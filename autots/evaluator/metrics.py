@@ -1,7 +1,7 @@
 """
 Metrics
 """
-
+import numpy as np
 import math
 
 def smape(actual, forecast):

@@ -7,9 +7,9 @@ import pandas as pd
 # id_col: typing.Optional[str]=None
 
 def long_to_wide(df, date_col: str, value_col: str, id_col: str, 
-                 frequency: str = "infer", na_tolerance: float = 0.25,
+                 frequency: str = "infer", na_tolerance: float = 0.95,
                  drop_data_older_than_periods: int = 10000, 
-                 drop_most_recent: bool = False):
+                 drop_most_recent: bool = False, aggfunc: str ='first'):
     """
     Takes long data and converts into wide, cleaner data
     
@@ -23,12 +23,16 @@ def long_to_wide(df, date_col: str, value_col: str, id_col: str,
             currently, aliases are listed somewhere in here: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html
         
         na_tolerance - allow up to this percent of values to be NaN, else drop the entire series
+            the default of 0.95 means a series can be 95% NaN values and still be included.
         
         drop_data_older_than_periods - cut off older data because eventually you just get too much
             10,000 is meant to be rather high, normally for daily data I'd use only the last couple of years, say 1500 samples
             
         drop_most_recent - if to drop the most recent data point
             useful if you pull monthly data before month end, and you don't want an incomplete month appearing complete
+        
+        aggfunc - passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
+            other options include "mean" and other numpy functions
     """
     timeseries_long = df.copy()
     timeseries_long['value'] = timeseries_long[value_col]
@@ -53,7 +57,7 @@ def long_to_wide(df, date_col: str, value_col: str, id_col: str,
     timeseries_long = timeseries_long[['date','series_id','value']]
     
     # pivot to different wide shape
-    timeseries_seriescols = timeseries_long.pivot_table(values='value', index='date', columns='series_id')
+    timeseries_seriescols = timeseries_long.pivot_table(values='value', index='date', columns='series_id', aggfunc = aggfunc)
     timeseries_seriescols = timeseries_seriescols.sort_index(ascending=True)
     
     # drop older data, because too much of a good thing...
@@ -79,3 +83,132 @@ def long_to_wide(df, date_col: str, value_col: str, id_col: str,
         timeseries_seriescols.drop(timeseries_seriescols.tail(1).index, inplace = True)
     
     return timeseries_seriescols
+
+class NumericTransformer(object):
+    """
+    Results of values_to_numeric
+        categorical_features - list of columns (series_ids) which were encoded
+    """
+    def __init__(self, dataframe = None, categorical_features = [], categorical_transformed = False, encoder = None):
+        self.dataframe = dataframe
+        self.categorical_features = categorical_features
+        self.categorical_transformed = categorical_transformed
+        self.encoder = encoder
+
+def values_to_numeric(df, na_strings: list = ['', ' ', 'NULL', 'NA','NaN','na','nan'],
+                      categorical_impute_strategy: str = 'constant'):
+    """
+    Uses sklearn to convert all non-numeric columns to numerics using Sklearn
+    
+    args:
+        na_strings - a list of values to read in as np.nan
+        
+        categorical_impute_strategy to be passed to Sklearn SimpleImputer
+            "most_frequent" or "constant" are allowed
+    """   
+    transformer_result = NumericTransformer("Categorical Transformer")
+    df.replace(na_strings, np.nan, inplace=True)
+    
+    for col in df.columns:
+        df[col] = df[col].astype(float, errors = 'ignore')
+    
+    df = df.astype(float, errors = 'ignore')
+    numeric_features = list(set(df.select_dtypes(include=[np.number]).columns.tolist()))
+    categorical_features = list(set(list(df)) - set(numeric_features))
+    
+    if len(categorical_features) > 0:
+        from sklearn.preprocessing import OrdinalEncoder
+        from sklearn.impute import SimpleImputer
+        df_enc = SimpleImputer(strategy = categorical_impute_strategy).fit_transform(df[categorical_features])
+        enc = OrdinalEncoder()
+        enc.fit(df_enc)
+        df_enc = enc.transform(df_enc)
+        df = pd.concat([
+            pd.DataFrame(df[numeric_features], columns = numeric_features),
+            pd.DataFrame(df_enc, columns = categorical_features, index = df.index)
+               ], axis = 1)
+        print("Categorical features converted to numeric")
+        transformer_result.categorical_transformed = True
+        transformer_result.encoder = enc
+    
+    transformer_result.categorical_features = categorical_features
+    transformer_result.dataframe = df
+    
+    return transformer_result
+
+def subset_series(df, n: int = 1000, na_tolerance: float = 1.0, random_state: int = 425):
+    """
+    Expects a pandas DataFrame in format of output from long_to_wide()
+    That is, in the format where the Index is a Date
+    and Columns are each a unique time series
+    
+    args:
+        n - number of unique time series to keep
+        na_tolerance - allow up to this percent of values to be NaN, else drop the entire series
+            default is 1.0, allow all NaNs, primarily handled instead by long_to_wide
+        random_state - random seed
+    """
+    # remove series with way too many NaNs - probably those of a different frequency, or brand new
+    na_threshold = int(len(df.index) * (1 - na_tolerance))
+    df = df.dropna(axis = 1, thresh=na_threshold)
+    
+    if isinstance(n, (int, float, complex)) and not isinstance(n, bool):
+        if n > len(df.columns):
+            n = len(df.columns)
+            return df
+        else:
+            df = df.sample(n, axis = 1, random_state = random_state, replace = False)    
+            return df
+
+
+def simple_train_test_split(df, forecast_length: int = 10,
+                            min_allowed_train_percent: float = 0.3):
+    """
+    Uses the last periods of forecast_length as the test set, the rest as train
+    
+    args:
+        min_allowed_train_percent - forecast length cannot be greater than 1 - this
+            constrains the forecast length from being much larger than than the training data
+            note this includes NaNs in current configuration
+    
+    returns train, test    (both pd DataFrames)
+    """
+    assert forecast_length > 0, "forecast_length must be greater than 0"
+    
+    if forecast_length > int(len(df.index) * (min_allowed_train_percent)):
+        raise ValueError("forecast_length is too large, not enough training data, alter min_allowed_train_percent to override")
+    
+    else:
+        train = df.head(len(df.index) - forecast_length)
+        test = df.tail(forecast_length)
+        return train, test
+    
+def multiple_train_test_split(df, forecast_length: int = 10,
+                              context_length: int = None,
+                              train_na_tolerance: float = 0.95,
+                              test_na_tolerance: float = 0.75):
+    """
+    Uses the last periods of forecast_length as the test set
+    
+    args:
+        context_length, the length (number of periods) of the train dataset
+        
+        forecast_length, the length of the test dataset
+        
+        train_na_tolerance: percent na allowed in train
+        test_na_tolerance: percent na allowed in test (1.0 would allow a series of entirely NaN)
+    
+    returns train, test    (both pd DataFrames)
+    """
+    assert forecast_length > 0, "forecast_length must be greater than 0"
+    
+    if context_length is None:
+        context_length = 2 * forecast_length
+    
+    if forecast_length > int(len(df.index) * (min_allowed_train_percent)):
+        raise ValueError("forecast_length is too large, not enough training data, alter min_allowed_train_percent to override")
+    
+    else:
+        train = df.head(len(df.index) - forecast_length)
+        test = df.tail(forecast_length)
+        return train, test
