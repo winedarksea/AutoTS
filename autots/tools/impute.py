@@ -30,18 +30,24 @@ def biased_ffill(df):
     df = (df_mean + df_ffill)/2
     return df
 
-def fill_na(df, method: str = 'ffill'):
+def fill_na(df, method: str = 'ffill', window: int = 10):
     """
     Fill NA values using different methods
     
     args:
-        method:
+    ======
+    
+        :param method:
             'ffill' - fill most recent non-na value forward until another non-na value is reached
             'zero' - fill with zero. Useful for sales and other data where NA does usually mean $0.
             'mean' - fill all missing values with the series' overall average value
             'median' - fill all missing values with the series' overall median value
-            'rolling mean' - fill with last n values (10)
+            'rolling mean' - fill with last n (window) values
             'ffill mean biased' - simple avg of ffill and mean
+        :type method: str
+        
+        :param window: length of rolling windows for filling na, for rolling methods
+        :type window: int
     """
     if method == 'zero':
         df = fill_zero(df)
@@ -56,7 +62,7 @@ def fill_na(df, method: str = 'ffill'):
         df = fill_median(df)
         
     if method == 'rolling mean':
-        df = rolling_mean(df)
+        df = rolling_mean(df, window = window)
         
     if method == 'ffill mean biased':
         df = biased_ffill(df)

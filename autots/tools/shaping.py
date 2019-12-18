@@ -14,25 +14,39 @@ def long_to_wide(df, date_col: str, value_col: str, id_col: str,
     Takes long data and converts into wide, cleaner data
     
     args:
-        df - a pandas dataframe having three columns:
-            date_col - the name of the column containing dates, preferrably already in pandas datetime format
-            value_col - the name of the column with the values of the time series (ie sales $)
-            id_col - name of the id column, unique for each time series
-        
-        frequency - frequency in string of alias for DateOffset object, normally "1D" -daily, "MS" -month start etc.
-            currently, aliases are listed somewhere in here: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html
-        
-        na_tolerance - allow up to this percent of values to be NaN, else drop the entire series
-            the default of 0.95 means a series can be 95% NaN values and still be included.
-        
-        drop_data_older_than_periods - cut off older data because eventually you just get too much
-            10,000 is meant to be rather high, normally for daily data I'd use only the last couple of years, say 1500 samples
+    ========
+    
+        :param df: - a pandas dataframe having three columns:
+        :type df: pandas.DataFrame
             
-        drop_most_recent - if to drop the most recent data point
-            useful if you pull monthly data before month end, and you don't want an incomplete month appearing complete
+            :param date_col: - the name of the column containing dates, preferrably already in pandas datetime format
+            :type date_col: str
+            
+            :param value_col: - the name of the column with the values of the time series (ie sales $)
+            :type value_col: str
+            
+            :param id_col: - name of the id column, unique for each time series
+            :type id_col: str
         
-        aggfunc - passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
+        :param frequency: - frequency in string of alias for DateOffset object, normally "1D" -daily, "MS" -month start etc.
+            currently, aliases are listed somewhere in here: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html
+        :type frequency: str
+        
+        :param na_tolerance: - allow up to this percent of values to be NaN, else drop the entire series
+            the default of 0.95 means a series can be 95% NaN values and still be included.
+        :type na_tolerance: float
+        
+        :param drop_data_older_than_periods: - cut off older data because eventually you just get too much
+            10,000 is meant to be rather high, normally for daily data I'd use only the last couple of years, say 1500 samples
+        :type drop_data_older_than_periods: int
+        
+        :param drop_most_recent: - if to drop the most recent data point
+            useful if you pull monthly data before month end, and you don't want an incomplete month appearing complete
+        :type drop_most_recent: bool
+        
+        :param aggfunc: - passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
             other options include "mean" and other numpy functions
+        :type aggfunc: str
     """
     timeseries_long = df.copy()
     timeseries_long['value'] = timeseries_long[value_col]
@@ -101,10 +115,12 @@ def values_to_numeric(df, na_strings: list = ['', ' ', 'NULL', 'NA','NaN','na','
     Uses sklearn to convert all non-numeric columns to numerics using Sklearn
     
     args:
-        na_strings - a list of values to read in as np.nan
+        :param na_strings: - a list of values to read in as np.nan
+        :type na_strings: list
         
-        categorical_impute_strategy to be passed to Sklearn SimpleImputer
+        :param categorical_impute_strategy: to be passed to Sklearn SimpleImputer
             "most_frequent" or "constant" are allowed
+        :type categorical_impute_strategy: str
     """   
     transformer_result = NumericTransformer("Categorical Transformer")
     df.replace(na_strings, np.nan, inplace=True)
@@ -167,11 +183,17 @@ def simple_train_test_split(df, forecast_length: int = 10,
     Uses the last periods of forecast_length as the test set, the rest as train
     
     args:
-        min_allowed_train_percent - forecast length cannot be greater than 1 - this
+    ========
+        :param forecast_length: number of future periods to predict
+        :type forecast_lengt: int
+        
+        :param min_allowed_train_percent: - forecast length cannot be greater than 1 - this
             constrains the forecast length from being much larger than than the training data
             note this includes NaNs in current configuration
+        :type min_allowed_train_percent: float
     
-    returns train, test    (both pd DataFrames)
+    :return: train, test  (both pd DataFrames)
+    :rtype: pandas.DataFrame
     """
     assert forecast_length > 0, "forecast_length must be greater than 0"
     
@@ -182,7 +204,8 @@ def simple_train_test_split(df, forecast_length: int = 10,
         train = df.head(len(df.index) - forecast_length)
         test = df.tail(forecast_length)
         return train, test
-    
+
+
 def multiple_train_test_split(df, forecast_length: int = 10,
                               context_length: int = None,
                               train_na_tolerance: float = 0.95,
