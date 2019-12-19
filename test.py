@@ -22,6 +22,27 @@ categorical_transformer = values_to_numeric(df_wide)
 df_wide_numeric = categorical_transformer.dataframe
 # categorical_transformer.encoder.inverse_transform(df_wide_numeric['categoricalDayofWeek'].values.reshape(-1, 1))
 
+df4 = df_wide_numeric.copy()
+from autots.tools.impute import fill_na
+df4 = fill_na(df4)
+
+from autots.tools.transform import RollingMeanTransformer
+meaner = RollingMeanTransformer(window = 10).fit(df4)
+temp = meaner.transform(df4)
+test = temp.tail(21)
+
+meaner = RollingMeanTransformer(window = 10).fit(df4.head(120))
+temp = meaner.transform(df4.head(120))
+testtemp = meaner.inverse_transform(test, trans_method = 'forecast')
+testDF = pd.concat([df4.tail(21), testtemp], axis = 1)
+# original works but forecast does not
+
+
+from autots.tools.transform import Detrend
+detrender = Detrend().fit(df4)
+temp = detrender.transform(df4)
+temp = detrender.inverse_transform(temp)
+test = pd.concat([df4, temp], axis = 1)
 
 from autots.tools.profile import data_profile
 # currently doesn't ignore nans

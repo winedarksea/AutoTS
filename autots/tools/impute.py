@@ -10,6 +10,7 @@ def fill_zero(df):
 
 def fill_forward(df):
     df = df.fillna(method='ffill')
+    df = df.fillna(method='bfill')
     return df
     
 def fill_mean(df):
@@ -24,10 +25,36 @@ def rolling_mean(df, window: int = 10):
     df= df.fillna(df.rolling(window = window, min_periods=1).mean())
     return df
     
-def biased_ffill(df):
+def biased_ffill(df, mean_weight: float = 1):
     df_mean = fill_mean(df)
     df_ffill = fill_forward(df)
-    df = (df_mean + df_ffill)/2
+    df = ((df_mean * mean_weight) + df_ffill)/(1 + mean_weight)
+    return df
+
+def fake_date_fill(df, back_method: str = 'slice'):
+    """
+    Returns a dataframe where na values are removed and values shifted forward.
+    Thus, values will likely have incorrect timestamps!
+    
+    :param back_method: - how to deal with tails due to different length series
+        - 'bfill' -back fill the last value
+        - 'slice' - drop any rows with any na
+        - 'keepNA' - keep the lagging na
+    :type back_method: str
+    """    
+    df_index = df.index.to_series().copy()
+    df = df.sort_index(ascending=False)
+    df = df.apply(lambda x: pd.Series(x.dropna().values))
+    df = df.sort_index(ascending=False)
+    df.index = df_index.tail(len(df.index))    
+    df = df.dropna(how = 'all', axis = 0)
+    
+    if back_method == 'bfill':
+        df = df.fillna(method = 'bfill')
+    if back_method == 'slice':
+        df = df.dropna(how = 'any', axis = 0)
+    if back_method == 'keepNA':
+        pass
     return df
 
 def fill_na(df, method: str = 'ffill', window: int = 10):
@@ -44,6 +71,7 @@ def fill_na(df, method: str = 'ffill', window: int = 10):
             'median' - fill all missing values with the series' overall median value
             'rolling mean' - fill with last n (window) values
             'ffill mean biased' - simple avg of ffill and mean
+            'fake date' - shifts forward data over nan, thus values will have incorrect timestamps
         :type method: str
         
         :param window: length of rolling windows for filling na, for rolling methods
@@ -66,6 +94,9 @@ def fill_na(df, method: str = 'ffill', window: int = 10):
         
     if method == 'ffill mean biased':
         df = biased_ffill(df)
+    
+    if method == 'fake date':
+        df = fake_date_fill(df, back_method = 'slice')
     
     return df
     
