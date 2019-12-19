@@ -28,14 +28,14 @@ df4 = fill_na(df4)
 
 from autots.tools.transform import RollingMeanTransformer
 meaner = RollingMeanTransformer(window = 10).fit(df4)
-temp = meaner.transform(df4)
-test = temp.tail(21)
+temp2 = meaner.transform(df4)
+test = temp2.tail(21)
 
 meaner = RollingMeanTransformer(window = 10).fit(df4.head(120))
 temp = meaner.transform(df4.head(120))
 testtemp = meaner.inverse_transform(test, trans_method = 'forecast')
 testDF = pd.concat([df4.tail(21), testtemp], axis = 1)
-# original works but forecast does not
+testDF2 = pd.concat([temp2.head(120), temp.head(120)], axis = 1)
 
 
 from autots.tools.transform import Detrend

@@ -192,6 +192,7 @@ class RollingMeanTransformer(object):
             staged = self.last_values
             df = pd.concat([self.last_rolling, df], axis = 0)
             diffed = ((df.astype(float) - df.shift(1).astype(float)) * window).tail(len(df.index))
+            diffed = diffed.tail(len(diffed.index) -1)
             temp_cols = diffed.columns
             for n in range(len(diffed.index)):
                 temp_index = diffed.index[n]
@@ -199,7 +200,7 @@ class RollingMeanTransformer(object):
                 temp_row = pd.DataFrame(temp_row.values.reshape(1,len(temp_row)), columns = temp_cols)
                 temp_row.index = pd.DatetimeIndex([temp_index])
                 staged = pd.concat([staged, temp_row], axis = 0)
-            staged = staged.tail(len(df.index))
+            staged = staged.tail(len(diffed.index))
             return staged
             
     
