@@ -111,16 +111,12 @@ class NumericTransformer(object):
 
 def values_to_numeric(df, na_strings: list = ['', ' ', 'NULL', 'NA','NaN','na','nan'],
                       categorical_impute_strategy: str = 'constant'):
-    """
-    Uses sklearn to convert all non-numeric columns to numerics using Sklearn
+    """Uses sklearn to convert all non-numeric columns to numerics using Sklearn
     
-    args:
-        :param na_strings: - a list of values to read in as np.nan
-        :type na_strings: list
-        
-        :param categorical_impute_strategy: to be passed to Sklearn SimpleImputer
+    Args:
+        na_strings (list): - a list of values to read in as np.nan
+        categorical_impute_strategy (str): to be passed to Sklearn SimpleImputer
             "most_frequent" or "constant" are allowed
-        :type categorical_impute_strategy: str
     """   
     transformer_result = NumericTransformer("Categorical Transformer")
     df.replace(na_strings, np.nan, inplace=True)
@@ -152,17 +148,38 @@ def values_to_numeric(df, na_strings: list = ['', ' ', 'NULL', 'NA','NaN','na','
     
     return transformer_result
 
+def categorical_inverse(categorical_transformer_object, df):
+    """Wrapper for Inverse Categorical Transformations
+    Args:
+        categorical_transformer_object (object): a NumericTransformer object from values_to_numeric
+        df (pandas.DataFrame): Datetime Indexed 
+    """
+    categorical_transformer = categorical_transformer_object
+    cat_features = categorical_transformer.categorical_features
+    if len(cat_features) > 0:
+        col_namen = df.columns
+        categorical = categorical_transformer.encoder.inverse_transform(df[cat_features].values) # .reshape(-1, 1)
+        categorical = pd.DataFrame(categorical)
+        categorical.columns = cat_features
+        categorical.index = df.index
+        df = pd.concat([df.drop(cat_features, axis = 1), categorical], axis = 1)
+        df = df[col_namen]
+        return df
+    else:
+        return df
+
+
 def subset_series(df, n: int = 1000, na_tolerance: float = 1.0, random_state: int = 425):
     """
     Expects a pandas DataFrame in format of output from long_to_wide()
     That is, in the format where the Index is a Date
     and Columns are each a unique time series
     
-    args:
-        n - number of unique time series to keep
-        na_tolerance - allow up to this percent of values to be NaN, else drop the entire series
+    Args:
+        n (int): - number of unique time series to keep
+        na_tolerance (float): - allow up to this percent of values to be NaN, else drop the entire series
             default is 1.0, allow all NaNs, primarily handled instead by long_to_wide
-        random_state - random seed
+        random_state (int): - random seed
     """
     # remove series with way too many NaNs - probably those of a different frequency, or brand new
     na_threshold = int(len(df.index) * (1 - na_tolerance))
@@ -182,18 +199,15 @@ def simple_train_test_split(df, forecast_length: int = 10,
     """
     Uses the last periods of forecast_length as the test set, the rest as train
     
-    args:
-    ========
-        :param forecast_length: number of future periods to predict
-        :type forecast_lengt: int
+    Args:
+        forecast_length (int): number of future periods to predict
         
-        :param min_allowed_train_percent: - forecast length cannot be greater than 1 - this
+        min_allowed_train_percent (float): - forecast length cannot be greater than 1 - this
             constrains the forecast length from being much larger than than the training data
             note this includes NaNs in current configuration
-        :type min_allowed_train_percent: float
     
-    :return: train, test  (both pd DataFrames)
-    :rtype: pandas.DataFrame
+    Returns: 
+        train, test  (both pd DataFrames)
     """
     assert forecast_length > 0, "forecast_length must be greater than 0"
     
@@ -210,18 +224,18 @@ def multiple_train_test_split(df, forecast_length: int = 10,
                               context_length: int = None,
                               train_na_tolerance: float = 0.95,
                               test_na_tolerance: float = 0.75):
-    """
-    Uses the last periods of forecast_length as the test set
+    """Uses the last periods of forecast_length as the test set
     
-    args:
-        context_length, the length (number of periods) of the train dataset
+    Args:
+        context_length (int):, the length (number of periods) of the train dataset
         
-        forecast_length, the length of the test dataset
+        forecast_length (int):, the length of the test dataset
         
-        train_na_tolerance: percent na allowed in train
-        test_na_tolerance: percent na allowed in test (1.0 would allow a series of entirely NaN)
+        train_na_tolerance (float): percent na allowed in train
+        test_na_tolerance (float): percent na allowed in test (1.0 would allow a series of entirely NaN)
     
-    returns train, test    (both pd DataFrames)
+    Returns:
+        train, test    (both pd DataFrames)
     """
     assert forecast_length > 0, "forecast_length must be greater than 0"
     

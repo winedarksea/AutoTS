@@ -57,14 +57,11 @@ def fake_date_fill(df, back_method: str = 'slice'):
         pass
     return df
 
-def fill_na(df, method: str = 'ffill', window: int = 10):
-    """
-    Fill NA values using different methods
+def FillNA(df, method: str = 'ffill', window: int = 10):
+    """Fill NA values using different methods
     
-    args:
-    ======
-    
-        :param method:
+    Args:
+        method (str):
             'ffill' - fill most recent non-na value forward until another non-na value is reached
             'zero' - fill with zero. Useful for sales and other data where NA does usually mean $0.
             'mean' - fill all missing values with the series' overall average value
@@ -72,31 +69,37 @@ def fill_na(df, method: str = 'ffill', window: int = 10):
             'rolling mean' - fill with last n (window) values
             'ffill mean biased' - simple avg of ffill and mean
             'fake date' - shifts forward data over nan, thus values will have incorrect timestamps
-        :type method: str
-        
-        :param window: length of rolling windows for filling na, for rolling methods
-        :type window: int
+        window (int): length of rolling windows for filling na, for rolling methods
     """
     if method == 'zero':
         df = fill_zero(df)
+        return df
     
     if method == 'ffill':
         df = fill_forward(df)
+        return df
         
     if method == 'mean':
         df = fill_mean(df)
+        return df
         
     if method == 'median':
         df = fill_median(df)
+        return df
         
     if method == 'rolling mean':
         df = rolling_mean(df, window = window)
+        return df
         
     if method == 'ffill mean biased':
         df = biased_ffill(df)
+        return df
     
     if method == 'fake date':
         df = fake_date_fill(df, back_method = 'slice')
+        return df
     
-    return df
+    else:
+        print("FillNA method not known or improperly entered, returning original df")
+        return df
     

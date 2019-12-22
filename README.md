@@ -6,6 +6,9 @@ Simple package for comparing open-source time series implementations.
 
 Requirements:
 	Python >= 3.5 (typing)
+	pandas
+	sklearn >= 0.20.0 (ColumnTransformer)
+	statsmodels
 
 
 pip install fredapi # if using samples

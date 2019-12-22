@@ -1,13 +1,14 @@
 import numpy as np
 import pandas as pd
 
+forecast_length = 14
+
 df_long = pd.read_csv("SampleTimeSeries.csv")
 df_long['date'] = pd.to_datetime(df_long['date'], infer_datetime_format = True)
 
 
-from autots.datasets.fred import get_fred_data
-df_long = get_fred_data('93873d40f10c20fe6f6e75b1ad0aed4d')
-
+#from autots.datasets.fred import get_fred_data
+#df_long = get_fred_data('XXXXXXXXXXXxx')
 
 
 from autots.tools.shaping import long_to_wide
@@ -20,11 +21,47 @@ from autots.tools.shaping import values_to_numeric
 
 categorical_transformer = values_to_numeric(df_wide)
 df_wide_numeric = categorical_transformer.dataframe
-# categorical_transformer.encoder.inverse_transform(df_wide_numeric['categoricalDayofWeek'].values.reshape(-1, 1))
+
+from autots.tools.shaping import categorical_inverse
+df_cat_inverse = categorical_inverse(categorical_transformer, df_wide_numeric)
+
+
+from autots.tools.shaping import simple_train_test_split
+df_train, df_test = simple_train_test_split(df_wide_numeric, forecast_length = forecast_length)
+
+
+from autots.tools.transform import GeneralTransformer
+transformer_object = GeneralTransformer(outlier='clip2std',fillNA = 'fake date', transformation = 'MinMaxScaler').fit(df_train)
+df_train_transformed = transformer_object.transform(df_train)
+
+from autots.evaluator.auto_model import ModelMonster
+model = ModelMonster(model, parameters)
+model = model.fit(df_train_transformed)
+df_inverse_forecast = model.predict(forecast_length = forecast_length, added_regressor = XXXXX)
+
+df_forecast = transformer_object.inverse_transform(df_inverse_forecast)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 df4 = df_wide_numeric.copy()
-from autots.tools.impute import fill_na
-df4 = fill_na(df4)
+from autots.tools.impute import FillNA
+df4 = FillNA(df4)
 
 from autots.tools.transform import RollingMeanTransformer
 meaner = RollingMeanTransformer(window = 10).fit(df4)
@@ -52,9 +89,7 @@ from autots.tools.shaping import subset_series
 
 df_subset = subset_series(df_wide_numeric, n = 10, na_tolerance = 0.5, random_state = 425)
 
-from autots.tools.shaping import simple_train_test_split
 
-df_train, df_test = simple_train_test_split(df_subset, forecast_length = 14)
 
 
 # to gluon ds
