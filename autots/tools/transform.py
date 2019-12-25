@@ -66,6 +66,28 @@ def context_slicer(df, method: str = 'max', fraction: float = 2, forecast_length
     else:
         return df
 
+def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
+    """Condensed version of context_slicer with more limited options.
+    
+    Args:
+        df (pandas.DataFrame): training data frame to slice
+        method (str): Option to slice dataframe
+            'None' - return unaltered dataframe
+            'HalfMax' - return half of dataframe
+            '2ForecastLength' - return dataframe equal to twice length of forecast
+    """
+    if (method == 'None') or (method == None):
+        return df
+    
+    df = df.sort_index(ascending=True)
+    
+    if method == 'HalfMax':
+        return df.tail(int(len(df.index)/2))
+    if method == '2ForecastLength':
+        return df.tail(2 * forecast_length)
+    else:
+        return df
+        
 
 class Detrend(object):
     """Remove a linear trend from the data
@@ -320,8 +342,11 @@ class GeneralTransformer(object):
         df = df.copy()
         df = self.outlier_treatment(df)
         df = self.fill_na(df)
+        self.column_names = df.columns
+        self.index = df.index
         self.transformer = self._transformation_fit(df)
         df = self.transformer.transform(df)
+        df = pd.DataFrame(df, index = self.index, columns = self.column_names)
         return df
     
     def fit(self, df):
@@ -340,7 +365,10 @@ class GeneralTransformer(object):
         df = df.copy()
         df = self.outlier_treatment(df)
         df = self.fill_na(df)
+        self.column_names = df.columns
+        self.index = df.index
         df = self.transformer.transform(df)
+        df = pd.DataFrame(df, index = self.index, columns = self.column_names)
         return df
     
     def inverse_transform(self, df, trans_method: str = "forecast"):

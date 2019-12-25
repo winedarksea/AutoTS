@@ -6,14 +6,15 @@ class ModelObject(object):
     """
     Models should all have methods:
         .fit(df) (taking a DataFrame with DatetimeIndex and n columns of n timeseries)
-        .predict(forecast_length = int)
+        .predict(forecast_length = int, regressor)
+        .get_new_params(method)
     
     Args:
         name (str): Model Name
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
     """
-    def __init__(self, name: str = "Uniniated Model Name", frequency: str = 'infer', prediction_interval: float = 0.9, fit_runtime=datetime.timedelta(0)):
+    def __init__(self, name: str = "Uninitiated Model Name", frequency: str = 'infer', prediction_interval: float = 0.9, fit_runtime=datetime.timedelta(0)):
         self.name = name
         self.frequency = frequency
         self.prediction_interval = prediction_interval
@@ -23,6 +24,8 @@ class ModelObject(object):
         return 'ModelObject of ' + self.name
     
     def basic_profile(self, df):
+        """Capture basic training details
+        """
         self.startTime = datetime.datetime.now()
         self.train_shape = df.shape
         self.column_names = df.columns
@@ -41,13 +44,19 @@ class ModelObject(object):
         self.forecast_index = forecast_index
         return forecast_index
     
+    def get_params():
+        """Return dict of current parameters
+        """
+        return {}
+    
     def get_new_params(method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
         return {}
 
 class PredictionObject(object):
-    def __init__(self, forecast_length: int = 0, lower_forecast = np.nan, forecast = np.nan, upper_forecast = np.nan, prediction_interval: float = 0.9, predict_runtime=datetime.timedelta(0)):
+    def __init__(self, model_name: str = 'Uninitiated', forecast_length: int = 0, lower_forecast = np.nan, forecast = np.nan, upper_forecast = np.nan, prediction_interval: float = 0.9, predict_runtime=datetime.timedelta(0)):
+        self.model_name = model_name
         self.forecast_length = forecast_length
         self.lower_forecast = lower_forecast
         self.forecast = forecast
@@ -56,13 +65,21 @@ class PredictionObject(object):
         self.predict_runtime = predict_runtime
 
 
-def ModelMonster(model: str, parameters: dict):
+def ModelMonster(model: str, parameters: dict, frequency: str = 'infer', prediction_interval: float = 0.9):
     """Directs strings and parameters to appropriate model objects.
     
     Args:
         model (str): Name of Model Function
         parameters (dict): Dictionary of parameters to pass through to model
     """
-    if model = 'Zeroes':
-        from autots.models.basics import Zeroes
-        return Zeroes()
+    if model == 'ZeroesNaive':
+        from autots.models.basics import ZeroesNaive
+        return ZeroesNaive(frequency = frequency, prediction_interval = prediction_interval)
+    
+    if model == 'LastValueNaive':
+        from autots.models.basics import LastValueNaive
+        return LastValueNaive(frequency = frequency, prediction_interval = prediction_interval)
+    
+    if model == 'MedValueNaive':
+        from autots.models.basics import MedValueNaive
+        return MedValueNaive(frequency = frequency, prediction_interval = prediction_interval)

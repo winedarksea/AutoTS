@@ -3,6 +3,14 @@ import pandas as pd
 
 forecast_length = 14
 
+weighted = False
+transformation_dict = {'outlier': 'clip2std',
+                       'fillNA' : 'fake date', 
+                       'transformation' : 'PowerTransformer',
+                       'context_slicer' : 'None'}
+model_str = "LastValueNaive"
+parameter_dict = {}
+
 df_long = pd.read_csv("SampleTimeSeries.csv")
 df_long['date'] = pd.to_datetime(df_long['date'], infer_datetime_format = True)
 
@@ -29,19 +37,47 @@ df_cat_inverse = categorical_inverse(categorical_transformer, df_wide_numeric)
 from autots.tools.shaping import simple_train_test_split
 df_train, df_test = simple_train_test_split(df_wide_numeric, forecast_length = forecast_length)
 
-
-from autots.tools.transform import GeneralTransformer
-transformer_object = GeneralTransformer(outlier='clip2std',fillNA = 'fake date', transformation = 'MinMaxScaler').fit(df_train)
-df_train_transformed = transformer_object.transform(df_train)
-
-from autots.evaluator.auto_model import ModelMonster
-model = ModelMonster(model, parameters)
-model = model.fit(df_train_transformed)
-df_inverse_forecast = model.predict(forecast_length = forecast_length, added_regressor = XXXXX)
-
-df_forecast = transformer_object.inverse_transform(df_inverse_forecast)
+if weighted == False:
+    weights = {x:1 for x in df_train.columns}
 
 
+def ModelPrediction(df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, transformation_dict: dict, model_str: str, parameter_dict: dict):
+    """Feed parameters into modeling pipeline
+    
+    Args:
+        df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
+      
+    Returns:
+        PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
+    """
+    
+    from autots.tools.transform import GeneralTransformer
+    transformer_object = GeneralTransformer(outlier=transformation_dict['outlier'],
+                                            fillNA = transformation_dict['fillNA'], 
+                                            transformation = transformation_dict['transformation']).fit(df_train)
+    df_train_transformed = transformer_object.transform(df_train)
+    
+    if transformation_dict['context_slicer'] in ['2ForecastLength','HalfMax']:
+        from autots.tools.transform import simple_context_slicer
+        df_train_transformed = simple_context_slicer(df_train_transformed, method = transformation_dict['context_slicer'], forecast_length = forecast_length)
+    
+    from autots.evaluator.auto_model import ModelMonster
+    model = ModelMonster(model_str, parameter_dict, frequency = frequency, prediction_interval = prediction_interval)
+    model = model.fit(df_train_transformed)
+    df_forecast = model.predict(forecast_length = forecast_length, regressor = "007")
+    
+    df_forecast.lower_forecast = transformer_object.inverse_transform(df_forecast.lower_forecast)
+    df_forecast.forecast = transformer_object.inverse_transform(df_forecast.forecast)
+    df_forecast.upper_forecast = transformer_object.inverse_transform(df_forecast.upper_forecast)
+    
+    return df_forecast
+
+from autots.evaluator.metrics import PredictionEval
+model_error = PredictionEval(df_forecast, df_test)
+
+"""
+Managing template errors...
+"""
 
 
 
