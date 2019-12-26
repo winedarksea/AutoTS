@@ -8,7 +8,7 @@ from scipy.stats import percentileofscore
 def percentileofscore_appliable(x, a, kind = 'rank'):
     return percentileofscore(a, score = x, kind = kind)
 
-def Catlin_Point_to_Probability(train, forecast, alpha = 0.3, beta = 1):
+def Variable_Point_to_Probability(train, forecast, alpha = 0.3, beta = 1):
     """Data driven placeholder for model error estimation
     
     Catlin Point to Probability method ('a mixture of dark magic and gum disease')
@@ -93,10 +93,10 @@ def Point_to_Probability(train, forecast, prediction_interval = 0.9):
     
     beta = prediction_interval * 1.25
     alpha = 0.3
-    errorranges = Catlin_Point_to_Probability(train, forecast, alpha = alpha, beta = beta)
+    errorranges = Variable_Point_to_Probability(train, forecast, alpha = alpha, beta = beta)
     # make symmetric error ranges
     errorranges = errorranges / 2 
     
-    upper_error = forecast + errorranges
-    lower_error = forecast - errorranges
-    return upper_error, lower_error
+    upper_forecast = forecast + errorranges
+    lower_forecast = forecast - errorranges
+    return upper_forecast, lower_forecast

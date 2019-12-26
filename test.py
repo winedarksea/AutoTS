@@ -76,7 +76,10 @@ from autots.evaluator.metrics import PredictionEval
 model_error = PredictionEval(df_forecast, df_test)
 
 """
-Managing template errors...
+Managing template errors...\
+
+Confirm per_series weighting
+
 """
 
 

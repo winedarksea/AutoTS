@@ -86,7 +86,7 @@ def rmse(actual, forecast):
         mae_result = np.nan
     return mae_result
 
-def containment():
+def containment(lower_forecast, upper_forecast, actual):
     """Expects two, 2-D numpy arrays of forecast_length * n series
     
     Returns a 1-D array of results in len n series
@@ -95,16 +95,17 @@ def containment():
         actual (numpy.array): known true values
         forecast (numpy.array): predicted values
     """
+    return np.count_nonzero((upper_forecast > actual) & (lower_forecast < actual), axis = 0)/actual.shape[0]
+    
     
 
 class EvalObject(object):
     """Object to contain all your failures!
     """
-    def __init__(self, model_name: str = 'Uninitiated', residuals = np.nan, per_series_metrics = np.nan, per_series_metrics_weighted = np.nan, avg_metrics = np.nan, avg_metrics_weighted = np.nan):
+    def __init__(self, model_name: str = 'Uninitiated', residuals = np.nan, per_series_metrics = np.nan, weights = np.nan, avg_metrics = np.nan, avg_metrics_weighted = np.nan):
         self.model_name = model_name
         self.residuals = residuals
         self.per_series_metrics = per_series_metrics
-        # self.per_series_metrics_weighted = per_series_metrics_weighted
         self.weights
         self.avg_metrics = avg_metrics
         self.avg_metrics_weighted = avg_metrics_weighted
@@ -118,30 +119,23 @@ def PredictionEval(PredictionObject, actual, series_weights = {}):
 
     """
     errors = EvalObject()
+    errors.model_name = PredictionObject.model_name
     errors.residuals = PredictionObject.forecast - actual
+    errors.weights = series_weights
     
-    smape(actual, PredictionObject.forecast)
-    mae(actual, PredictionObject.forecast)
+    per_series = pd.DataFrame({
+            'smape': smape(actual, PredictionObject.forecast),
+            'mae': mae(actual, PredictionObject.forecast),
+            'rmse': rmse(actual, PredictionObject.forecast),
+            'containment': containment(PredictionObject.lower_forecast, PredictionObject.upper_forecast, actual)
+            }).transpose()
+    per_series.columns = actual.columns
+    errors.per_series_metrics = per_series
+    # this won't work well if entire metrics are NaN, but results should still be comparable
+    errors.avg_metrics_weighted = (per_series * series_weights).sum(axis = 1, skipna = True) / sum(series_weights.values())
+    errors.avg_metrics = per_series.mean(axis = 1)
+    
     return errors
-
-"""
-actual = df_test
-actual_np = actual.values
-forecast_np = df_forecast.forecast
-forecast = pd.DataFrame(forecast_np, columns = actual.columns, index = actual.index)
-
-temp = mae(actual, forecast)
-mae(actual_np, forecast_np)
-
-temp = smape(actual, forecast)
-smape(actual_np, forecast_np)
-
-temp = smape_old(actual, forecast)
-smape_old(actual_np, forecast_np)
-
-temp = rmse(actual, forecast)
-rmse(actual_np, forecast_np)
-"""
 
 """
 Transformation Dict

@@ -83,3 +83,4 @@ def ModelMonster(model: str, parameters: dict, frequency: str = 'infer', predict
     if model == 'MedValueNaive':
         from autots.models.basics import MedValueNaive
         return MedValueNaive(frequency = frequency, prediction_interval = prediction_interval)
+    

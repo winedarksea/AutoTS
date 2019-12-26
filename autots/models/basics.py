@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from autots.evaluator.auto_model import ModelObject
 from autots.evaluator.auto_model import PredictionObject
+from autots.tools.probabilistic import Point_to_Probability
 
 
 class ZeroesNaive(ModelObject):
@@ -84,6 +85,7 @@ class LastValueNaive(ModelObject):
         """
         df = self.basic_profile(df)
         self.last_values = df.tail(1).values
+        self.df_train = df
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -104,10 +106,13 @@ class LastValueNaive(ModelObject):
         if just_point_forecast:
             return df
         else:
+            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df, prediction_interval = self.prediction_interval)
+            
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name
-                                          forecast_length=forecast_length,lower_forecast=df,
-                                          forecast=df, upper_forecast=df,
+            prediction = PredictionObject(model_name = self.name,
+                                          forecast_length=forecast_length,
+                                          lower_forecast=lower_forecast,
+                                          forecast=df, upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime)
             
@@ -163,7 +168,7 @@ class MedValueNaive(ModelObject):
             return df
         else:
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name
+            prediction = PredictionObject(model_name = self.name,
                                           forecast_length=forecast_length,lower_forecast=df,
                                           forecast=df, upper_forecast=df,
                                           prediction_interval=self.prediction_interval,
