@@ -5,11 +5,17 @@ forecast_length = 14
 
 weighted = False
 transformation_dict = {'outlier': 'clip2std',
-                       'fillNA' : 'fake date', 
-                       'transformation' : 'PowerTransformer',
+                       'fillNA' : 'ffill', 
+                       'transformation' : 'Detrend',
                        'context_slicer' : 'None'}
-model_str = "LastValueNaive"
-parameter_dict = {}
+model_str = "FBProphet"
+parameter_dict = {'holiday':True,
+                  'regression_type' : 'User'}
+frequency = '1D'
+prediction_interval = 0.9
+no_negatives = False
+seed = 425
+holiday_country = 'US'
 
 df_long = pd.read_csv("SampleTimeSeries.csv")
 df_long['date'] = pd.to_datetime(df_long['date'], infer_datetime_format = True)
@@ -22,8 +28,15 @@ df_long['date'] = pd.to_datetime(df_long['date'], infer_datetime_format = True)
 from autots.tools.shaping import long_to_wide
 
 df_wide = long_to_wide(df_long, date_col = 'date', value_col = 'value',
-                       id_col = 'series_id', frequency = '1D', na_tolerance = 0.95,
+                       id_col = 'series_id', frequency = frequency, na_tolerance = 0.95,
                        drop_data_older_than_periods = 1000, aggfunc = 'first')
+
+
+preord_regressor = pd.Series(np.random.randint(0, 100, size = len(df_wide.index)), index = df_wide.index )
+
+
+
+
 
 from autots.tools.shaping import values_to_numeric
 
@@ -36,45 +49,37 @@ df_cat_inverse = categorical_inverse(categorical_transformer, df_wide_numeric)
 
 from autots.tools.shaping import simple_train_test_split
 df_train, df_test = simple_train_test_split(df_wide_numeric, forecast_length = forecast_length)
+preord_regressor_train = preord_regressor[df_train.index]
+preord_regressor_test = preord_regressor[df_test.index]
 
 if weighted == False:
     weights = {x:1 for x in df_train.columns}
 
 
-def ModelPrediction(df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, transformation_dict: dict, model_str: str, parameter_dict: dict):
-    """Feed parameters into modeling pipeline
-    
-    Args:
-        df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
-      
-    Returns:
-        PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
-    """
-    
-    from autots.tools.transform import GeneralTransformer
-    transformer_object = GeneralTransformer(outlier=transformation_dict['outlier'],
-                                            fillNA = transformation_dict['fillNA'], 
-                                            transformation = transformation_dict['transformation']).fit(df_train)
-    df_train_transformed = transformer_object.transform(df_train)
-    
-    if transformation_dict['context_slicer'] in ['2ForecastLength','HalfMax']:
-        from autots.tools.transform import simple_context_slicer
-        df_train_transformed = simple_context_slicer(df_train_transformed, method = transformation_dict['context_slicer'], forecast_length = forecast_length)
-    
-    from autots.evaluator.auto_model import ModelMonster
-    model = ModelMonster(model_str, parameter_dict, frequency = frequency, prediction_interval = prediction_interval)
-    model = model.fit(df_train_transformed)
-    df_forecast = model.predict(forecast_length = forecast_length, regressor = "007")
-    
-    df_forecast.lower_forecast = transformer_object.inverse_transform(df_forecast.lower_forecast)
-    df_forecast.forecast = transformer_object.inverse_transform(df_forecast.forecast)
-    df_forecast.upper_forecast = transformer_object.inverse_transform(df_forecast.upper_forecast)
-    
-    return df_forecast
+from autots.evaluator.auto_model import ModelPrediction
+df_forecast = ModelPrediction(df_train, forecast_length,transformation_dict, 
+                              model_str, parameter_dict, frequency=frequency, 
+                              prediction_interval=prediction_interval, 
+                              no_negatives=no_negatives,
+                              preord_regressor_train = preord_regressor_train,
+                              preord_regressor_forecast = preord_regressor_test, 
+                              holiday_country = holiday_country)
 
 from autots.evaluator.metrics import PredictionEval
-model_error = PredictionEval(df_forecast, df_test)
+model_error = PredictionEval(df_forecast, df_test, series_weights = weights)
+model_error.per_series_metrics
+"""
+Transformation Dict
+ModelName
+Parameter Dict
+Capture Errors, Total Runtime
 
+Ensemble
+Regressor
+Multiple validation
+Point to probability isn't working particularly well
+Set seed
+"""
 """
 Managing template errors...\
 
@@ -97,28 +102,6 @@ Confirm per_series weighting
 
 
 
-
-df4 = df_wide_numeric.copy()
-from autots.tools.impute import FillNA
-df4 = FillNA(df4)
-
-from autots.tools.transform import RollingMeanTransformer
-meaner = RollingMeanTransformer(window = 10).fit(df4)
-temp2 = meaner.transform(df4)
-test = temp2.tail(21)
-
-meaner = RollingMeanTransformer(window = 10).fit(df4.head(120))
-temp = meaner.transform(df4.head(120))
-testtemp = meaner.inverse_transform(test, trans_method = 'forecast')
-testDF = pd.concat([df4.tail(21), testtemp], axis = 1)
-testDF2 = pd.concat([temp2.head(120), temp.head(120)], axis = 1)
-
-
-from autots.tools.transform import Detrend
-detrender = Detrend().fit(df4)
-temp = detrender.transform(df4)
-temp = detrender.inverse_transform(temp)
-test = pd.concat([df4, temp], axis = 1)
 
 from autots.tools.profile import data_profile
 # currently doesn't ignore nans

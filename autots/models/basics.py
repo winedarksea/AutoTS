@@ -18,9 +18,9 @@ class ZeroesNaive(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
 
     """
-    def __init__(self, name: str = "ZeroesNaive", frequency: str = 'infer', prediction_interval: float = 0.9):
-        ModelObject.__init__(self, name, frequency, prediction_interval)
-    def fit(self, df):
+    def __init__(self, name: str = "ZeroesNaive", frequency: str = 'infer', prediction_interval: float = 0.9, holiday_country: str = 'US'):
+        ModelObject.__init__(self, name, frequency, prediction_interval, holiday_country = holiday_country)
+    def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -30,7 +30,7 @@ class ZeroesNaive(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -49,19 +49,23 @@ class ZeroesNaive(ModelObject):
         else:
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name = self.name,
-                                          forecast_length=forecast_length,lower_forecast=df,
+                                          forecast_length=forecast_length,
+                                          forecast_index = df.index,
+                                          forecast_columns = df.columns,
+                                          lower_forecast=df,
                                           forecast=df, upper_forecast=df,
                                           prediction_interval=self.prediction_interval,
-                                          predict_runtime=predict_runtime)
+                                          predict_runtime=predict_runtime,
+                                          model_parameters = self.get_params()))
             
             return prediction
         
-    def get_params():
+    def get_params(self):
         """Return dict of current parameters
         """
         return {}
     
-    def get_new_params(method: str = 'random'):
+    def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
         return {}
@@ -75,9 +79,9 @@ class LastValueNaive(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
 
     """
-    def __init__(self, name: str = "LastValueNaive", frequency: str = 'infer', prediction_interval: float = 0.9):
-        ModelObject.__init__(self, name, frequency, prediction_interval)
-    def fit(self, df):
+    def __init__(self, name: str = "LastValueNaive", frequency: str = 'infer', prediction_interval: float = 0.9, holiday_country: str = 'US'):
+        ModelObject.__init__(self, name, frequency, prediction_interval, holiday_country = holiday_country)
+    def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -89,7 +93,7 @@ class LastValueNaive(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -111,19 +115,22 @@ class LastValueNaive(ModelObject):
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name = self.name,
                                           forecast_length=forecast_length,
+                                          forecast_index = df.index,
+                                          forecast_columns = df.columns,
                                           lower_forecast=lower_forecast,
                                           forecast=df, upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
-                                          predict_runtime=predict_runtime)
+                                          predict_runtime=predict_runtime,
+                                          model_parameters = self.get_params())
             
             return prediction
         
-    def get_new_params(method: str = 'random'):
+    def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
         return {}
     
-    def get_params():
+    def get_params(self):
         """Return dict of current parameters
         """
         return {}
@@ -137,9 +144,9 @@ class MedValueNaive(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
 
     """
-    def __init__(self, name: str = "MedValueNaive", frequency: str = 'infer', prediction_interval: float = 0.9):
-        ModelObject.__init__(self, name, frequency, prediction_interval)
-    def fit(self, df):
+    def __init__(self, name: str = "MedValueNaive", frequency: str = 'infer', prediction_interval: float = 0.9, holiday_country: str = 'US'):
+        ModelObject.__init__(self, name, frequency, prediction_interval, holiday_country = holiday_country)
+    def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -150,7 +157,7 @@ class MedValueNaive(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -169,19 +176,23 @@ class MedValueNaive(ModelObject):
         else:
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name = self.name,
-                                          forecast_length=forecast_length,lower_forecast=df,
+                                          forecast_length=forecast_length,
+                                          forecast_index = df.index,
+                                          forecast_columns = df.columns,
+                                          lower_forecast=df,
                                           forecast=df, upper_forecast=df,
                                           prediction_interval=self.prediction_interval,
-                                          predict_runtime=predict_runtime)
+                                          predict_runtime=predict_runtime,
+                                          model_parameters = self.get_params())
             
             return prediction
         
-    def get_new_params(method: str = 'random'):
+    def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
         return {}
     
-    def get_params():
+    def get_params(self):
         """Return dict of current parameters
         """
         return {}

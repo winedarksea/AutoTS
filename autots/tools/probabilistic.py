@@ -92,7 +92,7 @@ def Point_to_Probability(train, forecast, prediction_interval = 0.9):
     """
     
     beta = prediction_interval * 1.25
-    alpha = 0.3
+    alpha = 0.8
     errorranges = Variable_Point_to_Probability(train, forecast, alpha = alpha, beta = beta)
     # make symmetric error ranges
     errorranges = errorranges / 2 

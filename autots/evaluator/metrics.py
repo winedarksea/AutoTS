@@ -106,7 +106,7 @@ class EvalObject(object):
         self.model_name = model_name
         self.residuals = residuals
         self.per_series_metrics = per_series_metrics
-        self.weights
+        self.weights = weights
         self.avg_metrics = avg_metrics
         self.avg_metrics_weighted = avg_metrics_weighted
 
@@ -137,20 +137,3 @@ def PredictionEval(PredictionObject, actual, series_weights = {}):
     
     return errors
 
-"""
-Transformation Dict
-ModelName
-Parameter Dict
-Residuals (date * n series)
-Per Series:
-    smape
-    mae
-    rmse
-    containment
-Avg Error:   np.nanmean()
-    smape
-    mae
-    rmse
-    containment
-Weighted
-"""
