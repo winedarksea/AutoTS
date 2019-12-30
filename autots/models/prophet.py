@@ -26,9 +26,11 @@ class FBProphet(ModelObject):
     def __init__(self, name: str = "FBProphet", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, 
                  holiday: bool = False, 
-                 regression_type: str = None, holiday_country: str = 'US'):
+                 regression_type: str = None, holiday_country: str = 'US',
+                 random_seed: int = 2020):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             regression_type = regression_type, holiday_country = holiday_country)
+                             regression_type = regression_type, 
+                             holiday_country = holiday_country, random_seed = random_seed)
         self.holiday = holiday
         
     def fit(self, df, preord_regressor = []):
@@ -111,6 +113,7 @@ class FBProphet(ModelObject):
                                           upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
+                                          fit_runtime = self.fit_runtime,
                                           model_parameters = self.get_params())
             
             return prediction

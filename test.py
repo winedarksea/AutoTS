@@ -4,13 +4,6 @@ import pandas as pd
 forecast_length = 14
 
 weighted = False
-transformation_dict = {'outlier': 'clip2std',
-                       'fillNA' : 'ffill', 
-                       'transformation' : 'Detrend',
-                       'context_slicer' : 'None'}
-model_str = "FBProphet"
-parameter_dict = {'holiday':True,
-                  'regression_type' : 'User'}
 frequency = '1D'
 prediction_interval = 0.9
 no_negatives = False
@@ -56,6 +49,14 @@ if weighted == False:
     weights = {x:1 for x in df_train.columns}
 
 
+transformation_dict = {'outlier': 'clip2std',
+                       'fillNA' : 'ffill', 
+                       'transformation' : 'Detrend',
+                       'context_slicer' : 'None'}
+model_str = "FBProphet"
+parameter_dict = {'holiday':True,
+                  'regression_type' : 'User'}
+
 from autots.evaluator.auto_model import ModelPrediction
 df_forecast = ModelPrediction(df_train, forecast_length,transformation_dict, 
                               model_str, parameter_dict, frequency=frequency, 
@@ -67,21 +68,43 @@ df_forecast = ModelPrediction(df_train, forecast_length,transformation_dict,
 
 from autots.evaluator.metrics import PredictionEval
 model_error = PredictionEval(df_forecast, df_test, series_weights = weights)
-model_error.per_series_metrics
+
+
+
+
+
+import json
+result = pd.DataFrame({
+        'Model': model_str,
+        'ModelParameters': json.dumps(df_forecast.model_parameters),
+        'TransformationParameters': json.dumps(df_forecast.transformation_parameters),
+        'FitRuntime': df_forecast.fit_runtime,
+        'PredictRuntime': df_forecast.predict_runtime,
+        'TotalRuntime': df_forecast.fit_runtime + df_forecast.predict_runtime
+        }, index = [0])
+a = pd.DataFrame(model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')).transpose()
+result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1)
+
+model_error.per_series_metrics.loc['smape']
+
+model_error.per_series_metrics.loc['mae']
+
+
+
 """
 Transformation Dict
 ModelName
 Parameter Dict
 Capture Errors, Total Runtime
+Model name * Series, all SMAPE
+Dict of Forecast Values
 
 Ensemble
-Regressor
 Multiple validation
 Point to probability isn't working particularly well
-Set seed
 """
 """
-Managing template errors...\
+Managing template errors...
 
 Confirm per_series weighting
 

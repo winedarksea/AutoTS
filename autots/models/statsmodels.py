@@ -19,8 +19,10 @@ class GLM(ModelObject):
 
     """
     def __init__(self, name: str = "GLM", frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, holiday_country: str = 'US'):
-        ModelObject.__init__(self, name, frequency, prediction_interval, holiday_country = holiday_country)
+                 prediction_interval: float = 0.9, holiday_country: str = 'US',
+                 random_seed: int = 2020):
+        ModelObject.__init__(self, name, frequency, prediction_interval, 
+                             holiday_country = holiday_country, random_seed = random_seed)
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
@@ -64,6 +66,7 @@ class GLM(ModelObject):
                                           forecast=df, upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
+                                          fit_runtime = self.fit_runtime,
                                           model_parameters = self.get_params())
             
             return prediction
@@ -95,8 +98,9 @@ class ETS(ModelObject):
     def __init__(self, name: str = "ETS", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, damped: bool = False, 
                  trend: str = None, seasonal: str=None, seasonal_periods:int=None, 
-                 holiday_country: str = 'US'):
-        ModelObject.__init__(self, name, frequency, prediction_interval, holiday_country = holiday_country)
+                 holiday_country: str = 'US',random_seed: int = 2020):
+        ModelObject.__init__(self, name, frequency, prediction_interval, 
+                             holiday_country = holiday_country, random_seed = random_seed)
         self.damped = damped
         self.trend = trend
         self.seasonal = seasonal
@@ -152,6 +156,7 @@ class ETS(ModelObject):
                                           upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
+                                          fit_runtime = self.fit_runtime,
                                           model_parameters = self.get_params())
             
             return prediction
@@ -208,9 +213,11 @@ class ARIMA(ModelObject):
     """
     def __init__(self, name: str = "ARIMA", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, p:int = 0, d:int = 1,
-                 q:int = 0, regression_type: str = None, holiday_country: str = 'US'):
+                 q:int = 0, regression_type: str = None, holiday_country: str = 'US',
+                 random_seed: int = 2020):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             regression_type = regression_type, holiday_country = holiday_country)
+                             regression_type = regression_type, 
+                             holiday_country = holiday_country, random_seed = random_seed)
         self.p = p
         self.d = d
         self.q = q
@@ -286,6 +293,7 @@ class ARIMA(ModelObject):
                                           upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
+                                          fit_runtime = self.fit_runtime,
                                           model_parameters = self.get_params())
             
             return prediction

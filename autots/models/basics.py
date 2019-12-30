@@ -18,8 +18,12 @@ class ZeroesNaive(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
 
     """
-    def __init__(self, name: str = "ZeroesNaive", frequency: str = 'infer', prediction_interval: float = 0.9, holiday_country: str = 'US'):
-        ModelObject.__init__(self, name, frequency, prediction_interval, holiday_country = holiday_country)
+    def __init__(self, name: str = "ZeroesNaive", frequency: str = 'infer', 
+                 prediction_interval: float = 0.9, holiday_country: str = 'US',
+                 random_seed: int = 2020):
+        ModelObject.__init__(self, name, frequency, prediction_interval, 
+                             holiday_country = holiday_country,
+                             random_seed = random_seed)
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
@@ -56,6 +60,7 @@ class ZeroesNaive(ModelObject):
                                           forecast=df, upper_forecast=df,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
+                                          fit_runtime = self.fit_runtime,
                                           model_parameters = self.get_params()))
             
             return prediction
@@ -79,8 +84,11 @@ class LastValueNaive(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
 
     """
-    def __init__(self, name: str = "LastValueNaive", frequency: str = 'infer', prediction_interval: float = 0.9, holiday_country: str = 'US'):
-        ModelObject.__init__(self, name, frequency, prediction_interval, holiday_country = holiday_country)
+    def __init__(self, name: str = "LastValueNaive", frequency: str = 'infer', 
+                 prediction_interval: float = 0.9, holiday_country: str = 'US',
+                 random_seed: int = 2020):
+        ModelObject.__init__(self, name, frequency, prediction_interval, 
+                             holiday_country = holiday_country, random_seed = random_seed)
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
@@ -121,6 +129,7 @@ class LastValueNaive(ModelObject):
                                           forecast=df, upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
+                                          fit_runtime = self.fit_runtime,
                                           model_parameters = self.get_params())
             
             return prediction
@@ -144,8 +153,11 @@ class MedValueNaive(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
 
     """
-    def __init__(self, name: str = "MedValueNaive", frequency: str = 'infer', prediction_interval: float = 0.9, holiday_country: str = 'US'):
-        ModelObject.__init__(self, name, frequency, prediction_interval, holiday_country = holiday_country)
+    def __init__(self, name: str = "MedValueNaive", frequency: str = 'infer', 
+                 prediction_interval: float = 0.9, holiday_country: str = 'US',
+                 random_seed: int = 2020):
+        ModelObject.__init__(self, name, frequency, prediction_interval, 
+                             holiday_country = holiday_country, random_seed = random_seed)
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
@@ -183,6 +195,7 @@ class MedValueNaive(ModelObject):
                                           forecast=df, upper_forecast=df,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
+                                          fit_runtime = self.fit_runtime,
                                           model_parameters = self.get_params())
             
             return prediction

@@ -16,13 +16,15 @@ class ModelObject(object):
     """
     def __init__(self, name: str = "Uninitiated Model Name", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, regression_type: str = None, 
-                 fit_runtime=datetime.timedelta(0), holiday_country: str = 'US'):
+                 fit_runtime=datetime.timedelta(0), holiday_country: str = 'US',
+                 random_seed: int = 2020):
         self.name = name
         self.frequency = frequency
         self.prediction_interval = prediction_interval
         self.regression_type = regression_type
         self.fit_runtime = fit_runtime
         self.holiday_country = holiday_country
+        self.random_seed = random_seed
     
     def __repr__(self):
         return 'ModelObject of ' + self.name
@@ -63,7 +65,8 @@ class PredictionObject(object):
                  forecast_length: int = 0, 
                  forecast_index = np.nan, forecast_columns = np.nan,
                  lower_forecast = np.nan, forecast = np.nan, upper_forecast = np.nan, 
-                 prediction_interval: float = 0.9, predict_runtime=datetime.timedelta(0), 
+                 prediction_interval: float = 0.9, predict_runtime=datetime.timedelta(0),
+                 fit_runtime = datetime.timedelta(0),
                  model_parameters = {}, transformation_parameters = {}):
         self.model_name = model_name
         self.model_parameters = model_parameters
@@ -76,6 +79,7 @@ class PredictionObject(object):
         self.upper_forecast = upper_forecast
         self.prediction_interval = prediction_interval
         self.predict_runtime = predict_runtime
+        self.fit_runtime = fit_runtime
         
 
 
