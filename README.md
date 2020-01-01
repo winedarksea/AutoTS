@@ -25,5 +25,44 @@ pip install numpy==1.17.4 # gluonts likes to force numpy back to 1.14, but 1.17 
 pip install sktime==0.3.1
 
 
-preordained_regressor
-regressor_type = [None, 'User', 'Holiday']
+## To-Do
+Speed improvements, Parallelization, and Distributed options for general greater speed
+Generate list of functional frequences, and improve usability on rarer frequenices
+Warning/handling if lots of NaN in most recent (test) part of data
+Figures: Add option to output figures of train/test + forecast, other performance figures
+Input and Output saved templates as .csv and .json
+'Check Package' to check if optional model packages are installed
+Pre-clustering on many time series
+If all input are Int, convert floats back to int
+Trim whitespace on string inputs
+Hierachial correction (bottom-up to start with)
+Improved verbosity controls and options
+Export as simpler code (as TPOT)
+AIC metric
+Analyze and return inaccuracy patterns
+Used saved results to resume a search partway through
+Generally improved probabilistic forecasting
+Option to drop series which haven't had a value in last N days
+
+#### Ensemble:
+	best 3
+	forecast distance 20/80
+	forecast distance 30/30/30
+	best per series ensemble
+	best point with best probalistic containment
+#### New models:
+	Seasonal Naive
+	Last Value + Drift Naive
+	Simple Decomposition forecasting
+	GluonTS Models
+	Simulations
+	Sklearn + TSFresh
+	Sklearn + polynomial features
+	Sktime
+	Ta-lib
+	tslearn
+	pydlm
+	Isotonic regression
+	TPOT if it adds multioutput functionality
+	
+

@@ -67,7 +67,8 @@ class PredictionObject(object):
                  lower_forecast = np.nan, forecast = np.nan, upper_forecast = np.nan, 
                  prediction_interval: float = 0.9, predict_runtime=datetime.timedelta(0),
                  fit_runtime = datetime.timedelta(0),
-                 model_parameters = {}, transformation_parameters = {}):
+                 model_parameters = {}, transformation_parameters = {},
+                 transformation_runtime=datetime.timedelta(0)):
         self.model_name = model_name
         self.model_parameters = model_parameters
         self.transformation_parameters = transformation_parameters
@@ -80,6 +81,7 @@ class PredictionObject(object):
         self.prediction_interval = prediction_interval
         self.predict_runtime = predict_runtime
         self.fit_runtime = fit_runtime
+        self.transformation_runtime = transformation_runtime
         
 
 
@@ -87,16 +89,26 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
                     model_str: str, parameter_dict: dict, frequency: str = 'infer', 
                     prediction_interval: float = 0.9, no_negatives: bool = False,
                     preord_regressor_train = [], preord_regressor_forecast = [], 
-                    holiday_country: str = 'US'):
+                    holiday_country: str = 'US', startTimeStamps = None):
     """Feed parameters into modeling pipeline
     
     Args:
         df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
-      
+        forecast_length (int): number of periods to forecast
+        transformation_dict (dict): a dictionary of outlier, fillNA, and transformation methods to be used
+        model_str (str): a string to be direct to the appropriate model, used in ModelMonster
+        frequency (str): str representing frequency alias of time series
+        prediction_interval (float): width of errors (note: rarely do the intervals accurately match the % asked for...)
+        no_negatives (bool): whether to force all forecasts to be > 0
+        preord_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
+        preord_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
+        holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.            
+        startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
+        
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
     """
-    
+    transformationStartTime = datetime.datetime.now()
     from autots.tools.transform import GeneralTransformer
     transformer_object = GeneralTransformer(outlier=transformation_dict['outlier'],
                                             fillNA = transformation_dict['fillNA'], 
@@ -107,15 +119,17 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
         from autots.tools.transform import simple_context_slicer
         df_train_transformed = simple_context_slicer(df_train_transformed, method = transformation_dict['context_slicer'], forecast_length = forecast_length)
     
+    transformation_runtime = datetime.datetime.now() - transformationStartTime
     from autots.evaluator.auto_model import ModelMonster
     model = ModelMonster(model_str, parameters=parameter_dict, frequency = frequency, 
                          prediction_interval = prediction_interval, holiday_country = holiday_country)
     model = model.fit(df_train_transformed, preord_regressor = preord_regressor_train)
     df_forecast = model.predict(forecast_length = forecast_length, preord_regressor = preord_regressor_forecast)
     
+    transformationStartTime = datetime.datetime.now()
     # Inverse the transformations
-    df_forecast.lower_forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.lower_forecast), index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
     df_forecast.forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.forecast), index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
+    df_forecast.lower_forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.lower_forecast), index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
     df_forecast.upper_forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.upper_forecast), index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
     
     df_forecast.transformation_parameters = transformation_dict
@@ -124,10 +138,14 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
         df_forecast.lower_forecast = df_forecast.lower_forecast.where(df_forecast.lower_forecast > 0, 0)
         df_forecast.forecast = df_forecast.forecast.where(df_forecast.forecast > 0, 0)
         df_forecast.upper_forecast = df_forecast.upper_forecast.where(df_forecast.upper_forecast > 0, 0)
-        
+    transformation_runtime = transformation_runtime + (datetime.datetime.now() - transformationStartTime)
+    df_forecast.transformation_runtime = transformation_runtime
+    
     return df_forecast
 
-def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', prediction_interval: float = 0.9, holiday_country: str = 'US'):
+def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', 
+                 prediction_interval: float = 0.9, holiday_country: str = 'US', 
+                 startTimeStamps = None):
     """Directs strings and parameters to appropriate model objects.
     
     Args:

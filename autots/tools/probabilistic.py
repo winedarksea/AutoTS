@@ -91,8 +91,8 @@ def Point_to_Probability(train, forecast, prediction_interval = 0.9):
         upper_error, lower_error (two pandas.DataFrames for upper and lower bound respectively)
     """
     
-    beta = prediction_interval * 1.25
-    alpha = 0.8
+    beta = np.exp(prediction_interval * 10)
+    alpha = 1
     errorranges = Variable_Point_to_Probability(train, forecast, alpha = alpha, beta = beta)
     # make symmetric error ranges
     errorranges = errorranges / 2 
