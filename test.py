@@ -60,7 +60,25 @@ upper_forecasts = []
 lower_forecasts = []
 forecasts_list = []
 
-json.loads()
+from autots.evaluator.auto_model import ModelNames
+from autots.tools.transform import RandomTransform
+from autots.evaluator.auto_model import ModelMonster
+def RandomTemplate(n: int = 10):
+    template = pd.DataFrame()
+    for i in range(n):
+        model_str = np.random.choice(ModelNames)
+        param_dict = ModelMonster(model_str).get_new_params()
+        trans_dict = RandomTransform()
+        row = pd.DataFrame({
+                'Model': model_str,
+                'ModelParameters': param_dict,
+                'TransformationParameters': trans_dict
+                }, index = [0])
+        pd.concat([template, row], axis = 0, ignore_index = True)
+    return template
+    
+
+# json.loads()
 transformation_dict = {'outlier': 'clip2std',
                        'fillNA' : 'ffill', 
                        'transformation' : 'RollingMean10',
@@ -145,6 +163,7 @@ ARIMA + Detrend fails
 Combine multiple metrics into 'score'
 Ranked by score
 """
+
 """
 Managing template errors...
 

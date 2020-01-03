@@ -386,3 +386,18 @@ class GeneralTransformer(object):
         return df
 
 
+def RandomTransform():
+    """
+    Returns a dict of randomly choosen transformation selections
+    """
+    outlier_choice = np.random.choice(a = [None, 'clip3std', 'clip2std','clip4std','remove3std'], size = 1, p = [0.4, 0.3, 0.1, 0.1, 0.1]).item()
+    na_choice = np.random.choice(a = ['ffill', 'fake date', 'rolling mean','mean','zero', 'ffill mean biased', 'median'], size = 1, p = [0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1]).item()
+    transformation_choice = np.random.choice(a = [None, 'PowerTransformer', 'RollingMean100thN','MinMaxScaler','Detrend', 'RollingMean10'], size = 1, p = [0.3, 0.2, 0.2, 0.1, 0.1, 0.1]).item()
+    context_choice = np.random.choice(a = [None, 'HalfMax', '2ForecastLength'], size = 1, p = [0.8, 0.1, 0.1]).item()
+    param_dict = {
+            'outlier': outlier_choice,
+            'fillNA' : na_choice, 
+           'transformation' : transformation_choice,
+           'context_slicer' : context_choice
+            }
+    return param_dict
