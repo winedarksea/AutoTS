@@ -64,21 +64,34 @@ from autots.evaluator.auto_model import ModelNames
 from autots.tools.transform import RandomTransform
 from autots.evaluator.auto_model import ModelMonster
 def RandomTemplate(n: int = 10):
+    """"
+    Returns a template dataframe of randomly generated transformations, models, and hyperparameters
+    
+    Args:
+        n (int): number of random models to return
+    """
+    n = abs(int(n))
     template = pd.DataFrame()
-    for i in range(n):
+    counter = 0
+    while (len(template.index) < n):
         model_str = np.random.choice(ModelNames)
         param_dict = ModelMonster(model_str).get_new_params()
         trans_dict = RandomTransform()
         row = pd.DataFrame({
                 'Model': model_str,
-                'ModelParameters': param_dict,
-                'TransformationParameters': trans_dict
+                'ModelParameters': json.dumps(param_dict),
+                'TransformationParameters': json.dumps(trans_dict),
+                'Ensemble': 0
                 }, index = [0])
-        pd.concat([template, row], axis = 0, ignore_index = True)
+        template = pd.concat([template, row], axis = 0, ignore_index = True)
+        template.drop_duplicates(inplace = True)
+        counter += 1
+        if counter > (n * 3):
+            break
     return template
     
 
-# json.loads()
+# 
 transformation_dict = {'outlier': 'clip2std',
                        'fillNA' : 'ffill', 
                        'transformation' : 'RollingMean10',
@@ -92,57 +105,63 @@ parameter_dict = {'p': 1,
                   'q': 1,
                   'regression_type' : 'User'}
 
-try:
-    from autots.evaluator.auto_model import ModelPrediction
-    df_forecast = ModelPrediction(df_train, forecast_length,transformation_dict, 
-                                  model_str, parameter_dict, frequency=frequency, 
-                                  prediction_interval=prediction_interval, 
-                                  no_negatives=no_negatives,
-                                  preord_regressor_train = preord_regressor_train,
-                                  preord_regressor_forecast = preord_regressor_test, 
-                                  holiday_country = holiday_country,
-                                  startTimeStamps = profile_df.loc['FirstDate'])
+template = RandomTemplate(20)
+for index, row in template.iterrows():
+    model_str = row['Model']
+    parameter_dict = json.loads(row['ModelParameters'])
+    transformation_dict = json.loads(row['TransformationParameters'])
+    print("Row: {} with model {}".format(str(index), model_str))
+    try:
+        from autots.evaluator.auto_model import ModelPrediction
+        df_forecast = ModelPrediction(df_train, forecast_length,transformation_dict, 
+                                      model_str, parameter_dict, frequency=frequency, 
+                                      prediction_interval=prediction_interval, 
+                                      no_negatives=no_negatives,
+                                      preord_regressor_train = preord_regressor_train,
+                                      preord_regressor_forecast = preord_regressor_test, 
+                                      holiday_country = holiday_country,
+                                      startTimeStamps = profile_df.loc['FirstDate'])
+        
+        from autots.evaluator.metrics import PredictionEval
+        model_error = PredictionEval(df_forecast, df_test, series_weights = weights)
+        
+        result = pd.DataFrame({
+                'Model': model_str,
+                'ModelParameters': json.dumps(df_forecast.model_parameters),
+                'TransformationParameters': json.dumps(df_forecast.transformation_parameters),
+                'TransformationRuntime': df_forecast.transformation_runtime,
+                'FitRuntime': df_forecast.fit_runtime,
+                'PredictRuntime': df_forecast.predict_runtime,
+                'TotalRuntime': df_forecast.fit_runtime + df_forecast.predict_runtime + df_forecast.transformation_runtime,
+                'Ensemble': 0,
+                'Exceptions': np.nan
+                }, index = [0])
+        a = pd.DataFrame(model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')).transpose()
+        result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1)
+        
+        model_results = pd.concat([model_results, result], axis = 0).reset_index(drop = True)
+        model_results_per_series_smape = model_results_per_series_smape.append(model_error.per_series_metrics.loc['smape'], ignore_index = True)
+        model_results_per_series_mae = model_results_per_series_mae.append(model_error.per_series_metrics.loc['mae'], ignore_index = True)
+        
+        if ensemble:
+            forecasts_list.extend([model_str])
+            forecasts.extend([df_forecast.forecast])
+            upper_forecasts.extend([df_forecast.upper_forecast])
+            lower_forecasts.extend([df_forecast.lower_forecast])
     
-    from autots.evaluator.metrics import PredictionEval
-    model_error = PredictionEval(df_forecast, df_test, series_weights = weights)
-    
-    result = pd.DataFrame({
+    except Exception as e:
+        result = pd.DataFrame({
             'Model': model_str,
-            'ModelParameters': json.dumps(df_forecast.model_parameters),
-            'TransformationParameters': json.dumps(df_forecast.transformation_parameters),
-            'TransformationRuntime': df_forecast.transformation_runtime,
-            'FitRuntime': df_forecast.fit_runtime,
-            'PredictRuntime': df_forecast.predict_runtime,
-            'TotalRuntime': df_forecast.fit_runtime + df_forecast.predict_runtime + df_forecast.transformation_runtime,
+            'ModelParameters': json.dumps(parameter_dict),
+            'TransformationParameters': json.dumps(transformation_dict),
             'Ensemble': 0,
-            'Exceptions': np.nan
+            'TransformationRuntime': datetime.timedelta(0),
+            'FitRuntime': datetime.timedelta(0),
+            'PredictRuntime': datetime.timedelta(0),
+            'TotalRuntime': datetime.timedelta(0),
+            'Exceptions': str(e)
             }, index = [0])
-    a = pd.DataFrame(model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')).transpose()
-    result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1)
-    
-    model_results = pd.concat([model_results, result], axis = 0).reset_index(drop = True)
-    model_results_per_series_smape = model_results_per_series_smape.append(model_error.per_series_metrics.loc['smape'], ignore_index = True)
-    model_results_per_series_mae = model_results_per_series_mae.append(model_error.per_series_metrics.loc['mae'], ignore_index = True)
-    
-    if ensemble:
-        forecasts_list.extend([model_str])
-        forecasts.extend([df_forecast.forecast])
-        upper_forecasts.extend([df_forecast.upper_forecast])
-        lower_forecasts.extend([df_forecast.lower_forecast])
-
-except Exception as e:
-    result = pd.DataFrame({
-        'Model': model_str,
-        'ModelParameters': json.dumps(parameter_dict),
-        'TransformationParameters': json.dumps(transformation_dict),
-        'TransformationRuntime': datetime.timedelta(0),
-        'FitRuntime': datetime.timedelta(0),
-        'PredictRuntime': datetime.timedelta(0),
-        'TotalRuntime': datetime.timedelta(0),
-        'Ensemble': 0,
-        'Exceptions': str(e)
-        }, index = [0])
-    model_results = pd.concat([model_results, result], axis = 0).reset_index(drop = True)
+        model_results = pd.concat([model_results, result], axis = 0).reset_index(drop = True)
 
 
 """

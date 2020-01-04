@@ -61,17 +61,17 @@ class ZeroesNaive(ModelObject):
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
                                           fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params()))
+                                          model_parameters = self.get_params())
             
             return prediction
         
-    def get_params(self):
-        """Return dict of current parameters
+    def get_new_params(self,method: str = 'random'):
+        """Returns dict of new parameters for parameter tuning
         """
         return {}
     
-    def get_new_params(self, method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
+    def get_params(self):
+        """Return dict of current parameters
         """
         return {}
 
@@ -134,7 +134,7 @@ class LastValueNaive(ModelObject):
             
             return prediction
         
-    def get_new_params(self, method: str = 'random'):
+    def get_new_params(self,method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
         return {}
@@ -200,7 +200,7 @@ class MedValueNaive(ModelObject):
             
             return prediction
         
-    def get_new_params(self, method: str = 'random'):
+    def get_new_params(self,method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
         return {}
