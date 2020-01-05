@@ -59,6 +59,7 @@ forecasts = []
 upper_forecasts = []
 lower_forecasts = []
 forecasts_list = []
+forecasts_runtime = []
 
 from autots.evaluator.auto_model import ModelNames
 from autots.tools.transform import RandomTransform
@@ -134,6 +135,7 @@ for index, row in template.iterrows():
         from autots.evaluator.metrics import PredictionEval
         model_error = PredictionEval(df_forecast, df_test, series_weights = weights)
         model_id = create_model_id(model_str, df_forecast.model_parameters, df_forecast.transformation_parameters)
+        total_runtime = df_forecast.fit_runtime + df_forecast.predict_runtime + df_forecast.transformation_runtime
         result = pd.DataFrame({
                 'ID': model_id,
                 'Model': model_str,
@@ -142,7 +144,7 @@ for index, row in template.iterrows():
                 'TransformationRuntime': df_forecast.transformation_runtime,
                 'FitRuntime': df_forecast.fit_runtime,
                 'PredictRuntime': df_forecast.predict_runtime,
-                'TotalRuntime': df_forecast.fit_runtime + df_forecast.predict_runtime + df_forecast.transformation_runtime,
+                'TotalRuntime': total_runtime,
                 'Ensemble': 0,
                 'Exceptions': np.nan
                 }, index = [0])
@@ -155,6 +157,7 @@ for index, row in template.iterrows():
         
         if ensemble:
             forecasts_list.extend([model_id])
+            forecasts_runtime.extend([total_runtime])
             forecasts.extend([df_forecast.forecast])
             upper_forecasts.extend([df_forecast.upper_forecast])
             lower_forecasts.extend([df_forecast.lower_forecast])
@@ -175,41 +178,49 @@ for index, row in template.iterrows():
         model_results = pd.concat([model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
 
 
-# forecasts[35].isnull().all(axis = 0).astype(int)
-
 if ensemble:
-    best3 = model_results.nsmallest(3, columns = ['smape'])
-    ensemble_models = {}
-    for index, row in best3.iterrows():
-        temp_dict = {'Model': row['Model'],
-         'ModelParameters': row['ModelParameters'],
-         'TransformationParameters': row['TransformationParameters']
-         }
-        ensemble_models[row['ID']] = temp_dict
-    model_indexes = [idx for idx, x in enumerate(forecasts_list) if x in best3['ID'].tolist()]
-    ens_df = pd.DataFrame(0, index=forecasts[0].index, columns=forecasts[0].columns)
-    for idx, x in enumerate(forecasts):
-        if idx in model_indexes:
-            print(idx)
-            ens_df = ens_df + forecasts[idx]
-    ens_df = ens_df / len(model_indexes)
-    """
-    PredictionObject(model_name = "Best3Ensemble",
-                                          forecast_length=forecast_length,
-                                          forecast_index = ens_df.index,
-                                          forecast_columns = ens_df.columns,
-                                          lower_forecast=,
-                                          forecast=ens_df, upper_forecast=,
-                                          prediction_interval= prediction_interval,
-                                          predict_runtime=,
-                                          fit_runtime = ,
-                                          model_parameters = 
-                                          )
-    """
+    from autots.models.ensemble import Best3Ensemble
+    ens_forecast = Best3Ensemble(model_results, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval)
+    try:
+        from autots.evaluator.metrics import PredictionEval
+        model_error = PredictionEval(ens_forecast, df_test, series_weights = weights)
+        model_id = create_model_id(ens_forecast.model_name, ens_forecast.model_parameters, ens_forecast.transformation_parameters)
+        total_runtime = ens_forecast.fit_runtime + ens_forecast.predict_runtime + ens_forecast.transformation_runtime
+        result = pd.DataFrame({
+                'ID': model_id,
+                'Model': ens_forecast.model_name,
+                'ModelParameters': json.dumps(ens_forecast.model_parameters),
+                'TransformationParameters': json.dumps(ens_forecast.transformation_parameters),
+                'TransformationRuntime': ens_forecast.transformation_runtime,
+                'FitRuntime': ens_forecast.fit_runtime,
+                'PredictRuntime': ens_forecast.predict_runtime,
+                'TotalRuntime': total_runtime,
+                'Ensemble': 1,
+                'Exceptions': np.nan
+                }, index = [0])
+        a = pd.DataFrame(model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')).transpose()
+        result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1)
+        
+        model_results = pd.concat([model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+        model_results_per_series_smape = model_results_per_series_smape.append(model_error.per_series_metrics.loc['smape'], ignore_index = True)
+        model_results_per_series_mae = model_results_per_series_mae.append(model_error.per_series_metrics.loc['mae'], ignore_index = True)
+        
+    except Exception as e:
+        model_str = "Best3Ensemble"
+        result = pd.DataFrame({
+            'ID': create_model_id(model_str, {}, {}),
+            'Model': model_str,
+            'ModelParameters': json.dumps({}),
+            'TransformationParameters': json.dumps({}),
+            'Ensemble': 1,
+            'TransformationRuntime': datetime.timedelta(0),
+            'FitRuntime': datetime.timedelta(0),
+            'PredictRuntime': datetime.timedelta(0),
+            'TotalRuntime': datetime.timedelta(0),
+            'Exceptions': str(e)
+            }, index = [0])
+        model_results = pd.concat([model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
 
-# {'models': }
-
-model_results['smape'].idxmin(skipna = True)
 
 """
 Passing in Start Dates - (Test)
