@@ -43,6 +43,7 @@ Analyze and return inaccuracy patterns
 Used saved results to resume a search partway through
 Generally improved probabilistic forecasting
 Option to drop series which haven't had a value in last N days
+Use quantile of training data to provide upper/lower forecast for Last Value Naive (so upper forecast might be 95th percentile largest number)
 
 #### Ensemble:
 	best 3

@@ -126,6 +126,9 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     model = model.fit(df_train_transformed, preord_regressor = preord_regressor_train)
     df_forecast = model.predict(forecast_length = forecast_length, preord_regressor = preord_regressor_forecast)
     
+    if df_forecast.forecast.isnull().all(axis = 0).astype(int).sum() > 0:
+        raise ValueError("Model {} failed for one or more series".format(model_str))
+    
     transformationStartTime = datetime.datetime.now()
     # Inverse the transformations
     df_forecast.forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.forecast), index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)

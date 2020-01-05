@@ -300,7 +300,7 @@ class GeneralTransformer(object):
         """
         transformation = self.transformation
         if (transformation =='None') or (transformation == None):
-            transformer = EmptyTransformer.fit(df)
+            transformer = EmptyTransformer().fit(df)
             return transformer
         
         if (transformation =='MinMaxScaler'):

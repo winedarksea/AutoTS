@@ -140,7 +140,8 @@ class ETS(ModelObject):
             esPred = esModel.predict(start=test_index[0], end=test_index[-1])
             forecast = pd.concat([forecast, esPred], axis = 1)
         forecast.columns = self.column_names
-        
+        if forecast.isnull().all(axis = 0).astype(int).sum() > 0:
+            print("One or more series have failed to optimize with ETS model")
         if just_point_forecast:
             return forecast
         else:
@@ -268,10 +269,10 @@ class ARIMA(ModelObject):
             current_series = self.df_train[series].copy()
             try:
                 if (self.regression_type == "User") or (self.regression_type == "Holiday"):
-                    maModel = ARIMA(current_series, order = self.order, freq = self.frequency, exog = self.regressor_train).fit()
+                    maModel = ARIMA(current_series, order = self.order, freq = self.frequency, exog = self.regressor_train).fit(maxiter = 600)
                     maPred = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
                 else:
-                    maModel = ARIMA(current_series, order = self.order, freq = self.frequency).fit()
+                    maModel = ARIMA(current_series, order = self.order, freq = self.frequency).fit(maxiter = 600)
                     maPred = maModel.predict(start=test_index[0], end=test_index[-1])
             except Exception:
                 maPred = pd.Series((np.zeros((forecast_length,))), index = test_index)

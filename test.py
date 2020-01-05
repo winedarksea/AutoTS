@@ -90,7 +90,15 @@ def RandomTemplate(n: int = 10):
             break
     return template
     
-
+import hashlib
+def create_model_id(model_str: str, parameter_dict: dict = {}, transformation_dict: dict = {}):
+    """
+    Create a hash model ID which should be unique to the model parameters
+    """
+    str_repr = str(model_str) + json.dumps(parameter_dict) + json.dumps(transformation_dict)
+    str_repr = ''.join(str_repr.split())
+    hashed = hashlib.md5(str_repr.encode('utf-8')).hexdigest()
+    return hashed
 # 
 transformation_dict = {'outlier': 'clip2std',
                        'fillNA' : 'ffill', 
@@ -105,7 +113,8 @@ parameter_dict = {'p': 1,
                   'q': 1,
                   'regression_type' : 'User'}
 
-template = RandomTemplate(20)
+template = RandomTemplate(40)
+
 for index, row in template.iterrows():
     model_str = row['Model']
     parameter_dict = json.loads(row['ModelParameters'])
@@ -124,8 +133,9 @@ for index, row in template.iterrows():
         
         from autots.evaluator.metrics import PredictionEval
         model_error = PredictionEval(df_forecast, df_test, series_weights = weights)
-        
+        model_id = create_model_id(model_str, df_forecast.model_parameters, df_forecast.transformation_parameters)
         result = pd.DataFrame({
+                'ID': model_id,
                 'Model': model_str,
                 'ModelParameters': json.dumps(df_forecast.model_parameters),
                 'TransformationParameters': json.dumps(df_forecast.transformation_parameters),
@@ -139,18 +149,19 @@ for index, row in template.iterrows():
         a = pd.DataFrame(model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')).transpose()
         result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1)
         
-        model_results = pd.concat([model_results, result], axis = 0).reset_index(drop = True)
+        model_results = pd.concat([model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
         model_results_per_series_smape = model_results_per_series_smape.append(model_error.per_series_metrics.loc['smape'], ignore_index = True)
         model_results_per_series_mae = model_results_per_series_mae.append(model_error.per_series_metrics.loc['mae'], ignore_index = True)
         
         if ensemble:
-            forecasts_list.extend([model_str])
+            forecasts_list.extend([model_id])
             forecasts.extend([df_forecast.forecast])
             upper_forecasts.extend([df_forecast.upper_forecast])
             lower_forecasts.extend([df_forecast.lower_forecast])
     
     except Exception as e:
         result = pd.DataFrame({
+            'ID': create_model_id(model_str, parameter_dict, transformation_dict),
             'Model': model_str,
             'ModelParameters': json.dumps(parameter_dict),
             'TransformationParameters': json.dumps(transformation_dict),
@@ -161,30 +172,56 @@ for index, row in template.iterrows():
             'TotalRuntime': datetime.timedelta(0),
             'Exceptions': str(e)
             }, index = [0])
-        model_results = pd.concat([model_results, result], axis = 0).reset_index(drop = True)
+        model_results = pd.concat([model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
 
+
+# forecasts[35].isnull().all(axis = 0).astype(int)
+
+if ensemble:
+    best3 = model_results.nsmallest(3, columns = ['smape'])
+    ensemble_models = {}
+    for index, row in best3.iterrows():
+        temp_dict = {'Model': row['Model'],
+         'ModelParameters': row['ModelParameters'],
+         'TransformationParameters': row['TransformationParameters']
+         }
+        ensemble_models[row['ID']] = temp_dict
+    model_indexes = [idx for idx, x in enumerate(forecasts_list) if x in best3['ID'].tolist()]
+    ens_df = pd.DataFrame(0, index=forecasts[0].index, columns=forecasts[0].columns)
+    for idx, x in enumerate(forecasts):
+        if idx in model_indexes:
+            print(idx)
+            ens_df = ens_df + forecasts[idx]
+    ens_df = ens_df / len(model_indexes)
+    """
+    PredictionObject(model_name = "Best3Ensemble",
+                                          forecast_length=forecast_length,
+                                          forecast_index = ens_df.index,
+                                          forecast_columns = ens_df.columns,
+                                          lower_forecast=,
+                                          forecast=ens_df, upper_forecast=,
+                                          prediction_interval= prediction_interval,
+                                          predict_runtime=,
+                                          fit_runtime = ,
+                                          model_parameters = 
+                                          )
+    """
+
+# {'models': }
+
+model_results['smape'].idxmin(skipna = True)
 
 """
-Transformation Dict
-ModelName
-Parameter Dict
-Model name * Series, all SMAPE
-Dict of Forecast Values
-Errors in Results DF
-Passing in Start Dates
+Passing in Start Dates - (Test)
 
 Ensemble
 Multiple validation
-Point to probability isn't working particularly well
 
 ARIMA + Detrend fails
+Transformation: Null fails
 
 Combine multiple metrics into 'score'
 Ranked by score
-"""
-
-"""
-Managing template errors...
 
 Confirm per_series weighting
 
