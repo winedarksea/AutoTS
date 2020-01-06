@@ -100,8 +100,8 @@ forecasts_runtime = []
 from autots.evaluator.auto_model import TemplateWizard    
 
 model_count = 0
-template = RandomTemplate(30)
-template_result = TemplateWizard(template, df_train, df_test, weights,
+initial_template = RandomTemplate(40)
+template_result = TemplateWizard(initial_template, df_train, df_test, weights,
                                  model_count = model_count, ensemble = ensemble, 
                                  forecast_length = forecast_length, frequency=frequency, 
                                   prediction_interval=prediction_interval, 
@@ -123,9 +123,32 @@ if ensemble:
     upper_forecasts.extend(template_result.upper_forecasts)
     lower_forecasts.extend(template_result.lower_forecasts)
 
+generations = 3
+n_selection = 10
+for x in range(generations):
+    model_results.nsmallest(n = n_selection, columns = "smape_weighted", keep = 'all')
+    
+"""
+Genetic Algorithm
+    Intial template (random, expert, expert+random) (user only, user add-on)
+    For X generations:
+        Select N best algorithms (by multiple metrics, MAE, SMAPE)
+            Generate Y new models
+    Pass Z models into Multiple Validation
+
+New models
+            Recombine best two of each model, if two or more present
+            Generate new random model, mix: random trans + best param, best trans + random param
+            
+            Recombine best transformations across different models
+            
+            Check if combination already tested
+"""
 
 if ensemble:
-    best3 = model_results[model_results['Ensemble'] == 0].nsmallest(3, columns = ['smape'])
+    ensemble_forecasts_list = []
+    
+    best3 = model_results[model_results['Ensemble'] == 0].nsmallest(3, columns = ['smape_weighted'])
     ensemble_models = {}
     for index, row in best3.iterrows():
         temp_dict = {'Model': row['Model'],
@@ -136,8 +159,8 @@ if ensemble:
     best3params = {'models': ensemble_models}    
     
     from autots.models.ensemble import EnsembleForecast
-    ens_forecast = EnsembleForecast("Best3Ensemble", best3params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval)
-    
+    best3_ens_forecast = EnsembleForecast("Best3Ensemble", best3params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval)
+    ensemble_forecasts_list.append(best3_ens_forecast)
     
     first_bit = int(np.ceil(forecast_length * 0.2))
     last_bit = int(np.floor(forecast_length * 0.8))
@@ -152,28 +175,35 @@ if ensemble:
          'TransformationParameters': row['TransformationParameters']
          }
         ensemble_models[row['ID']] = temp_dict
-    dist2090params = {'models': ensemble_models,
+    dist2080params = {'models': ensemble_models,
                       'FirstModel':first_model,
                       'LastModel':last_model} 
+    dist2080_ens_forecast = EnsembleForecast("Dist2080Ensemble", dist2080params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval)
+    ensemble_forecasts_list.append(dist2080_ens_forecast)
+
+    from autots.models.ensemble import EnsembleEvaluate
+    ens_template_result = EnsembleEvaluate(ensemble_forecasts_list, df_test = df_test, weights = weights, model_count = model_count)
+    
+    model_count = ens_template_result.model_count
+    model_results = pd.concat([model_results, ens_template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+    model_results_per_timestamp_smape = model_results_per_timestamp_smape.append(ens_template_result.model_results_per_timestamp_smape)
+    model_results_per_timestamp_mae = model_results_per_timestamp_mae.append(ens_template_result.model_results_per_timestamp_mae)
+    model_results_per_series_smape = model_results_per_series_smape.append(ens_template_result.model_results_per_series_smape)
+    model_results_per_series_mae = model_results_per_series_mae.append(ens_template_result.model_results_per_series_mae)
+
 
 
 """
 unpack ensembles if in template!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+replace smape and mae with _weighted in selections
+
 Verbosity
-Ensemble 2080
 Consolidate repeat models in model_results, and per_series/per_timestamp
 
-Genetic Algorithm
-    Intial template (random, expert, expert+random) (user only, user add-on)
-    For X generations:
-        Select N best algorithms (by multiple metrics, MAE, SMAPE)
-            Generate Y new models
-            Generate random new parameters
-            recombine existing and random
-            Check if combination already tested
-    Pass Z models into Multiple Validation
 Multiple validation
 Predict method
+
+ARIMA + Detrend
 
 Combine multiple metrics into 'score'
 Ranked by score
@@ -182,17 +212,10 @@ Ranked by score
 Things needing testing:
     Confirm per_series weighting
     Passing in Start Dates - (Test)
+    Different frequencies
 
 
 """
-
-
-
-
-
-
-
-
 
 
 
@@ -213,14 +236,9 @@ df_subset = subset_series(df_wide_numeric, n = 10, na_tolerance = 0.5, random_st
 
 # to gluon ds
 # to xgboost ds
-
-# train/test split + cross validation
-    # to be more sensitive to NaNs in train/test split count
-    # option to skip if na_tolerance is not met in both train and test.
 # GENERATOR of series for per series methods
 # trim series to first actual value
     # gluon start
     # per series, trim before first na
     # from regressions, remove rows based on % columns that are NaN
-# then fill na
 # *args, **kwargs
