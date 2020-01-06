@@ -1,6 +1,17 @@
 import numpy as np
 import pandas as pd
 import datetime
+import hashlib
+import json
+
+def create_model_id(model_str: str, parameter_dict: dict = {}, transformation_dict: dict = {}):
+    """
+    Create a hash model ID which should be unique to the model parameters
+    """
+    str_repr = str(model_str) + json.dumps(parameter_dict) + json.dumps(transformation_dict)
+    str_repr = ''.join(str_repr.split())
+    hashed = hashlib.md5(str_repr.encode('utf-8')).hexdigest()
+    return hashed
 
 class ModelObject(object):
     """
@@ -200,4 +211,133 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
     
     else:
         raise AttributeError("Model String not found in ModelMonster")
+
+
+class TemplateEvalObject(object):
+    """Object to contain all your failures!
+    """
+    def __init__(self, model_results = pd.DataFrame(), model_results_per_timestamp_smape=pd.DataFrame(),
+                 model_results_per_timestamp_mae=pd.DataFrame(), model_results_per_series_mae =pd.DataFrame(),
+                 model_results_per_series_smape = pd.DataFrame(), forecasts= [],
+                 upper_forecasts = [], lower_forecasts=[], forecasts_list = [],
+                 forecasts_runtime = [], model_count: int = 0
+                 ):
+        self.model_results = model_results
+        self.model_results_per_timestamp_smape = model_results_per_timestamp_smape
+        self.model_results_per_timestamp_mae = model_results_per_timestamp_mae
+        self.model_results_per_series_mae = model_results_per_series_mae
+        self.model_results_per_series_smape = model_results_per_series_smape
+        self.forecasts = forecasts
+        self.upper_forecasts = upper_forecasts
+        self.lower_forecasts = lower_forecasts
+        self.forecasts_list = forecasts_list
+        self.forecasts_runtime = forecasts_runtime
+        self.model_count = model_count
     
+# from autots.evaluator.auto_model import create_model_id    
+def TemplateWizard(template, df_train, df_test, weights,
+                   model_count: int = 0, ensemble: bool = True,
+                   forecast_length: int = 14, frequency: str = 'infer', 
+                    prediction_interval: float = 0.9, no_negatives: bool = False,
+                    preord_regressor_train = [], preord_regressor_forecast = [], 
+                    holiday_country: str = 'US', startTimeStamps = None):
+    """
+    takes Template, returns Results
+    
+    Args:
+        template (pandas.DataFrame): containing model str, and json of transformations and hyperparamters
+        df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
+        df_test (pandas.DataFrame): dataframe of actual values of (forecast length * n series)
+        weights (dict): key = column/series_id, value = weight
+        
+        forecast_length (int): number of periods to forecast
+        transformation_dict (dict): a dictionary of outlier, fillNA, and transformation methods to be used
+        model_str (str): a string to be direct to the appropriate model, used in ModelMonster
+        frequency (str): str representing frequency alias of time series
+        prediction_interval (float): width of errors (note: rarely do the intervals accurately match the % asked for...)
+        no_negatives (bool): whether to force all forecasts to be > 0
+        preord_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
+        preord_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
+        holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.            
+        startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
+        
+    """
+    template_result = TemplateEvalObject()
+    template_result.model_count = model_count
+    
+    
+    for index, row in template.iterrows():
+        model_str = row['Model']
+        parameter_dict = json.loads(row['ModelParameters'])
+        transformation_dict = json.loads(row['TransformationParameters'])
+        template_result.model_count += 1
+        print("Model Number: {} with model {}".format(str(template_result.model_count), model_str))
+        try:
+            # from autots.evaluator.auto_model import ModelPrediction
+            df_forecast = ModelPrediction(df_train, forecast_length,transformation_dict, 
+                                          model_str, parameter_dict, frequency=frequency, 
+                                          prediction_interval=prediction_interval, 
+                                          no_negatives=no_negatives,
+                                          preord_regressor_train = preord_regressor_train,
+                                          preord_regressor_forecast = preord_regressor_forecast, 
+                                          holiday_country = holiday_country,
+                                          startTimeStamps = startTimeStamps)
+            
+            from autots.evaluator.metrics import PredictionEval
+            model_error = PredictionEval(df_forecast, df_test, series_weights = weights)
+            model_id = create_model_id(model_str, df_forecast.model_parameters, df_forecast.transformation_parameters)
+            total_runtime = df_forecast.fit_runtime + df_forecast.predict_runtime + df_forecast.transformation_runtime
+            result = pd.DataFrame({
+                    'ID': model_id,
+                    'Model': model_str,
+                    'ModelParameters': json.dumps(df_forecast.model_parameters),
+                    'TransformationParameters': json.dumps(df_forecast.transformation_parameters),
+                    'TransformationRuntime': df_forecast.transformation_runtime,
+                    'FitRuntime': df_forecast.fit_runtime,
+                    'PredictRuntime': df_forecast.predict_runtime,
+                    'TotalRuntime': total_runtime,
+                    'Ensemble': 0,
+                    'Exceptions': np.nan,
+                    'Runs': 1
+                    }, index = [0])
+            a = pd.DataFrame(model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')).transpose()
+            result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1)
+            
+            template_result.model_results = pd.concat([template_result.model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+            temp = pd.DataFrame(model_error.per_timestamp_metrics.loc['smape']).transpose()
+            temp.index = result['ID'] 
+            template_result.model_results_per_timestamp_smape = template_result.model_results_per_timestamp_smape.append(temp)
+            temp = pd.DataFrame(model_error.per_timestamp_metrics.loc['mae']).transpose()
+            temp.index = result['ID']  
+            template_result.model_results_per_timestamp_mae = template_result.model_results_per_timestamp_mae.append(temp)
+            temp = pd.DataFrame(model_error.per_series_metrics.loc['smape']).transpose()
+            temp.index = result['ID']            
+            template_result.model_results_per_series_smape = template_result.model_results_per_series_smape.append(temp)
+            temp = pd.DataFrame(model_error.per_series_metrics.loc['mae']).transpose()
+            temp.index = result['ID']
+            template_result.model_results_per_series_mae = template_result.model_results_per_series_mae.append(temp)
+            
+            if ensemble:
+                template_result.forecasts_list.extend([model_id])
+                template_result.forecasts_runtime.extend([total_runtime])
+                template_result.forecasts.extend([df_forecast.forecast])
+                template_result.upper_forecasts.extend([df_forecast.upper_forecast])
+                template_result.lower_forecasts.extend([df_forecast.lower_forecast])
+        
+        except Exception as e:
+            result = pd.DataFrame({
+                'ID': create_model_id(model_str, parameter_dict, transformation_dict),
+                'Model': model_str,
+                'ModelParameters': json.dumps(parameter_dict),
+                'TransformationParameters': json.dumps(transformation_dict),
+                'Ensemble': 0,
+                'TransformationRuntime': datetime.timedelta(0),
+                'FitRuntime': datetime.timedelta(0),
+                'PredictRuntime': datetime.timedelta(0),
+                'TotalRuntime': datetime.timedelta(0),
+                'Exceptions': str(e),
+                'Runs': 1
+                }, index = [0])
+            template_result.model_results = pd.concat([template_result.model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+
+    return template_result 

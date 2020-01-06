@@ -51,15 +51,7 @@ preord_regressor_test = preord_regressor[df_test.index]
 if weighted == False:
     weights = {x:1 for x in df_train.columns}
 
-model_results = pd.DataFrame()
-model_results_per_series_mae = pd.DataFrame()
-model_results_per_series_smape = pd.DataFrame()
 
-forecasts = []
-upper_forecasts = []
-lower_forecasts = []
-forecasts_list = []
-forecasts_runtime = []
 
 from autots.evaluator.auto_model import ModelNames
 from autots.tools.transform import RandomTransform
@@ -91,150 +83,106 @@ def RandomTemplate(n: int = 10):
             break
     return template
     
-import hashlib
-def create_model_id(model_str: str, parameter_dict: dict = {}, transformation_dict: dict = {}):
-    """
-    Create a hash model ID which should be unique to the model parameters
-    """
-    str_repr = str(model_str) + json.dumps(parameter_dict) + json.dumps(transformation_dict)
-    str_repr = ''.join(str_repr.split())
-    hashed = hashlib.md5(str_repr.encode('utf-8')).hexdigest()
-    return hashed
-# 
-transformation_dict = {'outlier': 'clip2std',
-                       'fillNA' : 'ffill', 
-                       'transformation' : 'RollingMean10',
-                       'context_slicer' : 'None'}
-model_str = "FBProphet"
-parameter_dict = {'holiday':True,
-                  'regression_type' : 'User'}
-model_str = "ARIMA"
-parameter_dict = {'p': 1,
-                  'd': 0,
-                  'q': 1,
-                  'regression_type' : 'User'}
 
-template = RandomTemplate(40)
 
-for index, row in template.iterrows():
-    model_str = row['Model']
-    parameter_dict = json.loads(row['ModelParameters'])
-    transformation_dict = json.loads(row['TransformationParameters'])
-    print("Row: {} with model {}".format(str(index), model_str))
-    try:
-        from autots.evaluator.auto_model import ModelPrediction
-        df_forecast = ModelPrediction(df_train, forecast_length,transformation_dict, 
-                                      model_str, parameter_dict, frequency=frequency, 
-                                      prediction_interval=prediction_interval, 
-                                      no_negatives=no_negatives,
-                                      preord_regressor_train = preord_regressor_train,
-                                      preord_regressor_forecast = preord_regressor_test, 
-                                      holiday_country = holiday_country,
-                                      startTimeStamps = profile_df.loc['FirstDate'])
-        
-        from autots.evaluator.metrics import PredictionEval
-        model_error = PredictionEval(df_forecast, df_test, series_weights = weights)
-        model_id = create_model_id(model_str, df_forecast.model_parameters, df_forecast.transformation_parameters)
-        total_runtime = df_forecast.fit_runtime + df_forecast.predict_runtime + df_forecast.transformation_runtime
-        result = pd.DataFrame({
-                'ID': model_id,
-                'Model': model_str,
-                'ModelParameters': json.dumps(df_forecast.model_parameters),
-                'TransformationParameters': json.dumps(df_forecast.transformation_parameters),
-                'TransformationRuntime': df_forecast.transformation_runtime,
-                'FitRuntime': df_forecast.fit_runtime,
-                'PredictRuntime': df_forecast.predict_runtime,
-                'TotalRuntime': total_runtime,
-                'Ensemble': 0,
-                'Exceptions': np.nan
-                }, index = [0])
-        a = pd.DataFrame(model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')).transpose()
-        result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1)
-        
-        model_results = pd.concat([model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
-        model_results_per_series_smape = model_results_per_series_smape.append(model_error.per_series_metrics.loc['smape'], ignore_index = True)
-        model_results_per_series_mae = model_results_per_series_mae.append(model_error.per_series_metrics.loc['mae'], ignore_index = True)
-        
-        if ensemble:
-            forecasts_list.extend([model_id])
-            forecasts_runtime.extend([total_runtime])
-            forecasts.extend([df_forecast.forecast])
-            upper_forecasts.extend([df_forecast.upper_forecast])
-            lower_forecasts.extend([df_forecast.lower_forecast])
-    
-    except Exception as e:
-        result = pd.DataFrame({
-            'ID': create_model_id(model_str, parameter_dict, transformation_dict),
-            'Model': model_str,
-            'ModelParameters': json.dumps(parameter_dict),
-            'TransformationParameters': json.dumps(transformation_dict),
-            'Ensemble': 0,
-            'TransformationRuntime': datetime.timedelta(0),
-            'FitRuntime': datetime.timedelta(0),
-            'PredictRuntime': datetime.timedelta(0),
-            'TotalRuntime': datetime.timedelta(0),
-            'Exceptions': str(e)
-            }, index = [0])
-        model_results = pd.concat([model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+model_results = pd.DataFrame()
+model_results_per_timestamp_smape = pd.DataFrame()
+model_results_per_timestamp_mae = pd.DataFrame()
+model_results_per_series_mae = pd.DataFrame()
+model_results_per_series_smape = pd.DataFrame()
+
+forecasts = []
+upper_forecasts = []
+lower_forecasts = []
+forecasts_list = []
+forecasts_runtime = []
+
+from autots.evaluator.auto_model import TemplateWizard    
+
+model_count = 0
+template = RandomTemplate(30)
+template_result = TemplateWizard(template, df_train, df_test, weights,
+                                 model_count = model_count, ensemble = ensemble, 
+                                 forecast_length = forecast_length, frequency=frequency, 
+                                  prediction_interval=prediction_interval, 
+                                  no_negatives=no_negatives,
+                                  preord_regressor_train = preord_regressor_train,
+                                  preord_regressor_forecast = preord_regressor_test, 
+                                  holiday_country = holiday_country,
+                                  startTimeStamps = profile_df.loc['FirstDate'])
+model_count = template_result.model_count
+model_results = pd.concat([model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+model_results_per_timestamp_smape = model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
+model_results_per_timestamp_mae = model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
+model_results_per_series_smape = model_results_per_series_smape.append(template_result.model_results_per_series_smape)
+model_results_per_series_mae = model_results_per_series_mae.append(template_result.model_results_per_series_mae)
+if ensemble:
+    forecasts_list.extend(template_result.forecasts_list)
+    forecasts_runtime.extend(template_result.forecasts_runtime)
+    forecasts.extend(template_result.forecasts)
+    upper_forecasts.extend(template_result.upper_forecasts)
+    lower_forecasts.extend(template_result.lower_forecasts)
 
 
 if ensemble:
-    from autots.models.ensemble import Best3Ensemble
-    ens_forecast = Best3Ensemble(model_results, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval)
-    try:
-        from autots.evaluator.metrics import PredictionEval
-        model_error = PredictionEval(ens_forecast, df_test, series_weights = weights)
-        model_id = create_model_id(ens_forecast.model_name, ens_forecast.model_parameters, ens_forecast.transformation_parameters)
-        total_runtime = ens_forecast.fit_runtime + ens_forecast.predict_runtime + ens_forecast.transformation_runtime
-        result = pd.DataFrame({
-                'ID': model_id,
-                'Model': ens_forecast.model_name,
-                'ModelParameters': json.dumps(ens_forecast.model_parameters),
-                'TransformationParameters': json.dumps(ens_forecast.transformation_parameters),
-                'TransformationRuntime': ens_forecast.transformation_runtime,
-                'FitRuntime': ens_forecast.fit_runtime,
-                'PredictRuntime': ens_forecast.predict_runtime,
-                'TotalRuntime': total_runtime,
-                'Ensemble': 1,
-                'Exceptions': np.nan
-                }, index = [0])
-        a = pd.DataFrame(model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')).transpose()
-        result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1)
-        
-        model_results = pd.concat([model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
-        model_results_per_series_smape = model_results_per_series_smape.append(model_error.per_series_metrics.loc['smape'], ignore_index = True)
-        model_results_per_series_mae = model_results_per_series_mae.append(model_error.per_series_metrics.loc['mae'], ignore_index = True)
-        
-    except Exception as e:
-        model_str = "Best3Ensemble"
-        result = pd.DataFrame({
-            'ID': create_model_id(model_str, {}, {}),
-            'Model': model_str,
-            'ModelParameters': json.dumps({}),
-            'TransformationParameters': json.dumps({}),
-            'Ensemble': 1,
-            'TransformationRuntime': datetime.timedelta(0),
-            'FitRuntime': datetime.timedelta(0),
-            'PredictRuntime': datetime.timedelta(0),
-            'TotalRuntime': datetime.timedelta(0),
-            'Exceptions': str(e)
-            }, index = [0])
-        model_results = pd.concat([model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+    best3 = model_results[model_results['Ensemble'] == 0].nsmallest(3, columns = ['smape'])
+    ensemble_models = {}
+    for index, row in best3.iterrows():
+        temp_dict = {'Model': row['Model'],
+         'ModelParameters': row['ModelParameters'],
+         'TransformationParameters': row['TransformationParameters']
+         }
+        ensemble_models[row['ID']] = temp_dict
+    best3params = {'models': ensemble_models}    
+    
+    from autots.models.ensemble import EnsembleForecast
+    ens_forecast = EnsembleForecast("Best3Ensemble", best3params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval)
+    
+    
+    first_bit = int(np.ceil(forecast_length * 0.2))
+    last_bit = int(np.floor(forecast_length * 0.8))
+    ens_per_ts = model_results_per_timestamp_smape[model_results_per_timestamp_smape.index.isin(model_results[model_results['Ensemble'] == 0]['ID'].tolist())]
+    first_model = ens_per_ts.iloc[:,0:first_bit].mean(axis = 1).idxmin()
+    last_model = ens_per_ts.iloc[:,first_bit:(last_bit + first_bit)].mean(axis = 1).idxmin()
+    ensemble_models = {}
+    best3 = model_results[model_results['ID'].isin([first_model,last_model])].drop_duplicates(subset = ['Model','ModelParameters','TransformationParameters'])
+    for index, row in best3.iterrows():
+        temp_dict = {'Model': row['Model'],
+         'ModelParameters': row['ModelParameters'],
+         'TransformationParameters': row['TransformationParameters']
+         }
+        ensemble_models[row['ID']] = temp_dict
+    dist2090params = {'models': ensemble_models,
+                      'FirstModel':first_model,
+                      'LastModel':last_model} 
 
 
 """
-Passing in Start Dates - (Test)
+unpack ensembles if in template!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Verbosity
+Ensemble 2080
+Consolidate repeat models in model_results, and per_series/per_timestamp
 
-Ensemble
+Genetic Algorithm
+    Intial template (random, expert, expert+random) (user only, user add-on)
+    For X generations:
+        Select N best algorithms (by multiple metrics, MAE, SMAPE)
+            Generate Y new models
+            Generate random new parameters
+            recombine existing and random
+            Check if combination already tested
+    Pass Z models into Multiple Validation
 Multiple validation
-
-ARIMA + Detrend fails
-Transformation: Null fails
+Predict method
 
 Combine multiple metrics into 'score'
 Ranked by score
+    nearest neighbor score - is time much slower than similar? is MAE much better than similar for SMAPE?
 
-Confirm per_series weighting
+Things needing testing:
+    Confirm per_series weighting
+    Passing in Start Dates - (Test)
+
 
 """
 

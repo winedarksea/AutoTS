@@ -1,18 +1,15 @@
 import datetime
 import numpy as np
 import pandas as pd
+import json
 from autots.evaluator.auto_model import PredictionObject
+from autots.evaluator.auto_model import create_model_id    
 
-def Best3Ensemble(model_results, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval):
-    best3 = model_results.nsmallest(3, columns = ['smape'])
-    ensemble_models = {}
-    for index, row in best3.iterrows():
-        temp_dict = {'Model': row['Model'],
-         'ModelParameters': row['ModelParameters'],
-         'TransformationParameters': row['TransformationParameters']
-         }
-        ensemble_models[row['ID']] = temp_dict
-    model_indexes = [idx for idx, x in enumerate(forecasts_list) if x in best3['ID'].tolist()]
+
+def Best3Ensemble(ensemble_params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval):
+    id_list = list(ensemble_params['models'].keys())
+    model_indexes = [idx for idx, x in enumerate(forecasts_list) if x in id_list]
+    
     ens_df = pd.DataFrame(0, index=forecasts[0].index, columns=forecasts[0].columns)
     for idx, x in enumerate(forecasts):
         if idx in model_indexes:
@@ -45,6 +42,71 @@ def Best3Ensemble(model_results, forecasts_list, forecasts, lower_forecasts, upp
                                           prediction_interval= prediction_interval,
                                           predict_runtime= datetime.timedelta(0),
                                           fit_runtime = ens_runtime,
-                                          model_parameters = {'models': ensemble_models}
+                                          model_parameters = ensemble_params
                                           )
     return ens_result
+
+def EnsembleForecast(ensemble_str, ensemble_params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval):
+    """
+    Returns PredictionObject for given ensemble method
+    """
+    if ensemble_str.lower().strip() == 'best3ensemble':
+        #from autots.models.ensemble import Best3Ensemble
+        ens_forecast = Best3Ensemble(ensemble_params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval)
+        return ens_forecast
+
+
+def EnsembleEvaluate(ensemble_forecast):
+    try:
+        from autots.evaluator.metrics import PredictionEval
+        model_error = PredictionEval(ensemble_forecast, df_test, series_weights = weights)
+        model_id = create_model_id(ensemble_forecast.model_name, ensemble_forecast.model_parameters, ensemble_forecast.transformation_parameters)
+        total_runtime = ensemble_forecast.fit_runtime + ensemble_forecast.predict_runtime + ensemble_forecast.transformation_runtime
+        result = pd.DataFrame({
+                'ID': model_id,
+                'Model': ensemble_forecast.model_name,
+                'ModelParameters': json.dumps(ensemble_forecast.model_parameters),
+                'TransformationParameters': json.dumps(ensemble_forecast.transformation_parameters),
+                'TransformationRuntime': ensemble_forecast.transformation_runtime,
+                'FitRuntime': ensemble_forecast.fit_runtime,
+                'PredictRuntime': ensemble_forecast.predict_runtime,
+                'TotalRuntime': total_runtime,
+                'Ensemble': 1,
+                'Exceptions': np.nan,
+                'Runs': 1
+                }, index = [0])
+        a = pd.DataFrame(model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')).transpose()
+        result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1)
+        
+        model_results = pd.concat([model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+        temp = pd.DataFrame(model_error.per_timestamp_metrics.loc['smape']).transpose()
+        temp.index = result['ID'] 
+        model_results_per_timestamp_smape = model_results_per_timestamp_smape.append(temp)
+        temp = pd.DataFrame(model_error.per_timestamp_metrics.loc['mae']).transpose()
+        temp.index = result['ID']  
+        model_results_per_timestamp_mae = model_results_per_timestamp_mae.append(temp)
+        temp = pd.DataFrame(model_error.per_series_metrics.loc['smape']).transpose()
+        temp.index = result['ID']            
+        model_results_per_series_smape = model_results_per_series_smape.append(temp)
+        temp = pd.DataFrame(model_error.per_series_metrics.loc['mae']).transpose()
+        temp.index = result['ID']
+        model_results_per_series_mae = model_results_per_series_mae.append(temp)
+        
+        
+    except Exception as e:
+        model_str = ensemble_forecast.model_name
+        result = pd.DataFrame({
+            'ID': create_model_id(model_str, {}, {}),
+            'Model': model_str,
+            'ModelParameters': json.dumps({}),
+            'TransformationParameters': json.dumps({}),
+            'Ensemble': 1,
+            'TransformationRuntime': datetime.timedelta(0),
+            'FitRuntime': datetime.timedelta(0),
+            'PredictRuntime': datetime.timedelta(0),
+            'TotalRuntime': datetime.timedelta(0),
+            'Exceptions': str(e),
+            'Runs': 1
+            }, index = [0])
+        model_results = pd.concat([model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+    

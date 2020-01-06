@@ -102,27 +102,34 @@ def containment(lower_forecast, upper_forecast, actual):
 class EvalObject(object):
     """Object to contain all your failures!
     """
-    def __init__(self, model_name: str = 'Uninitiated', residuals = np.nan, per_series_metrics = np.nan, weights = np.nan, avg_metrics = np.nan, avg_metrics_weighted = np.nan):
+    def __init__(self, model_name: str = 'Uninitiated', residuals = np.nan, per_series_metrics = np.nan,per_timestamp_metrics=np.nan, weights = np.nan, avg_metrics = np.nan, avg_metrics_weighted = np.nan):
         self.model_name = model_name
         self.residuals = residuals
         self.per_series_metrics = per_series_metrics
+        self.per_timestamp_metrics = per_timestamp_metrics
         self.weights = weights
         self.avg_metrics = avg_metrics
         self.avg_metrics_weighted = avg_metrics_weighted
 
-def PredictionEval(PredictionObject, actual, series_weights = {}):
+def PredictionEval(PredictionObject, actual, series_weights: dict = {}, per_timestamp: bool = True):
     """Evalute prediction against test actual.
     
     Args:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
         actual (pandas.DataFrame): dataframe of actual values of (forecast length * n series)
+        series_weights (dict): key = column/series_id, value = weight
+        per_timestamp (bool): Whether to calculate and return per timestamp direction errors
 
     """
+    if series_weights == {}:
+        series_weights = {x:1 for x in actual.columns}
+
     errors = EvalObject()
     errors.model_name = PredictionObject.model_name
     errors.residuals = PredictionObject.forecast - actual
     errors.weights = series_weights
     
+
     per_series = pd.DataFrame({
             'smape': smape(actual, PredictionObject.forecast),
             'mae': mae(actual, PredictionObject.forecast),
@@ -131,7 +138,17 @@ def PredictionEval(PredictionObject, actual, series_weights = {}):
             }).transpose()
     per_series.columns = actual.columns
     errors.per_series_metrics = per_series
-    # this won't work well if entire metrics are NaN, but results should still be comparable
+    
+    if per_timestamp:
+        per_timestamp = pd.DataFrame({
+                'smape': (np.nansum((abs(PredictionObject.forecast - actual) / (abs(PredictionObject.forecast) + abs(actual))), axis = 1)* 200) / np.count_nonzero(~np.isnan(actual), axis = 1),
+                'mae': np.nanmean(abs(actual - PredictionObject.forecast), axis=1),
+                'rmse': np.sqrt(np.nanmean(((actual - PredictionObject.forecast) ** 2),axis = 1)),
+                'containment':np.count_nonzero((PredictionObject.upper_forecast > actual) & (PredictionObject.lower_forecast < actual), axis = 1)/actual.shape[1]
+                }).transpose()
+        errors.per_timestamp_metrics = per_timestamp
+    
+    # this weighting won't work well if entire metrics are NaN, but results should still be comparable
     errors.avg_metrics_weighted = (per_series * series_weights).sum(axis = 1, skipna = True) / sum(series_weights.values())
     errors.avg_metrics = per_series.mean(axis = 1)
     

@@ -66,4 +66,17 @@ Use quantile of training data to provide upper/lower forecast for Last Value Nai
 	Isotonic regression
 	TPOT if it adds multioutput functionality
 	
-
+```
+transformation_dict = {'outlier': 'clip2std',
+                       'fillNA' : 'ffill', 
+                       'transformation' : 'RollingMean10',
+                       'context_slicer' : 'None'}
+model_str = "FBProphet"
+parameter_dict = {'holiday':True,
+                  'regression_type' : 'User'}
+model_str = "ARIMA"
+parameter_dict = {'p': 1,
+                  'd': 0,
+                  'q': 1,
+                  'regression_type' : 'User'}
+```

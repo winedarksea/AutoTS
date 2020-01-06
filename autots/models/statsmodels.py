@@ -272,7 +272,7 @@ class ARIMA(ModelObject):
                     maModel = ARIMA(current_series, order = self.order, freq = self.frequency, exog = self.regressor_train).fit(maxiter = 600)
                     maPred = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
                 else:
-                    maModel = ARIMA(current_series, order = self.order, freq = self.frequency).fit(maxiter = 600)
+                    maModel = ARIMA(current_series, order = self.order, freq = self.frequency).fit(maxiter = 400)
                     maPred = maModel.predict(start=test_index[0], end=test_index[-1])
             except Exception:
                 maPred = pd.Series((np.zeros((forecast_length,))), index = test_index)
@@ -301,10 +301,12 @@ class ARIMA(ModelObject):
         
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
+        
+        large p,d,q can be very slow (a p of 30 can take hours, whereas 5 takes seconds)
         """
-        p_choice = np.random.choice(a = [0,1,2,3,4,5,7,10,30], size = 1, p = [0.2,0.2,0.05,0.05,0.1,0.1,0.1,0.1,0.1]).item()
+        p_choice = np.random.choice(a = [0,1,2,3,4,5,7,10], size = 1, p = [0.2,0.2,0.1,0.1,0.1,0.1,0.1,0.1]).item()
         d_choice = np.random.choice(a = [0,1,2,3], size = 1, p = [0.4, 0.3, 0.2, 0.1]).item()
-        q_choice = np.random.choice(a = [0,1,2,3,4,5,7,10,30], size = 1, p = [0.2,0.2,0.05,0.05,0.1,0.1,0.1,0.1,0.1]).item()
+        q_choice = np.random.choice(a = [0,1,2,3,4,5,7,10], size = 1, p = [0.2,0.2,0.1,0.1,0.1,0.1,0.1,0.1]).item()
         regression_list = [None, 'User', 'Holiday']
         regression_probability = [0.2, 0.6, 0.2]
         regression_choice = np.random.choice(a = regression_list, size = 1, p = regression_probability).item()
