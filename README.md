@@ -24,9 +24,38 @@ pip uninstall numpy # might be necessary, even twice, followed by the following
 pip install numpy==1.17.4 # gluonts likes to force numpy back to 1.14, but 1.17 seems to be fine with it
 pip install sktime==0.3.1
 
+## Caveats and Advice
+#### Short Training History
+How much data is 'too little' depends on the seasonality and volatility of the data. 
+But less than half a year of daily data or less than two years of monthly data are both going to be tight. 
+Minimal training data most greatly impacts the ability to do proper cross validation. Set num_validations = 0 in such cases. 
+Since ensembles are based on the test dataset, it would also be wise to set ensemble = False if num_validations = 0.
+
+#### Too much training data.
+Too much data is already handled to some extent by 'context_slicer' in the transformations, which tests using less training data. 
+That said, large datasets will be slower and more memory intensive, for high frequency data (say hourly) it can often be advisable to roll that up to a higher level (daily, hourly, etc.). 
+Rollup can be accomplished by specifying the frequency = your rollup frequency, and then setting the agg_func = 'sum' or 'mean' or other appropriate statistic.
+
+#### Lots of NaN in data
+Various NaN filling techniques are tested in the transformation. Rolling up data to a lower frequency may also help deal with NaNs.
+
+#### More than one preord regressor
+'Preord' regressor stands for 'Preordained' regressor, to make it clear this is data that will be know with high certainy about the future. 
+Such data about the future is rare, one example might be number of stores that will be (planned to be) open each given day in the future when forecast sales. 
+Since many algorithms do not handle more than one regressor, only one is handled here. If you would like to use more than one, 
+manually select the best variable or use dimensionality reduction to reduce the features to one dimension. 
+However, the model can handle quite a lot of parallel time series. Additional regressors can be passed through as additional time series to forecast. 
+The regression models here can utilize the information they provide to help improve forecast quality. 
+To prevent forecast accuracy for considering these additional series too heavily, input series weights that lower or remove their forecast accuracy from consideration.
+
+#### Categorical Data
+Categorical data is handled, but it is handled poorly. For example, optimization metrics do not currently include any categorical accuracy metrics. 
+For categorical data that has a meaningful order (ie 'low', 'medium', 'high') it is best for the user to encode that data before passing it in, 
+thus properly capturing the relative sequence (ie 'low' = 1, 'medium' = 2, 'high' = 3).
+
 
 ## To-Do
-Speed improvements, Parallelization, and Distributed options for general greater speed
+Speed improvements, Profiling, Parallelization, and Distributed options for general greater speed
 Generate list of functional frequences, and improve usability on rarer frequenices
 Warning/handling if lots of NaN in most recent (test) part of data
 Figures: Add option to output figures of train/test + forecast, other performance figures
@@ -38,17 +67,16 @@ Trim whitespace on string inputs
 Hierachial correction (bottom-up to start with)
 Improved verbosity controls and options
 Export as simpler code (as TPOT)
-AIC metric
-Analyze and return inaccuracy patterns
+AIC metric, other accuracy metrics
+Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
 Used saved results to resume a search partway through
 Generally improved probabilistic forecasting
 Option to drop series which haven't had a value in last N days
 Option to change which metric is being used for model selections
 Use quantile of training data to provide upper/lower forecast for Last Value Naive (so upper forecast might be 95th percentile largest number)
 
-#### Ensemble:
-	best 3
-	forecast distance 20/80
+#### New Ensembles:
+	best 3 (unique algorithms not just variations)
 	forecast distance 30/30/30
 	best per series ensemble
 	best point with best probalistic containment

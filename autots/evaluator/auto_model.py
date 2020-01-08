@@ -144,7 +144,7 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     df_forecast.upper_forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.upper_forecast), index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
     
     if df_forecast.forecast.isnull().all(axis = 0).astype(int).sum() > 0:
-        raise ValueError("Model {} failed for one or more series".format(model_str))
+        raise ValueError("Model {} returned NaN for one or more series".format(model_str))
         
     df_forecast.transformation_parameters = transformation_dict
     # Remove negatives if desired

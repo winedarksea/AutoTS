@@ -74,7 +74,9 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
         method (str): Option to slice dataframe
             'None' - return unaltered dataframe
             'HalfMax' - return half of dataframe
+            'ForecastLength' - return dataframe equal to length of forecast
             '2ForecastLength' - return dataframe equal to twice length of forecast
+                (also takes 4, 6, 8, 10 in addition to 2)
     """
     if (method == 'None') or (method == None):
         return df
@@ -83,9 +85,20 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
     
     if method == 'HalfMax':
         return df.tail(int(len(df.index)/2))
+    if method == 'ForecastLength':
+        return df.tail(forecast_length)
     if method == '2ForecastLength':
         return df.tail(2 * forecast_length)
+    if method == '4ForecastLength':
+        return df.tail(4 * forecast_length)
+    if method == '6ForecastLength':
+        return df.tail(6 * forecast_length)
+    if method == '8ForecastLength':
+        return df.tail(8 * forecast_length)
+    if method == '10ForecastLength':
+        return df.tail(10 * forecast_length)
     else:
+        print("Context Slicer Method not recognized")
         return df
         
 
@@ -393,7 +406,7 @@ def RandomTransform():
     outlier_choice = np.random.choice(a = [None, 'clip3std', 'clip2std','clip4std','remove3std'], size = 1, p = [0.4, 0.3, 0.1, 0.1, 0.1]).item()
     na_choice = np.random.choice(a = ['ffill', 'fake date', 'rolling mean','mean','zero', 'ffill mean biased', 'median'], size = 1, p = [0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1]).item()
     transformation_choice = np.random.choice(a = [None, 'PowerTransformer', 'RollingMean100thN','MinMaxScaler','Detrend', 'RollingMean10'], size = 1, p = [0.3, 0.2, 0.2, 0.1, 0.1, 0.1]).item()
-    context_choice = np.random.choice(a = [None, 'HalfMax', '2ForecastLength'], size = 1, p = [0.8, 0.1, 0.1]).item()
+    context_choice = np.random.choice(a = [None, 'HalfMax', '2ForecastLength', '6ForecastLength'], size = 1, p = [0.7, 0.1, 0.1, 0.1]).item()
     param_dict = {
             'outlier': outlier_choice,
             'fillNA' : na_choice, 
