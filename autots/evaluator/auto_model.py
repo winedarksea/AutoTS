@@ -341,3 +341,90 @@ def TemplateWizard(template, df_train, df_test, weights,
             template_result.model_results = pd.concat([template_result.model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
 
     return template_result 
+
+from autots.tools.transform import RandomTransform
+def RandomTemplate(n: int = 10):
+    """"
+    Returns a template dataframe of randomly generated transformations, models, and hyperparameters
+    
+    Args:
+        n (int): number of random models to return
+    """
+    n = abs(int(n))
+    template = pd.DataFrame()
+    counter = 0
+    while (len(template.index) < n):
+        model_str = np.random.choice(ModelNames)
+        param_dict = ModelMonster(model_str).get_new_params()
+        trans_dict = RandomTransform()
+        row = pd.DataFrame({
+                'Model': model_str,
+                'ModelParameters': json.dumps(param_dict),
+                'TransformationParameters': json.dumps(trans_dict),
+                'Ensemble': 0
+                }, index = [0])
+        template = pd.concat([template, row], axis = 0, ignore_index = True)
+        template.drop_duplicates(inplace = True)
+        counter += 1
+        if counter > (n * 3):
+            break
+    return template
+
+def UniqueTemplates(existing_templates, new_possibilities, selection_cols: list = ['Model','ModelParameters','TransformationParameters','Ensemble']):
+    """
+    Returns unique dataframe rows from new_possiblities not in existing_templates
+    
+    Args:
+        selection_cols (list): list of column namess to use to judge uniqueness/match on
+    """
+    keys = list(new_possibilities[selection_cols].columns.values)
+    idx1 = existing_templates.copy().set_index(keys).index
+    idx2 = new_possibilities.set_index(keys).index
+    new_template = new_possibilities[~idx2.isin(idx1)]
+    return new_template
+
+def NewGeneticTemplate(model_results, submitted_parameters, sort_column: str = "smape_weighted", 
+                       sort_ascending: bool = True, max_results: int = 40,
+                       top_n: int = 15, template_cols: list = ['Model','ModelParameters','TransformationParameters','Ensemble']):
+    """
+    Returns new template given old template with model accuracies
+    
+    Args:
+        model_results (pandas.DataFrame): models that have actually been run
+        submitted_paramters (pandas.DataFrame): models tried (may have returned different parameters to results)
+    
+    """
+    new_template = pd.DataFrame()
+    
+    sorted_results = model_results[model_results['Ensemble'] == 0].copy().sort_values(by = sort_column, ascending = sort_ascending, na_position = 'last')
+    # mutation
+    for index, row in sorted_results.drop_duplicates(subset = "Model", keep = 'first').head(top_n).iterrows():
+        param_dict = ModelMonster(row['Model']).get_new_params()
+        trans_dict = RandomTransform()
+        new_row = pd.DataFrame({
+                'Model': row['Model'],
+                'ModelParameters': json.dumps(param_dict),
+                'TransformationParameters': row['TransformationParameters'],
+                'Ensemble': 0
+                }, index = [0])
+        new_template = pd.concat([new_template, new_row], axis = 0, ignore_index = True, sort = False)
+        new_row = pd.DataFrame({
+                'Model': row['Model'],
+                'ModelParameters': row['ModelParameters'],
+                'TransformationParameters': json.dumps(trans_dict),
+                'Ensemble': 0
+                }, index = [0])
+        new_template = pd.concat([new_template, new_row], axis = 0, ignore_index = True, sort = False)
+
+    # recombination of transforms across models
+    recombination = sorted_results.tail(len(sorted_results.index) - 1).copy()
+    recombination['TransformationParameters'] = sorted_results['TransformationParameters'].shift(1).tail(len(sorted_results.index) - 1)
+    new_template = pd.concat([new_template, recombination.head(top_n)[template_cols]], axis = 0, ignore_index = True, sort = False)
+    
+    # internal recombination of model parameters, not implemented because some options are mutually exclusive.
+    # Recombine best two of each model, if two or more present
+    
+    # remove generated models which have already been tried
+    sorted_results = pd.concat([submitted_parameters, sorted_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+    new_template = UniqueTemplates(sorted_results, new_template, selection_cols = template_cols).head(max_results)
+    return new_template   

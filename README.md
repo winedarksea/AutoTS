@@ -6,7 +6,7 @@ Simple package for comparing open-source time series implementations.
 For other time series needs, check out the package list here: https://github.com/MaxBenChrist/awesome_time_series_in_python
 
 Requirements:
-	Python >= 3.5 (typing)
+	Python >= 3.5 (typing) >= 3.6 (GluonTS)
 	pandas
 	sklearn >= 0.20.0 (ColumnTransformer)
 	statsmodels
@@ -53,27 +53,35 @@ Categorical data is handled, but it is handled poorly. For example, optimization
 For categorical data that has a meaningful order (ie 'low', 'medium', 'high') it is best for the user to encode that data before passing it in, 
 thus properly capturing the relative sequence (ie 'low' = 1, 'medium' = 2, 'high' = 3).
 
+#### Custom Metrics
+Implementing new metrics is rather difficult. However the internal 'Score' that compares models can easily be adjusted by passing through custom metric weights. 
+Higher weighting increases the importance of that metric. 
+`metric_weighting = {'smape_weighting' : 9, 'mae_weighting' : 1, 'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0.5}` 
+sMAPE is generally the most versatile across multiple series, but doesn't handle forecasts with lots of zeroes well. 
+Contaiment measures the percent of test data that falls between the upper and lower forecasts. 
 
 ## To-Do
-Speed improvements, Profiling, Parallelization, and Distributed options for general greater speed
-Generate list of functional frequences, and improve usability on rarer frequenices
-Warning/handling if lots of NaN in most recent (test) part of data
-Figures: Add option to output figures of train/test + forecast, other performance figures
-Input and Output saved templates as .csv and .json
-'Check Package' to check if optional model packages are installed
-Pre-clustering on many time series
-If all input are Int, convert floats back to int
-Trim whitespace on string inputs
-Hierachial correction (bottom-up to start with)
-Improved verbosity controls and options
-Export as simpler code (as TPOT)
-AIC metric, other accuracy metrics
-Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
-Used saved results to resume a search partway through
-Generally improved probabilistic forecasting
-Option to drop series which haven't had a value in last N days
-Option to change which metric is being used for model selections
-Use quantile of training data to provide upper/lower forecast for Last Value Naive (so upper forecast might be 95th percentile largest number)
+* Speed improvements, Profiling, Parallelization, and Distributed options for general greater speed
+* Generate list of functional frequences, and improve usability on rarer frequenices
+* Warning/handling if lots of NaN in most recent (test) part of data
+* Figures: Add option to output figures of train/test + forecast, other performance figures
+* Input and Output saved templates as .csv and .json
+* 'Check Package' to check if optional model packages are installed
+* Pre-clustering on many time series
+* If all input are Int, convert floats back to int
+* Trim whitespace on string inputs
+* Hierachial correction (bottom-up to start with)
+* Improved verbosity controls and options
+* Export as simpler code (as TPOT)
+* AIC metric, other accuracy metrics
+* Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
+* Used saved results to resume a search partway through
+* Generally improved probabilistic forecasting
+* Option to drop series which haven't had a value in last N days
+* Option to change which metric is being used for model selections
+* Use quantile of training data to provide upper/lower forecast for Last Value Naive (so upper forecast might be 95th percentile largest number)
+* More thorough use of setting random seed
+* For monthly data account for number of days in month
 
 #### New Ensembles:
 	best 3 (unique algorithms not just variations)

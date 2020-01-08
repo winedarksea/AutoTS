@@ -9,7 +9,7 @@ import pandas as pd
 def long_to_wide(df, date_col: str, value_col: str, id_col: str, 
                  frequency: str = "infer", na_tolerance: float = 0.95,
                  drop_data_older_than_periods: int = 10000, 
-                 drop_most_recent: bool = False, aggfunc: str ='first'):
+                 drop_most_recent: int = 0, aggfunc: str ='first'):
     """
     Takes long data and converts into wide, cleaner data
     
@@ -42,7 +42,7 @@ def long_to_wide(df, date_col: str, value_col: str, id_col: str,
         
         :param drop_most_recent: - if to drop the most recent data point
             useful if you pull monthly data before month end, and you don't want an incomplete month appearing complete
-        :type drop_most_recent: bool
+        :type drop_most_recent: int
         
         :param aggfunc: - passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
             other options include "mean" and other numpy functions
@@ -93,8 +93,8 @@ def long_to_wide(df, date_col: str, value_col: str, id_col: str,
         raise ValueError("All series filtered, probably the na_tolerance is too low or frequency is incorrect")
     
     # drop most recent value when desired
-    if drop_most_recent:
-        timeseries_seriescols.drop(timeseries_seriescols.tail(1).index, inplace = True)
+    if drop_most_recent > 0:
+        timeseries_seriescols.drop(timeseries_seriescols.tail(drop_most_recent).index, inplace = True)
     
     return timeseries_seriescols
 
@@ -169,7 +169,7 @@ def categorical_inverse(categorical_transformer_object, df):
         return df
 
 
-def subset_series(df, n: int = 1000, na_tolerance: float = 1.0, random_state: int = 425):
+def subset_series(df, weights, n: int = 1000, na_tolerance: float = 1.0, random_state: int = 425):
     """
     Expects a pandas DataFrame in format of output from long_to_wide()
     That is, in the format where the Index is a Date
@@ -190,7 +190,7 @@ def subset_series(df, n: int = 1000, na_tolerance: float = 1.0, random_state: in
             n = len(df.columns)
             return df
         else:
-            df = df.sample(n, axis = 1, random_state = random_state, replace = False)    
+            df = df.sample(n, axis = 1, random_state = random_state, replace = False, weights = weights)    
             return df
 
 
