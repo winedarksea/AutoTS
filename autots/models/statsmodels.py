@@ -98,9 +98,9 @@ class ETS(ModelObject):
     def __init__(self, name: str = "ETS", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, damped: bool = False, 
                  trend: str = None, seasonal: str=None, seasonal_periods:int=None, 
-                 holiday_country: str = 'US',random_seed: int = 2020):
+                 holiday_country: str = 'US',random_seed: int = 2020, verbose: int = 0):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             holiday_country = holiday_country, random_seed = random_seed)
+                             holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         self.damped = damped
         self.trend = trend
         self.seasonal = seasonal
@@ -215,10 +215,11 @@ class ARIMA(ModelObject):
     def __init__(self, name: str = "ARIMA", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, p:int = 0, d:int = 1,
                  q:int = 0, regression_type: str = None, holiday_country: str = 'US',
-                 random_seed: int = 2020):
+                 random_seed: int = 2020, verbose: int = 0):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              regression_type = regression_type, 
-                             holiday_country = holiday_country, random_seed = random_seed)
+                             holiday_country = holiday_country, random_seed = random_seed,
+                             verbose = verbose)
         self.p = p
         self.d = d
         self.q = q
@@ -272,7 +273,7 @@ class ARIMA(ModelObject):
                     maModel = ARIMA(current_series, order = self.order, freq = self.frequency, exog = self.regressor_train).fit(maxiter = 600)
                     maPred = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
                 else:
-                    maModel = ARIMA(current_series, order = self.order, freq = self.frequency).fit(maxiter = 400)
+                    maModel = ARIMA(current_series, order = self.order, freq = self.frequency).fit(maxiter = 400, disp = self.verbose)
                     maPred = maModel.predict(start=test_index[0], end=test_index[-1])
             except Exception:
                 maPred = pd.Series((np.zeros((forecast_length,))), index = test_index)

@@ -20,10 +20,10 @@ class ZeroesNaive(ModelObject):
     """
     def __init__(self, name: str = "ZeroesNaive", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US',
-                 random_seed: int = 2020):
+                 random_seed: int = 2020, verbose: int = 0):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              holiday_country = holiday_country,
-                             random_seed = random_seed)
+                             random_seed = random_seed, verbose = verbose)
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         

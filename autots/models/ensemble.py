@@ -105,7 +105,7 @@ def EnsembleEvaluate(ensemble_forecasts_list: list, df_test, weights, model_coun
     for ensemble_forecast in ensemble_forecasts_list:
         try:
             ens_eval.model_count += 1
-            print("Model Number: {} with model {}".format(str(ens_eval.model_count), ensemble_forecast.model_name))
+            # print("Model Number: {} with model {}".format(str(ens_eval.model_count), ensemble_forecast.model_name))
             model_error = PredictionEval(ensemble_forecast, df_test, series_weights = weights)
             model_id = create_model_id(ensemble_forecast.model_name, ensemble_forecast.model_parameters, ensemble_forecast.transformation_parameters)
             total_runtime = ensemble_forecast.fit_runtime + ensemble_forecast.predict_runtime + ensemble_forecast.transformation_runtime

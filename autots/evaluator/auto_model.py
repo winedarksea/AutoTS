@@ -28,7 +28,7 @@ class ModelObject(object):
     def __init__(self, name: str = "Uninitiated Model Name", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, regression_type: str = None, 
                  fit_runtime=datetime.timedelta(0), holiday_country: str = 'US',
-                 random_seed: int = 2020):
+                 random_seed: int = 2020, verbose: int = 0):
         self.name = name
         self.frequency = frequency
         self.prediction_interval = prediction_interval
@@ -36,6 +36,7 @@ class ModelObject(object):
         self.fit_runtime = fit_runtime
         self.holiday_country = holiday_country
         self.random_seed = random_seed
+        self.verbose = verbose
     
     def __repr__(self):
         return 'ModelObject of ' + self.name
@@ -103,7 +104,8 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
                     model_str: str, parameter_dict: dict, frequency: str = 'infer', 
                     prediction_interval: float = 0.9, no_negatives: bool = False,
                     preord_regressor_train = [], preord_regressor_forecast = [], 
-                    holiday_country: str = 'US', startTimeStamps = None):
+                    holiday_country: str = 'US', startTimeStamps = None,
+                    random_seed: int = 2020, verbose: int = 0):
     """Feed parameters into modeling pipeline
     
     Args:
@@ -136,7 +138,8 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     transformation_runtime = datetime.datetime.now() - transformationStartTime
     from autots.evaluator.auto_model import ModelMonster
     model = ModelMonster(model_str, parameters=parameter_dict, frequency = frequency, 
-                         prediction_interval = prediction_interval, holiday_country = holiday_country)
+                         prediction_interval = prediction_interval, holiday_country = holiday_country,
+                         random_seed = random_seed, verbose = verbose)
     model = model.fit(df_train_transformed, preord_regressor = preord_regressor_train)
     df_forecast = model.predict(forecast_length = forecast_length, preord_regressor = preord_regressor_forecast)
     
@@ -161,11 +164,12 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     return df_forecast
 
 ModelNames = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet']
+              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RandomForestRolling']
 
 def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US', 
-                 startTimeStamps = None):
+                 startTimeStamps = None,
+                 random_seed: int = 2020, verbose: int = 0):
     """Directs strings and parameters to appropriate model objects.
     
     Args:
@@ -191,26 +195,36 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
     if model == 'ETS':
         from autots.models.statsmodels import ETS
         if parameters == {}:
-            model = ETS(frequency = frequency, prediction_interval = prediction_interval)
+            model = ETS(frequency = frequency, prediction_interval = prediction_interval, random_seed = random_seed, verbose = verbose)
         else:
-            model = ETS(frequency = frequency, prediction_interval = prediction_interval, damped=parameters['damped'], trend=parameters['trend'], seasonal=parameters['seasonal'], seasonal_periods=parameters['seasonal_periods'])
+            model = ETS(frequency = frequency, prediction_interval = prediction_interval, damped=parameters['damped'], trend=parameters['trend'], seasonal=parameters['seasonal'], seasonal_periods=parameters['seasonal_periods'], random_seed = random_seed, verbose = verbose)
         return model
     
     if model == 'ARIMA':
         from autots.models.statsmodels import ARIMA
         if parameters == {}:
-            model = ARIMA(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country)
+            model = ARIMA(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         else:
-            model = ARIMA(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, p =parameters['p'], d=parameters['d'], q=parameters['q'], regression_type=parameters['regression_type'])
+            model = ARIMA(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, p =parameters['p'], d=parameters['d'], q=parameters['q'], regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose)
         return model
     
     if model == 'FBProphet':
         from autots.models.prophet import FBProphet
         if parameters == {}:
-            model = FBProphet(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country)
+            model = FBProphet(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         else:
-            model = FBProphet(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, holiday =parameters['holiday'], regression_type=parameters['regression_type'])
+            model = FBProphet(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, holiday =parameters['holiday'], regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose)
         return model
+    
+    if model == 'RandomForestRolling':
+        from autots.models.sklearn import RandomForestRolling
+        if parameters == {}:
+            model = RandomForestRolling(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        else:
+            model = RandomForestRolling(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, holiday =parameters['holiday'], regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
+                 n_estimators =parameters['n_estimators'], min_samples_split =parameters['min_samples_split'], max_depth =parameters['max_depth'], mean_rolling_periods =parameters['mean_rolling_periods'], std_rolling_periods =parameters['std_rolling_periods'])
+        return model
+    
     
     else:
         raise AttributeError("Model String not found in ModelMonster")
@@ -263,11 +277,16 @@ def PredictWitch(template, df_train,forecast_length: int,
                     prediction_interval: float = 0.9, no_negatives: bool = False,
                     preord_regressor_train = [], preord_regressor_forecast = [], 
                     holiday_country: str = 'US', startTimeStamps = None,
+                    random_seed: int = 2020, verbose: int = 0,
                     template_cols: list = ['Model','ModelParameters','TransformationParameters','Ensemble']):
     """
     Takes numeric data, returns numeric forecasts.
     Only one model (albeit potentially an ensemble)!
     
+    Well, she turned me into a newt.
+    A newt?
+    I got better. -Python
+
     Args:
         df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
         forecast_length (int): number of periods to forecast
@@ -311,7 +330,8 @@ def PredictWitch(template, df_train,forecast_length: int,
                                               preord_regressor_train = preord_regressor_train,
                                               preord_regressor_forecast = preord_regressor_forecast, 
                                               holiday_country = holiday_country,
-                                              startTimeStamps = startTimeStamps)
+                                              startTimeStamps = startTimeStamps,
+                                              random_seed = random_seed, verbose = verbose)
                 model_id = create_model_id(df_forecast.model_name, df_forecast.model_parameters, df_forecast.transformation_parameters)
                 total_runtime = df_forecast.fit_runtime + df_forecast.predict_runtime + df_forecast.transformation_runtime
 
@@ -337,6 +357,7 @@ def PredictWitch(template, df_train,forecast_length: int,
                                           preord_regressor_train = preord_regressor_train,
                                           preord_regressor_forecast = preord_regressor_forecast, 
                                           holiday_country = holiday_country,
+                                          random_seed = random_seed, verbose = verbose,
                                           startTimeStamps = startTimeStamps)
     
             return df_forecast
@@ -348,6 +369,7 @@ def TemplateWizard(template, df_train, df_test, weights,
                     prediction_interval: float = 0.9, no_negatives: bool = False,
                     preord_regressor_train = [], preord_regressor_forecast = [], 
                     holiday_country: str = 'US', startTimeStamps = None,
+                    random_seed: int = 2020, verbose: int = 0,
                     template_cols: list = ['Model','ModelParameters','TransformationParameters','Ensemble']):
 
     """
@@ -395,8 +417,10 @@ def TemplateWizard(template, df_train, df_test, weights,
                                           preord_regressor_forecast = preord_regressor_forecast, 
                                           holiday_country = holiday_country,
                                           startTimeStamps = startTimeStamps,
+                                          random_seed = random_seed, verbose = verbose,
                                        template_cols = template_cols)
-            print("Model Number: {} with model {}".format(str(template_result.model_count), df_forecast.model_name))
+            if verbose > 0:
+                print("Model Number: {} with model {}".format(str(template_result.model_count), df_forecast.model_name))
             
             from autots.evaluator.metrics import PredictionEval
             model_error = PredictionEval(df_forecast, df_test, series_weights = weights)

@@ -3,10 +3,13 @@ Automated Time Series Model Selection for Python
 
 https://github.com/winedarksea/AutoTS
 """
-import logging
+from autots.datasets import load_toy_daily
 
-__version__ = '0.0.dev0'
+__version__ = '0.0.1'
 
-logger = logging.getLogger(__name__)
-logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.INFO)
+__all__ = ['load_toy_daily']
+
+# import logging
+# logger = logging.getLogger(__name__)
+# logger.addHandler(logging.StreamHandler())
+# logger.setLevel(logging.INFO)

@@ -7,6 +7,7 @@ import pandas as pd
 from autots.evaluator.auto_model import ModelObject
 from autots.evaluator.auto_model import PredictionObject
 
+import logging
 from fbprophet import Prophet
 
 class FBProphet(ModelObject):
@@ -27,10 +28,10 @@ class FBProphet(ModelObject):
                  prediction_interval: float = 0.9, 
                  holiday: bool = False, 
                  regression_type: str = None, holiday_country: str = 'US',
-                 random_seed: int = 2020):
+                 random_seed: int = 2020, verbose: int = 0):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              regression_type = regression_type, 
-                             holiday_country = holiday_country, random_seed = random_seed)
+                             holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         self.holiday = holiday
         
     def fit(self, df, preord_regressor = []):
@@ -71,6 +72,8 @@ class FBProphet(ModelObject):
         forecast = pd.DataFrame()
         lower_forecast = pd.DataFrame()
         upper_forecast = pd.DataFrame()
+        if self.verbose <= 0:
+            logging.getLogger('fbprophet').setLevel(logging.WARNING)
 
         for series in self.df_train.columns:
             current_series = self.df_train.copy()

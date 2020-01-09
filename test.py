@@ -12,9 +12,10 @@ weights = {'categoricalDayofWeek': 1,
          'wabashaTemp': 1}
 weighted = False
 frequency = '1D'
+aggfunc = 'first'
 prediction_interval = 0.9
 no_negatives = False
-seed = 425
+random_seed = 425
 holiday_country = 'US'
 ensemble = True
 subset = 200
@@ -26,17 +27,18 @@ num_validations = 2
 models_to_validate = 10
 # 'backwards' or 'even'
 validation_method = 'even'
-max_generations = 3
+max_generations = 1
+verbose = 1
 
+random_seed = abs(int(random_seed))
 import random
-random.seed(seed)
-np.random.seed(seed)
+random.seed(random_seed)
+np.random.seed(random_seed)
 
 template_cols = ['Model','ModelParameters','TransformationParameters','Ensemble']
 
-df_long = pd.read_csv("SampleTimeSeries.csv")
-df_long['date'] = pd.to_datetime(df_long['date'], infer_datetime_format = True)
-
+from autots.datasets import load_toy_daily
+df_long = load_toy_daily()
 
 #from autots.datasets.fred import get_fred_data
 #df_long = get_fred_data('XXXXXXXXXXXxx')
@@ -46,7 +48,7 @@ from autots.tools.shaping import long_to_wide
 
 df_wide = long_to_wide(df_long, date_col = 'date', value_col = 'value',
                        id_col = 'series_id', frequency = frequency, na_tolerance = na_tolerance,
-                       drop_data_older_than_periods = 1000, aggfunc = 'first',
+                       drop_data_older_than_periods = 1000, aggfunc = aggfunc,
                        drop_most_recent = drop_most_recent)
 
 if weighted == False:
@@ -74,7 +76,7 @@ df_cat_inverse = categorical_inverse(categorical_transformer, df_wide_numeric)
 
 
 from autots.tools.shaping import subset_series
-df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = seed)
+df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = random_seed)
 
 if weighted == False:
     current_weights = {x:1 for x in df_subset.columns}
@@ -110,7 +112,7 @@ def generate_score(model_results, metric_weighting: dict = {}, prediction_interv
     except:
         containment_weighting = 1
     try:
-        runtime_weighting = metric_weighting['runtime_weighting']
+        runtime_weighting = metric_weighting['runtime_weighting'] * 0.1
     except:
         runtime_weighting = 0.5
     smape_score = model_results['smape_weighted']/model_results['smape_weighted'].min(skipna=True) # smaller better
@@ -142,7 +144,7 @@ template_result = TemplateWizard(initial_template, df_train, df_test, current_we
                                   preord_regressor_forecast = preord_regressor_test, 
                                   holiday_country = holiday_country,
                                   startTimeStamps = profile_df.loc['FirstDate'],
-                                  template_cols = template_cols)
+                                  template_cols = template_cols, random_seed = random_seed, verbose = verbose)
 model_count = template_result.model_count
 main_results.model_results = pd.concat([main_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
 main_results.model_results['Score'] = generate_score(main_results.model_results, metric_weighting = metric_weighting,prediction_interval = prediction_interval)
@@ -162,7 +164,8 @@ current_generation = 0
 # eventually, have this break if accuracy improvement plateaus before max_generations
 while current_generation < max_generations:
     current_generation += 1
-    print("New generation: {}".format(current_generation))
+    if verbose > 0:
+        print("New generation: {}".format(current_generation))
     new_template = NewGeneticTemplate(main_results.model_results, submitted_parameters=submitted_parameters, sort_column = "Score", 
                        sort_ascending = True, max_results = 40, top_n = 15, template_cols=template_cols)
     submitted_parameters = pd.concat([submitted_parameters, new_template], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
@@ -176,7 +179,8 @@ while current_generation < max_generations:
                                   preord_regressor_forecast = preord_regressor_test, 
                                   holiday_country = holiday_country,
                                   startTimeStamps = profile_df.loc['FirstDate'],
-                                  template_cols = template_cols)
+                                  template_cols = template_cols,
+                                  random_seed = random_seed, verbose = verbose)
     model_count = template_result.model_count
     main_results.model_results = pd.concat([main_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
     main_results.model_results['Score'] = generate_score(main_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
@@ -264,7 +268,7 @@ if num_validations > 0:
             # gradually remove the end
             current_slice = df_wide_numeric.head(len(df_wide_numeric.index) - (y+1) * forecast_length)
             # subset series (if used) and take a new train/test split
-            df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = seed)
+            df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = random_seed)
             if weighted == False:
                 current_weights = {x:1 for x in df_subset.columns}
             if weighted == True:
@@ -282,7 +286,7 @@ if num_validations > 0:
                                           preord_regressor_forecast = preord_regressor_test, 
                                           holiday_country = holiday_country,
                                           startTimeStamps = profile_df.loc['FirstDate'],
-                                          template_cols = template_cols)
+                                          template_cols = template_cols, random_seed = random_seed, verbose = verbose)
             model_count = template_result.model_count
             validation_results.model_results = pd.concat([validation_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
             validation_results.model_results['Score'] = generate_score(validation_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
@@ -298,7 +302,7 @@ if num_validations > 0:
             validation_size = int(np.floor((len(df_wide_numeric.index) - forecast_length)/num_validations))
             current_slice = df_wide_numeric.head(validation_size * (y+1) + forecast_length)
             # subset series (if used) and take a new train/test split
-            df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = seed)
+            df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = random_seed)
             if weighted == False:
                 current_weights = {x:1 for x in df_subset.columns}
             if weighted == True:
@@ -316,7 +320,8 @@ if num_validations > 0:
                                           preord_regressor_forecast = preord_regressor_test, 
                                           holiday_country = holiday_country,
                                           startTimeStamps = profile_df.loc['FirstDate'],
-                                          template_cols = template_cols)
+                                          template_cols = template_cols,
+                                          random_seed = random_seed, verbose = verbose)
             model_count = template_result.model_count
             validation_results.model_results = pd.concat([validation_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
             validation_results.model_results['Score'] = generate_score(validation_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
@@ -326,7 +331,21 @@ if num_validations > 0:
             validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
         validation_results = validation_aggregation(validation_results)
 
-
+class AutoTS(object):
+    def __init__(self):
+        pass
+    def fit(self):
+        pass
+    def predict(self):
+        pass
+    def export_template(output_format: str = 'csv', models: str = 'best'):
+        """"
+        output_format = 'csv' or 'json'
+        models = 'best', 'validation', or 'all'
+        """
+        print("Not yet implemented")
+    def get_params(self):
+        pass
 
 model_results_per_series_smape = main_results.model_results_per_series_smape
 model_results = main_results.model_results
@@ -337,25 +356,33 @@ Recombine best two of each model, if two or more present
 Duplicates still seem to be occurring in the genetic template runs
 Inf appearing in MAE and RMSE (possibly all NaN in test)
 Na Tolerance for test in simple_train_test_split
+Relative/Absolute Imports and reduce package reloading
+User regressor to sklearn model regression_type
 
 Predict method
     PredictWitch + Inverse Categorical
+    Regressor Flag - warns if Regressor provided in train but not forecast (regression_type == 'User')
+Import/export template
 Sklearn models
 
 ARIMA + Detrend fails
-
-Ranked by score
-    nearest neighbor score - is time much slower than similar? is MAE much better than similar for SMAPE?
 
 Things needing testing:
     Confirm per_series weighting works properly
     Passing in Start Dates - (Test)
     Different frequencies
+    Various verbose inputs
+    Test holidays on non-daily data
 
 
 """
 
-
+"""
+The verbosity level: if non zero, progress messages are printed. Above 50, the output is sent to stdout. The frequency of the messages increases with the verbosity level. If it more than 10, all iterations are reported."
+In addition, the Glossary (search for "verbose") says this:
+"Logging is not handled very consistently in Scikit-learn at present, but when it is provided as an option, the verbose parameter is usually available to choose no logging (set to False). Any True value should enable some logging, but larger integers (e.g. above 10) may be needed for full verbosity. Verbose logs are usually printed to Standard Output. Estimators should not produce any output on Standard Output with the default verbose setting."
+https://stackoverflow.com/questions/29995249/verbose-argument-in-scikit-learn
+"""
 # to gluon ds
 # to xgboost ds
 # GENERATOR of series for per series methods
