@@ -1,15 +1,18 @@
 import numpy as np
 import pandas as pd
 import datetime
-import json
 import copy
 
-forecast_length = 14
+from autots.datasets import load_toy_daily
+df_long = load_toy_daily()
 
 weights = {'categoricalDayofWeek': 1,
            'randomNegative': 1,
          'sp500high': 4,
          'wabashaTemp': 1}
+
+
+forecast_length = 14
 weighted = False
 frequency = '1D'
 aggfunc = 'first'
@@ -27,7 +30,7 @@ num_validations = 2
 models_to_validate = 10
 # 'backwards' or 'even'
 validation_method = 'even'
-max_generations = 1
+max_generations = 10
 verbose = 1
 
 random_seed = abs(int(random_seed))
@@ -36,9 +39,6 @@ random.seed(random_seed)
 np.random.seed(random_seed)
 
 template_cols = ['Model','ModelParameters','TransformationParameters','Ensemble']
-
-from autots.datasets import load_toy_daily
-df_long = load_toy_daily()
 
 #from autots.datasets.fred import get_fred_data
 #df_long = get_fred_data('XXXXXXXXXXXxx')
@@ -331,17 +331,98 @@ if num_validations > 0:
             validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
         validation_results = validation_aggregation(validation_results)
 
+if not ensemble:
+    validation_template[validation_template['Ensemble'] == 0]
+
+best_model = validation_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols).head(1)[template_cols]
+
+    
+
 class AutoTS(object):
-    def __init__(self):
+    """"
+    Automated time series modeling using genetic algorithms.
+    
+    Args:
+        forecast_length: int = 14
+        weights: dict = {}, weighted: bool = False
+        frequency: str = 'infer'
+        aggfunc: str = 'first'
+        prediction_interval: float = 0.9
+        no_negatives: bool = False
+        random_seed: int = 425
+        holiday_country: str = 'US'
+        ensemble: bool = True
+        subset: int = 200
+        na_tolerance: float = 0.95
+        metric_weighting: dict = {'smape_weighting' : 10, 'mae_weighting' : 1,
+            'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0}
+        drop_most_recent: int = 1
+        num_validations: int = 2
+        models_to_validate: int = 10
+        validation_method (str): 'even' or 'backwards' where backwards is better for shorter training sets
+        max_generations: int = 1
+        verbose: int = 1
+    """
+    def __init__(self, 
+        forecast_length: int = 14,
+        weights: dict = {}, weighted: bool = False,
+        frequency: str = 'infer',
+        aggfunc: str = 'first',
+        prediction_interval: float = 0.9,
+        no_negatives: bool = False,
+        random_seed: int = 425,
+        holiday_country: str = 'US',
+        ensemble: bool = True,
+        subset: int = 200,
+        na_tolerance: float = 0.95,
+        metric_weighting: dict = {'smape_weighting' : 10, 'mae_weighting' : 1,
+            'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0},
+        drop_most_recent: int = 0,
+        num_validations: int = 3,
+        models_to_validate: int = 10,
+        validation_method: str = 'even',
+        max_generations: int = 1,
+        verbose: int = 1 
+        ):
+        self.forecast_length = forecast_length
+        self.weights = weights
+        self.frequency = frequency
+        self.aggfunc = aggfunc
+        self.prediction_interval = prediction_interval
+        self.no_negatives = no_negatives
+        self.random_seed = random_seed
+        self.holiday_country = holiday_country
+        self.ensemble = ensemble
+        self.subset = subset
+        self.na_tolerance = na_tolerance
+        self.metric_weighting = metric_weighting
+        self.drop_most_recent = drop_most_recent
+        self.num_validations = num_validations
+        self.models_to_validate = models_to_validate
+        self.validation_method = validation_method
+        self.max_generations = max_generations
+        self.verbose = verbose
+        
+        self.best_model = pd.DataFrame()
+        self.regressor_used = False
+        
+    def fit(self, df, preord_regressor = []):
+        return self
+    def predict(self, df, forecast_length: int = "self", preord_regressor = []):
+        if forecast_length == 'self':
+            forecast_length = self.forecast_length
         pass
-    def fit(self):
-        pass
-    def predict(self):
-        pass
-    def export_template(output_format: str = 'csv', models: str = 'best'):
+    def export_template(filename, models: str = 'best'):
         """"
-        output_format = 'csv' or 'json'
+        output_format = 'csv' or 'json' (from filename)
         models = 'best', 'validation', or 'all'
+        """
+        print("Not yet implemented")
+    def import_template(file):
+        """"
+        
+        Args:
+            file
         """
         print("Not yet implemented")
     def get_params(self):
@@ -362,6 +443,7 @@ User regressor to sklearn model regression_type
 Predict method
     PredictWitch + Inverse Categorical
     Regressor Flag - warns if Regressor provided in train but not forecast (regression_type == 'User')
+    Best Model
 Import/export template
 Sklearn models
 
