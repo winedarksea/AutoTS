@@ -160,10 +160,4 @@ class RandomForestRolling(ModelObject):
                         }
         return parameter_dict
 
-"""
-model = RandomForestRolling(holiday = True)
-model.fit(df_train)
-pred = model.predict(14)
-pred.forecast
-"""
 

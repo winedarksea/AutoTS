@@ -27,7 +27,7 @@ num_validations = 2
 models_to_validate = 10
 # 'backwards' or 'even'
 validation_method = 'even'
-max_generations = 1
+max_generations = 10
 verbose = 1
 
 random_seed = abs(int(random_seed))
