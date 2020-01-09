@@ -87,10 +87,13 @@ def long_to_wide(df, date_col: str, value_col: str, id_col: str,
    
     # remove series with way too many NaNs - probably those of a different frequency, or brand new
     na_threshold = int(len(timeseries_seriescols.index) * (1 - na_tolerance))
+    initial_length = len(timeseries_seriescols.columns)
     timeseries_seriescols = timeseries_seriescols.dropna(axis = 1, thresh=na_threshold)
+    if initial_length != len(timeseries_seriescols.columns):
+        print("Some columns dropped as having too many NaN (greater than na_tolerance)")
     
     if len(timeseries_seriescols.columns) < 1:
-        raise ValueError("All series filtered, probably the na_tolerance is too low or frequency is incorrect")
+        raise ValueError("All series filtered! Probably the na_tolerance is too low or frequency is incorrect")
     
     # drop most recent value when desired
     if drop_most_recent > 0:

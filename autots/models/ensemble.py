@@ -47,6 +47,7 @@ def Best3Ensemble(ensemble_params, forecasts_list, forecasts, lower_forecasts, u
     return ens_result
 
 def Dist2080Ensemble(ensemble_params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval):   
+
     first_model_index = forecasts_list.index(ensemble_params['FirstModel'])
     last_model_index = forecasts_list.index(ensemble_params['LastModel'])
     forecast_length = forecasts[0].shape[0]
@@ -65,7 +66,7 @@ def Dist2080Ensemble(ensemble_params, forecasts_list, forecasts, lower_forecasts
         if idx in model_indexes:
             ens_runtime = ens_runtime + forecasts_runtime[idx]
     
-    ens_result = PredictionObject(model_name = "Dist2080Ensemble",
+    ens_result_obj = PredictionObject(model_name = "Dist2080Ensemble",
                                           forecast_length=len(ens_df.index),
                                           forecast_index = ens_df.index,
                                           forecast_columns = ens_df.columns,
@@ -76,7 +77,7 @@ def Dist2080Ensemble(ensemble_params, forecasts_list, forecasts, lower_forecasts
                                           fit_runtime = ens_runtime,
                                           model_parameters = ensemble_params
                                           )
-    return ens_result
+    return ens_result_obj
 
 def EnsembleForecast(ensemble_str, ensemble_params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval):
     """

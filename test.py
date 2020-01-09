@@ -7,7 +7,7 @@ import copy
 forecast_length = 14
 
 weights = {'categoricalDayofWeek': 1,
-         'randomNegative': 1,
+           'randomNegative': 1,
          'sp500high': 4,
          'wabashaTemp': 1}
 weighted = False
@@ -19,9 +19,14 @@ holiday_country = 'US'
 ensemble = True
 subset = 200
 na_tolerance = 0.95
-metric_weighting = {'smape_weighting' : 9, 'mae_weighting' : 1,
-    'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0.5}
-drop_most_recent = 3 # 141 to 11-27
+metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
+    'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0}
+drop_most_recent = 1
+num_validations = 2
+models_to_validate = 10
+# 'backwards' or 'even'
+validation_method = 'even'
+max_generations = 3
 
 import random
 random.seed(seed)
@@ -46,7 +51,12 @@ df_wide = long_to_wide(df_long, date_col = 'date', value_col = 'value',
 
 if weighted == False:
     weights = {x:1 for x in df_wide.columns}
-
+if weighted == True:
+    # handle not all weights being provided
+    weights = {col:(weights[col] if col in weights else 1) for col in df_wide.columns}
+    # handle non-numeric inputs
+    weights = {key:(abs(float(weights[key])) if str(weights[key]).isdigit() else 1) for key in weights}
+    
 preord_regressor = pd.Series(np.random.randint(0, 100, size = len(df_wide.index)), index = df_wide.index )
 
 
@@ -118,9 +128,10 @@ main_results = TemplateEvalObject()
 from autots.evaluator.auto_model import NewGeneticTemplate
 from autots.evaluator.auto_model import RandomTemplate
 from autots.evaluator.auto_model import TemplateWizard    
-
+from autots.evaluator.auto_model import unpack_ensemble_models
 model_count = 0
 initial_template = RandomTemplate(40)
+initial_template = unpack_ensemble_models(initial_template, template_cols, keep_ensemble = False)
 submitted_parameters = initial_template.copy()
 template_result = TemplateWizard(initial_template, df_train, df_test, current_weights,
                                  model_count = model_count, ensemble = ensemble, 
@@ -130,7 +141,8 @@ template_result = TemplateWizard(initial_template, df_train, df_test, current_we
                                   preord_regressor_train = preord_regressor_train,
                                   preord_regressor_forecast = preord_regressor_test, 
                                   holiday_country = holiday_country,
-                                  startTimeStamps = profile_df.loc['FirstDate'])
+                                  startTimeStamps = profile_df.loc['FirstDate'],
+                                  template_cols = template_cols)
 model_count = template_result.model_count
 main_results.model_results = pd.concat([main_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
 main_results.model_results['Score'] = generate_score(main_results.model_results, metric_weighting = metric_weighting,prediction_interval = prediction_interval)
@@ -146,9 +158,11 @@ if ensemble:
     main_results.lower_forecasts.extend(template_result.lower_forecasts)
 
 
-
-generations = 1
-for x in range(generations):
+current_generation = 0
+# eventually, have this break if accuracy improvement plateaus before max_generations
+while current_generation < max_generations:
+    current_generation += 1
+    print("New generation: {}".format(current_generation))
     new_template = NewGeneticTemplate(main_results.model_results, submitted_parameters=submitted_parameters, sort_column = "Score", 
                        sort_ascending = True, max_results = 40, top_n = 15, template_cols=template_cols)
     submitted_parameters = pd.concat([submitted_parameters, new_template], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
@@ -161,7 +175,8 @@ for x in range(generations):
                                   preord_regressor_train = preord_regressor_train,
                                   preord_regressor_forecast = preord_regressor_test, 
                                   holiday_country = holiday_country,
-                                  startTimeStamps = profile_df.loc['FirstDate'])
+                                  startTimeStamps = profile_df.loc['FirstDate'],
+                                  template_cols = template_cols)
     model_count = template_result.model_count
     main_results.model_results = pd.concat([main_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
     main_results.model_results['Score'] = generate_score(main_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
@@ -227,9 +242,7 @@ if ensemble:
     main_results.model_results_per_series_smape = main_results.model_results_per_series_smape.append(ens_template_result.model_results_per_series_smape)
     main_results.model_results_per_series_mae = main_results.model_results_per_series_mae.append(ens_template_result.model_results_per_series_mae)
 
-num_validations = 0
-models_to_validate = 20
-validation_method = 'backwards'
+
 num_validations = abs(int(num_validations))
 max_possible = int(np.floor(len(df_wide_numeric.index)/forecast_length))
 if max_possible < (num_validations + 1):
@@ -238,22 +251,20 @@ if max_possible < (num_validations + 1):
         num_validations = 0
     print("Too many training validations for length of data provided, decreasing num_validations to {}".format(num_validations))
 
+validation_template = main_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols).head(models_to_validate)[template_cols]
+if not ensemble:
+    validation_template[validation_template['Ensemble'] == 0]
+    
+validation_results = copy.copy(main_results) 
 
-validation_template = main_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last').head(models_to_validate)[template_cols]
-validation_results = copy.deepcopy(main_results) 
-# TemplateEvalObject(), possibly drop if runs <= 1
-# HANDLE ENSEMBLES
-    # unpack ensemble models
-    # clear forecasts lists
-    # run forecasts by str
-# slice into num bits (less the bit used above)
+from autots.evaluator.auto_model import validation_aggregation
 if num_validations > 0:
     if validation_method == 'backwards':
         for y in range(num_validations):
             # gradually remove the end
             current_slice = df_wide_numeric.head(len(df_wide_numeric.index) - (y+1) * forecast_length)
             # subset series (if used) and take a new train/test split
-            df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = seed)
+            df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = seed)
             if weighted == False:
                 current_weights = {x:1 for x in df_subset.columns}
             if weighted == True:
@@ -262,7 +273,7 @@ if num_validations > 0:
             preord_regressor_train = preord_regressor[df_train.index]
             preord_regressor_test = preord_regressor[df_test.index]
 
-            template_result = TemplateWizard(new_template, df_train, df_test, current_weights,
+            template_result = TemplateWizard(validation_template, df_train, df_test, current_weights,
                                          model_count = model_count, ensemble = ensemble, 
                                          forecast_length = forecast_length, frequency=frequency, 
                                           prediction_interval=prediction_interval, 
@@ -270,44 +281,66 @@ if num_validations > 0:
                                           preord_regressor_train = preord_regressor_train,
                                           preord_regressor_forecast = preord_regressor_test, 
                                           holiday_country = holiday_country,
-                                          startTimeStamps = profile_df.loc['FirstDate'])
+                                          startTimeStamps = profile_df.loc['FirstDate'],
+                                          template_cols = template_cols)
             model_count = template_result.model_count
             validation_results.model_results = pd.concat([validation_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
             validation_results.model_results['Score'] = generate_score(validation_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
-            
             validation_results.model_results_per_timestamp_smape = validation_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
             validation_results.model_results_per_timestamp_mae = validation_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
             validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
             validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
-            if ensemble:
-                validation_results.forecasts_list.extend(template_result.forecasts_list)
-                validation_results.forecasts_runtime.extend(template_result.forecasts_runtime)
-                validation_results.forecasts.extend(template_result.forecasts)
-                validation_results.upper_forecasts.extend(template_result.upper_forecasts)
-                validation_results.lower_forecasts.extend(template_result.lower_forecasts)
-        # aggregate here
+        validation_results = validation_aggregation(validation_results)
 
     if validation_method == 'even':
-        df_wide_numeric.index
-    from autots.tools.shaping import simple_train_test_split
-    df_train, df_test = simple_train_test_split(df_wide_numeric, forecast_length = forecast_length)
-    preord_regressor_train = preord_regressor[df_train.index]
-    preord_regressor_test = preord_regressor[df_test.index]
+        for y in range(num_validations):
+            # /num_validations biases it towards the last segment (which I prefer), /(num_validations + 1) would remove that
+            validation_size = int(np.floor((len(df_wide_numeric.index) - forecast_length)/num_validations))
+            current_slice = df_wide_numeric.head(validation_size * (y+1) + forecast_length)
+            # subset series (if used) and take a new train/test split
+            df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = seed)
+            if weighted == False:
+                current_weights = {x:1 for x in df_subset.columns}
+            if weighted == True:
+                current_weights = {x: weights[x] for x in df_subset.columns}                
+            df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length)
+            preord_regressor_train = preord_regressor[df_train.index]
+            preord_regressor_test = preord_regressor[df_test.index]
 
-    
+            template_result = TemplateWizard(validation_template, df_train, df_test, current_weights,
+                                         model_count = model_count, ensemble = ensemble, 
+                                         forecast_length = forecast_length, frequency=frequency, 
+                                          prediction_interval=prediction_interval, 
+                                          no_negatives=no_negatives,
+                                          preord_regressor_train = preord_regressor_train,
+                                          preord_regressor_forecast = preord_regressor_test, 
+                                          holiday_country = holiday_country,
+                                          startTimeStamps = profile_df.loc['FirstDate'],
+                                          template_cols = template_cols)
+            model_count = template_result.model_count
+            validation_results.model_results = pd.concat([validation_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+            validation_results.model_results['Score'] = generate_score(validation_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
+            validation_results.model_results_per_timestamp_smape = validation_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
+            validation_results.model_results_per_timestamp_mae = validation_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
+            validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
+            validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
+        validation_results = validation_aggregation(validation_results)
+
+
+
 model_results_per_series_smape = main_results.model_results_per_series_smape
 model_results = main_results.model_results
+temp = validation_results.model_results
+
 """
-unpack ensembles if in template!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 Recombine best two of each model, if two or more present
-Additonal drop_most_recent from bool to int of periods to drop
-handle weighting not being provided for all columns
+Duplicates still seem to be occurring in the genetic template runs
+Inf appearing in MAE and RMSE (possibly all NaN in test)
+Na Tolerance for test in simple_train_test_split
 
-Verbosity
-
-Multiple validation
-    Consolidate repeat models in model_results, and per_series/per_timestamp
 Predict method
+    PredictWitch + Inverse Categorical
+Sklearn models
 
 ARIMA + Detrend fails
 
@@ -321,15 +354,6 @@ Things needing testing:
 
 
 """
-
-
-
-
-
-
-
-
-
 
 
 # to gluon ds

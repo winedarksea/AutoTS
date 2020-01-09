@@ -71,7 +71,7 @@ Contaiment measures the percent of test data that falls between the upper and lo
 * If all input are Int, convert floats back to int
 * Trim whitespace on string inputs
 * Hierachial correction (bottom-up to start with)
-* Improved verbosity controls and options
+* Improved verbosity controls and options. Replace most 'print' with logging.
 * Export as simpler code (as TPOT)
 * AIC metric, other accuracy metrics
 * Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
@@ -82,6 +82,7 @@ Contaiment measures the percent of test data that falls between the upper and lo
 * Use quantile of training data to provide upper/lower forecast for Last Value Naive (so upper forecast might be 95th percentile largest number)
 * More thorough use of setting random seed
 * For monthly data account for number of days in month
+* Option to run generations until generations no longer see improvement of at least X % over n generations
 
 #### New Ensembles:
 	best 3 (unique algorithms not just variations)
