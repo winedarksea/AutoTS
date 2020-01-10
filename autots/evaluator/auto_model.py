@@ -599,3 +599,35 @@ def validation_aggregation(validation_results):
     validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.groupby('ID').mean()
     validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.groupby('ID').mean()
     return validation_results
+
+def generate_score(model_results, metric_weighting: dict = {}, prediction_interval: float = 0.9):
+    """
+    Generates score based on relative accuracies
+    """
+    try:
+        smape_weighting = metric_weighting['smape_weighting']
+    except:
+        smape_weighting = 9
+    try:
+        mae_weighting = metric_weighting['mae_weighting']
+    except:
+        mae_weighting = 1
+    try:
+        rmse_weighting = metric_weighting['rmse_weighting']
+    except:
+        rmse_weighting = 5
+    try:
+        containment_weighting = metric_weighting['containment_weighting']
+    except:
+        containment_weighting = 1
+    try:
+        runtime_weighting = metric_weighting['runtime_weighting'] * 0.1
+    except:
+        runtime_weighting = 0.5
+    smape_score = model_results['smape_weighted']/model_results['smape_weighted'].min(skipna=True) # smaller better
+    rmse_score = model_results['rmse_weighted']/model_results['rmse_weighted'].min(skipna=True) # smaller better
+    mae_score = model_results['mae_weighted']/model_results['mae_weighted'].min(skipna=True) # smaller better
+    containment_score = (abs(prediction_interval - model_results['containment'])) # from 0 to 1, smaller better
+    runtime_score = model_results['TotalRuntime']/(model_results['TotalRuntime'].min(skipna=True) + datetime.timedelta(minutes = 1)) # smaller better
+    return (smape_score * smape_weighting) + (mae_score * mae_weighting) + (rmse_score * rmse_weighting) + (containment_score * containment_weighting) + (runtime_score * runtime_weighting)
+

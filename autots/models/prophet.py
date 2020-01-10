@@ -79,7 +79,8 @@ class FBProphet(ModelObject):
             current_series = self.df_train.copy()
             current_series['y'] = current_series[series]
             current_series['ds'] = current_series.index
-            current_series[self.regressor_name] = self.regressor_train
+            if preord_regressor != []:
+                current_series[self.regressor_name] = self.regressor_train
             
             m = Prophet(interval_width = self.prediction_interval)
             if self.holiday == True:

@@ -161,7 +161,7 @@ def categorical_inverse(categorical_transformer_object, df):
     cat_features = categorical_transformer.categorical_features
     if len(cat_features) > 0:
         col_namen = df.columns
-        categorical = categorical_transformer.encoder.inverse_transform(df[cat_features].values) # .reshape(-1, 1)
+        categorical = categorical_transformer.encoder.inverse_transform(df[cat_features].astype(int).values) # .reshape(-1, 1)
         categorical = pd.DataFrame(categorical)
         categorical.columns = cat_features
         categorical.index = df.index
