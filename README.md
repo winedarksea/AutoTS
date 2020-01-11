@@ -1,30 +1,60 @@
 # AutoTS
+Unstable prototype: version 0.0.1
 ### Project CATS (Catlin Automated Time Series)
-Model Selection for Multiple Time Series
+(or maybe eventually: Clustered Automated Time Series)
+#### Model Selection for Multiple Time Series
 
-Simple package for comparing open-source time series implementations.
+Simple package for comparing and predicting with open-source time series implementations.
 For other time series needs, check out the package list here: https://github.com/MaxBenChrist/awesome_time_series_in_python
 
-Requirements:
+`pip install autots`
+#### Requirements:
 	Python >= 3.5 (typing) >= 3.6 (GluonTS)
 	pandas
 	sklearn >= 0.20.0 (ColumnTransformer)
 	statsmodels
 	holidays
 
+`pip install autots['additional models']`
+#### Requirements
+	fbprophet
+	fredapi (example datasets)
 
-pip install fredapi # if using samples
-conda install -c conda-forge fbprophet
-pip install mxnet==1.4.1
-    pip install mxnet-cu90mkl==1.4.1 # if you want GPU and have Intel CPU
-pip install gluonts==0.4.0
-    pip install git+https://github.com/awslabs/gluon-ts.git #if you want dev version
-pip install pmdarima==1.4.0 
-pip uninstall numpy # might be necessary, even twice, followed by the following
-pip install numpy==1.17.4 # gluonts likes to force numpy back to 1.14, but 1.17 seems to be fine with it
-pip install sktime==0.3.1
+## Basic Use
+Input data is expected to come in a 'long' format with three columns: Date (ideally already in pd.DateTime format), Value, and Series ID. the column name for each of these is passed to .fit(). For a single time series, series_id can be = None. 
+
+```
+from autots.datasets import load_toy_daily
+df_long = load_toy_daily()
+
+from autots import AutoTS
+model = AutoTS(forecast_length = 14, frequency = 'infer',
+               prediction_interval = 0.9, ensemble = True, weighted = False,
+               max_generations = 5, num_validations = 2, validation_method = 'even')
+model = model.fit(df_long, date_col = 'date', value_col = 'value', id_col = 'series_id' )
+
+# Print the name of the best mode
+print(model.best_model['Model'].iloc[0])
+
+prediction = model.predict()
+# point forecasts dataframe
+forecasts_df = prediction.forecast
+# accuracy of all tried model results (not including cross validation)
+model_results = model.main_results.model_results
+```
+
+## Underlying Process
+AutoTS works in the following way at present:
+* It begins by taking long data and converting it to a wide dataframe with DateTimeIndex
+* An initial train/test split is generated where the test is the most recent data, of forecast_length
+* A random template of models is generated and tested on the initial train/test
+	* Models consist of a pre-transformation step (fill na options, outlier removal options, etc), and algorithm (ie ETS) and model paramters (trend, damped, etc)
+* The top models (selected by a combination of SMAPE, MAE, RMSE) are recombined with random mutations for n_generations
+* A handful of the best models from this process go to cross validation, where they are re-assessed on new train/test splits.
+* The best model in validation is selected as best_model and used in the .predict() method to generate forecasts.
 
 ## Caveats and Advice
+
 #### Short Training History
 How much data is 'too little' depends on the seasonality and volatility of the data. 
 But less than half a year of daily data or less than two years of monthly data are both going to be tight. 
@@ -61,6 +91,22 @@ sMAPE is generally the most versatile across multiple series, but doesn't handle
 Contaiment measures the percent of test data that falls between the upper and lower forecasts. 
 
 ## To-Do
+* Smaller
+	* Recombine best two of each model, if two or more present
+	* Duplicates still seem to be occurring in the genetic template runs
+	* Inf appearing in MAE and RMSE (possibly all NaN in test)
+	* Na Tolerance for test in simple_train_test_split
+	* Relative/Absolute Imports and reduce package reloading
+	* User regressor to sklearn model regression_type
+	* Import/export template
+	* ARIMA + Detrend fails
+* Things needing testing:
+    * Confirm per_series weighting works properly
+    * Passing in Start Dates - (Test)
+    * Different frequencies
+    * Various verbose inputs
+    * Test holidays on non-daily data
+    * Handle categorical forecasts where forecast leaves known values
 * Speed improvements, Profiling, Parallelization, and Distributed options for general greater speed
 * Generate list of functional frequences, and improve usability on rarer frequenices
 * Warning/handling if lots of NaN in most recent (test) part of data
@@ -103,18 +149,3 @@ Contaiment measures the percent of test data that falls between the upper and lo
 	pydlm
 	Isotonic regression
 	TPOT if it adds multioutput functionality
-	
-```
-transformation_dict = {'outlier': 'clip2std',
-                       'fillNA' : 'ffill', 
-                       'transformation' : 'RollingMean10',
-                       'context_slicer' : 'None'}
-model_str = "FBProphet"
-parameter_dict = {'holiday':True,
-                  'regression_type' : 'User'}
-model_str = "ARIMA"
-parameter_dict = {'p': 1,
-                  'd': 0,
-                  'q': 1,
-                  'regression_type' : 'User'}
-```
