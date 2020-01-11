@@ -50,7 +50,11 @@ Things needing testing:
     Test holidays on non-daily data
     Handle categorical forecasts where forecast leaves known values
 
-
+https://packaging.python.org/tutorials/packaging-projects/
+python -m pip install --user --upgrade setuptools wheel
+cd /to project directory
+python setup.py sdist bdist_wheel
+twine upload dist/*
 """
 
 """

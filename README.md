@@ -9,6 +9,7 @@ For other time series needs, check out the package list here: https://github.com
 
 `pip install autots`
 #### Requirements:
+	numpy
 	Python >= 3.5 (typing) >= 3.6 (GluonTS)
 	pandas
 	sklearn >= 0.20.0 (ColumnTransformer)
@@ -17,8 +18,11 @@ For other time series needs, check out the package list here: https://github.com
 
 `pip install autots['additional']`
 #### Requirements
-	fbprophet>=0.4.*
+	fbprophet
 	fredapi (example datasets)
+
+Check out `functional_environments.md` for specific versions tested to work.
+
 
 ## Basic Use
 Input data is expected to come in a 'long' format with three columns: Date (ideally already in pd.DateTime format), Value, and Series ID. the column name for each of these is passed to .fit(). For a single time series, series_id can be = None. 

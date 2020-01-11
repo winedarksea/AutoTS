@@ -1,11 +1,11 @@
 import setuptools
 
 required = [
-    "numpy", "pandas>=0.23.*", "statsmodels>=0.9.*", "scikit-learn>=0.20.*","holidays>=0.9"
+    "numpy>=1.14.6", "pandas>=0.25.*", "statsmodels>=0.10.*", "scikit-learn>=0.20.*","holidays>=0.9"
 ]
 
 extras = {
-    'additional' : ['fbprophet>=0.3.*', 'fredapi']
+    'additional' : ['fbprophet>=0.4.*', 'fredapi']
 }
 
 with open("README.md", "r") as fh:
