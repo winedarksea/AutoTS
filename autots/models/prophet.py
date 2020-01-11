@@ -1,5 +1,7 @@
 """
 Facebook's Prophet
+
+Since Prophet install can be finicky on Windows, it will be an optional dependency.
 """
 import datetime
 import numpy as np
@@ -8,7 +10,16 @@ from autots.evaluator.auto_model import ModelObject
 from autots.evaluator.auto_model import PredictionObject
 
 import logging
-from fbprophet import Prophet
+
+# https://stackoverflow.com/questions/27361427/how-to-properly-deal-with-optional-features-in-python
+try:
+    from fbprophet import Prophet
+except Exception: # except ImportError
+    _has_prophet = False
+else:
+    _has_prophet = True
+
+
 
 class FBProphet(ModelObject):
     """Facebook's Prophet
@@ -40,6 +51,9 @@ class FBProphet(ModelObject):
         Args:
             df (pandas.DataFrame): Datetime Indexed 
         """
+        if not _has_prophet:
+            raise ImportError("Package fbprophet is required")
+        
         df = self.basic_profile(df)
         if self.regression_type != None:
             if (len(preord_regressor) != len(df)):
@@ -64,7 +78,9 @@ class FBProphet(ModelObject):
         Returns:
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
-        """        
+        """       
+        if not _has_prophet:
+            raise ImportError("Package fbprophet is required")
         predictStartTime = datetime.datetime.now()
         #if self.regression_type != None:
          #   assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"

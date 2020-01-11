@@ -375,6 +375,8 @@ def TemplateWizard(template, df_train, df_test, weights,
     """
     takes Template, returns Results
     
+    There are some who call me... Tim. - Python
+    
     Args:
         template (pandas.DataFrame): containing model str, and json of transformations and hyperparamters
         df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
