@@ -1,7 +1,7 @@
 import setuptools
 
 required = [
-    "numpy", "pandas", "statsmodels", "sklearn>=0.20.0","holidays"
+    "numpy", "pandas", "statsmodels", "scikit-learn","holidays"
 ]
 
 extras = {
@@ -13,7 +13,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="AutoTS",
-    version="0.0.1",
+    version="0.0.2",
     author="Colin Catlin",
     author_email="colin.catlin@syllepsis.live",
     description="Automated Time Series Forecasting",
