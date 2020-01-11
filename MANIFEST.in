@@ -1,0 +1,2 @@
+include autots/datasets/data/*.csv
+include README.md LICENSE
