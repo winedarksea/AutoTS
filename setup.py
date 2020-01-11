@@ -1,11 +1,11 @@
 import setuptools
 
 required = [
-    "numpy", "pandas", "statsmodels", "scikit-learn","holidays"
+    "numpy", "pandas>=0.23.*", "statsmodels>=0.9.*", "scikit-learn>=0.20.*","holidays>=0.9"
 ]
 
 extras = {
-    'additional models' : ['fbprophet', 'fredapi']
+    'additional' : ['fbprophet>=0.3.*', 'fredapi']
 }
 
 with open("README.md", "r") as fh:
@@ -13,7 +13,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="AutoTS",
-    version="0.0.2",
+    version="0.0.3",
     author="Colin Catlin",
     author_email="colin.catlin@syllepsis.live",
     description="Automated Time Series Forecasting",

@@ -1,5 +1,5 @@
 # AutoTS
-Unstable prototype: version 0.0.2
+
 ### Project CATS (Catlin Automated Time Series)
 (or maybe eventually: Clustered Automated Time Series)
 #### Model Selection for Multiple Time Series
@@ -15,9 +15,9 @@ For other time series needs, check out the package list here: https://github.com
 	statsmodels
 	holidays
 
-`pip install autots['additional models']`
+`pip install autots['additional']`
 #### Requirements
-	fbprophet
+	fbprophet>=0.4.*
 	fredapi (example datasets)
 
 ## Basic Use
