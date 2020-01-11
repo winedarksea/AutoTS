@@ -1,5 +1,5 @@
 # AutoTS
-Unstable prototype: version 0.0.1
+Unstable prototype: version 0.0.2
 ### Project CATS (Catlin Automated Time Series)
 (or maybe eventually: Clustered Automated Time Series)
 #### Model Selection for Multiple Time Series
