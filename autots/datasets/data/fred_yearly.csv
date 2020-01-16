@@ -1,0 +1,662 @@
+date,value,series_id,series_name
+1929-01-01,104.556,GDPA,Gross Domestic Product
+1930-01-01,92.16,GDPA,Gross Domestic Product
+1931-01-01,77.391,GDPA,Gross Domestic Product
+1932-01-01,59.522,GDPA,Gross Domestic Product
+1933-01-01,57.154,GDPA,Gross Domestic Product
+1934-01-01,66.8,GDPA,Gross Domestic Product
+1935-01-01,74.241,GDPA,Gross Domestic Product
+1936-01-01,84.83,GDPA,Gross Domestic Product
+1937-01-01,93.003,GDPA,Gross Domestic Product
+1938-01-01,87.352,GDPA,Gross Domestic Product
+1939-01-01,93.437,GDPA,Gross Domestic Product
+1940-01-01,102.899,GDPA,Gross Domestic Product
+1941-01-01,129.309,GDPA,Gross Domestic Product
+1942-01-01,165.952,GDPA,Gross Domestic Product
+1943-01-01,203.084,GDPA,Gross Domestic Product
+1944-01-01,224.447,GDPA,Gross Domestic Product
+1945-01-01,228.007,GDPA,Gross Domestic Product
+1946-01-01,227.535,GDPA,Gross Domestic Product
+1947-01-01,249.616,GDPA,Gross Domestic Product
+1948-01-01,274.468,GDPA,Gross Domestic Product
+1949-01-01,272.475,GDPA,Gross Domestic Product
+1950-01-01,299.827,GDPA,Gross Domestic Product
+1951-01-01,346.914,GDPA,Gross Domestic Product
+1952-01-01,367.341,GDPA,Gross Domestic Product
+1953-01-01,389.218,GDPA,Gross Domestic Product
+1954-01-01,390.549,GDPA,Gross Domestic Product
+1955-01-01,425.478,GDPA,Gross Domestic Product
+1956-01-01,449.353,GDPA,Gross Domestic Product
+1957-01-01,474.039,GDPA,Gross Domestic Product
+1958-01-01,481.229,GDPA,Gross Domestic Product
+1959-01-01,521.654,GDPA,Gross Domestic Product
+1960-01-01,542.382,GDPA,Gross Domestic Product
+1961-01-01,562.21,GDPA,Gross Domestic Product
+1962-01-01,603.921,GDPA,Gross Domestic Product
+1963-01-01,637.451,GDPA,Gross Domestic Product
+1964-01-01,684.46,GDPA,Gross Domestic Product
+1965-01-01,742.289,GDPA,Gross Domestic Product
+1966-01-01,813.414,GDPA,Gross Domestic Product
+1967-01-01,859.958,GDPA,Gross Domestic Product
+1968-01-01,940.651,GDPA,Gross Domestic Product
+1969-01-01,1017.615,GDPA,Gross Domestic Product
+1970-01-01,1073.303,GDPA,Gross Domestic Product
+1971-01-01,1164.85,GDPA,Gross Domestic Product
+1972-01-01,1279.11,GDPA,Gross Domestic Product
+1973-01-01,1425.376,GDPA,Gross Domestic Product
+1974-01-01,1545.243,GDPA,Gross Domestic Product
+1975-01-01,1684.904,GDPA,Gross Domestic Product
+1976-01-01,1873.412,GDPA,Gross Domestic Product
+1977-01-01,2081.826,GDPA,Gross Domestic Product
+1978-01-01,2351.599,GDPA,Gross Domestic Product
+1979-01-01,2627.334,GDPA,Gross Domestic Product
+1980-01-01,2857.307,GDPA,Gross Domestic Product
+1981-01-01,3207.042,GDPA,Gross Domestic Product
+1982-01-01,3343.789,GDPA,Gross Domestic Product
+1983-01-01,3634.038,GDPA,Gross Domestic Product
+1984-01-01,4037.613,GDPA,Gross Domestic Product
+1985-01-01,4338.979,GDPA,Gross Domestic Product
+1986-01-01,4579.631,GDPA,Gross Domestic Product
+1987-01-01,4855.215,GDPA,Gross Domestic Product
+1988-01-01,5236.438,GDPA,Gross Domestic Product
+1989-01-01,5641.58,GDPA,Gross Domestic Product
+1990-01-01,5963.144,GDPA,Gross Domestic Product
+1991-01-01,6158.129,GDPA,Gross Domestic Product
+1992-01-01,6520.327,GDPA,Gross Domestic Product
+1993-01-01,6858.559,GDPA,Gross Domestic Product
+1994-01-01,7287.236,GDPA,Gross Domestic Product
+1995-01-01,7639.749,GDPA,Gross Domestic Product
+1996-01-01,8073.122,GDPA,Gross Domestic Product
+1997-01-01,8577.552,GDPA,Gross Domestic Product
+1998-01-01,9062.817,GDPA,Gross Domestic Product
+1999-01-01,9630.663,GDPA,Gross Domestic Product
+2000-01-01,10252.347,GDPA,Gross Domestic Product
+2001-01-01,10581.822,GDPA,Gross Domestic Product
+2002-01-01,10936.418,GDPA,Gross Domestic Product
+2003-01-01,11458.246,GDPA,Gross Domestic Product
+2004-01-01,12213.73,GDPA,Gross Domestic Product
+2005-01-01,13036.637,GDPA,Gross Domestic Product
+2006-01-01,13814.609,GDPA,Gross Domestic Product
+2007-01-01,14451.86,GDPA,Gross Domestic Product
+2008-01-01,14712.845,GDPA,Gross Domestic Product
+2009-01-01,14448.932,GDPA,Gross Domestic Product
+2010-01-01,14992.052,GDPA,Gross Domestic Product
+2011-01-01,15542.582,GDPA,Gross Domestic Product
+2012-01-01,16197.007,GDPA,Gross Domestic Product
+2013-01-01,16784.851,GDPA,Gross Domestic Product
+2014-01-01,17527.258,GDPA,Gross Domestic Product
+2015-01-01,18224.78,GDPA,Gross Domestic Product
+2016-01-01,18715.04,GDPA,Gross Domestic Product
+2017-01-01,19519.424,GDPA,Gross Domestic Product
+2018-01-01,20580.223,GDPA,Gross Domestic Product
+1986-01-01,15.05,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1987-01-01,19.2,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1988-01-01,15.97,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1989-01-01,19.64,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1990-01-01,24.53,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1991-01-01,21.54,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1992-01-01,20.58,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1993-01-01,18.43,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1994-01-01,17.2,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1995-01-01,18.43,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1996-01-01,22.12,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1997-01-01,20.61,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1998-01-01,14.42,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1999-01-01,19.34,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2000-01-01,30.38,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2001-01-01,25.98,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2002-01-01,26.18,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2003-01-01,31.08,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2004-01-01,41.51,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2005-01-01,56.64,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2006-01-01,66.05,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2007-01-01,72.34,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2008-01-01,99.67,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2009-01-01,61.95,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2010-01-01,79.48,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2011-01-01,94.88,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2012-01-01,94.05,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2013-01-01,97.98,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2014-01-01,93.17,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2015-01-01,48.66,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2016-01-01,43.29,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2017-01-01,50.8,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+2018-01-01,65.23,ACOILWTICO,Crude Oil West Texas Intermediate Cushing Oklahoma
+1999-01-01,1.0653,AEXUSEU,US Euro Foreign Exchange Rate
+2000-01-01,0.9232,AEXUSEU,US Euro Foreign Exchange Rate
+2001-01-01,0.8952,AEXUSEU,US Euro Foreign Exchange Rate
+2002-01-01,0.9454,AEXUSEU,US Euro Foreign Exchange Rate
+2003-01-01,1.1321,AEXUSEU,US Euro Foreign Exchange Rate
+2004-01-01,1.2438,AEXUSEU,US Euro Foreign Exchange Rate
+2005-01-01,1.2449,AEXUSEU,US Euro Foreign Exchange Rate
+2006-01-01,1.2563,AEXUSEU,US Euro Foreign Exchange Rate
+2007-01-01,1.3711,AEXUSEU,US Euro Foreign Exchange Rate
+2008-01-01,1.4726,AEXUSEU,US Euro Foreign Exchange Rate
+2009-01-01,1.3935,AEXUSEU,US Euro Foreign Exchange Rate
+2010-01-01,1.3261,AEXUSEU,US Euro Foreign Exchange Rate
+2011-01-01,1.3931,AEXUSEU,US Euro Foreign Exchange Rate
+2012-01-01,1.2859,AEXUSEU,US Euro Foreign Exchange Rate
+2013-01-01,1.3281,AEXUSEU,US Euro Foreign Exchange Rate
+2014-01-01,1.3297,AEXUSEU,US Euro Foreign Exchange Rate
+2015-01-01,1.1096,AEXUSEU,US Euro Foreign Exchange Rate
+2016-01-01,1.1072,AEXUSEU,US Euro Foreign Exchange Rate
+2017-01-01,1.1301,AEXUSEU,US Euro Foreign Exchange Rate
+2018-01-01,1.1817,AEXUSEU,US Euro Foreign Exchange Rate
+2019-01-01,1.1194,AEXUSEU,US Euro Foreign Exchange Rate
+1981-01-01,1.71,AEXCHUS,China US Foreign Exchange Rate
+1982-01-01,1.8979,AEXCHUS,China US Foreign Exchange Rate
+1983-01-01,1.981,AEXCHUS,China US Foreign Exchange Rate
+1984-01-01,2.3303,AEXCHUS,China US Foreign Exchange Rate
+1985-01-01,2.9434,AEXCHUS,China US Foreign Exchange Rate
+1986-01-01,3.4616,AEXCHUS,China US Foreign Exchange Rate
+1987-01-01,3.7314,AEXCHUS,China US Foreign Exchange Rate
+1988-01-01,3.7314,AEXCHUS,China US Foreign Exchange Rate
+1989-01-01,3.7673,AEXCHUS,China US Foreign Exchange Rate
+1990-01-01,4.7921,AEXCHUS,China US Foreign Exchange Rate
+1991-01-01,5.3337,AEXCHUS,China US Foreign Exchange Rate
+1992-01-01,5.5206,AEXCHUS,China US Foreign Exchange Rate
+1993-01-01,5.7795,AEXCHUS,China US Foreign Exchange Rate
+1994-01-01,8.6397,AEXCHUS,China US Foreign Exchange Rate
+1995-01-01,8.37,AEXCHUS,China US Foreign Exchange Rate
+1996-01-01,8.3389,AEXCHUS,China US Foreign Exchange Rate
+1997-01-01,8.3193,AEXCHUS,China US Foreign Exchange Rate
+1998-01-01,8.3008,AEXCHUS,China US Foreign Exchange Rate
+1999-01-01,8.2783,AEXCHUS,China US Foreign Exchange Rate
+2000-01-01,8.2784,AEXCHUS,China US Foreign Exchange Rate
+2001-01-01,8.277,AEXCHUS,China US Foreign Exchange Rate
+2002-01-01,8.2771,AEXCHUS,China US Foreign Exchange Rate
+2003-01-01,8.2772,AEXCHUS,China US Foreign Exchange Rate
+2004-01-01,8.2768,AEXCHUS,China US Foreign Exchange Rate
+2005-01-01,8.1936,AEXCHUS,China US Foreign Exchange Rate
+2006-01-01,7.9723,AEXCHUS,China US Foreign Exchange Rate
+2007-01-01,7.6058,AEXCHUS,China US Foreign Exchange Rate
+2008-01-01,6.9477,AEXCHUS,China US Foreign Exchange Rate
+2009-01-01,6.8307,AEXCHUS,China US Foreign Exchange Rate
+2010-01-01,6.7696,AEXCHUS,China US Foreign Exchange Rate
+2011-01-01,6.463,AEXCHUS,China US Foreign Exchange Rate
+2012-01-01,6.3093,AEXCHUS,China US Foreign Exchange Rate
+2013-01-01,6.1478,AEXCHUS,China US Foreign Exchange Rate
+2014-01-01,6.162,AEXCHUS,China US Foreign Exchange Rate
+2015-01-01,6.2827,AEXCHUS,China US Foreign Exchange Rate
+2016-01-01,6.64,AEXCHUS,China US Foreign Exchange Rate
+2017-01-01,6.7569,AEXCHUS,China US Foreign Exchange Rate
+2018-01-01,6.609,AEXCHUS,China US Foreign Exchange Rate
+2019-01-01,6.9081,AEXCHUS,China US Foreign Exchange Rate
+1971-01-01,1.0099,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1972-01-01,0.9907,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1973-01-01,1.0002,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1974-01-01,0.978,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1975-01-01,1.0175,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1976-01-01,0.9863,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1977-01-01,1.0633,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1978-01-01,1.1405,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1979-01-01,1.1713,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1980-01-01,1.1693,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1981-01-01,1.199,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1982-01-01,1.2344,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1983-01-01,1.2325,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1984-01-01,1.2952,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1985-01-01,1.3659,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1986-01-01,1.3896,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1987-01-01,1.3259,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1988-01-01,1.2306,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1989-01-01,1.1842,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1990-01-01,1.1668,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1991-01-01,1.146,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1992-01-01,1.2085,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1993-01-01,1.2902,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1994-01-01,1.3664,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1995-01-01,1.3725,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1996-01-01,1.3638,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1997-01-01,1.3849,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1998-01-01,1.4836,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1999-01-01,1.4858,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2000-01-01,1.4855,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2001-01-01,1.5487,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2002-01-01,1.5704,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2003-01-01,1.4008,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2004-01-01,1.3017,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2005-01-01,1.2115,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2006-01-01,1.134,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2007-01-01,1.0734,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2008-01-01,1.066,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2009-01-01,1.1412,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2010-01-01,1.0298,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2011-01-01,0.9887,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2012-01-01,0.9995,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2013-01-01,1.03,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2014-01-01,1.1043,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2015-01-01,1.2791,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2016-01-01,1.3243,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2017-01-01,1.2984,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2018-01-01,1.2957,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+2019-01-01,1.3269,AEXCAUS,Canadian to US Dollar Exchange Rate Daily
+1984-01-01,51742.0,MEHOINUSA672N,Real Median US Household Income
+1985-01-01,52709.0,MEHOINUSA672N,Real Median US Household Income
+1986-01-01,54608.0,MEHOINUSA672N,Real Median US Household Income
+1987-01-01,55260.0,MEHOINUSA672N,Real Median US Household Income
+1988-01-01,55716.0,MEHOINUSA672N,Real Median US Household Income
+1989-01-01,56678.0,MEHOINUSA672N,Real Median US Household Income
+1990-01-01,55952.0,MEHOINUSA672N,Real Median US Household Income
+1991-01-01,54318.0,MEHOINUSA672N,Real Median US Household Income
+1992-01-01,53897.0,MEHOINUSA672N,Real Median US Household Income
+1993-01-01,53610.0,MEHOINUSA672N,Real Median US Household Income
+1994-01-01,54233.0,MEHOINUSA672N,Real Median US Household Income
+1995-01-01,55931.0,MEHOINUSA672N,Real Median US Household Income
+1996-01-01,56744.0,MEHOINUSA672N,Real Median US Household Income
+1997-01-01,57911.0,MEHOINUSA672N,Real Median US Household Income
+1998-01-01,60040.0,MEHOINUSA672N,Real Median US Household Income
+1999-01-01,61526.0,MEHOINUSA672N,Real Median US Household Income
+2000-01-01,61399.0,MEHOINUSA672N,Real Median US Household Income
+2001-01-01,60038.0,MEHOINUSA672N,Real Median US Household Income
+2002-01-01,59360.0,MEHOINUSA672N,Real Median US Household Income
+2003-01-01,59286.0,MEHOINUSA672N,Real Median US Household Income
+2004-01-01,59080.0,MEHOINUSA672N,Real Median US Household Income
+2005-01-01,59712.0,MEHOINUSA672N,Real Median US Household Income
+2006-01-01,60178.0,MEHOINUSA672N,Real Median US Household Income
+2007-01-01,60985.0,MEHOINUSA672N,Real Median US Household Income
+2008-01-01,58811.0,MEHOINUSA672N,Real Median US Household Income
+2009-01-01,58400.0,MEHOINUSA672N,Real Median US Household Income
+2010-01-01,56873.0,MEHOINUSA672N,Real Median US Household Income
+2011-01-01,56006.0,MEHOINUSA672N,Real Median US Household Income
+2012-01-01,55900.0,MEHOINUSA672N,Real Median US Household Income
+2013-01-01,57856.0,MEHOINUSA672N,Real Median US Household Income
+2014-01-01,56969.0,MEHOINUSA672N,Real Median US Household Income
+2015-01-01,59901.0,MEHOINUSA672N,Real Median US Household Income
+2016-01-01,61779.0,MEHOINUSA672N,Real Median US Household Income
+2017-01-01,62626.0,MEHOINUSA672N,Real Median US Household Income
+2018-01-01,63179.0,MEHOINUSA672N,Real Median US Household Income
+1955-01-01,,CPALTT01USA661S,Consumer Price Index All Items
+1956-01-01,,CPALTT01USA661S,Consumer Price Index All Items
+1957-01-01,,CPALTT01USA661S,Consumer Price Index All Items
+1958-01-01,,CPALTT01USA661S,Consumer Price Index All Items
+1959-01-01,,CPALTT01USA661S,Consumer Price Index All Items
+1960-01-01,12.4780079066059,CPALTT01USA661S,Consumer Price Index All Items
+1961-01-01,12.6116129504072,CPALTT01USA661S,Consumer Price Index All Items
+1962-01-01,12.7627976052351,CPALTT01USA661S,Consumer Price Index All Items
+1963-01-01,12.9210141044735,CPALTT01USA661S,Consumer Price Index All Items
+1964-01-01,13.0862624481226,CPALTT01USA661S,Consumer Price Index All Items
+1965-01-01,13.2937018582352,CPALTT01USA661S,Consumer Price Index All Items
+1966-01-01,13.6945169896393,CPALTT01USA661S,Consumer Price Index All Items
+1967-01-01,14.0742365878116,CPALTT01USA661S,Consumer Price Index All Items
+1968-01-01,14.6754592849177,CPALTT01USA661S,Consumer Price Index All Items
+1969-01-01,15.4770895477258,CPALTT01USA661S,Consumer Price Index All Items
+1970-01-01,16.3806815544876,CPALTT01USA661S,Consumer Price Index All Items
+1971-01-01,17.0838659955474,CPALTT01USA661S,Consumer Price Index All Items
+1972-01-01,17.64289762619,CPALTT01USA661S,Consumer Price Index All Items
+1973-01-01,18.7328335098326,CPALTT01USA661S,Consumer Price Index All Items
+1974-01-01,20.8037116887537,CPALTT01USA661S,Consumer Price Index All Items
+1975-01-01,22.7058256018204,CPALTT01USA661S,Consumer Price Index All Items
+1976-01-01,24.0102327399863,CPALTT01USA661S,Consumer Price Index All Items
+1977-01-01,25.571302199139,CPALTT01USA661S,Consumer Price Index All Items
+1978-01-01,27.5226390230799,CPALTT01USA661S,Consumer Price Index All Items
+1979-01-01,30.6201664859483,CPALTT01USA661S,Consumer Price Index All Items
+1980-01-01,34.768954688201,CPALTT01USA661S,Consumer Price Index All Items
+1981-01-01,38.3622271820165,CPALTT01USA661S,Consumer Price Index All Items
+1982-01-01,40.7143791373614,CPALTT01USA661S,Consumer Price Index All Items
+1983-01-01,42.0223021977326,CPALTT01USA661S,Consumer Price Index All Items
+1984-01-01,43.8294862112563,CPALTT01USA661S,Consumer Price Index All Items
+1985-01-01,45.3835238259984,CPALTT01USA661S,Consumer Price Index All Items
+1986-01-01,46.2449247662966,CPALTT01USA661S,Consumer Price Index All Items
+1987-01-01,47.9395992692507,CPALTT01USA661S,Consumer Price Index All Items
+1988-01-01,49.8944520153969,CPALTT01USA661S,Consumer Price Index All Items
+1989-01-01,52.3028587260267,CPALTT01USA661S,Consumer Price Index All Items
+1990-01-01,55.1261442568817,CPALTT01USA661S,Consumer Price Index All Items
+1991-01-01,57.4607166012002,CPALTT01USA661S,Consumer Price Index All Items
+1992-01-01,59.2010980928232,CPALTT01USA661S,Consumer Price Index All Items
+1993-01-01,60.9485114288567,CPALTT01USA661S,Consumer Price Index All Items
+1994-01-01,62.5377082656518,CPALTT01USA661S,Consumer Price Index All Items
+1995-01-01,64.292153446096,CPALTT01USA661S,Consumer Price Index All Items
+1996-01-01,66.1766877481362,CPALTT01USA661S,Consumer Price Index All Items
+1997-01-01,67.7236935184677,CPALTT01USA661S,Consumer Price Index All Items
+1998-01-01,68.7749542578521,CPALTT01USA661S,Consumer Price Index All Items
+1999-01-01,70.27976896172,CPALTT01USA661S,Consumer Price Index All Items
+2000-01-01,72.6530164502968,CPALTT01USA661S,Consumer Price Index All Items
+2001-01-01,74.7063150181914,CPALTT01USA661S,Consumer Price Index All Items
+2002-01-01,75.8911808013771,CPALTT01USA661S,Consumer Price Index All Items
+2003-01-01,77.6139826819736,CPALTT01USA661S,Consumer Price Index All Items
+2004-01-01,79.6918927053052,CPALTT01USA661S,Consumer Price Index All Items
+2005-01-01,82.3956368811801,CPALTT01USA661S,Consumer Price Index All Items
+2006-01-01,85.0536740683861,CPALTT01USA661S,Consumer Price Index All Items
+2007-01-01,87.4799768230408,CPALTT01USA661S,Consumer Price Index All Items
+2008-01-01,90.8384208727644,CPALTT01USA661S,Consumer Price Index All Items
+2009-01-01,90.5154482589856,CPALTT01USA661S,Consumer Price Index All Items
+2010-01-01,91.9999409325069,CPALTT01USA661S,Consumer Price Index All Items
+2011-01-01,94.9042333109721,CPALTT01USA661S,Consumer Price Index All Items
+2012-01-01,96.8681219771859,CPALTT01USA661S,Consumer Price Index All Items
+2013-01-01,98.2870778608004,CPALTT01USA661S,Consumer Price Index All Items
+2014-01-01,99.8815134216814,CPALTT01USA661S,Consumer Price Index All Items
+2015-01-01,100.0,CPALTT01USA661S,Consumer Price Index All Items
+2016-01-01,101.261583205705,CPALTT01USA661S,Consumer Price Index All Items
+2017-01-01,103.418566319434,CPALTT01USA661S,Consumer Price Index All Items
+2018-01-01,105.944650946275,CPALTT01USA661S,Consumer Price Index All Items
+1901-06-30,63.0,FYFSD,Federal Surplus or Deficit
+1902-06-30,77.0,FYFSD,Federal Surplus or Deficit
+1903-06-30,45.0,FYFSD,Federal Surplus or Deficit
+1904-06-30,-43.0,FYFSD,Federal Surplus or Deficit
+1905-06-30,-23.0,FYFSD,Federal Surplus or Deficit
+1906-06-30,25.0,FYFSD,Federal Surplus or Deficit
+1907-06-30,87.0,FYFSD,Federal Surplus or Deficit
+1908-06-30,-57.0,FYFSD,Federal Surplus or Deficit
+1909-06-30,-89.0,FYFSD,Federal Surplus or Deficit
+1910-06-30,-18.0,FYFSD,Federal Surplus or Deficit
+1911-06-30,11.0,FYFSD,Federal Surplus or Deficit
+1912-06-30,3.0,FYFSD,Federal Surplus or Deficit
+1913-06-30,0.0,FYFSD,Federal Surplus or Deficit
+1914-06-30,0.0,FYFSD,Federal Surplus or Deficit
+1915-06-30,-63.0,FYFSD,Federal Surplus or Deficit
+1916-06-30,48.0,FYFSD,Federal Surplus or Deficit
+1917-06-30,-853.0,FYFSD,Federal Surplus or Deficit
+1918-06-30,-9032.0,FYFSD,Federal Surplus or Deficit
+1919-06-30,-13363.0,FYFSD,Federal Surplus or Deficit
+1920-06-30,291.0,FYFSD,Federal Surplus or Deficit
+1921-06-30,509.0,FYFSD,Federal Surplus or Deficit
+1922-06-30,736.0,FYFSD,Federal Surplus or Deficit
+1923-06-30,713.0,FYFSD,Federal Surplus or Deficit
+1924-06-30,963.0,FYFSD,Federal Surplus or Deficit
+1925-06-30,717.0,FYFSD,Federal Surplus or Deficit
+1926-06-30,865.0,FYFSD,Federal Surplus or Deficit
+1927-06-30,1155.0,FYFSD,Federal Surplus or Deficit
+1928-06-30,939.0,FYFSD,Federal Surplus or Deficit
+1929-06-30,734.0,FYFSD,Federal Surplus or Deficit
+1930-06-30,738.0,FYFSD,Federal Surplus or Deficit
+1931-06-30,-462.0,FYFSD,Federal Surplus or Deficit
+1932-06-30,-2735.0,FYFSD,Federal Surplus or Deficit
+1933-06-30,-2602.0,FYFSD,Federal Surplus or Deficit
+1934-06-30,-3586.0,FYFSD,Federal Surplus or Deficit
+1935-06-30,-2803.0,FYFSD,Federal Surplus or Deficit
+1936-06-30,-4304.0,FYFSD,Federal Surplus or Deficit
+1937-06-30,-2193.0,FYFSD,Federal Surplus or Deficit
+1938-06-30,-89.0,FYFSD,Federal Surplus or Deficit
+1939-06-30,-2846.0,FYFSD,Federal Surplus or Deficit
+1940-06-30,-2920.0,FYFSD,Federal Surplus or Deficit
+1941-06-30,-4941.0,FYFSD,Federal Surplus or Deficit
+1942-06-30,-20503.0,FYFSD,Federal Surplus or Deficit
+1943-06-30,-54554.0,FYFSD,Federal Surplus or Deficit
+1944-06-30,-47557.0,FYFSD,Federal Surplus or Deficit
+1945-06-30,-47553.0,FYFSD,Federal Surplus or Deficit
+1946-06-30,-15936.0,FYFSD,Federal Surplus or Deficit
+1947-06-30,4018.0,FYFSD,Federal Surplus or Deficit
+1948-06-30,11796.0,FYFSD,Federal Surplus or Deficit
+1949-06-30,580.0,FYFSD,Federal Surplus or Deficit
+1950-06-30,-3119.0,FYFSD,Federal Surplus or Deficit
+1951-06-30,6102.0,FYFSD,Federal Surplus or Deficit
+1952-06-30,-1519.0,FYFSD,Federal Surplus or Deficit
+1953-06-30,-6493.0,FYFSD,Federal Surplus or Deficit
+1954-06-30,-1154.0,FYFSD,Federal Surplus or Deficit
+1955-06-30,-2993.0,FYFSD,Federal Surplus or Deficit
+1956-06-30,3947.0,FYFSD,Federal Surplus or Deficit
+1957-06-30,3412.0,FYFSD,Federal Surplus or Deficit
+1958-06-30,-2769.0,FYFSD,Federal Surplus or Deficit
+1959-06-30,-12849.0,FYFSD,Federal Surplus or Deficit
+1960-06-30,301.0,FYFSD,Federal Surplus or Deficit
+1961-06-30,-3335.0,FYFSD,Federal Surplus or Deficit
+1962-06-30,-7146.0,FYFSD,Federal Surplus or Deficit
+1963-06-30,-4756.0,FYFSD,Federal Surplus or Deficit
+1964-06-30,-5915.0,FYFSD,Federal Surplus or Deficit
+1965-06-30,-1411.0,FYFSD,Federal Surplus or Deficit
+1966-06-30,-3698.0,FYFSD,Federal Surplus or Deficit
+1967-06-30,-8643.0,FYFSD,Federal Surplus or Deficit
+1968-06-30,-25161.0,FYFSD,Federal Surplus or Deficit
+1969-06-30,3242.0,FYFSD,Federal Surplus or Deficit
+1970-06-30,-2842.0,FYFSD,Federal Surplus or Deficit
+1971-06-30,-23033.0,FYFSD,Federal Surplus or Deficit
+1972-06-30,-23373.0,FYFSD,Federal Surplus or Deficit
+1973-06-30,-14908.0,FYFSD,Federal Surplus or Deficit
+1974-06-30,-6135.0,FYFSD,Federal Surplus or Deficit
+1975-06-30,-53242.0,FYFSD,Federal Surplus or Deficit
+1976-06-30,-73732.0,FYFSD,Federal Surplus or Deficit
+1977-09-30,-53659.0,FYFSD,Federal Surplus or Deficit
+1978-09-30,-59185.0,FYFSD,Federal Surplus or Deficit
+1979-09-30,-40726.0,FYFSD,Federal Surplus or Deficit
+1980-09-30,-73830.0,FYFSD,Federal Surplus or Deficit
+1981-09-30,-78968.0,FYFSD,Federal Surplus or Deficit
+1982-09-30,-127977.0,FYFSD,Federal Surplus or Deficit
+1983-09-30,-207802.0,FYFSD,Federal Surplus or Deficit
+1984-09-30,-185367.0,FYFSD,Federal Surplus or Deficit
+1985-09-30,-212308.0,FYFSD,Federal Surplus or Deficit
+1986-09-30,-221227.0,FYFSD,Federal Surplus or Deficit
+1987-09-30,-149730.0,FYFSD,Federal Surplus or Deficit
+1988-09-30,-155178.0,FYFSD,Federal Surplus or Deficit
+1989-09-30,-152639.0,FYFSD,Federal Surplus or Deficit
+1990-09-30,-221036.0,FYFSD,Federal Surplus or Deficit
+1991-09-30,-269238.0,FYFSD,Federal Surplus or Deficit
+1992-09-30,-290321.0,FYFSD,Federal Surplus or Deficit
+1993-09-30,-255051.0,FYFSD,Federal Surplus or Deficit
+1994-09-30,-203186.0,FYFSD,Federal Surplus or Deficit
+1995-09-30,-163952.0,FYFSD,Federal Surplus or Deficit
+1996-09-30,-107431.0,FYFSD,Federal Surplus or Deficit
+1997-09-30,-21884.0,FYFSD,Federal Surplus or Deficit
+1998-09-30,69270.0,FYFSD,Federal Surplus or Deficit
+1999-09-30,125610.0,FYFSD,Federal Surplus or Deficit
+2000-09-30,236241.0,FYFSD,Federal Surplus or Deficit
+2001-09-30,128236.0,FYFSD,Federal Surplus or Deficit
+2002-09-30,-157758.0,FYFSD,Federal Surplus or Deficit
+2003-09-30,-377585.0,FYFSD,Federal Surplus or Deficit
+2004-09-30,-412727.0,FYFSD,Federal Surplus or Deficit
+2005-09-30,-318346.0,FYFSD,Federal Surplus or Deficit
+2006-09-30,-248181.0,FYFSD,Federal Surplus or Deficit
+2007-09-30,-160701.0,FYFSD,Federal Surplus or Deficit
+2008-09-30,-458553.0,FYFSD,Federal Surplus or Deficit
+2009-09-30,-1412688.0,FYFSD,Federal Surplus or Deficit
+2010-09-30,-1294373.0,FYFSD,Federal Surplus or Deficit
+2011-09-30,-1299599.0,FYFSD,Federal Surplus or Deficit
+2012-09-30,-1076573.0,FYFSD,Federal Surplus or Deficit
+2013-09-30,-679775.0,FYFSD,Federal Surplus or Deficit
+2014-09-30,-484793.0,FYFSD,Federal Surplus or Deficit
+2015-09-30,-441960.0,FYFSD,Federal Surplus or Deficit
+2016-09-30,-584651.0,FYFSD,Federal Surplus or Deficit
+2017-09-30,-665446.0,FYFSD,Federal Surplus or Deficit
+2018-09-30,-778996.0,FYFSD,Federal Surplus or Deficit
+2019-09-30,-984388.0,FYFSD,Federal Surplus or Deficit
+1975-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1976-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1977-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1978-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1979-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1980-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1981-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1982-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1983-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1984-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1985-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1986-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1987-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1988-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1989-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1990-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1991-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1992-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1993-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1994-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1995-01-01,,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1996-01-01,95.9398,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1997-01-01,112.508,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1998-01-01,130.955,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1999-01-01,144.12,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2000-01-01,146.656,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2001-01-01,138.855,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2002-01-01,115.334,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2003-01-01,111.191,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2004-01-01,126.18299999999999,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2005-01-01,128.954,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2006-01-01,133.784,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2007-01-01,137.606,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2008-01-01,109.74,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2009-01-01,92.7631,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2010-01-01,108.12100000000001,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2011-01-01,107.214,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2012-01-01,106.749,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2013-01-01,127.992,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2014-01-01,145.424,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2015-01-01,141.876,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2016-01-01,140.661,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+2017-01-01,153.211,DDDM01USA156NWDB,Stock Market Capitalization to US GDP
+1979-01-01,332.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1980-01-01,318.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1981-01-01,312.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1982-01-01,313.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1983-01-01,314.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1984-01-01,314.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1985-01-01,320.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1986-01-01,327.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1987-01-01,329.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1988-01-01,326.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1989-01-01,322.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1990-01-01,315.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1991-01-01,313.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1992-01-01,314.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1993-01-01,317.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1994-01-01,315.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1995-01-01,314.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1996-01-01,313.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1997-01-01,314.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1998-01-01,321.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1999-01-01,329.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2000-01-01,334.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2001-01-01,336.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2002-01-01,338.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2003-01-01,337.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2004-01-01,338.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2005-01-01,333.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2006-01-01,333.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2007-01-01,335.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2008-01-01,335.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2009-01-01,345.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2010-01-01,342.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2011-01-01,336.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2012-01-01,335.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2013-01-01,333.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2014-01-01,334.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2015-01-01,341.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2016-01-01,347.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2017-01-01,351.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+2018-01-01,353.0,LEU0252881600A,Median Weekly Earnings for Salary Workers
+1955-01-01,,LFWA64TTUSA647N,US Working Age Population
+1956-01-01,,LFWA64TTUSA647N,US Working Age Population
+1957-01-01,,LFWA64TTUSA647N,US Working Age Population
+1958-01-01,,LFWA64TTUSA647N,US Working Age Population
+1959-01-01,,LFWA64TTUSA647N,US Working Age Population
+1960-01-01,101908250.0,LFWA64TTUSA647N,US Working Age Population
+1961-01-01,103084250.0,LFWA64TTUSA647N,US Working Age Population
+1962-01-01,103598750.0,LFWA64TTUSA647N,US Working Age Population
+1963-01-01,105470416.666667,LFWA64TTUSA647N,US Working Age Population
+1964-01-01,107333750.0,LFWA64TTUSA647N,US Working Age Population
+1965-01-01,109079916.666667,LFWA64TTUSA647N,US Working Age Population
+1966-01-01,110341333.333333,LFWA64TTUSA647N,US Working Age Population
+1967-01-01,111843583.333333,LFWA64TTUSA647N,US Working Age Population
+1968-01-01,113688166.666667,LFWA64TTUSA647N,US Working Age Population
+1969-01-01,115676250.0,LFWA64TTUSA647N,US Working Age Population
+1970-01-01,118077500.0,LFWA64TTUSA647N,US Working Age Population
+1971-01-01,120809750.0,LFWA64TTUSA647N,US Working Age Population
+1972-01-01,124102166.666667,LFWA64TTUSA647N,US Working Age Population
+1973-01-01,126708083.333333,LFWA64TTUSA647N,US Working Age Population
+1974-01-01,129175750.0,LFWA64TTUSA647N,US Working Age Population
+1975-01-01,131627083.333333,LFWA64TTUSA647N,US Working Age Population
+1976-01-01,134066333.333333,LFWA64TTUSA647N,US Working Age Population
+1977-01-01,136436166.666667,LFWA64TTUSA647N,US Working Age Population
+1978-01-01,138744416.666667,LFWA64TTUSA647N,US Working Age Population
+1979-01-01,141097416.666667,LFWA64TTUSA647N,US Working Age Population
+1980-01-01,143395250.0,LFWA64TTUSA647N,US Working Age Population
+1981-01-01,145279916.666667,LFWA64TTUSA647N,US Working Age Population
+1982-01-01,146883750.0,LFWA64TTUSA647N,US Working Age Population
+1983-01-01,148323083.333333,LFWA64TTUSA647N,US Working Age Population
+1984-01-01,149949750.0,LFWA64TTUSA647N,US Working Age Population
+1985-01-01,151208083.333333,LFWA64TTUSA647N,US Working Age Population
+1986-01-01,153090250.0,LFWA64TTUSA647N,US Working Age Population
+1987-01-01,154644333.333333,LFWA64TTUSA647N,US Working Age Population
+1988-01-01,156000750.0,LFWA64TTUSA647N,US Working Age Population
+1989-01-01,157221333.333333,LFWA64TTUSA647N,US Working Age Population
+1990-01-01,159917250.0,LFWA64TTUSA647N,US Working Age Population
+1991-01-01,161224666.666667,LFWA64TTUSA647N,US Working Age Population
+1992-01-01,162626583.333333,LFWA64TTUSA647N,US Working Age Population
+1993-01-01,164203666.666667,LFWA64TTUSA647N,US Working Age Population
+1994-01-01,165801750.0,LFWA64TTUSA647N,US Working Age Population
+1995-01-01,167136500.0,LFWA64TTUSA647N,US Working Age Population
+1996-01-01,168839250.0,LFWA64TTUSA647N,US Working Age Population
+1997-01-01,171144083.333333,LFWA64TTUSA647N,US Working Age Population
+1998-01-01,172982666.666667,LFWA64TTUSA647N,US Working Age Population
+1999-01-01,175269083.333333,LFWA64TTUSA647N,US Working Age Population
+2000-01-01,179110250.0,LFWA64TTUSA647N,US Working Age Population
+2001-01-01,181420666.666667,LFWA64TTUSA647N,US Working Age Population
+2002-01-01,183761750.0,LFWA64TTUSA647N,US Working Age Population
+2003-01-01,186914416.666667,LFWA64TTUSA647N,US Working Age Population
+2004-01-01,188748083.333333,LFWA64TTUSA647N,US Working Age Population
+2005-01-01,191014166.666667,LFWA64TTUSA647N,US Working Age Population
+2006-01-01,193201416.666667,LFWA64TTUSA647N,US Working Age Population
+2007-01-01,195639000.0,LFWA64TTUSA647N,US Working Age Population
+2008-01-01,196626583.333333,LFWA64TTUSA647N,US Working Age Population
+2009-01-01,197803250.0,LFWA64TTUSA647N,US Working Age Population
+2010-01-01,199123250.0,LFWA64TTUSA647N,US Working Age Population
+2011-01-01,199888916.666667,LFWA64TTUSA647N,US Working Age Population
+2012-01-01,201415250.0,LFWA64TTUSA647N,US Working Age Population
+2013-01-01,202267583.333333,LFWA64TTUSA647N,US Working Age Population
+2014-01-01,202987250.0,LFWA64TTUSA647N,US Working Age Population
+2015-01-01,204291750.0,LFWA64TTUSA647N,US Working Age Population
+2016-01-01,205502750.0,LFWA64TTUSA647N,US Working Age Population
+2017-01-01,205537500.0,LFWA64TTUSA647N,US Working Age Population
+2018-01-01,206507750.0,LFWA64TTUSA647N,US Working Age Population
+1955-01-01,,IRLTLT01USA156N,Long Term Government Bond Yields
+1956-01-01,,IRLTLT01USA156N,Long Term Government Bond Yields
+1957-01-01,,IRLTLT01USA156N,Long Term Government Bond Yields
+1958-01-01,,IRLTLT01USA156N,Long Term Government Bond Yields
+1959-01-01,,IRLTLT01USA156N,Long Term Government Bond Yields
+1960-01-01,4.11666666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+1961-01-01,3.8825,IRLTLT01USA156N,Long Term Government Bond Yields
+1962-01-01,3.94583333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+1963-01-01,4.0025,IRLTLT01USA156N,Long Term Government Bond Yields
+1964-01-01,4.18666666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+1965-01-01,4.2825,IRLTLT01USA156N,Long Term Government Bond Yields
+1966-01-01,4.92333333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+1967-01-01,5.07333333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+1968-01-01,5.64583333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+1969-01-01,6.67083333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+1970-01-01,7.34833333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+1971-01-01,6.15916666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+1972-01-01,6.21,IRLTLT01USA156N,Long Term Government Bond Yields
+1973-01-01,6.8425,IRLTLT01USA156N,Long Term Government Bond Yields
+1974-01-01,7.5575,IRLTLT01USA156N,Long Term Government Bond Yields
+1975-01-01,7.9875,IRLTLT01USA156N,Long Term Government Bond Yields
+1976-01-01,7.61166666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+1977-01-01,7.41916666666666,IRLTLT01USA156N,Long Term Government Bond Yields
+1978-01-01,8.41,IRLTLT01USA156N,Long Term Government Bond Yields
+1979-01-01,9.4425,IRLTLT01USA156N,Long Term Government Bond Yields
+1980-01-01,11.46,IRLTLT01USA156N,Long Term Government Bond Yields
+1981-01-01,13.9108333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+1982-01-01,13.0016666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+1983-01-01,11.105,IRLTLT01USA156N,Long Term Government Bond Yields
+1984-01-01,12.4383333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+1985-01-01,10.6233333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+1986-01-01,7.6825,IRLTLT01USA156N,Long Term Government Bond Yields
+1987-01-01,8.38416666666666,IRLTLT01USA156N,Long Term Government Bond Yields
+1988-01-01,8.84583333333334,IRLTLT01USA156N,Long Term Government Bond Yields
+1989-01-01,8.49833333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+1990-01-01,8.55,IRLTLT01USA156N,Long Term Government Bond Yields
+1991-01-01,7.85833333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+1992-01-01,7.01,IRLTLT01USA156N,Long Term Government Bond Yields
+1993-01-01,5.87333333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+1994-01-01,7.08,IRLTLT01USA156N,Long Term Government Bond Yields
+1995-01-01,6.58,IRLTLT01USA156N,Long Term Government Bond Yields
+1996-01-01,6.43833333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+1997-01-01,6.3525,IRLTLT01USA156N,Long Term Government Bond Yields
+1998-01-01,5.26416666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+1999-01-01,5.63666666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+2000-01-01,6.02916666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+2001-01-01,5.0175,IRLTLT01USA156N,Long Term Government Bond Yields
+2002-01-01,4.61083333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+2003-01-01,4.015,IRLTLT01USA156N,Long Term Government Bond Yields
+2004-01-01,4.27416666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+2005-01-01,4.29,IRLTLT01USA156N,Long Term Government Bond Yields
+2006-01-01,4.79166666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+2007-01-01,4.62916666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+2008-01-01,3.66666666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+2009-01-01,3.25666666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+2010-01-01,3.21416666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+2011-01-01,2.78583333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+2012-01-01,1.8025,IRLTLT01USA156N,Long Term Government Bond Yields
+2013-01-01,2.35083333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+2014-01-01,2.54083333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+2015-01-01,2.13583333333333,IRLTLT01USA156N,Long Term Government Bond Yields
+2016-01-01,1.84166666666667,IRLTLT01USA156N,Long Term Government Bond Yields
+2017-01-01,2.33,IRLTLT01USA156N,Long Term Government Bond Yields
+2018-01-01,2.91,IRLTLT01USA156N,Long Term Government Bond Yields

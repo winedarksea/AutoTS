@@ -59,7 +59,7 @@ class FBProphet(ModelObject):
             if (len(preord_regressor) != len(df)):
                 self.regression_type = None
         random_two = "n9032380gflljWfu8233koWQop3"
-        random_one = "nJIOVxgQ0vZGC7nx"
+        random_one = "nJIOVxgQ0vZGC7nx_"
         self.regressor_name = random_one if random_one not in df.columns else random_two
         self.regressor_train = preord_regressor.copy()
         self.df_train = df
@@ -95,7 +95,8 @@ class FBProphet(ModelObject):
             current_series = self.df_train.copy()
             current_series['y'] = current_series[series]
             current_series['ds'] = current_series.index
-            if preord_regressor != []:
+            print("FBProphet Initial Set")
+            if self.regression_type == 'User':
                 current_series[self.regressor_name] = self.regressor_train
             
             m = Prophet(interval_width = self.prediction_interval)

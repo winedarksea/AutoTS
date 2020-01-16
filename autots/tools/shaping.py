@@ -9,7 +9,8 @@ import pandas as pd
 def long_to_wide(df, date_col: str, value_col: str, id_col: str, 
                  frequency: str = "infer", na_tolerance: float = 0.95,
                  drop_data_older_than_periods: int = 10000, 
-                 drop_most_recent: int = 0, aggfunc: str ='first'):
+                 drop_most_recent: int = 0, aggfunc: str ='first',
+                 verbose: int = 0):
     """
     Takes long data and converts into wide, cleaner data
     
@@ -81,10 +82,15 @@ def long_to_wide(df, date_col: str, value_col: str, id_col: str,
     # infer frequency, not recommended
     if frequency == 'infer':
         frequency = pd.infer_freq(timeseries_seriescols.index, warn = True)
+        if verbose > 0:
+            print("Inferred frequency is: {}".format(str(frequency)))
     
     # fill missing dates in index with NaN
-    timeseries_seriescols = timeseries_seriescols.asfreq(frequency, fill_value=np.nan)
-   
+    try:
+        timeseries_seriescols = timeseries_seriescols.resample(frequency).apply(aggfunc)
+    except Exception:
+        timeseries_seriescols = timeseries_seriescols.asfreq(frequency, fill_value=np.nan)
+    
     # remove series with way too many NaNs - probably those of a different frequency, or brand new
     na_threshold = int(len(timeseries_seriescols.index) * (1 - na_tolerance))
     initial_length = len(timeseries_seriescols.columns)

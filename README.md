@@ -44,7 +44,7 @@ prediction = model.predict()
 # point forecasts dataframe
 forecasts_df = prediction.forecast
 # accuracy of all tried model results (not including cross validation)
-model_results = model.main_results.model_results
+model_results = model.initial_results.model_results
 ```
 
 ## Underlying Process
