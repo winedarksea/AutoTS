@@ -8,7 +8,7 @@ import pandas as pd
 
 try:
     from fredapi import Fred
-except:
+except Exception:
     raise ImportError("Package fredapi is required, install with `pip install fredapi`")
 
 def get_fred_data(fredkey: str, SeriesNameDict: dict = {'SeriesID':'SeriesName'}):

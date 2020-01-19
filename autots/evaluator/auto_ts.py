@@ -1,8 +1,25 @@
 import numpy as np
 import pandas as pd
-import datetime
 import copy
 import json
+
+from autots.tools.shaping import long_to_wide
+import random
+from autots.tools.shaping import values_to_numeric
+from autots.tools.profile import data_profile
+from autots.tools.shaping import subset_series
+from autots.tools.shaping import simple_train_test_split
+from autots.evaluator.auto_model import TemplateEvalObject
+from autots.evaluator.auto_model import NewGeneticTemplate
+from autots.evaluator.auto_model import RandomTemplate
+from autots.evaluator.auto_model import TemplateWizard    
+from autots.evaluator.auto_model import unpack_ensemble_models
+from autots.evaluator.auto_model import  generate_score
+from autots.models.ensemble import EnsembleForecast
+from autots.models.ensemble import EnsembleEvaluate      
+from autots.evaluator.auto_model import PredictWitch
+from autots.tools.shaping import categorical_inverse
+from autots.evaluator.auto_model import validation_aggregation
 
 class AutoTS(object):
     """"
@@ -11,11 +28,12 @@ class AutoTS(object):
     Args:
         forecast_length (int): number of periods over which to evaluate forecast. Can be overriden later in .predict().
         frequency (str): 'infer' or a specific pandas datetime offset. Can be used to force rollup of data (ie daily input, but frequency 'M' will rollup to monthly).
-        aggfunc (str): if data is to be rolled up to a higher frequency (daily -> monthly) or duplicates are included. Default 'first' removes duplicates, for rollup try 'mean' or 'sum'.
+        aggfunc (str): if data is to be rolled up to a higher frequency (daily -> monthly) or duplicates are included. Default 'first' removes duplicates, for rollup try 'mean' or 'sum'. Beware numeric aggregations like 'mean' will *drop* categorical features as cat->num occurs later.
         prediction_interval (float): 0-1, uncertainty range for upper and lower forecasts. Adjust range, but rarely matches actual containment.
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         weighted (bool): if True, considers series weights passed through to .fit(). Weights affect metrics and subsetting.
         ensemble (bool): whether or not to include ensemble models in evaluation
+        initial_template (str): 'Random' - randomly generates starting template, 'Default' uses template included in package, 'Default+Random' - both of previous. Also can be overriden with self.import_template()
         figures (bool): Not yet implemented
         random_seed (int): random seed allows (slightly) more consistent results.
         holiday_country (str): passed through to Holidays package for some models.
@@ -42,6 +60,7 @@ class AutoTS(object):
         no_negatives: bool = False,
         weighted: bool = False,
         ensemble: bool = True,
+        initial_template: str = 'Random',
         figures: bool = False,
         random_seed: int = 425,
         holiday_country: str = 'US',
@@ -50,7 +69,7 @@ class AutoTS(object):
         metric_weighting: dict = {'smape_weighting' : 10, 'mae_weighting' : 1,
             'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0},
         drop_most_recent: int = 0,
-        drop_data_older_than_periods: int = 10000,
+        drop_data_older_than_periods: int = 100000,
         num_validations: int = 3,
         models_to_validate: int = 10,
         validation_method: str = 'even',
@@ -77,11 +96,16 @@ class AutoTS(object):
         self.max_generations = max_generations
         self.verbose = verbose
         
+        if initial_template.lower() == 'random':
+            self.initial_template = RandomTemplate(40)
+        else: 
+            print("Input initial_template either unrecognized or not yet implemented. Using Random.")
+            self.initial_template = RandomTemplate(40)
         self.best_model = pd.DataFrame()
         self.regressor_used = False
         self.template_cols = ['Model','ModelParameters','TransformationParameters','Ensemble']
         
-    def fit(self, df, date_col: str = 'date', value_col: str = 'value', id_col: str = 'series_id', preord_regressor = [], weights: dict = {}, result_file: str = None):
+    def fit(self, df, date_col: str = 'datetime', value_col: str = 'value', id_col: str = 'series_id', preord_regressor = [], weights: dict = {}, result_file: str = None):
         """
         Train algorithm given data supplied 
         
@@ -89,7 +113,7 @@ class AutoTS(object):
             df (pandas.DataFrame): Datetime Indexed
             preord_regressor (numpy.Array): single external regressor matching train.index
             weights (dict): {'colname1':2, 'colname2':5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
-            result_file (str): Location of template/results.csv to be saved at intermediate/final time. Not yet implemented.
+            result_file (str): Location of template/results.csv to be saved at intermediate/final time.
         """
         self.preord_regressor_train = preord_regressor
         self.weights = weights
@@ -116,19 +140,26 @@ class AutoTS(object):
         max_generations = self.max_generations
         verbose = self.verbose
         
+        if result_file != None:
+            try:
+                if ".csv" not in str(result_file):
+                    "Result filename must be a valid 'filename.csv'"
+                    result_file = None
+            except Exception:
+                "Result filename must be a valid 'filename.csv'"
+                result_file = None
+        
         random_seed = abs(int(random_seed))
-        import random
         random.seed(random_seed)
         np.random.seed(random_seed)
         
         template_cols = self.template_cols
         
-        from autots.tools.shaping import long_to_wide
         
         df_wide = long_to_wide(df, date_col = self.date_col, value_col = self.value_col,
                                id_col = self.id_col, frequency = frequency, na_tolerance = na_tolerance,
                                drop_data_older_than_periods = self.drop_data_older_than_periods, aggfunc = aggfunc,
-                               drop_most_recent = drop_most_recent)
+                               drop_most_recent = drop_most_recent, verbose = verbose)
         
         if weighted == False:
             weights = {x:1 for x in df_wide.columns}
@@ -137,20 +168,16 @@ class AutoTS(object):
             weights = {col:(weights[col] if col in weights else 1) for col in df_wide.columns}
             # handle non-numeric inputs
             weights = {key:(abs(float(weights[key])) if str(weights[key]).isdigit() else 1) for key in weights}
-                
         
-        from autots.tools.shaping import values_to_numeric
         categorical_transformer = values_to_numeric(df_wide)
         self.categorical_transformer = categorical_transformer
         
         df_wide_numeric = categorical_transformer.dataframe
         self.df_wide_numeric = df_wide_numeric
         
-        from autots.tools.profile import data_profile
         profile_df = data_profile(df_wide_numeric)
         self.startTimeStamps = profile_df.loc['FirstDate']
         
-        from autots.tools.shaping import subset_series
         df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = random_seed)
         
         if weighted == False:
@@ -158,28 +185,22 @@ class AutoTS(object):
         if weighted == True:
             current_weights = {x: weights[x] for x in df_subset.columns}
             
-        from autots.tools.shaping import simple_train_test_split
+        
         df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length)
         try:
             preord_regressor_train = preord_regressor[df_train.index]
             preord_regressor_test = preord_regressor[df_test.index]
-        except:
+        except Exception:
             preord_regressor_train = []
             preord_regressor_test = []
         
-        from autots.evaluator.auto_model import TemplateEvalObject
         main_results = TemplateEvalObject()
         
-        from autots.evaluator.auto_model import NewGeneticTemplate
-        from autots.evaluator.auto_model import RandomTemplate
-        from autots.evaluator.auto_model import TemplateWizard    
-        from autots.evaluator.auto_model import unpack_ensemble_models
-        from autots.evaluator.auto_model import  generate_score
         model_count = 0
-        initial_template = RandomTemplate(40)
-        initial_template = unpack_ensemble_models(initial_template, template_cols, keep_ensemble = False)
-        submitted_parameters = initial_template.copy()
-        template_result = TemplateWizard(initial_template, df_train, df_test, current_weights,
+        
+        self.initial_template = unpack_ensemble_models(self.initial_template, template_cols, keep_ensemble = False)
+        submitted_parameters = self.initial_template.copy()
+        template_result = TemplateWizard(self.initial_template, df_train, df_test, current_weights,
                                          model_count = model_count, ensemble = ensemble, 
                                          forecast_length = forecast_length, frequency=frequency, 
                                           prediction_interval=prediction_interval, 
@@ -192,6 +213,8 @@ class AutoTS(object):
         model_count = template_result.model_count
         main_results.model_results = pd.concat([main_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
         main_results.model_results['Score'] = generate_score(main_results.model_results, metric_weighting = metric_weighting,prediction_interval = prediction_interval)
+        if result_file != None:
+            main_results.model_results.to_csv(result_file, index = False)
         main_results.model_results_per_timestamp_smape = main_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
         main_results.model_results_per_timestamp_mae = main_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
         main_results.model_results_per_series_smape = main_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
@@ -228,7 +251,8 @@ class AutoTS(object):
             model_count = template_result.model_count
             main_results.model_results = pd.concat([main_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
             main_results.model_results['Score'] = generate_score(main_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
-            
+            if result_file != None:
+                main_results.model_results.to_csv(result_file, index = False)
             main_results.model_results_per_timestamp_smape = main_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
             main_results.model_results_per_timestamp_mae = main_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
             main_results.model_results_per_series_smape = main_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
@@ -256,7 +280,6 @@ class AutoTS(object):
                 ensemble_models[row['ID']] = temp_dict
             best3params = {'models': ensemble_models}    
             
-            from autots.models.ensemble import EnsembleForecast
             best3_ens_forecast = EnsembleForecast("Best3Ensemble", best3params, main_results.forecasts_list, main_results.forecasts, main_results.lower_forecasts, main_results.upper_forecasts, main_results.forecasts_runtime, prediction_interval)
             ensemble_forecasts_list.append(best3_ens_forecast)
             
@@ -279,7 +302,7 @@ class AutoTS(object):
             dist2080_ens_forecast = EnsembleForecast("Dist2080Ensemble", dist2080params, main_results.forecasts_list, main_results.forecasts, main_results.lower_forecasts, main_results.upper_forecasts, main_results.forecasts_runtime, prediction_interval)
             ensemble_forecasts_list.append(dist2080_ens_forecast)
         
-            from autots.models.ensemble import EnsembleEvaluate
+            
             ens_template_result = EnsembleEvaluate(ensemble_forecasts_list, df_test = df_test, weights = current_weights, model_count = model_count)
             
             model_count = ens_template_result.model_count
@@ -305,7 +328,7 @@ class AutoTS(object):
             
         validation_results = copy.copy(main_results) 
         
-        from autots.evaluator.auto_model import validation_aggregation
+        
         if num_validations > 0:
             if validation_method == 'backwards':
                 for y in range(num_validations):
@@ -323,7 +346,7 @@ class AutoTS(object):
                     try:
                         preord_regressor_train = preord_regressor[df_train.index]
                         preord_regressor_test = preord_regressor[df_test.index]
-                    except:
+                    except Exception:
                         preord_regressor_train = []
                         preord_regressor_test = []
         
@@ -363,7 +386,7 @@ class AutoTS(object):
                     try:
                         preord_regressor_train = preord_regressor[df_train.index]
                         preord_regressor_test = preord_regressor[df_test.index]
-                    except:
+                    except Exception:
                         preord_regressor_train = []
                         preord_regressor_test = []
         
@@ -391,27 +414,27 @@ class AutoTS(object):
             validation_template = validation_template[validation_template['Ensemble'] == 0]
         
         self.validation_results = validation_results
-        self.main_results = main_results
+        self.initial_results = main_results
         self.best_model = validation_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols).head(1)[template_cols]
 
-        ensemble_check = (self.best_model['Ensemble'].iloc[0])
+        self.ensemble_check = (self.best_model['Ensemble'].iloc[0])
         param_dict = json.loads(self.best_model['ModelParameters'].iloc[0])
-        if ensemble_check == 1:
-            self.regression_check = False
+        if self.ensemble_check == 1:
+            self.used_regressor_check = False
             for key in param_dict['models']:
                 try:
                     reg_param = json.loads(param_dict['models'][key]['ModelParameters'])['regression_type']
                     if reg_param == 'User':
-                        self.regression_check = True
-                except:
+                        self.used_regressor_check = True
+                except Exception:
                     pass
-        if ensemble_check == 0:
-            self.regression_check = False
+        if self.ensemble_check == 0:
+            self.used_regressor_check = False
             try:
                 reg_param =  param_dict['ModelParameters']['regression_type']
                 if reg_param == 'User':
-                    self.regression_check = True
-            except:
+                    self.used_regressor_check = True
+            except Exception:
                 pass
         return self
     
@@ -434,11 +457,10 @@ class AutoTS(object):
             forecast_length = self.forecast_length
         
         # if the models don't need the regressor, ignore it...
-        if self.regression_check == False:
+        if self.used_regressor_check == False:
             preord_regressor = []
             self.preord_regressor_train = []
-        
-        from autots.evaluator.auto_model import PredictWitch
+
         df_forecast = PredictWitch(self.best_model, df_train = self.df_wide_numeric, 
                                    forecast_length= forecast_length, frequency= self.frequency, 
                                           prediction_interval= self.prediction_interval, 
@@ -450,7 +472,6 @@ class AutoTS(object):
                                           random_seed = self.random_seed, verbose = self.verbose,
                                        template_cols = self.template_cols)
         
-        from autots.tools.shaping import categorical_inverse
         df_forecast.forecast = categorical_inverse(self.categorical_transformer, df_forecast.forecast)
         #df_forecast.lower_forecast = categorical_inverse(self.categorical_transformer, df_forecast.lower_forecast)
         #df_forecast.upper_forecast = categorical_inverse(self.categorical_transformer, df_forecast.upper_forecast)
@@ -460,19 +481,72 @@ class AutoTS(object):
         else:
             return df_forecast
         
-    def export_template(filename, models: str = 'best'):
-        """"
-        output_format = 'csv' or 'json' (from filename)
-        models = 'best', 'validation', or 'all'
-        """
-        print("Not yet implemented")
-    def import_template(file, method: str = "Add On"):
+    def export_template(self, filename, models: str = 'best', n: int = 1):
         """"
         
         Args:
-            file (str): file location
+            output_format = 'csv' or 'json' (from filename)
+            models (str): 'best' or 'all'
+            n (int): if models = 'best', how many n-best to export
+        """
+        if models == 'all':
+            export_template = self.initial_results[self.template_cols]
+        if models == 'best':
+            self.validation_results.model_results
+            export_template = self.validation_results.model_results.nsmallest(n, columns = ['Score'])[self.template_cols]
+        try:
+            if '.csv' in filename:
+                return export_template.to_csv(filename, index = False)
+            if '.json' in filename:
+                return export_template.to_json(filename, orient = 'columns')
+        except PermissionError:
+            raise PermissionError("Permission Error: directory or existing file is locked for editing.")
+    def import_template(self, filename: str, method: str = "Add On"):
+        """"
+        "Hello. Would you like to destroy some evil today?" - Sanderson
+        
+        Args:
+            filename (str): file location
             method (str): 'Add On' or 'Only'
         """
-        print("Not yet implemented")
+        if '.csv' in filename:
+            import_template = pd.read_csv(filename)
+        if '.json' in filename:
+            import_template = pd.read_json(filename, orient = 'columns')
+        
+        try:
+            import_template = import_template[self.template_cols]
+        except Exception:
+            print("Column names {} were not recognized as matching template columns: {}".format(str(import_template.columns), str(self.template_cols)))
+        
+        if method.lower() == 'add on':
+            self.initial_template = self.initial_template.merge(import_template, on = self.initial_template.columns.intersection(import_template.columns).to_list())
+            self.initial_template = self.initial_template.drop_duplicates(subset = self.template_cols)
+        if method.lower() == 'only':
+            self.initial_template = import_template
+        
+        return self
     def get_params(self):
         pass
+
+def fake_regressor(df_long, forecast_length: int = 14,
+                   date_col: str = 'datetime', value_col: str = 'value', id_col: str = 'series_id',
+                   frequency: str = 'infer', aggfunc: str = 'first',
+                   drop_most_recent: int = 0, na_tolerance: float = 0.95,
+                   drop_data_older_than_periods: int = 10000):
+        
+    from autots.tools.shaping import long_to_wide
+    df_wide = long_to_wide(df_long, date_col = date_col, value_col = value_col,
+                       id_col = id_col, frequency = frequency, na_tolerance = na_tolerance,
+                       drop_data_older_than_periods = drop_data_older_than_periods, aggfunc = aggfunc,
+                       drop_most_recent = drop_most_recent)
+    if frequency == 'infer':
+        frequency = pd.infer_freq(df_wide.index, warn = True)
+    
+    preord_regressor_train = pd.Series(np.random.randint(0, 100, size = len(df_wide.index)), index = df_wide.index)
+        
+    forecast_index = pd.date_range(freq = frequency, start = df_wide.index[-1], periods = forecast_length + 1)
+    forecast_index = forecast_index[1:]
+
+    preord_regressor_forecast = pd.Series(np.random.randint(0, 100, size = (forecast_length)), index = forecast_index)
+    return preord_regressor_train, preord_regressor_forecast

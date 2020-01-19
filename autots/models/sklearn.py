@@ -47,16 +47,23 @@ class RandomForestRolling(ModelObject):
         
         Args:
             df (pandas.DataFrame): Datetime Indexed 
-        """
-        from sklearn.ensemble import RandomForestRegressor
-        
+        """       
         df = self.basic_profile(df)
 
         self.df_train = df
-        
+        self.regressor_train = preord_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
-
+    
+    def X_maker(self, df, mean_rolling_periods: int = 30, std_rolling_periods: int = 7, holiday: bool = False, holiday_country: str = 'US'):
+            X = pd.concat([df, df.rolling(mean_rolling_periods,min_periods = 1).mean(), df.rolling(7,min_periods = 1).std()], axis = 1)
+            X.columns = [x for x in range(len(X.columns))]
+            X.replace([np.inf, -np.inf], np.nan).fillna(method='ffill').fillna(method='bfill')
+            if holiday:
+                from autots.tools.holiday import holiday_flag
+                X['holiday_flag_'] = holiday_flag(X.index, country = holiday_country).values
+            return X
+    
     def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast: bool = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
@@ -77,15 +84,8 @@ class RandomForestRolling(ModelObject):
         Y = sktraindata.drop(sktraindata.head(2).index) 
         Y.columns = [x for x in range(len(Y.columns))]
            
-        def X_maker(df, mean_rolling_periods: int = 30, std_rolling_periods: int = 7, holiday: bool = False, holiday_country: str = 'US'):
-            X = pd.concat([df, df.rolling(mean_rolling_periods,min_periods = 1).mean(), df.rolling(7,min_periods = 1).std()], axis = 1)
-            X.columns = [x for x in range(len(X.columns))]
-            X.replace([np.inf, -np.inf], np.nan).fillna(method='ffill').fillna(method='bfill')
-            if holiday:
-                from autots.tools.holiday import holiday_flag
-                X['holiday_flag_'] = holiday_flag(X.index, country = holiday_country).values
-            return X
-        X = X_maker(sktraindata, mean_rolling_periods=self.mean_rolling_periods, std_rolling_periods=self.std_rolling_periods,holiday=self.holiday, holiday_country=self.holiday_country)
+
+        X = self.X_maker(sktraindata, mean_rolling_periods=self.mean_rolling_periods, std_rolling_periods=self.std_rolling_periods,holiday=self.holiday, holiday_country=self.holiday_country)
         X = X.drop(X.tail(1).index).drop(X.head(1).index)
         
         regr = RandomForestRegressor(random_state= self.random_seed, n_estimators=self.n_estimators, verbose = self.verbose)
@@ -95,7 +95,7 @@ class RandomForestRolling(ModelObject):
         forecast = pd.DataFrame()
         sktraindata.columns = [x for x in range(len(sktraindata.columns))]
         for x in range(forecast_length):
-            x_dat = X_maker(sktraindata, mean_rolling_periods=self.mean_rolling_periods, std_rolling_periods=self.std_rolling_periods,holiday=self.holiday, holiday_country=self.holiday_country)
+            x_dat = self.X_maker(sktraindata, mean_rolling_periods=self.mean_rolling_periods, std_rolling_periods=self.std_rolling_periods,holiday=self.holiday, holiday_country=self.holiday_country)
             rfPred =  pd.DataFrame(regr.predict(x_dat.tail(1).values))
         
             forecast = pd.concat([forecast, rfPred], axis = 0, ignore_index = True)
