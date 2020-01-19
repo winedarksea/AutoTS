@@ -69,7 +69,7 @@ class AutoTS(object):
         metric_weighting: dict = {'smape_weighting' : 10, 'mae_weighting' : 1,
             'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0},
         drop_most_recent: int = 0,
-        drop_data_older_than_periods: int = 10000,
+        drop_data_older_than_periods: int = 100000,
         num_validations: int = 3,
         models_to_validate: int = 10,
         validation_method: str = 'even',
@@ -105,7 +105,7 @@ class AutoTS(object):
         self.regressor_used = False
         self.template_cols = ['Model','ModelParameters','TransformationParameters','Ensemble']
         
-    def fit(self, df, date_col: str = 'date', value_col: str = 'value', id_col: str = 'series_id', preord_regressor = [], weights: dict = {}, result_file: str = None):
+    def fit(self, df, date_col: str = 'datetime', value_col: str = 'value', id_col: str = 'series_id', preord_regressor = [], weights: dict = {}, result_file: str = None):
         """
         Train algorithm given data supplied 
         
@@ -530,7 +530,7 @@ class AutoTS(object):
         pass
 
 def fake_regressor(df_long, forecast_length: int = 14,
-                   date_col: str = 'date', value_col: str = 'value', id_col: str = 'series_id',
+                   date_col: str = 'datetime', value_col: str = 'value', id_col: str = 'series_id',
                    frequency: str = 'infer', aggfunc: str = 'first',
                    drop_most_recent: int = 0, na_tolerance: float = 0.95,
                    drop_data_older_than_periods: int = 10000):

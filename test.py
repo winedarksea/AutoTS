@@ -3,14 +3,16 @@ import pandas as pd
 
 forecast_length = 12
 from autots.datasets import load_toy_daily
-from autots.datasets import load_toy_monthly
+from autots.datasets import load_toy_hourly
 
-df_long = load_toy_monthly()
+df_long = load_toy_hourly()
 
 weights_daily = {'categoricalDayofWeek': 5,
            'randomNegative': 1,
          'sp500high': 2,
          'wabashaTemp': 1}
+
+weights_hourly = {'traffic_volume': 10}
 
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
@@ -18,11 +20,11 @@ model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                max_generations = 2, num_validations = 2, validation_method = 'even')
 
 from autots.evaluator.auto_ts import fake_regressor
-preord_regressor_train, preord_regressor_forecast = fake_regressor(df_long, forecast_length = forecast_length)
+preord_regressor_train, preord_regressor_forecast = fake_regressor(df_long, forecast_length = forecast_length, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
 
-model = model.fit(df_long, date_col = 'date', value_col = 'value', id_col = 'series_id')
-# model = model.fit(df_long, date_col = 'date', value_col = 'value', id_col = 'series_id', weights = weights_daily) # and weighted = True
-# model = model.fit(df_long, date_col = 'date', value_col = 'value', id_col = 'series_id', preord_regressor = preord_regressor_train)
+model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
+# model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', weights = weights_daily) # and weighted = True
+# model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', preord_regressor = preord_regressor_train)
 
 print(model.best_model['Model'].iloc[0])
 print(model.best_model['ModelParameters'].iloc[0])
@@ -33,40 +35,25 @@ forecasts_df = prediction.forecast
 # accuracy of all tried model results (not including cross validation)
 initial_results = model.initial_results.model_results
 # validation results
-try:
-    validation_results = model.validation_results.model_results
-except Exception:
-    pass
+validation_results = model.validation_results.model_results
 
 """
 Import/Export
-"""
+
 example_filename = "example_export.csv" #.csv/.json
-# model.export_template(example_filename, models = 'best', n = 5)
-# model = model.import_template(example_filename, method = 'add on')
-# print("Overwrite template is: {}".format(str(model.initial_template)))
+model.export_template(example_filename, models = 'best', n = 5)
+model = model.import_template(example_filename, method = 'add on')
+print("Overwrite template is: {}".format(str(model.initial_template)))
+"""
+
+"""
+from autots.tools.shaping import long_to_wide
+df_wide = long_to_wide(df_long, date_col = 'datetime', value_col = 'value',
+                       id_col = 'series_id', frequency = 'infer', aggfunc = 'first')
+"""
 
 
 """
-Recombine best two of each model, if two or more present
-Inf appearing in MAE and RMSE (possibly all NaN in test)
-Na Tolerance for test in simple_train_test_split
-Relative/Absolute Imports and reduce package reloading
-User regressor to sklearn model regression_type
-Annual, Monthly, Weekly, Hourly sample data
-Format of Regressor - allow multiple input to at least sklearn models
-'Age' regressor as an option in addition to User/Holiday
-Handle categorical forecasts where forecast leaves range of known values
-
-Things needing testing:
-    With and without regressor
-    With and without weighting
-    Passing in Start Dates - (Test)
-    Different frequencies
-    Various verbose inputs
-    Test holidays on non-daily data
-   
-
 https://packaging.python.org/tutorials/packaging-projects/
 python -m pip install --user --upgrade setuptools wheel
 cd /to project directory

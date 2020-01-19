@@ -1,4 +1,4 @@
-date,value,series_id
+datetime,value,series_id
 11/27/2019,3153.96,sp500high
 11/26/2019,3142.69,sp500high
 11/25/2019,3133.83,sp500high

@@ -32,14 +32,17 @@ def load_fred_monthly():
     monthly_data = get_fred_data(fredkey = 'XXXXXXXXX', SeriesNameDict = SeriesNameDict)
     """
     module_path = dirname(__file__)
-    data_file_name = join(module_path, 'data', 'fred_monthly.csv')
+    data_file_name = join(module_path, 'data', 'fred_monthly.zip')
     
-    df_long = pd.read_csv(data_file_name)
+    df_long = pd.read_csv(data_file_name, compression = 'zip')
     df_long['date'] = pd.to_datetime(df_long['date'], infer_datetime_format = True)
 
     return df_long
 
 def load_toy_monthly():
+    """
+    Federal Reserve of St. Louis
+    """
     return load_fred_monthly()
 
 def load_fred_yearly():
@@ -70,4 +73,27 @@ def load_fred_yearly():
     return df_long
 
 def load_toy_yearly():
+    """
+    Federal Reserve of St. Louis
+    """
     return load_fred_yearly()
+
+def load_traffic_hourly():
+    """
+    From the MN DOT via the UCI data repository. 
+    Yes, Minnesota is the best state of the Union.
+    """
+    module_path = dirname(__file__)
+    data_file_name = join(module_path, 'data', 'traffic_hourly.zip')
+    
+    df_long = pd.read_csv(data_file_name, compression = 'zip')
+    df_long['datetime'] = pd.to_datetime(df_long['datetime'], infer_datetime_format = True)
+
+    return df_long
+
+def load_toy_hourly():
+    """
+    From the MN DOT via the UCI data repository. 
+    Yes, Minnesota is the best state of the Union.
+    """
+    return load_traffic_hourly()
