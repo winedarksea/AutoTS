@@ -1,29 +1,20 @@
-
-## To-Do
-Recombine best two of each model, if two or more present
-Inf appearing in MAE and RMSE (possibly all NaN in test)
-Na Tolerance for test in simple_train_test_split
-Relative/Absolute Imports and reduce package reloading
-User regressor to sklearn model regression_type
-Annual, Monthly, Weekly, Hourly sample data
-Format of Regressor - allow multiple input to at least sklearn models
-'Age' regressor as an option in addition to User/Holiday
-Handle categorical forecasts where forecast leaves range of known values
-
-Things needing testing:
-    With and without regressor
-    With and without weighting
-    Passing in Start Dates - (Test)
-    Different frequencies
-    Various verbose inputs
-    Test holidays on non-daily data
-
+# To-Do
+* Recombine best two of each model parameters, if two or more present
+* Inf appearing in MAE and RMSE (possibly all NaN in test)
+* Na Tolerance for test in simple_train_test_split
+* min_allowed_train_percent into higher-level API
+* annual data with different dates of the record 6/30, 1/1, 12/30
+* Relative/Absolute Imports and reduce package reloading
+* User regressor to sklearn model regression_type
+* Weekly sample data
+* Format of Regressor - allow multiple input to at least sklearn models
+* 'Age' regressor as an option in addition to User/Holiday
+* Handle categorical forecasts where forecast leaves range of known values
+* Detrend transformer doesn't work on some indexes
 * Speed improvements, Profiling, Parallelization, and Distributed options for general greater speed
 * Generate list of functional frequences, and improve usability on rarer frequenices
 * Warning/handling if lots of NaN in most recent (test) part of data
 * Figures: Add option to output figures of train/test + forecast, other performance figures
-* Input and Output saved templates as .csv and .json
-* 'Check Package' to check if optional model packages are installed
 * Pre-clustering on many time series
 * If all input are Int, convert floats back to int
 * Trim whitespace on string inputs
@@ -52,6 +43,7 @@ Things needing testing:
 	Simple Decomposition forecasting
 	GluonTS Models
 	Simulations
+	XGBoost (doesn't support multioutput directly)
 	Sklearn + TSFresh
 	Sklearn + polynomial features
 	Sktime

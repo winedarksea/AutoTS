@@ -1,11 +1,22 @@
+"""
+Things needing testing:
+    With and without regressor
+    With and without weighting
+    Different frequencies
+    Various verbose inputs
+    
+    Passing in Start Dates - (Test)
+    Holidays on non-daily datas
+"""
 import numpy as np
 import pandas as pd
 
-forecast_length = 12
+forecast_length = 3
 from autots.datasets import load_toy_daily
 from autots.datasets import load_toy_hourly
+from autots.datasets import load_toy_yearly
 
-df_long = load_toy_hourly()
+df_long = load_toy_yearly()
 
 weights_daily = {'categoricalDayofWeek': 5,
            'randomNegative': 1,
@@ -17,13 +28,14 @@ weights_hourly = {'traffic_volume': 10}
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                prediction_interval = 0.9, ensemble = True, weighted = False,
-               max_generations = 2, num_validations = 2, validation_method = 'even')
+               max_generations = 1, num_validations = 2, validation_method = 'even',
+               drop_most_recent = 1)
 
 from autots.evaluator.auto_ts import fake_regressor
 preord_regressor_train, preord_regressor_forecast = fake_regressor(df_long, forecast_length = forecast_length, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
 
 model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
-# model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', weights = weights_daily) # and weighted = True
+# model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', weights = weights_hourly) # and weighted = True
 # model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', preord_regressor = preord_regressor_train)
 
 print(model.best_model['Model'].iloc[0])
@@ -55,10 +67,13 @@ df_wide = long_to_wide(df_long, date_col = 'datetime', value_col = 'value',
 
 """
 https://packaging.python.org/tutorials/packaging-projects/
+
 python -m pip install --user --upgrade setuptools wheel
 cd /to project directory
 python setup.py sdist bdist_wheel
 twine upload dist/*
+
+Merge dev to master on GitHub and create release (include .tar.gz)
 """
 
 """
@@ -75,7 +90,6 @@ pip install sktime==0.3.1
 """
 # to gluon ds
 # to xgboost ds
-# GENERATOR of series for per series methods
 # trim series to first actual value
     # gluon start
     # per series, trim before first na
