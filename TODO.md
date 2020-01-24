@@ -45,7 +45,6 @@
 	Simulations
 	XGBoost (doesn't support multioutput directly)
 	Sklearn + TSFresh
-	Sklearn + polynomial features
 	Sktime
 	Ta-lib
 	tslearn

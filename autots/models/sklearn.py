@@ -10,7 +10,25 @@ from autots.evaluator.auto_model import ModelObject
 from autots.evaluator.auto_model import PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 
-
+def rolling_x_regressor(df, mean_rolling_periods: int = 30, std_rolling_periods: int = 7, holiday: bool = False, holiday_country: str = 'US', polynomial_degree = None):
+    """
+    Generate more features from initial time series
+    """
+    X = pd.concat([df, df.rolling(mean_rolling_periods,min_periods = 1).mean(), df.rolling(7,min_periods = 1).std()], axis = 1)
+    X.columns = [x for x in range(len(X.columns))]
+    X.replace([np.inf, -np.inf], np.nan).fillna(method='ffill').fillna(method='bfill')
+    if holiday:
+        from autots.tools.holiday import holiday_flag
+        X['holiday_flag_'] = holiday_flag(X.index, country = holiday_country).values
+    
+    if str(polynomial_degree).isdigit():
+        polynomial_degree = abs(int(polynomial_degree))
+        from sklearn.preprocessing import PolynomialFeatures
+        poly = PolynomialFeatures(polynomial_degree)
+        X = poly.fit_transform(X)
+    
+    return X
+    
 
 class RandomForestRolling(ModelObject):
     """Simple regression-framed approach to forecasting using sklearn
@@ -30,7 +48,8 @@ class RandomForestRolling(ModelObject):
                  prediction_interval: float = 0.9, regression_type: str = None, holiday_country: str = 'US',
                  verbose: int = 0, random_seed: int = 2020,
                  n_estimators: int = 100, min_samples_split: float = 2, max_depth: int = None,
-                 holiday: bool = False, mean_rolling_periods: int = 30, std_rolling_periods: int = 7):
+                 holiday: bool = False, mean_rolling_periods: int = 30, std_rolling_periods: int = 7,
+                 polynomial_degree: int = None):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              regression_type = regression_type, 
                              holiday_country = holiday_country, 
@@ -41,6 +60,7 @@ class RandomForestRolling(ModelObject):
         self.holiday = holiday
         self.mean_rolling_periods = mean_rolling_periods
         self.std_rolling_periods = std_rolling_periods
+        self.polynomial_degree = polynomial_degree
         
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
@@ -54,15 +74,6 @@ class RandomForestRolling(ModelObject):
         self.regressor_train = preord_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
-    
-    def X_maker(self, df, mean_rolling_periods: int = 30, std_rolling_periods: int = 7, holiday: bool = False, holiday_country: str = 'US'):
-            X = pd.concat([df, df.rolling(mean_rolling_periods,min_periods = 1).mean(), df.rolling(7,min_periods = 1).std()], axis = 1)
-            X.columns = [x for x in range(len(X.columns))]
-            X.replace([np.inf, -np.inf], np.nan).fillna(method='ffill').fillna(method='bfill')
-            if holiday:
-                from autots.tools.holiday import holiday_flag
-                X['holiday_flag_'] = holiday_flag(X.index, country = holiday_country).values
-            return X
     
     def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast: bool = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
@@ -78,14 +89,20 @@ class RandomForestRolling(ModelObject):
         """        
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
+        if preord_regressor == []:
+            self.regression_type = 'None'
         
         from sklearn.ensemble import RandomForestRegressor
         sktraindata = self.df_train.dropna(how = 'all', axis = 0).fillna(method='ffill').fillna(method='bfill')
         Y = sktraindata.drop(sktraindata.head(2).index) 
         Y.columns = [x for x in range(len(Y.columns))]
-           
-
-        X = self.X_maker(sktraindata, mean_rolling_periods=self.mean_rolling_periods, std_rolling_periods=self.std_rolling_periods,holiday=self.holiday, holiday_country=self.holiday_country)
+        
+        X = rolling_x_regressor(sktraindata, mean_rolling_periods=self.mean_rolling_periods, std_rolling_periods=self.std_rolling_periods,holiday=self.holiday, holiday_country=self.holiday_country, polynomial_degree=self.polynomial_degree)
+        if self.regression_type == 'User':
+            X = pd.concat([X, self.regressor_train], axis = 1)
+        if self.regression_type == 'User':
+            complete_regressor = pd.concat([self.regressor_train, preord_regressor], axis = 0)
+            
         X = X.drop(X.tail(1).index).drop(X.head(1).index)
         
         regr = RandomForestRegressor(random_state= self.random_seed, n_estimators=self.n_estimators, verbose = self.verbose)
@@ -95,7 +112,9 @@ class RandomForestRolling(ModelObject):
         forecast = pd.DataFrame()
         sktraindata.columns = [x for x in range(len(sktraindata.columns))]
         for x in range(forecast_length):
-            x_dat = self.X_maker(sktraindata, mean_rolling_periods=self.mean_rolling_periods, std_rolling_periods=self.std_rolling_periods,holiday=self.holiday, holiday_country=self.holiday_country)
+            x_dat = rolling_x_regressor(sktraindata, mean_rolling_periods=self.mean_rolling_periods, std_rolling_periods=self.std_rolling_periods,holiday=self.holiday, holiday_country=self.holiday_country, polynomial_degree=self.polynomial_degree)
+            if self.regression_type == 'User':
+                x_dat = pd.concat([x_dat, complete_regressor.head(len(x_dat.index))], axis = 1)
             rfPred =  pd.DataFrame(regr.predict(x_dat.tail(1).values))
         
             forecast = pd.concat([forecast, rfPred], axis = 0, ignore_index = True)
@@ -134,6 +153,8 @@ class RandomForestRolling(ModelObject):
         mean_rolling_periods_choice = np.random.choice(a = [2, 5, 7, 10, 30], size = 1, p = [0.2, 0.2, 0.2, 0.2, 0.2]).item()
         std_rolling_periods_choice = np.random.choice(a = [2, 5, 7, 10, 30], size = 1, p = [0.2, 0.2, 0.2, 0.2, 0.2]).item()
         holiday_choice = np.random.choice(a=[True,False], size = 1, p = [0.5, 0.5]).item()
+        polynomial_degree_choice = np.random.choice(a=[None,2], size = 1, p = [0.8, 0.2]).item()
+        regression_choice = np.random.choice(a=['None','User'], size = 1, p = [0.7, 0.3]).item()
 
         parameter_dict = {
                         'n_estimators': n_estimators_choice,
@@ -142,7 +163,8 @@ class RandomForestRolling(ModelObject):
                         'holiday': holiday_choice,
                         'mean_rolling_periods': mean_rolling_periods_choice,
                         'std_rolling_periods': std_rolling_periods_choice,
-                        'regression_type': 'None'
+                        'polynomial_degree': polynomial_degree_choice,
+                        'regression_type': regression_choice
                         }
         return parameter_dict
     
@@ -156,6 +178,7 @@ class RandomForestRolling(ModelObject):
                         'holiday': self.holiday,
                         'mean_rolling_periods': self.mean_rolling_periods,
                         'std_rolling_periods': self.std_rolling_periods,
+                        'polynomial_degree': self.polynomial_degree,
                         'regression_type': self.regression_type
                         }
         return parameter_dict
