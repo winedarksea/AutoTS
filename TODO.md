@@ -5,7 +5,7 @@
 * min_allowed_train_percent into higher-level API
 * annual data with different dates of the record 6/30, 1/1, 12/30
 * Relative/Absolute Imports and reduce package reloading
-* User regressor to sklearn model regression_type
+* User regressor to sklearn model regression_type (added, needs testing)
 * Weekly sample data
 * Format of Regressor - allow multiple input to at least sklearn models
 * 'Age' regressor as an option in addition to User/Holiday

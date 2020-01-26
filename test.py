@@ -14,9 +14,9 @@ import pandas as pd
 forecast_length = 3
 from autots.datasets import load_toy_daily
 from autots.datasets import load_toy_hourly
-from autots.datasets import load_toy_daily
+from autots.datasets import load_toy_monthly
 
-df_long = load_toy_daily()
+df_long = load_toy_monthly()
 
 weights_daily = {'categoricalDayofWeek': 5,
            'randomNegative': 1,
@@ -34,9 +34,9 @@ model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
 from autots.evaluator.auto_ts import fake_regressor
 preord_regressor_train, preord_regressor_forecast = fake_regressor(df_long, forecast_length = forecast_length, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
 
-model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
+# model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
 # model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', weights = weights_hourly) # and weighted = True
-# model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', preord_regressor = preord_regressor_train)
+model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', preord_regressor = preord_regressor_train)
 
 print(model.best_model['Model'].iloc[0])
 print(model.best_model['ModelParameters'].iloc[0])
