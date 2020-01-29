@@ -28,7 +28,7 @@ weights_hourly = {'traffic_volume': 10}
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                prediction_interval = 0.9, ensemble = True, weighted = False,
-               max_generations = 5, num_validations = 2, validation_method = 'even',
+               max_generations = 2, num_validations = 2, validation_method = 'even',
                drop_most_recent = 1)
 
 from autots.evaluator.auto_ts import fake_regressor
@@ -40,6 +40,7 @@ model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 
 
 print(model.best_model['Model'].iloc[0])
 print(model.best_model['ModelParameters'].iloc[0])
+print(model.best_model['TransformationParameters'].iloc[0])
 
 prediction = model.predict(preord_regressor = preord_regressor_forecast)
 # point forecasts dataframe
@@ -59,9 +60,11 @@ print("Overwrite template is: {}".format(str(model.initial_template)))
 """
 
 """
+
 from autots.tools.shaping import long_to_wide
 df_wide = long_to_wide(df_long, date_col = 'datetime', value_col = 'value',
                        id_col = 'series_id', frequency = 'infer', aggfunc = 'first')
+
 """
 
 

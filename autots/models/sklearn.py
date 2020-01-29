@@ -89,7 +89,7 @@ class RandomForestRolling(ModelObject):
         """        
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
-        if preord_regressor == []:
+        if len(preord_regressor) == 0:
             self.regression_type = 'None'
         
         from sklearn.ensemble import RandomForestRegressor
@@ -100,7 +100,6 @@ class RandomForestRolling(ModelObject):
         X = rolling_x_regressor(sktraindata, mean_rolling_periods=self.mean_rolling_periods, std_rolling_periods=self.std_rolling_periods,holiday=self.holiday, holiday_country=self.holiday_country, polynomial_degree=self.polynomial_degree)
         if self.regression_type == 'User':
             X = pd.concat([X, self.regressor_train], axis = 1)
-        if self.regression_type == 'User':
             complete_regressor = pd.concat([self.regressor_train, preord_regressor], axis = 0)
             
         X = X.drop(X.tail(1).index).drop(X.head(1).index)
@@ -111,6 +110,7 @@ class RandomForestRolling(ModelObject):
         combined_index = (self.df_train.index.append(index))
         forecast = pd.DataFrame()
         sktraindata.columns = [x for x in range(len(sktraindata.columns))]
+        
         for x in range(forecast_length):
             x_dat = rolling_x_regressor(sktraindata, mean_rolling_periods=self.mean_rolling_periods, std_rolling_periods=self.std_rolling_periods,holiday=self.holiday, holiday_country=self.holiday_country, polynomial_degree=self.polynomial_degree)
             if self.regression_type == 'User':
@@ -184,3 +184,11 @@ class RandomForestRolling(ModelObject):
         return parameter_dict
 
 
+
+
+"""
+model = RandomForestRolling(regression_type = 'User')
+model = model.fit(df_wide.fillna(method='ffill').fillna(method='bfill'), preord_regressor = preord_regressor_train)
+prediction = model.predict(forecast_length = 3, preord_regressor = preord_regressor_forecast)
+prediction.forecast
+"""

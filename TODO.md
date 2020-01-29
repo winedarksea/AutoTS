@@ -1,4 +1,5 @@
 # To-Do
+Statsmodels, Statsmodel Poisson
 * Recombine best two of each model parameters, if two or more present
 * Inf appearing in MAE and RMSE (possibly all NaN in test)
 * Na Tolerance for test in simple_train_test_split

@@ -1,6 +1,9 @@
 """
 tsfresh - automated feature extraction
+
+n_jobs>1 causes Windows issues, sometimes
 """
+
 import datetime
 import numpy as np
 import pandas as pd
@@ -9,7 +12,7 @@ from autots.evaluator.auto_model import PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 
 try:
-    from tsfresh import extract_features
+    from tsfresh.feature_extraction import extract_features, EfficientFCParameters, MinimalFCParameters
 except Exception: # except ImportError
     _has_tsfresh = False
 else:
@@ -18,9 +21,6 @@ else:
 
 class RandomForestRolling(ModelObject):
     """Simple regression-framed approach to forecasting using sklearn
-    
-    Who are you who are so wise in the ways of science?
-    I am Arthur, King of the Britons. -Python
 
     Args:
         name (str): String to identify class
@@ -34,8 +34,7 @@ class RandomForestRolling(ModelObject):
                  prediction_interval: float = 0.9, regression_type: str = None, holiday_country: str = 'US',
                  verbose: int = 0, random_seed: int = 2020,
                  n_estimators: int = 100, min_samples_split: float = 2, max_depth: int = None,
-                 holiday: bool = False, mean_rolling_periods: int = 30, std_rolling_periods: int = 7,
-                 polynomial_degree: int = None):
+                 num_subsamples: int = 10):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              regression_type = regression_type, 
                              holiday_country = holiday_country, 
@@ -43,10 +42,7 @@ class RandomForestRolling(ModelObject):
         self.n_estimators = n_estimators
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
-        self.holiday = holiday
-        self.mean_rolling_periods = mean_rolling_periods
-        self.std_rolling_periods = std_rolling_periods
-        self.polynomial_degree = polynomial_degree
+        self.num_subsamples = num_subsamples
         
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
@@ -78,46 +74,59 @@ class RandomForestRolling(ModelObject):
         """        
         if not _has_tsfresh:
             raise ImportError("Package tsfresh is required")
-            
-        date_col_name = df_wide.index.name
-        tsfresh_long = df_wide.reset_index().melt(id_vars = date_col_name, var_name = 'series_id', value_name = 'value')
-        tsfresh_long = tsfresh_long.fillna(method = 'ffill').fillna(method = 'bfill')
-        if self.verbose > 0:
-            extracted_features = extract_features(tsfresh_long, column_id="series_id", column_sort=date_col_name, column_value = 'value')
-        else:
-            extracted_features = extract_features(tsfresh_long, column_id="series_id", column_sort=date_col_name, column_value = 'value', disable_progressbar = True)
-
-        # disable_progressbar = True
-        
+        # num_subsamples = 10
         predictStartTime = datetime.datetime.now()
+        
+        date_col_name = df_train.index.name
+        row_count = int(np.floor((len(df_train.index)-1)/num_subsamples))
+        X = pd.DataFrame()
+        Y = pd.DataFrame()
+        for start in range(0, df_train.shape[0]-row_count, row_count):
+            df_subset = df_train.iloc[start:start + row_count]            
+            tsfresh_long = df_subset.reset_index().melt(id_vars = date_col_name, var_name = 'series_id', value_name = 'value')
+            tsfresh_long = tsfresh_long.fillna(method = 'ffill').fillna(method = 'bfill')
+            if verbose > 0:
+                extracted_features = extract_features(tsfresh_long, column_id="series_id", column_sort=date_col_name, column_value = 'value', default_fc_parameters=MinimalFCParameters(), n_jobs=1) # MinimalFCParameters, EfficientFCParameters
+            else:
+                extracted_features = extract_features(tsfresh_long, column_id="series_id", column_sort=date_col_name, column_value = 'value', disable_progressbar = True,  default_fc_parameters=MinimalFCParameters(), n_jobs=1)        
+            a = extracted_features.to_numpy().flatten()
+            X = pd.concat([X, pd.DataFrame(a.reshape(-1, len(a)))],axis = 0)
+            Y = pd.concat([Y, pd.DataFrame(df_train.iloc[start+row_count]).transpose()], axis = 0)
+        endTime = datetime.datetime.now()
+        
+        X =  X.dropna(how='any', axis = 1)
+        Y = Y.fillna(method = 'ffill').fillna(method = 'bfill')
+        
         index = self.create_forecast_index(forecast_length=forecast_length)
-        if preord_regressor == []:
+        if len(preord_regressor) == 0:
             self.regression_type = 'None'
         
         from sklearn.ensemble import RandomForestRegressor
-        sktraindata = self.df_train.dropna(how = 'all', axis = 0).fillna(method='ffill').fillna(method='bfill')
-        Y = sktraindata.drop(sktraindata.head(2).index) 
-        Y.columns = [x for x in range(len(Y.columns))]
         
-        X = rolling_x_regressor(sktraindata, mean_rolling_periods=self.mean_rolling_periods, std_rolling_periods=self.std_rolling_periods,holiday=self.holiday, holiday_country=self.holiday_country, polynomial_degree=self.polynomial_degree)
         if self.regression_type == 'User':
             X = pd.concat([X, self.regressor_train], axis = 1)
-        if self.regression_type == 'User':
-            complete_regressor = pd.concat([self.regressor_train, preord_regressor], axis = 0)
-            
-        X = X.drop(X.tail(1).index).drop(X.head(1).index)
+            # complete_regressor = pd.concat([self.regressor_train, preord_regressor], axis = 0)
         
         regr = RandomForestRegressor(random_state= self.random_seed, n_estimators=self.n_estimators, verbose = self.verbose)
         regr.fit(X, Y)
         
         combined_index = (self.df_train.index.append(index))
         forecast = pd.DataFrame()
-        sktraindata.columns = [x for x in range(len(sktraindata.columns))]
+        sktraindata = df_train.copy()
         for x in range(forecast_length):
-            x_dat = rolling_x_regressor(sktraindata, mean_rolling_periods=self.mean_rolling_periods, std_rolling_periods=self.std_rolling_periods,holiday=self.holiday, holiday_country=self.holiday_country, polynomial_degree=self.polynomial_degree)
+            
+            tsfresh_long = sktraindata.tail(row_count).reset_index().melt(id_vars = date_col_name, var_name = 'series_id', value_name = 'value')
+            tsfresh_long = tsfresh_long.fillna(method = 'ffill').fillna(method = 'bfill')
+            if verbose > 0:
+                extracted_features = extract_features(tsfresh_long, column_id="series_id", column_sort=date_col_name, column_value = 'value', default_fc_parameters=MinimalFCParameters(), n_jobs=1) # MinimalFCParameters EfficientFCParameters
+            else:
+                extracted_features = extract_features(tsfresh_long, column_id="series_id", column_sort=date_col_name, column_value = 'value', disable_progressbar = True,  default_fc_parameters=MinimalFCParameters(), n_jobs=1)        
+            a = extracted_features.to_numpy().flatten()
+            df = pd.DataFrame(a.reshape(-1, len(a))).fillna(0)
             if self.regression_type == 'User':
-                x_dat = pd.concat([x_dat, complete_regressor.head(len(x_dat.index))], axis = 1)
-            rfPred =  pd.DataFrame(regr.predict(x_dat.tail(1).values))
+                df = pd.concat([df, preord_regressor.iloc[x]], axis = 1)
+            df = df[X.columns]
+            rfPred =  pd.DataFrame(regr.predict(df.tail(1).values))
         
             forecast = pd.concat([forecast, rfPred], axis = 0, ignore_index = True)
             sktraindata = pd.concat([sktraindata, rfPred], axis = 0, ignore_index = True)
@@ -152,21 +161,14 @@ class RandomForestRolling(ModelObject):
         """
         n_estimators_choice = np.random.choice(a = [100, 1000], size = 1, p = [0.2, 0.8]).item()
         max_depth_choice = np.random.choice(a = [None, 5, 10], size = 1, p = [0.8, 0.1, 0.1]).item()
-        mean_rolling_periods_choice = np.random.choice(a = [2, 5, 7, 10, 30], size = 1, p = [0.2, 0.2, 0.2, 0.2, 0.2]).item()
-        std_rolling_periods_choice = np.random.choice(a = [2, 5, 7, 10, 30], size = 1, p = [0.2, 0.2, 0.2, 0.2, 0.2]).item()
-        holiday_choice = np.random.choice(a=[True,False], size = 1, p = [0.5, 0.5]).item()
-        polynomial_degree_choice = np.random.choice(a=[None,2], size = 1, p = [0.8, 0.2]).item()
         regression_choice = np.random.choice(a=['None','User'], size = 1, p = [0.7, 0.3]).item()
 
         parameter_dict = {
-                        'n_estimators': n_estimators_choice,
-                        'max_depth': max_depth_choice,
+                        'n_estimators': 1000,
+                        'max_depth': None,
                         'min_samples_split': 2,
-                        'holiday': holiday_choice,
-                        'mean_rolling_periods': mean_rolling_periods_choice,
-                        'std_rolling_periods': std_rolling_periods_choice,
-                        'polynomial_degree': polynomial_degree_choice,
-                        'regression_type': regression_choice
+                        'num_subsamples': 10,
+                        'regression_type': 'None'
                         }
         return parameter_dict
     
@@ -177,10 +179,7 @@ class RandomForestRolling(ModelObject):
                         'n_estimators': self.n_estimators,
                         'max_depth': self.max_depth,
                         'min_samples_split': self.min_samples_split,
-                        'holiday': self.holiday,
-                        'mean_rolling_periods': self.mean_rolling_periods,
-                        'std_rolling_periods': self.std_rolling_periods,
-                        'polynomial_degree': self.polynomial_degree,
+                        'num_subsamples': self.num_subsamples,
                         'regression_type': self.regression_type
                         }
         return parameter_dict

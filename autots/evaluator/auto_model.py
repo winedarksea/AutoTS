@@ -164,7 +164,8 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     return df_forecast
 
 ModelNames = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RandomForestRolling']
+              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RandomForestRolling',
+              'UnobservedComponents', 'VAR', 'VECM', 'DynamicFactor']
 
 def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US', 
@@ -225,6 +226,47 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
                  n_estimators =parameters['n_estimators'], min_samples_split =parameters['min_samples_split'], max_depth =parameters['max_depth'], mean_rolling_periods =parameters['mean_rolling_periods'], std_rolling_periods =parameters['std_rolling_periods'])
         return model
     
+    if model == 'UnobservedComponents':
+        from autots.models.statsmodels import UnobservedComponents
+        if parameters == {}:
+            model = UnobservedComponents(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        else:
+            model = UnobservedComponents(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country,
+                                         regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
+                                         level = parameters['level'], trend=parameters['trend'], cycle = parameters['cycle'],
+                                         damped_cycle = parameters['damped_cycle'], irregular = parameters['irregular'],
+                                         stochastic_trend=parameters['stochastic_trend'], stochastic_level=parameters['stochastic_level'],
+                                         stochastic_cycle=parameters['stochastic_cycle'])
+        return model
+    
+    if model == 'DynamicFactor':
+        from autots.models.statsmodels import DynamicFactor
+        if parameters == {}:
+            model = DynamicFactor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        else:
+            model = DynamicFactor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country,
+                                         regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
+                                         k_factors = parameters['k_factors'], factor_order = parameters['factor_order'])
+        return model
+    
+    if model == 'VECM':
+        from autots.models.statsmodels import VECM
+        if parameters == {}:
+            model = VECM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        else:
+            model = VECM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country,
+                                         regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
+                                         deterministic = parameters['deterministic'], k_ar_diff = parameters['k_ar_diff'])
+        return model
+    
+    if model == 'VAR':
+        from autots.models.statsmodels import VAR
+        if parameters == {}:
+            model = VAR(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        else:
+            model = VAR(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country,
+                                         svar_type = parameters['svar_type'])
+        return model
     
     else:
         raise AttributeError("Model String not found in ModelMonster")
