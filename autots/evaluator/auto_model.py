@@ -165,7 +165,7 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
 
 ModelNames = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive',
               'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RandomForestRolling',
-              'UnobservedComponents', 'VAR', 'VECM', 'DynamicFactor']
+              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
 
 def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US', 
@@ -259,13 +259,12 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
                                          deterministic = parameters['deterministic'], k_ar_diff = parameters['k_ar_diff'])
         return model
     
-    if model == 'VAR':
-        from autots.models.statsmodels import VAR
+    if model == 'VARMAX':
+        from autots.models.statsmodels import VARMAX
         if parameters == {}:
-            model = VAR(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = VARMAX(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         else:
-            model = VAR(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country,
-                                         svar_type = parameters['svar_type'])
+            model = VARMAX(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         return model
     
     else:

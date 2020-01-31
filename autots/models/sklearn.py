@@ -152,7 +152,7 @@ class RandomForestRolling(ModelObject):
         max_depth_choice = np.random.choice(a = [None, 5, 10], size = 1, p = [0.8, 0.1, 0.1]).item()
         mean_rolling_periods_choice = np.random.choice(a = [2, 5, 7, 10, 30], size = 1, p = [0.2, 0.2, 0.2, 0.2, 0.2]).item()
         std_rolling_periods_choice = np.random.choice(a = [2, 5, 7, 10, 30], size = 1, p = [0.2, 0.2, 0.2, 0.2, 0.2]).item()
-        holiday_choice = np.random.choice(a=[True,False], size = 1, p = [0.5, 0.5]).item()
+        holiday_choice = np.random.choice(a=[True,False], size = 1, p = [0.3, 0.7]).item()
         polynomial_degree_choice = np.random.choice(a=[None,2], size = 1, p = [0.8, 0.2]).item()
         regression_choice = np.random.choice(a=['None','User'], size = 1, p = [0.7, 0.3]).item()
 

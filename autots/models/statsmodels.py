@@ -266,24 +266,33 @@ class ARIMA(ModelObject):
         if self.regression_type != None:
             assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"
         forecast = pd.DataFrame()
+        upper_forecast = pd.DataFrame()
+        lower_forecast = pd.DataFrame()
         for series in self.df_train.columns:
             current_series = self.df_train[series].copy()
             try:
                 if (self.regression_type == "User") or (self.regression_type == "Holiday"):
                     maModel = ARIMA(current_series, order = self.order, freq = self.frequency, exog = self.regressor_train).fit(maxiter = 600)
-                    maPred = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
+                    # maPred = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
+                    maPred, stderr, conf = maModel.forecast(steps = self.forecast_length, alpha = (1 - self.prediction_interval), exog = preord_regressor)
                 else:
                     maModel = ARIMA(current_series, order = self.order, freq = self.frequency).fit(maxiter = 400, disp = self.verbose)
-                    maPred = maModel.predict(start=test_index[0], end=test_index[-1])
+                    # maPred = maModel.predict(start=test_index[0], end=test_index[-1])
+                    maPred, stderr, conf = maModel.forecast(steps = self.forecast_length, alpha = (1 - self.prediction_interval))
             except Exception:
-                maPred = pd.Series((np.zeros((forecast_length,))), index = test_index)
-            forecast = pd.concat([forecast, maPred], axis = 1)
+                # maPred = pd.Series((np.zeros((forecast_length,))), index = test_index)
+                maPred = np.zeros((forecast_length,))
+                conf = np.zeros((forecast_length, 2))
+            forecast = pd.concat([forecast, pd.Series(maPred, index = test_index)], axis = 1)
+            conf = pd.DataFrame(conf, index = test_index)
+            lower_forecast = pd.concat([lower_forecast, conf[0]], axis = 1)
+            upper_forecast = pd.concat([upper_forecast, conf[1]], axis = 1)
         forecast.columns = self.column_names
         
         if just_point_forecast:
             return forecast
         else:
-            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, forecast, prediction_interval = self.prediction_interval)
+            # upper_forecast, lower_forecast = Point_to_Probability(self.df_train, forecast, prediction_interval = self.prediction_interval)
             
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name = self.name,
@@ -309,7 +318,7 @@ class ARIMA(ModelObject):
         d_choice = np.random.choice(a = [0,1,2,3], size = 1, p = [0.4, 0.3, 0.2, 0.1]).item()
         q_choice = np.random.choice(a = [0,1,2,3,4,5,7,10], size = 1, p = [0.2,0.2,0.1,0.1,0.1,0.1,0.1,0.1]).item()
         regression_list = [None, 'User', 'Holiday']
-        regression_probability = [0.2, 0.6, 0.2]
+        regression_probability = [0.4, 0.4, 0.2]
         regression_choice = np.random.choice(a = regression_list, size = 1, p = regression_probability).item()
 
         parameter_dict = {
@@ -377,6 +386,14 @@ class UnobservedComponents(ModelObject):
             self.verbose = False
         self.df_train = df
         
+        if self.regression_type == 'Holiday':
+            from autots.tools.holiday import holiday_flag
+            self.regressor_train = holiday_flag(df.index, country = self.holiday_country).values
+        else:
+            if self.regression_type != None:
+                if (len(preord_regressor) != len(df.index)):
+                    self.regression_type = None
+            self.regressor_train = preord_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -531,6 +548,15 @@ class DynamicFactor(ModelObject):
             self.verbose = False
         self.df_train = df
         
+        if self.regression_type == 'Holiday':
+            from autots.tools.holiday import holiday_flag
+            self.regressor_train = holiday_flag(df.index, country = self.holiday_country).values
+        else:
+            if self.regression_type != None:
+                if (len(preord_regressor) != len(df.index)):
+                    self.regression_type = None
+            self.regressor_train = preord_regressor
+        
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -560,11 +586,11 @@ class DynamicFactor(ModelObject):
         
         if (self.regression_type == "User") or (self.regression_type == "Holiday"):
             maModel = DynamicFactor(self.df_train, freq = self.frequency, exog = self.regressor_train, 
-                                           k_factors = self.k_factors, factor_order=self.factor_order).fit(disp = self.verbose)
-            forecast = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
+                                           k_factors = self.k_factors, factor_order=self.factor_order).fit(disp = self.verbose, maxiter=100)
+            forecast = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor.values.reshape(-1,1))
         else:
             maModel = DynamicFactor(self.df_train, freq = self.frequency, 
-                                           k_factors = self.k_factors, factor_order=self.factor_order).fit(disp = self.verbose)
+                                           k_factors = self.k_factors, factor_order=self.factor_order).fit(disp = self.verbose, maxiter=100)
             forecast = maModel.predict(start=test_index[0], end=test_index[-1])
         
         if just_point_forecast:
@@ -651,6 +677,15 @@ class VECM(ModelObject):
             self.verbose = False
         self.df_train = df
         
+        if self.regression_type == 'Holiday':
+            from autots.tools.holiday import holiday_flag
+            self.regressor_train = holiday_flag(df.index, country = self.holiday_country).values
+        else:
+            if self.regression_type != None:
+                if (len(preord_regressor) != len(df.index)):
+                    self.regression_type = None
+            self.regressor_train = preord_regressor
+        
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -685,6 +720,7 @@ class VECM(ModelObject):
                                            deterministic=self.deterministic,k_ar_diff=self.k_ar_diff).fit()
             # forecast = maModel.predict(start=test_index[0], end=test_index[-1])
             forecast = maModel.predict(steps = len(test_index))
+        forecast = pd.DataFrame(forecast, index = test_index, columns = self.column_names)
         
         if just_point_forecast:
             return forecast
@@ -734,8 +770,8 @@ class VECM(ModelObject):
         return parameter_dict
 
 
-class VAR(ModelObject):
-    """VAR from Statsmodels
+class VARMAX(ModelObject):
+    """VARMAX from Statsmodels
     
     Args:
         name (str): String to identify class
@@ -744,7 +780,7 @@ class VAR(ModelObject):
 
         regression_type (str): type of regression (None, 'User', or 'Holiday')
     """
-    def __init__(self, name: str = "VAR", frequency: str = 'infer', 
+    def __init__(self, name: str = "VARMAX", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, 
                  regression_type: str = None, holiday_country: str = 'US',
                  random_seed: int = 2020, verbose: int = 0):
@@ -761,6 +797,11 @@ class VAR(ModelObject):
         df = self.basic_profile(df)
         
         self.df_train = df
+        
+        if self.verbose > 1:
+            self.verbose = True
+        else:
+            self.verbose = False
         
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -779,18 +820,18 @@ class VAR(ModelObject):
             
         """        
         predictStartTime = datetime.datetime.now()
-        from statsmodels.tsa.vector_ar.var_model import VAR
         test_index = self.create_forecast_index(forecast_length=forecast_length)
+        from statsmodels.tsa.statespace.varmax import VARMAX
 
-
-        maModel = VAR(self.df_train, freq = self.frequency).fit()
+        maModel = VARMAX(self.df_train, freq = self.frequency).fit(disp = self.verbose)
         forecast = maModel.predict(start=test_index[0], end=test_index[-1])
         
         if just_point_forecast:
             return forecast
         else:
+            # point, lower_forecast, upper_forecast = maModel.forecast_interval(steps = self.forecast_length, alpha = 1 - self.prediction_interval)            
             upper_forecast, lower_forecast = Point_to_Probability(self.df_train, forecast, prediction_interval = self.prediction_interval)
-            
+
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name = self.name,
                                           forecast_length=forecast_length,
