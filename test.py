@@ -28,7 +28,7 @@ weights_hourly = {'traffic_volume': 10}
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                prediction_interval = 0.9, ensemble = True, weighted = False,
-               max_generations = 3, num_validations = 2, validation_method = 'even',
+               max_generations = 10, num_validations = 2, validation_method = 'even',
                drop_most_recent = 1)
 
 from autots.evaluator.auto_ts import fake_regressor

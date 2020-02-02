@@ -163,10 +163,10 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     
     return df_forecast
 
-ModelNames = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive',
+ModelNames = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
               'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RandomForestRolling',
               'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
-
+ModelNames = ['GLM', 'GLS']
 def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US', 
                  startTimeStamps = None,
@@ -189,9 +189,17 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
         from autots.models.basics import MedValueNaive
         return MedValueNaive(frequency = frequency, prediction_interval = prediction_interval)
     
+    if model == 'GLS':
+        from autots.models.statsmodels import GLS
+        return GLS(frequency = frequency, prediction_interval = prediction_interval)
+    
     if model == 'GLM':
         from autots.models.statsmodels import GLM
-        return GLM(frequency = frequency, prediction_interval = prediction_interval)
+        if parameters == {}:
+            model = GLM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        else:
+            model = GLM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, family = parameters['family'])
+        return model
     
     if model == 'ETS':
         from autots.models.statsmodels import ETS

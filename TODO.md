@@ -1,5 +1,5 @@
 # To-Do
-Coerce index (as string?) to Index from Detrend
+Single time series
 Statsmodels, Statsmodel Poisson, conf_int and get_prediction for statsmodels prediction interval
 * Recombine best two of each model parameters, if two or more present
 * Inf appearing in MAE and RMSE (possibly all NaN in test)

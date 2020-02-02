@@ -9,7 +9,7 @@ from autots.evaluator.auto_model import PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 
 
-class GLM(ModelObject):
+class GLS(ModelObject):
     """Simple linear regression from statsmodels
     
     Args:
@@ -18,7 +18,7 @@ class GLM(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
 
     """
-    def __init__(self, name: str = "GLM", frequency: str = 'infer', 
+    def __init__(self, name: str = "GLS", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US',
                  random_seed: int = 2020):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
@@ -81,6 +81,110 @@ class GLM(ModelObject):
         """
         return {}
 
+class GLM(ModelObject):
+    """Simple linear regression from statsmodels
+    
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+
+    """
+    def __init__(self, name: str = "GLM", frequency: str = 'infer', 
+                 prediction_interval: float = 0.9, holiday_country: str = 'US',
+                 random_seed: int = 2020, family = 'Gaussian', verbose: int = 1):
+        ModelObject.__init__(self, name, frequency, prediction_interval, 
+                             holiday_country = holiday_country, random_seed = random_seed,
+                             verbose = verbose)
+        self.family = family
+        
+    def fit(self, df, preord_regressor = []):
+        """Train algorithm given data supplied 
+        
+        Args:
+            df (pandas.DataFrame): Datetime Indexed 
+        """
+        
+        df = self.basic_profile(df)
+        self.df_train = df
+        if self.verbose > 1:
+            self.verbose = True
+        else:
+            self.verbose = False
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+        
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+            
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+        from statsmodels.api import GLM
+        X = (pd.to_numeric(self.df_train.index, errors = 'coerce',downcast='integer').values)
+        forecast = pd.DataFrame()
+        for y in self.df_train.columns:
+            current_series = self.df_train[y]
+            if str(self.family).lower() == 'poisson':
+                from statsmodels.genmod.families.family import Poisson
+                model = GLM(current_series.values, X, family= Poisson(), missing = 'drop').fit(disp = self.verbose)
+            elif str(self.family).lower() == 'binomial':
+                from statsmodels.genmod.families.family import Binomial
+                model = GLM(current_series.values, X, family= Binomial(), missing = 'drop').fit(disp = self.verbose)
+            elif str(self.family).lower() == 'negativebinomial':
+                from statsmodels.genmod.families.family import NegativeBinomial
+                model = GLM(current_series.values, X, family= NegativeBinomial(), missing = 'drop').fit(disp = self.verbose)
+            elif str(self.family).lower() == 'tweedie':
+                from statsmodels.genmod.families.family import Tweedie
+                model = GLM(current_series.values, X, family= Tweedie(), missing = 'drop').fit(disp = self.verbose)
+            elif str(self.family).lower() == 'gamma':
+                from statsmodels.genmod.families.family import Gamma
+                model = GLM(current_series.values, X, family= Gamma(), missing = 'drop').fit(disp = self.verbose)
+            else:
+                self.family = 'Gaussian'
+                model = GLM(current_series.values, X, missing = 'drop').fit()
+            current_forecast = model.predict((pd.to_numeric(test_index, errors = 'coerce',downcast='integer').values))
+            forecast = pd.concat([forecast, pd.Series(current_forecast)], axis = 1)
+        df_forecast = pd.DataFrame(forecast)
+        df_forecast.columns = self.column_names
+        df_forecast.index = test_index
+        if just_point_forecast:
+            return df_forecast
+        else:
+            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df_forecast, prediction_interval = self.prediction_interval)
+            
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(model_name = self.name,
+                                          forecast_length=forecast_length,
+                                          forecast_index = df_forecast.index,
+                                          forecast_columns = df_forecast.columns,
+                                          lower_forecast=lower_forecast,
+                                          forecast=df_forecast, upper_forecast=upper_forecast,
+                                          prediction_interval=self.prediction_interval,
+                                          predict_runtime=predict_runtime,
+                                          fit_runtime = self.fit_runtime,
+                                          model_parameters = self.get_params())
+            
+            return prediction
+        
+    def get_new_params(self,method: str = 'random'):
+        """Returns dict of new parameters for parameter tuning
+        """
+        family_choice = np.random.choice(a = ['Gaussian', 'Poisson','Binomial','NegativeBinomial','Tweedie'], size = 1, p = [0.4, 0.3, 0.1, 0.1, 0.1]).item()
+        return {'family':family_choice}
+    
+    def get_params(self):
+        """Return dict of current parameters
+        """
+        return {'family':self.family}
 
 class ETS(ModelObject):
     """Exponential Smoothing from Statsmodels
