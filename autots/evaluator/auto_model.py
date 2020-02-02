@@ -166,7 +166,7 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
 ModelNames = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
               'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RandomForestRolling',
               'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
-ModelNames = ['GLM', 'GLS']
+
 def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US', 
                  startTimeStamps = None,

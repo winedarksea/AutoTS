@@ -1,6 +1,7 @@
 # To-Do
 Single time series
-Statsmodels, Statsmodel Poisson, conf_int and get_prediction for statsmodels prediction interval
+Better point to probabilistic (uncertainty of naive last-value forecast)
+Better X_maker for Rolling Sklearn
 * Recombine best two of each model parameters, if two or more present
 * Inf appearing in MAE and RMSE (possibly all NaN in test)
 * Na Tolerance for test in simple_train_test_split
@@ -23,6 +24,7 @@ Statsmodels, Statsmodel Poisson, conf_int and get_prediction for statsmodels pre
 * Hierachial correction (bottom-up to start with)
 * Improved verbosity controls and options. Replace most 'print' with logging.
 * Export as simpler code (as TPOT)
+* set up the lower-level API to be usable as pipelines
 * AIC metric, other accuracy metrics
 * Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
 * Used saved results to resume a search partway through
@@ -33,6 +35,7 @@ Statsmodels, Statsmodel Poisson, conf_int and get_prediction for statsmodels pre
 * More thorough use of setting random seed
 * For monthly data account for number of days in month
 * Option to run generations until generations no longer see improvement of at least X % over n generations
+* add constant to GLM
 
 #### New Ensembles:
 	best 3 (unique algorithms not just variations)

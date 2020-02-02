@@ -178,7 +178,7 @@ class GLM(ModelObject):
     def get_new_params(self,method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
-        family_choice = np.random.choice(a = ['Gaussian', 'Poisson','Binomial','NegativeBinomial','Tweedie'], size = 1, p = [0.4, 0.3, 0.1, 0.1, 0.1]).item()
+        family_choice = np.random.choice(a = ['Gaussian', 'Poisson','Binomial','NegativeBinomial','Tweedie'], size = 1, p = [0.1, 0.4, 0.1, 0.3, 0.1]).item()
         return {'family':family_choice}
     
     def get_params(self):
