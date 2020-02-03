@@ -2,20 +2,20 @@
 Single time series
 Better point to probabilistic (uncertainty of naive last-value forecast)
 Better X_maker for Rolling Sklearn
+VARMAX parameters
+Possible error where first template model is invalid, 'smape_weighted' doesn't exist error
 * Recombine best two of each model parameters, if two or more present
 * Inf appearing in MAE and RMSE (possibly all NaN in test)
 * Na Tolerance for test in simple_train_test_split
 * min_allowed_train_percent into higher-level API
-* annual data with different dates of the record 6/30, 1/1, 12/30
 * Relative/Absolute Imports and reduce package reloading
 * User regressor to sklearn model regression_type (added, needs testing)
 * Weekly sample data
 * Format of Regressor - allow multiple input to at least sklearn models
 * 'Age' regressor as an option in addition to User/Holiday
-* Handle categorical forecasts where forecast leaves range of known values
-* Detrend transformer doesn't work on some indexes
+* Handle categorical forecasts where forecast leaves range of known values, then add to upper/lower forecasts
 * Speed improvements, Profiling, Parallelization, and Distributed options for general greater speed
-* Generate list of functional frequences, and improve usability on rarer frequenices
+* Improve usability on rarer frequenices
 * Warning/handling if lots of NaN in most recent (test) part of data
 * Figures: Add option to output figures of train/test + forecast, other performance figures
 * Pre-clustering on many time series
@@ -47,6 +47,7 @@ Better X_maker for Rolling Sklearn
 	Last Value + Drift Naive
 	Simple Decomposition forecasting
 	GluonTS Models
+	Tensorflow Probability Structural Time Series
 	Pytorch Simple LSTM/GRU
 	Simulations
 	XGBoost (doesn't support multioutput directly)

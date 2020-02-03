@@ -10,22 +10,43 @@ from autots.evaluator.auto_model import ModelObject
 from autots.evaluator.auto_model import PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 
-def rolling_x_regressor(df, mean_rolling_periods: int = 30, std_rolling_periods: int = 7, holiday: bool = False, holiday_country: str = 'US', polynomial_degree = None):
+def rolling_x_regressor(df, mean_rolling_periods: int = 30, std_rolling_periods: int = 7, 
+                        max_rolling_periods: int = None, min_rolling_periods: int = None,
+                        ewm_alpha: float = 0.5, additional_lag_periods: int = 7,
+                        holiday: bool = False, holiday_country: str = 'US', polynomial_degree = None):
     """
     Generate more features from initial time series
+    
+    Returns a dataframe of statistical features. Will need to be shifted by 1 or more to match Y for forecast.
     """
-    X = pd.concat([df, df.rolling(mean_rolling_periods,min_periods = 1).mean(), df.rolling(7,min_periods = 1).std()], axis = 1)
-    X.columns = [x for x in range(len(X.columns))]
-    X.replace([np.inf, -np.inf], np.nan).fillna(method='ffill').fillna(method='bfill')
+    X = df.copy()
+    if str(mean_rolling_periods).isdigit():
+        X = pd.concat([X, df.rolling(int(mean_rolling_periods), min_periods = 1).mean()], axis = 1)
+    if str(std_rolling_periods).isdigit():
+        X = pd.concat([X, df.rolling(std_rolling_periods, min_periods = 1).std()], axis = 1)
+    if str(max_rolling_periods).isdigit():
+        X = pd.concat([X, df.rolling(max_rolling_periods, min_periods = 1).max()], axis = 1)
+    if str(min_rolling_periods).isdigit():
+        X = pd.concat([X, df.rolling(min_rolling_periods, min_periods = 1).min()], axis = 1)
+    if str(ewm_alpha).replace('.', '').isdigit():
+        X = pd.concat([X, df.ewm(alpha = ewm_alpha, min_periods = 1).mean()], axis = 1)
+    if str(additional_lag_periods).isdigit():
+        X = pd.concat([X, df.shift(additional_lag_periods)], axis = 1)
+
     if holiday:
         from autots.tools.holiday import holiday_flag
         X['holiday_flag_'] = holiday_flag(X.index, country = holiday_country).values
-    
+        X['holiday_flag_future_'] = holiday_flag(X.index + pd.Timedelta('1D'), country = holiday_country).values
+
     if str(polynomial_degree).isdigit():
         polynomial_degree = abs(int(polynomial_degree))
         from sklearn.preprocessing import PolynomialFeatures
         poly = PolynomialFeatures(polynomial_degree)
         X = poly.fit_transform(X)
+    
+    X = X.replace([np.inf, -np.inf], np.nan).fillna(method='ffill').fillna(method='bfill')
+    
+    X.columns = [x for x in range(len(X.columns))]
     
     return X
     
@@ -49,6 +70,8 @@ class RandomForestRolling(ModelObject):
                  verbose: int = 0, random_seed: int = 2020,
                  n_estimators: int = 100, min_samples_split: float = 2, max_depth: int = None,
                  holiday: bool = False, mean_rolling_periods: int = 30, std_rolling_periods: int = 7,
+                 max_rolling_periods: int = 7, min_rolling_periods: int = 7,
+                 ewm_alpha: float = 0.5, additional_lag_periods: int = 7,
                  polynomial_degree: int = None):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              regression_type = regression_type, 
@@ -60,6 +83,10 @@ class RandomForestRolling(ModelObject):
         self.holiday = holiday
         self.mean_rolling_periods = mean_rolling_periods
         self.std_rolling_periods = std_rolling_periods
+        self.max_rolling_periods = max_rolling_periods
+        self.min_rolling_periods = min_rolling_periods
+        self.ewm_alpha = ewm_alpha
+        self.additional_lag_periods = additional_lag_periods
         self.polynomial_degree = polynomial_degree
         
     def fit(self, df, preord_regressor = []):
@@ -94,14 +121,14 @@ class RandomForestRolling(ModelObject):
         
         from sklearn.ensemble import RandomForestRegressor
         sktraindata = self.df_train.dropna(how = 'all', axis = 0).fillna(method='ffill').fillna(method='bfill')
-        Y = sktraindata.drop(sktraindata.head(2).index) 
+        Y = sktraindata.drop(sktraindata.head(2).index)
         Y.columns = [x for x in range(len(Y.columns))]
         
         X = rolling_x_regressor(sktraindata, mean_rolling_periods=self.mean_rolling_periods, std_rolling_periods=self.std_rolling_periods,holiday=self.holiday, holiday_country=self.holiday_country, polynomial_degree=self.polynomial_degree)
         if self.regression_type == 'User':
             X = pd.concat([X, self.regressor_train], axis = 1)
             complete_regressor = pd.concat([self.regressor_train, preord_regressor], axis = 0)
-            
+        # 1 is dropped to shift data, and the first one is dropped because it will least accurately represnt rolling values
         X = X.drop(X.tail(1).index).drop(X.head(1).index)
         
         regr = RandomForestRegressor(random_state= self.random_seed, n_estimators=self.n_estimators, verbose = self.verbose)
@@ -150,8 +177,12 @@ class RandomForestRolling(ModelObject):
         """
         n_estimators_choice = np.random.choice(a = [100, 1000], size = 1, p = [0.2, 0.8]).item()
         max_depth_choice = np.random.choice(a = [None, 5, 10], size = 1, p = [0.8, 0.1, 0.1]).item()
-        mean_rolling_periods_choice = np.random.choice(a = [2, 5, 7, 10, 30], size = 1, p = [0.2, 0.2, 0.2, 0.2, 0.2]).item()
-        std_rolling_periods_choice = np.random.choice(a = [2, 5, 7, 10, 30], size = 1, p = [0.2, 0.2, 0.2, 0.2, 0.2]).item()
+        mean_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
+        std_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
+        max_rolling_periods_choice = np.random.choice(a = ['None', 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
+        min_rolling_periods_choice = np.random.choice(a = ['None', 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
+        lag_periods_choice = np.random.choice(a = ['None', 2, 6, 11, 30], size = 1, p = [0.2, 0.2, 0.2, 0.2, 0.2]).item()
+        ewm_choice = np.random.choice(a=[None, 0.2, 0.5, 0.8], size = 1, p = [0.25, 0.25, 0.25, 0.25]).item()
         holiday_choice = np.random.choice(a=[True,False], size = 1, p = [0.3, 0.7]).item()
         polynomial_degree_choice = np.random.choice(a=[None,2], size = 1, p = [0.8, 0.2]).item()
         regression_choice = np.random.choice(a=['None','User'], size = 1, p = [0.7, 0.3]).item()
@@ -163,6 +194,10 @@ class RandomForestRolling(ModelObject):
                         'holiday': holiday_choice,
                         'mean_rolling_periods': mean_rolling_periods_choice,
                         'std_rolling_periods': std_rolling_periods_choice,
+                        'max_rolling_periods': max_rolling_periods_choice,
+                        'min_rolling_periods': min_rolling_periods_choice,
+                        'ewm_alpha': ewm_choice,
+                        'additional_lag_periods': lag_periods_choice,
                         'polynomial_degree': polynomial_degree_choice,
                         'regression_type': regression_choice
                         }
@@ -178,6 +213,10 @@ class RandomForestRolling(ModelObject):
                         'holiday': self.holiday,
                         'mean_rolling_periods': self.mean_rolling_periods,
                         'std_rolling_periods': self.std_rolling_periods,
+                        'max_rolling_periods': self.max_rolling_periods,
+                        'min_rolling_periods': self.min_rolling_periods,
+                        'ewm_alpha': self.ewm_alpha,
+                        'additional_lag_periods': self.additional_lag_periods,
                         'polynomial_degree': self.polynomial_degree,
                         'regression_type': self.regression_type
                         }
