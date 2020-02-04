@@ -163,9 +163,10 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     
     return df_forecast
 
-ModelNames = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RandomForestRolling']
-
+ModelNames = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
+              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
+              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
+# ModelNames = ['RollingRegression']
 def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US', 
                  startTimeStamps = None,
@@ -188,9 +189,17 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
         from autots.models.basics import MedValueNaive
         return MedValueNaive(frequency = frequency, prediction_interval = prediction_interval)
     
+    if model == 'GLS':
+        from autots.models.statsmodels import GLS
+        return GLS(frequency = frequency, prediction_interval = prediction_interval)
+    
     if model == 'GLM':
         from autots.models.statsmodels import GLM
-        return GLM(frequency = frequency, prediction_interval = prediction_interval)
+        if parameters == {}:
+            model = GLM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        else:
+            model = GLM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, family = parameters['family'])
+        return model
     
     if model == 'ETS':
         from autots.models.statsmodels import ETS
@@ -216,15 +225,56 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
             model = FBProphet(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, holiday =parameters['holiday'], regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose)
         return model
     
-    if model == 'RandomForestRolling':
-        from autots.models.sklearn import RandomForestRolling
+    if model == 'RollingRegression':
+        from autots.models.sklearn import RollingRegression
         if parameters == {}:
-            model = RandomForestRolling(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = RollingRegression(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         else:
-            model = RandomForestRolling(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, holiday =parameters['holiday'], regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
-                 n_estimators =parameters['n_estimators'], min_samples_split =parameters['min_samples_split'], max_depth =parameters['max_depth'], mean_rolling_periods =parameters['mean_rolling_periods'], std_rolling_periods =parameters['std_rolling_periods'])
+            model = RollingRegression(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, holiday =parameters['holiday'], regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
+                 regression_model = parameters['regression_model'], mean_rolling_periods =parameters['mean_rolling_periods'], std_rolling_periods =parameters['std_rolling_periods'])
         return model
     
+    if model == 'UnobservedComponents':
+        from autots.models.statsmodels import UnobservedComponents
+        if parameters == {}:
+            model = UnobservedComponents(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        else:
+            model = UnobservedComponents(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country,
+                                         regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
+                                         level = parameters['level'], trend=parameters['trend'], cycle = parameters['cycle'],
+                                         damped_cycle = parameters['damped_cycle'], irregular = parameters['irregular'],
+                                         stochastic_trend=parameters['stochastic_trend'], stochastic_level=parameters['stochastic_level'],
+                                         stochastic_cycle=parameters['stochastic_cycle'])
+        return model
+    
+    if model == 'DynamicFactor':
+        from autots.models.statsmodels import DynamicFactor
+        if parameters == {}:
+            model = DynamicFactor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        else:
+            model = DynamicFactor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country,
+                                         regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
+                                         k_factors = parameters['k_factors'], factor_order = parameters['factor_order'])
+        return model
+    
+    if model == 'VECM':
+        from autots.models.statsmodels import VECM
+        if parameters == {}:
+            model = VECM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        else:
+            model = VECM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country,
+                                         regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
+                                         deterministic = parameters['deterministic'], k_ar_diff = parameters['k_ar_diff'])
+        return model
+    
+    if model == 'VARMAX':
+        from autots.models.statsmodels import VARMAX
+        if parameters == {}:
+            model = VARMAX(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        else:
+            model = VARMAX(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, 
+                           order = parameters['order'], trend = parameters['trend'])
+        return model
     
     else:
         raise AttributeError("Model String not found in ModelMonster")

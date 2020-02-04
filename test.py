@@ -11,9 +11,10 @@ Things needing testing:
 import numpy as np
 import pandas as pd
 
-forecast_length = 3
+forecast_length = 2
 from autots.datasets import load_toy_daily
 from autots.datasets import load_toy_hourly
+from autots.datasets import load_toy_monthly
 from autots.datasets import load_toy_yearly
 
 df_long = load_toy_yearly()
@@ -28,18 +29,19 @@ weights_hourly = {'traffic_volume': 10}
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                prediction_interval = 0.9, ensemble = True, weighted = False,
-               max_generations = 1, num_validations = 2, validation_method = 'even',
+               max_generations = 20, num_validations = 2, validation_method = 'even',
                drop_most_recent = 1)
 
 from autots.evaluator.auto_ts import fake_regressor
 preord_regressor_train, preord_regressor_forecast = fake_regressor(df_long, forecast_length = forecast_length, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
 
-model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
+# model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
 # model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', weights = weights_hourly) # and weighted = True
-# model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', preord_regressor = preord_regressor_train)
+model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', preord_regressor = preord_regressor_train)
 
 print(model.best_model['Model'].iloc[0])
 print(model.best_model['ModelParameters'].iloc[0])
+print(model.best_model['TransformationParameters'].iloc[0])
 
 prediction = model.predict(preord_regressor = preord_regressor_forecast)
 # point forecasts dataframe
@@ -59,9 +61,17 @@ print("Overwrite template is: {}".format(str(model.initial_template)))
 """
 
 """
+Edgey Cases:
+        Single Time Series
+        Forecast Length of 1
+        Very short training data
+"""
+"""
+
 from autots.tools.shaping import long_to_wide
 df_wide = long_to_wide(df_long, date_col = 'datetime', value_col = 'value',
                        id_col = 'series_id', frequency = 'infer', aggfunc = 'first')
+
 """
 
 

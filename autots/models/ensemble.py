@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import json
 from autots.evaluator.auto_model import PredictionObject
-from autots.evaluator.auto_model import create_model_id    
+from autots.evaluator.auto_model import create_model_id
 
 
 def Best3Ensemble(ensemble_params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval):
@@ -123,7 +123,7 @@ def EnsembleEvaluate(ensemble_forecasts_list: list, df_test, weights, model_coun
                     'Runs': 1
                     }, index = [0])
             a = pd.DataFrame(model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')).transpose()
-            result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1)
+            result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1, sort = False)
             
             ens_eval.model_results = pd.concat([ens_eval.model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
             temp = pd.DataFrame(model_error.per_timestamp_metrics.loc['smape']).transpose()

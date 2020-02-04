@@ -110,7 +110,7 @@ def long_to_wide(df, date_col: str = 'datetime', value_col: str = 'value', id_co
     if drop_most_recent > 0:
         df_wide.drop(df_wide.tail(drop_most_recent).index, inplace = True)
     
-    return df_wide
+    return pd.DataFrame(df_wide)
 
 class NumericTransformer(object):
     """

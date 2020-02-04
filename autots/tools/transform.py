@@ -117,7 +117,8 @@ class Detrend(object):
         except:
             raise ValueError ("Data Cannot Be Converted to Numeric Float")
             
-        self.model = GLS(df.values, (df.index.astype( int ).values), missing = 'drop').fit()
+        # formerly df.index.astype( int ).values
+        self.model = GLS(df.values, (pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values), missing = 'drop').fit()
         self.shape = df.shape
         return self        
         
@@ -151,7 +152,7 @@ class Detrend(object):
             df = df.astype(float)
         except:
             raise ValueError ("Data Cannot Be Converted to Numeric Float")
-        df = df.astype(float) + self.model.predict(df.index.astype( int ).values)
+        df = df.astype(float) + self.model.predict(pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values)
         return df
         
 class RollingMeanTransformer(object):
