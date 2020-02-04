@@ -2,7 +2,7 @@
 Single time series
 Better point to probabilistic (uncertainty of naive last-value forecast)
 Better X_maker for Rolling Sklearn
-VARMAX parameters
+Sklearn Holiday not working
 Possible error where first template model is invalid, 'smape_weighted' doesn't exist error
 * Recombine best two of each model parameters, if two or more present
 * Inf appearing in MAE and RMSE (possibly all NaN in test)
@@ -36,6 +36,11 @@ Possible error where first template model is invalid, 'smape_weighted' doesn't e
 * For monthly data account for number of days in month
 * Option to run generations until generations no longer see improvement of at least X % over n generations
 * add constant to GLM
+
+### Faster Convergence
+* Only search useful parameters, highest probability for most likely effective parameters
+* 'Expert' starting template to try most likley combinations first
+* Recombination of parameters (both transformation and model)
 
 #### New Ensembles:
 	best 3 (unique algorithms not just variations)

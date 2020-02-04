@@ -887,11 +887,14 @@ class VARMAX(ModelObject):
     def __init__(self, name: str = "VARMAX", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, 
                  regression_type: str = None, holiday_country: str = 'US',
-                 random_seed: int = 2020, verbose: int = 0):
+                 random_seed: int = 2020, verbose: int = 0,
+                 order: tuple = (1, 0), trend: str = 'c'):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              regression_type = regression_type, 
                              holiday_country = holiday_country, random_seed = random_seed,
                              verbose = verbose)
+        self.order = order
+        self.trend = trend
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
@@ -927,7 +930,7 @@ class VARMAX(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         from statsmodels.tsa.statespace.varmax import VARMAX
 
-        maModel = VARMAX(self.df_train, freq = self.frequency).fit(disp = self.verbose)
+        maModel = VARMAX(self.df_train, freq = self.frequency, order = self.order, trend = self.trend).fit(disp = self.verbose)
         forecast = maModel.predict(start=test_index[0], end=test_index[-1])
         
         if just_point_forecast:
@@ -954,11 +957,22 @@ class VARMAX(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
-        return {}
+        ar_choice = np.random.choice(a = [0,1,2,7], size = 1, p = [0.1, 0.5, 0.2, 0.2]).item()
+        ma_choice = np.random.choice(a = [0,1,2], size = 1, p = [0.5, 0.3, 0.2]).item()
+        trend_choice = np.random.choice(a = ['n','c','t','ct', 'poly'], size = 1, p = [0.1, 0.5, 0.1, 0.2, 0.1]).item()
+        if trend_choice == 'poly':
+            trend_choice = [np.random.randint(0,2,1).item(), np.random.randint(0,2,1).item(),np.random.randint(0,2,1).item(),np.random.randint(0,2,1).item()]
+        return {
+                'order':(ar_choice, ma_choice),
+                'trend':trend_choice
+                }
     
     def get_params(self):
         """Return dict of current parameters
         """
-        parameter_dict = {}
+        parameter_dict = {
+                'order':self.order,
+                'trend':self.trend
+                }
         return parameter_dict
     

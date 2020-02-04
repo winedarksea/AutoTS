@@ -164,9 +164,9 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     return df_forecast
 
 ModelNames = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RandomForestRolling',
+              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
               'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
-ModelNames = ['RandomForestRolling']
+# ModelNames = ['RollingRegression']
 def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US', 
                  startTimeStamps = None,
@@ -225,13 +225,13 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
             model = FBProphet(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, holiday =parameters['holiday'], regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose)
         return model
     
-    if model == 'RandomForestRolling':
-        from autots.models.sklearn import RandomForestRolling
+    if model == 'RollingRegression':
+        from autots.models.sklearn import RollingRegression
         if parameters == {}:
-            model = RandomForestRolling(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = RollingRegression(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         else:
-            model = RandomForestRolling(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, holiday =parameters['holiday'], regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
-                 n_estimators =parameters['n_estimators'], min_samples_split =parameters['min_samples_split'], max_depth =parameters['max_depth'], mean_rolling_periods =parameters['mean_rolling_periods'], std_rolling_periods =parameters['std_rolling_periods'])
+            model = RollingRegression(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, holiday =parameters['holiday'], regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
+                 regression_model = parameters['regression_model'], mean_rolling_periods =parameters['mean_rolling_periods'], std_rolling_periods =parameters['std_rolling_periods'])
         return model
     
     if model == 'UnobservedComponents':
@@ -272,7 +272,8 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
         if parameters == {}:
             model = VARMAX(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         else:
-            model = VARMAX(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = VARMAX(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, 
+                           order = parameters['order'], trend = parameters['trend'])
         return model
     
     else:

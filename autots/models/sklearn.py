@@ -1,7 +1,7 @@
 """
 Sklearn dependent models
 
-Elastic Net, Random Forest, KNN
+Decision Tree, Elastic Net,  Random Forest, MLPRegressor, KNN, Adaboost 
 """
 import datetime
 import numpy as np
@@ -21,7 +21,7 @@ def rolling_x_regressor(df, mean_rolling_periods: int = 30, std_rolling_periods:
     """
     X = df.copy()
     if str(mean_rolling_periods).isdigit():
-        X = pd.concat([X, df.rolling(int(mean_rolling_periods), min_periods = 1).mean()], axis = 1)
+        X = pd.concat([X, df.rolling(int(mean_rolling_periods), min_periods = 1).median()], axis = 1)
     if str(std_rolling_periods).isdigit():
         X = pd.concat([X, df.rolling(std_rolling_periods, min_periods = 1).std()], axis = 1)
     if str(max_rolling_periods).isdigit():
@@ -51,7 +51,7 @@ def rolling_x_regressor(df, mean_rolling_periods: int = 30, std_rolling_periods:
     return X
     
 
-class RandomForestRolling(ModelObject):
+class RollingRegression(ModelObject):
     """Simple regression-framed approach to forecasting using sklearn
     
     Who are you who are so wise in the ways of science?
@@ -65,10 +65,10 @@ class RandomForestRolling(ModelObject):
         regression_type (str): type of regression (None, 'User')
 
     """
-    def __init__(self, name: str = "RandomForestRolling", frequency: str = 'infer', 
+    def __init__(self, name: str = "RollingRegression", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, regression_type: str = None, holiday_country: str = 'US',
                  verbose: int = 0, random_seed: int = 2020,
-                 n_estimators: int = 100, min_samples_split: float = 2, max_depth: int = None,
+                 regression_model: str = 'RandomForest',
                  holiday: bool = False, mean_rolling_periods: int = 30, std_rolling_periods: int = 7,
                  max_rolling_periods: int = 7, min_rolling_periods: int = 7,
                  ewm_alpha: float = 0.5, additional_lag_periods: int = 7,
@@ -77,9 +77,7 @@ class RandomForestRolling(ModelObject):
                              regression_type = regression_type, 
                              holiday_country = holiday_country, 
                              random_seed = random_seed, verbose = verbose)
-        self.n_estimators = n_estimators
-        self.max_depth = max_depth
-        self.min_samples_split = min_samples_split
+        self.regression_model = regression_model
         self.holiday = holiday
         self.mean_rolling_periods = mean_rolling_periods
         self.std_rolling_periods = std_rolling_periods
@@ -119,7 +117,6 @@ class RandomForestRolling(ModelObject):
         if len(preord_regressor) == 0:
             self.regression_type = 'None'
         
-        from sklearn.ensemble import RandomForestRegressor
         sktraindata = self.df_train.dropna(how = 'all', axis = 0).fillna(method='ffill').fillna(method='bfill')
         Y = sktraindata.drop(sktraindata.head(2).index)
         Y.columns = [x for x in range(len(Y.columns))]
@@ -131,7 +128,31 @@ class RandomForestRolling(ModelObject):
         # 1 is dropped to shift data, and the first one is dropped because it will least accurately represnt rolling values
         X = X.drop(X.tail(1).index).drop(X.head(1).index)
         
-        regr = RandomForestRegressor(random_state= self.random_seed, n_estimators=self.n_estimators, verbose = self.verbose)
+        if self.regression_model == 'ElasticNet':
+            from sklearn.linear_model import MultiTaskElasticNet
+            regr = MultiTaskElasticNet(alpha = 1.0, random_state= self.random_seed)
+        elif self.regression_model == 'DecisionTree':
+            from sklearn.tree import DecisionTreeRegressor
+            regr = DecisionTreeRegressor(random_state= self.random_seed)
+        elif self.regression_model == 'MLP':
+            from sklearn.neural_network import MLPRegressor
+            mlp_verbose = True if self.verbose > 1 else False
+            #relu/tanh lbfgs/adam layer_sizes (100) (10)
+            regr = MLPRegressor(hidden_layer_sizes=(10, 25, 10),verbose = mlp_verbose, max_iter = 200,
+                  activation='tanh', solver='lbfgs', random_state= self.random_seed)
+        elif self.regression_model == 'KNN':
+            from sklearn.multioutput import MultiOutputRegressor
+            from sklearn.neighbors import KNeighborsRegressor
+            regr = MultiOutputRegressor(KNeighborsRegressor(random_state=self.random_seed))
+        elif self.regression_model == 'Adaboost':
+            from sklearn.multioutput import MultiOutputRegressor
+            from sklearn.ensemble import AdaBoostRegressor
+            regr = MultiOutputRegressor(AdaBoostRegressor(n_estimators = 200, random_state=self.random_seed))
+        else:
+            self.regression_model = 'RandomForest'
+            from sklearn.ensemble import RandomForestRegressor
+            regr = RandomForestRegressor(random_state= self.random_seed, n_estimators=1000, verbose = self.verbose)
+        
         regr.fit(X, Y)
         
         combined_index = (self.df_train.index.append(index))
@@ -172,11 +193,10 @@ class RandomForestRolling(ModelObject):
         
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
-        
-        large p,d,q can be very slow (a p of 30 can take hours, whereas 5 takes seconds)
         """
-        n_estimators_choice = np.random.choice(a = [100, 1000], size = 1, p = [0.2, 0.8]).item()
-        max_depth_choice = np.random.choice(a = [None, 5, 10], size = 1, p = [0.8, 0.1, 0.1]).item()
+        #n_estimators_choice = np.random.choice(a = [100, 1000], size = 1, p = [0.2, 0.8]).item()
+        #max_depth_choice = np.random.choice(a = [None, 5, 10], size = 1, p = [0.8, 0.1, 0.1]).item()
+        model_choice = np.random.choice(a = ['RandomForest','ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost'], size = 1, p = [0.3, 0.1, 0.025, 0.125, 0.025, 0.425]).item()
         mean_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
         std_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
         max_rolling_periods_choice = np.random.choice(a = ['None', 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
@@ -188,9 +208,7 @@ class RandomForestRolling(ModelObject):
         regression_choice = np.random.choice(a=['None','User'], size = 1, p = [0.7, 0.3]).item()
 
         parameter_dict = {
-                        'n_estimators': n_estimators_choice,
-                        'max_depth': max_depth_choice,
-                        'min_samples_split': 2,
+                        'regression_model': model_choice,
                         'holiday': holiday_choice,
                         'mean_rolling_periods': mean_rolling_periods_choice,
                         'std_rolling_periods': std_rolling_periods_choice,
@@ -207,9 +225,7 @@ class RandomForestRolling(ModelObject):
         """Return dict of current parameters
         """
         parameter_dict = {
-                        'n_estimators': self.n_estimators,
-                        'max_depth': self.max_depth,
-                        'min_samples_split': self.min_samples_split,
+                        'regression_model': self.regression_model,
                         'holiday': self.holiday,
                         'mean_rolling_periods': self.mean_rolling_periods,
                         'std_rolling_periods': self.std_rolling_periods,
