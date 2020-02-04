@@ -5,7 +5,7 @@ required = [
 ]
 
 extras = {
-    'additional' : ['fbprophet>=0.4.*', 'fredapi']
+    'additional' : ['fbprophet>=0.4.*', 'fredapi', 'tsfresh']
 }
 
 with open("README.md", "r") as fh:
@@ -13,7 +13,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="AutoTS",
-    version="0.0.4",
+    version="0.1.0",
     author="Colin Catlin",
     author_email="colin.catlin@syllepsis.live",
     description="Automated Time Series Forecasting",

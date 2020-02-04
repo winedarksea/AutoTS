@@ -1,7 +1,7 @@
 # AutoTS
 
-### Project CATS (Catlin Automated Time Series)
-(or maybe eventually: Clustered Automated Time Series)
+### Project CATS
+
 #### Model Selection for Multiple Time Series
 
 Simple package for comparing and predicting with open-source time series implementations.
@@ -26,7 +26,7 @@ from autots.datasets import load_toy_monthly # also: _daily _yearly or _hourly
 df_long = load_toy_monthly()
 
 from autots import AutoTS
-model = AutoTS(forecast_length = 14, frequency = 'infer',
+model = AutoTS(forecast_length = 3, frequency = 'infer',
                prediction_interval = 0.9, ensemble = True, weighted = False,
                max_generations = 5, num_validations = 2, validation_method = 'even')
 model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
@@ -68,6 +68,7 @@ AutoTS works in the following way at present:
 #### Requirements
 	fbprophet
 	fredapi (example datasets)
+	tsfresh
 
 Check out `functional_environments.md` for specific versions tested to work.
 

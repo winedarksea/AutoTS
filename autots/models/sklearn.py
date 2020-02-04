@@ -196,7 +196,7 @@ class RollingRegression(ModelObject):
         """
         #n_estimators_choice = np.random.choice(a = [100, 1000], size = 1, p = [0.2, 0.8]).item()
         #max_depth_choice = np.random.choice(a = [None, 5, 10], size = 1, p = [0.8, 0.1, 0.1]).item()
-        model_choice = np.random.choice(a = ['RandomForest','ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost'], size = 1, p = [0.3, 0.1, 0.025, 0.125, 0.025, 0.425]).item()
+        model_choice = np.random.choice(a = ['RandomForest','ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost'], size = 1, p = [0.2, 0.1, 0.025, 0.225, 0.025, 0.425]).item()
         mean_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
         std_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
         max_rolling_periods_choice = np.random.choice(a = ['None', 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()

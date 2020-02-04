@@ -11,12 +11,13 @@ Things needing testing:
 import numpy as np
 import pandas as pd
 
-forecast_length = 14
+forecast_length = 2
 from autots.datasets import load_toy_daily
 from autots.datasets import load_toy_hourly
 from autots.datasets import load_toy_monthly
+from autots.datasets import load_toy_yearly
 
-df_long = load_toy_daily()
+df_long = load_toy_yearly()
 
 weights_daily = {'categoricalDayofWeek': 5,
            'randomNegative': 1,
@@ -59,6 +60,12 @@ model = model.import_template(example_filename, method = 'add on')
 print("Overwrite template is: {}".format(str(model.initial_template)))
 """
 
+"""
+Edgey Cases:
+        Single Time Series
+        Forecast Length of 1
+        Very short training data
+"""
 """
 
 from autots.tools.shaping import long_to_wide

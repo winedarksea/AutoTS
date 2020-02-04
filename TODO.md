@@ -1,6 +1,6 @@
 # To-Do
 Single time series
-Better point to probabilistic (uncertainty of naive last-value forecast)
+Better point to probabilistic (uncertainty of naive last-value forecast) - linear reg of abs error of samples
 Better X_maker for Rolling Sklearn
 Sklearn Holiday not working
 Possible error where first template model is invalid, 'smape_weighted' doesn't exist error
