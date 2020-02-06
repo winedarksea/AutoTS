@@ -7,6 +7,19 @@
 Simple package for comparing and predicting with open-source time series implementations.
 For other time series needs, check out the package list here: https://github.com/MaxBenChrist/awesome_time_series_in_python
 
+## Features
+* Finds optimal time series models by genetic programming
+* Handles univariate and multivariate/parallel time series
+* Point and probabilistic forecasts
+* Ability to handle messy data by learning optimal NaN imputation and outlier removal
+* Ability to add external regressor
+* Allows automatic ensembling of best models
+* Multiple cross validation options
+* Subsetting and weighting to improve search on many multivariate series
+* Option to use one or a combination of SMAPE, RMSE, MAE, and Runtime for model selection
+* Ability to upsample data to a custom frequency
+* Import and export of templates allowing greater user customization
+
 ## Basic Use
 ```
 pip install autots
@@ -27,7 +40,7 @@ df_long = load_toy_monthly()
 
 from autots import AutoTS
 model = AutoTS(forecast_length = 3, frequency = 'infer',
-               prediction_interval = 0.9, ensemble = True, weighted = False,
+               prediction_interval = 0.9, ensemble = False, weighted = False,
                max_generations = 5, num_validations = 2, validation_method = 'even')
 model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
 
@@ -41,6 +54,10 @@ forecasts_df = prediction.forecast
 model_results = model.initial_results.model_results
 ```
 
+## Deployment
+Many models can be reverse engineered with relative simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package. 
+There are some advantages to deploying within AutoTS and a reduced starting template. Following the model training, the top models can be exported to a .csv or .json file, then on next run only those models will be tried. 
+This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve.
 
 ## Underlying Process
 AutoTS works in the following way at present:
@@ -111,6 +128,7 @@ Contaiment measures the percent of test data that falls between the upper and lo
 ### Custom and Unusual Frequencies
 Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects 
 Some models will support a more limited range of frequencies. 
+
 #### Tested Frequencies
 | Frequency      | Offset Str   | Notes                                        |
 | :------------- | :----------: | --------------------------------------------:|

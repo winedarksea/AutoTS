@@ -37,6 +37,7 @@ class ModelObject(object):
         self.holiday_country = holiday_country
         self.random_seed = random_seed
         self.verbose = verbose
+        self.verbose_bool = True if self.verbose > 1 else False
     
     def __repr__(self):
         return 'ModelObject of ' + self.name
@@ -608,7 +609,7 @@ def NewGeneticTemplate(model_results, submitted_parameters, sort_column: str = "
                 }, index = [0])
         new_template = pd.concat([new_template, new_row], axis = 0, ignore_index = True, sort = False)
 
-    # recombination of transforms across models
+    # recombination of transforms across models by shifting
     recombination = sorted_results.tail(len(sorted_results.index) - 1).copy()
     recombination['TransformationParameters'] = sorted_results['TransformationParameters'].shift(1).tail(len(sorted_results.index) - 1)
     new_template = pd.concat([new_template, recombination.head(top_n)[template_cols]], axis = 0, ignore_index = True, sort = False)

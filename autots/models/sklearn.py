@@ -136,9 +136,8 @@ class RollingRegression(ModelObject):
             regr = DecisionTreeRegressor(random_state= self.random_seed)
         elif self.regression_model == 'MLP':
             from sklearn.neural_network import MLPRegressor
-            mlp_verbose = True if self.verbose > 1 else False
             #relu/tanh lbfgs/adam layer_sizes (100) (10)
-            regr = MLPRegressor(hidden_layer_sizes=(10, 25, 10),verbose = mlp_verbose, max_iter = 200,
+            regr = MLPRegressor(hidden_layer_sizes=(10, 25, 10),verbose = self.verbose_bool, max_iter = 200,
                   activation='tanh', solver='lbfgs', random_state= self.random_seed)
         elif self.regression_model == 'KNN':
             from sklearn.multioutput import MultiOutputRegressor
