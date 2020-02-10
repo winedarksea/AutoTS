@@ -8,11 +8,12 @@ Simple package for comparing and predicting with open-source time series impleme
 For other time series needs, check out the package list here: https://github.com/MaxBenChrist/awesome_time_series_in_python
 
 ## Features
+* Thirteen available models, with thousands of possible hyperparameter configurations
 * Finds optimal time series models by genetic programming
 * Handles univariate and multivariate/parallel time series
 * Point and probabilistic forecasts
 * Ability to handle messy data by learning optimal NaN imputation and outlier removal
-* Ability to add external regressor
+* Ability to add external known-in-advance regressor
 * Allows automatic ensembling of best models
 * Multiple cross validation options
 * Subsetting and weighting to improve search on many multivariate series

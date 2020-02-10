@@ -164,10 +164,6 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     
     return df_forecast
 
-ModelNames = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
-              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
-# ModelNames = ['RollingRegression']
 def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US', 
                  startTimeStamps = None,
@@ -455,14 +451,14 @@ def TemplateWizard(template, df_train, df_test, weights,
     # template = unpack_ensemble_models(template, template_cols, keep_ensemble = False)
     
     for index in template.index:
-        current_template = template.loc[index]
-        model_str = current_template['Model']
-        parameter_dict = json.loads(current_template['ModelParameters'])
-        transformation_dict = json.loads(current_template['TransformationParameters'])
-        ensemble_input = current_template['Ensemble']
-        current_template = pd.DataFrame(current_template).transpose()
-        template_result.model_count += 1
         try:
+            current_template = template.loc[index]
+            model_str = current_template['Model']
+            parameter_dict = json.loads(current_template['ModelParameters'])
+            transformation_dict = json.loads(current_template['TransformationParameters'])
+            ensemble_input = current_template['Ensemble']
+            current_template = pd.DataFrame(current_template).transpose()
+            template_result.model_count += 1
             df_forecast = PredictWitch(current_template, df_train = df_train, forecast_length=forecast_length,frequency=frequency, 
                                           prediction_interval=prediction_interval, 
                                           no_negatives=no_negatives,
@@ -536,7 +532,9 @@ def TemplateWizard(template, df_train, df_test, weights,
 
 
 from autots.tools.transform import RandomTransform
-def RandomTemplate(n: int = 10):
+def RandomTemplate(n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
+              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
+              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']):
     """"
     Returns a template dataframe of randomly generated transformations, models, and hyperparameters
     
@@ -547,7 +545,7 @@ def RandomTemplate(n: int = 10):
     template = pd.DataFrame()
     counter = 0
     while (len(template.index) < n):
-        model_str = np.random.choice(ModelNames)
+        model_str = np.random.choice(model_list)
         param_dict = ModelMonster(model_str).get_new_params()
         trans_dict = RandomTransform()
         row = pd.DataFrame({
