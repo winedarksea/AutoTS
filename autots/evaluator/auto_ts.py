@@ -110,7 +110,7 @@ class AutoTS(object):
             from autots.templates.general import general_template
             random_template = RandomTemplate(40, model_list = self.model_list)
             self.initial_template = pd.concat([general_template, random_template], axis = 0).drop_duplicates()
-        else: 
+        else:
             print("Input initial_template either unrecognized or not yet implemented. Using Random.")
             self.initial_template = RandomTemplate(40)
         
@@ -356,7 +356,7 @@ class AutoTS(object):
         
         
         if num_validations > 0:
-            if validation_method == 'backwards':
+            if str(validation_method).lower() in ['backwards', 'back', 'backward']:
                 for y in range(num_validations):
                     if verbose > 0:
                         print("Validation Round: {}".format(str(y)))
@@ -400,7 +400,7 @@ class AutoTS(object):
                     if verbose > 0:
                         print("Validation Round: {}".format(str(y)))
                     # /num_validations biases it towards the last segment (which I prefer), /(num_validations + 1) would remove that
-                    validation_size = int(np.floor((len(df_wide_numeric.index) - forecast_length)/num_validations))
+                    validation_size = int(np.floor((len(df_wide_numeric.index) - forecast_length)/(num_validations + 1)))
                     current_slice = df_wide_numeric.head(validation_size * (y+1) + forecast_length)
                     # subset series (if used) and take a new train/test split
                     df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = random_seed)
@@ -514,13 +514,14 @@ class AutoTS(object):
             output_format = 'csv' or 'json' (from filename)
             models (str): 'best' or 'all'
             n (int): if models = 'best', how many n-best to export
+            max_per_model_class (int): if models = 'best', the max number of each model class to include in template
         """
         if models == 'all':
             export_template = self.initial_results[self.template_cols]
         if models == 'best':
             export_template = self.validation_results.model_results
             if str(max_per_model_class).isdigit():
-                export_template = export_template.reset_index(drop=True).groupby('Model').nsmallest(max_per_model_class, columns = ['Score']).reset_index()
+                export_template = export_template.sort_values('Score', ascending=True).groupby('Model').head(max_per_model_class).reset_index()
             export_template = export_template.nsmallest(n, columns = ['Score'])[self.template_cols]
         try:
             if '.csv' in filename:
@@ -550,7 +551,7 @@ class AutoTS(object):
         if method.lower() == 'add on':
             self.initial_template = self.initial_template.merge(import_template, on = self.initial_template.columns.intersection(import_template.columns).to_list())
             self.initial_template = self.initial_template.drop_duplicates(subset = self.template_cols)
-        if method.lower() == 'only':
+        if method.lower() == 'only' or  method.lower() == 'user only':
             self.initial_template = import_template
         
         return self

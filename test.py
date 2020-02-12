@@ -19,7 +19,7 @@ from autots.datasets import load_toy_yearly
 
 df_long = load_toy_monthly()
 
-df_long = df_long[df_long['series_id'] == 'GS10']
+# df_long = df_long[df_long['series_id'] == 'GS10']
 
 weights_daily = {'categoricalDayofWeek': 5,
            'randomNegative': 1,
@@ -58,6 +58,7 @@ forecasts_df = prediction.forecast
 initial_results = model.initial_results.model_results
 # validation results
 validation_results = model.validation_results.model_results
+
 
 """
 Import/Export

@@ -7,35 +7,30 @@
 * New models need only be sometimes applicable
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
-# How to Contribute:
-* Give feedback on where you find the documentation confusing
-* Use AutoTS and...
-	* Report errors and request features by adding Issues on GitHub
-	* Posting the top model templates for your data (to help improve the starting templates)
-* And, of course, contributing to the codebase directly on GitHub!
-
 ## Errors: 
 'ValueError: forecast_length is too large, not enough training data, alter min_allowed_train_percent to override' -> daily toy, forecast_length = 30
 'Detrend' transformation is still buggy (can't convert to Series)
 Possible error where first template model is invalid, 'smape_weighted' doesn't exist error
+raise AttributeError(("Model String '{}' not recognized").format(model)) -> turn to an allowable exception with a printed warning
 
 # To-Do
+* Na Tolerance for test in simple_train_test_split
+* min_allowed_train_percent into higher-level API
+
 * Get the sphinx (google style) documentation and readthedocs.io website up
-* Improve Readme
-* Test 'max_per_model_class' in export template
+* Improve Readme and Extended Tutorial
 * Better point to probabilistic (uncertainty of naive last-value forecast) - linear reg of abs error of samples - simulations
 * Better X_maker:
 	* use feature selection on TSFresh features - autocorrelation lag n, fft/cwt coefficients (abs), abs_energy
 	* Holiday not working
 	* date part and age/expanding regressors
 * Get Tsfresh working with small dataset (short, 2 columns) (check feature importance again)
-* Recombine best two of each model parameters, if two or more present
+* Recombine best two of each model parameters, if two or more present (plus option to disable this)
+* 'Probabilistic' option to only use models with 'proper' probabilistic outputs
 * Inf appearing in MAE and RMSE (possibly all NaN in test)
-* Na Tolerance for test in simple_train_test_split
-* min_allowed_train_percent into higher-level API
 * Relative/Absolute Imports and reduce package reloading
+* MedianValueNaive -> AverageNaive with parameters for Mean/Median/Mode
 * Weekly sample data (EIA)
-* Add a print(AutoTS) that displays fitted model, if given
 * Format of Regressor - allow multiple input to at least sklearn models
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
 * Handle categorical forecasts where forecast leaves range of known values, then add to upper/lower forecasts
@@ -54,13 +49,16 @@ Possible error where first template model is invalid, 'smape_weighted' doesn't e
 * set up the lower-level API to be usable as pipelines
 	* allow stand-alone pipeline for transformation with format for export data format to other package requirements (use AutoTS just for preprocessing)
 * AIC metric, other accuracy metrics
+	* MAE of upper and lower forecasts, balance with Containment
+* Metric to measure if the series follows the same shape (Contour)
+	* Potentially % change between n and n-1, compare this % change between forecast and actual
 * Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
 * Used saved results to resume a search partway through
-* Generally improved probabilistic forecasting
 * Option to drop series which haven't had a value in last N days
 * More thorough use of setting random seed, verbose, n_jobs
 * For monthly data account for number of days in month
 * add constant to GLM
+* Ability to automatically add external datasets of parallel time series of global usability (ie from FRED or others)
 
 ### Faster Convergence
 * Only search useful parameters, highest probability for most likely effective parameters
@@ -69,6 +67,8 @@ Possible error where first template model is invalid, 'smape_weighted' doesn't e
 * Remove parameters that are rarely/never useful from get_new_params
 * Don't apply transformations to Zeroes naive, possibly other naives
 * Option to run generations until generations no longer see improvement of at least X % over n generations
+* ignore series of weight 0 in univariate models
+* Method to 'unlock' deeper parameter search, potentially a method = 'deep' to get_new_params used after n generations
 
 #### New Ensembles:
 	best 3 (unique algorithms not just variations)

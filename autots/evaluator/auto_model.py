@@ -274,7 +274,7 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
         return model
     
     else:
-        raise AttributeError("Model String not found in ModelMonster")
+        raise AttributeError(("Model String '{}' not a recognized model type").format(model))
 
 
 class TemplateEvalObject(object):
