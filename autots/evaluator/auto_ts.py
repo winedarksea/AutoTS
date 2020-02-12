@@ -72,7 +72,7 @@ class AutoTS(object):
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
         model_list: list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
+              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
               'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor'],
         num_validations: int = 3,
         models_to_validate: int = 10,

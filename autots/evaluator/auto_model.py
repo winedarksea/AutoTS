@@ -140,7 +140,7 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     from autots.evaluator.auto_model import ModelMonster
     model = ModelMonster(model_str, parameters=parameter_dict, frequency = frequency, 
                          prediction_interval = prediction_interval, holiday_country = holiday_country,
-                         random_seed = random_seed, verbose = verbose)
+                         random_seed = random_seed, verbose = verbose, forecast_length = forecast_length)
     model = model.fit(df_train_transformed, preord_regressor = preord_regressor_train)
     df_forecast = model.predict(forecast_length = forecast_length, preord_regressor = preord_regressor_forecast)
     
@@ -155,10 +155,11 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
         
     df_forecast.transformation_parameters = transformation_dict
     # Remove negatives if desired
+    # There's df.where(df_forecast.forecast > 0, 0) or  df.clip(lower = 0), not sure which faster
     if no_negatives:
-        df_forecast.lower_forecast = df_forecast.lower_forecast.where(df_forecast.lower_forecast > 0, 0)
-        df_forecast.forecast = df_forecast.forecast.where(df_forecast.forecast > 0, 0)
-        df_forecast.upper_forecast = df_forecast.upper_forecast.where(df_forecast.upper_forecast > 0, 0)
+        df_forecast.lower_forecast = df_forecast.lower_forecast.clip(lower = 0)
+        df_forecast.forecast = df_forecast.forecast.clip(lower = 0)
+        df_forecast.upper_forecast = df_forecast.upper_forecast.clip(lower = 0)
     transformation_runtime = transformation_runtime + (datetime.datetime.now() - transformationStartTime)
     df_forecast.transformation_runtime = transformation_runtime
     
@@ -166,7 +167,7 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
 
 def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US', 
-                 startTimeStamps = None,
+                 startTimeStamps = None, forecast_length: int = 14,
                  random_seed: int = 2020, verbose: int = 0):
     """Directs strings and parameters to appropriate model objects.
     
@@ -271,6 +272,16 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
         else:
             model = VARMAX(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, 
                            order = parameters['order'], trend = parameters['trend'])
+        return model
+    
+    if model == 'GluonTS':
+        from autots.models.gluonts import GluonTS
+        if parameters == {}:
+            model = GluonTS(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, forecast_length = forecast_length)
+        else:
+            model = GluonTS(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, 
+                           gluon_model = parameters['gluon_model'], epochs = parameters['epochs'], learning_rate = parameters['learning_rate'],
+                           forecast_length = forecast_length)
         return model
     
     else:
@@ -533,7 +544,7 @@ def TemplateWizard(template, df_train, df_test, weights,
 
 from autots.tools.transform import RandomTransform
 def RandomTemplate(n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
+              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
               'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']):
     """"
     Returns a template dataframe of randomly generated transformations, models, and hyperparameters

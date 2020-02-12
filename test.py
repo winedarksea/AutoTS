@@ -29,9 +29,9 @@ weights_daily = {'categoricalDayofWeek': 5,
 weights_hourly = {'traffic_volume': 10}
 
 model_list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
+              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
               'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
-# model_list = ['RollingRegression']
+model_list = ['GluonTS']
 
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',

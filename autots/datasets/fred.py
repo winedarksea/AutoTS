@@ -8,8 +8,10 @@ import pandas as pd
 
 try:
     from fredapi import Fred
-except Exception:
-    raise ImportError("Package fredapi is required, install with `pip install fredapi`")
+except Exception: # except ImportError
+    _has_fred = False
+else:
+    _has_fred = True
 
 def get_fred_data(fredkey: str, SeriesNameDict: dict = {'SeriesID':'SeriesName'}):
     """
@@ -22,6 +24,9 @@ def get_fred_data(fredkey: str, SeriesNameDict: dict = {'SeriesID':'SeriesName'}
             Series id must match Fred IDs, but name can be anything
             if default is use, several default samples are returned
     """
+    if not _has_fred:
+        raise ImportError("Package fredapi is required")
+        
     fred = Fred(api_key=fredkey)
     
     if SeriesNameDict == {'SeriesID':'SeriesName'}:

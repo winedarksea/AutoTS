@@ -60,7 +60,7 @@ def long_to_wide(df, date_col: str = 'datetime', value_col: str = 'value', id_co
     # handle no id_col for if only one time series
     # this isn't particularly robust, hence an id_col is required
     if id_col is None:
-        print("No id_col passed, using only first time series...")
+        # print("No id_col passed, using only first time series...")
         df_long[id_col] = 'First'
         df_long.drop_duplicates(subset = date_col, keep = 'first', inplace = True)
     

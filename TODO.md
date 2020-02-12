@@ -7,12 +7,12 @@
 * New models need only be sometimes applicable
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
-## Errors: 
+# Errors: 
 'ValueError: forecast_length is too large, not enough training data, alter min_allowed_train_percent to override' -> daily toy, forecast_length = 30
 'Detrend' transformation is still buggy (can't convert to Series)
 Possible error where first template model is invalid, 'smape_weighted' doesn't exist error
 raise AttributeError(("Model String '{}' not recognized").format(model)) -> turn to an allowable exception with a printed warning
-Holiday not working in ARIMA, RollingRegression
+Holiday not (always) working
 
 # To-Do
 * Na Tolerance for test in simple_train_test_split
@@ -24,6 +24,10 @@ Holiday not working in ARIMA, RollingRegression
 * Better X_maker:
 	* use feature selection on TSFresh features - autocorrelation lag n, fft/cwt coefficients (abs), abs_energy
 	* date part and age/expanding regressors
+* GluonTS
+	* Add support for preord_regressor
+	* Modify GluonStart if lots of NaN at start of that series
+	* GPU and CPU ctx
 * Get Tsfresh working with small dataset (short, 2 columns) (check feature importance again)
 * Recombine best two of each model parameters, if two or more present (plus option to disable this)
 * 'Probabilistic' option to only use models with 'proper' probabilistic outputs
@@ -59,27 +63,30 @@ Holiday not working in ARIMA, RollingRegression
 * For monthly data account for number of days in month
 * add constant to GLM
 * Ability to automatically add external datasets of parallel time series of global usability (ie from FRED or others)
+* Infer column names for df_long to wide based on which is datetime, which is string, and which is numeric
 
 ### Faster Convergence
 * Only search useful parameters, highest probability for most likely effective parameters
-* 'Expert' starting template to try most likley combinations first
+* 'Expert' starting templates to try most likley combinations first
 * Recombination of parameters (both transformation and model)
 * Remove parameters that are rarely/never useful from get_new_params
 * Don't apply transformations to Zeroes naive, possibly other naives
 * Option to run generations until generations no longer see improvement of at least X % over n generations
 * ignore series of weight 0 in univariate models
-* Method to 'unlock' deeper parameter search, potentially a method = 'deep' to get_new_params used after n generations
+* Method to 'unlock' deeper parameter search, 
+	* potentially a method = 'deep' to get_new_params used after n generations
+	* no unlock, but simply very low-probability options in get_new_params
+* Exempt or reduce slow models from unnecessary runs, particularly with different transformations
 
 #### New Ensembles:
-	best 3 (unique algorithms not just variations)
+	best 3 (unique algorithms not just variations of same)
 	forecast distance 30/30/30
-	best per series ensemble
+	best per series ensemble ('horizontal ensemble')
 	best point with best probalistic containment
 #### New models:
 	Seasonal Naive
 	Last Value + Drift Naive
 	Simple Decomposition forecasting
-	GluonTS Models
 	Tensorflow Probability Structural Time Series
 	Pytorch Simple LSTM/GRU
 	Simulations
@@ -93,6 +100,7 @@ Holiday not working in ARIMA, RollingRegression
 	Isotonic regression
 	Survival Analysis
 	TPOT if it adds multioutput functionality
+	Compressive Transformer, if they go anywhere
 
 #### New Transformations:
 	Test variations on 'RollingMean100thN'

@@ -29,6 +29,11 @@ model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 
 print(model)
 ```
 
+If your data is already wide (one column for each value), to bring to a long format:
+```
+df_long = df_wide.melt(id_vars = ['datetime_col_name'], var_name = 'series_id', value_name = 'value')
+```
+
 #### You can tailor the process in a few ways...
 The simplest thing is to increase the number of generations `max_generations = 15`. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.
 
