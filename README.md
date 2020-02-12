@@ -1,7 +1,5 @@
 # AutoTS
 
-### Project CATS
-
 #### Model Selection for Multiple Time Series
 
 Simple package for comparing and predicting with open-source time series implementations.
@@ -27,7 +25,11 @@ pip install autots
 ```
 This includes dependencies for basic models, but additonal packages are required for some models and methods.
 
-Input data is expected to come in a 'long' format with three columns: Date (ideally already in pd.DateTime format), Value, and Series ID. the column name for each of these is passed to .fit(). For a single time series, series_id can be = None. 
+Input data is expected to come in a 'long' format with three columns: 
+* Date (ideally already in pd.DateTime format)
+* Value
+* Series ID. For a single time series, series_id can be `= None`. 
+The column name for each of these is passed to .fit(). 
 
 If your data is already wide (one column for each value), to bring to a long format:
 ```
@@ -59,6 +61,7 @@ validation_results = model.validation_results.model_results
 
 ```
 
+Check out [extended_tutorial.md](https://github.com/winedarksea/AutoTS/blob/master/functional_environments.md) for a more detailed guide to features!
 
 # How to Contribute:
 * Give feedback on where you find the documentation confusing
@@ -66,3 +69,7 @@ validation_results = model.validation_results.model_results
 	* Report errors and request features by adding Issues on GitHub
 	* Posting the top model templates for your data (to help improve the starting templates)
 * And, of course, contributing to the codebase directly on GitHub!
+
+
+*Also known as Project CATS*
+CATS = Catlin's Automated Time Series

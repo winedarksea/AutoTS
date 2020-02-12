@@ -1,6 +1,6 @@
 # Functional Environments
 
-### AutoTS Version 0.0.3 and 0.0.4 Date: Jan 11, 2020
+### AutoTS Version 0.0.3, 0.0.4 and 0.1.0 Date: Feb 12, 2020
 Same as 0.0.2
 
 ### AutoTS Version 0.0.2 Date: Jan 11, 2020

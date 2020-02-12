@@ -12,6 +12,7 @@
 'Detrend' transformation is still buggy (can't convert to Series)
 Possible error where first template model is invalid, 'smape_weighted' doesn't exist error
 raise AttributeError(("Model String '{}' not recognized").format(model)) -> turn to an allowable exception with a printed warning
+Holiday not working in ARIMA, RollingRegression
 
 # To-Do
 * Na Tolerance for test in simple_train_test_split
@@ -22,7 +23,6 @@ raise AttributeError(("Model String '{}' not recognized").format(model)) -> turn
 * Better point to probabilistic (uncertainty of naive last-value forecast) - linear reg of abs error of samples - simulations
 * Better X_maker:
 	* use feature selection on TSFresh features - autocorrelation lag n, fft/cwt coefficients (abs), abs_energy
-	* Holiday not working
 	* date part and age/expanding regressors
 * Get Tsfresh working with small dataset (short, 2 columns) (check feature importance again)
 * Recombine best two of each model parameters, if two or more present (plus option to disable this)
