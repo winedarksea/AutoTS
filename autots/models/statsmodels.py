@@ -484,10 +484,6 @@ class UnobservedComponents(ModelObject):
             df (pandas.DataFrame): Datetime Indexed 
         """
         df = self.basic_profile(df)
-        if self.verbose > 1:
-            self.verbose = True
-        else:
-            self.verbose = False
         self.df_train = df
         
         if self.regression_type == 'Holiday':
@@ -530,14 +526,14 @@ class UnobservedComponents(ModelObject):
                                                    level = self.level, trend = self.trend,cycle=self.cycle, 
                                                    damped_cycle=self.damped_cycle,irregular=self.irregular,
                                                    stochastic_cycle=self.stochastic_cycle, stochastic_level=self.stochastic_level,
-                                                   stochastic_trend = self.stochastic_trend).fit(disp = self.verbose)
+                                                   stochastic_trend = self.stochastic_trend).fit(disp = self.verbose_bool)
                     maPred = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
                 else:
                     maModel = UnobservedComponents(current_series, freq = self.frequency, 
                                                    level = self.level, trend = self.trend,cycle=self.cycle, 
                                                    damped_cycle=self.damped_cycle,irregular=self.irregular,
                                                    stochastic_cycle=self.stochastic_cycle, stochastic_level=self.stochastic_level,
-                                                   stochastic_trend = self.stochastic_trend).fit(disp = self.verbose)
+                                                   stochastic_trend = self.stochastic_trend).fit(disp = self.verbose_bool)
                     maPred = maModel.predict(start=test_index[0], end=test_index[-1])
             except Exception:
                 maPred = pd.Series((np.zeros((forecast_length,))), index = test_index)
@@ -775,10 +771,6 @@ class VECM(ModelObject):
             df (pandas.DataFrame): Datetime Indexed 
         """
         df = self.basic_profile(df)
-        if self.verbose > 1:
-            self.verbose = True
-        else:
-            self.verbose = False
         self.df_train = df
         
         if self.regression_type == 'Holiday':
@@ -905,11 +897,6 @@ class VARMAX(ModelObject):
         
         self.df_train = df
         
-        if self.verbose > 1:
-            self.verbose = True
-        else:
-            self.verbose = False
-        
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -930,7 +917,7 @@ class VARMAX(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         from statsmodels.tsa.statespace.varmax import VARMAX
 
-        maModel = VARMAX(self.df_train, freq = self.frequency, order = self.order, trend = self.trend).fit(disp = self.verbose)
+        maModel = VARMAX(self.df_train, freq = self.frequency, order = self.order, trend = self.trend).fit(disp = self.verbose_bool)
         forecast = maModel.predict(start=test_index[0], end=test_index[-1])
         
         if just_point_forecast:

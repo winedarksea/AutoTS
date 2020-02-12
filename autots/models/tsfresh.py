@@ -1,7 +1,7 @@
 """
 tsfresh - automated feature extraction
 
-n_jobs>1 causes Windows issues, sometimes
+n_jobs>1 causes Windows issues, sometimes maybe
 """
 
 import datetime
@@ -19,8 +19,8 @@ else:
     _has_tsfresh = True
 
 
-class RandomForestRolling(ModelObject):
-    """Simple regression-framed approach to forecasting using sklearn
+class TsfreshRegressor(ModelObject):
+    """Sklearn + TSFresh feature generation
 
     Args:
         name (str): String to identify class
@@ -30,20 +30,15 @@ class RandomForestRolling(ModelObject):
         regression_type (str): type of regression (None, 'User')
 
     """
-    def __init__(self, name: str = "RandomForestRolling", frequency: str = 'infer', 
+    def __init__(self, name: str = "TsfreshRegressor", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, regression_type: str = None, holiday_country: str = 'US',
-                 verbose: int = 0, random_seed: int = 2020,
-                 n_estimators: int = 100, min_samples_split: float = 2, max_depth: int = None,
-                 num_subsamples: int = 10):
+                 verbose: int = 0, random_seed: int = 2020
+                 ):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              regression_type = regression_type, 
                              holiday_country = holiday_country, 
                              random_seed = random_seed, verbose = verbose)
-        self.n_estimators = n_estimators
-        self.max_depth = max_depth
-        self.min_samples_split = min_samples_split
-        self.num_subsamples = num_subsamples
-        
+
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
@@ -77,56 +72,110 @@ class RandomForestRolling(ModelObject):
         # num_subsamples = 10
         predictStartTime = datetime.datetime.now()
         
-        date_col_name = df_train.index.name
-        row_count = int(np.floor((len(df_train.index)-1)/num_subsamples))
-        X = pd.DataFrame()
-        Y = pd.DataFrame()
-        for start in range(0, df_train.shape[0]-row_count, row_count):
-            df_subset = df_train.iloc[start:start + row_count]            
-            tsfresh_long = df_subset.reset_index().melt(id_vars = date_col_name, var_name = 'series_id', value_name = 'value')
-            tsfresh_long = tsfresh_long.fillna(method = 'ffill').fillna(method = 'bfill')
-            if verbose > 0:
-                extracted_features = extract_features(tsfresh_long, column_id="series_id", column_sort=date_col_name, column_value = 'value', default_fc_parameters=MinimalFCParameters(), n_jobs=1) # MinimalFCParameters, EfficientFCParameters
-            else:
-                extracted_features = extract_features(tsfresh_long, column_id="series_id", column_sort=date_col_name, column_value = 'value', disable_progressbar = True,  default_fc_parameters=MinimalFCParameters(), n_jobs=1)        
-            a = extracted_features.to_numpy().flatten()
-            X = pd.concat([X, pd.DataFrame(a.reshape(-1, len(a)))],axis = 0)
-            Y = pd.concat([Y, pd.DataFrame(df_train.iloc[start+row_count]).transpose()], axis = 0)
-        endTime = datetime.datetime.now()
+        from tsfresh import extract_features
+        from tsfresh.utilities.dataframe_functions import make_forecasting_frame
+        from sklearn.ensemble import AdaBoostRegressor
+        from tsfresh.utilities.dataframe_functions import impute as tsfresh_impute
+        from tsfresh.feature_extraction import EfficientFCParameters, MinimalFCParameters
+
         
-        X =  X.dropna(how='any', axis = 1)
-        Y = Y.fillna(method = 'ffill').fillna(method = 'bfill')
+        max_timeshift = 10
+        self.regression_model = 'Adaboost'
+        feature_selection = 'Variance'
+        
+        sktraindata = self.df_train.copy()
+        
+        X = pd.DataFrame()
+        y = pd.DataFrame()
+        for column in sktraindata.columns:
+            df_shift, current_y = make_forecasting_frame(sktraindata[column], kind="time_series", max_timeshift=max_timeshift, rolling_direction=1)
+            # disable_progressbar = True MinimalFCParameters EfficientFCParameters
+            current_X = extract_features(df_shift, column_id="id", column_sort="time", column_value="value", impute_function=tsfresh_impute,
+                     show_warnings=False, n_jobs=1) # default_fc_parameters=MinimalFCParameters(),
+            current_X["feature_last_value"] = current_y.shift(1)
+            current_X.rename(columns=lambda x: str(column) + '_' + x)
+            
+            X = pd.concat([X, current_X],axis = 1)
+            y = pd.concat([y, current_y],axis = 1)
+        # drop constant features
+        X = X.loc[:, current_X.apply(pd.Series.nunique) != 1]
+        
+        if feature_selection == 'Variance':
+            from sklearn.feature_selection import VarianceThreshold
+            sel = VarianceThreshold(threshold=(0.15))
+            X = sel.fit_transform(X)
+        if feature_selection == 'Percentile':
+            from sklearn.feature_selection import SelectPercentile, chi2
+            X = SelectPercentile(chi2, percentile=20).fit_transform(X, y[y.columns[0]])
+        if feature_selection == 'DecisionTree':
+            from sklearn.tree import DecisionTreeRegressor
+            from sklearn.feature_selection import SelectFromModel
+            clf = DecisionTreeRegressor(random_state= self.random_seed)
+            clf = clf.fit(X, y)
+            model = SelectFromModel(clf, prefit=True)
+            X = model.transform(X)
+        if feature_selection == 'Lasso':
+            from sklearn.linear_model import MultiTaskLasso
+            from sklearn.feature_selection import SelectFromModel
+            clf = MultiTaskLasso(random_state= self.random_seed)
+            clf = clf.fit(X, y)
+            model = SelectFromModel(clf, prefit=True)
+            X = model.transform(X)
+            
+            
+        # Drop first line
+        X = X.iloc[1:, ]
+        y = y.iloc[1: ]
+
+        y = y.fillna(method = 'ffill').fillna(method = 'bfill')
         
         index = self.create_forecast_index(forecast_length=forecast_length)
-        if len(preord_regressor) == 0:
-            self.regression_type = 'None'
+
+        if self.regression_model == 'ElasticNet':
+            from sklearn.linear_model import MultiTaskElasticNet
+            regr = MultiTaskElasticNet(alpha = 1.0, random_state= self.random_seed)
+        elif self.regression_model == 'DecisionTree':
+            from sklearn.tree import DecisionTreeRegressor
+            regr = DecisionTreeRegressor(random_state= self.random_seed)
+        elif self.regression_model == 'MLP':
+            from sklearn.neural_network import MLPRegressor
+            #relu/tanh lbfgs/adam layer_sizes (100) (10)
+            regr = MLPRegressor(hidden_layer_sizes=(10, 25, 10),verbose = self.verbose_bool, max_iter = 200,
+                  activation='tanh', solver='lbfgs', random_state= self.random_seed)
+        elif self.regression_model == 'KNN':
+            from sklearn.multioutput import MultiOutputRegressor
+            from sklearn.neighbors import KNeighborsRegressor
+            regr = MultiOutputRegressor(KNeighborsRegressor(random_state=self.random_seed))
+        elif self.regression_model == 'Adaboost':
+            from sklearn.multioutput import MultiOutputRegressor
+            from sklearn.ensemble import AdaBoostRegressor
+            regr = MultiOutputRegressor(AdaBoostRegressor(n_estimators = 200, random_state=self.random_seed))
+        else:
+            self.regression_model = 'RandomForest'
+            from sklearn.ensemble import RandomForestRegressor
+            regr = RandomForestRegressor(random_state= self.random_seed, n_estimators=1000, verbose = self.verbose)
         
-        from sklearn.ensemble import RandomForestRegressor
-        
-        if self.regression_type == 'User':
-            X = pd.concat([X, self.regressor_train], axis = 1)
-            # complete_regressor = pd.concat([self.regressor_train, preord_regressor], axis = 0)
-        
-        regr = RandomForestRegressor(random_state= self.random_seed, n_estimators=self.n_estimators, verbose = self.verbose)
-        regr.fit(X, Y)
+        regr.fit(X, y)
         
         combined_index = (self.df_train.index.append(index))
         forecast = pd.DataFrame()
-        sktraindata = df_train.copy()
+        sktraindata.columns = [x for x in range(len(sktraindata.columns))]
+        
         for x in range(forecast_length):
+            x_dat = pd.DataFrame()
+            y_dat = pd.DataFrame()
+            for column in sktraindata.columns:
+                df_shift, current_y = make_forecasting_frame(sktraindata.tail(max_timeshift)[column], kind="time_series", max_timeshift=max_timeshift, rolling_direction=0)
+                # disable_progressbar = True MinimalFCParameters EfficientFCParameters
+                current_X = extract_features(df_shift, column_id="id", column_sort="time", column_value="value", impute_function=tsfresh_impute,
+                         show_warnings=False, n_jobs=1) # default_fc_parameters=MinimalFCParameters(),
+                current_X["feature_last_value"] = current_y.shift(1)
+                current_X.rename(columns=lambda x: str(column) + '_' + x)
+                
+                x_dat = pd.concat([x_dat, current_X],axis = 1)
+                y_dat = pd.concat([y_dat, current_y],axis = 1)
             
-            tsfresh_long = sktraindata.tail(row_count).reset_index().melt(id_vars = date_col_name, var_name = 'series_id', value_name = 'value')
-            tsfresh_long = tsfresh_long.fillna(method = 'ffill').fillna(method = 'bfill')
-            if verbose > 0:
-                extracted_features = extract_features(tsfresh_long, column_id="series_id", column_sort=date_col_name, column_value = 'value', default_fc_parameters=MinimalFCParameters(), n_jobs=1) # MinimalFCParameters EfficientFCParameters
-            else:
-                extracted_features = extract_features(tsfresh_long, column_id="series_id", column_sort=date_col_name, column_value = 'value', disable_progressbar = True,  default_fc_parameters=MinimalFCParameters(), n_jobs=1)        
-            a = extracted_features.to_numpy().flatten()
-            df = pd.DataFrame(a.reshape(-1, len(a))).fillna(0)
-            if self.regression_type == 'User':
-                df = pd.concat([df, preord_regressor.iloc[x]], axis = 1)
-            df = df[X.columns]
-            rfPred =  pd.DataFrame(regr.predict(df.tail(1).values))
+            rfPred =  pd.DataFrame(regr.predict(x_dat.tail(1).values))
         
             forecast = pd.concat([forecast, rfPred], axis = 0, ignore_index = True)
             sktraindata = pd.concat([sktraindata, rfPred], axis = 0, ignore_index = True)
@@ -159,29 +208,14 @@ class RandomForestRolling(ModelObject):
         
         large p,d,q can be very slow (a p of 30 can take hours, whereas 5 takes seconds)
         """
-        n_estimators_choice = np.random.choice(a = [100, 1000], size = 1, p = [0.2, 0.8]).item()
-        max_depth_choice = np.random.choice(a = [None, 5, 10], size = 1, p = [0.8, 0.1, 0.1]).item()
-        regression_choice = np.random.choice(a=['None','User'], size = 1, p = [0.7, 0.3]).item()
 
-        parameter_dict = {
-                        'n_estimators': 1000,
-                        'max_depth': None,
-                        'min_samples_split': 2,
-                        'num_subsamples': 10,
-                        'regression_type': 'None'
-                        }
+        parameter_dict = {}
         return parameter_dict
     
     def get_params(self):
         """Return dict of current parameters
         """
-        parameter_dict = {
-                        'n_estimators': self.n_estimators,
-                        'max_depth': self.max_depth,
-                        'min_samples_split': self.min_samples_split,
-                        'num_subsamples': self.num_subsamples,
-                        'regression_type': self.regression_type
-                        }
+        parameter_dict = {}
         return parameter_dict
 
 

@@ -37,6 +37,7 @@ class ModelObject(object):
         self.holiday_country = holiday_country
         self.random_seed = random_seed
         self.verbose = verbose
+        self.verbose_bool = True if self.verbose > 1 else False
     
     def __repr__(self):
         return 'ModelObject of ' + self.name
@@ -163,10 +164,6 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     
     return df_forecast
 
-ModelNames = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
-              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
-# ModelNames = ['RollingRegression']
 def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US', 
                  startTimeStamps = None,
@@ -277,7 +274,7 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
         return model
     
     else:
-        raise AttributeError("Model String not found in ModelMonster")
+        raise AttributeError(("Model String '{}' not a recognized model type").format(model))
 
 
 class TemplateEvalObject(object):
@@ -454,14 +451,14 @@ def TemplateWizard(template, df_train, df_test, weights,
     # template = unpack_ensemble_models(template, template_cols, keep_ensemble = False)
     
     for index in template.index:
-        current_template = template.loc[index]
-        model_str = current_template['Model']
-        parameter_dict = json.loads(current_template['ModelParameters'])
-        transformation_dict = json.loads(current_template['TransformationParameters'])
-        ensemble_input = current_template['Ensemble']
-        current_template = pd.DataFrame(current_template).transpose()
-        template_result.model_count += 1
         try:
+            current_template = template.loc[index]
+            model_str = current_template['Model']
+            parameter_dict = json.loads(current_template['ModelParameters'])
+            transformation_dict = json.loads(current_template['TransformationParameters'])
+            ensemble_input = current_template['Ensemble']
+            current_template = pd.DataFrame(current_template).transpose()
+            template_result.model_count += 1
             df_forecast = PredictWitch(current_template, df_train = df_train, forecast_length=forecast_length,frequency=frequency, 
                                           prediction_interval=prediction_interval, 
                                           no_negatives=no_negatives,
@@ -535,7 +532,9 @@ def TemplateWizard(template, df_train, df_test, weights,
 
 
 from autots.tools.transform import RandomTransform
-def RandomTemplate(n: int = 10):
+def RandomTemplate(n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
+              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
+              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']):
     """"
     Returns a template dataframe of randomly generated transformations, models, and hyperparameters
     
@@ -546,7 +545,7 @@ def RandomTemplate(n: int = 10):
     template = pd.DataFrame()
     counter = 0
     while (len(template.index) < n):
-        model_str = np.random.choice(ModelNames)
+        model_str = np.random.choice(model_list)
         param_dict = ModelMonster(model_str).get_new_params()
         trans_dict = RandomTransform()
         row = pd.DataFrame({
@@ -608,7 +607,7 @@ def NewGeneticTemplate(model_results, submitted_parameters, sort_column: str = "
                 }, index = [0])
         new_template = pd.concat([new_template, new_row], axis = 0, ignore_index = True, sort = False)
 
-    # recombination of transforms across models
+    # recombination of transforms across models by shifting
     recombination = sorted_results.tail(len(sorted_results.index) - 1).copy()
     recombination['TransformationParameters'] = sorted_results['TransformationParameters'].shift(1).tail(len(sorted_results.index) - 1)
     new_template = pd.concat([new_template, recombination.head(top_n)[template_cols]], axis = 0, ignore_index = True, sort = False)

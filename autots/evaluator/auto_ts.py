@@ -33,7 +33,7 @@ class AutoTS(object):
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         weighted (bool): if True, considers series weights passed through to .fit(). Weights affect metrics and subsetting.
         ensemble (bool): whether or not to include ensemble models in evaluation
-        initial_template (str): 'Random' - randomly generates starting template, 'Default' uses template included in package, 'Default+Random' - both of previous. Also can be overriden with self.import_template()
+        initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
         figures (bool): Not yet implemented
         random_seed (int): random seed allows (slightly) more consistent results.
         holiday_country (str): passed through to Holidays package for some models.
@@ -42,6 +42,7 @@ class AutoTS(object):
         metric_weighting (dict): weights to assign to metrics, effecting how the ranking score is generated.
         drop_most_recent (int): option to drop n most recent data points. Useful, say, for monthly sales data where the current (unfinished) month is included.
         drop_data_older_than_periods (int): take only the n most recent timestamps
+        model_list (list): list of names of model objects to use
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation
         validation_method (str): 'even' or 'backwards' where backwards is better for shorter training sets
@@ -60,7 +61,7 @@ class AutoTS(object):
         no_negatives: bool = False,
         weighted: bool = False,
         ensemble: bool = True,
-        initial_template: str = 'Random',
+        initial_template: str = 'General+Random',
         figures: bool = False,
         random_seed: int = 425,
         holiday_country: str = 'US',
@@ -70,6 +71,9 @@ class AutoTS(object):
             'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0},
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
+        model_list: list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
+              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
+              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor'],
         num_validations: int = 3,
         models_to_validate: int = 10,
         validation_method: str = 'even',
@@ -90,6 +94,7 @@ class AutoTS(object):
         self.metric_weighting = metric_weighting
         self.drop_most_recent = drop_most_recent
         self.drop_data_older_than_periods = drop_data_older_than_periods
+        self.model_list = model_list
         self.num_validations = num_validations
         self.models_to_validate = models_to_validate
         self.validation_method = validation_method
@@ -97,14 +102,35 @@ class AutoTS(object):
         self.verbose = verbose
         
         if initial_template.lower() == 'random':
-            self.initial_template = RandomTemplate(40)
-        else: 
+            self.initial_template = RandomTemplate(40, model_list = self.model_list)
+        elif initial_template.lower() == 'general':
+            from autots.templates.general import general_template
+            self.initial_template = general_template
+        elif initial_template.lower() == 'general+random':
+            from autots.templates.general import general_template
+            random_template = RandomTemplate(40, model_list = self.model_list)
+            self.initial_template = pd.concat([general_template, random_template], axis = 0).drop_duplicates()
+        else:
             print("Input initial_template either unrecognized or not yet implemented. Using Random.")
             self.initial_template = RandomTemplate(40)
+        
+        self.initial_template = self.initial_template[self.initial_template['Model'].isin(self.model_list)]
+        
+        if len(self.initial_template.index) == 0:
+            raise ValueError("No models in template! Adjust initial_template or model_list")
+            
         self.best_model = pd.DataFrame()
         self.regressor_used = False
         self.template_cols = ['Model','ModelParameters','TransformationParameters','Ensemble']
-        
+    
+    def __repr__(self):
+        if self.best_model.empty == True:
+            return "Uninitiated AutoTS object"
+        else:
+            try:
+                return f"Initiated AutoTS object with best model: \n{self.best_model['Model'].iloc[0]}\n{self.best_model['TransformationParameters'].iloc[0]}\n{self.best_model['ModelParameters'].iloc[0]}"
+            except:
+                return "Initiated AutoTS object"
     def fit(self, df, date_col: str = 'datetime', value_col: str = 'value', id_col: str = 'series_id', preord_regressor = [], weights: dict = {}, result_file: str = None):
         """
         Train algorithm given data supplied 
@@ -330,7 +356,7 @@ class AutoTS(object):
         
         
         if num_validations > 0:
-            if validation_method == 'backwards':
+            if str(validation_method).lower() in ['backwards', 'back', 'backward']:
                 for y in range(num_validations):
                     if verbose > 0:
                         print("Validation Round: {}".format(str(y)))
@@ -374,7 +400,7 @@ class AutoTS(object):
                     if verbose > 0:
                         print("Validation Round: {}".format(str(y)))
                     # /num_validations biases it towards the last segment (which I prefer), /(num_validations + 1) would remove that
-                    validation_size = int(np.floor((len(df_wide_numeric.index) - forecast_length)/num_validations))
+                    validation_size = int(np.floor((len(df_wide_numeric.index) - forecast_length)/(num_validations + 1)))
                     current_slice = df_wide_numeric.head(validation_size * (y+1) + forecast_length)
                     # subset series (if used) and take a new train/test split
                     df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = random_seed)
@@ -481,19 +507,22 @@ class AutoTS(object):
         else:
             return df_forecast
         
-    def export_template(self, filename, models: str = 'best', n: int = 1):
+    def export_template(self, filename, models: str = 'best', n: int = 1, max_per_model_class: int = None):
         """"
         
         Args:
             output_format = 'csv' or 'json' (from filename)
             models (str): 'best' or 'all'
             n (int): if models = 'best', how many n-best to export
+            max_per_model_class (int): if models = 'best', the max number of each model class to include in template
         """
         if models == 'all':
             export_template = self.initial_results[self.template_cols]
         if models == 'best':
-            self.validation_results.model_results
-            export_template = self.validation_results.model_results.nsmallest(n, columns = ['Score'])[self.template_cols]
+            export_template = self.validation_results.model_results
+            if str(max_per_model_class).isdigit():
+                export_template = export_template.sort_values('Score', ascending=True).groupby('Model').head(max_per_model_class).reset_index()
+            export_template = export_template.nsmallest(n, columns = ['Score'])[self.template_cols]
         try:
             if '.csv' in filename:
                 return export_template.to_csv(filename, index = False)
@@ -522,7 +551,7 @@ class AutoTS(object):
         if method.lower() == 'add on':
             self.initial_template = self.initial_template.merge(import_template, on = self.initial_template.columns.intersection(import_template.columns).to_list())
             self.initial_template = self.initial_template.drop_duplicates(subset = self.template_cols)
-        if method.lower() == 'only':
+        if method.lower() == 'only' or  method.lower() == 'user only':
             self.initial_template = import_template
         
         return self
