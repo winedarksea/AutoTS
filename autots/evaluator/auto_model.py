@@ -183,9 +183,12 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
         from autots.models.basics import LastValueNaive
         return LastValueNaive(frequency = frequency, prediction_interval = prediction_interval)
     
-    if model == 'MedValueNaive':
-        from autots.models.basics import MedValueNaive
-        return MedValueNaive(frequency = frequency, prediction_interval = prediction_interval)
+    if model == 'AverageValueNaive':
+        from autots.models.basics import AverageValueNaive
+        if parameters == {}:
+            return AverageValueNaive(frequency = frequency, prediction_interval = prediction_interval)
+        else:
+            return AverageValueNaive(frequency = frequency, prediction_interval = prediction_interval, method = parameters['method'])
     
     if model == 'GLS':
         from autots.models.statsmodels import GLS
@@ -543,7 +546,7 @@ def TemplateWizard(template, df_train, df_test, weights,
 
 
 from autots.tools.transform import RandomTransform
-def RandomTemplate(n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
+def RandomTemplate(n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
               'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
               'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']):
     """"

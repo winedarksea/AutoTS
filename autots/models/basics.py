@@ -144,7 +144,7 @@ class LastValueNaive(ModelObject):
         """
         return {}
     
-class MedValueNaive(ModelObject):
+class AverageValueNaive(ModelObject):
     """Naive forecasting predicting a dataframe of the series' median values
     
     Args:
@@ -153,11 +153,14 @@ class MedValueNaive(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
 
     """
-    def __init__(self, name: str = "MedValueNaive", frequency: str = 'infer', 
+    def __init__(self, name: str = "AverageValueNaive", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US',
-                 random_seed: int = 2020):
+                 random_seed: int = 2020, verbose: int = 0,
+                 method: str = 'Median'):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             holiday_country = holiday_country, random_seed = random_seed)
+                             holiday_country = holiday_country, random_seed = random_seed,
+                             verbose = verbose)
+        self.method = method
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
@@ -165,7 +168,12 @@ class MedValueNaive(ModelObject):
             df (pandas.DataFrame): Datetime Indexed 
         """
         df = self.basic_profile(df)
-        self.median_values = df.median(axis = 0).values
+        if str(self.method).lower() == 'median':
+            self.average_values = df.median(axis = 0).values
+        if str(self.method).lower() == 'mean':
+            self.average_values = df.mean(axis = 0).values
+        if str(self.method).lower() == 'mode':
+            self.average_values = df.mode(axis = 0).iloc[0].fillna(df.median(axis=0)).values
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -182,7 +190,7 @@ class MedValueNaive(ModelObject):
             if just_point_forecast == True, a dataframe of point forecasts
         """
         predictStartTime = datetime.datetime.now()
-        df = pd.DataFrame(np.tile(self.median_values, (forecast_length,1)), columns = self.column_names, index = self.create_forecast_index(forecast_length=forecast_length))
+        df = pd.DataFrame(np.tile(self.average_values, (forecast_length,1)), columns = self.column_names, index = self.create_forecast_index(forecast_length=forecast_length))
         if just_point_forecast:
             return df
         else:
@@ -203,9 +211,14 @@ class MedValueNaive(ModelObject):
     def get_new_params(self,method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
-        return {}
+        method_choice = np.random.choice(a=['Median', 'Mean', 'Mode'], size = 1, p = [0.3, 0.6, 0.1]).item()
+        return {
+                'method': method_choice
+                }
     
     def get_params(self):
         """Return dict of current parameters
         """
-        return {}
+        return {
+                'method' : self.method
+                }

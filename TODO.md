@@ -34,7 +34,6 @@ Holiday not (always) working
 * Inf appearing in MAE and RMSE (possibly all NaN in test)
 * Relative/Absolute Imports and reduce package reloading
 * MedianValueNaive -> AverageNaive with parameters for Mean/Median/Mode
-* Weekly sample data (EIA)
 * Format of Regressor - allow multiple input to at least sklearn models
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
 * Handle categorical forecasts where forecast leaves range of known values, then add to upper/lower forecasts
@@ -78,6 +77,7 @@ Holiday not (always) working
 	* potentially a method = 'deep' to get_new_params used after n generations
 	* no unlock, but simply very low-probability options in get_new_params
 * Exempt or reduce slow models from unnecessary runs, particularly with different transformations
+* 'Slow' and 'Fast' model lists
 
 #### New Ensembles:
 	best 3 (unique algorithms not just variations of same)

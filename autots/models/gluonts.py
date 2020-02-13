@@ -77,7 +77,7 @@ class GluonTS(ModelObject):
         if self.frequency == "MS" or self.frequency == "1MS":
             gluon_freq = "1M"
         else:
-            gluon_freq = self.frequency
+            gluon_freq = str(self.frequency).split('-')[0]
         
         # Context Length is deal with in Transformations, this takes that, or a fraction of that
         if (str(self.context_length).lower() == 'full'):

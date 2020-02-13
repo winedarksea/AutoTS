@@ -16,8 +16,10 @@ from autots.datasets import load_toy_daily
 from autots.datasets import load_toy_hourly
 from autots.datasets import load_toy_monthly
 from autots.datasets import load_toy_yearly
+from autots.datasets import load_toy_weekly
 
-df_long = load_toy_monthly()
+
+df_long = load_toy_weekly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -28,9 +30,9 @@ weights_daily = {'categoricalDayofWeek': 5,
 
 weights_hourly = {'traffic_volume': 10}
 
-model_list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
+model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
               'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
-              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
+              'UnobservedComponents', 'VECM', 'DynamicFactor'] # 'VARMAX',
 # model_list = ['GluonTS']
 
 from autots import AutoTS

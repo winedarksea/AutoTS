@@ -71,7 +71,7 @@ class AutoTS(object):
             'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0},
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
-        model_list: list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
+        model_list: list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
               'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
               'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor'],
         num_validations: int = 3,
