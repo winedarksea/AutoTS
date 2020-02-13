@@ -126,8 +126,12 @@ print("Overwrite template is: {}".format(str(model.initial_template)))
 `pip install autots['additional']`
 #### Optional Requirements
 	fbprophet
-	fredapi (example datasets)
+	fredapi
 	tsfresh
+	mxnet==1.4.1 (mxnet-mkl, mxnet-cu91, mxnet-cu92mkl, etc.)
+	gluonts
+
+If using Anaconda, fbprophet is easier to install with `conda install -c conda-forge fbprophet`
 
 Check out `functional_environments.md` for specific versions tested to work.
 

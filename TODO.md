@@ -50,6 +50,7 @@ Holiday not (always) working
 * Because I'm a biologist, incorporate more genetics and such. Also as a neuro person, there must be a way to fit networks in...
 * Improved verbosity controls and options. Replace most 'print' with logging.
 * Export as simpler code (as TPOT)
+* Option to import either long or wide data
 * set up the lower-level API to be usable as pipelines
 	* allow stand-alone pipeline for transformation with format for export data format to other package requirements (use AutoTS just for preprocessing)
 * AIC metric, other accuracy metrics

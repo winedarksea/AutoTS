@@ -239,7 +239,7 @@ class GluonTS(ModelObject):
         """Returns dict of new parameters for parameter tuning
         """
         gluon_model_choice = np.random.choice(a=['DeepAR', 'NPTS', 'DeepState', 'WaveNet','DeepFactor', 'Transformer','SFF', 'MQCNN'], size = 1, p = [0.2, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1]).item()
-        epochs_choice = np.random.choice(a=[20, 40, 80, 150], size = 1, p = [0.85, 0.08, 0.05, 0.02]).item()
+        epochs_choice = np.random.choice(a=[20, 40, 80, 150], size = 1, p = [0.58, 0.35, 0.05, 0.02]).item()
         learning_rate_choice = np.random.choice(a=[0.01, 0.001, 0.0001], size = 1, p = [0.3, 0.6, 0.1]).item()
         context_length_choice = np.random.choice(a=['full','2ForecastLength'], size = 1, p = [0.9, 0.1]).item()
         return {
