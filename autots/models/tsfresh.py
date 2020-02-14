@@ -99,6 +99,9 @@ class TsfreshRegressor(ModelObject):
             y = pd.concat([y, current_y],axis = 1)
         # drop constant features
         X = X.loc[:, current_X.apply(pd.Series.nunique) != 1]
+        X = X.replace([np.inf, -np.inf], np.nan)
+        X = X.fillna(0)
+        y = y.fillna(method = 'ffill').fillna(method = 'bfill')
         
         if feature_selection == 'Variance':
             from sklearn.feature_selection import VarianceThreshold
@@ -110,17 +113,30 @@ class TsfreshRegressor(ModelObject):
         if feature_selection == 'DecisionTree':
             from sklearn.tree import DecisionTreeRegressor
             from sklearn.feature_selection import SelectFromModel
-            clf = DecisionTreeRegressor(random_state= self.random_seed)
+            clf = DecisionTreeRegressor()
             clf = clf.fit(X, y)
             model = SelectFromModel(clf, prefit=True)
+            
             X = model.transform(X)
         if feature_selection == 'Lasso':
             from sklearn.linear_model import MultiTaskLasso
             from sklearn.feature_selection import SelectFromModel
-            clf = MultiTaskLasso(random_state= self.random_seed)
+            clf = MultiTaskLasso(max_iter = 2000)
             clf = clf.fit(X, y)
             model = SelectFromModel(clf, prefit=True)
+            
             X = model.transform(X)
+         """
+         decisionTreeList = X.columns[model.get_support()]
+         LassoList = X.columns[model.get_support()]
+         
+         feature_list = decisionTreeList.to_list()
+         set([x for x in feature_list if feature_list.count(x) > 1])
+         from collections import Counter
+         repeat_features = Counter(feature_list)
+         repeat_features = repeat_features.most_common(20)
+         """
+         
             
             
         # Drop first line
