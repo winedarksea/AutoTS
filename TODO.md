@@ -33,7 +33,6 @@ Holiday not (always) working
 * 'Probabilistic' option to only use models with 'proper' probabilistic outputs
 * Inf appearing in MAE and RMSE (possibly all NaN in test)
 * Relative/Absolute Imports and reduce package reloading
-* MedianValueNaive -> AverageNaive with parameters for Mean/Median/Mode
 * Format of Regressor - allow multiple input to at least sklearn models
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
 * Handle categorical forecasts where forecast leaves range of known values, then add to upper/lower forecasts
