@@ -19,7 +19,7 @@ else:
     _has_tsfresh = True
 
 
-class TsfreshRegressor(ModelObject):
+class TSFreshRegressor(ModelObject):
     """Sklearn + TSFresh feature generation
 
     Args:
@@ -30,14 +30,19 @@ class TsfreshRegressor(ModelObject):
         regression_type (str): type of regression (None, 'User')
 
     """
-    def __init__(self, name: str = "TsfreshRegressor", frequency: str = 'infer', 
+    def __init__(self, name: str = "TSFreshRegressor", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, regression_type: str = None, holiday_country: str = 'US',
-                 verbose: int = 0, random_seed: int = 2020
+                 verbose: int = 0, random_seed: int = 2020,
+                 regression_model: str = 'Adaboost',
+                 max_timeshift: int = 10, feature_selection: str = None
                  ):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              regression_type = regression_type, 
                              holiday_country = holiday_country, 
                              random_seed = random_seed, verbose = verbose)
+        self.regression_model = regression_model
+        self.max_timeshift = max_timeshift
+        self.feature_selection = feature_selection
 
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
@@ -74,14 +79,18 @@ class TsfreshRegressor(ModelObject):
         
         from tsfresh import extract_features
         from tsfresh.utilities.dataframe_functions import make_forecasting_frame
-        from sklearn.ensemble import AdaBoostRegressor
+        # from sklearn.ensemble import AdaBoostRegressor
         from tsfresh.utilities.dataframe_functions import impute as tsfresh_impute
         from tsfresh.feature_extraction import EfficientFCParameters, MinimalFCParameters
 
         
         max_timeshift = 10
-        self.regression_model = 'Adaboost'
-        feature_selection = 'Variance'
+        regression_model = 'Adaboost'
+        feature_selection = None
+        
+        max_timeshift = self.max_timeshift
+        regression_model = self.regression_model
+        feature_selection = self.feature_selection
         
         sktraindata = self.df_train.copy()
         
@@ -91,12 +100,14 @@ class TsfreshRegressor(ModelObject):
             df_shift, current_y = make_forecasting_frame(sktraindata[column], kind="time_series", max_timeshift=max_timeshift, rolling_direction=1)
             # disable_progressbar = True MinimalFCParameters EfficientFCParameters
             current_X = extract_features(df_shift, column_id="id", column_sort="time", column_value="value", impute_function=tsfresh_impute,
-                     show_warnings=False, n_jobs=1) # default_fc_parameters=MinimalFCParameters(),
+                     show_warnings=False, default_fc_parameters=EfficientFCParameters(), n_jobs=1) # 
             current_X["feature_last_value"] = current_y.shift(1)
             current_X.rename(columns=lambda x: str(column) + '_' + x)
             
             X = pd.concat([X, current_X],axis = 1)
             y = pd.concat([y, current_y],axis = 1)
+        
+        trainTSFreshFinish = datetime.datetime.now()
         # drop constant features
         X = X.loc[:, current_X.apply(pd.Series.nunique) != 1]
         X = X.replace([np.inf, -np.inf], np.nan)
@@ -106,10 +117,10 @@ class TsfreshRegressor(ModelObject):
         if feature_selection == 'Variance':
             from sklearn.feature_selection import VarianceThreshold
             sel = VarianceThreshold(threshold=(0.15))
-            X = sel.fit_transform(X)
+            X = pd.DataFrame(sel.fit_transform(X))
         if feature_selection == 'Percentile':
             from sklearn.feature_selection import SelectPercentile, chi2
-            X = SelectPercentile(chi2, percentile=20).fit_transform(X, y[y.columns[0]])
+            X = pd.DataFrame(SelectPercentile(chi2, percentile=20).fit_transform(X, y[y.columns[0]]))
         if feature_selection == 'DecisionTree':
             from sklearn.tree import DecisionTreeRegressor
             from sklearn.feature_selection import SelectFromModel
@@ -126,7 +137,8 @@ class TsfreshRegressor(ModelObject):
             model = SelectFromModel(clf, prefit=True)
             
             X = model.transform(X)
-         """
+        
+        """
          decisionTreeList = X.columns[model.get_support()]
          LassoList = X.columns[model.get_support()]
          
@@ -135,9 +147,7 @@ class TsfreshRegressor(ModelObject):
          from collections import Counter
          repeat_features = Counter(feature_list)
          repeat_features = repeat_features.most_common(20)
-         """
-         
-            
+        """
             
         # Drop first line
         X = X.iloc[1:, ]
@@ -147,27 +157,27 @@ class TsfreshRegressor(ModelObject):
         
         index = self.create_forecast_index(forecast_length=forecast_length)
 
-        if self.regression_model == 'ElasticNet':
+        if regression_model == 'ElasticNet':
             from sklearn.linear_model import MultiTaskElasticNet
             regr = MultiTaskElasticNet(alpha = 1.0, random_state= self.random_seed)
-        elif self.regression_model == 'DecisionTree':
+        elif regression_model == 'DecisionTree':
             from sklearn.tree import DecisionTreeRegressor
             regr = DecisionTreeRegressor(random_state= self.random_seed)
-        elif self.regression_model == 'MLP':
+        elif regression_model == 'MLP':
             from sklearn.neural_network import MLPRegressor
             #relu/tanh lbfgs/adam layer_sizes (100) (10)
             regr = MLPRegressor(hidden_layer_sizes=(10, 25, 10),verbose = self.verbose_bool, max_iter = 200,
                   activation='tanh', solver='lbfgs', random_state= self.random_seed)
-        elif self.regression_model == 'KNN':
+        elif regression_model == 'KNN':
             from sklearn.multioutput import MultiOutputRegressor
             from sklearn.neighbors import KNeighborsRegressor
             regr = MultiOutputRegressor(KNeighborsRegressor(random_state=self.random_seed))
-        elif self.regression_model == 'Adaboost':
+        elif regression_model == 'Adaboost':
             from sklearn.multioutput import MultiOutputRegressor
             from sklearn.ensemble import AdaBoostRegressor
-            regr = MultiOutputRegressor(AdaBoostRegressor(n_estimators = 200, random_state=self.random_seed))
+            regr = MultiOutputRegressor(AdaBoostRegressor(n_estimators = 200)) #, random_state=self.random_seed))
         else:
-            self.regression_model = 'RandomForest'
+            regression_model = 'RandomForest'
             from sklearn.ensemble import RandomForestRegressor
             regr = RandomForestRegressor(random_state= self.random_seed, n_estimators=1000, verbose = self.verbose)
         
@@ -181,11 +191,12 @@ class TsfreshRegressor(ModelObject):
             x_dat = pd.DataFrame()
             y_dat = pd.DataFrame()
             for column in sktraindata.columns:
-                df_shift, current_y = make_forecasting_frame(sktraindata.tail(max_timeshift)[column], kind="time_series", max_timeshift=max_timeshift, rolling_direction=0)
+                df_shift, current_y = make_forecasting_frame(sktraindata.tail(max_timeshift)[column], kind="time_series", max_timeshift=max_timeshift, rolling_direction=1)
                 # disable_progressbar = True MinimalFCParameters EfficientFCParameters
                 current_X = extract_features(df_shift, column_id="id", column_sort="time", column_value="value", impute_function=tsfresh_impute,
-                         show_warnings=False, n_jobs=1) # default_fc_parameters=MinimalFCParameters(),
+                         show_warnings=False, n_jobs=1, default_fc_parameters=EfficientFCParameters()) # default_fc_parameters=MinimalFCParameters(),
                 current_X["feature_last_value"] = current_y.shift(1)
+                
                 current_X.rename(columns=lambda x: str(column) + '_' + x)
                 
                 x_dat = pd.concat([x_dat, current_X],axis = 1)
@@ -221,18 +232,31 @@ class TsfreshRegressor(ModelObject):
         
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
-        
-        large p,d,q can be very slow (a p of 30 can take hours, whereas 5 takes seconds)
         """
-
-        parameter_dict = {}
+        max_timeshift_choice = np.random.choice(a = [5, 10, 20], size = 1, p = [0.01, 0.98,0.01]).item()
+        regression_model_choice = np.random.choice(a = ['RandomForest','ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost'], size = 1, p = [0.02, 0.01, 0.01, 0.05, 0.01, 0.9]).item()
+        feature_selection_choice = None
+        parameter_dict = {
+                'max_timeshift': max_timeshift_choice,
+                'regression_model': regression_model_choice,
+                'feature_selection': feature_selection_choice
+                }
         return parameter_dict
     
     def get_params(self):
         """Return dict of current parameters
         """
-        parameter_dict = {}
+        parameter_dict = {
+                'max_timeshift': self.max_timeshift,
+                'regression_model': self.regression_model,
+                'feature_selection': self.feature_selection
+                }
         return parameter_dict
 
 
-
+"""
+model = TSFreshRegressor()
+model = model.fit(df_wide[df_wide.columns[0:2]].fillna(method='ffill').fillna(method='bfill').tail(50))
+prediction = model.predict(forecast_length = 3)
+prediction.forecast
+"""

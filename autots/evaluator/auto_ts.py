@@ -74,9 +74,7 @@ class AutoTS(object):
             'lower_mae_weighting': 0, 'upper_mae_weighting': 0, 'contour_weighting': 2},
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
-        model_list: str = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
-              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor'],
+        model_list: str = 'default',
         num_validations: int = 3,
         models_to_validate: int = 10,
         validation_method: str = 'even',
@@ -112,6 +110,10 @@ class AutoTS(object):
             self.per_timestamp_errors = True
             self.per_series_errors = True
         
+        if model_list == 'default':
+            self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
+              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
+              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
         if model_list == 'superfast':
             self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS']
         if model_list == 'fast':
@@ -125,7 +127,7 @@ class AutoTS(object):
         if model_list == 'all':
             self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
               'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
-              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
+              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor', 'TSFreshRegressor']
             
         if initial_template.lower() == 'random':
             self.initial_template = RandomTemplate(40, model_list = self.model_list)

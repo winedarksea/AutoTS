@@ -28,7 +28,7 @@ model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
               ,'UnobservedComponents', 'VECM', 'DynamicFactor'
               #,'VARMAX', 'GluonTS'
               ]
-# model_list = ['GluonTS']
+# model_list = ['TSFreshRegressor']
 
 metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
             'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0,

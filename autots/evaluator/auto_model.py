@@ -289,6 +289,14 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
                            forecast_length = forecast_length)
         return model
     
+    if model == 'TSFreshRegressor':
+        from autots.models.tsfresh import TSFreshRegressor
+        if parameters == {}:
+            model = TSFreshRegressor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        else:
+            model = TSFreshRegressor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        return model
+    
     else:
         raise AttributeError(("Model String '{}' not a recognized model type").format(model))
 
