@@ -19,9 +19,11 @@ Holiday not (always) working
 * min_allowed_train_percent into higher-level API
 * Warning/handling if lots of NaN in most recent (test) part of data
 * max_per_class to validation options
+* migrate arima_model to arima.model
 
 * Get the sphinx (google style) documentation and readthedocs.io website up
 * Better point to probabilistic (uncertainty of naive last-value forecast) - linear reg of abs error of samples - simulations
+* get_prediction for Statsmodels Statespace models to include confidence interval
 * Better X_maker:
 	* use feature selection on TSFresh features - autocorrelation lag n, fft/cwt coefficients (abs), abs_energy
 	* date part and age/expanding regressors
@@ -92,6 +94,7 @@ Holiday not (always) working
 	Seasonal Naive
 	Last Value + Drift Naive
 	Simple Decomposition forecasting
+	Statespace variant of ETS which has Confidence Intervals
 	Tensorflow Probability Structural Time Series
 	Pytorch Simple LSTM/GRU
 	Simulations
@@ -104,6 +107,7 @@ Holiday not (always) working
 	pydlm - baysesian dynamic linear
 	Isotonic regression
 	Survival Analysis
+	MarkovAutoRegression
 	TPOT if it adds multioutput functionality
 	Compressive Transformer, if they go anywhere
 
