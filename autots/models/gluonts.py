@@ -73,11 +73,8 @@ class GluonTS(ModelObject):
         
         gluon_train = df.transpose()
         self.train_index = gluon_train.index
-        # handles an error with certain pandas versions
-        if self.frequency == "MS" or self.frequency == "1MS":
-            gluon_freq = "1M"
-        else:
-            gluon_freq = str(self.frequency).split('-')[0]
+        
+        gluon_freq = str(self.frequency).split('-')[0]
         
         # Context Length is deal with in Transformations, this takes that, or a fraction of that
         if (str(self.context_length).lower() == 'full'):
