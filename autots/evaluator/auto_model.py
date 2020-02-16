@@ -4,6 +4,8 @@ import datetime
 import hashlib
 import json
 
+from autots.evaluator.metrics import PredictionEval
+
 def create_model_id(model_str: str, parameter_dict: dict = {}, transformation_dict: dict = {}):
     """
     Create a hash model ID which should be unique to the model parameters
@@ -431,6 +433,8 @@ def TemplateWizard(template, df_train, df_test, weights,
                     preord_regressor_train = [], preord_regressor_forecast = [], 
                     holiday_country: str = 'US', startTimeStamps = None,
                     random_seed: int = 2020, verbose: int = 0,
+                    per_timestamp_errors: bool = False,
+                    per_series_errors: bool = True,
                     template_cols: list = ['Model','ModelParameters','TransformationParameters','Ensemble']):
 
     """
@@ -485,8 +489,8 @@ def TemplateWizard(template, df_train, df_test, weights,
             if verbose > 0:
                 print("Model Number: {} with model {}".format(str(template_result.model_count), df_forecast.model_name))
             
-            from autots.evaluator.metrics import PredictionEval
-            model_error = PredictionEval(df_forecast, df_test, series_weights = weights)
+            
+            model_error = PredictionEval(df_forecast, df_test, series_weights = weights, per_timestamp_errors = per_timestamp_errors)
             model_id = create_model_id(df_forecast.model_name, df_forecast.model_parameters, df_forecast.transformation_parameters)
             total_runtime = df_forecast.fit_runtime + df_forecast.predict_runtime + df_forecast.transformation_runtime
             result = pd.DataFrame({
@@ -506,19 +510,21 @@ def TemplateWizard(template, df_train, df_test, weights,
             result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1)
             
             template_result.model_results = pd.concat([template_result.model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
-            temp = pd.DataFrame(model_error.per_timestamp_metrics.loc['smape']).transpose()
-            temp.index = result['ID'] 
-            template_result.model_results_per_timestamp_smape = template_result.model_results_per_timestamp_smape.append(temp)
-            temp = pd.DataFrame(model_error.per_timestamp_metrics.loc['mae']).transpose()
-            temp.index = result['ID']  
-            template_result.model_results_per_timestamp_mae = template_result.model_results_per_timestamp_mae.append(temp)
-            temp = pd.DataFrame(model_error.per_series_metrics.loc['smape']).transpose()
-            temp.index = result['ID']            
-            template_result.model_results_per_series_smape = template_result.model_results_per_series_smape.append(temp)
-            temp = pd.DataFrame(model_error.per_series_metrics.loc['mae']).transpose()
-            temp.index = result['ID']
-            template_result.model_results_per_series_mae = template_result.model_results_per_series_mae.append(temp)
-            
+            if per_timestamp_errors:
+                temp = pd.DataFrame(model_error.per_timestamp_metrics.loc['smape']).transpose()
+                temp.index = result['ID'] 
+                template_result.model_results_per_timestamp_smape = template_result.model_results_per_timestamp_smape.append(temp)
+                temp = pd.DataFrame(model_error.per_timestamp_metrics.loc['mae']).transpose()
+                temp.index = result['ID']  
+                template_result.model_results_per_timestamp_mae = template_result.model_results_per_timestamp_mae.append(temp)
+            if per_series_errors:    
+                temp = pd.DataFrame(model_error.per_series_metrics.loc['smape']).transpose()
+                temp.index = result['ID']            
+                template_result.model_results_per_series_smape = template_result.model_results_per_series_smape.append(temp)
+                temp = pd.DataFrame(model_error.per_series_metrics.loc['mae']).transpose()
+                temp.index = result['ID']
+                template_result.model_results_per_series_mae = template_result.model_results_per_series_mae.append(temp)
+                
             if ensemble:
                 template_result.forecasts_list.extend([model_id])
                 template_result.forecasts_runtime.extend([total_runtime])
@@ -527,6 +533,7 @@ def TemplateWizard(template, df_train, df_test, weights,
                 template_result.lower_forecasts.extend([df_forecast.lower_forecast])
         
         except Exception as e:
+            print('Template Eval Error: {}'.format(str(e)))
             result = pd.DataFrame({
                 'ID': create_model_id(model_str, parameter_dict, transformation_dict),
                 'Model': model_str,
@@ -634,7 +641,7 @@ def NewGeneticTemplate(model_results, submitted_parameters, sort_column: str = "
     new_template = UniqueTemplates(sorted_results, new_template, selection_cols = template_cols).head(max_results)
     return new_template
 
-def validation_aggregation(validation_results):
+def validation_aggregation(validation_results, per_timestamp_errors: bool = False, per_series_errors: bool = False):
     """
     Aggregates a TemplateEvalObject
     """
@@ -648,6 +655,9 @@ def validation_aggregation(validation_results):
                 'mae': 'mean',
                 'rmse': 'mean',
                 'containment': 'mean',
+                'lower_mae': 'mean',
+                'upper_mae': 'mean',
+                'contour': 'mean',
                 'smape_weighted': 'mean',
                 'mae_weighted': 'mean',
                 'rmse_weighted': 'mean',
@@ -658,11 +668,18 @@ def validation_aggregation(validation_results):
     validation_results.model_results = validation_results.model_results.replace([np.inf, -np.inf], np.nan)
     validation_results.model_results = validation_results.model_results.groupby(groupby_cols).agg(col_aggs)
     validation_results.model_results = validation_results.model_results.reset_index(drop = False)
-
-    validation_results.model_results_per_timestamp_smape = validation_results.model_results_per_timestamp_smape.groupby('ID').mean()
-    validation_results.model_results_per_timestamp_mae = validation_results.model_results_per_timestamp_mae.groupby('ID').mean()
-    validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.groupby('ID').mean()
-    validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.groupby('ID').mean()
+    if per_timestamp_errors:
+        try:
+            validation_results.model_results_per_timestamp_smape = validation_results.model_results_per_timestamp_smape.groupby('ID').mean()
+            validation_results.model_results_per_timestamp_mae = validation_results.model_results_per_timestamp_mae.groupby('ID').mean()
+        except KeyError:
+            raise KeyError("Per_timestamp data not available. Make sure per_timestamp_errors = True")
+    if per_series_errors:
+        try:
+            validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.groupby('ID').mean()
+            validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.groupby('ID').mean()
+        except KeyError:
+            raise KeyError("Per_timestamp data not available. Make sure per_timestamp_errors = True")
     return validation_results
 
 def generate_score(model_results, metric_weighting: dict = {}, prediction_interval: float = 0.9):
@@ -672,27 +689,46 @@ def generate_score(model_results, metric_weighting: dict = {}, prediction_interv
     try:
         smape_weighting = metric_weighting['smape_weighting']
     except:
-        smape_weighting = 9
+        smape_weighting = 1
     try:
         mae_weighting = metric_weighting['mae_weighting']
     except:
-        mae_weighting = 1
+        mae_weighting = 0
     try:
         rmse_weighting = metric_weighting['rmse_weighting']
     except:
-        rmse_weighting = 5
+        rmse_weighting = 0
     try:
         containment_weighting = metric_weighting['containment_weighting']
     except:
-        containment_weighting = 1
+        containment_weighting = 0
     try:
         runtime_weighting = metric_weighting['runtime_weighting'] * 0.1
     except:
-        runtime_weighting = 0.5
-    smape_score = model_results['smape_weighted']/model_results['smape_weighted'].min(skipna=True) # smaller better
-    rmse_score = model_results['rmse_weighted']/model_results['rmse_weighted'].min(skipna=True) # smaller better
-    mae_score = model_results['mae_weighted']/model_results['mae_weighted'].min(skipna=True) # smaller better
-    containment_score = (abs(prediction_interval - model_results['containment'])) # from 0 to 1, smaller better
-    runtime_score = model_results['TotalRuntime']/(model_results['TotalRuntime'].min(skipna=True) + datetime.timedelta(minutes = 1)) # smaller better
-    return (smape_score * smape_weighting) + (mae_score * mae_weighting) + (rmse_score * rmse_weighting) + (containment_score * containment_weighting) + (runtime_score * runtime_weighting)
+        runtime_weighting = 0
+    try:
+        lower_mae_weighting = metric_weighting['lower_mae_weighting']
+    except:
+        lower_mae_weighting = 0
+    try:
+        upper_mae_weighting = metric_weighting['upper_mae_weighting']
+    except:
+        upper_mae_weighting = 0
+    try:
+        contour_weighting = metric_weighting['contour_weighting']
+    except:
+        contour_weighting = 0
+    try:
+        smape_score = model_results['smape_weighted']/model_results['smape_weighted'].min(skipna=True) # smaller better
+        rmse_score = model_results['rmse_weighted']/model_results['rmse_weighted'].min(skipna=True) # smaller better
+        mae_score = model_results['mae_weighted']/model_results['mae_weighted'].min(skipna=True) # smaller better
+        containment_score = (abs(prediction_interval - model_results['containment'])) # from 0 to 1, smaller better
+        runtime_score = model_results['TotalRuntime']/(model_results['TotalRuntime'].min(skipna=True) + datetime.timedelta(minutes = 1)) # smaller better
+        lower_mae_score = model_results['lower_mae_weighted']/model_results['lower_mae_weighted'].min(skipna=True) # smaller better
+        upper_mae_score = model_results['upper_mae_weighted']/model_results['upper_mae_weighted'].min(skipna=True) # smaller better
+        contour_score =  (1/(model_results['contour_weighted']))
+    except KeyError:
+        raise KeyError("Inconceivable! Evaluation Metrics are missing. Likely an error in TemplateWizard or metrics. A new template may help.")
+        
+    return (smape_score * smape_weighting) + (mae_score * mae_weighting) + (rmse_score * rmse_weighting) + (containment_score * containment_weighting) + (runtime_score * runtime_weighting) + (lower_mae_score * lower_mae_weighting) + (upper_mae_score * upper_mae_weighting) + (contour_score * contour_weighting)
 

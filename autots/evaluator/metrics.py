@@ -97,7 +97,27 @@ def containment(lower_forecast, upper_forecast, actual):
     """
     return np.count_nonzero((upper_forecast > actual) & (lower_forecast < actual), axis = 0)/actual.shape[0]
     
+def contour(A, F):
+    """A measure of how well the actual and forecast follow the same pattern of change.
+    *Note:* If actual values are unchanging, will match positive changing forecasts.
+    Expects two, 2-D numpy arrays of forecast_length * n series   
+    Returns a 1-D array of results in len n series
     
+    Args: 
+        A (numpy.array): known true values
+        F (numpy.array): predicted values
+    """
+    try:
+        X = np.diff(A, axis = 0)
+        Y = np.diff(F, axis = 0)
+        
+        # On the assumption flat lines common in forecasts, but exceedingly rare in real world
+        X = X>=0
+        Y = Y>0
+        contour_result = np.sum(X == Y, axis = 0)/X.shape[0]
+    except Exception:
+        contour_result = np.nan
+    return contour_result   
 
 class EvalObject(object):
     """Object to contain all your failures!
@@ -111,7 +131,7 @@ class EvalObject(object):
         self.avg_metrics = avg_metrics
         self.avg_metrics_weighted = avg_metrics_weighted
 
-def PredictionEval(PredictionObject, actual, series_weights: dict = {}, per_timestamp: bool = True):
+def PredictionEval(PredictionObject, actual, series_weights: dict = {}, per_timestamp_errors: bool = True, per_series_errors: bool = True):
     """Evalute prediction against test actual.
     
     Args:
@@ -134,12 +154,15 @@ def PredictionEval(PredictionObject, actual, series_weights: dict = {}, per_time
             'smape': smape(actual, PredictionObject.forecast),
             'mae': mae(actual, PredictionObject.forecast),
             'rmse': rmse(actual, PredictionObject.forecast),
-            'containment': containment(PredictionObject.lower_forecast, PredictionObject.upper_forecast, actual)
+            'containment': containment(PredictionObject.lower_forecast, PredictionObject.upper_forecast, actual),
+            'lower_mae': mae(actual, PredictionObject.lower_forecast),
+            'upper_mae': mae(actual, PredictionObject.upper_forecast),
+            'contour': contour(actual, PredictionObject.forecast)
             }).transpose()
     per_series.columns = actual.columns
     errors.per_series_metrics = per_series
     
-    if per_timestamp:
+    if per_timestamp_errors:
         per_timestamp = pd.DataFrame({
                 'smape': (np.nansum((abs(PredictionObject.forecast - actual) / (abs(PredictionObject.forecast) + abs(actual))), axis = 1)* 200) / np.count_nonzero(~np.isnan(actual), axis = 1),
                 'mae': np.nanmean(abs(actual - PredictionObject.forecast), axis=1),

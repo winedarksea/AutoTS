@@ -46,6 +46,8 @@ class AutoTS(object):
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation
         validation_method (str): 'even' or 'backwards' where backwards is better for shorter training sets
+        per_timestamp_errors (bool): whether to make available a list of errors by series * timestamps. Forced to True with Ensemble == True.
+        per_series_errors (bool): whether to make available SMAPE/SME per series. Forced to True if Ensemble == True.
         max_generations (int): number of genetic algorithms generations to run. More runs = better chance of better accuracy.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give slightly more output.
         
@@ -68,15 +70,18 @@ class AutoTS(object):
         subset: int = 200,
         na_tolerance: float = 0.95,
         metric_weighting: dict = {'smape_weighting' : 10, 'mae_weighting' : 1,
-            'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0},
+            'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0,
+            'lower_mae_weighting': 0, 'upper_mae_weighting': 0, 'contour_weighting': 2},
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
-        model_list: list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
+        model_list: str = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
               'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
               'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor'],
         num_validations: int = 3,
         models_to_validate: int = 10,
         validation_method: str = 'even',
+        per_timestamp_errors: bool = False,
+        per_series_errors: bool = False,
         max_generations: int = 5,
         verbose: int = 1 
         ):
@@ -98,9 +103,30 @@ class AutoTS(object):
         self.num_validations = num_validations
         self.models_to_validate = models_to_validate
         self.validation_method = validation_method
+        self.per_timestamp_errors = per_timestamp_errors
+        self.per_series_errors = per_series_errors
         self.max_generations = max_generations
         self.verbose = verbose
         
+        if ensemble == True:
+            self.per_timestamp_errors = True
+            self.per_series_errors = True
+        
+        if model_list == 'superfast':
+            self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS']
+        if model_list == 'fast':
+            self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
+                               'GLM', 'ETS', 'FBProphet', 'RollingRegression',
+                               'UnobservedComponents', 'VECM', 'DynamicFactor']
+        if model_list == 'probabilistic':
+            self.model_list = ['ARIMA', 'GluonTS', 'FBProphet']
+        if model_list == 'multivariate':
+            self.model_list = ['VECM', 'DynamicFactor', 'GluonTS', 'VARMAX', 'RollingRegression']
+        if model_list == 'all':
+            self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
+              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
+              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
+            
         if initial_template.lower() == 'random':
             self.initial_template = RandomTemplate(40, model_list = self.model_list)
         elif initial_template.lower() == 'general':
@@ -171,10 +197,10 @@ class AutoTS(object):
         if result_file != None:
             try:
                 if ".csv" not in str(result_file):
-                    "Result filename must be a valid 'filename.csv'"
+                    print("Result filename must be a valid 'filename.csv'")
                     result_file = None
             except Exception:
-                "Result filename must be a valid 'filename.csv'"
+                print("Result filename must be a valid 'filename.csv'")
                 result_file = None
         
         random_seed = abs(int(random_seed))
@@ -237,16 +263,20 @@ class AutoTS(object):
                                           preord_regressor_forecast = preord_regressor_test, 
                                           holiday_country = holiday_country,
                                           startTimeStamps = self.startTimeStamps,
+                                          per_timestamp_errors = self.per_timestamp_errors,
+                                          per_series_errors = self.per_series_errors,
                                           template_cols = template_cols, random_seed = random_seed, verbose = verbose)
         model_count = template_result.model_count
         self.initial_results.model_results = pd.concat([self.initial_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
         self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting,prediction_interval = prediction_interval)
         if result_file != None:
             self.initial_results.model_results.to_csv(result_file, index = False)
-        self.initial_results.model_results_per_timestamp_smape = self.initial_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
-        self.initial_results.model_results_per_timestamp_mae = self.initial_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
-        self.initial_results.model_results_per_series_smape = self.initial_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
-        self.initial_results.model_results_per_series_mae = self.initial_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
+        if self.per_timestamp_errors:
+            self.initial_results.model_results_per_timestamp_smape = self.initial_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
+            self.initial_results.model_results_per_timestamp_mae = self.initial_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
+        if self.per_series_errors:
+            self.initial_results.model_results_per_series_smape = self.initial_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
+            self.initial_results.model_results_per_series_mae = self.initial_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
         if ensemble:
             self.initial_results.forecasts_list.extend(template_result.forecasts_list)
             self.initial_results.forecasts_runtime.extend(template_result.forecasts_runtime)
@@ -275,16 +305,20 @@ class AutoTS(object):
                                           holiday_country = holiday_country,
                                           startTimeStamps = profile_df.loc['FirstDate'],
                                           template_cols = template_cols,
+                                          per_timestamp_errors = self.per_timestamp_errors,
+                                          per_series_errors = self.per_series_errors,
                                           random_seed = random_seed, verbose = verbose)
             model_count = template_result.model_count
             self.initial_results.model_results = pd.concat([self.initial_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
             self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
             if result_file != None:
                 self.initial_results.model_results.to_csv(result_file, index = False)
-            self.initial_results.model_results_per_timestamp_smape = self.initial_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
-            self.initial_results.model_results_per_timestamp_mae = self.initial_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
-            self.initial_results.model_results_per_series_smape = self.initial_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
-            self.initial_results.model_results_per_series_mae = self.initial_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
+            if self.per_timestamp_errors:
+                self.initial_results.model_results_per_timestamp_smape = self.initial_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
+                self.initial_results.model_results_per_timestamp_mae = self.initial_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
+            if self.per_series_errors:
+                self.initial_results.model_results_per_series_smape = self.initial_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
+                self.initial_results.model_results_per_series_mae = self.initial_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
             if ensemble:
                 self.initial_results.forecasts_list.extend(template_result.forecasts_list)
                 self.initial_results.forecasts_runtime.extend(template_result.forecasts_runtime)
@@ -336,10 +370,12 @@ class AutoTS(object):
             model_count = ens_template_result.model_count
             self.initial_results.model_results = pd.concat([self.initial_results.model_results, ens_template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
             self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
-            self.initial_results.model_results_per_timestamp_smape = self.initial_results.model_results_per_timestamp_smape.append(ens_template_result.model_results_per_timestamp_smape)
-            self.initial_results.model_results_per_timestamp_mae = self.initial_results.model_results_per_timestamp_mae.append(ens_template_result.model_results_per_timestamp_mae)
-            self.initial_results.model_results_per_series_smape = self.initial_results.model_results_per_series_smape.append(ens_template_result.model_results_per_series_smape)
-            self.initial_results.model_results_per_series_mae = self.initial_results.model_results_per_series_mae.append(ens_template_result.model_results_per_series_mae)
+            if self.per_timestamp_errors:
+                self.initial_results.model_results_per_timestamp_smape = self.initial_results.model_results_per_timestamp_smape.append(ens_template_result.model_results_per_timestamp_smape)
+                self.initial_results.model_results_per_timestamp_mae = self.initial_results.model_results_per_timestamp_mae.append(ens_template_result.model_results_per_timestamp_mae)
+            if self.per_series_errors:
+                self.initial_results.model_results_per_series_smape = self.initial_results.model_results_per_series_smape.append(ens_template_result.model_results_per_series_smape)
+                self.initial_results.model_results_per_series_mae = self.initial_results.model_results_per_series_mae.append(ens_template_result.model_results_per_series_mae)
         
         
         num_validations = abs(int(num_validations))
@@ -387,15 +423,19 @@ class AutoTS(object):
                                                   preord_regressor_forecast = preord_regressor_test, 
                                                   holiday_country = holiday_country,
                                                   startTimeStamps = profile_df.loc['FirstDate'],
+                                                  per_timestamp_errors = self.per_timestamp_errors,
+                                                  per_series_errors = self.per_series_errors,
                                                   template_cols = template_cols, random_seed = random_seed, verbose = verbose)
                     model_count = template_result.model_count
                     validation_results.model_results = pd.concat([validation_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
                     validation_results.model_results['Score'] = generate_score(validation_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
-                    validation_results.model_results_per_timestamp_smape = validation_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
-                    validation_results.model_results_per_timestamp_mae = validation_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
-                    validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
-                    validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
-                validation_results = validation_aggregation(validation_results)
+                    if self.per_timestamp_errors:
+                        validation_results.model_results_per_timestamp_smape = validation_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
+                        validation_results.model_results_per_timestamp_mae = validation_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
+                    if self.per_series_errors:
+                        validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
+                        validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
+                validation_results = validation_aggregation(validation_results, per_timestamp_errors = self.per_timestamp_errors, per_series_errors = self.per_series_errors)
         
             if validation_method == 'even':
                 for y in range(num_validations):
@@ -428,15 +468,19 @@ class AutoTS(object):
                                                   holiday_country = holiday_country,
                                                   startTimeStamps = profile_df.loc['FirstDate'],
                                                   template_cols = template_cols,
+                                                  per_timestamp_errors = self.per_timestamp_errors,
+                                                  per_series_errors = self.per_series_errors,
                                                   random_seed = random_seed, verbose = verbose)
                     model_count = template_result.model_count
                     validation_results.model_results = pd.concat([validation_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
                     validation_results.model_results['Score'] = generate_score(validation_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
-                    validation_results.model_results_per_timestamp_smape = validation_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
-                    validation_results.model_results_per_timestamp_mae = validation_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
-                    validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
-                    validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
-                validation_results = validation_aggregation(validation_results)
+                    if self.per_timestamp_errors:
+                        validation_results.model_results_per_timestamp_smape = validation_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
+                        validation_results.model_results_per_timestamp_mae = validation_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
+                    if self.per_series_errors:
+                        validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
+                        validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
+                validation_results = validation_aggregation(validation_results, per_timestamp_errors = self.per_timestamp_errors, per_series_errors = self.per_series_errors)
         
         if not ensemble:
             validation_template = validation_template[validation_template['Ensemble'] == 0]
@@ -549,7 +593,7 @@ class AutoTS(object):
         except Exception:
             print("Column names {} were not recognized as matching template columns: {}".format(str(import_template.columns), str(self.template_cols)))
         
-        if method.lower() == 'add on':
+        if method.lower() in ['add on', 'addon']:
             self.initial_template = self.initial_template.merge(import_template, on = self.initial_template.columns.intersection(import_template.columns).to_list())
             self.initial_template = self.initial_template.drop_duplicates(subset = self.template_cols)
         if method.lower() == 'only' or  method.lower() == 'user only':
@@ -558,11 +602,10 @@ class AutoTS(object):
         return self
     def import_results(self, filename):
         """
-        Add results from another run on the same data
+        Add results from another run on the same data.
         """
-        # drop any not-run models from it
         past_results = pd.read_csv(filename)
-        past_results = past_results
+        past_results = past_results[pd.isnull(past_results['Exceptions'])]
         self.initial_results.model_results = pd.concat([self.initial_results.model_results, past_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
         return self
     def get_params(self):
