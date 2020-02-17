@@ -209,7 +209,8 @@ def subset_series(df, weights, n: int = 1000, na_tolerance: float = 1.0, random_
 
 
 def simple_train_test_split(df, forecast_length: int = 10,
-                            min_allowed_train_percent: float = 0.3):
+                            min_allowed_train_percent: float = 0.3,
+                            verbose: int = 1):
     """
     Uses the last periods of forecast_length as the test set, the rest as train
     
@@ -226,12 +227,14 @@ def simple_train_test_split(df, forecast_length: int = 10,
     assert forecast_length > 0, "forecast_length must be greater than 0"
     
     if forecast_length > int(len(df.index) * (min_allowed_train_percent)):
-        raise ValueError("forecast_length is too large, not enough training data, alter min_allowed_train_percent to override")
+        raise ValueError("forecast_length is too large, not enough training data, alter min_allowed_train_percent to override, or reduce validation number, if applicable")
     
-    else:
-        train = df.head(len(df.index) - forecast_length)
-        test = df.tail(forecast_length)
-        return train, test
+    train = df.head(len(df.index) - forecast_length)
+    test = df.tail(forecast_length)
+    
+    if (verbose > 0) and ((train.isnull().sum(axis=0)/train.shape[1]).max() > 0.9):
+        print("One or more series is 90% or more NaN in this test split")
+    return train, test
 
 
 def multiple_train_test_split(df, forecast_length: int = 10,

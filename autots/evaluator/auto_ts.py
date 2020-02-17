@@ -45,9 +45,11 @@ class AutoTS(object):
         model_list (list): list of names of model objects to use
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation
+        validation_max_per_model_class (int): of the models_to_validate, what is the maximum to pass from any one model class/family.
         validation_method (str): 'even' or 'backwards' where backwards is better for shorter training sets
         per_timestamp_errors (bool): whether to make available a list of errors by series * timestamps. Forced to True with Ensemble == True.
         per_series_errors (bool): whether to make available SMAPE/SME per series. Forced to True if Ensemble == True.
+        min_allowed_train_percent (float): useful in (unrecommended) cases where forecast_length > training length. Percent of forecast length to allow as min training, else raises error.
         max_generations (int): number of genetic algorithms generations to run. More runs = better chance of better accuracy.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give slightly more output.
         
@@ -68,7 +70,7 @@ class AutoTS(object):
         random_seed: int = 425,
         holiday_country: str = 'US',
         subset: int = 200,
-        na_tolerance: float = 0.95,
+        na_tolerance: float = 0.99,
         metric_weighting: dict = {'smape_weighting' : 10, 'mae_weighting' : 1,
             'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0,
             'lower_mae_weighting': 0, 'upper_mae_weighting': 0, 'contour_weighting': 2},
@@ -76,10 +78,12 @@ class AutoTS(object):
         drop_data_older_than_periods: int = 100000,
         model_list: str = 'default',
         num_validations: int = 3,
-        models_to_validate: int = 10,
+        models_to_validate: int = 15,
+        validation_max_per_model_class: int = 5,
         validation_method: str = 'even',
         per_timestamp_errors: bool = False,
         per_series_errors: bool = False,
+        min_allowed_train_percent: float = 0.5,
         max_generations: int = 5,
         verbose: int = 1 
         ):
@@ -100,11 +104,13 @@ class AutoTS(object):
         self.model_list = model_list
         self.num_validations = num_validations
         self.models_to_validate = models_to_validate
+        self.validation_max_per_model_class = validation_max_per_model_class
         self.validation_method = validation_method
         self.per_timestamp_errors = per_timestamp_errors
         self.per_series_errors = per_series_errors
+        self.min_allowed_train_percent = min_allowed_train_percent
         self.max_generations = max_generations
-        self.verbose = verbose
+        self.verbose = int(verbose)
         
         if ensemble == True:
             self.per_timestamp_errors = True
@@ -180,20 +186,14 @@ class AutoTS(object):
         forecast_length = self.forecast_length
         weighted = self.weighted
         frequency = self.frequency
-        aggfunc = self.aggfunc
         prediction_interval = self.prediction_interval
         no_negatives = self.no_negatives
         random_seed = self.random_seed
         holiday_country = self.holiday_country
         ensemble = self.ensemble
         subset = self.subset
-        na_tolerance = self.na_tolerance
         metric_weighting = self.metric_weighting
-        drop_most_recent = self.drop_most_recent
         num_validations = self.num_validations
-        models_to_validate = self.models_to_validate
-        validation_method = self.validation_method
-        max_generations = self.max_generations
         verbose = self.verbose
         
         if result_file != None:
@@ -213,9 +213,9 @@ class AutoTS(object):
         
         
         df_wide = long_to_wide(df, date_col = self.date_col, value_col = self.value_col,
-                               id_col = self.id_col, frequency = frequency, na_tolerance = na_tolerance,
-                               drop_data_older_than_periods = self.drop_data_older_than_periods, aggfunc = aggfunc,
-                               drop_most_recent = drop_most_recent, verbose = verbose)
+                               id_col = self.id_col, frequency = self.frequency, na_tolerance = self.na_tolerance,
+                               drop_data_older_than_periods = self.drop_data_older_than_periods, aggfunc = self.aggfunc,
+                               drop_most_recent = self.drop_most_recent, verbose = self.verbose)
         
         if weighted == False:
             weights = {x:1 for x in df_wide.columns}
@@ -234,7 +234,7 @@ class AutoTS(object):
         profile_df = data_profile(df_wide_numeric)
         self.startTimeStamps = profile_df.loc['FirstDate']
         
-        df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = random_seed)
+        df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = self.na_tolerance, random_state = random_seed)
         
         if weighted == False:
             current_weights = {x:1 for x in df_subset.columns}
@@ -242,7 +242,7 @@ class AutoTS(object):
             current_weights = {x: weights[x] for x in df_subset.columns}
             
         
-        df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length)
+        df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length, min_allowed_train_percent = self.min_allowed_train_percent, verbose = self.verbose)
         try:
             preord_regressor_train = preord_regressor[df_train.index]
             preord_regressor_test = preord_regressor[df_test.index]
@@ -289,7 +289,7 @@ class AutoTS(object):
         
         current_generation = 0
         # eventually, have this break if accuracy improvement plateaus before max_generations
-        while current_generation < max_generations:
+        while current_generation < self.max_generations:
             current_generation += 1
             if verbose > 0:
                 print("New Generation: {}".format(current_generation))
@@ -381,14 +381,23 @@ class AutoTS(object):
         
         
         num_validations = abs(int(num_validations))
-        max_possible = int(np.floor(len(df_wide_numeric.index)/forecast_length))
+        max_possible = len(df_wide_numeric.index)/forecast_length
+        if (max_possible - np.floor(max_possible)) > self.min_allowed_train_percent:
+            max_possible = int(max_possible)
+        else:
+            max_possible = int(max_possible) - 1
         if max_possible < (num_validations + 1):
             num_validations = max_possible - 1
             if num_validations < 0:
                 num_validations = 0
             print("Too many training validations for length of data provided, decreasing num_validations to {}".format(num_validations))
         
-        validation_template = self.initial_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols).head(models_to_validate)[template_cols]
+        validation_template = self.initial_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols)
+        if str(self.validation_max_per_model_class).isdigit():
+            validation_template = validation_template.sort_values('Score', ascending=True).groupby('Model').head(self.validation_max_per_model_class).reset_index()
+        validation_template = validation_template.nsmallest(self.models_to_validate, columns = ['Score'])[self.template_cols]
+        
+        # validation_template = self.initial_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols).head(models_to_validate)[template_cols]
         if not ensemble:
             validation_template[validation_template['Ensemble'] == 0]
             
@@ -396,19 +405,19 @@ class AutoTS(object):
         
         
         if num_validations > 0:
-            if str(validation_method).lower() in ['backwards', 'back', 'backward']:
+            if str(self.validation_method).lower() in ['backwards', 'back', 'backward']:
                 for y in range(num_validations):
                     if verbose > 0:
                         print("Validation Round: {}".format(str(y)))
                     # gradually remove the end
                     current_slice = df_wide_numeric.head(len(df_wide_numeric.index) - (y+1) * forecast_length)
                     # subset series (if used) and take a new train/test split
-                    df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = random_seed)
+                    df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = self.na_tolerance, random_state = random_seed)
                     if weighted == False:
                         current_weights = {x:1 for x in df_subset.columns}
                     if weighted == True:
                         current_weights = {x: weights[x] for x in df_subset.columns}                
-                    df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length)
+                    df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length, min_allowed_train_percent = self.min_allowed_train_percent, verbose = self.verbose)
                     try:
                         preord_regressor_train = preord_regressor[df_train.index]
                         preord_regressor_test = preord_regressor[df_test.index]
@@ -439,7 +448,7 @@ class AutoTS(object):
                         validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
                 validation_results = validation_aggregation(validation_results, per_timestamp_errors = self.per_timestamp_errors, per_series_errors = self.per_series_errors)
         
-            if validation_method == 'even':
+            if self.validation_method == 'even':
                 for y in range(num_validations):
                     if verbose > 0:
                         print("Validation Round: {}".format(str(y)))
@@ -447,12 +456,12 @@ class AutoTS(object):
                     validation_size = int(np.floor((len(df_wide_numeric.index) - forecast_length)/(num_validations + 1)))
                     current_slice = df_wide_numeric.head(validation_size * (y+1) + forecast_length)
                     # subset series (if used) and take a new train/test split
-                    df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = na_tolerance, random_state = random_seed)
+                    df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = self.na_tolerance, random_state = random_seed)
                     if weighted == False:
                         current_weights = {x:1 for x in df_subset.columns}
                     if weighted == True:
                         current_weights = {x: weights[x] for x in df_subset.columns}                
-                    df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length)
+                    df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length, min_allowed_train_percent = self.min_allowed_train_percent, verbose = self.verbose)
                     try:
                         preord_regressor_train = preord_regressor[df_train.index]
                         preord_regressor_test = preord_regressor[df_test.index]
