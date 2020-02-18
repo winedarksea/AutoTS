@@ -96,20 +96,21 @@ class TSFreshRegressor(ModelObject):
         
         X = pd.DataFrame()
         y = pd.DataFrame()
+        counter = 0
         for column in sktraindata.columns:
             df_shift, current_y = make_forecasting_frame(sktraindata[column], kind="time_series", max_timeshift=max_timeshift, rolling_direction=1)
             # disable_progressbar = True MinimalFCParameters EfficientFCParameters
             current_X = extract_features(df_shift, column_id="id", column_sort="time", column_value="value", impute_function=tsfresh_impute,
                      show_warnings=False, default_fc_parameters=EfficientFCParameters(), n_jobs=1) # 
             current_X["feature_last_value"] = current_y.shift(1)
-            current_X.rename(columns=lambda x: str(column) + '_' + x)
+            current_X.rename(columns=lambda x: str(counter) + '_' + x, inplace = True)
             
             X = pd.concat([X, current_X],axis = 1)
             y = pd.concat([y, current_y],axis = 1)
+            counter += 1
         
-        trainTSFreshFinish = datetime.datetime.now()
         # drop constant features
-        X = X.loc[:, current_X.apply(pd.Series.nunique) != 1]
+        X = X.loc[:, X.apply(pd.Series.nunique) != 1]
         X = X.replace([np.inf, -np.inf], np.nan)
         X = X.fillna(0)
         y = y.fillna(method = 'ffill').fillna(method = 'bfill')
@@ -190,6 +191,7 @@ class TSFreshRegressor(ModelObject):
         for x in range(forecast_length):
             x_dat = pd.DataFrame()
             y_dat = pd.DataFrame()
+            counter = 0
             for column in sktraindata.columns:
                 df_shift, current_y = make_forecasting_frame(sktraindata.tail(max_timeshift)[column], kind="time_series", max_timeshift=max_timeshift, rolling_direction=1)
                 # disable_progressbar = True MinimalFCParameters EfficientFCParameters
@@ -197,11 +199,14 @@ class TSFreshRegressor(ModelObject):
                          show_warnings=False, n_jobs=1, default_fc_parameters=EfficientFCParameters()) # default_fc_parameters=MinimalFCParameters(),
                 current_X["feature_last_value"] = current_y.shift(1)
                 
-                current_X.rename(columns=lambda x: str(column) + '_' + x)
+                current_X.rename(columns=lambda x: str(counter) + '_' + x, inplace = True)
+                
                 
                 x_dat = pd.concat([x_dat, current_X],axis = 1)
                 y_dat = pd.concat([y_dat, current_y],axis = 1)
+                counter += 1
             
+            x_dat = x_dat[X.columns]
             rfPred =  pd.DataFrame(regr.predict(x_dat.tail(1).values))
         
             forecast = pd.concat([forecast, rfPred], axis = 0, ignore_index = True)
