@@ -8,22 +8,16 @@
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
 # Errors: 
-'ValueError: forecast_length is too large, not enough training data, alter min_allowed_train_percent to override' -> daily toy, forecast_length = 30
 'Detrend' transformation is still buggy (can't convert to Series)
-Possible error where first template model is invalid, 'smape_weighted' doesn't exist error
 raise AttributeError(("Model String '{}' not recognized").format(model)) -> turn to an allowable exception with a printed warning
 Holiday not (always) working
 
 # To-Do
-* Na Tolerance for test in simple_train_test_split
-* min_allowed_train_percent into higher-level API
-* Warning/handling if lots of NaN in most recent (test) part of data
-* max_per_class to validation options
-* migrate arima_model to arima.model
-
 * Get the sphinx (google style) documentation and readthedocs.io website up
 * Better point to probabilistic (uncertainty of naive last-value forecast) - linear reg of abs error of samples - simulations
-* get_prediction for Statsmodels Statespace models to include confidence interval
+* get_prediction for Statsmodels Statespace models to include confidence interval where possible
+	* migrate arima_model to arima.model
+* Check how fillna methods handle datasets that are entirely NaN
 * Better X_maker:
 	* use feature selection on TSFresh features - autocorrelation lag n, fft/cwt coefficients (abs), abs_energy
 	* date part and age/expanding regressors

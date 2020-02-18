@@ -28,6 +28,7 @@ model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
               ,'UnobservedComponents', 'VECM', 'DynamicFactor'
               #,'VARMAX', 'GluonTS'
               ]
+model_list = 'superfast'
 # model_list = ['TSFreshRegressor']
 
 metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
@@ -37,7 +38,7 @@ metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                prediction_interval = 0.9, ensemble = False, weighted = False,
-               max_generations = 5, num_validations = 2, validation_method = 'even',
+               max_generations = 2, num_validations = 2, validation_method = 'even',
                model_list = model_list, initial_template = 'General+Random',
                metric_weighting = metric_weighting,
                drop_most_recent = 1, verbose = 1)
@@ -102,23 +103,4 @@ twine upload dist/*
 
 Merge dev to master on GitHub and create release (include .tar.gz)
 """
-
-"""
-pip install fredapi # if using samples
-conda install -c conda-forge fbprophet
-pip install mxnet==1.4.1
-    pip install mxnet-cu90mkl==1.4.1 # if you want GPU and have Intel CPU
-pip install gluonts==0.4.0
-    pip install git+https://github.com/awslabs/gluon-ts.git #if you want dev version
-pip install pmdarima==1.4.0 
-pip uninstall numpy # might be necessary, even twice, followed by the following
-pip install numpy==1.17.4 # gluonts likes to force numpy back to 1.14, but 1.17 seems to be fine with it
-pip install sktime==0.3.1
-"""
-# to gluon ds
-# to xgboost ds
-# trim series to first actual value
-    # gluon start
-    # per series, trim before first na
-    # from regressions, remove rows based on % columns that are NaN
 # *args, **kwargs
