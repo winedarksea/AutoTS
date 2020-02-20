@@ -45,7 +45,7 @@ class AutoTS(object):
         model_list (list): list of names of model objects to use
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation
-        validation_max_per_model_class (int): of the models_to_validate, what is the maximum to pass from any one model class/family.
+        max_per_model_class (int): of the models_to_validate and for new generations, what is the maximum to pass from any one model class/family.
         validation_method (str): 'even' or 'backwards' where backwards is better for shorter training sets
         per_timestamp_errors (bool): whether to make available a list of errors by series * timestamps. Forced to True with Ensemble == True.
         per_series_errors (bool): whether to make available SMAPE/SME per series. Forced to True if Ensemble == True.
@@ -79,7 +79,7 @@ class AutoTS(object):
         model_list: str = 'default',
         num_validations: int = 3,
         models_to_validate: int = 15,
-        validation_max_per_model_class: int = 5,
+        max_per_model_class: int = 5,
         validation_method: str = 'even',
         per_timestamp_errors: bool = False,
         per_series_errors: bool = False,
@@ -104,7 +104,7 @@ class AutoTS(object):
         self.model_list = model_list
         self.num_validations = num_validations
         self.models_to_validate = models_to_validate
-        self.validation_max_per_model_class = validation_max_per_model_class
+        self.max_per_model_class = max_per_model_class
         self.validation_method = validation_method
         self.per_timestamp_errors = per_timestamp_errors
         self.per_series_errors = per_series_errors
@@ -294,7 +294,8 @@ class AutoTS(object):
             if verbose > 0:
                 print("New Generation: {}".format(current_generation))
             new_template = NewGeneticTemplate(self.initial_results.model_results, submitted_parameters=submitted_parameters, sort_column = "Score", 
-                               sort_ascending = True, max_results = 40, top_n = 15, template_cols=template_cols)
+                               sort_ascending = True, max_results = 40, max_per_model_class = self.max_per_model_class,
+                               top_n = 15, template_cols=template_cols)
             submitted_parameters = pd.concat([submitted_parameters, new_template], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
             
             template_result = TemplateWizard(new_template, df_train, df_test, current_weights,
@@ -393,9 +394,9 @@ class AutoTS(object):
             print("Too many training validations for length of data provided, decreasing num_validations to {}".format(num_validations))
         
         validation_template = self.initial_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols)
-        if str(self.validation_max_per_model_class).isdigit():
-            validation_template = validation_template.sort_values('Score', ascending=True).groupby('Model').head(self.validation_max_per_model_class).reset_index()
-        validation_template = validation_template.nsmallest(self.models_to_validate, columns = ['Score'])[self.template_cols]
+        if str(self.max_per_model_class).isdigit():
+            validation_template = validation_template.sort_values('Score', ascending = True, na_position = 'last').groupby('Model').head(self.max_per_model_class).reset_index(drop = True)
+        validation_template = validation_template.sort_values('Score', ascending = True, na_position = 'last').head(self.models_to_validate)[self.template_cols]
         
         # validation_template = self.initial_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols).head(models_to_validate)[template_cols]
         if not ensemble:
@@ -497,7 +498,8 @@ class AutoTS(object):
             validation_template = validation_template[validation_template['Ensemble'] == 0]
         
         self.validation_results = validation_results
-        self.best_model = validation_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols).head(1)[template_cols]
+        eligible_models = validation_results.model_results[validation_results.model_results['Runs'] >= num_validations]
+        self.best_model = eligible_models.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols).head(1)[template_cols]
 
         self.ensemble_check = (self.best_model['Ensemble'].iloc[0])
         param_dict = json.loads(self.best_model['ModelParameters'].iloc[0])

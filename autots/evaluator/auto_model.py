@@ -541,7 +541,7 @@ def TemplateWizard(template, df_train, df_test, weights,
                 template_result.lower_forecasts.extend([df_forecast.lower_forecast])
         
         except Exception as e:
-            print('Template Eval Error: {}'.format(str(e)))
+            print('Template Eval Error: {} in model {}'.format(str(e), model_str))
             result = pd.DataFrame({
                 'ID': create_model_id(model_str, parameter_dict, transformation_dict),
                 'Model': model_str,
@@ -605,6 +605,7 @@ def UniqueTemplates(existing_templates, new_possibilities, selection_cols: list 
 
 def NewGeneticTemplate(model_results, submitted_parameters, sort_column: str = "smape_weighted", 
                        sort_ascending: bool = True, max_results: int = 40,
+                       max_per_model_class: int = 5,
                        top_n: int = 15, template_cols: list = ['Model','ModelParameters','TransformationParameters','Ensemble']):
     """
     Returns new template given old template with model accuracies
@@ -616,9 +617,14 @@ def NewGeneticTemplate(model_results, submitted_parameters, sort_column: str = "
     """
     new_template = pd.DataFrame()
     
-    sorted_results = model_results[model_results['Ensemble'] == 0].copy().sort_values(by = sort_column, ascending = sort_ascending, na_position = 'last')
+    sorted_results =  model_results[model_results['Ensemble'] == 0].copy().sort_values(by = sort_column, ascending = sort_ascending, na_position = 'last').drop_duplicates(subset = template_cols, keep = 'first')
+    if str(max_per_model_class).isdigit():
+        sorted_results = sorted_results.sort_values(sort_column, ascending=sort_ascending).groupby('Model').head(max_per_model_class).reset_index()
+    sorted_results = sorted_results.sort_values(by = sort_column, ascending = sort_ascending, na_position = 'last').head(top_n)
+    
+    # sorted_results = model_results[model_results['Ensemble'] == 0].copy().sort_values(by = sort_column, ascending = sort_ascending, na_position = 'last')
     # mutation
-    for index, row in sorted_results.drop_duplicates(subset = "Model", keep = 'first').head(top_n).iterrows():
+    for index, row in sorted_results.iterrows():
         param_dict = ModelMonster(row['Model']).get_new_params()
         trans_dict = RandomTransform()
         new_row = pd.DataFrame({
@@ -727,13 +733,15 @@ def generate_score(model_results, metric_weighting: dict = {}, prediction_interv
     except:
         contour_weighting = 0
     try:
-        smape_score = model_results['smape_weighted']/model_results['smape_weighted'].min(skipna=True) # smaller better
-        rmse_score = model_results['rmse_weighted']/model_results['rmse_weighted'].min(skipna=True) # smaller better
-        mae_score = model_results['mae_weighted']/model_results['mae_weighted'].min(skipna=True) # smaller better
+        model_results = model_results.replace([np.inf, -np.inf], np.nan)
+        # model_results = model_results.fillna(value = model_results.max(axis = 0))
+        smape_score = model_results['smape_weighted']/(model_results['smape_weighted'].min(skipna=True) + 1) # smaller better
+        rmse_score = model_results['rmse_weighted']/(model_results['rmse_weighted'].min(skipna=True) + 1) # smaller better
+        mae_score = model_results['mae_weighted']/(model_results['mae_weighted'].min(skipna=True) + 1) # smaller better
         containment_score = (abs(prediction_interval - model_results['containment'])) # from 0 to 1, smaller better
         runtime_score = model_results['TotalRuntime']/(model_results['TotalRuntime'].min(skipna=True) + datetime.timedelta(minutes = 1)) # smaller better
-        lower_mae_score = model_results['lower_mae_weighted']/model_results['lower_mae_weighted'].min(skipna=True) # smaller better
-        upper_mae_score = model_results['upper_mae_weighted']/model_results['upper_mae_weighted'].min(skipna=True) # smaller better
+        lower_mae_score = model_results['lower_mae_weighted']/(model_results['lower_mae_weighted'].min(skipna=True) +1) # smaller better
+        upper_mae_score = model_results['upper_mae_weighted']/(model_results['upper_mae_weighted'].min(skipna=True) +1) # smaller better
         contour_score =  (1/(model_results['contour_weighted']))
     except KeyError:
         raise KeyError("Inconceivable! Evaluation Metrics are missing. Likely an error in TemplateWizard or metrics. A new template may help.")
