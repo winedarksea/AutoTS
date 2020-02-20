@@ -72,13 +72,13 @@ class AutoTS(object):
         subset: int = 200,
         na_tolerance: float = 0.99,
         metric_weighting: dict = {'smape_weighting' : 10, 'mae_weighting' : 1,
-            'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0,
+            'rmse_weighting' : 5, 'containment_weighting' : 0, 'runtime_weighting' : 0,
             'lower_mae_weighting': 0, 'upper_mae_weighting': 0, 'contour_weighting': 2},
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
         model_list: str = 'default',
         num_validations: int = 3,
-        models_to_validate: int = 15,
+        models_to_validate: int = 20,
         max_per_model_class: int = 5,
         validation_method: str = 'even',
         per_timestamp_errors: bool = False,
@@ -498,7 +498,7 @@ class AutoTS(object):
             validation_template = validation_template[validation_template['Ensemble'] == 0]
         
         self.validation_results = validation_results
-        eligible_models = validation_results.model_results[validation_results.model_results['Runs'] >= num_validations]
+        eligible_models = validation_results.model_results[validation_results.model_results['Runs'] >= (num_validations + 1)]
         self.best_model = eligible_models.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols).head(1)[template_cols]
 
         self.ensemble_check = (self.best_model['Ensemble'].iloc[0])

@@ -52,6 +52,10 @@ general_template_dict = {
  12: {'Model': 'RollingRegression',
   'ModelParameters': '{"regression_model": "DecisionTree", "holiday": false, "mean_rolling_periods": 30, "std_rolling_periods": null, "max_rolling_periods": 7, "min_rolling_periods": 7, "ewm_alpha": 0.5, "additional_lag_periods": 7, "polynomial_degree": null, "regression_type": "None"}',
   'TransformationParameters': '{"outlier": null, "fillNA": "ffill", "transformation": "MinMaxScaler", "context_slicer": "10ForecastLength"}',
+  'Ensemble': 0},
+ 13: {'Model': 'RollingRegression',
+  'ModelParameters': '{"regression_model": "Adaboost", "holiday": false, "mean_rolling_periods": 5, "std_rolling_periods": 30, "max_rolling_periods": 7, "min_rolling_periods": 7, "ewm_alpha": 0.5, "additional_lag_periods": 7, "polynomial_degree": null, "regression_type": "None"}',
+  'TransformationParameters': '{"outlier": "clip3std", "fillNA": "fake date", "transformation": null, "context_slicer": null}',
   'Ensemble': 0}
  }
 
