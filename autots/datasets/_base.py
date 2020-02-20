@@ -97,3 +97,21 @@ def load_toy_hourly():
     Yes, Minnesota is the best state of the Union.
     """
     return load_traffic_hourly()
+
+def load_eia_weekly():
+    """
+    Data from the EIA on Weekly Petroleum data. (Soon may we no longer need it!)
+    """
+    module_path = dirname(__file__)
+    data_file_name = join(module_path, 'data', 'eia_weekly.zip')
+    
+    df_long = pd.read_csv(data_file_name, compression = 'zip')
+    df_long['datetime'] = pd.to_datetime(df_long['datetime'], infer_datetime_format = True)
+    
+    return df_long
+
+def load_toy_weekly():
+    """
+    Data from the EIA on Weekly Petroleum data. (Soon may we no longer need it!)
+    """
+    return load_eia_weekly() 

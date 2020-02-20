@@ -29,6 +29,11 @@ model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 
 print(model)
 ```
 
+If your data is already wide (one column for each value), to bring to a long format:
+```
+df_long = df_wide.melt(id_vars = ['datetime_col_name'], var_name = 'series_id', value_name = 'value')
+```
+
 #### You can tailor the process in a few ways...
 The simplest thing is to increase the number of generations `max_generations = 15`. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.
 
@@ -62,7 +67,8 @@ Only a subset of models are based from initial validation to cross validation. T
 Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in (lovely) Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting. 
 Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. This carries information to models such as RollingRegression, VARMAX, and VECM. 
 
-Also seen in use here is the `model_list`. By default, most available models are tried. For a more limited subset of models, a custom list like this can be passed in.
+Also seen in use here is the `model_list`. By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of 'probabilistic', 'multivariate', 'fast', 'superfast', or 'all'.
+
 ```
 from autots.datasets import load_toy_hourly
 
@@ -108,6 +114,27 @@ model = model.import_template(example_filename, method = 'only') # method = 'add
 print("Overwrite template is: {}".format(str(model.initial_template)))
 ```
 
+### Metrics
+There are a number of available metrics, all combined together into a 'Score' which evaluates the best model. The 'Score' that compares models can easily be adjusted by passing through custom metric weights dictionary. 
+Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers. 
+This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series. 
+```
+metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1, 'rmse_weighting' : 5, 
+					'containment_weighting' : 1, 'runtime_weighting' : 0,
+					'lower_mae_weighting': 0, 'upper_mae_weighting': 0, 'contour_weighting': 3}
+
+model = AutoTS(forecast_length = forecast_length, frequency = 'infer', metric_weighting = metric_weighting)
+```		
+It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE. 
+			
+**Warning**: weights are not (yet) well balanced 1 - 1 - 1. As such it is usually best to place your favorite metric an order of magnitude or more above the others. 
+
+`sMAPE` is generally the most versatile across multiple series, but doesn't handle forecasts with lots of zeroes well. 
+
+`Containment` measures the percent of test data that falls between the upper and lower forecasts. As containment would tend to drive towards massive forecast ranges, `lower_mae` and `upper_mae`, the MAE on the upper and lower forecasts, are available. `Containment` and `upper/lower_mae` counteract each other and help balance the assessement of probabilistic forecasts.
+
+`Contour` is another unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference.
+
 ## Installation and Dependency Versioning
 `pip install autots`
 #### Requirements:
@@ -121,8 +148,12 @@ print("Overwrite template is: {}".format(str(model.initial_template)))
 `pip install autots['additional']`
 #### Optional Requirements
 	fbprophet
-	fredapi (example datasets)
+	fredapi
 	tsfresh
+	mxnet==1.4.1 (mxnet-mkl, mxnet-cu91, mxnet-cu92mkl, etc.)
+	gluonts
+
+If using Anaconda, fbprophet is easier to install with `conda install -c conda-forge fbprophet`
 
 Check out `functional_environments.md` for specific versions tested to work.
 
@@ -154,13 +185,6 @@ To prevent forecast accuracy for considering these additional series too heavily
 Categorical data is handled, but it is handled poorly. For example, optimization metrics do not currently include any categorical accuracy metrics. 
 For categorical data that has a meaningful order (ie 'low', 'medium', 'high') it is best for the user to encode that data before passing it in, 
 thus properly capturing the relative sequence (ie 'low' = 1, 'medium' = 2, 'high' = 3).
-
-### Custom Metrics
-Implementing new metrics is rather difficult. However the internal 'Score' that compares models can easily be adjusted by passing through custom metric weights. 
-Higher weighting increases the importance of that metric. 
-`metric_weighting = {'smape_weighting' : 9, 'mae_weighting' : 1, 'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0.5}` 
-sMAPE is generally the most versatile across multiple series, but doesn't handle forecasts with lots of zeroes well. 
-Contaiment measures the percent of test data that falls between the upper and lower forecasts. 
 
 ### Custom and Unusual Frequencies
 Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects 

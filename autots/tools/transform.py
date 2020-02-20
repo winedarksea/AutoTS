@@ -397,6 +397,12 @@ class GeneralTransformer(object):
         else:
             df = self.transformer.inverse_transform(df)
         
+        # since inf just causes trouble. Feel free to debate my choice of replacing with zero.
+        try:
+            df = df.replace([np.inf, -np.inf], 0)
+        except Exception:
+            df[df == -np.inf] = 0
+            df[df == np.inf] = 0
         return df
 
 

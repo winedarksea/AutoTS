@@ -3,10 +3,11 @@
 #### Model Selection for Multiple Time Series
 
 Simple package for comparing and predicting with open-source time series implementations.
-For other time series needs, check out the package list here: https://github.com/MaxBenChrist/awesome_time_series_in_python
+
+For other time series needs, check out the list [here](https://github.com/MaxBenChrist/awesome_time_series_in_python).
 
 ## Features
-* Thirteen available models, with thousands of possible hyperparameter configurations
+* Fourteen available model classes, with thousands of possible hyperparameter configurations
 * Finds optimal time series models by genetic programming
 * Handles univariate and multivariate/parallel time series
 * Point and probabilistic forecasts
@@ -29,13 +30,8 @@ Input data is expected to come in a 'long' format with three columns:
 * Date (ideally already in pd.DateTime format)
 * Value
 * Series ID. For a single time series, series_id can be `= None`. 
+
 The column name for each of these is passed to .fit(). 
-
-If your data is already wide (one column for each value), to bring to a long format:
-```
-df_long = df_wide.melt(id_vars = ['datetime_col_name'], var_name = 'series_id', value_name = 'value')
-```
-
 
 ```
 from autots.datasets import load_toy_monthly # also: _daily _yearly or _hourly
@@ -68,8 +64,10 @@ Check out [extended_tutorial.md](https://github.com/winedarksea/AutoTS/blob/mast
 * Use AutoTS and...
 	* Report errors and request features by adding Issues on GitHub
 	* Posting the top model templates for your data (to help improve the starting templates)
+	* Feel free to recommend different search grid parameters for your favorite models
 * And, of course, contributing to the codebase directly on GitHub!
 
 
 *Also known as Project CATS*
+
 CATS = Catlin's Automated Time Series

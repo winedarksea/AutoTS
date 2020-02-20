@@ -1,23 +1,18 @@
 """
-Things needing testing:
-    With and without regressor
-    With and without weighting
-    Different frequencies
-    Various verbose inputs
-    
-    Passing in Start Dates - (Test)
-    Holidays on non-daily datas
+Informal testing script
 """
 import numpy as np
 import pandas as pd
 
-forecast_length = 12
 from autots.datasets import load_toy_daily
 from autots.datasets import load_toy_hourly
 from autots.datasets import load_toy_monthly
 from autots.datasets import load_toy_yearly
+from autots.datasets import load_toy_weekly
 
-df_long = load_toy_monthly()
+
+forecast_length = 12
+df_long = load_toy_hourly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -28,23 +23,31 @@ weights_daily = {'categoricalDayofWeek': 5,
 
 weights_hourly = {'traffic_volume': 10}
 
-model_list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
-              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
-# model_list = ['RollingRegression']
+model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
+               'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression'
+              ,'UnobservedComponents', 'VECM', 'DynamicFactor'
+              #,'VARMAX', 'GluonTS'
+              ]
+model_list = 'superfast'
+# model_list = ['TSFreshRegressor']
+
+metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
+            'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0,
+            'lower_mae_weighting': 0, 'upper_mae_weighting': 0, 'contour_weighting': 2}
 
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                prediction_interval = 0.9, ensemble = False, weighted = False,
-               max_generations = 1, num_validations = 2, validation_method = 'even',
+               max_generations = 20, num_validations = 2, validation_method = 'even',
                model_list = model_list, initial_template = 'General+Random',
+               metric_weighting = metric_weighting,
                drop_most_recent = 1, verbose = 1)
 
 from autots.evaluator.auto_ts import fake_regressor
 preord_regressor_train, preord_regressor_forecast = fake_regressor(df_long, forecast_length = forecast_length, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
 
-model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
-# model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', weights = weights_hourly) # and weighted = True
+# model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
+model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', weights = weights_hourly) # and weighted = True
 # model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', preord_regressor = preord_regressor_train)
 
 print(model.best_model['Model'].iloc[0])
@@ -70,6 +73,12 @@ print("Overwrite template is: {}".format(str(model.initial_template)))
 """
 
 """
+Things needing testing:
+    With and without regressor
+    With and without weighting
+    Different frequencies
+    Various verbose inputs
+
 Edgey Cases:
         Single Time Series
         Forecast Length of 1
@@ -94,23 +103,4 @@ twine upload dist/*
 
 Merge dev to master on GitHub and create release (include .tar.gz)
 """
-
-"""
-pip install fredapi # if using samples
-conda install -c conda-forge fbprophet
-pip install mxnet==1.4.1
-    pip install mxnet-cu90mkl==1.4.1 # if you want GPU and have Intel CPU
-pip install gluonts==0.4.0
-    pip install git+https://github.com/awslabs/gluon-ts.git #if you want dev version
-pip install pmdarima==1.4.0 
-pip uninstall numpy # might be necessary, even twice, followed by the following
-pip install numpy==1.17.4 # gluonts likes to force numpy back to 1.14, but 1.17 seems to be fine with it
-pip install sktime==0.3.1
-"""
-# to gluon ds
-# to xgboost ds
-# trim series to first actual value
-    # gluon start
-    # per series, trim before first na
-    # from regressions, remove rows based on % columns that are NaN
 # *args, **kwargs
