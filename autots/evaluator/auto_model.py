@@ -5,6 +5,7 @@ import hashlib
 import json
 
 from autots.evaluator.metrics import PredictionEval
+from autots.models.ensemble import EnsembleForecast
 
 def create_model_id(model_str: str, parameter_dict: dict = {}, transformation_dict: dict = {}):
     """
@@ -342,7 +343,6 @@ def unpack_ensemble_models(template,
         template = template[template['Ensemble'] == 0]
     return template
 
-from autots.models.ensemble import EnsembleForecast
 def PredictWitch(template, df_train,forecast_length: int,
                     frequency: str = 'infer', 
                     prediction_interval: float = 0.9, no_negatives: bool = False,
