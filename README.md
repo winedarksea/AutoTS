@@ -1,5 +1,7 @@
 # AutoTS
 
+![AutoTS Logo](/img/autots_logo.png)
+
 #### Model Selection for Multiple Time Series
 
 Simple package for comparing and predicting with open-source time series implementations.
