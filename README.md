@@ -70,6 +70,4 @@ Check out [extended_tutorial.md](https://github.com/winedarksea/AutoTS/blob/mast
 * And, of course, contributing to the codebase directly on GitHub!
 
 
-*Also known as Project CATS*
-
-CATS = Catlin's Automated Time Series
+*Also known as Project CATS (Catlin's Automated Time Series) hence the logo.*
