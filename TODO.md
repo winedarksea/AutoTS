@@ -102,7 +102,9 @@ Holiday not (always) working
 	Isotonic regression
 	Survival Analysis
 	MarkovAutoRegression
+	Motif discovery, and repeat
 	TPOT if it adds multioutput functionality
+	https://towardsdatascience.com/pyspark-forecasting-with-pandas-udf-and-fb-prophet-e9d70f86d802
 	Compressive Transformer, if they go anywhere
 
 #### New Transformations:
