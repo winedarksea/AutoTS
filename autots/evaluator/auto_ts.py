@@ -167,7 +167,7 @@ class AutoTS(object):
                 return f"Initiated AutoTS object with best model: \n{self.best_model['Model'].iloc[0]}\n{self.best_model['TransformationParameters'].iloc[0]}\n{self.best_model['ModelParameters'].iloc[0]}"
             except:
                 return "Initiated AutoTS object"
-    def fit(self, df, date_col: str = 'datetime', value_col: str = 'value', id_col: str = 'series_id', preord_regressor = [], weights: dict = {}, result_file: str = None):
+    def fit(self, df, date_col: str = 'datetime', value_col: str = 'value', id_col: str = None, preord_regressor = [], weights: dict = {}, result_file: str = None):
         """
         Train algorithm given data supplied 
         
