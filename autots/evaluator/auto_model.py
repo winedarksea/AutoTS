@@ -102,71 +102,6 @@ class PredictionObject(object):
         return self.fit_runtime + self.predict_runtime + self.transformation_runtime
 
 
-
-def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict, 
-                    model_str: str, parameter_dict: dict, frequency: str = 'infer', 
-                    prediction_interval: float = 0.9, no_negatives: bool = False,
-                    preord_regressor_train = [], preord_regressor_forecast = [], 
-                    holiday_country: str = 'US', startTimeStamps = None,
-                    random_seed: int = 2020, verbose: int = 0):
-    """Feed parameters into modeling pipeline
-    
-    Args:
-        df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
-        forecast_length (int): number of periods to forecast
-        transformation_dict (dict): a dictionary of outlier, fillNA, and transformation methods to be used
-        model_str (str): a string to be direct to the appropriate model, used in ModelMonster
-        frequency (str): str representing frequency alias of time series
-        prediction_interval (float): width of errors (note: rarely do the intervals accurately match the % asked for...)
-        no_negatives (bool): whether to force all forecasts to be > 0
-        preord_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
-        preord_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
-        holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.            
-        startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
-        
-    Returns:
-        PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
-    """
-    transformationStartTime = datetime.datetime.now()
-    from autots.tools.transform import GeneralTransformer
-    transformer_object = GeneralTransformer(outlier=transformation_dict['outlier'],
-                                            fillNA = transformation_dict['fillNA'], 
-                                            transformation = transformation_dict['transformation']).fit(df_train)
-    df_train_transformed = transformer_object.transform(df_train)
-    
-    if transformation_dict['context_slicer'] in ['2ForecastLength','HalfMax']:
-        from autots.tools.transform import simple_context_slicer
-        df_train_transformed = simple_context_slicer(df_train_transformed, method = transformation_dict['context_slicer'], forecast_length = forecast_length)
-    
-    transformation_runtime = datetime.datetime.now() - transformationStartTime
-    from autots.evaluator.auto_model import ModelMonster
-    model = ModelMonster(model_str, parameters=parameter_dict, frequency = frequency, 
-                         prediction_interval = prediction_interval, holiday_country = holiday_country,
-                         random_seed = random_seed, verbose = verbose, forecast_length = forecast_length)
-    model = model.fit(df_train_transformed, preord_regressor = preord_regressor_train)
-    df_forecast = model.predict(forecast_length = forecast_length, preord_regressor = preord_regressor_forecast)
-    
-    transformationStartTime = datetime.datetime.now()
-    # Inverse the transformations
-    df_forecast.forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.forecast), index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
-    df_forecast.lower_forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.lower_forecast), index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
-    df_forecast.upper_forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.upper_forecast), index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
-    
-    if df_forecast.forecast.isnull().all(axis = 0).astype(int).sum() > 0:
-        raise ValueError("Model {} returned NaN for one or more series".format(model_str))
-        
-    df_forecast.transformation_parameters = transformation_dict
-    # Remove negatives if desired
-    # There's df.where(df_forecast.forecast > 0, 0) or  df.clip(lower = 0), not sure which faster
-    if no_negatives:
-        df_forecast.lower_forecast = df_forecast.lower_forecast.clip(lower = 0)
-        df_forecast.forecast = df_forecast.forecast.clip(lower = 0)
-        df_forecast.upper_forecast = df_forecast.upper_forecast.clip(lower = 0)
-    transformation_runtime = transformation_runtime + (datetime.datetime.now() - transformationStartTime)
-    df_forecast.transformation_runtime = transformation_runtime
-    
-    return df_forecast
-
 def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US', 
                  startTimeStamps = None, forecast_length: int = 14,
@@ -300,6 +235,69 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
     else:
         raise AttributeError(("Model String '{}' not a recognized model type").format(model))
 
+def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict, 
+                    model_str: str, parameter_dict: dict, frequency: str = 'infer', 
+                    prediction_interval: float = 0.9, no_negatives: bool = False,
+                    preord_regressor_train = [], preord_regressor_forecast = [], 
+                    holiday_country: str = 'US', startTimeStamps = None,
+                    random_seed: int = 2020, verbose: int = 0):
+    """Feed parameters into modeling pipeline
+    
+    Args:
+        df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
+        forecast_length (int): number of periods to forecast
+        transformation_dict (dict): a dictionary of outlier, fillNA, and transformation methods to be used
+        model_str (str): a string to be direct to the appropriate model, used in ModelMonster
+        frequency (str): str representing frequency alias of time series
+        prediction_interval (float): width of errors (note: rarely do the intervals accurately match the % asked for...)
+        no_negatives (bool): whether to force all forecasts to be > 0
+        preord_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
+        preord_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
+        holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.            
+        startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
+        
+    Returns:
+        PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
+    """
+    transformationStartTime = datetime.datetime.now()
+    from autots.tools.transform import GeneralTransformer
+    transformer_object = GeneralTransformer(outlier=transformation_dict['outlier'],
+                                            fillNA = transformation_dict['fillNA'], 
+                                            transformation = transformation_dict['transformation']).fit(df_train)
+    df_train_transformed = transformer_object.transform(df_train)
+    
+    if transformation_dict['context_slicer'] in ['2ForecastLength','HalfMax']:
+        from autots.tools.transform import simple_context_slicer
+        df_train_transformed = simple_context_slicer(df_train_transformed, method = transformation_dict['context_slicer'], forecast_length = forecast_length)
+    
+    transformation_runtime = datetime.datetime.now() - transformationStartTime
+    # from autots.evaluator.auto_model import ModelMonster
+    model = ModelMonster(model_str, parameters=parameter_dict, frequency = frequency, 
+                         prediction_interval = prediction_interval, holiday_country = holiday_country,
+                         random_seed = random_seed, verbose = verbose, forecast_length = forecast_length)
+    model = model.fit(df_train_transformed, preord_regressor = preord_regressor_train)
+    df_forecast = model.predict(forecast_length = forecast_length, preord_regressor = preord_regressor_forecast)
+    
+    transformationStartTime = datetime.datetime.now()
+    # Inverse the transformations
+    df_forecast.forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.forecast), index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
+    df_forecast.lower_forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.lower_forecast), index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
+    df_forecast.upper_forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.upper_forecast), index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
+    
+    if df_forecast.forecast.isnull().all(axis = 0).astype(int).sum() > 0:
+        raise ValueError("Model {} returned NaN for one or more series".format(model_str))
+        
+    df_forecast.transformation_parameters = transformation_dict
+    # Remove negatives if desired
+    # There's df.where(df_forecast.forecast > 0, 0) or  df.clip(lower = 0), not sure which faster
+    if no_negatives:
+        df_forecast.lower_forecast = df_forecast.lower_forecast.clip(lower = 0)
+        df_forecast.forecast = df_forecast.forecast.clip(lower = 0)
+        df_forecast.upper_forecast = df_forecast.upper_forecast.clip(lower = 0)
+    transformation_runtime = transformation_runtime + (datetime.datetime.now() - transformationStartTime)
+    df_forecast.transformation_runtime = transformation_runtime
+    
+    return df_forecast
 
 class TemplateEvalObject(object):
     """Object to contain all your failures!
@@ -342,7 +340,6 @@ def unpack_ensemble_models(template,
         template = template[template['Ensemble'] == 0]
     return template
 
-from autots.models.ensemble import EnsembleForecast
 def PredictWitch(template, df_train,forecast_length: int,
                     frequency: str = 'infer', 
                     prediction_interval: float = 0.9, no_negatives: bool = False,
@@ -381,6 +378,7 @@ def PredictWitch(template, df_train,forecast_length: int,
     for index_upper, row_upper in template.iterrows():
         # if an ensemble
         if row_upper['Ensemble'] == 1:
+            from autots.models.ensemble import EnsembleForecast
             forecasts_list = []
             forecasts_runtime = []
             forecasts = []
@@ -420,7 +418,6 @@ def PredictWitch(template, df_train,forecast_length: int,
             parameter_dict = json.loads(row_upper['ModelParameters'])
             transformation_dict = json.loads(row_upper['TransformationParameters'])
             
-            # from autots.evaluator.auto_model import ModelPrediction
             df_forecast = ModelPrediction(df_train, forecast_length,transformation_dict, 
                                           model_str, parameter_dict, frequency=frequency, 
                                           prediction_interval=prediction_interval, 
@@ -432,8 +429,7 @@ def PredictWitch(template, df_train,forecast_length: int,
                                           startTimeStamps = startTimeStamps)
     
             return df_forecast
-
-# from autots.evaluator.auto_model import create_model_id    
+   
 def TemplateWizard(template, df_train, df_test, weights,
                    model_count: int = 0, ensemble: bool = True,
                    forecast_length: int = 14, frequency: str = 'infer', 
