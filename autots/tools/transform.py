@@ -326,12 +326,30 @@ class GeneralTransformer(object):
         if (transformation =='PowerTransformer'):
             from sklearn.preprocessing import PowerTransformer
             transformer = PowerTransformer(method = 'yeo-johnson', standardize=True, copy=True).fit(df)
-            #df = transformer.transform(df)
+            return transformer
+        
+        if (transformation =='QuantileTransformer'):
+            from sklearn.preprocessing import QuantileTransformer
+            transformer = QuantileTransformer(copy=True).fit(df)
+            return transformer
+        
+        if (transformation =='StandardScaler'):
+            from sklearn.preprocessing import StandardScaler
+            transformer = StandardScaler(copy=True).fit(df)
+            return transformer
+        
+        if (transformation =='MaxAbsScaler'):
+            from sklearn.preprocessing import MaxAbsScaler
+            transformer = MaxAbsScaler(copy=True).fit(df)
+            return transformer
+        
+        if (transformation =='RobustScaler'):
+            from sklearn.preprocessing import RobustScaler
+            transformer = RobustScaler(copy=True).fit(df)
             return transformer
         
         if (transformation =='Detrend'):
             transformer = Detrend().fit(df)
-            #df = transformer.transform(df)
             return transformer
         
         if (transformation == 'RollingMean10'):
@@ -345,7 +363,12 @@ class GeneralTransformer(object):
             window = 2 if window < 2 else window
             self.window = window
             transformer = RollingMeanTransformer(window = self.window).fit(df)
-            #df = transformer.transform(df)
+            return transformer
+        if (transformation == 'RollingMean10thN'):
+            window = int(len(df.index)/10)
+            window = 2 if window < 2 else window
+            self.window = window
+            transformer = RollingMeanTransformer(window = self.window).fit(df)
             return transformer
         else:
             print("Transformation method not known or improperly entered, returning untransformed df")
@@ -412,7 +435,7 @@ def RandomTransform():
     """
     outlier_choice = np.random.choice(a = [None, 'clip3std', 'clip2std','clip4std','remove3std'], size = 1, p = [0.4, 0.3, 0.1, 0.1, 0.1]).item()
     na_choice = np.random.choice(a = ['ffill', 'fake date', 'rolling mean','mean','zero', 'ffill mean biased', 'median'], size = 1, p = [0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1]).item()
-    transformation_choice = np.random.choice(a = [None, 'PowerTransformer', 'RollingMean100thN','MinMaxScaler','Detrend', 'RollingMean10'], size = 1, p = [0.3, 0.2, 0.2, 0.1, 0.1, 0.1]).item()
+    transformation_choice = np.random.choice(a = [None, 'PowerTransformer', 'RollingMean100thN','MinMaxScaler','Detrend', 'RollingMean10', 'RollingMean10thN', 'QuantileTransformer', 'StandardScaler', 'MaxAbsScaler', 'RobustScaler'], size = 1, p = [0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05 ,0.05, 0.05]).item()
     context_choice = np.random.choice(a = [None, 'HalfMax', '2ForecastLength', '6ForecastLength'], size = 1, p = [0.7, 0.1, 0.1, 0.1]).item()
     param_dict = {
             'outlier': outlier_choice,

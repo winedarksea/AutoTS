@@ -238,7 +238,7 @@ class TSFreshRegressor(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
-        max_timeshift_choice = np.random.choice(a = [5, 10, 20], size = 1, p = [0.01, 0.98,0.01]).item()
+        max_timeshift_choice = np.random.choice(a = [5, 10, 20], size = 1, p = [0.05, 0.9,0.05]).item()
         regression_model_choice = np.random.choice(a = ['RandomForest','ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost'], size = 1, p = [0.02, 0.01, 0.01, 0.05, 0.01, 0.9]).item()
         feature_selection_choice = None
         parameter_dict = {

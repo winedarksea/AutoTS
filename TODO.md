@@ -8,27 +8,34 @@
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
 # Errors: 
-'Detrend' transformation is still buggy (can't convert to Series)
-raise AttributeError(("Model String '{}' not recognized").format(model)) -> turn to an allowable exception with a printed warning
+'Detrend' transformation is sometimes buggy (can't convert to Series)
 Holiday not (always) working
+Hourly data repeatedly: One or more series is 90% or more NaN in this test split
+
+GluonTS to template, best
+Select Transformers to include in random, resort in function
+Seasonal Naive where Lag is > training length
 
 # To-Do
 * Get the sphinx (google style) documentation and readthedocs.io website up
 * Better point to probabilistic (uncertainty of naive last-value forecast) - linear reg of abs error of samples - simulations
 * get_prediction for Statsmodels Statespace models to include confidence interval where possible
 	* migrate arima_model to arima.model
+	* uncomp, dynamic factor with uncertainty intervals
 * Check how fillna methods handle datasets that are entirely NaN
 * Better X_maker:
 	* use feature selection on TSFresh features - autocorrelation lag n, fft/cwt coefficients (abs), abs_energy
 	* date part and age/expanding regressors
+	* moving average +/- moving std deviation
 * GluonTS
 	* Add support for preord_regressor
 	* Modify GluonStart if lots of NaN at start of that series
 	* GPU and CPU ctx
 * Print methods for prediction/model objects that give simple readme how-to's
-* Get Tsfresh working with small dataset (short, 2 columns) (check feature importance again)
 * Relative/Absolute Imports and reduce package reloading messages
 * Format of Regressor - allow multiple input to at least sklearn models
+	* Miso l filter or similar to reduce to single time series where only on regressor allowed
+	* or PCA or other fast approach to reduce dimensions
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
 * Handle categorical forecasts where forecast leaves range of known values, then add to upper/lower forecasts
 * Speed improvements, Profiling
@@ -39,6 +46,7 @@ Holiday not (always) working
 * If all input are Int, convert floats back to int
 * Trim whitespace/case-desensitize on string inputs
 * Option to print % improvement of best over last value naive
+* If model list * max model_per_class is < models to validate or other, raise models_per_clas
 * Hierachial correction (bottom-up to start with)
 * Because I'm a biologist, incorporate more genetics and such. Also as a neuro person, there must be a way to fit networks in...
 * Improved verbosity controls and options. 
@@ -79,22 +87,25 @@ Holiday not (always) working
 * Exempt or reduce slow models from unnecessary runs, particularly with different transformations
 * Numba and Cythion acceleration (metrics might be easy to start with)
 
+#### New datasets:
+	Second level data that is music (like a radio stream)
+	Ecological data
+
 #### New Ensembles:
 	best 3 (unique algorithms not just variations of same)
 	forecast distance 30/30/30
 	best per series ensemble ('horizontal ensemble')
 	best point with best probalistic containment
 #### New models:
-	Seasonal Naive
-	Last Value + Drift Naive
 	Simple Decomposition forecasting
 	Statespace variant of ETS which has Confidence Intervals
 	Tensorflow Probability Structural Time Series
-	Pytorch Simple LSTM/GRU
+	RollingRegression
+		Pytorch and Tensorflow Simple LSTM/GRU
+		other sequence models
+		Categorical classifier
+		PCA or similar -> Univariate Series (Unobserved Components)
 	Simulations
-	XGBoost (doesn't support multioutput directly)
-	Sklearn + TSFresh
-	Sktime
 	Ta-lib
 	tslearn
 	Multivariate GARCH
@@ -109,3 +120,9 @@ Holiday not (always) working
 
 #### New Transformations:
 	Test variations on 'RollingMean100thN'
+	Simple filter, no inverse (uninverted weighted moving average)
+	Weighted moving average
+	Symbolic aggregate approximation (SAX) and (PAA)
+		Binning and simplifying (100th N)
+	KernelPCA/PCA/TruncatedSVD
+	

@@ -117,14 +117,14 @@ class AutoTS(object):
             self.per_series_errors = True
         
         if model_list == 'default':
-            self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
+            self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'SeasonalNaive',
               'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
               'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
         if model_list == 'superfast':
-            self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS']
+            self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'SeasonalNaive']
         if model_list == 'fast':
             self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
-                               'GLM', 'ETS', 'FBProphet', 'RollingRegression',
+                               'GLM', 'ETS', 'FBProphet', 'RollingRegression', 'SeasonalNaive',
                                'UnobservedComponents', 'VECM', 'DynamicFactor']
         if model_list == 'probabilistic':
             self.model_list = ['ARIMA', 'GluonTS', 'FBProphet']
@@ -132,7 +132,7 @@ class AutoTS(object):
             self.model_list = ['VECM', 'DynamicFactor', 'GluonTS', 'VARMAX', 'RollingRegression']
         if model_list == 'all':
             self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
+              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS', 'SeasonalNaive',
               'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor', 'TSFreshRegressor']
             
         if initial_template.lower() == 'random':
@@ -295,7 +295,7 @@ class AutoTS(object):
                 print("New Generation: {}".format(current_generation))
             new_template = NewGeneticTemplate(self.initial_results.model_results, submitted_parameters=submitted_parameters, sort_column = "Score", 
                                sort_ascending = True, max_results = 40, max_per_model_class = self.max_per_model_class,
-                               top_n = 15, template_cols=template_cols)
+                               top_n = 20, template_cols=template_cols)
             submitted_parameters = pd.concat([submitted_parameters, new_template], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
             
             template_result = TemplateWizard(new_template, df_train, df_test, current_weights,
@@ -380,7 +380,7 @@ class AutoTS(object):
                 self.initial_results.model_results_per_series_smape = self.initial_results.model_results_per_series_smape.append(ens_template_result.model_results_per_series_smape)
                 self.initial_results.model_results_per_series_mae = self.initial_results.model_results_per_series_mae.append(ens_template_result.model_results_per_series_mae)
         
-        
+        self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(subset = ['ID', 'Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'])
         num_validations = abs(int(num_validations))
         max_possible = len(df_wide_numeric.index)/forecast_length
         if (max_possible - np.floor(max_possible)) > self.min_allowed_train_percent:

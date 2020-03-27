@@ -112,6 +112,8 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
         model (str): Name of Model Function
         parameters (dict): Dictionary of parameters to pass through to model
     """
+    model = str(model)
+    
     if model == 'ZeroesNaive':
         from autots.models.basics import ZeroesNaive
         return ZeroesNaive(frequency = frequency, prediction_interval = prediction_interval)
@@ -126,6 +128,12 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
             return AverageValueNaive(frequency = frequency, prediction_interval = prediction_interval)
         else:
             return AverageValueNaive(frequency = frequency, prediction_interval = prediction_interval, method = parameters['method'])
+    if model == 'SeasonalNaive':
+        from autots.models.basics import SeasonalNaive
+        if parameters == {}:
+            return SeasonalNaive(frequency = frequency, prediction_interval = prediction_interval)
+        else:
+            return SeasonalNaive(frequency = frequency, prediction_interval = prediction_interval, method = parameters['method'], lag_1 = parameters['lag_1'], lag_2 = parameters['lag_2'])
     
     if model == 'GLS':
         from autots.models.statsmodels import GLS
@@ -660,7 +668,6 @@ def validation_aggregation(validation_results, per_timestamp_errors: bool = Fals
                 # 'TransformationRuntime': 'mean', 
                 # 'FitRuntime': 'mean', 
                 # 'PredictRuntime': 'mean',
-                # 'TotalRuntime': 'mean',
                 'smape': 'mean',
                 'mae': 'mean',
                 'rmse': 'mean',
@@ -672,8 +679,10 @@ def validation_aggregation(validation_results, per_timestamp_errors: bool = Fals
                 'mae_weighted': 'mean',
                 'rmse_weighted': 'mean',
                 'containment_weighted': 'mean',
+                'TotalRuntimeSeconds': 'mean',
                 'Score': 'mean'
                 }
+    validation_results.model_results['TotalRuntimeSeconds'] = validation_results.model_results['TotalRuntime'].dt.seconds + 1
     validation_results.model_results = validation_results.model_results[pd.isnull(validation_results.model_results['Exceptions'])]
     validation_results.model_results = validation_results.model_results.replace([np.inf, -np.inf], np.nan)
     validation_results.model_results = validation_results.model_results.groupby(groupby_cols).agg(col_aggs)

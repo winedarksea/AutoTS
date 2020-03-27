@@ -67,7 +67,7 @@ Only a subset of models are based from initial validation to cross validation. T
 Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in (lovely) Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting. 
 Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. This carries information to models such as RollingRegression, VARMAX, and VECM. 
 
-Also seen in use here is the `model_list`. By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of 'probabilistic', 'multivariate', 'fast', 'superfast', or 'all'.
+Also seen in use here is the `model_list`. 
 
 ```
 from autots.datasets import load_toy_hourly
@@ -98,6 +98,11 @@ FBProphet, GluonTS, and ARIMA are all sources of probabilistic intervals.
 upper_forecasts_df = prediction.upper_forecast
 lower_forecasts_df = prediction.lower_forecast
 ```
+
+### Model Lists
+By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of 'probabilistic', 'multivariate', 'fast', 'superfast', or 'all'.
+
+One note of warning is that the TSFreshRegressor, included only in 'all', does not appear to work very reliably on Windows. It can be very slow, especially with large amounts of data. 
 
 ## Deployment and Template Import/Export
 Many models can be reverse engineered with relative simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package. 

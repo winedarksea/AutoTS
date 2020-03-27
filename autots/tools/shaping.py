@@ -232,7 +232,9 @@ def simple_train_test_split(df, forecast_length: int = 10,
     train = df.head(len(df.index) - forecast_length)
     test = df.tail(forecast_length)
     
-    if (verbose > 0) and ((train.isnull().sum(axis=0)/train.shape[1]).max() > 0.9):
+    if (verbose > 0) and ((train.isnull().sum(axis=0)/train.shape[0]).max() > 0.9):
+        print("One or more series is 90% or more NaN in this train split")
+    if (verbose > 0) and ((test.isnull().sum(axis=0)/test.shape[0]).max() > 0.9):
         print("One or more series is 90% or more NaN in this test split")
     return train, test
 

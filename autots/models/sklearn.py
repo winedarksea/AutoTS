@@ -13,7 +13,8 @@ from autots.tools.probabilistic import Point_to_Probability
 def rolling_x_regressor(df, mean_rolling_periods: int = 30, std_rolling_periods: int = 7, 
                         max_rolling_periods: int = None, min_rolling_periods: int = None,
                         ewm_alpha: float = 0.5, additional_lag_periods: int = 7,
-                        holiday: bool = False, holiday_country: str = 'US', polynomial_degree = None):
+                        holiday: bool = False, holiday_country: str = 'US', polynomial_degree = None,
+                        abs_energy: bool = False, lag_autocorr_periods: int = None):
     """
     Generate more features from initial time series
     
@@ -32,12 +33,19 @@ def rolling_x_regressor(df, mean_rolling_periods: int = 30, std_rolling_periods:
         X = pd.concat([X, df.ewm(alpha = ewm_alpha, min_periods = 1).mean()], axis = 1)
     if str(additional_lag_periods).isdigit():
         X = pd.concat([X, df.shift(additional_lag_periods)], axis = 1)
-
+    if abs_energy:
+        X = pd.concat([X, df.pow(other = ([2] * len(df.columns))).cumsum()], axis = 1)
+    if str(lag_autocorr_periods).isdigit():
+        # (df.rolling(window=1).corr(df.shift(lag_autocorr_periods)))
+        # df.rolling(5).apply(lambda x: pd.Series(x).autocorr())
+        # df.corrwith(df.shift(lag_autocorr_periods).fillna(0).astype(int))
+        # df.apply(lambda col: col.autocorr(lag_autocorr_periods), axis=0)
+        # X = pd.concat([X, ZZZ.fillna(0)], axis = 1)
+        pass
     if holiday:
         from autots.tools.holiday import holiday_flag
         X['holiday_flag_'] = holiday_flag(X.index, country = holiday_country).values
         X['holiday_flag_future_'] = holiday_flag(X.index + pd.Timedelta('1D'), country = holiday_country).values
-
     if str(polynomial_degree).isdigit():
         polynomial_degree = abs(int(polynomial_degree))
         from sklearn.preprocessing import PolynomialFeatures
@@ -136,8 +144,7 @@ class RollingRegression(ModelObject):
             regr = DecisionTreeRegressor(random_state= self.random_seed)
         elif self.regression_model == 'MLP':
             from sklearn.neural_network import MLPRegressor
-            #relu/tanh lbfgs/adam layer_sizes (100) (10)
-            regr = MLPRegressor(hidden_layer_sizes=(10, 25, 10),verbose = self.verbose_bool, max_iter = 200,
+            regr = MLPRegressor(hidden_layer_sizes=(25, 15, 25),verbose = self.verbose_bool, max_iter = 250,
                   activation='tanh', solver='lbfgs', random_state= self.random_seed)
         elif self.regression_model == 'KNN':
             from sklearn.multioutput import MultiOutputRegressor
