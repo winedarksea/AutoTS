@@ -136,7 +136,7 @@ class AutoTS(object):
               'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor', 'TSFreshRegressor']
             
         if initial_template.lower() == 'random':
-            self.initial_template = RandomTemplate(40, model_list = self.model_list)
+            self.initial_template = RandomTemplate(50, model_list = self.model_list)
         elif initial_template.lower() == 'general':
             from autots.templates.general import general_template
             self.initial_template = general_template
@@ -146,7 +146,7 @@ class AutoTS(object):
             self.initial_template = pd.concat([general_template, random_template], axis = 0).drop_duplicates()
         else:
             print("Input initial_template either unrecognized or not yet implemented. Using Random.")
-            self.initial_template = RandomTemplate(40)
+            self.initial_template = RandomTemplate(50)
         
         self.initial_template = self.initial_template[self.initial_template['Model'].isin(self.model_list)]
         

@@ -4,8 +4,7 @@ Naives and Others Requiring No Additional Packages Beyond Numpy and Pandas
 import datetime
 import numpy as np
 import pandas as pd
-from autots.evaluator.auto_model import ModelObject
-from autots.evaluator.auto_model import PredictionObject
+from autots.evaluator.auto_model import ModelObject, PredictionObject, seasonal_int
 from autots.tools.probabilistic import Point_to_Probability
 
 
@@ -323,10 +322,8 @@ class SeasonalNaive(ModelObject):
     def get_new_params(self,method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
-        lag_1_choice = np.random.choice(a=['random_int', 2, 7, 12, 24, 28, 60, 364], size = 1, p = [0.15, 0.05, 0.2, 0.1, 0.1, 0.2, 0.1, 0.1]).item()
-        if lag_1_choice == 'random_int':
-            lag_1_choice = np.random.randint(2, 100, size = 1).item()
-        lag_2_choice = np.random.choice(a=['None', 1, 7, 12, 24, 28, 60, 364], size = 1, p = [0.3, 0.2, 0.1, 0.05, 0.1, 0.1, 0.05, 0.1]).item()
+        lag_1_choice = seasonal_int()
+        lag_2_choice = np.random.choice(a=['None', seasonal_int(include_one = True)], size = 1, p = [0.3, 0.7]).item()
         if str(lag_2_choice) == str(lag_1_choice):
             lag_2_choice = 1
         method_choice = np.random.choice(a=['Mean', 'LastValue'], size = 1, p = [0.5, 0.5]).item()

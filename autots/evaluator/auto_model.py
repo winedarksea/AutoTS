@@ -6,6 +6,15 @@ import json
 
 from autots.evaluator.metrics import PredictionEval
 
+def seasonal_int(include_one: bool = False):
+    if include_one:
+        lag = np.random.choice(a=['random_int', 1, 2, 4, 7, 10, 12, 24, 28, 60, 96, 364, 1440, 420, 52, 84], size = 1, p = [0.10, 0.05, 0.05, 0.05, 0.15, 0.01, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.01, 0.01, 0.01, 0.01]).item()
+    else:
+        lag = np.random.choice(a=['random_int', 2, 4, 7, 10, 12, 24, 28, 60, 96, 364, 1440, 420, 52, 84], size = 1, p = [0.15, 0.05, 0.05, 0.15, 0.01, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.01, 0.01, 0.01, 0.01]).item()
+    if lag == 'random_int':
+            lag = np.random.randint(2, 100, size = 1).item()
+    return int(lag)
+
 def create_model_id(model_str: str, parameter_dict: dict = {}, transformation_dict: dict = {}):
     """
     Create a hash model ID which should be unique to the model parameters

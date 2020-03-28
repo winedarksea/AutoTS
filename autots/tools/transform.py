@@ -165,7 +165,106 @@ class Detrend(object):
         # X = add_constant(X, has_constant='add')
         df = df.astype(float) + self.model.predict(X)
         return df
+
+class SinTrend(object):
+    """Modelling sin
+    
+    """
+    def fit_sin(self, tt, yy):
+        '''Fit sin to the input time sequence, and return fitting parameters "amp", "omega", "phase", "offset", "freq", "period" and "fitfunc"
         
+        from user unsym @ https://stackoverflow.com/questions/16716302/how-do-i-fit-a-sine-curve-to-my-data-with-pylab-and-numpy
+        '''
+        import scipy.optimize
+        tt = np.array(tt)
+        yy = np.array(yy)
+        ff = np.fft.fftfreq(len(tt), (tt[1]-tt[0]))   # assume uniform spacing
+        Fyy = abs(np.fft.fft(yy))
+        guess_freq = abs(ff[np.argmax(Fyy[1:])+1])   # excluding the zero frequency "peak", which is related to offset
+        guess_amp = np.std(yy) * 2.**0.5
+        guess_offset = np.mean(yy)
+        guess = np.array([guess_amp, 2.*np.pi*guess_freq, 0., guess_offset])
+    
+        def sinfunc(t, A, w, p, c):  return A * np.sin(w*t + p) + c
+        popt, pcov = scipy.optimize.curve_fit(sinfunc, tt, yy, p0=guess, maxfev=10000)
+        A, w, p, c = popt
+        # f = w/(2.*np.pi)
+        # fitfunc = lambda t: A * np.sin(w*t + p) + c
+        return {"amp": A, "omega": w, "phase": p, "offset": c} #, "freq": f, "period": 1./f, "fitfunc": fitfunc, "maxcov": np.max(pcov), "rawres": (guess,popt,pcov)}
+
+    def fit(self, df):
+        """Fits trend for later detrending
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        try:
+            df = df.astype(float)
+        except:
+            raise ValueError ("Data Cannot Be Converted to Numeric Float")
+        
+        X = (pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values)
+        self.sin_params = pd.DataFrame()
+        for column in df.columns:
+            try:
+                y = df[column].values
+                vals = self.fit_sin(X, y)
+                current_param = pd.DataFrame(vals, index = [column])
+            except Exception as e:
+                print(e)
+                current_param = pd.DataFrame({"amp": 0, "omega": 1, "phase": 1, "offset": 1}, index = [column])
+            self.sin_params = pd.concat([self.sin_params, current_param], axis = 0)
+        self.shape = df.shape
+        return self        
+        
+    def fit_transform(self, df):
+        """Fits and Returns Detrended DataFrame
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+        
+
+    def transform(self, df):
+        """Returns detrended data
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        try:
+            df = df.astype(float)
+        except:
+            raise ValueError ("Data Cannot Be Converted to Numeric Float")
+        X = (pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values)
+        
+        sin_df = pd.DataFrame()
+        for index, row in self.sin_params.iterrows():
+            yy = pd.DataFrame(row['amp']*np.sin(row['omega']*X + row['phase']) + row['offset'], columns = [index])
+            sin_df = pd.concat([sin_df, yy], axis = 1)
+        df_index = df.index
+        df = df.astype(float).reset_index(drop = True) - sin_df.reset_index(drop = True)
+        df.index = df_index
+        return df
+    
+    def inverse_transform(self, df):
+        """Returns data to original form
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        try:
+            df = df.astype(float)
+        except:
+            raise ValueError ("Data Cannot Be Converted to Numeric Float")
+        X = pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values
+        
+        sin_df = pd.DataFrame()
+        for index, row in self.sin_params.iterrows():
+            yy = pd.DataFrame(row['amp']*np.sin(row['omega']*X + row['phase']) + row['offset'], columns = [index])
+            sin_df = pd.concat([sin_df, yy], axis = 1)
+        df_index = df.index
+        df = df.astype(float).reset_index(drop = True) + sin_df.reset_index(drop = True)
+        df.index = df_index
+        return df
+
 class RollingMeanTransformer(object):
     """Attempt at Rolling Mean with built-in inverse_transform for time series
     inverse_transform can only be applied to the original series, or an immediately following forecast
@@ -651,7 +750,7 @@ def RandomTransform():
     """
     outlier_choice = np.random.choice(a = [None, 'clip3std', 'clip2std','clip4std','remove3std'], size = 1, p = [0.4, 0.3, 0.1, 0.1, 0.1]).item()
     na_choice = np.random.choice(a = ['ffill', 'fake date', 'rolling mean','mean','zero', 'ffill mean biased', 'median'], size = 1, p = [0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1]).item()
-    # 'PowerTransformer', 'PCA', 'Detrend', 'RollingMean10', 'RollingMean100thN',
+    # 'PowerTransformer', 'PCA', 'Detrend', 'RollingMean10', 'RollingMean100thN', 'SinTrend'
     transformation_choice = np.random.choice(a = [None, 'KitchenSink2','KitchenSink3','KitchenSink4', 'KitchenSink5','MinMaxScaler', 'RollingMean10thN', 'QuantileTransformer', 'StandardScaler', 'MaxAbsScaler', 'RobustScaler','KitchenSink'], size = 1, p = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05 ,0.05, 0.05, 0.1]).item()
     transformation_choice =   np.random.choice(a = ['KitchenSink', 'KitchenSink5','KitchenSink2','KitchenSink3','KitchenSink4',], size = 1, p = [0.2, 0.2, 0.2, 0.2, 0.2]).item()
     context_choice = np.random.choice(a = [None, 'HalfMax', '2ForecastLength', '6ForecastLength'], size = 1, p = [0.7, 0.1, 0.1, 0.1]).item()
