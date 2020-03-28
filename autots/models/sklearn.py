@@ -200,8 +200,6 @@ class RollingRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
-        #n_estimators_choice = np.random.choice(a = [100, 1000], size = 1, p = [0.2, 0.8]).item()
-        #max_depth_choice = np.random.choice(a = [None, 5, 10], size = 1, p = [0.8, 0.1, 0.1]).item()
         model_choice = np.random.choice(a = ['RandomForest','ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost'], size = 1, p = [0.2, 0.1, 0.025, 0.225, 0.025, 0.425]).item()
         mean_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
         std_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
@@ -212,7 +210,9 @@ class RollingRegression(ModelObject):
         holiday_choice = np.random.choice(a=[True,False], size = 1, p = [0.3, 0.7]).item()
         polynomial_degree_choice = np.random.choice(a=[None,2], size = 1, p = [0.8, 0.2]).item()
         regression_choice = np.random.choice(a=['None','User'], size = 1, p = [0.7, 0.3]).item()
-
+        #lag_1_choice = np.random.choice(a=['random_int', 2, 7, 12, 24, 28, 60, 364], size = 1, p = [0.15, 0.05, 0.2, 0.1, 0.1, 0.2, 0.1, 0.1]).item()
+        # if lag_1_choice == 'random_int':
+        #    lag_1_choice = np.random.randint(2, 100, size = 1).item()
         parameter_dict = {
                         'regression_model': model_choice,
                         'holiday': holiday_choice,

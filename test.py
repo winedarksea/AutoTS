@@ -29,7 +29,7 @@ model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
               #,'VARMAX', 'GluonTS'
               ]
 model_list = 'superfast'
-# model_list = ['SeasonalNaive']
+model_list = ['GLM']
 
 metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
             'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0,
@@ -38,7 +38,7 @@ metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                prediction_interval = 0.9, ensemble = False, weighted = False,
-               max_generations = 50, num_validations = 2, validation_method = 'even',
+               max_generations = 5, num_validations = 2, validation_method = 'even',
                model_list = model_list, initial_template = 'General+Random',
                metric_weighting = metric_weighting, models_to_validate = 50,
                max_per_model_class = 10,
@@ -90,6 +90,8 @@ Edgey Cases:
 from autots.tools.shaping import long_to_wide
 df_wide = long_to_wide(df_long, date_col = 'datetime', value_col = 'value',
                        id_col = 'series_id', frequency = 'infer', aggfunc = 'first')
+
+X = df_wide[df_wide.columns[0:3]].fillna(0)
 
 from autots.tools.shaping import values_to_numeric
 categorical_transformer = values_to_numeric(df_wide)

@@ -8,13 +8,11 @@
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
 # Errors: 
-'Detrend' transformation is sometimes buggy (can't convert to Series)
 Holiday not (always) working
-Hourly data repeatedly: One or more series is 90% or more NaN in this test split
+Models are failing without being captured in model_results
 
 GluonTS to template, best
 Select Transformers to include in random, resort in function
-Seasonal Naive where Lag is > training length
 
 # To-Do
 * Get the sphinx (google style) documentation and readthedocs.io website up
@@ -23,6 +21,7 @@ Seasonal Naive where Lag is > training length
 	* migrate arima_model to arima.model
 	* uncomp, dynamic factor with uncertainty intervals
 * Check how fillna methods handle datasets that are entirely NaN
+* add_constant to GLS, GLM
 * Better X_maker:
 	* use feature selection on TSFresh features - autocorrelation lag n, fft/cwt coefficients (abs), abs_energy
 	* date part and age/expanding regressors

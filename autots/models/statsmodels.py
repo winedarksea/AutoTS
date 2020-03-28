@@ -92,11 +92,13 @@ class GLM(ModelObject):
     """
     def __init__(self, name: str = "GLM", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US',
-                 random_seed: int = 2020, family = 'Gaussian', verbose: int = 1):
+                 random_seed: int = 2020, 
+                 family = 'Gaussian', constant: bool = False, verbose: int = 1):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              holiday_country = holiday_country, random_seed = random_seed,
                              verbose = verbose)
         self.family = family
+        self.constant = constant
         
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
@@ -130,7 +132,13 @@ class GLM(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         from statsmodels.api import GLM
         X = (pd.to_numeric(self.df_train.index, errors = 'coerce',downcast='integer').values)
+        if self.constant or self.constant == 'True':
+            from statsmodels.tools import add_constant
+            X = add_constant(X, has_constant='add')
         forecast = pd.DataFrame()
+        self.df_train = self.df_train.replace(0, np.nan)
+        fill_vals = self.df_train.abs().min(axis = 0, skipna = True)
+        self.df_train = self.df_train.fillna(fill_vals).fillna(0.1)
         for y in self.df_train.columns:
             current_series = self.df_train[y]
             if str(self.family).lower() == 'poisson':
@@ -151,7 +159,10 @@ class GLM(ModelObject):
             else:
                 self.family = 'Gaussian'
                 model = GLM(current_series.values, X, missing = 'drop').fit()
-            current_forecast = model.predict((pd.to_numeric(test_index, errors = 'coerce',downcast='integer').values))
+            Xf = pd.to_numeric(test_index, errors = 'coerce',downcast='integer').values
+            if self.constant or self.constant == 'True':
+                Xf = add_constant(Xf, has_constant='add')
+            current_forecast = model.predict((Xf))
             forecast = pd.concat([forecast, pd.Series(current_forecast)], axis = 1)
         df_forecast = pd.DataFrame(forecast)
         df_forecast.columns = self.column_names
@@ -178,13 +189,16 @@ class GLM(ModelObject):
     def get_new_params(self,method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
-        family_choice = np.random.choice(a = ['Gaussian', 'Poisson','Binomial','NegativeBinomial','Tweedie'], size = 1, p = [0.1, 0.4, 0.1, 0.3, 0.1]).item()
-        return {'family':family_choice}
+        family_choice = np.random.choice(a = ['Gaussian', 'Poisson','Binomial','NegativeBinomial','Tweedie', 'Gamma'], size = 1, p = [0.1, 0.3, 0.1, 0.3, 0.1, 0.1]).item()
+        constant_choice = np.random.choice(a = [False, True], size = 1, p = [0.95, 0.05]).item()
+        return {'family':family_choice,
+                'constant':constant_choice}
     
     def get_params(self):
         """Return dict of current parameters
         """
-        return {'family':self.family}
+        return {'family':self.family,
+                'constant':self.constant}
 
 class ETS(ModelObject):
     """Exponential Smoothing from Statsmodels
@@ -280,7 +294,9 @@ class ETS(ModelObject):
         seasonal_probability = [0.2, 0.2, 0.6]
         seasonal_choice = np.random.choice(a = seasonal_list, size = 1, p = seasonal_probability).item()
         if seasonal_choice in ["additive", "multiplicative"]:
-            seasonal_period_choice = np.random.choice([4,7,12,30], size = 1).item()
+            seasonal_period_choice = np.random.choice(a=['random_int', 2, 7, 12, 24, 28, 60, 364], size = 1, p = [0.15, 0.05, 0.2, 0.1, 0.1, 0.2, 0.1, 0.1]).item()
+            if seasonal_period_choice == 'random_int':
+                seasonal_period_choice = np.random.randint(2, 100, size = 1).item()
         else:
             seasonal_period_choice = None
         parameter_dict = {
@@ -418,9 +434,9 @@ class ARIMA(ModelObject):
         
         large p,d,q can be very slow (a p of 30 can take hours, whereas 5 takes seconds)
         """
-        p_choice = np.random.choice(a = [0,1,2,3,4,5,7,10], size = 1, p = [0.2,0.2,0.1,0.1,0.1,0.1,0.1,0.1]).item()
+        p_choice = np.random.choice(a = [0,1,2,3,4,5,7,12], size = 1, p = [0.2,0.2,0.1,0.1,0.1,0.1,0.1,0.1]).item()
         d_choice = np.random.choice(a = [0,1,2,3], size = 1, p = [0.4, 0.3, 0.2, 0.1]).item()
-        q_choice = np.random.choice(a = [0,1,2,3,4,5,7,10], size = 1, p = [0.2,0.2,0.1,0.1,0.1,0.1,0.1,0.1]).item()
+        q_choice = np.random.choice(a = [0,1,2,3,4,5,7,12], size = 1, p = [0.2,0.2,0.1,0.1,0.1,0.1,0.1,0.1]).item()
         regression_list = [None, 'User', 'Holiday']
         regression_probability = [0.4, 0.4, 0.2]
         regression_choice = np.random.choice(a = regression_list, size = 1, p = regression_probability).item()

@@ -144,7 +144,7 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
         if parameters == {}:
             model = GLM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         else:
-            model = GLM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, family = parameters['family'])
+            model = GLM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, family = parameters['family'], constant = parameters['constant'])
         return model
     
     if model == 'ETS':

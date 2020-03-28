@@ -58,7 +58,7 @@ general_template_dict = {
   'TransformationParameters': '{"outlier": "clip3std", "fillNA": "fake date", "transformation": null, "context_slicer": null}',
   'Ensemble': 0},
  14: {'Model': 'GLM',
-  'ModelParameters': '{"family": "NegativeBinomial"}',
+  'ModelParameters': '{"family": "NegativeBinomial", "constant": false}',
   'TransformationParameters': '{"outlier": null, "fillNA": "ffill", "transformation": "MinMaxScaler", "context_slicer": "HalfMax"}',
   'Ensemble': 0}
  }

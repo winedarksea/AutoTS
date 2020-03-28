@@ -118,7 +118,11 @@ class Detrend(object):
             raise ValueError ("Data Cannot Be Converted to Numeric Float")
             
         # formerly df.index.astype( int ).values
-        self.model = GLS(df.values, (pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values), missing = 'drop').fit()
+        y = df.values
+        X = (pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values)
+        # from statsmodels.tools import add_constant
+        # X = add_constant(X, has_constant='add')
+        self.model = GLS(y, X, missing = 'drop').fit()
         self.shape = df.shape
         return self        
         
@@ -140,7 +144,11 @@ class Detrend(object):
             df = df.astype(float)
         except:
             raise ValueError ("Data Cannot Be Converted to Numeric Float")
-        df = df.astype(float) - self.model.predict(df.index.astype( int ).values)
+        # formerly X = df.index.astype( int ).values
+        X = (pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values)
+        # from statsmodels.tools import add_constant
+        # X = add_constant(X, has_constant='add')
+        df = df.astype(float) - self.model.predict(X)
         return df
     
     def inverse_transform(self, df):
@@ -152,7 +160,10 @@ class Detrend(object):
             df = df.astype(float)
         except:
             raise ValueError ("Data Cannot Be Converted to Numeric Float")
-        df = df.astype(float) + self.model.predict(pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values)
+        X = pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values
+        # from statsmodels.tools import add_constant
+        # X = add_constant(X, has_constant='add')
+        df = df.astype(float) + self.model.predict(X)
         return df
         
 class RollingMeanTransformer(object):
@@ -228,6 +239,176 @@ class RollingMeanTransformer(object):
             staged = staged.tail(len(diffed.index))
             return staged
             
+class MixedTransformer(object):
+    """
+    Multiple transformers combined.
+    Some functionality will only inverse correctly for a forecast immediately proceeding the fit data.
+    
+    Args:
+        pre_transformer (str): 'PowerTransformer', 'StandardScaler', or 'QuantileTransformer'
+        detrend (bool): whether or not to remove a linear trend
+        rolling_window (int): Size of window to do a rolling window smoothing, or None to pass
+        post_transformer (str): 'PowerTransformer', 'MinMaxScaler', or 'QuantileTransformer'
+        n_bins (int): None to pass or int number of categories to discretize into by quantiles
+        bin_strategy (str): 'lower', 'center', 'upper' like Riemann sums
+    """
+    def __init__(self,
+                 pre_transformer: str = 'PowerTransformer', 
+                 detrend: bool = False, rolling_window: int = None, 
+                 post_transformer: str = None,
+                 n_bins: int = None,
+                 bin_strategy: str = 'center',
+                 random_seed: int = 2020):
+        self.pre_transformer = pre_transformer
+        self.detrend = detrend
+        self.rolling_window = rolling_window
+        if str(self.rolling_window).isdigit():
+            self.rolling_window = abs(int(rolling_window))
+        self.post_transformer = post_transformer
+        self.n_bins = n_bins
+        if str(n_bins).isdigit():
+            self.n_bins = abs(int(n_bins))
+        self.bin_strategy = bin_strategy
+        self.random_seed = random_seed
+    def fit(self, df):
+        """Fits trend for later detrending
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.shape = df.shape
+        self.df_index = df.index
+        self.df_colnames = df.columns
+        
+        
+        if self.pre_transformer == 'QuantileTransformer':
+            from sklearn.preprocessing import QuantileTransformer
+            self.transformer1 = QuantileTransformer(copy=True, random_state = self.random_seed)
+        elif self.pre_transformer == 'StandardScaler':
+            from sklearn.preprocessing import StandardScaler
+            self.transformer1 = StandardScaler(copy=True)
+        else:
+            self.pre_transformer = 'PowerTransformer'
+            from sklearn.preprocessing import PowerTransformer
+            self.transformer1 = PowerTransformer(method = 'yeo-johnson', copy=True)
+        if self.pre_transformer is None:
+            pass
+        else:
+            self.transformer1 = self.transformer1.fit(df)
+            df = pd.DataFrame(self.transformer1.transform(df), index = self.df_index, columns = self.df_colnames)
+        
+        
+        if self.detrend == True:
+            from sklearn.linear_model import LinearRegression
+            X = (pd.to_numeric(self.df_index, errors = 'coerce',downcast='integer').values).reshape((-1, 1))
+            self.model = LinearRegression(fit_intercept=True).fit(X, df.values)
+            df = df - self.model.predict(X)
+            df = pd.DataFrame(df, index = self.df_index, columns = self.df_colnames)
+        
+        
+        if str(self.rolling_window).isdigit():
+            self.rolling_transformer = RollingMeanTransformer(window = self.rolling_window).fit(df)
+            df = self.rolling_transformer.transform(df)
+            df.index = self.df_index
+            df.columns = self.df_colnames
+        
+        self.transformer2_on = False
+        if self.post_transformer == 'QuantileTransformer':
+            from sklearn.preprocessing import QuantileTransformer
+            self.transformer2 = QuantileTransformer(copy=True, random_state = self.random_seed).fit(df)
+            self.transformer2_on = True
+        elif self.post_transformer == 'MinMaxScaler':
+            from sklearn.preprocessing import MinMaxScaler
+            self.transformer2 = MinMaxScaler(copy=True).fit(df)
+            self.transformer2_on = True
+        elif self.post_transformer == 'PowerTransformer':
+            self.transformer2_on = True
+            from sklearn.preprocessing import PowerTransformer
+            self.transformer2 = PowerTransformer(method = 'yeo-johnson', standardize=True, copy=True).fit(df)
+        if self.transformer2_on:
+            df = pd.DataFrame(self.transformer2.transform(df), index = self.df_index, columns = self.df_colnames)
+        
+        
+        if str(self.n_bins).isdigit():
+            steps = 1/self.n_bins
+            quantiles = np.arange(0, 1 + steps, steps)
+            bins = np.nanquantile(df, quantiles, axis=0, keepdims=True)
+            if self.bin_strategy == 'center':
+                bins = np.cumsum(bins, dtype=float, axis = 0)
+                bins[2:] = bins[2:] - bins[:-2]
+                bins = bins[2 - 1:] / 2
+            elif self.bin_strategy == 'lower':
+                bins = np.delete(bins, (-1), axis=0)
+            elif self.bin_strategy == 'upper':
+                bins = np.delete(bins, (0), axis=0)
+            self.bins = bins
+            binned = (np.abs(df.values - self.bins)).argmin(axis = 0)
+            indices = np.indices(binned.shape)[1]
+            bins_reshaped = self.bins.reshape((self.n_bins, len(df.columns)))
+            df = pd.DataFrame(bins_reshaped[binned, indices], index = self.df_index, columns = self.df_colnames)
+        
+        return self        
+        
+    def fit_transform(self, df):
+        """Fits and Returns DataFrame
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+        
+
+    def transform(self, df):
+        """Returns data
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.df_index = df.index
+        self.df_colnames = df.columns
+        
+        if self.pre_transformer is not None:
+            df = pd.DataFrame(self.transformer1.transform(df), index = self.df_index, columns = self.df_colnames)
+        if self.detrend == True:
+            X = (pd.to_numeric(self.df_index, errors = 'coerce',downcast='integer').values).reshape((-1, 1))
+            df = df - self.model.predict(X)
+            df = pd.DataFrame(df, index = self.df_index, columns = self.df_colnames)
+        if str(self.rolling_window).isdigit():
+            df = self.rolling_transformer.transform(df)
+            df = pd.DataFrame(df, index = self.df_index, columns = self.df_colnames)
+        if self.transformer2_on:
+            df = pd.DataFrame(self.transformer2.transform(df), index = self.df_index, columns = self.df_colnames)
+        if str(self.n_bins).isdigit():
+            binned = (np.abs(df.values - self.bins)).argmin(axis = 0)
+            indices = np.indices(binned.shape)[1]
+            bins_reshaped = self.bins.reshape((self.n_bins, len(df.columns)))
+            df = pd.DataFrame(bins_reshaped[binned, indices], index = self.df_index, columns = self.df_colnames)
+        return df
+    
+    def inverse_transform(self, df):
+        """Returns data to original form
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.df_index = df.index
+        self.df_colnames = df.columns
+        
+        if str(self.n_bins).isdigit():
+            # no inverse needed in current design
+            pass
+        if self.transformer2_on:
+            df = self.transformer2.inverse_transform(df)
+            df = pd.DataFrame(df, index = self.df_index, columns = self.df_colnames)
+        if str(self.rolling_window).isdigit():
+            df = self.rolling_transformer.inverse_transform(df)
+            df = pd.DataFrame(df, index = self.df_index, columns = self.df_colnames)
+        if self.detrend == True:
+            X = (pd.to_numeric(self.df_index, errors = 'coerce',downcast='integer').values).reshape((-1, 1))
+            df = df + self.model.predict(X)
+            df = pd.DataFrame(df, index = self.df_index, columns = self.df_colnames)
+        if self.pre_transformer is not None:
+            df = self.transformer1.inverse_transform(df)
+            df = pd.DataFrame(df, index = self.df_index, columns = self.df_colnames)
+        return df
+
 class EmptyTransformer(object):
     def fit(self, df):
         return self
@@ -351,6 +532,41 @@ class GeneralTransformer(object):
         if (transformation =='Detrend'):
             transformer = Detrend().fit(df)
             return transformer
+        if (transformation =='KitchenSink'):
+            transformer = MixedTransformer(pre_transformer = 'QuantileTransformer', 
+                 detrend = True, rolling_window = None, 
+                 post_transformer = 'QuantileTransformer',
+                 n_bins = None, bin_strategy = 'lower').fit(df)
+            return transformer
+        if (transformation =='KitchenSink2'):
+            transformer = MixedTransformer(pre_transformer = 'StandardScaler', 
+                 detrend = True, rolling_window = None, 
+                 post_transformer = None,
+                 n_bins = 5, bin_strategy = 'center').fit(df)
+            return transformer
+        if (transformation =='KitchenSink3'):
+            transformer = MixedTransformer(pre_transformer = None, 
+                 detrend = False, rolling_window = None, 
+                 post_transformer = None,
+                 n_bins = 3, bin_strategy = 'upper').fit(df)
+            return transformer
+        if (transformation =='KitchenSink4'):
+            transformer = MixedTransformer(pre_transformer = 'StandardScaler', 
+                 detrend = False, rolling_window = None, 
+                 post_transformer = None,
+                 n_bins = 10, bin_strategy = 'lower').fit(df)
+            return transformer
+        if (transformation =='KitchenSink5'):
+            transformer = MixedTransformer(pre_transformer = None, 
+                 detrend = False, rolling_window = 10, 
+                 post_transformer = 'MinMaxScaler',
+                 n_bins = 50, bin_strategy = 'center').fit(df)
+            return transformer
+        
+        if (transformation =='PCA'):
+            from sklearn.decomposition import PCA
+            transformer = PCA(n_components=len(df.columns)).fit(df)
+            return transformer
         
         if (transformation == 'RollingMean10'):
             self.window = 10
@@ -415,7 +631,7 @@ class GeneralTransformer(object):
             df (pandas.DataFrame): Datetime Indexed 
             trans_method (str): passed through to RollingTransformer, if used
         """
-        if (self.transformation == 'RollingMean100thN') or (self.transformation == 'RollingMean10'):
+        if (self.transformation == 'RollingMean100thN') or (self.transformation == 'RollingMean10') or (self.transformation == 'RollingMean10thN'):
             df = self.transformer.inverse_transform(df, trans_method = trans_method)
         else:
             df = self.transformer.inverse_transform(df)
@@ -435,7 +651,9 @@ def RandomTransform():
     """
     outlier_choice = np.random.choice(a = [None, 'clip3std', 'clip2std','clip4std','remove3std'], size = 1, p = [0.4, 0.3, 0.1, 0.1, 0.1]).item()
     na_choice = np.random.choice(a = ['ffill', 'fake date', 'rolling mean','mean','zero', 'ffill mean biased', 'median'], size = 1, p = [0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1]).item()
-    transformation_choice = np.random.choice(a = [None, 'PowerTransformer', 'RollingMean100thN','MinMaxScaler','Detrend', 'RollingMean10', 'RollingMean10thN', 'QuantileTransformer', 'StandardScaler', 'MaxAbsScaler', 'RobustScaler'], size = 1, p = [0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05 ,0.05, 0.05]).item()
+    # 'PowerTransformer', 'PCA', 'Detrend', 'RollingMean10', 'RollingMean100thN',
+    transformation_choice = np.random.choice(a = [None, 'KitchenSink2','KitchenSink3','KitchenSink4', 'KitchenSink5','MinMaxScaler', 'RollingMean10thN', 'QuantileTransformer', 'StandardScaler', 'MaxAbsScaler', 'RobustScaler','KitchenSink'], size = 1, p = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05 ,0.05, 0.05, 0.1]).item()
+    transformation_choice =   np.random.choice(a = ['KitchenSink', 'KitchenSink5','KitchenSink2','KitchenSink3','KitchenSink4',], size = 1, p = [0.2, 0.2, 0.2, 0.2, 0.2]).item()
     context_choice = np.random.choice(a = [None, 'HalfMax', '2ForecastLength', '6ForecastLength'], size = 1, p = [0.7, 0.1, 0.1, 0.1]).item()
     param_dict = {
             'outlier': outlier_choice,
