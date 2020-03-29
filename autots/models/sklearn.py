@@ -154,6 +154,14 @@ class RollingRegression(ModelObject):
             from sklearn.multioutput import MultiOutputRegressor
             from sklearn.ensemble import AdaBoostRegressor
             regr = MultiOutputRegressor(AdaBoostRegressor(n_estimators = 200, random_state=self.random_seed))
+        elif self.regression_model == 'SVM':
+            from sklearn.multioutput import MultiOutputRegressor
+            from sklearn.svm import SVR
+            regr = MultiOutputRegressor(SVR(kernel='rbf', verbose = self.verbose_bool))
+        elif self.regression_model == 'ComplementNB':
+            from sklearn.multioutput import MultiOutputClassifier
+            from sklearn.naive_bayes import ComplementNB
+            regr = MultiOutputClassifier(ComplementNB())
         else:
             self.regression_model = 'RandomForest'
             from sklearn.ensemble import RandomForestRegressor
@@ -200,7 +208,7 @@ class RollingRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
-        model_choice = np.random.choice(a = ['RandomForest','ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost'], size = 1, p = [0.2, 0.1, 0.025, 0.225, 0.025, 0.425]).item()
+        model_choice = np.random.choice(a = ['RandomForest','ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost', 'SVM', 'ComplementNB'], size = 1, p = [0.2, 0.1, 0.02, 0.225, 0.02, 0.4, 0.025, 0.01]).item()
         mean_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
         std_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
         max_rolling_periods_choice = np.random.choice(a = ['None', 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()

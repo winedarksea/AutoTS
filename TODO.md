@@ -23,11 +23,13 @@ Select Transformers to include in random, resort in function
 * Check how fillna methods handle datasets that are entirely NaN
 * add_constant to GLS, GLM
 * Better X_maker:
+	* add magnitude_1, magnitude2, and so on (new_params have these all the same for models that don't use them)
 	* use feature selection on TSFresh features - autocorrelation lag n, fft/cwt coefficients (abs), abs_energy
 	* date part and age/expanding regressors
 	* moving average +/- moving std deviation
 * GluonTS
 	* Add support for preord_regressor
+	* Make sure of rolling regression setup
 	* Modify GluonStart if lots of NaN at start of that series
 	* GPU and CPU ctx
 * Print methods for prediction/model objects that give simple readme how-to's
@@ -103,10 +105,15 @@ Select Transformers to include in random, resort in function
 		Pytorch and Tensorflow Simple LSTM/GRU
 		other sequence models
 		Categorical classifier
+		RBF kernel SVR
 		PCA or similar -> Univariate Series (Unobserved Components)
+	Neural net with just short series as input, Keras time series generator
+		Transfer learning (model weights pretrained on other time series)
 	Simulations
+	Motif simulations
 	Ta-lib
 	tslearn
+	Nystroem
 	Multivariate GARCH
 	pydlm - baysesian dynamic linear
 	Isotonic regression
@@ -118,10 +125,14 @@ Select Transformers to include in random, resort in function
 	Compressive Transformer, if they go anywhere
 
 #### New Transformations:
-	Test variations on 'RollingMean100thN'
+	Test variations on 'RollingMean100thN', n_bins
+		3, 10, 10thN, 100thN
 	Simple filter, no inverse (uninverted weighted moving average)
 	Weighted moving average
-	Symbolic aggregate approximation (SAX) and (PAA)
-		Binning and simplifying (100th N)
-	KernelPCA/PCA/TruncatedSVD
+	Symbolic aggregate approximation (SAX) and (PAA) (basically these are just binning)
+	PCA
+	Simple difference smoothing
+	Seasonal means/std/last value differencing
+	Cum sum
+	Sine regression detrend
 	

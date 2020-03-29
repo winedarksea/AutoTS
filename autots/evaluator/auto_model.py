@@ -758,7 +758,7 @@ def generate_score(model_results, metric_weighting: dict = {}, prediction_interv
         upper_mae_score = model_results['upper_mae_weighted']/(model_results['upper_mae_weighted'].min(skipna=True) +1) # smaller better
         contour_score =  (1/(model_results['contour_weighted']))
     except KeyError:
-        raise KeyError("Inconceivable! Evaluation Metrics are missing. Likely an error in TemplateWizard or metrics. A new template may help.")
+        raise KeyError("Inconceivable! Evaluation Metrics are missing and all models have failed, by an error in TemplateWizard or metrics. A new template may help, or an adjusted model_list.")
         
     return (smape_score * smape_weighting) + (mae_score * mae_weighting) + (rmse_score * rmse_weighting) + (containment_score * containment_weighting) + (runtime_score * runtime_weighting) + (lower_mae_score * lower_mae_weighting) + (upper_mae_score * upper_mae_weighting) + (contour_score * contour_weighting)
 

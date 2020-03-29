@@ -114,7 +114,7 @@ class Detrend(object):
         from statsmodels.regression.linear_model import GLS
         try:
             df = df.astype(float)
-        except:
+        except Exception:
             raise ValueError ("Data Cannot Be Converted to Numeric Float")
             
         # formerly df.index.astype( int ).values
@@ -142,7 +142,7 @@ class Detrend(object):
         """
         try:
             df = df.astype(float)
-        except:
+        except Exception:
             raise ValueError ("Data Cannot Be Converted to Numeric Float")
         # formerly X = df.index.astype( int ).values
         X = (pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values)
@@ -158,7 +158,7 @@ class Detrend(object):
         """
         try:
             df = df.astype(float)
-        except:
+        except Exception:
             raise ValueError ("Data Cannot Be Converted to Numeric Float")
         X = pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values
         # from statsmodels.tools import add_constant
@@ -199,7 +199,7 @@ class SinTrend(object):
         """
         try:
             df = df.astype(float)
-        except:
+        except Exception:
             raise ValueError ("Data Cannot Be Converted to Numeric Float")
         
         X = (pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values)
@@ -232,7 +232,7 @@ class SinTrend(object):
         """
         try:
             df = df.astype(float)
-        except:
+        except Exception:
             raise ValueError ("Data Cannot Be Converted to Numeric Float")
         X = (pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values)
         
@@ -252,7 +252,7 @@ class SinTrend(object):
         """
         try:
             df = df.astype(float)
-        except:
+        except Exception:
             raise ValueError ("Data Cannot Be Converted to Numeric Float")
         X = pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values
         
