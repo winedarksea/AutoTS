@@ -29,7 +29,7 @@ model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
               #,'VARMAX', 'GluonTS'
               ]
 model_list = 'superfast'
-model_list = ['GLM']
+# model_list = ['GLM']
 
 metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
             'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0,
@@ -91,7 +91,7 @@ from autots.tools.shaping import long_to_wide
 df_wide = long_to_wide(df_long, date_col = 'datetime', value_col = 'value',
                        id_col = 'series_id', frequency = 'infer', aggfunc = 'first')
 
-X = df_wide[df_wide.columns[0:3]].fillna(0)
+df = df_wide[df_wide.columns[0:3]].fillna(0).astype(float)
 
 from autots.tools.shaping import values_to_numeric
 categorical_transformer = values_to_numeric(df_wide)

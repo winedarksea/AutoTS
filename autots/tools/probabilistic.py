@@ -69,8 +69,28 @@ def Variable_Point_to_Probability(train, forecast, alpha = 0.3, beta = 1):
     
     return ErrorRange
 
+def historic_quantile(df_train, prediction_interval: float = 0.9):
+    """
+    Computes the difference between the median and the prediction interval range in historic data.
+    
+    Args:
+        df_train (pd.DataFrame): a dataframe of training data
+        prediction_interval (float): the desired forecast interval range
+    
+    Returns:
+        lower, upper (np.array): two 1D arrays
+    """
+    quantiles = [0, 1 - prediction_interval, 0.5, prediction_interval, 1]
+    bins = np.nanquantile(df_train.astype(float), quantiles, axis=0, keepdims=False)
+    upper = bins[3] - bins[2]
+    if 0 in upper:
+        np.where(upper != 0, upper, (bins[4] - bins[2])/4)
+    lower = bins[2] - bins[1]
+    if 0 in lower:
+        np.where(lower != 0, lower, (bins[2] - bins[0])/4)
+    return lower, upper
 
-def Point_to_Probability(train, forecast, prediction_interval = 0.9):
+def Point_to_Probability(train, forecast, prediction_interval = 0.9, method: str = 'variable_pct_change'):
     """Data driven placeholder for model error estimation
     
     Catlin Point to Probability method ('a mixture of dark magic and gum disease')
@@ -90,13 +110,18 @@ def Point_to_Probability(train, forecast, prediction_interval = 0.9):
     Returns:
         upper_error, lower_error (two pandas.DataFrames for upper and lower bound respectively)
     """
-    
-    beta = np.exp(prediction_interval * 10)
-    alpha = 1
-    errorranges = Variable_Point_to_Probability(train, forecast, alpha = alpha, beta = beta)
-    # make symmetric error ranges
-    errorranges = errorranges / 2 
-    
-    upper_forecast = forecast + errorranges
-    lower_forecast = forecast - errorranges
-    return upper_forecast, lower_forecast
+    if method == 'variable_pct_change':
+        beta = np.exp(prediction_interval * 10)
+        alpha = 0.3
+        errorranges = Variable_Point_to_Probability(train, forecast, alpha = alpha, beta = beta)
+        # make symmetric error ranges
+        errorranges = errorranges / 2 
+        
+        upper_forecast = forecast + errorranges
+        lower_forecast = forecast - errorranges
+        return upper_forecast, lower_forecast
+    if method == 'historic_quantile':
+        lower, upper = historic_quantile(train, prediction_interval)
+        upper_forecast = forecast.astype(float) + upper
+        lower_forecast = forecast.astype(float) - lower
+        return upper_forecast, lower_forecast

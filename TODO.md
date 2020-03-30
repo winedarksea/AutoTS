@@ -9,6 +9,8 @@
 
 # Errors: 
 Holiday not (always) working
+\Users\Owner\Documents\Personal\Projects\AutoTS\autots\evaluator\metrics.py:115: RuntimeWarning: invalid value encountered in greater_equal X = X>=0
+\Users\Owner\Documents\Personal\Projects\AutoTS\autots\evaluator\metrics.py:72: RuntimeWarning: Mean of empty slice return np.nanmean(mae_result, axis=0)
 Models are failing without being captured in model_results
 
 GluonTS to template, best
@@ -109,6 +111,7 @@ Select Transformers to include in random, resort in function
 		PCA or similar -> Univariate Series (Unobserved Components)
 	Neural net with just short series as input, Keras time series generator
 		Transfer learning (model weights pretrained on other time series)
+		Neural net with '2d' output (series * forecast_length)
 	Simulations
 	Motif simulations
 	Ta-lib
