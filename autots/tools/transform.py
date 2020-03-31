@@ -204,6 +204,7 @@ class SinTrend(object):
         
         X = (pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values)
         self.sin_params = pd.DataFrame()
+        # make this faster
         for column in df.columns:
             try:
                 y = df[column].values
@@ -237,6 +238,7 @@ class SinTrend(object):
         X = (pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values)
         
         sin_df = pd.DataFrame()
+        # make this faster
         for index, row in self.sin_params.iterrows():
             yy = pd.DataFrame(row['amp']*np.sin(row['omega']*X + row['phase']) + row['offset'], columns = [index])
             sin_df = pd.concat([sin_df, yy], axis = 1)
@@ -257,6 +259,7 @@ class SinTrend(object):
         X = pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values
         
         sin_df = pd.DataFrame()
+        # make this faster
         for index, row in self.sin_params.iterrows():
             yy = pd.DataFrame(row['amp']*np.sin(row['omega']*X + row['phase']) + row['offset'], columns = [index])
             sin_df = pd.concat([sin_df, yy], axis = 1)

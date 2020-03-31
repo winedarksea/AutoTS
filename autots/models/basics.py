@@ -351,27 +351,42 @@ class SeasonalNaive(ModelObject):
 
 class ContouredMofitSimulation(ModelObject):
     """More dark magic created by the evil mastermind of this project.
+    Basically a highly-customized KNN
+    
+    Warning: if you are forecasting many steps (large forecast_length), and interested in probabilistic upper/lower forecasts, then set recency_weighting <= 0, and have a larger cutoff_minimum
     
     Args:
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
         
-
+        distance_metric (str): passed through to sklearn pairwise_distances
+        max_motifs (float): number of motifs to compare per series. If less 1, used as % of length training data
     """
     def __init__(self, name: str = "ContouredMofitSimulation", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US', random_seed: int = 2020,
                  phrase_len: str = '20thN',
-                 comparison: str = 'pct_change_sign', #'pct_change_sign', 'magnitude', 'pct_change_magnitude','5bin'
+                 comparison: str = 'magnitude_pct_change_sign',
                  shared: bool = False,
-                 max_motifs: int = 500 # x or %n
+                 distance_metric: str = 'hamming',
+                 max_motifs: float = 50,
+                 recency_weighting: float = 0,
+                 cutoff_threshold: float = 0.7,
+                 cutoff_minimum: int = 20,
+                 point_method: str = 'median',
+                 verbose: int = 0
                  ):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              holiday_country = holiday_country, random_seed = random_seed)
         self.phrase_len = phrase_len
         self.comparison = comparison
         self.shared = shared
+        self.distance_metric = distance_metric
         self.max_motifs = max_motifs
+        self.recency_weighting = recency_weighting
+        self.cutoff_threshold = cutoff_threshold
+        self.cutoff_minimum = cutoff_minimum
+        self.point_method = point_method
         
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
@@ -379,6 +394,17 @@ class ContouredMofitSimulation(ModelObject):
         Args:
             df (pandas.DataFrame): Datetime Indexed 
         """
+        if abs(float(self.max_motifs)) > 1:
+            self.max_motifs_n = abs(int(self.max_motifs))
+        elif float(self.max_motifs) == 1:
+            self.max_motifs_n = 2
+        elif float(self.max_motifs) < 1:
+            self.max_motifs_n = int(abs(np.floor(self.max_motifs * df.shape[0])))
+        else:
+            self.max_motifs = 10
+            self.max_motifs_n = 10
+        
+        # convert strings of phrase length into int lengths
         if str(self.phrase_len).isdigit():
             self.phrase_n = self.phrase_len
         elif self.phrase_len == '10thN':
@@ -392,46 +418,166 @@ class ContouredMofitSimulation(ModelObject):
             self.phrase_n = int(np.floor((df.shape[0])/20))
         if (self.phrase_n > df.shape[0]) or (self.phrase_n <= 0):
             raise ValueError("phrase_len is inappropriate for the length of training data provided")
-        
+        # df = df_wide[df_wide.columns[0:3]].fillna(0).astype(float)
         df = self.basic_profile(df)
-        if self.comparison == 'pct_change_sign':
+        """
+        comparison = 'pct_change' # pct_change, pct_change_sign, magnitude_pct_change_sign, magnitude, magnitude_pct_change
+        distance_metric = 'hamming'
+        max_motifs_n = 100
+        phrase_n = 5
+        shared = False
+        recency_weighting = 0.1
+        cutoff_threshold = 0.8
+        cutoff_minimum = 20
+        prediction_interval = 0.9
+        na_threshold = 0.1
+        point_method = 'sample'
+        """
+        phrase_n = abs(int(self.phrase_n))
+        max_motifs_n = abs(int(self.max_motifs_n))
+        comparison = self.comparison
+        distance_metric = self.distance_metric
+        shared = self.shared
+        recency_weighting = float(self.recency_weighting)
+        cutoff_threshold = float(self.cutoff_threshold)
+        cutoff_minimum = abs(int(self.cutoff_minimum))
+        prediction_interval = float(self.prediction_interval)
+        na_threshold = 0.1
+        point_method = self.point_method
+        
+        # transform the data into different views (contour = percent_change)
+        if 'pct_change' in comparison:
+            if comparison in ['magnitude_pct_change', 'magnitude_pct_change_sign']:
+                original_df = df.copy()
+            df = df.replace([0], np.nan)
+            df = df.fillna(abs(df[df != 0]).min()).fillna(0.1)
+            last_row = df.tail(1)
             df = df.pct_change(periods=1, fill_method='ffill').tail(df.shape[0] - 1).fillna(0)
-            # df = (df > 0).astype(int)
-            # np.where(df > 0, 1, np.where(df < 0, -1, 0))
-            df = df.where(df >= 0, -1).where(df <= 0, 1)
-            df = df.replace({1 : 'a', 0: 'b', -1: 'c'})
-            
-            max_motif = 100
-            phrase_n = 5
-            last_motif = df.tail(phrase_n)
-            numbers = np.random.choice((df.shape[0] - phrase_n), size=max_motif, replace=False)
-            
-            rand_row = np.random.randint(low = 0, high = (df.shape[0] - phrase_n), size = 1).item()
-            rand_slice = df.iloc[rand_row:(rand_row + phrase_n),]
-            comparative = pd.concat([last_motif.sum(), rand_slice.sum()], axis = 1)
-            
-            from sklearn.metrics.pairwise import pairwise_distances
-            temp = pairwise_distances(last_motif.transpose(), rand_slice.transpose(), metric = "hamming")
-            
-            test = rand_slice.reset_index(drop = True).transpose().set_index(np.repeat(rand_row, (df.shape[1],)), append = True)
-            test.index.get_level_values(1)
-        elif self.comparison == 'pct_change_magnitude':
-            df = df.pct_change(periods=1, fill_method='ffill').tail(df.shape[0] - 1).fillna(0)
-        
-        
-        
-        if self.shared:
-            df
+            df = df.replace([np.inf, -np.inf], 0)
         else:
-            df
+            self.comparison = 'magnitude'
+        
+        if 'pct_change_sign' in comparison:
+            last_motif = df.where(df >= 0, -1).where(df <= 0, 1).tail(phrase_n)
+        else:
+            last_motif = df.tail(phrase_n)
+        
+        numbers = np.random.choice((df.shape[0] - phrase_n), size=max_motifs_n, replace=False)
+        
+        # make this faster
+        motif_vecs = pd.DataFrame()
+        # takes random slices of the time series and rearranges as phrase_n length vectors
+        for z in numbers:
+            rand_slice = df.iloc[z:(z + phrase_n),]
+            rand_slice = rand_slice.reset_index(drop = True).transpose().set_index(np.repeat(z, (df.shape[1],)), append = True)
+            motif_vecs = pd.concat([motif_vecs, rand_slice], axis = 0)
+
+        if 'pct_change_sign' in comparison:
+            motif_vecs = motif_vecs.where(motif_vecs >= 0, -1).where(motif_vecs <= 0, 1)
+        
+        # compare the motif vectors to the last (most recent) vector of the series
+        from sklearn.metrics.pairwise import pairwise_distances
+        if shared:
+            comparative = pd.DataFrame(pairwise_distances(motif_vecs, last_motif.transpose(), metric = distance_metric))
+            comparative.index = motif_vecs.index
+            comparative.columns = last_motif.columns
+        if not shared:
+            # make this faster
+            comparative = pd.DataFrame()
+            for column in last_motif.columns:
+                x = motif_vecs[motif_vecs.index.get_level_values(0) == column]
+                y = last_motif[column].values.reshape(1, -1)
+                current_comparative = pd.DataFrame(pairwise_distances(x, y, metric = distance_metric))
+                current_comparative.index = x.index
+                current_comparative.columns = [column]
+                comparative = pd.concat([comparative, current_comparative], axis = 0, sort = True)
+            comparative = comparative.groupby(level = [0,1]).sum(min_count = 0)
+        
+        # comparative is a df of motifs (in index) with their value to each series (per column)
+        if recency_weighting != 0:
+            rec_weights = np.repeat(((comparative.index.get_level_values(1))/df.shape[0]).values.reshape(-1,1) * recency_weighting, len(comparative.columns), axis = 1)
+            comparative = comparative.add(rec_weights, fill_value = 0)
+        
+        # make this faster
+        upper_forecasts = pd.DataFrame()
+        forecasts = pd.DataFrame()
+        lower_forecasts = pd.DataFrame()
+        for col in comparative.columns:
+            # comparative.idxmax()
+            vals = comparative[col].sort_values(ascending = False)
+            if not shared:
+                vals = vals[vals.index.get_level_values(0) == col]
+            vals = vals[vals > cutoff_threshold]
+            if vals.shape[0] < cutoff_minimum:
+                vals = comparative[col].sort_values(ascending = False)
+                if not shared:
+                    vals = vals[vals.index.get_level_values(0) == col]
+                vals = vals.head(cutoff_minimum)
+                
+            pos_forecasts = pd.DataFrame()
+            for val_index, val_value in vals.items():
+                sec_start = (val_index[1] + phrase_n)
+                if comparison in ['magnitude_pct_change', 'magnitude_pct_change_sign']:
+                    current_pos = original_df[val_index[0]].iloc[sec_start + 1:]
+                else:
+                    current_pos = df[val_index[0]].iloc[sec_start:]
+                pos_forecasts = pd.concat([pos_forecasts, current_pos.reset_index(drop = True)], axis = 1, sort = False)
+            
+            
+            thresh = int(np.ceil(pos_forecasts.shape[1] * na_threshold))
+            if point_method == 'mean':
+                current_forecast = pos_forecasts.mean(axis = 1)
+            elif point_method == 'sample':
+                current_forecast = pos_forecasts.sample(n = 1, axis = 1, weights = vals.values)
+            else:
+                point_method = 'median'
+                current_forecast = pos_forecasts.median(axis = 1)
+            # current_forecast.columns = [col]
+            forecasts = pd.concat([forecasts, current_forecast], axis = 1, sort = False)
+            
+            
+            if point_method == 'sample':
+                n_samples = int(np.ceil(pos_forecasts.shape[1]/2))
+                current_forecast = pos_forecasts.sample(n = n_samples, axis = 1, weights = vals.values).dropna(thresh = thresh, axis = 0).quantile(q = [(1 - (prediction_interval* 1.1)), (prediction_interval * 1.1)], axis = 1).transpose()
+            else:
+                current_forecast = pos_forecasts.dropna(thresh = thresh, axis = 0).quantile(q = [(1 - prediction_interval), prediction_interval], axis = 1).transpose()
+            # current_forecast.columns = [col, col]
+            lower_forecasts = pd.concat([lower_forecasts, current_forecast.iloc[:,0]], axis = 1, sort = False)
+            upper_forecasts = pd.concat([upper_forecasts, current_forecast.iloc[:,1]], axis = 1, sort = False)
+        forecasts.columns = comparative.columns
+        lower_forecasts.columns = comparative.columns
+        upper_forecasts.columns = comparative.columns
+        
+        
+        if comparison in ['pct_change', 'pct_change_sign']:
+            forecasts = (forecasts + 1).replace([0], np.nan)
+            forecasts = forecasts.fillna(abs(df[df != 0]).min()).fillna(0.1)
+            forecasts = pd.concat([last_row.reset_index(drop = True), (forecasts)], axis = 0, sort = False).cumprod()
+            upper_forecasts = (upper_forecasts + 1).replace([0], np.nan)
+            upper_forecasts = upper_forecasts.fillna(abs(df[df != 0]).min()).fillna(0.1)
+            upper_forecasts = pd.concat([last_row.reset_index(drop = True), (upper_forecasts)], axis = 0, sort = False).cumprod()
+            lower_forecasts = (lower_forecasts + 1).replace([0], np.nan)
+            lower_forecasts = lower_forecasts.fillna(abs(df[df != 0]).min()).fillna(0.1)
+            lower_forecasts = pd.concat([last_row.reset_index(drop = True), (lower_forecasts)], axis = 0, sort = False).cumprod()
+        
+        self.forecasts = forecasts
+        self.lower_forecasts = lower_forecasts
+        self.upper_forecasts = upper_forecasts
+        
+        # temp = forecasts.head(1000)
         """
         In fit phase, only select motifs.
             table: start index, weight, column it applies to, and count of rows that follow motif
             slice into possible motifs
             compare motifs (efficiently)
-        Select motifs that do not include last motif if possible
+            choose the motifs to use for each series
+                if not shared, can drop column part of index ref
+            combine the following values into forecasts
+                consider the weights
+                magnitude and percentage change
+            account for forecasts not running the full length of forecast_length
+                if longer than comparative, append na df then ffill
         
-        Select slices (all columns at same) into new array, reshuffle that
         Similarity:
             string distance
                 sign
@@ -442,9 +588,13 @@ class ContouredMofitSimulation(ModelObject):
                 magnitude
         
         KNN
-            
-        """
         
+        Profile speed and which code to improve first
+            Remove for loops
+            Quantile not be calculated until after pos_forecasts narrowed down to only forecast length
+            https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
+        """
+        self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
     def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
@@ -460,25 +610,41 @@ class ContouredMofitSimulation(ModelObject):
             if just_point_forecast == True, a dataframe of point forecasts
         """
         predictStartTime = datetime.datetime.now()
-        tile_len = len(self.tile_values_lag_1.index)
-        df = pd.DataFrame(np.tile(self.tile_values_lag_1, (int(np.ceil(forecast_length/tile_len)),1))[0:forecast_length], columns = self.column_names, index = self.create_forecast_index(forecast_length=forecast_length))
-        if str(self.lag_2).isdigit():
-            y = pd.DataFrame(np.tile(self.tile_values_lag_2, (int(np.ceil(forecast_length/len(self.tile_values_lag_2.index))),1))[0:forecast_length], columns = self.column_names, index = self.create_forecast_index(forecast_length=forecast_length))
-            df = (df + y) / 2
-        # df = df.apply(pd.to_numeric, errors='coerce')
-        df = df.astype(float)
+        
+        forecasts = self.forecasts.head(forecast_length)
+        if forecasts.shape[0] < forecast_length:
+            extra_len = forecast_length - forecasts.shape[0]
+            empty_frame = pd.DataFrame(index=np.arange(extra_len), columns=forecasts.columns)
+            forecasts = pd.concat([forecasts, empty_frame], axis = 0, sort = False).fillna(method='ffill')
+        forecasts.columns = self.column_names
+        forecasts.index = self.create_forecast_index(forecast_length=forecast_length)
+        
         if just_point_forecast:
-            return df
+            return forecasts
         else:
-            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df, prediction_interval = self.prediction_interval)
+            lower_forecasts = self.lower_forecasts.head(forecast_length)
+            upper_forecasts = self.upper_forecasts.head(forecast_length)
+            if lower_forecasts.shape[0] < forecast_length:
+                extra_len = forecast_length - lower_forecasts.shape[0]
+                empty_frame = pd.DataFrame(index=np.arange(extra_len), columns=lower_forecasts.columns)
+                lower_forecasts = pd.concat([lower_forecasts, empty_frame], axis = 0, sort = False).fillna(method='ffill')
+            lower_forecasts.columns = self.column_names
+            lower_forecasts.index = self.create_forecast_index(forecast_length=forecast_length)
+            
+            if upper_forecasts.shape[0] < forecast_length:
+                extra_len = forecast_length - upper_forecasts.shape[0]
+                empty_frame = pd.DataFrame(index=np.arange(extra_len), columns=upper_forecasts.columns)
+                upper_forecasts = pd.concat([upper_forecasts, empty_frame], axis = 0, sort = False).fillna(method='ffill')
+            upper_forecasts.columns = self.column_names
+            upper_forecasts.index = self.create_forecast_index(forecast_length=forecast_length)
             
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name = self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = df.index,
-                                          forecast_columns = df.columns,
-                                          lower_forecast=lower_forecast,
-                                          forecast=df, upper_forecast=upper_forecast,
+                                          forecast_index = forecasts.index,
+                                          forecast_columns = forecasts.columns,
+                                          lower_forecast=lower_forecasts,
+                                          forecast=forecasts, upper_forecast=upper_forecasts,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
                                           fit_runtime = self.fit_runtime,
@@ -489,29 +655,49 @@ class ContouredMofitSimulation(ModelObject):
     def get_new_params(self,method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
-        lag_1_choice = seasonal_int()
-        lag_2_choice = np.random.choice(a=['None', seasonal_int(include_one = True)], size = 1, p = [0.3, 0.7]).item()
-        if str(lag_2_choice) == str(lag_1_choice):
-            lag_2_choice = 1
-        method_choice = np.random.choice(a=['Mean', 'LastValue'], size = 1, p = [0.5, 0.5]).item()
+        comparison_choice = np.random.choice(a=['pct_change', 'pct_change_sign', 'magnitude_pct_change_sign', 'magnitude', 'magnitude_pct_change'], size = 1).item()
+        phrase_len_choice = np.random.choice(a=[5, 10, '10thN', '100thN', '100thN', '20thN'], size = 1).item()
+        shared_choice = np.random.choice(a=[True, False], size = 1, p = [0.3, 0.7]).item()
+        distance_metric_choice = np.random.choice(a=['other', 'hamming', 'cityblock', 'cosine','euclidean','l1', 'l2', 'manhattan'], size = 1).item()
+        if distance_metric_choice == 'other':
+            distance_metric_choice = np.random.choice(a=['braycurtis', 'canberra', 'chebyshev', 'correlation', 'dice', 'hamming', 'jaccard', 'kulsinski', 'mahalanobis', 'minkowski', 'rogerstanimoto', 'russellrao', 'seuclidean', 'sokalmichener', 'sokalsneath', 'sqeuclidean', 'yule'] , size = 1).item()
+        max_motifs_choice = float(np.random.choice(a=[20, 50, 0.5, 0.2], size = 1).item())
+        recency_weighting_choice = np.random.choice(a=[0, 0.5, 0.1, 0.01, -0.1], size = 1, p = [0.4, 0.1, 0.3, 0.1, 0.1]).item()
+        cutoff_threshold_choice = np.random.choice(a=[0.3, 0.5, 0.7, 0.9], size = 1, p = [0.2, 0.3, 0.3, 0.2]).item()
+        cutoff_minimum_choice = np.random.choice(a=[5, 10, 20, 50, 100], size = 1).item()
+        point_method_choice = np.random.choice(a=['median', 'sample', 'mean'], size = 1, p = [0.4, 0.3, 0.3]).item()
+        
+        
         return {
-                'method' : method_choice,
-                'lag_1' : lag_1_choice,
-                'lag_2' : lag_2_choice
+                'phrase_len': phrase_len_choice,
+                'comparison': comparison_choice,
+                'shared': shared_choice,
+                'distance_metric' : distance_metric_choice,
+                'max_motifs': max_motifs_choice,
+                'recency_weighting': recency_weighting_choice,
+                'cutoff_threshold': cutoff_threshold_choice,
+                'cutoff_minimum': cutoff_minimum_choice,
+                'point_method': point_method_choice
                 }
     
     def get_params(self):
         """Return dict of current parameters
         """
         return {
-                'method' : self.method,
-                'lag_1' : self.lag_1,
-                'lag_2' : self.lag_2
+                'phrase_len': self.phrase_len,
+                'comparison': self.comparison,
+                'shared': self.shared,
+                'distance_metric' : self.distance_metric,
+                'max_motifs': self.max_motifs,
+                'recency_weighting': self.recency_weighting,
+                'cutoff_threshold': self.cutoff_threshold,
+                'cutoff_minimum': self.cutoff_minimum,
+                'point_method': self.point_method
                 }
 
 
 """
-model = SeasonalNaive()
+model = ContouredMofitSimulation()
 model = model.fit(df_wide.fillna(0)[df_wide.columns[0:5]].astype(float))
 prediction = model.predict(forecast_length = 14)
 prediction.forecast

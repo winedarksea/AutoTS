@@ -127,7 +127,7 @@ class AutoTS(object):
                                'GLM', 'ETS', 'FBProphet', 'RollingRegression', 'SeasonalNaive',
                                'UnobservedComponents', 'VECM', 'DynamicFactor']
         if model_list == 'probabilistic':
-            self.model_list = ['ARIMA', 'GluonTS', 'FBProphet']
+            self.model_list = ['ARIMA', 'GluonTS', 'FBProphet', 'AverageValueNaive']
         if model_list == 'multivariate':
             self.model_list = ['VECM', 'DynamicFactor', 'GluonTS', 'VARMAX', 'RollingRegression']
         if model_list == 'all':

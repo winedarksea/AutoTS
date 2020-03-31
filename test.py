@@ -29,7 +29,7 @@ model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
               #,'VARMAX', 'GluonTS'
               ]
 model_list = 'superfast'
-# model_list = ['GLM']
+model_list = ['ContouredMofitSimulation']
 
 metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
             'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0,
@@ -38,7 +38,7 @@ metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                prediction_interval = 0.9, ensemble = False, weighted = False,
-               max_generations = 5, num_validations = 2, validation_method = 'even',
+               max_generations = 2, num_validations = 2, validation_method = 'even',
                model_list = model_list, initial_template = 'General+Random',
                metric_weighting = metric_weighting, models_to_validate = 50,
                max_per_model_class = 10,

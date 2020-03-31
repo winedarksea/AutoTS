@@ -249,6 +249,18 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
             model = TSFreshRegressor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         return model
     
+    if model == 'ContouredMofitSimulation':
+        from autots.models.basics import ContouredMofitSimulation
+        if parameters == {}:
+            model = ContouredMofitSimulation(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        else:
+            model = ContouredMofitSimulation(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose,
+                                             phrase_len = parameters['phrase_len'],comparison = parameters['comparison'],
+                                             shared = parameters['shared'],distance_metric = parameters['distance_metric'],
+                                             max_motifs = parameters['max_motifs'],recency_weighting = parameters['recency_weighting'],
+                                             cutoff_threshold = parameters['cutoff_threshold'],cutoff_minimum = parameters['cutoff_minimum'],
+                                             point_method = parameters['point_method'])
+        return model
     else:
         raise AttributeError(("Model String '{}' not a recognized model type").format(model))
 
