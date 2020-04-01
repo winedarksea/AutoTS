@@ -49,6 +49,7 @@ preord_regressor_train, preord_regressor_forecast = fake_regressor(df_long, fore
 
 # model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
 model = model.fit(df_long, 
+                  result_file = 'motif_results.csv',
                   date_col = 'datetime', value_col = 'value', id_col = 'series_id', weights = weights_hourly) # and weighted = True
 # model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', preord_regressor = preord_regressor_train)
 

@@ -20,7 +20,7 @@ Does rolling mean work?
 Are transformers included in Try/Except?
 Would expect to see all transformers delivery roughly same performance with same model
 Bring GeneralTransformer to higher level API.
-	Note about how fillna/outlier/rollingmean/detrend are not invertible
+	wide_to_long and long_to_wide in higher-level API
 
 # To-Do
 * Get the sphinx (google style) documentation and readthedocs.io website up
@@ -35,6 +35,7 @@ Bring GeneralTransformer to higher level API.
 	* use feature selection on TSFresh features - autocorrelation lag n, fft/cwt coefficients (abs), abs_energy
 	* date part and age/expanding regressors
 	* moving average +/- moving std deviation
+	* Nystroem kernel
 * Simple performance:
 	* large if collections (ModelMonster, Transformers) with dict lookups
 	* replace try/except with if/else in some cases

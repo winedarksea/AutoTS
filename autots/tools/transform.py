@@ -347,12 +347,13 @@ class RollingMeanTransformer(object):
 
 # df = df_wide_numeric.tail(60).head(50)
 # df_forecast = (df_wide_numeric).tail(10)
-# 
+# forecats = transformed.tail(10)
+"""
 test = RollingMeanTransformer().fit(df)
 transformed = test.transform(df)
-inverse = test.inverse_transform(transformed, trans_method = 'original')
+inverse = test.inverse_transform(forecats, trans_method = 'forecast')
 inverse == df
-
+"""
 class DifferencedTransformer(object):
     """Difference from lag n value
     inverse_transform can only be applied to the original series, or an immediately following forecast
@@ -400,11 +401,11 @@ class DifferencedTransformer(object):
         lag = self.lag
         # add last values, group by lag, cumsum
         if trans_method == 'original':
-            df = pd.concat([first_values, df.tail(df.shape[0] - lag)])
+            df = pd.concat([self.first_values, df.tail(df.shape[0] - lag)])
             return df.cumsum()
         else:
             df_len = df.shape[0]
-            df = pd.concat([last_values, df], axis = 0)
+            df = pd.concat([self.last_values, df], axis = 0)
             return df.cumsum().tail(df_len)
 
 class MixedTransformer(object):
@@ -592,6 +593,15 @@ from autots.tools.impute import FillNA
 class GeneralTransformer(object):
     """Remove outliers, fillNA, then mathematical transformations.
     
+    Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a 'wide' (one column per series) shape.
+    
+    Warning:
+        - inverse_transform will not fully return the original data under some conditions
+            * outliers removed or clipped will be returned in the clipped or filled na form
+            * NAs filled will be returned with the filled value
+            * RollingMean and DifferencedTransformer will only return original or an immediately following forecast
+                - by default 'forecast' is expected, 'original' can be set in trans_method
+    
     Args:       
         outlier_method (str): - level of outlier removal, if any, per series
             'None'
@@ -613,30 +623,50 @@ class GeneralTransformer(object):
             'None'
             'MinMaxScaler' - Sklearn MinMaxScaler
             'PowerTransformer' - Sklearn PowerTransformer
+            'QuantileTransformer' - Sklearn
+            'MaxAbsScaler' - Sklearn
+            'StandardScaler' - Sklearn
+            'RobustScaler' - Sklearn
+            'PCA, 'TruncatedSVD', 'FastICA', 'NMF' - performs sklearn decomposition and returns n-cols worth of n_components
             'Detrend' - fit then remove a linear regression from the data
+            'RollingMean' - 10 period rolling average, can receive a custom window by transformation_param if used as second_transformation
             'RollingMean10' - 10 period rolling average (smoothing)
             'RollingMean100thN' - Rolling mean of periods of len(train)/100 (minimum 2)
-            
-            DifferencedTransformer
-            SinTrend
+            'DifferencedTransformer' - makes each value the difference of that value and the previous value
+            'SinTrend' - removes a sin trend (fitted to each column) from the data
+        
+        second_transformation (str): second transformation to apply. Same options as transformation, but with transformation_param passed in if used
 
+        transformation_param (str): passed to second_transformation, not used by most transformers.
+        
+        third_transformation (str): third transformation to apply. Sames options as transformation.
+        
+        discretization (str): method of binning to apply
+            None - no discretization
+            'center' - values are rounded to center value of each bin
+            'lower' - values are rounded to lower range of closest bin
+            'upper' - values are rounded up to upper edge of closest bin
+            
+        n_bins (int): number of quantile bins to split data into
+        
+        random_seed (int): random state passed through where applicable
     """
     def __init__(self, outlier_method: str = None, outlier_threshold: float = 3,
-                 fillNA: str = 'ffill', 
+                 fillna: str = 'ffill', 
                  transformation: str = None, detrend: bool = False,
-                 param_transformer: str = None, param: str = None,
-                 post_transformer: str = None,
+                 second_transformation: str = None, transformation_param: str = None,
+                 third_transformation: str = None,
                  discretization: str = 'center', n_bins: int = None,
                  random_seed: int = 2020):
         
         self.outlier_method = outlier_method
         self.outlier_threshold = outlier_threshold
-        self.fillNA = fillNA
+        self.fillna = fillna
         self.transformation = transformation,
         self.detrend = detrend,
-        self.param_transformer = param_transformer,
-        self.param = param,
-        self.post_transformer = post_transformer,
+        self.second_transformation = second_transformation,
+        self.transformation_param = transformation_param,
+        self.third_transformation = third_transformation,
         self.discretization = discretization 
         self.n_bins = n_bins
         self.random_seed = random_seed
@@ -645,6 +675,9 @@ class GeneralTransformer(object):
         """
         Args:
             df (pandas.DataFrame): Datetime Indexed 
+        
+        Returns:
+            pandas.DataFrame
         """
         outlier_method = self.outlier_method
         
@@ -665,122 +698,186 @@ class GeneralTransformer(object):
         Args:
             df (pandas.DataFrame): Datetime Indexed
             window (int): passed through to rolling mean fill technique
+        
+        Returns:
+            pandas.DataFrame
         """
-        df = FillNA(df, method = self.fillNA, window = window)
+        df = FillNA(df, method = self.fillna, window = window)
         return df
         
-    def _transformation_fit(self, df, transformation: str = None):
+    def _retrieve_transformer(self, df = None, transformation: str = None, param: str = None):
         """
         Args:
-            df (pandas.DataFrame): Datetime Indexed 
+            df (pandas.DataFrame): Datetime Indexed - required to set params for some transformers
+            transformation (str): name of desired method
+            
+        Returns:
+            transformer object
         """
         
-        if (transformation =='None') or (transformation == None):
-            transformer = EmptyTransformer().fit(df)
-            return transformer
+        if transformation in [None, 'None', 'Detrend','SinTrend', 'DifferencedTransformer', 'RollingMean10']:
+            return {'None': EmptyTransformer(), 
+                    None: EmptyTransformer(),
+                    'RollingMean10': RollingMeanTransformer(window = 10),
+                    'Detrend':Detrend(),
+                    'DifferencedTransformer': DifferencedTransformer(),
+                    'SinTrend': SinTrend()
+             }[transformation]
         
-        if (transformation =='MinMaxScaler'):
+        elif (transformation =='MinMaxScaler'):
             from sklearn.preprocessing import MinMaxScaler
-            transformer = MinMaxScaler(feature_range=(0, 1), copy=True).fit(df)
-            #df = transformer.transform(df)
+            transformer = MinMaxScaler(feature_range=(0, 1), copy=True)
             return transformer
         
-        if (transformation =='PowerTransformer'):
+        elif (transformation =='PowerTransformer'):
             from sklearn.preprocessing import PowerTransformer
-            transformer = PowerTransformer(method = 'yeo-johnson', standardize=True, copy=True).fit(df)
+            transformer = PowerTransformer(method = 'yeo-johnson', standardize=True, copy=True)
             return transformer
         
-        if (transformation =='QuantileTransformer'):
+        elif (transformation =='QuantileTransformer'):
             from sklearn.preprocessing import QuantileTransformer
-            transformer = QuantileTransformer(copy=True).fit(df)
+            transformer = QuantileTransformer(copy=True)
             return transformer
         
-        if (transformation =='StandardScaler'):
+        elif (transformation =='StandardScaler'):
             from sklearn.preprocessing import StandardScaler
-            transformer = StandardScaler(copy=True).fit(df)
+            transformer = StandardScaler(copy=True)
             return transformer
         
-        if (transformation =='MaxAbsScaler'):
+        elif (transformation =='MaxAbsScaler'):
             from sklearn.preprocessing import MaxAbsScaler
-            transformer = MaxAbsScaler(copy=True).fit(df)
+            transformer = MaxAbsScaler(copy=True)
             return transformer
         
-        if (transformation =='RobustScaler'):
+        elif (transformation =='RobustScaler'):
             from sklearn.preprocessing import RobustScaler
-            transformer = RobustScaler(copy=True).fit(df)
+            transformer = RobustScaler(copy=True)
             return transformer
         
-        if (transformation =='Detrend'):
-            transformer = Detrend().fit(df)
-            return transformer
-        if (transformation =='KitchenSink'):
-            transformer = MixedTransformer(pre_transformer = 'QuantileTransformer', 
-                 detrend = True, rolling_window = None, 
-                 post_transformer = 'QuantileTransformer',
-                 n_bins = None, bin_strategy = 'lower').fit(df)
-            return transformer
-        if (transformation =='KitchenSink2'):
-            transformer = MixedTransformer(pre_transformer = 'StandardScaler', 
-                 detrend = True, rolling_window = None, 
-                 post_transformer = None,
-                 n_bins = 5, bin_strategy = 'center').fit(df)
-            return transformer
-        if (transformation =='KitchenSink3'):
-            transformer = MixedTransformer(pre_transformer = None, 
-                 detrend = False, rolling_window = None, 
-                 post_transformer = None,
-                 n_bins = 3, bin_strategy = 'upper').fit(df)
-            return transformer
-        if (transformation =='KitchenSink4'):
-            transformer = MixedTransformer(pre_transformer = 'StandardScaler', 
-                 detrend = False, rolling_window = None, 
-                 post_transformer = None,
-                 n_bins = 10, bin_strategy = 'lower').fit(df)
-            return transformer
-        if (transformation =='KitchenSink5'):
-            transformer = MixedTransformer(pre_transformer = None, 
-                 detrend = False, rolling_window = 10, 
-                 post_transformer = 'MinMaxScaler',
-                 n_bins = 50, bin_strategy = 'center').fit(df)
+        elif (transformation == 'RollingMean'):
+            self.param = 10 if self.param is None else self.param
+            if not str(self.param).isdigit():
+                window = int(''.join([s for s in str(self.param) if s.isdigit()]))
+                window = int(df.shape[0]/window)
+            window = 2 if window < 2 else window
+            self.window = window
+            transformer = RollingMeanTransformer(window = self.window)
             return transformer
         
-        if (transformation =='PCA'):
+        elif (transformation == 'RollingMean100thN'):
+            window = int(df.shape[0]/100)
+            window = 2 if window < 2 else window
+            self.window = window
+            transformer = RollingMeanTransformer(window = self.window)
+            return transformer
+        
+        elif (transformation == 'RollingMean10thN'):
+            window = int(df.shape[0]/10)
+            window = 2 if window < 2 else window
+            self.window = window
+            transformer = RollingMeanTransformer(window = self.window)
+            return transformer
+        
+        elif (transformation =='PCA'):
             from sklearn.decomposition import PCA
-            transformer = PCA(n_components=len(df.columns)).fit(df)
+            transformer = PCA(n_components=df.shape[1], whiten = False, random_state = self.random_seed)
             return transformer
         
-        if (transformation == 'RollingMean10'):
-            self.window = 10
-            transformer = RollingMeanTransformer(window = self.window).fit(df)
-            #df = transformer.transform(df)
+        elif (transformation =='TruncatedSVD'):
+            from sklearn.decomposition import TruncatedSVD
+            transformer = TruncatedSVD(n_components=df.shape[1], random_state = self.random_seed)
             return transformer
         
-        if (transformation == 'RollingMean100thN'):
-            window = int(len(df.index)/100)
-            window = 2 if window < 2 else window
-            self.window = window
-            transformer = RollingMeanTransformer(window = self.window).fit(df)
+        elif (transformation =='FastICA'):
+            from sklearn.decomposition import FastICA
+            transformer = FastICA(n_components=df.shape[1], whiten = True, random_state = self.random_seed)
             return transformer
-        if (transformation == 'RollingMean10thN'):
-            window = int(len(df.index)/10)
-            window = 2 if window < 2 else window
-            self.window = window
-            transformer = RollingMeanTransformer(window = self.window).fit(df)
+        
+        elif (transformation =='NMF'):
+            from sklearn.decomposition import NMF
+            transformer = NMF(n_components=df.shape[1], random_state = self.random_seed)
             return transformer
+        
         else:
             print("Transformation method not known or improperly entered, returning untransformed df")
-            transformer = EmptyTransformer.fit(df)
+            transformer = EmptyTransformer
             return transformer
+        """
+        elif (transformation =='Detrend'):
+            transformer = Detrend()
+            return transformer
+        
+        elif (transformation =='DifferencedTransformer'):
+            transformer = DifferencedTransformer()
+            return transformer
+        
+        elif (transformation =='SinTrend'):
+            transformer = SinTrend()
+            return transformer
+        
+        elif (transformation == 'RollingMean10'):
+            self.window = 10
+            transformer = RollingMeanTransformer(window = self.window)
+            return transformer
+        """
         
     def _fit(self, df):
         df = df.copy()
+        self.df_index = df.index
+        self.df_colnames = df.columns
+        
+        # clean up outliers and NaN
         df = self.outlier_treatment(df)
         df = self.fill_na(df)
-        self.column_names = df.columns
-        self.index = df.index
-        self.transformer = self._transformation_fit(df, transformation = self.transformation)
-        df = self.transformer.transform(df)
-        df = pd.DataFrame(df, index = self.index, columns = self.column_names)
+        
+        # the first transformation!
+        self.transformer = self._retrieve_transformer(df, transformation = self.transformation)
+        self.transformer = self.transformer.fit(df)
+        df = pd.DataFrame(self.transformer.transform(df))
+        df.index = self.df_index
+        df.columns = self.df_colnames
+        
+        
+        if self.detrend:
+            # Note that currently this is slightly different than the detrend in the separate transformers
+            from sklearn.linear_model import LinearRegression
+            X = (pd.to_numeric(self.df_index, errors = 'coerce',downcast='integer').values).reshape((-1, 1))
+            self.model = LinearRegression(fit_intercept=True).fit(X, df.values)
+            df = df - self.model.predict(X)
+        
+        # the second transformation! This one has an optional parameter passed through
+        self.second_transformer = self._retrieve_transformer(df, transformation = self.second_transformation, param = self.transformation_param)
+        self.second_transformer = self.second_transformer.fit(df)
+        df = pd.DataFrame(self.transformer.second_transformer(df))
+        df.index = self.df_index
+        df.columns = self.df_colnames
+        
+        # the third transformation!
+        self.third_transformer = self._retrieve_transformer(df, transformation = self.third_transformation, param = self.transformation_param)
+        self.third_transformer = self.third_transformer.fit(df)
+        df = pd.DataFrame(self.transformer.third_transformer(df))
+        df.index = self.df_index
+        df.columns = self.df_colnames
+        
+        # discretization
+        if self.discretization not in [None, 'None']:
+            steps = 1/self.n_bins
+            quantiles = np.arange(0, 1 + steps, steps)
+            bins = np.nanquantile(df, quantiles, axis=0, keepdims=True)
+            if self.discretization == 'center':
+                bins = np.cumsum(bins, dtype=float, axis = 0)
+                bins[2:] = bins[2:] - bins[:-2]
+                bins = bins[2 - 1:] / 2
+            elif self.discretization == 'lower':
+                bins = np.delete(bins, (-1), axis=0)
+            elif self.discretization == 'upper':
+                bins = np.delete(bins, (0), axis=0)
+            self.bins = bins
+            binned = (np.abs(df.values - self.bins)).argmin(axis = 0)
+            indices = np.indices(binned.shape)[1]
+            bins_reshaped = self.bins.reshape((self.n_bins, len(df.columns)))
+            df = pd.DataFrame(bins_reshaped[binned, indices], index = self.df_index, columns = self.df_colnames)
+        
         return df
     
     def fit(self, df):
@@ -799,30 +896,80 @@ class GeneralTransformer(object):
         df = df.copy()
         df = self.outlier_treatment(df)
         df = self.fill_na(df)
-        self.column_names = df.columns
-        self.index = df.index
-        df = self.transformer.transform(df)
-        df = pd.DataFrame(df, index = self.index, columns = self.column_names)
+        
+        self.df_index = df.index
+        self.df_colnames = df.columns
+        
+        # first transformation
+        df = pd.DataFrame(self.transformer.transform(df))
+        df.index = self.df_index
+        df.columns = self.df_colnames
+        
+        # detrend
+        if self.detrend == True:
+            X = (pd.to_numeric(self.df_index, errors = 'coerce',downcast='integer').values).reshape((-1, 1))
+            df = df - self.model.predict(X)
+            # df = pd.DataFrame(df, index = self.df_index, columns = self.df_colnames)
+        
+        # second transformation
+        df = pd.DataFrame(self.second_transformer.transform(df))
+        df.index = self.df_index
+        df.columns = self.df_colnames
+        
+        # third transformation
+        df = pd.DataFrame(self.third_transformer.transform(df))
+        df.index = self.df_index
+        df.columns = self.df_colnames
+        
+        #discretization
+        if self.discretization not in [None, 'None']:
+            binned = (np.abs(df.values - self.bins)).argmin(axis = 0)
+            indices = np.indices(binned.shape)[1]
+            bins_reshaped = self.bins.reshape((self.n_bins, df.shape[1]))
+            df = pd.DataFrame(bins_reshaped[binned, indices], index = self.df_index, columns = self.df_colnames)
+        
         return df
     
     def inverse_transform(self, df, trans_method: str = "forecast"):
-        """Apply transformations and return transformer object
+        """Undo the madness
         
         Args:
             df (pandas.DataFrame): Datetime Indexed 
-            trans_method (str): passed through to RollingTransformer, if used
+            trans_method (str): 'forecast' or 'original' passed through to RollingTransformer, DifferencedTransformer, if used
         """
-        if (self.transformation == 'RollingMean100thN') or (self.transformation == 'RollingMean10') or (self.transformation == 'RollingMean10thN'):
-            df = self.transformer.inverse_transform(df, trans_method = trans_method)
+        self.df_index = df.index
+        self.df_colnames = df.columns
+        
+        if self.third_transformation in ['DifferencedTransformer', 'RollingMean100thN', 'RollingMean10thN', 'RollingMean10', 'RollingMean']:
+            df = pd.DataFrame(self.third_transformer.inverse_transform(df, trans_method = trans_method))
         else:
-            df = self.transformer.inverse_transform(df)
+            df = pd.DataFrame(self.third_transformer.inverse_transform(df))
+        df.index = self.df_index
+        df.columns = self.df_colnames
+        
+        if self.second_transformation in ['DifferencedTransformer', 'RollingMean100thN', 'RollingMean10thN', 'RollingMean10', 'RollingMean']:
+            df = pd.DataFrame(self.second_transformer.inverse_transform(df, trans_method = trans_method))
+        else:
+            df = pd.DataFrame(self.second_transformer.inverse_transform(df))
+        df.index = self.df_index
+        df.columns = self.df_colnames
+        
+        if self.detrend == True:
+            X = (pd.to_numeric(self.df_index, errors = 'coerce',downcast='integer').values).reshape((-1, 1))
+            df = df + self.model.predict(X)
+            # df = pd.DataFrame(df, index = self.df_index, columns = self.df_colnames)
+        
+        if self.transformation in ['DifferencedTransformer', 'RollingMean100thN', 'RollingMean10thN', 'RollingMean10', 'RollingMean']:
+            df = pd.DataFrame(self.transformer.inverse_transform(df, trans_method = trans_method))
+        else:
+            df = pd.DataFrame(self.transformer.inverse_transform(df))
+        df.index = self.df_index
+        df.columns = self.df_colnames
+        
+        
         
         # since inf just causes trouble. Feel free to debate my choice of replacing with zero.
-        try:
-            df = df.replace([np.inf, -np.inf], 0)
-        except Exception:
-            df[df == -np.inf] = 0
-            df[df == np.inf] = 0
+        # df = df.replace([np.inf, -np.inf], 0)
         return df
 
 
