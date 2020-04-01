@@ -85,17 +85,17 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
     
     if method == 'HalfMax':
         return df.tail(int(len(df.index)/2))
-    if method == 'ForecastLength':
+    elif method == 'ForecastLength':
         return df.tail(forecast_length)
-    if method == '2ForecastLength':
+    elif method == '2ForecastLength':
         return df.tail(2 * forecast_length)
-    if method == '4ForecastLength':
+    elif method == '4ForecastLength':
         return df.tail(4 * forecast_length)
-    if method == '6ForecastLength':
+    elif method == '6ForecastLength':
         return df.tail(6 * forecast_length)
-    if method == '8ForecastLength':
+    elif method == '8ForecastLength':
         return df.tail(8 * forecast_length)
-    if method == '10ForecastLength':
+    elif method == '10ForecastLength':
         return df.tail(10 * forecast_length)
     else:
         print("Context Slicer Method not recognized")
@@ -287,6 +287,9 @@ class RollingMeanTransformer(object):
         self.shape = df.shape
         self.last_values = df.tail(self.window).fillna(method = 'ffill').fillna(method = 'bfill')
         self.first_values = df.head(self.window).fillna(method = 'ffill').fillna(method = 'bfill')
+        
+        df = df.tail(self.window + 1).rolling(window = self.window, min_periods  = 1).mean()
+        self.last_rolling = df.tail(1)
         return self        
     def transform(self, df):
         """Returns rolling data
@@ -294,7 +297,7 @@ class RollingMeanTransformer(object):
             df (pandas.DataFrame): input dataframe
         """
         df = df.rolling(window = self.window, min_periods  = 1).mean()
-        self.last_rolling = df.tail(1)
+        # self.last_rolling = df.tail(1)
         return df
     def fit_transform(self, df):
         """Fits and Returns Magical DataFrame
@@ -326,6 +329,7 @@ class RollingMeanTransformer(object):
                 staged = pd.concat([staged, temp_row], axis = 0)
             return staged
 
+        # current_inversed = current * window - cumsum(window-1 to previous)
         if trans_method == 'forecast':
             staged = self.last_values
             df = pd.concat([self.last_rolling, df], axis = 0)
@@ -340,7 +344,69 @@ class RollingMeanTransformer(object):
                 staged = pd.concat([staged, temp_row], axis = 0)
             staged = staged.tail(len(diffed.index))
             return staged
-            
+
+# df = df_wide_numeric.tail(60).head(50)
+# df_forecast = (df_wide_numeric).tail(10)
+# 
+test = RollingMeanTransformer().fit(df)
+transformed = test.transform(df)
+inverse = test.inverse_transform(transformed, trans_method = 'original')
+inverse == df
+
+class DifferencedTransformer(object):
+    """Difference from lag n value
+    inverse_transform can only be applied to the original series, or an immediately following forecast
+    
+    Args:
+        lag (int): number of periods to shift (not implemented, default = 1)
+    """
+    def __init__(self):
+        self.lag = 1
+        
+    def fit(self, df):
+        """Fits
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.last_values = df.tail(self.lag)
+        self.first_values = df.head(self.lag)
+        return self        
+    def transform(self, df):
+        """Returns differenced data
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        # df = df_wide_numeric.tail(60).head(50)
+        # df_forecast = (df_wide_numeric - df_wide_numeric.shift(1)).tail(10)
+        df = (df - df.shift(self.lag)).fillna(method = 'bfill')
+        return df
+    def fit_transform(self, df):
+        """Fits and Returns Magical DataFrame
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+    
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Returns data to original *or* forecast form
+        
+        Args:
+            df (pandas.DataFrame): input dataframe
+            trans_method (str): whether to inverse on original data, or on a following sequence
+                - 'original' return original data to original numbers 
+                - 'forecast' inverse the transform on a dataset immediately following the original
+        """
+        lag = self.lag
+        # add last values, group by lag, cumsum
+        if trans_method == 'original':
+            df = pd.concat([first_values, df.tail(df.shape[0] - lag)])
+            return df.cumsum()
+        else:
+            df_len = df.shape[0]
+            df = pd.concat([last_values, df], axis = 0)
+            return df.cumsum().tail(df_len)
+
 class MixedTransformer(object):
     """
     Multiple transformers combined.
@@ -527,12 +593,12 @@ class GeneralTransformer(object):
     """Remove outliers, fillNA, then mathematical transformations.
     
     Args:       
-        outlier (str): - level of outlier removal, if any, per series
+        outlier_method (str): - level of outlier removal, if any, per series
             'None'
-            'clip2std' - replace values > 2 stdev with the value of 2 st dev
-            'clip3std' - replace values > 3 stdev with the value of 2 st dev
-            'clip4std' - replace values > 4 stdev with the value of 2 st dev
-            'remove3std' - replace values > 3 stdev with NaN
+            'clip' - replace outliers with the highest value allowed by threshold
+            'remove' - remove outliers and replace with np.nan
+        
+        outlier_threshold (float): number of std deviations from mean to consider an outlier. Default 3.
 
         fillNA (str): - method to fill NA, passed through to FillNA()
             'ffill' - fill most recent non-na value forward until another non-na value is reached
@@ -550,52 +616,65 @@ class GeneralTransformer(object):
             'Detrend' - fit then remove a linear regression from the data
             'RollingMean10' - 10 period rolling average (smoothing)
             'RollingMean100thN' - Rolling mean of periods of len(train)/100 (minimum 2)
+            
+            DifferencedTransformer
+            SinTrend
 
     """
-    def __init__(self, outlier: str = "None", fillNA: str = 'ffill', transformation: str = 'None'):
-        self.outlier = outlier
+    def __init__(self, outlier_method: str = None, outlier_threshold: float = 3,
+                 fillNA: str = 'ffill', 
+                 transformation: str = None, detrend: bool = False,
+                 param_transformer: str = None, param: str = None,
+                 post_transformer: str = None,
+                 discretization: str = 'center', n_bins: int = None,
+                 random_seed: int = 2020):
+        
+        self.outlier_method = outlier_method
+        self.outlier_threshold = outlier_threshold
         self.fillNA = fillNA
-        self.transformation = transformation
+        self.transformation = transformation,
+        self.detrend = detrend,
+        self.param_transformer = param_transformer,
+        self.param = param,
+        self.post_transformer = post_transformer,
+        self.discretization = discretization 
+        self.n_bins = n_bins
+        self.random_seed = random_seed
 
     def outlier_treatment(self, df):
         """
         Args:
             df (pandas.DataFrame): Datetime Indexed 
         """
-        outlier = self.outlier
+        outlier_method = self.outlier_method
         
-        if (outlier =='None') or (outlier == None):
+        if (outlier_method in [None, 'None']):
             return df
-        
-        if (outlier == 'clip2std'):
-            df = clip_outliers(df, std_threshold = 2)
+        elif (outlier_method == 'clip'):
+            df = clip_outliers(df, std_threshold = self.outlier_threshold)
             return df
-        if (outlier == 'clip3std'):
-            df = clip_outliers(df, std_threshold = 3)
-            return df
-        if (outlier == 'clip4std'):
-            df = clip_outliers(df, std_threshold = 4)
-            return df
-        if (outlier == 'remove3std'):
-            df = remove_outliers(df, std_threshold = 3)
+        elif (outlier_method == 'remove'):
+            df = remove_outliers(df, std_threshold = self.outlier_threshold)
             return df
         else:
+            self.outlier_method = None
             return df
     
     def fill_na(self, df, window: int = 10):
         """
         Args:
-            df (pandas.DataFrame): Datetime Indexed 
+            df (pandas.DataFrame): Datetime Indexed
+            window (int): passed through to rolling mean fill technique
         """
         df = FillNA(df, method = self.fillNA, window = window)
         return df
         
-    def _transformation_fit(self, df):
+    def _transformation_fit(self, df, transformation: str = None):
         """
         Args:
             df (pandas.DataFrame): Datetime Indexed 
         """
-        transformation = self.transformation
+        
         if (transformation =='None') or (transformation == None):
             transformer = EmptyTransformer().fit(df)
             return transformer
@@ -699,7 +778,7 @@ class GeneralTransformer(object):
         df = self.fill_na(df)
         self.column_names = df.columns
         self.index = df.index
-        self.transformer = self._transformation_fit(df)
+        self.transformer = self._transformation_fit(df, transformation = self.transformation)
         df = self.transformer.transform(df)
         df = pd.DataFrame(df, index = self.index, columns = self.column_names)
         return df

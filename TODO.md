@@ -16,6 +16,12 @@ Models are failing without being captured in model_results
 GluonTS to template, best
 Select Transformers to include in random, resort in function
 
+Does rolling mean work?
+Are transformers included in Try/Except?
+Would expect to see all transformers delivery roughly same performance with same model
+Bring GeneralTransformer to higher level API.
+	Note about how fillna/outlier/rollingmean/detrend are not invertible
+
 # To-Do
 * Get the sphinx (google style) documentation and readthedocs.io website up
 * Better point to probabilistic (uncertainty of naive last-value forecast) - linear reg of abs error of samples - simulations
@@ -29,6 +35,9 @@ Select Transformers to include in random, resort in function
 	* use feature selection on TSFresh features - autocorrelation lag n, fft/cwt coefficients (abs), abs_energy
 	* date part and age/expanding regressors
 	* moving average +/- moving std deviation
+* Simple performance:
+	* large if collections (ModelMonster, Transformers) with dict lookups
+	* replace try/except with if/else in some cases
 * GluonTS
 	* Add support for preord_regressor
 	* Make sure of rolling regression setup
@@ -108,10 +117,15 @@ Select Transformers to include in random, resort in function
 		other sequence models
 		Categorical classifier
 		RBF kernel SVR
+		Clustering then separate models
 		PCA or similar -> Univariate Series (Unobserved Components)
 	Neural net with just short series as input, Keras time series generator
 		Transfer learning (model weights pretrained on other time series)
 		Neural net with '2d' output (series * forecast_length)
+		At least one for each of:
+			Tensorflow/Keras
+			Mxnet
+			PyTorch
 	Simulations
 	Motif simulations
 	Ta-lib

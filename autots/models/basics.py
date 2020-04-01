@@ -374,7 +374,7 @@ class ContouredMofitSimulation(ModelObject):
                  cutoff_threshold: float = 0.7,
                  cutoff_minimum: int = 20,
                  point_method: str = 'median',
-                 verbose: int = 0
+                 verbose: int = 1
                  ):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              holiday_country = holiday_country, random_seed = random_seed)
@@ -661,9 +661,9 @@ class ContouredMofitSimulation(ModelObject):
         distance_metric_choice = np.random.choice(a=['other', 'hamming', 'cityblock', 'cosine','euclidean','l1', 'l2', 'manhattan'], size = 1).item()
         if distance_metric_choice == 'other':
             distance_metric_choice = np.random.choice(a=['braycurtis', 'canberra', 'chebyshev', 'correlation', 'dice', 'hamming', 'jaccard', 'kulsinski', 'mahalanobis', 'minkowski', 'rogerstanimoto', 'russellrao', 'seuclidean', 'sokalmichener', 'sokalsneath', 'sqeuclidean', 'yule'] , size = 1).item()
-        max_motifs_choice = float(np.random.choice(a=[20, 50, 0.5, 0.2], size = 1).item())
+        max_motifs_choice = float(np.random.choice(a=[20, 50, 0.05, 0.2, 0.5], size = 1, p = [0.4, 0.1, 0.3, 0.19, 0.01]).item())
         recency_weighting_choice = np.random.choice(a=[0, 0.5, 0.1, 0.01, -0.1], size = 1, p = [0.4, 0.1, 0.3, 0.1, 0.1]).item()
-        cutoff_threshold_choice = np.random.choice(a=[0.3, 0.5, 0.7, 0.9], size = 1, p = [0.2, 0.3, 0.3, 0.2]).item()
+        cutoff_threshold_choice = np.random.choice(a=[0.3, 0.5, 0.7, 0.9, 0.99, 1.5], size = 1, p = [0.01, 0.01, 0.1, 0.2, 0.39, 0.29]).item()
         cutoff_minimum_choice = np.random.choice(a=[5, 10, 20, 50, 100], size = 1).item()
         point_method_choice = np.random.choice(a=['median', 'sample', 'mean'], size = 1, p = [0.4, 0.3, 0.3]).item()
         
