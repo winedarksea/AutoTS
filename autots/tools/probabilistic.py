@@ -111,15 +111,18 @@ def Point_to_Probability(train, forecast, prediction_interval = 0.9, method: str
         upper_error, lower_error (two pandas.DataFrames for upper and lower bound respectively)
     """
     if method == 'variable_pct_change':
-        beta = np.exp(prediction_interval * 10)
-        alpha = 0.3
-        errorranges = Variable_Point_to_Probability(train, forecast, alpha = alpha, beta = beta)
-        # make symmetric error ranges
-        errorranges = errorranges / 2 
-        
-        upper_forecast = forecast + errorranges
-        lower_forecast = forecast - errorranges
-        return upper_forecast, lower_forecast
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            beta = np.exp(prediction_interval * 10)
+            alpha = 0.3
+            errorranges = Variable_Point_to_Probability(train, forecast, alpha = alpha, beta = beta)
+            # make symmetric error ranges
+            errorranges = errorranges / 2 
+            
+            upper_forecast = forecast + errorranges
+            lower_forecast = forecast - errorranges
+            return upper_forecast, lower_forecast
     if method == 'historic_quantile':
         lower, upper = historic_quantile(train, prediction_interval)
         upper_forecast = forecast.astype(float) + upper

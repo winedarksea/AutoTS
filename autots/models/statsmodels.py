@@ -88,13 +88,16 @@ class GLM(ModelObject):
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
+        regression_type (str): type of regression (None, 'User')
 
     """
     def __init__(self, name: str = "GLM", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US',
                  random_seed: int = 2020, 
+                 regression_type: str = None,
                  family = 'Gaussian', constant: bool = False, verbose: int = 1):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
+                             regression_type = regression_type,
                              holiday_country = holiday_country, random_seed = random_seed,
                              verbose = verbose)
         self.family = family
@@ -113,6 +116,10 @@ class GLM(ModelObject):
             self.verbose = True
         else:
             self.verbose = False
+        if self.regression_type == 'User':
+            if (len(preord_regressor) != len(df.index)):
+                self.regression_type = None
+            self.preord_regressor_train = preord_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -132,9 +139,13 @@ class GLM(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         from statsmodels.api import GLM
         X = (pd.to_numeric(self.df_train.index, errors = 'coerce',downcast='integer').values)
-        if self.constant or self.constant == 'True':
+        if self.constant in [True, 'True', 'true']:
             from statsmodels.tools import add_constant
             X = add_constant(X, has_constant='add')
+        if self.regression_type == 'User':
+            if self.preord_regressor_train.ndim == 1:
+                self.preord_regressor_train = np.array(self.preord_regressor_train).reshape(-1, 1)
+            X = np.concatenate((X.reshape(-1, 1), self.preord_regressor_train), axis = 1)
         forecast = pd.DataFrame()
         self.df_train = self.df_train.replace(0, np.nan)
         fill_vals = self.df_train.abs().min(axis = 0, skipna = True)
@@ -162,6 +173,10 @@ class GLM(ModelObject):
             Xf = pd.to_numeric(test_index, errors = 'coerce',downcast='integer').values
             if self.constant or self.constant == 'True':
                 Xf = add_constant(Xf, has_constant='add')
+            if self.regression_type == 'User':
+                if preord_regressor.ndim == 1:
+                    preord_regressor = np.array(preord_regressor).reshape(-1, 1)
+                Xf = np.concatenate((Xf.reshape(-1, 1), preord_regressor), axis = 1)   
             current_forecast = model.predict((Xf))
             forecast = pd.concat([forecast, pd.Series(current_forecast)], axis = 1)
         df_forecast = pd.DataFrame(forecast)
@@ -191,14 +206,20 @@ class GLM(ModelObject):
         """
         family_choice = np.random.choice(a = ['Gaussian', 'Poisson','Binomial','NegativeBinomial','Tweedie', 'Gamma'], size = 1, p = [0.1, 0.3, 0.1, 0.3, 0.1, 0.1]).item()
         constant_choice = np.random.choice(a = [False, True], size = 1, p = [0.95, 0.05]).item()
+        regression_type_choice = np.random.choice(a = [None, 'User'], size = 1, p = [0.8, 0.2]).item()
         return {'family':family_choice,
-                'constant':constant_choice}
+                'constant':constant_choice,
+                'regression_type': regression_type_choice
+                }
     
     def get_params(self):
         """Return dict of current parameters
         """
-        return {'family':self.family,
-                'constant':self.constant}
+        return {
+                'family':self.family,
+                'constant':self.constant,
+                'regression_type': self.regression_type
+                }
 
 class ETS(ModelObject):
     """Exponential Smoothing from Statsmodels

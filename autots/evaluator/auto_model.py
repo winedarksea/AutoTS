@@ -153,7 +153,7 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
         if parameters == {}:
             model = GLM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         else:
-            model = GLM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, family = parameters['family'], constant = parameters['constant'])
+            model = GLM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, family = parameters['family'], constant = parameters['constant'], regression_type=parameters['regression_type'])
         return model
     
     if model == 'ETS':
@@ -246,15 +246,16 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
         if parameters == {}:
             model = TSFreshRegressor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         else:
-            model = TSFreshRegressor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = TSFreshRegressor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose,
+                             max_timeshift = parameters['max_timeshift'],regression_model = parameters['regression_model'], feature_selection = parameters['feature_selection'])
         return model
     
-    if model == 'ContouredMofitSimulation':
-        from autots.models.basics import ContouredMofitSimulation
+    if model == 'MotifSimulation':
+        from autots.models.basics import MotifSimulation
         if parameters == {}:
-            model = ContouredMofitSimulation(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = MotifSimulation(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         else:
-            model = ContouredMofitSimulation(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose,
+            model = MotifSimulation(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose,
                                              phrase_len = parameters['phrase_len'],comparison = parameters['comparison'],
                                              shared = parameters['shared'],distance_metric = parameters['distance_metric'],
                                              max_motifs = parameters['max_motifs'],recency_weighting = parameters['recency_weighting'],
@@ -290,9 +291,18 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     """
     transformationStartTime = datetime.datetime.now()
     from autots.tools.transform import GeneralTransformer
-    transformer_object = GeneralTransformer(outlier=transformation_dict['outlier'],
-                                            fillNA = transformation_dict['fillNA'], 
-                                            transformation = transformation_dict['transformation']).fit(df_train)
+    transformer_object = GeneralTransformer(
+                            outlier_method = transformation_dict['outlier_method'],
+                            outlier_threshold = transformation_dict['outlier_threshold'],
+                            fillna = transformation_dict['fillna'],
+                            transformation = transformation_dict['transformation'],
+                            detrend = transformation_dict['detrend'],
+                            second_transformation = transformation_dict['second_transformation'],
+                            transformation_param = transformation_dict['transformation_param'],
+                            third_transformation = transformation_dict['third_transformation'],
+                            discretization = transformation_dict['discretization'],
+                            n_bins = transformation_dict['n_bins']
+                                            ).fit(df_train)
     df_train_transformed = transformer_object.transform(df_train)
     
     if transformation_dict['context_slicer'] not in [None, 'None']:
@@ -520,7 +530,11 @@ def TemplateWizard(template, df_train, df_test, weights,
                                           random_seed = random_seed, verbose = verbose,
                                        template_cols = template_cols)
             if verbose > 0:
-                print("Model Number: {} with model {}".format(str(template_result.model_count), df_forecast.model_name))
+                if verbose > 1:
+                    print("Model Number: {} with model {} with params {} and transformations {}".format(str(template_result.model_count), df_forecast.model_name, json.dumps(df_forecast.model_parameters),json.dumps(df_forecast.transformation_parameters)))
+                else:
+                    print("Model Number: {} with model {}".format(str(template_result.model_count), df_forecast.model_name))
+                
             
             
             model_error = PredictionEval(df_forecast, df_test, series_weights = weights, per_timestamp_errors = per_timestamp_errors)
@@ -642,6 +656,7 @@ def NewGeneticTemplate(model_results, submitted_parameters, sort_column: str = "
     """
     new_template = pd.DataFrame()
     
+    # filter existing templates
     sorted_results =  model_results[model_results['Ensemble'] == 0].copy().sort_values(by = sort_column, ascending = sort_ascending, na_position = 'last').drop_duplicates(subset = template_cols, keep = 'first')
     if str(max_per_model_class).isdigit():
         sorted_results = sorted_results.sort_values(sort_column, ascending=sort_ascending).groupby('Model').head(max_per_model_class).reset_index()
@@ -768,7 +783,7 @@ def generate_score(model_results, metric_weighting: dict = {}, prediction_interv
         runtime_score = model_results['TotalRuntime']/(model_results['TotalRuntime'].min(skipna=True) + datetime.timedelta(minutes = 1)) # smaller better
         lower_mae_score = model_results['lower_mae_weighted']/(model_results['lower_mae_weighted'].min(skipna=True) +1) # smaller better
         upper_mae_score = model_results['upper_mae_weighted']/(model_results['upper_mae_weighted'].min(skipna=True) +1) # smaller better
-        contour_score =  (1/(model_results['contour_weighted']))
+        contour_score =  (1/(model_results['contour_weighted'])).replace([np.inf, -np.inf, np.nan], 10).clip(upper = 10)
     except KeyError:
         raise KeyError("Inconceivable! Evaluation Metrics are missing and all models have failed, by an error in TemplateWizard or metrics. A new template may help, or an adjusted model_list.")
         

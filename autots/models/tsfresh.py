@@ -77,11 +77,11 @@ class TSFreshRegressor(ModelObject):
         # num_subsamples = 10
         predictStartTime = datetime.datetime.now()
         
-        from tsfresh import extract_features
+        # from tsfresh import extract_features
         from tsfresh.utilities.dataframe_functions import make_forecasting_frame
         # from sklearn.ensemble import AdaBoostRegressor
         from tsfresh.utilities.dataframe_functions import impute as tsfresh_impute
-        from tsfresh.feature_extraction import EfficientFCParameters, MinimalFCParameters
+        # from tsfresh.feature_extraction import EfficientFCParameters, MinimalFCParameters
 
         
         max_timeshift = 10

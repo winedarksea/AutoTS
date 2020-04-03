@@ -10,12 +10,14 @@ from autots.datasets import load_toy_yearly
 from autots.datasets import load_toy_weekly
 
 from autots.evaluator.auto_ts import AutoTS
+from autots.tools.transform import GeneralTransformer
+from autots.tools.shaping import long_to_wide
 
-__version__ = '0.1.5'
+__version__ = '0.2.0'
 
 
 __all__ = ['load_toy_daily','load_toy_monthly', 'load_toy_yearly', 'load_toy_hourly', 'load_toy_weekly',
-           'AutoTS']
+           'AutoTS', 'GeneralTransformer', 'long_to_wide']
 
 # import logging
 # logger = logging.getLogger(__name__)

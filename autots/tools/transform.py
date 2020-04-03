@@ -627,7 +627,7 @@ class GeneralTransformer(object):
             'MaxAbsScaler' - Sklearn
             'StandardScaler' - Sklearn
             'RobustScaler' - Sklearn
-            'PCA, 'TruncatedSVD', 'FastICA', 'NMF' - performs sklearn decomposition and returns n-cols worth of n_components
+            'PCA, 'FastICA' - performs sklearn decomposition and returns n-cols worth of n_components
             'Detrend' - fit then remove a linear regression from the data
             'RollingMean' - 10 period rolling average, can receive a custom window by transformation_param if used as second_transformation
             'RollingMean10' - 10 period rolling average (smoothing)
@@ -662,11 +662,11 @@ class GeneralTransformer(object):
         self.outlier_method = outlier_method
         self.outlier_threshold = outlier_threshold
         self.fillna = fillna
-        self.transformation = transformation,
-        self.detrend = detrend,
-        self.second_transformation = second_transformation,
-        self.transformation_param = transformation_param,
-        self.third_transformation = third_transformation,
+        self.transformation = transformation
+        self.detrend = detrend
+        self.second_transformation = second_transformation
+        self.transformation_param = transformation_param
+        self.third_transformation = third_transformation
         self.discretization = discretization 
         self.n_bins = n_bins
         self.random_seed = random_seed
@@ -736,7 +736,8 @@ class GeneralTransformer(object):
         
         elif (transformation =='QuantileTransformer'):
             from sklearn.preprocessing import QuantileTransformer
-            transformer = QuantileTransformer(copy=True)
+            quants = 1000 if df.shape[0] > 1000 else int(df.shape[0] / 3)
+            transformer = QuantileTransformer(n_quantiles = quants, copy=True)
             return transformer
         
         elif (transformation =='StandardScaler'):
@@ -755,10 +756,12 @@ class GeneralTransformer(object):
             return transformer
         
         elif (transformation == 'RollingMean'):
-            self.param = 10 if self.param is None else self.param
-            if not str(self.param).isdigit():
-                window = int(''.join([s for s in str(self.param) if s.isdigit()]))
+            param = 10 if param is None else param
+            if not str(param).isdigit():
+                window = int(''.join([s for s in str(param) if s.isdigit()]))
                 window = int(df.shape[0]/window)
+            else:
+                window = int(param)
             window = 2 if window < 2 else window
             self.window = window
             transformer = RollingMeanTransformer(window = self.window)
@@ -783,19 +786,9 @@ class GeneralTransformer(object):
             transformer = PCA(n_components=df.shape[1], whiten = False, random_state = self.random_seed)
             return transformer
         
-        elif (transformation =='TruncatedSVD'):
-            from sklearn.decomposition import TruncatedSVD
-            transformer = TruncatedSVD(n_components=df.shape[1], random_state = self.random_seed)
-            return transformer
-        
         elif (transformation =='FastICA'):
             from sklearn.decomposition import FastICA
             transformer = FastICA(n_components=df.shape[1], whiten = True, random_state = self.random_seed)
-            return transformer
-        
-        elif (transformation =='NMF'):
-            from sklearn.decomposition import NMF
-            transformer = NMF(n_components=df.shape[1], random_state = self.random_seed)
             return transformer
         
         else:
@@ -823,12 +816,13 @@ class GeneralTransformer(object):
         
     def _fit(self, df):
         df = df.copy()
-        self.df_index = df.index
-        self.df_colnames = df.columns
         
         # clean up outliers and NaN
         df = self.outlier_treatment(df)
         df = self.fill_na(df)
+        
+        self.df_index = df.index
+        self.df_colnames = df.columns
         
         # the first transformation!
         self.transformer = self._retrieve_transformer(df, transformation = self.transformation)
@@ -848,14 +842,14 @@ class GeneralTransformer(object):
         # the second transformation! This one has an optional parameter passed through
         self.second_transformer = self._retrieve_transformer(df, transformation = self.second_transformation, param = self.transformation_param)
         self.second_transformer = self.second_transformer.fit(df)
-        df = pd.DataFrame(self.transformer.second_transformer(df))
+        df = pd.DataFrame(self.second_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         
         # the third transformation!
         self.third_transformer = self._retrieve_transformer(df, transformation = self.third_transformation, param = self.transformation_param)
         self.third_transformer = self.third_transformer.fit(df)
-        df = pd.DataFrame(self.transformer.third_transformer(df))
+        df = pd.DataFrame(self.third_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         
@@ -969,7 +963,7 @@ class GeneralTransformer(object):
         
         
         # since inf just causes trouble. Feel free to debate my choice of replacing with zero.
-        # df = df.replace([np.inf, -np.inf], 0)
+        df = df.replace([np.inf, -np.inf], 0)
         return df
 
 
@@ -977,16 +971,42 @@ def RandomTransform():
     """
     Returns a dict of randomly choosen transformation selections
     """
-    outlier_choice = np.random.choice(a = [None, 'clip3std', 'clip2std','clip4std','remove3std'], size = 1, p = [0.4, 0.3, 0.1, 0.1, 0.1]).item()
+    transformer_list = [None,'MinMaxScaler','PowerTransformer', 'QuantileTransformer','MaxAbsScaler','StandardScaler','RobustScaler','PCA', 'FastICA', 'Detrend','RollingMean10','RollingMean100thN','DifferencedTransformer','SinTrend']
+    first_transformer_prob = [0.3, 0.05 ,0.31, 0.05, 0.05, 0.05 ,0.05, 0.01, 0.01, 0.01, 0.03, 0.02 ,0.05, 0.01]
+    third_transformer_prob = [0.25, 0.05 ,0.1, 0.05, 0.05, 0.14 ,0.05, 0.05, 0.05, 0.05, 0.03, 0.02 ,0.1, 0.01]
+    outlier_method_choice = np.random.choice(a = [None, 'clip', 'remove'], size = 1, p = [0.5, 0.3, 0.2]).item()
+    if outlier_method_choice is not None:
+        outlier_threshold_choice = np.random.choice(a = [2,3,4,6], size = 1, p = [0.2, 0.5, 0.2, 0.1]).item()
+    else:
+        outlier_threshold_choice = None
     na_choice = np.random.choice(a = ['ffill', 'fake date', 'rolling mean','mean','zero', 'ffill mean biased', 'median'], size = 1, p = [0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1]).item()
-    # 'PowerTransformer', 'PCA', 'Detrend', 'RollingMean10', 'RollingMean100thN', 'SinTrend'
-    transformation_choice = np.random.choice(a = [None, 'KitchenSink2','KitchenSink3','KitchenSink4', 'KitchenSink5','MinMaxScaler', 'RollingMean10thN', 'QuantileTransformer', 'StandardScaler', 'MaxAbsScaler', 'RobustScaler','KitchenSink'], size = 1, p = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05 ,0.05, 0.05, 0.1]).item()
-    transformation_choice =   np.random.choice(a = ['KitchenSink', 'KitchenSink5','KitchenSink2','KitchenSink3','KitchenSink4',], size = 1, p = [0.2, 0.2, 0.2, 0.2, 0.2]).item()
+    transformation_choice = np.random.choice(a = transformer_list, size = 1, p = first_transformer_prob).item()
+    detrend_choice = np.random.choice(a = [True, False], size = 1, p = [0.2, 0.8]).item()
+    second_transformation_choice = np.random.choice(a = [None,'RollingMean', 'other'], size = 1, p = [0.3, 0.5, 0.2]).item()
+    if second_transformation_choice == 'other':
+        second_transformation_choice = np.random.choice(a = transformer_list, size = 1, p = first_transformer_prob).item()
+    if second_transformation_choice in ['RollingMean']:
+        transformation_param_choice = np.random.choice(a = [3, 10, 14, 28, '10thN', '25thN', '100thN'], size = 1, p = [0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1]).item()
+    else:
+        transformation_param_choice = None
+    third_transformation_choice = np.random.choice(a = transformer_list, size = 1, p = third_transformer_prob).item()
+    discretization_choice = np.random.choice(a = [None,'center','lower', 'upper'], size = 1, p = [0.7, 0.1, 0.1, 0.1]).item()
+    if discretization_choice is not None:
+        n_bins_choice = np.random.choice(a = [5, 10, 25], size = 1, p = [0.8, 0.1, 0.1]).item()
+    else:
+        n_bins_choice = None
     context_choice = np.random.choice(a = [None, 'HalfMax', '2ForecastLength', '6ForecastLength'], size = 1, p = [0.7, 0.1, 0.1, 0.1]).item()
     param_dict = {
-            'outlier': outlier_choice,
-            'fillNA' : na_choice, 
-           'transformation' : transformation_choice,
-           'context_slicer' : context_choice
+            'outlier_method' : outlier_method_choice,
+            'outlier_threshold' : outlier_threshold_choice,
+            'fillna' : na_choice,
+            'transformation' : transformation_choice,
+            'detrend' : detrend_choice,
+            'second_transformation' : second_transformation_choice,
+            'transformation_param' : transformation_param_choice,
+            'third_transformation' : third_transformation_choice,
+            'discretization' : discretization_choice,
+            'n_bins' : n_bins_choice,
+            'context_slicer' : context_choice
             }
     return param_dict

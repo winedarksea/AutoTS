@@ -8,16 +8,12 @@
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
 # Errors: 
+missing 1 required positional argument: 'df' in model VECM  (probably retrieve_transformer)
 Holiday not (always) working
-\Users\Owner\Documents\Personal\Projects\AutoTS\autots\evaluator\metrics.py:115: RuntimeWarning: invalid value encountered in greater_equal X = X>=0
-\Users\Owner\Documents\Personal\Projects\AutoTS\autots\evaluator\metrics.py:72: RuntimeWarning: Mean of empty slice return np.nanmean(mae_result, axis=0)
-Models are failing without being captured in model_results
 
 GluonTS to template, best
 Select Transformers to include in random, resort in function
-
-Does rolling mean work?
-Are transformers included in Try/Except?
+Select best parameters for contoured motif
 Would expect to see all transformers delivery roughly same performance with same model
 Bring GeneralTransformer to higher level API.
 	wide_to_long and long_to_wide in higher-level API
@@ -25,17 +21,42 @@ Bring GeneralTransformer to higher level API.
 # To-Do
 * Get the sphinx (google style) documentation and readthedocs.io website up
 * Better point to probabilistic (uncertainty of naive last-value forecast) - linear reg of abs error of samples - simulations
+	* Data, pct change, find window with % max change pos, and neg then avg. Bound is first point + that percent, roll from that first point and adjust if points cross, variant where all series share knowledge
+	* Data, split, normalize, find distribution exponentially weighted to most recent, center around forecast, shared variant
+	* Data quantile, recentered around median of forecast.
+	* Categorical class probabilities as range for RollingRegression
 * get_prediction for Statsmodels Statespace models to include confidence interval where possible
 	* migrate arima_model to arima.model
 	* uncomp, dynamic factor with uncertainty intervals
-* Check how fillna methods handle datasets that are entirely NaN
-* add_constant to GLS, GLM
+* Check how fillna methods handle datasets that have entirely NaN series
 * Better X_maker:
 	* add magnitude_1, magnitude2, and so on (new_params have these all the same for models that don't use them)
 	* use feature selection on TSFresh features - autocorrelation lag n, fft/cwt coefficients (abs), abs_energy
-	* date part and age/expanding regressors
+	* AR1, 
+	* holidays not working
+	* MACD long-term MA - short term MA
+	* Adjust rolling regression additional lag to 28, 364
+	* date part simple/expanded date part
+		* day of month, day of year, day of week
+		* month of year, year
+		* length of day at 45N
+		* weekday/weekend
+		* hour of day
+		* days in month (fraction of?)
+		* Season (4 seasons, 2 seasons)
 	* moving average +/- moving std deviation
-	* Nystroem kernel
+	* Nystroem kernel, FastICA
+	https://link.springer.com/article/10.1007/s10618-019-00647-x/tables/1
+	RollingRegression
+		Rolling regression magnitude parameters 1 - 5 (0.1, 1, 10, 100, 1000, 10000) which is usually 1, 
+		Pytorch and Tensorflow Simple LSTM/GRU
+		XGBoost
+		other sequence models
+		Categorical classifier
+		RBF kernel SVR
+		Clustering then separate models
+		ComplementNB
+		PCA or similar -> Univariate Series (Unobserved Components)
 * Simple performance:
 	* large if collections (ModelMonster, Transformers) with dict lookups
 	* replace try/except with if/else in some cases
@@ -49,6 +70,8 @@ Bring GeneralTransformer to higher level API.
 * Format of Regressor - allow multiple input to at least sklearn models
 	* Miso l filter or similar to reduce to single time series where only on regressor allowed
 	* or PCA or other fast approach to reduce dimensions
+	* Handles 1D ARIMA (should take 2d), FBProphet, Sklearn (should take 2d), Uncomp (should take 2d), Dynamic Factor (should take 2d), VECM (should take 2d),
+	* Handles both: Regression
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
 * Handle categorical forecasts where forecast leaves range of known values, then add to upper/lower forecasts
 * Speed improvements, Profiling
@@ -59,29 +82,18 @@ Bring GeneralTransformer to higher level API.
 * If all input are Int, convert floats back to int
 * Trim whitespace/case-desensitize on string inputs
 * Option to print % improvement of best over last value naive
-* If model list * max model_per_class is < models to validate or other, raise models_per_clas
 * Hierachial correction (bottom-up to start with)
 * Because I'm a biologist, incorporate more genetics and such. Also as a neuro person, there must be a way to fit networks in...
 * Improved verbosity controls and options. 
 * Replace most 'print' with logging.
-* Export as simpler code (as TPOT)
-* set up the lower-level API to be usable as pipelines
-	* allow stand-alone pipeline for transformation with format for export data format to other package requirements (use AutoTS just for preprocessing)
 * AIC metric, other accuracy metrics
 	* MAE of upper and lower forecasts, balance with Containment
-* Metric to measure if the series follows the same shape (Contour)
-	* Potentially % change between n and n-1, compare this % change between forecast and actual
-	* One if same direction, 0 otherwise (sum/len)
 * Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
 * Development tools:
 	* Add to Conda distribution as well as pip
 	* Continuous integration
 	* Code/documentation quality checkers
-* Option to drop series which haven't had a value in last N days
-* More thorough use of setting random seed, verbose, n_jobs
-* For monthly data account for number of days in month
-* add constant to GLM
-* Ability to automatically add external datasets of parallel time series of global usability (ie from FRED or others)
+9* Ability to automatically add external datasets of parallel time series of global usability (ie from FRED or others)
 * Option to import either long or wide data
 * Infer column names for df_long to wide based on which is datetime, which is string, and which is numeric
 
@@ -113,13 +125,6 @@ Bring GeneralTransformer to higher level API.
 	Simple Decomposition forecasting
 	Statespace variant of ETS which has Confidence Intervals
 	Tensorflow Probability Structural Time Series
-	RollingRegression
-		Pytorch and Tensorflow Simple LSTM/GRU
-		other sequence models
-		Categorical classifier
-		RBF kernel SVR
-		Clustering then separate models
-		PCA or similar -> Univariate Series (Unobserved Components)
 	Neural net with just short series as input, Keras time series generator
 		Transfer learning (model weights pretrained on other time series)
 		Neural net with '2d' output (series * forecast_length)

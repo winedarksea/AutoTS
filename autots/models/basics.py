@@ -349,7 +349,7 @@ class SeasonalNaive(ModelObject):
                 }
         
 
-class ContouredMofitSimulation(ModelObject):
+class MotifSimulation(ModelObject):
     """More dark magic created by the evil mastermind of this project.
     Basically a highly-customized KNN
     
@@ -363,15 +363,15 @@ class ContouredMofitSimulation(ModelObject):
         distance_metric (str): passed through to sklearn pairwise_distances
         max_motifs (float): number of motifs to compare per series. If less 1, used as % of length training data
     """
-    def __init__(self, name: str = "ContouredMofitSimulation", frequency: str = 'infer', 
+    def __init__(self, name: str = "MotifSimulation", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, holiday_country: str = 'US', random_seed: int = 2020,
-                 phrase_len: str = '20thN',
+                 phrase_len: str = '5',
                  comparison: str = 'magnitude_pct_change_sign',
                  shared: bool = False,
-                 distance_metric: str = 'hamming',
+                 distance_metric: str = 'l2',
                  max_motifs: float = 50,
-                 recency_weighting: float = 0,
-                 cutoff_threshold: float = 0.7,
+                 recency_weighting: float = 0.1,
+                 cutoff_threshold: float = 0.9,
                  cutoff_minimum: int = 20,
                  point_method: str = 'median',
                  verbose: int = 1
@@ -406,7 +406,7 @@ class ContouredMofitSimulation(ModelObject):
         
         # convert strings of phrase length into int lengths
         if str(self.phrase_len).isdigit():
-            self.phrase_n = self.phrase_len
+            self.phrase_n = int(self.phrase_len)
         elif self.phrase_len == '10thN':
             self.phrase_n = int(np.floor((df.shape[0])/10))
         elif self.phrase_len == '100thN':
@@ -416,8 +416,10 @@ class ContouredMofitSimulation(ModelObject):
         else:
             self.phrase_len = '20thN'
             self.phrase_n = int(np.floor((df.shape[0])/20))
-        if (self.phrase_n > df.shape[0]) or (self.phrase_n <= 0):
-            raise ValueError("phrase_len is inappropriate for the length of training data provided")
+        if (self.phrase_n > df.shape[0]) or (self.phrase_n <= 1):
+            # raise ValueError("phrase_len is inappropriate for the length of training data provided")
+            self.phrase_n = 3
+            self.phrase_len = 3
         # df = df_wide[df_wide.columns[0:3]].fillna(0).astype(float)
         df = self.basic_profile(df)
         """
@@ -526,6 +528,13 @@ class ContouredMofitSimulation(ModelObject):
             
             thresh = int(np.ceil(pos_forecasts.shape[1] * na_threshold))
             if point_method == 'mean':
+                current_forecast = pos_forecasts.mean(axis = 1)
+            elif point_method == 'sign_biased_mean':
+                axis_means = pos_forecasts.mean(axis = 0)
+                if axis_means.mean() > 0:
+                    pos_forecasts = pos_forecasts[pos_forecasts.columns[~(axis_means < 0)]]
+                else:
+                    pos_forecasts = pos_forecasts[pos_forecasts.columns[~(axis_means > 0)]]
                 current_forecast = pos_forecasts.mean(axis = 1)
             elif point_method == 'sample':
                 current_forecast = pos_forecasts.sample(n = 1, axis = 1, weights = vals.values)
@@ -656,16 +665,16 @@ class ContouredMofitSimulation(ModelObject):
         """Returns dict of new parameters for parameter tuning
         """
         comparison_choice = np.random.choice(a=['pct_change', 'pct_change_sign', 'magnitude_pct_change_sign', 'magnitude', 'magnitude_pct_change'], size = 1).item()
-        phrase_len_choice = np.random.choice(a=[5, 10, '10thN', '100thN', '100thN', '20thN'], size = 1).item()
-        shared_choice = np.random.choice(a=[True, False], size = 1, p = [0.3, 0.7]).item()
+        phrase_len_choice = np.random.choice(a=[5, 10, 20, '10thN', '100thN', '1000thN', '20thN'], p = [0.4, 0.1, 0.3, 0.01, 0.1, 0.08, 0.01], size = 1).item()
+        shared_choice = np.random.choice(a=[True, False], size = 1, p = [0.1, 0.9]).item()
         distance_metric_choice = np.random.choice(a=['other', 'hamming', 'cityblock', 'cosine','euclidean','l1', 'l2', 'manhattan'], size = 1).item()
         if distance_metric_choice == 'other':
             distance_metric_choice = np.random.choice(a=['braycurtis', 'canberra', 'chebyshev', 'correlation', 'dice', 'hamming', 'jaccard', 'kulsinski', 'mahalanobis', 'minkowski', 'rogerstanimoto', 'russellrao', 'seuclidean', 'sokalmichener', 'sokalsneath', 'sqeuclidean', 'yule'] , size = 1).item()
         max_motifs_choice = float(np.random.choice(a=[20, 50, 0.05, 0.2, 0.5], size = 1, p = [0.4, 0.1, 0.3, 0.19, 0.01]).item())
         recency_weighting_choice = np.random.choice(a=[0, 0.5, 0.1, 0.01, -0.1], size = 1, p = [0.4, 0.1, 0.3, 0.1, 0.1]).item()
-        cutoff_threshold_choice = np.random.choice(a=[0.3, 0.5, 0.7, 0.9, 0.99, 1.5], size = 1, p = [0.01, 0.01, 0.1, 0.2, 0.39, 0.29]).item()
-        cutoff_minimum_choice = np.random.choice(a=[5, 10, 20, 50, 100], size = 1).item()
-        point_method_choice = np.random.choice(a=['median', 'sample', 'mean'], size = 1, p = [0.4, 0.3, 0.3]).item()
+        cutoff_threshold_choice = np.random.choice(a=[0.7, 0.9, 0.99, 1.5], size = 1, p = [0.1, 0.2, 0.4, 0.3]).item()
+        cutoff_minimum_choice = np.random.choice(a=[5, 10, 20, 50, 100], size = 1, p = [0.1, 0.1, 0.2, 0.3, 0.3]).item()
+        point_method_choice = np.random.choice(a=['median', 'sample', 'mean', 'sign_biased_mean'], size = 1, p = [0.5, 0.1, 0.2, 0.2]).item()
         
         
         return {
@@ -697,7 +706,7 @@ class ContouredMofitSimulation(ModelObject):
 
 
 """
-model = ContouredMofitSimulation()
+model = MotifSimulation()
 model = model.fit(df_wide.fillna(0)[df_wide.columns[0:5]].astype(float))
 prediction = model.predict(forecast_length = 14)
 prediction.forecast

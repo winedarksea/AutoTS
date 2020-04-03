@@ -119,7 +119,7 @@ class AutoTS(object):
         if model_list == 'default':
             self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'SeasonalNaive',
               'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
-              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']
+              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor', 'MotifSimulation']
         if model_list == 'superfast':
             self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'SeasonalNaive']
         if model_list == 'fast':
@@ -127,13 +127,14 @@ class AutoTS(object):
                                'GLM', 'ETS', 'FBProphet', 'RollingRegression', 'SeasonalNaive',
                                'UnobservedComponents', 'VECM', 'DynamicFactor']
         if model_list == 'probabilistic':
-            self.model_list = ['ARIMA', 'GluonTS', 'FBProphet', 'AverageValueNaive']
+            self.model_list = ['ARIMA', 'GluonTS', 'FBProphet', 'AverageValueNaive', 'MotifSimulation']
         if model_list == 'multivariate':
             self.model_list = ['VECM', 'DynamicFactor', 'GluonTS', 'VARMAX', 'RollingRegression']
         if model_list == 'all':
             self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
               'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS', 'SeasonalNaive',
-              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor', 'TSFreshRegressor']
+              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor', 
+              'TSFreshRegressor', 'MotifSimulation']
             
         if initial_template.lower() == 'random':
             self.initial_template = RandomTemplate(50, model_list = self.model_list)
@@ -406,6 +407,7 @@ class AutoTS(object):
         
         
         if num_validations > 0:
+            model_count = 0
             if str(self.validation_method).lower() in ['backwards', 'back', 'backward']:
                 for y in range(num_validations):
                     if verbose > 0:
@@ -628,7 +630,11 @@ def fake_regressor(df_long, forecast_length: int = 14,
                    date_col: str = 'datetime', value_col: str = 'value', id_col: str = 'series_id',
                    frequency: str = 'infer', aggfunc: str = 'first',
                    drop_most_recent: int = 0, na_tolerance: float = 0.95,
-                   drop_data_older_than_periods: int = 10000):
+                   drop_data_older_than_periods: int = 10000,
+                   dimensions: int = 1):
+    """
+    creates a fake regressor of random numbers for testing purposes
+    """
         
     from autots.tools.shaping import long_to_wide
     df_wide = long_to_wide(df_long, date_col = date_col, value_col = value_col,
@@ -638,10 +644,14 @@ def fake_regressor(df_long, forecast_length: int = 14,
     if frequency == 'infer':
         frequency = pd.infer_freq(df_wide.index, warn = True)
     
-    preord_regressor_train = pd.Series(np.random.randint(0, 100, size = len(df_wide.index)), index = df_wide.index)
         
     forecast_index = pd.date_range(freq = frequency, start = df_wide.index[-1], periods = forecast_length + 1)
     forecast_index = forecast_index[1:]
-
-    preord_regressor_forecast = pd.Series(np.random.randint(0, 100, size = (forecast_length)), index = forecast_index)
+    
+    if dimensions <= 1:
+        preord_regressor_train = pd.Series(np.random.randint(0, 100, size = len(df_wide.index)), index = df_wide.index)
+        preord_regressor_forecast = pd.Series(np.random.randint(0, 100, size = (forecast_length)), index = forecast_index)
+    else:
+        preord_regressor_train = pd.DataFrame(np.random.randint(0, 100, size = (len(df_wide.index), dimensions)), index = df_wide.index)
+        preord_regressor_forecast = pd.DataFrame(np.random.randint(0, 100, size = (forecast_length, dimensions)), index = forecast_index)
     return preord_regressor_train, preord_regressor_forecast

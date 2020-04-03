@@ -22,7 +22,7 @@ def fill_median(df):
     return df
     
 def rolling_mean(df, window: int = 10):
-    df= df.fillna(df.rolling(window = window, min_periods=1).mean())
+    df= df.fillna(df.rolling(window = window, min_periods=1).mean()).fillna(df.mean().to_dict())
     return df
     
 def biased_ffill(df, mean_weight: float = 1):

@@ -1,6 +1,7 @@
 """
 Metrics
 """
+import warnings
 import math
 import numpy as np
 import pandas as pd
@@ -65,11 +66,11 @@ def mae(A, F):
         A (numpy.array): known true values
         F (numpy.array): predicted values
     """
-    try:
-        mae_result = abs(A - F)
-    except Exception:
-        mae_result = np.nan
-    return np.nanmean(mae_result, axis=0)
+    mae_result = abs(A - F)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        mae_result = np.nanmean(mae_result, axis=0)
+    return mae_result
 
 def rmse(actual, forecast):
     """Expects two, 2-D numpy arrays of forecast_length * n series
@@ -108,8 +109,8 @@ def contour(A, F):
         F (numpy.array): predicted values
     """
     try:
-        X = np.diff(A, axis = 0)
-        Y = np.diff(F, axis = 0)
+        X = np.nan_to_num(np.diff(A, axis = 0))
+        Y = np.nan_to_num(np.diff(F, axis = 0))
         
         # On the assumption flat lines common in forecasts, but exceedingly rare in real world
         X = X>=0

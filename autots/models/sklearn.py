@@ -14,7 +14,7 @@ def rolling_x_regressor(df, mean_rolling_periods: int = 30, std_rolling_periods:
                         max_rolling_periods: int = None, min_rolling_periods: int = None,
                         ewm_alpha: float = 0.5, additional_lag_periods: int = 7,
                         holiday: bool = False, holiday_country: str = 'US', polynomial_degree = None,
-                        abs_energy: bool = False, lag_autocorr_periods: int = None):
+                        abs_energy: bool = False):
     """
     Generate more features from initial time series
     
@@ -35,13 +35,6 @@ def rolling_x_regressor(df, mean_rolling_periods: int = 30, std_rolling_periods:
         X = pd.concat([X, df.shift(additional_lag_periods)], axis = 1)
     if abs_energy:
         X = pd.concat([X, df.pow(other = ([2] * len(df.columns))).cumsum()], axis = 1)
-    if str(lag_autocorr_periods).isdigit():
-        # (df.rolling(window=1).corr(df.shift(lag_autocorr_periods)))
-        # df.rolling(5).apply(lambda x: pd.Series(x).autocorr())
-        # df.corrwith(df.shift(lag_autocorr_periods).fillna(0).astype(int))
-        # df.apply(lambda col: col.autocorr(lag_autocorr_periods), axis=0)
-        # X = pd.concat([X, ZZZ.fillna(0)], axis = 1)
-        pass
     if holiday:
         from autots.tools.holiday import holiday_flag
         X['holiday_flag_'] = holiday_flag(X.index, country = holiday_country).values
@@ -60,7 +53,7 @@ def rolling_x_regressor(df, mean_rolling_periods: int = 30, std_rolling_periods:
     
 
 class RollingRegression(ModelObject):
-    """Simple regression-framed approach to forecasting using sklearn
+    """General regression-framed approach to forecasting using sklearn
     
     Who are you who are so wise in the ways of science?
     I am Arthur, King of the Britons. -Python
@@ -104,7 +97,11 @@ class RollingRegression(ModelObject):
         df = self.basic_profile(df)
 
         self.df_train = df
-        self.regressor_train = preord_regressor
+        if self.regression_type is not None:
+            if (len(preord_regressor) != len(df.index)):
+                self.regression_type = None
+            else:
+                self.regressor_train = preord_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
     
@@ -122,8 +119,6 @@ class RollingRegression(ModelObject):
         """        
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
-        if len(preord_regressor) == 0:
-            self.regression_type = 'None'
         
         sktraindata = self.df_train.dropna(how = 'all', axis = 0).fillna(method='ffill').fillna(method='bfill')
         Y = sktraindata.drop(sktraindata.head(2).index)
@@ -149,7 +144,7 @@ class RollingRegression(ModelObject):
         elif self.regression_model == 'KNN':
             from sklearn.multioutput import MultiOutputRegressor
             from sklearn.neighbors import KNeighborsRegressor
-            regr = MultiOutputRegressor(KNeighborsRegressor(random_state=self.random_seed))
+            regr = MultiOutputRegressor(KNeighborsRegressor())
         elif self.regression_model == 'Adaboost':
             from sklearn.multioutput import MultiOutputRegressor
             from sklearn.ensemble import AdaBoostRegressor
@@ -218,6 +213,7 @@ class RollingRegression(ModelObject):
         holiday_choice = np.random.choice(a=[True,False], size = 1, p = [0.3, 0.7]).item()
         polynomial_degree_choice = np.random.choice(a=[None,2], size = 1, p = [0.8, 0.2]).item()
         regression_choice = np.random.choice(a=['None','User'], size = 1, p = [0.7, 0.3]).item()
+        regression_choice = 'User'
         #lag_1_choice = np.random.choice(a=['random_int', 2, 7, 12, 24, 28, 60, 364], size = 1, p = [0.15, 0.05, 0.2, 0.1, 0.1, 0.2, 0.1, 0.1]).item()
         # if lag_1_choice == 'random_int':
         #    lag_1_choice = np.random.randint(2, 100, size = 1).item()
