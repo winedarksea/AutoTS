@@ -25,12 +25,12 @@ weights_hourly = {'traffic_volume': 10}
 
 model_list = [
               # 'ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
-              'GLM', 'ETS',
-              'ARIMA', 'FBProphet', 'RollingRegression'
-              ,'UnobservedComponents', 'VECM', 'DynamicFactor',
+              'GLM', 'ETS','RollingRegression', 'ARIMA',
+               'FBProphet', 'UnobservedComponents'
+               ,'VECM', 'DynamicFactor'
               #,'VARMAX', 'GluonTS'
               ]
-model_list = 'superfast'
+# model_list = 'superfast'
 # model_list = ['MofitSimulation', 'GLM','ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'SeasonalNaive']
 # model_list = ['RollingRegression']
 

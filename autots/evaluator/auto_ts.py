@@ -245,6 +245,7 @@ class AutoTS(object):
         # split train and test portions, and split regressor if present
         df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length, min_allowed_train_percent = self.min_allowed_train_percent, verbose = self.verbose)
         try:
+            preord_regressor = pd.DataFrame(preord_regressor)
             if not isinstance(preord_regressor.index,pd.DatetimeIndex):
                 preord_regressor.index = df_subset.index
             preord_regressor_train = preord_regressor.loc[df_train.index]

@@ -73,8 +73,8 @@ Bring GeneralTransformer to higher level API.
 * Format of Regressor - allow multiple input to at least sklearn models
 	* Miso l filter or similar to reduce to single time series where only on regressor allowed
 	* or PCA or other fast approach to reduce dimensions
-	* Handles 1D ARIMA (should take 2d), FBProphet, Sklearn (should take 2d), Uncomp (should take 2d), Dynamic Factor (should take 2d), VECM (should take 2d),
-	* Handles both: Regression
+	* Handles 1D ARIMA (should take 2d), FBProphet, Sklearn (should take 2d), Dynamic Factor (should take 2d), VECM (should take 2d),
+	* Handles both: GLM, Uncomp 
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
 * Handle categorical forecasts where forecast leaves range of known values, then add to upper/lower forecasts
 * Speed improvements, Profiling

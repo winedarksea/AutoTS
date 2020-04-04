@@ -305,9 +305,14 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
                                             ).fit(df_train)
     df_train_transformed = transformer_object.transform(df_train)
     
+    # slice the context, ie shorten the amount of data available.
     if transformation_dict['context_slicer'] not in [None, 'None']:
         from autots.tools.transform import simple_context_slicer
         df_train_transformed = simple_context_slicer(df_train_transformed, method = transformation_dict['context_slicer'], forecast_length = forecast_length)
+    
+    # make sure regressor has same length. This could be a problem if wrong size regressor is passed.
+    if len(preord_regressor_train) > 0:
+        preord_regressor_train = preord_regressor_train.tail(df_train_transformed.shape[0])
     
     transformation_runtime = datetime.datetime.now() - transformationStartTime
     # from autots.evaluator.auto_model import ModelMonster
