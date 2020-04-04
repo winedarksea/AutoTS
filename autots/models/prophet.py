@@ -55,9 +55,12 @@ class FBProphet(ModelObject):
             raise ImportError("Package fbprophet is required")
         
         df = self.basic_profile(df)
-        if self.regression_type != None:
-            if (len(preord_regressor) != len(df)):
+        if self.regression_type == 'User':
+            print("the shape of the input is: {}".format(str(((np.array(preord_regressor).shape[0])))))
+            print("the shape of the training data is: {}".format(str(df.shape[0])))
+            if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                 self.regression_type = None
+        
         random_two = "n9032380gflljWfu8233koWQop3"
         random_one = "nJIOVxgQ0vZGC7nx_"
         self.regressor_name = random_one if random_one not in df.columns else random_two

@@ -117,9 +117,10 @@ class GLM(ModelObject):
         else:
             self.verbose = False
         if self.regression_type == 'User':
-            if (len(preord_regressor) != len(df.index)):
+            if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                 self.regression_type = None
-            self.preord_regressor_train = preord_regressor
+            else:
+                self.preord_regressor_train = preord_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -378,9 +379,10 @@ class ARIMA(ModelObject):
             self.regressor_train = holiday_flag(df.index, country = self.holiday_country).values
         else:
             if self.regression_type != None:
-                if (len(preord_regressor) != len(df.index)):
+                if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                     self.regression_type = None
-            self.regressor_train = preord_regressor
+                else:
+                    self.regressor_train = preord_regressor
         self.df_train = df
         
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -528,9 +530,12 @@ class UnobservedComponents(ModelObject):
             self.regressor_train = holiday_flag(df.index, country = self.holiday_country).values
         else:
             if self.regression_type != None:
-                if (len(preord_regressor) != len(df.index)):
+                print("the shape of the input is: {}".format(str(((np.array(preord_regressor).shape[0])))))
+                print("the shape of the training data is: {}".format(str(df.shape[0])))
+                if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                     self.regression_type = None
-            self.regressor_train = preord_regressor
+                else:
+                    self.regressor_train = preord_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -690,9 +695,10 @@ class DynamicFactor(ModelObject):
             self.regressor_train = holiday_flag(df.index, country = self.holiday_country).values
         else:
             if self.regression_type != None:
-                if (len(preord_regressor) != len(df.index)):
+                if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                     self.regression_type = None
-            self.regressor_train = preord_regressor
+                else:
+                    self.regressor_train = preord_regressor
         
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -815,9 +821,10 @@ class VECM(ModelObject):
             self.regressor_train = holiday_flag(df.index, country = self.holiday_country).values
         else:
             if self.regression_type != None:
-                if (len(preord_regressor) != len(df.index)):
+                if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                     self.regression_type = None
-            self.regressor_train = preord_regressor
+                else:
+                    self.regressor_train = preord_regressor
         
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self

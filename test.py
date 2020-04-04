@@ -11,8 +11,8 @@ from autots.datasets import load_toy_yearly
 from autots.datasets import load_toy_weekly
 
 
-forecast_length = 14
-df_long = load_toy_weekly()
+forecast_length = 5
+df_long = load_toy_daily()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -23,12 +23,14 @@ weights_daily = {'categoricalDayofWeek': 5,
 
 weights_hourly = {'traffic_volume': 10}
 
-model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression'
+model_list = [
+              # 'ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
+              'GLM', 'ETS',
+              'ARIMA', 'FBProphet', 'RollingRegression'
               ,'UnobservedComponents', 'VECM', 'DynamicFactor',
               #,'VARMAX', 'GluonTS'
               ]
-model_list = 'default'
+model_list = 'superfast'
 # model_list = ['MofitSimulation', 'GLM','ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'SeasonalNaive']
 # model_list = ['RollingRegression']
 
@@ -39,7 +41,7 @@ metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                prediction_interval = 0.9, ensemble = False, weighted = False,
-               max_generations = 10, num_validations = 2, validation_method = 'even',
+               max_generations = 2, num_validations = 2, validation_method = 'even',
                model_list = model_list, initial_template = 'General+Random',
                metric_weighting = metric_weighting, models_to_validate = 100,
                max_per_model_class = 10,
@@ -48,14 +50,14 @@ model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
 from autots.evaluator.auto_ts import fake_regressor
 preord_regressor_train, preord_regressor_forecast = fake_regressor(df_long, dimensions= 1, forecast_length = forecast_length, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
 preord_regressor_train2d, preord_regressor_forecast2d = fake_regressor(df_long, dimensions= 4, forecast_length = forecast_length, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
-"""
+
 # model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
 """
 model = model.fit(df_long, weights = weights_hourly,
                   result_file = 'test_results.csv',
                   date_col = 'datetime', value_col = 'value', id_col = 'series_id') # and weighted = True
-
-# model = model.fit(df_long, preord_regressor = preord_regressor_train2d, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
+"""
+model = model.fit(df_long, preord_regressor = preord_regressor_train2d, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
 
 print(model.best_model['Model'].iloc[0])
 print(model.best_model['ModelParameters'].iloc[0])

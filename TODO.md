@@ -9,11 +9,14 @@
 
 # Errors: 
 missing 1 required positional argument: 'df' in model VECM  (probably retrieve_transformer)
+DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
+lower/upper MAE appearing NaN, and then getting a better score
 Holiday not (always) working
 
 GluonTS to template, best
 Select Transformers to include in random, resort in function
 Select best parameters for contoured motif
+if error occurs in validation but not first sample, what will be the result?
 Would expect to see all transformers delivery roughly same performance with same model
 Bring GeneralTransformer to higher level API.
 	wide_to_long and long_to_wide in higher-level API

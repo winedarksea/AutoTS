@@ -98,7 +98,7 @@ class RollingRegression(ModelObject):
 
         self.df_train = df
         if self.regression_type is not None:
-            if (len(preord_regressor) != len(df.index)):
+            if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                 self.regression_type = None
             else:
                 self.regressor_train = preord_regressor

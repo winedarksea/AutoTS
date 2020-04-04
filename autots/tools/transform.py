@@ -106,6 +106,8 @@ class Detrend(object):
     """Remove a linear trend from the data
     
     """
+    def __init__(self):
+        self.name = 'Detrend'
     def fit(self, df):
         """Fits trend for later detrending
         Args:
@@ -170,6 +172,8 @@ class SinTrend(object):
     """Modelling sin
     
     """
+    def __init__(self):
+        self.name = 'SinTrend'
     def fit_sin(self, tt, yy):
         '''Fit sin to the input time sequence, and return fitting parameters "amp", "omega", "phase", "offset", "freq", "period" and "fitfunc"
         
@@ -272,6 +276,7 @@ class RollingMeanTransformer(object):
     """Attempt at Rolling Mean with built-in inverse_transform for time series
     inverse_transform can only be applied to the original series, or an immediately following forecast
     Does not play well with data with NaNs
+    Inverse transformed values returned will also not return as 'exactly' equals due to floating point imprecision.
     
     Args:
         window (int): number of periods to take mean over
@@ -407,6 +412,68 @@ class DifferencedTransformer(object):
             df_len = df.shape[0]
             df = pd.concat([self.last_values, df], axis = 0)
             return df.cumsum().tail(df_len)
+
+class PctChangeTransformer(object):
+    """% Change of Data.
+    
+    Warning:
+        Because % change doesn't play well with zeroes, zeroes are replaced by positive of the lowest non-zero value.
+        Inverse transformed values returned will also not return as 'exactly' equals due to floating point imprecision.
+        inverse_transform can only be applied to the original series, or an immediately following forecast
+    
+    Args:
+        lag (int): number of periods to shift (not implemented, default = 1)
+    """
+    def __init__(self):
+        self.name = 'PctChangeTransformer'
+    
+    def fit(self, df):
+        """Fits
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        temp = df.replace([0], np.nan).fillna((df[df != 0]).abs().min(axis = 0)).fillna(0.1)
+        self.last_values = temp.tail(1)
+        self.first_values = temp.head(1)
+        return self
+    def transform(self, df):
+        """Returns changed data
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        df = df.replace([0], np.nan)
+        df = df.fillna((df[df != 0]).abs().min(axis = 0)).fillna(0.1)
+        df = df.pct_change(periods=1, fill_method='ffill').fillna(0)
+        df = df.replace([np.inf, -np.inf], 0)
+        return df
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+    
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Returns data to original *or* forecast form
+        
+        Args:
+            df (pandas.DataFrame): input dataframe
+            trans_method (str): whether to inverse on original data, or on a following sequence
+                - 'original' return original data to original numbers 
+                - 'forecast' inverse the transform on a dataset immediately following the original
+        """
+        df = (df + 1).replace([0], np.nan)
+        df = df.fillna((df[df != 0]).abs().min()).fillna(0.1)
+
+        # add last values, group by lag, cumprod
+        if trans_method == 'original':
+            df = pd.concat([self.first_values, df.tail(df.shape[0] - 1)], axis = 0)
+            return df.cumprod()
+        else:
+            df_len = df.shape[0]
+            df = pd.concat([self.last_values, df], axis = 0)
+            return df.cumprod().tail(df_len)
 
 class MixedTransformer(object):
     """
@@ -599,7 +666,7 @@ class GeneralTransformer(object):
         - inverse_transform will not fully return the original data under some conditions
             * outliers removed or clipped will be returned in the clipped or filled na form
             * NAs filled will be returned with the filled value
-            * RollingMean and DifferencedTransformer will only return original or an immediately following forecast
+            * RollingMean, PctChangeTransformer, and DifferencedTransformer will only return original or an immediately following forecast
                 - by default 'forecast' is expected, 'original' can be set in trans_method
     
     Args:       
@@ -633,6 +700,7 @@ class GeneralTransformer(object):
             'RollingMean10' - 10 period rolling average (smoothing)
             'RollingMean100thN' - Rolling mean of periods of len(train)/100 (minimum 2)
             'DifferencedTransformer' - makes each value the difference of that value and the previous value
+            'PctChangeTransformer' - converts to pct_change, not recommended if lots of zeroes in data
             'SinTrend' - removes a sin trend (fitted to each column) from the data
         
         second_transformation (str): second transformation to apply. Same options as transformation, but with transformation_param passed in if used
@@ -715,12 +783,13 @@ class GeneralTransformer(object):
             transformer object
         """
         
-        if transformation in [None, 'None', 'Detrend','SinTrend', 'DifferencedTransformer', 'RollingMean10']:
+        if transformation in [None, 'None', 'Detrend','SinTrend', 'DifferencedTransformer', 'RollingMean10', 'PctChangeTransformer']:
             return {'None': EmptyTransformer(), 
                     None: EmptyTransformer(),
                     'RollingMean10': RollingMeanTransformer(window = 10),
                     'Detrend':Detrend(),
                     'DifferencedTransformer': DifferencedTransformer(),
+                    'PctChangeTransformer': PctChangeTransformer(),
                     'SinTrend': SinTrend()
              }[transformation]
         
@@ -934,14 +1003,14 @@ class GeneralTransformer(object):
         self.df_index = df.index
         self.df_colnames = df.columns
         
-        if self.third_transformation in ['DifferencedTransformer', 'RollingMean100thN', 'RollingMean10thN', 'RollingMean10', 'RollingMean']:
+        if self.third_transformation in ['DifferencedTransformer', 'RollingMean100thN', 'RollingMean10thN', 'RollingMean10', 'RollingMean', 'PctChangeTransformer']:
             df = pd.DataFrame(self.third_transformer.inverse_transform(df, trans_method = trans_method))
         else:
             df = pd.DataFrame(self.third_transformer.inverse_transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         
-        if self.second_transformation in ['DifferencedTransformer', 'RollingMean100thN', 'RollingMean10thN', 'RollingMean10', 'RollingMean']:
+        if self.second_transformation in ['DifferencedTransformer', 'RollingMean100thN', 'RollingMean10thN', 'RollingMean10', 'RollingMean', 'PctChangeTransformer']:
             df = pd.DataFrame(self.second_transformer.inverse_transform(df, trans_method = trans_method))
         else:
             df = pd.DataFrame(self.second_transformer.inverse_transform(df))
@@ -953,7 +1022,7 @@ class GeneralTransformer(object):
             df = df + self.model.predict(X)
             # df = pd.DataFrame(df, index = self.df_index, columns = self.df_colnames)
         
-        if self.transformation in ['DifferencedTransformer', 'RollingMean100thN', 'RollingMean10thN', 'RollingMean10', 'RollingMean']:
+        if self.transformation in ['DifferencedTransformer', 'RollingMean100thN', 'RollingMean10thN', 'RollingMean10', 'RollingMean', 'PctChangeTransformer']:
             df = pd.DataFrame(self.transformer.inverse_transform(df, trans_method = trans_method))
         else:
             df = pd.DataFrame(self.transformer.inverse_transform(df))
@@ -971,9 +1040,9 @@ def RandomTransform():
     """
     Returns a dict of randomly choosen transformation selections
     """
-    transformer_list = [None,'MinMaxScaler','PowerTransformer', 'QuantileTransformer','MaxAbsScaler','StandardScaler','RobustScaler','PCA', 'FastICA', 'Detrend','RollingMean10','RollingMean100thN','DifferencedTransformer','SinTrend']
-    first_transformer_prob = [0.3, 0.05 ,0.31, 0.05, 0.05, 0.05 ,0.05, 0.01, 0.01, 0.01, 0.03, 0.02 ,0.05, 0.01]
-    third_transformer_prob = [0.25, 0.05 ,0.1, 0.05, 0.05, 0.14 ,0.05, 0.05, 0.05, 0.05, 0.03, 0.02 ,0.1, 0.01]
+    transformer_list = [None,'MinMaxScaler','PowerTransformer', 'QuantileTransformer','MaxAbsScaler','StandardScaler','RobustScaler','PCA', 'FastICA', 'Detrend','RollingMean10','RollingMean100thN','DifferencedTransformer','SinTrend', 'PctChangeTransformer']
+    first_transformer_prob = [0.3, 0.05 ,0.25, 0.05, 0.05, 0.05 ,0.05, 0.01, 0.01, 0.01, 0.03, 0.02 ,0.06, 0.01, 0.05]
+    third_transformer_prob = [0.25, 0.05 ,0.1, 0.05, 0.05, 0.1 ,0.05, 0.05, 0.05, 0.05, 0.03, 0.02 ,0.1, 0.01, 0.04]
     outlier_method_choice = np.random.choice(a = [None, 'clip', 'remove'], size = 1, p = [0.5, 0.3, 0.2]).item()
     if outlier_method_choice is not None:
         outlier_threshold_choice = np.random.choice(a = [2,3,4,6], size = 1, p = [0.2, 0.5, 0.2, 0.1]).item()
