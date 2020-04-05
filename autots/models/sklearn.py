@@ -73,7 +73,10 @@ class RollingRegression(ModelObject):
                  holiday: bool = False, mean_rolling_periods: int = 30, std_rolling_periods: int = 7,
                  max_rolling_periods: int = 7, min_rolling_periods: int = 7,
                  ewm_alpha: float = 0.5, additional_lag_periods: int = 7,
-                 polynomial_degree: int = None):
+                 polynomial_degree: int = None,
+                 magnitude_param_1: int = 10,magnitude_param_2: int = 10,
+                 magnitude_param_3: int = 10, magnitude_param_4: int = 10,
+                 magnitude_param_5: int = 10):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              regression_type = regression_type, 
                              holiday_country = holiday_country, 
@@ -87,7 +90,11 @@ class RollingRegression(ModelObject):
         self.ewm_alpha = ewm_alpha
         self.additional_lag_periods = additional_lag_periods
         self.polynomial_degree = polynomial_degree
-        
+        self.magnitude_param_1 = magnitude_param_1
+        self.magnitude_param_2 = magnitude_param_2
+        self.magnitude_param_3 = magnitude_param_3
+        self.magnitude_param_4 = magnitude_param_4
+        self.magnitude_param_5 = magnitude_param_5
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
@@ -104,7 +111,83 @@ class RollingRegression(ModelObject):
                 self.regressor_train = preord_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
-    
+    def _retrieve_regressor(self, regression_model: str = 'Adaboost'):
+        if self.regression_model == 'ElasticNet':
+            from sklearn.linear_model import MultiTaskElasticNet
+            regr = MultiTaskElasticNet(alpha=1.0, random_state=self.random_seed)
+            return regr
+        elif self.regression_model == 'DecisionTree':
+            from sklearn.tree import DecisionTreeRegressor
+            regr = DecisionTreeRegressor(random_state=self.random_seed)
+            return regr
+        elif self.regression_model == 'MLP':
+            from sklearn.neural_network import MLPRegressor
+            regr = MLPRegressor(hidden_layer_sizes=(25, 15, 25),
+                                verbose=self.verbose_bool, max_iter=250,
+                                activation='tanh', solver='lbfgs',
+                                random_state=self.random_seed)
+            return regr
+        elif self.regression_model == 'KNN':
+            from sklearn.multioutput import MultiOutputRegressor
+            from sklearn.neighbors import KNeighborsRegressor
+            regr = MultiOutputRegressor(KNeighborsRegressor())
+            return regr
+        elif self.regression_model == 'Adaboost':
+            # params 1, 2, and 3 used
+            from sklearn.multioutput import MultiOutputRegressor
+            from sklearn.ensemble import AdaBoostRegressor
+            if self.magnitude_param_1 == 10:
+                loss = 'linear'
+            elif self.magnitude_param_1 <= 100:
+                loss = 'square'
+            else:
+                loss = 'exponential'
+            if self.magnitude_param_3 <= 100:
+                regr = MultiOutputRegressor(AdaBoostRegressor(
+                    n_estimators=self.magnitude_param_2 * 5,
+                    loss=loss, random_state=self.random_seed))
+                return regr
+            else:
+                from sklearn.svm import SVR
+                svc = SVR(kernel='linear')
+                regr = MultiOutputRegressor(AdaBoostRegressor(
+                    n_estimators=self.magnitude_param_2 * 5,
+                    base_estimator=svc,
+                    loss=loss, random_state=self.random_seed))
+                return regr
+        elif self.regression_model == 'xgboost':
+            # params 1, 2 used
+            import xgboost as xgb
+            from sklearn.multioutput import MultiOutputRegressor
+            if self.magnitude_param_1 == 1:
+                obj = 'reg:linear'
+            elif self.magnitude_param_1 == 10:
+                obj = 'count:poisson'
+            elif self.magnitude_param_1 == 100:
+                obj = 'reg:gamma'
+            else:
+                obj = 'reg:squarederror'
+            regr = MultiOutputRegressor(
+                xgb.XGBRegressor(n_estimators=self.magnitude_param_2*10,
+                                 objective=obj, verbosity=self.verbose))
+            return regr
+        elif self.regression_model == 'SVM':
+            from sklearn.multioutput import MultiOutputRegressor
+            from sklearn.svm import SVR
+            regr = MultiOutputRegressor(SVR(kernel='rbf',
+                                            verbose=self.verbose_bool))
+            return regr
+        elif self.regression_model == 'ComplementNB':
+            from sklearn.multioutput import MultiOutputClassifier
+            from sklearn.naive_bayes import ComplementNB
+            regr = MultiOutputClassifier(ComplementNB())
+            return regr
+        else:
+            self.regression_model = 'RandomForest'
+            from sklearn.ensemble import RandomForestRegressor
+            regr = RandomForestRegressor(random_state= self.random_seed, n_estimators=1000, verbose = self.verbose)
+            return regr
+        
     def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast: bool = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
@@ -131,37 +214,7 @@ class RollingRegression(ModelObject):
         # 1 is dropped to shift data, and the first one is dropped because it will least accurately represnt rolling values
         X = X.drop(X.tail(1).index).drop(X.head(1).index)
         
-        if self.regression_model == 'ElasticNet':
-            from sklearn.linear_model import MultiTaskElasticNet
-            regr = MultiTaskElasticNet(alpha = 1.0, random_state= self.random_seed)
-        elif self.regression_model == 'DecisionTree':
-            from sklearn.tree import DecisionTreeRegressor
-            regr = DecisionTreeRegressor(random_state= self.random_seed)
-        elif self.regression_model == 'MLP':
-            from sklearn.neural_network import MLPRegressor
-            regr = MLPRegressor(hidden_layer_sizes=(25, 15, 25),verbose = self.verbose_bool, max_iter = 250,
-                  activation='tanh', solver='lbfgs', random_state= self.random_seed)
-        elif self.regression_model == 'KNN':
-            from sklearn.multioutput import MultiOutputRegressor
-            from sklearn.neighbors import KNeighborsRegressor
-            regr = MultiOutputRegressor(KNeighborsRegressor())
-        elif self.regression_model == 'Adaboost':
-            from sklearn.multioutput import MultiOutputRegressor
-            from sklearn.ensemble import AdaBoostRegressor
-            regr = MultiOutputRegressor(AdaBoostRegressor(n_estimators = 200, random_state=self.random_seed))
-        elif self.regression_model == 'SVM':
-            from sklearn.multioutput import MultiOutputRegressor
-            from sklearn.svm import SVR
-            regr = MultiOutputRegressor(SVR(kernel='rbf', verbose = self.verbose_bool))
-        elif self.regression_model == 'ComplementNB':
-            from sklearn.multioutput import MultiOutputClassifier
-            from sklearn.naive_bayes import ComplementNB
-            regr = MultiOutputClassifier(ComplementNB())
-        else:
-            self.regression_model = 'RandomForest'
-            from sklearn.ensemble import RandomForestRegressor
-            regr = RandomForestRegressor(random_state= self.random_seed, n_estimators=1000, verbose = self.verbose)
-        
+        regr = self._retrieve_regressor(regression_model=self.regression_model)
         regr.fit(X, Y)
         
         combined_index = (self.df_train.index.append(index))
@@ -203,7 +256,7 @@ class RollingRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
-        model_choice = np.random.choice(a = ['RandomForest','ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost', 'SVM', 'ComplementNB'], size = 1, p = [0.2, 0.1, 0.02, 0.225, 0.02, 0.4, 0.025, 0.01]).item()
+        model_choice = np.random.choice(a = ['RandomForest','ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost', 'SVM', 'ComplementNB', 'xgboost'], size = 1, p = [0.2, 0.1, 0.02, 0.2, 0.02, 0.4, 0.025, 0.01, 0.025]).item()
         mean_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
         std_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
         max_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
@@ -213,9 +266,11 @@ class RollingRegression(ModelObject):
         holiday_choice = np.random.choice(a=[True,False], size = 1, p = [0.3, 0.7]).item()
         polynomial_degree_choice = np.random.choice(a=[None,2], size = 1, p = [0.8, 0.2]).item()
         regression_choice = np.random.choice(a=[None,'User'], size = 1, p = [0.7, 0.3]).item()
-        #lag_1_choice = np.random.choice(a=['random_int', 2, 7, 12, 24, 28, 60, 364], size = 1, p = [0.15, 0.05, 0.2, 0.1, 0.1, 0.2, 0.1, 0.1]).item()
-        # if lag_1_choice == 'random_int':
-        #    lag_1_choice = np.random.randint(2, 100, size = 1).item()
+        magnitude_param_1_choice = np.random.choice(a=[1, 10, 100, 1000, 10000, 100000], size = 1, p = [0.1, 0.5, 0.1, 0.1, 0.1, 0.1]).item()
+        magnitude_param_2_choice = np.random.choice(a=[1, 10, 100, 1000, 10000, 100000], size = 1, p = [0.1, 0.5, 0.1, 0.1, 0.1, 0.1]).item()
+        magnitude_param_3_choice = np.random.choice(a=[1, 10, 100, 1000, 10000, 100000], size = 1, p = [0.1, 0.5, 0.1, 0.1, 0.1, 0.1]).item()
+        magnitude_param_4_choice = np.random.choice(a=[1, 10, 100, 1000, 10000, 100000], size = 1, p = [0.1, 0.5, 0.1, 0.1, 0.1, 0.1]).item()
+        magnitude_param_5_choice = np.random.choice(a=[1, 10, 100, 1000, 10000, 100000], size = 1, p = [0.1, 0.5, 0.1, 0.1, 0.1, 0.1]).item()
         parameter_dict = {
                         'regression_model': model_choice,
                         'holiday': holiday_choice,
@@ -226,6 +281,11 @@ class RollingRegression(ModelObject):
                         'ewm_alpha': ewm_choice,
                         'additional_lag_periods': lag_periods_choice,
                         'polynomial_degree': polynomial_degree_choice,
+                        'magnitude_param_1': magnitude_param_1_choice,
+                        'magnitude_param_2': magnitude_param_2_choice,
+                        'magnitude_param_3': magnitude_param_3_choice,
+                        'magnitude_param_4': magnitude_param_4_choice,
+                        'magnitude_param_5': magnitude_param_5_choice,
                         'regression_type': regression_choice
                         }
         return parameter_dict
@@ -242,7 +302,12 @@ class RollingRegression(ModelObject):
                         'min_rolling_periods': self.min_rolling_periods,
                         'ewm_alpha': self.ewm_alpha,
                         'additional_lag_periods': self.additional_lag_periods,
-                        'polynomial_degree': self.polynomial_degree,
+                        'polynomial_degree' : self.polynomial_degree,
+                        'magnitude_param_1' : self.magnitude_param_1,
+                        'magnitude_param_2' : self.magnitude_param_2,
+                        'magnitude_param_3' : self.magnitude_param_3,
+                        'magnitude_param_4' : self.magnitude_param_4,
+                        'magnitude_param_5' : self.magnitude_param_5,
                         'regression_type': self.regression_type
                         }
         return parameter_dict

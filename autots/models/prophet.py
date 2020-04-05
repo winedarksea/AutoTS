@@ -56,15 +56,23 @@ class FBProphet(ModelObject):
         
         df = self.basic_profile(df)
         if self.regression_type == 'User':
+            """
             print("the shape of the input is: {}".format(str(((np.array(preord_regressor).shape[0])))))
             print("the shape of the training data is: {}".format(str(df.shape[0])))
+            """
             if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                 self.regression_type = None
+            else:
+                if preord_regressor.ndim > 1:
+                    from sklearn.decomposition import PCA
+                    self.dimensionality_reducer = PCA(n_components=1).fit(preord_regressor)
+                    self.regressor_train = self.dimensionality_reducer.transform(preord_regressor)
+                else:
+                    self.regressor_train = preord_regressor.copy()
         
         random_two = "n9032380gflljWfu8233koWQop3"
         random_one = "nJIOVxgQ0vZGC7nx_"
         self.regressor_name = random_one if random_one not in df.columns else random_two
-        self.regressor_train = preord_regressor.copy()
         self.df_train = df
         
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -110,7 +118,11 @@ class FBProphet(ModelObject):
             m = m.fit(current_series)
             future = m.make_future_dataframe(periods=forecast_length)
             if self.regression_type == 'User':
-                a = np.append(self.regressor_train.values, preord_regressor.values)
+                if preord_regressor.ndim > 1:
+                    a = self.dimensionality_reducer.transform(preord_regressor)
+                    a = np.append(self.regressor_train, a)
+                else:
+                    a = np.append(self.regressor_train, preord_regressor.values)
                 future[self.regressor_name] = a
             fcst = m.predict(future)  
             fcst = fcst.tail(forecast_length) # remove the backcast

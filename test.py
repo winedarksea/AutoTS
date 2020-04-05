@@ -10,7 +10,7 @@ from autots.datasets import load_toy_monthly
 from autots.datasets import load_toy_yearly
 from autots.datasets import load_toy_weekly
 
-
+#%% 
 forecast_length = 5
 df_long = load_toy_daily()
 
@@ -32,7 +32,7 @@ model_list = [
               ]
 # model_list = 'superfast'
 # model_list = ['MofitSimulation', 'GLM','ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'SeasonalNaive']
-# model_list = ['RollingRegression']
+model_list = ['RollingRegression']
 
 metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
             'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0,
@@ -41,7 +41,7 @@ metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                prediction_interval = 0.9, ensemble = False, weighted = False,
-               max_generations = 2, num_validations = 2, validation_method = 'even',
+               max_generations = 0, num_validations = 2, validation_method = 'even',
                model_list = model_list, initial_template = 'General+Random',
                metric_weighting = metric_weighting, models_to_validate = 100,
                max_per_model_class = 10,
@@ -71,6 +71,7 @@ initial_results = model.initial_results.model_results
 # validation results
 validation_results = model.validation_results.model_results
 
+#%%
 
 """
 Import/Export
@@ -97,9 +98,9 @@ Edgey Cases:
 
 from autots.tools.shaping import long_to_wide
 df_wide = long_to_wide(df_long, date_col = 'datetime', value_col = 'value',
-                       id_col = 'series_id', frequency = 'infer', aggfunc = 'first')
+                       id_col='series_id', frequency='infer', aggfunc='first')
 
-df = df_wide[df_wide.columns[0:3]].fillna(0).astype(float)
+# df = df_wide[df_wide.columns[0:3]].fillna(0).astype(float)
 
 from autots.tools.shaping import values_to_numeric
 categorical_transformer = values_to_numeric(df_wide)

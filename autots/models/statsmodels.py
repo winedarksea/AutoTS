@@ -530,8 +530,10 @@ class UnobservedComponents(ModelObject):
             self.regressor_train = holiday_flag(df.index, country = self.holiday_country).values
         else:
             if self.regression_type != None:
+                """
                 print("the shape of the input is: {}".format(str(((np.array(preord_regressor).shape[0])))))
                 print("the shape of the training data is: {}".format(str(df.shape[0])))
+                """
                 if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                     self.regression_type = None
                 else:

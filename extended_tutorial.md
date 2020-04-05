@@ -177,13 +177,15 @@ Rollup can be accomplished by specifying the frequency = your rollup frequency, 
 ### Lots of NaN in data
 Various NaN filling techniques are tested in the transformation. Rolling up data to a less-frequent frequency may also help deal with NaNs.
 
-### More than one preord regressor
+### Adding regressors and other information
 'Preord' regressor stands for 'Preordained' regressor, to make it clear this is data that will be know with high certainy about the future. 
 Such data about the future is rare, one example might be number of stores that will be (planned to be) open each given day in the future when forecast sales. 
-Since many algorithms do not handle more than one regressor, only one is handled here. If you would like to use more than one, 
-manually select the best variable or use dimensionality reduction to reduce the features to one dimension. 
-However, the model can handle quite a lot of parallel time series. Additional regressors can be passed through as additional time series to forecast. 
-The regression models here can utilize the information they provide to help improve forecast quality. 
+Only a handful of models support adding regressors, and not all handle multiple regressors (if multiple regressors are fed in, they will be reduced to one for those models). 
+The recommended way to provide regressors is as a pd.Series/pd.Dataframe with a DatetimeIndex. 
+
+Don't know the future? Don't worry, the models can handle quite a lot of parallel time series, which is another way to add information. 
+Additional regressors can be passed through as additional time series to forecast as part of df_long. 
+The some models here can utilize the additional information they provide to help improve forecast quality. 
 To prevent forecast accuracy for considering these additional series too heavily, input series weights that lower or remove their forecast accuracy from consideration.
 
 ### Categorical Data
@@ -202,3 +204,4 @@ Some models will support a more limited range of frequencies.
 |  Daily         |     'D'      |                                              |
 |  Monthly 01    |     'MS'     |  First day of month                          |
 |  Annual        |   'A'/'AS'   | 											   |
+|  Weekly        |     'W'      | 											   |

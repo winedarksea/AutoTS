@@ -185,8 +185,22 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
         if parameters == {}:
             model = RollingRegression(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
         else:
-            model = RollingRegression(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, holiday =parameters['holiday'], regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
-                 regression_model = parameters['regression_model'], mean_rolling_periods =parameters['mean_rolling_periods'], std_rolling_periods =parameters['std_rolling_periods'])
+            model = RollingRegression(
+                frequency=frequency,
+                prediction_interval=prediction_interval,
+                holiday_country=holiday_country,
+                holiday=parameters['holiday'],
+                regression_type=parameters['regression_type'],
+                random_seed=random_seed, verbose=verbose,
+                regression_model=parameters['regression_model'],
+                mean_rolling_periods=parameters['mean_rolling_periods'],
+                std_rolling_periods=parameters['std_rolling_periods'],
+                magnitude_param_1=parameters['magnitude_param_1'],
+                magnitude_param_2=parameters['magnitude_param_2'],
+                magnitude_param_3=parameters['magnitude_param_3'],
+                magnitude_param_4=parameters['magnitude_param_4'],
+                magnitude_param_5=parameters['magnitude_param_5']
+                )
         return model
     
     if model == 'UnobservedComponents':
