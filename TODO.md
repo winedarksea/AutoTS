@@ -11,7 +11,7 @@
 missing 1 required positional argument: 'df' in model VECM  (probably retrieve_transformer)
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
 lower/upper MAE appearing NaN, and then getting a better score
-Holiday not (always) working
+VECM does not recognize exog to predict
 
 GluonTS to template, best
 Select Transformers to include in random, resort in function
@@ -34,9 +34,7 @@ Bring GeneralTransformer to higher level API.
 * Check how fillna methods handle datasets that have entirely NaN series
 * Better X_maker:
 	* add magnitude_1, magnitude2, and so on (new_params have these all the same for models that don't use them)
-	* use feature selection on TSFresh features - autocorrelation lag n, fft/cwt coefficients (abs), abs_energy
-	* AR1, 
-	* holidays not working
+	* rolling autocorrelation 
 	* MACD long-term MA - short term MA
 	* Adjust rolling regression additional lag to 28, 364
 	* date part simple/expanded date part
@@ -53,7 +51,6 @@ Bring GeneralTransformer to higher level API.
 	RollingRegression
 		Rolling regression magnitude parameters 1 - 5 (0.1, 1, 10, 100, 1000, 10000) which is usually 1, 
 		Pytorch and Tensorflow Simple LSTM/GRU
-		XGBoost
 		other sequence models
 		Categorical classifier
 		RBF kernel SVR
@@ -70,11 +67,6 @@ Bring GeneralTransformer to higher level API.
 	* GPU and CPU ctx
 * Print methods for prediction/model objects that give simple readme how-to's
 * Relative/Absolute Imports and reduce package reloading messages
-* Format of Regressor - allow multiple input to at least sklearn models
-	* Miso l filter or similar to reduce to single time series where only on regressor allowed
-	* or PCA or other fast approach to reduce dimensions
-	* Handles 1D ARIMA (should take 2d), FBProphet, Sklearn (should take 2d), Dynamic Factor (should take 2d), VECM (should take 2d),
-	* Handles both: GLM, Uncomp 
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
 * Handle categorical forecasts where forecast leaves range of known values, then add to upper/lower forecasts
 * Speed improvements, Profiling
@@ -96,7 +88,7 @@ Bring GeneralTransformer to higher level API.
 	* Add to Conda distribution as well as pip
 	* Continuous integration
 	* Code/documentation quality checkers
-9* Ability to automatically add external datasets of parallel time series of global usability (ie from FRED or others)
+* Ability to automatically add external datasets of parallel time series of global usability (ie from FRED or others)
 * Option to import either long or wide data
 * Infer column names for df_long to wide based on which is datetime, which is string, and which is numeric
 
@@ -136,29 +128,22 @@ Bring GeneralTransformer to higher level API.
 			Mxnet
 			PyTorch
 	Simulations
-	Motif simulations
 	Ta-lib
 	tslearn
 	Nystroem
 	Multivariate GARCH
 	pydlm - baysesian dynamic linear
-	Isotonic regression
 	Survival Analysis
 	MarkovAutoRegression
-	Motif discovery, and repeat
 	TPOT if it adds multioutput functionality
 	https://towardsdatascience.com/pyspark-forecasting-with-pandas-udf-and-fb-prophet-e9d70f86d802
 	Compressive Transformer, if they go anywhere
 
 #### New Transformations:
-	Test variations on 'RollingMean100thN', n_bins
-		3, 10, 10thN, 100thN
-	Simple filter, no inverse (uninverted weighted moving average)
 	Weighted moving average
 	Symbolic aggregate approximation (SAX) and (PAA) (basically these are just binning)
-	PCA
-	Simple difference smoothing
 	Seasonal means/std/last value differencing
-	Cum sum
-	Sine regression detrend
+		- random row, find other rows closest to it, retrieve indexes, see if indexes have divisible difference between.
+	Shared discretization (all series get same binning)
+	Ordinal discretization (invertible, all values to bins labeled 1, 2, 3, etc.)
 	

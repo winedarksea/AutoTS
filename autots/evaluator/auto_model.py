@@ -306,16 +306,17 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     transformationStartTime = datetime.datetime.now()
     from autots.tools.transform import GeneralTransformer
     transformer_object = GeneralTransformer(
-                            outlier_method = transformation_dict['outlier_method'],
-                            outlier_threshold = transformation_dict['outlier_threshold'],
-                            fillna = transformation_dict['fillna'],
-                            transformation = transformation_dict['transformation'],
-                            detrend = transformation_dict['detrend'],
-                            second_transformation = transformation_dict['second_transformation'],
-                            transformation_param = transformation_dict['transformation_param'],
-                            third_transformation = transformation_dict['third_transformation'],
-                            discretization = transformation_dict['discretization'],
-                            n_bins = transformation_dict['n_bins']
+        outlier_method = transformation_dict['outlier_method'],
+        outlier_threshold = transformation_dict['outlier_threshold'],
+        outlier_position = transformation_dict['outlier_position'],
+        fillna = transformation_dict['fillna'],
+        transformation = transformation_dict['transformation'],
+        detrend = transformation_dict['detrend'],
+        second_transformation = transformation_dict['second_transformation'],
+        transformation_param = transformation_dict['transformation_param'],
+        third_transformation = transformation_dict['third_transformation'],
+        discretization = transformation_dict['discretization'],
+        n_bins = transformation_dict['n_bins']
                                             ).fit(df_train)
     df_train_transformed = transformer_object.transform(df_train)
     

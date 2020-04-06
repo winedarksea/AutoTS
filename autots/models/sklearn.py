@@ -37,14 +37,14 @@ def rolling_x_regressor(df, mean_rolling_periods: int = 30, std_rolling_periods:
         X = pd.concat([X, df.pow(other = ([2] * len(df.columns))).cumsum()], axis = 1)
     if holiday:
         from autots.tools.holiday import holiday_flag
-        X['holiday_flag_'] = holiday_flag(X.index, country = holiday_country).values
-        X['holiday_flag_future_'] = holiday_flag(X.index + pd.Timedelta('1D'), country = holiday_country).values
+        X['holiday_flag_'] = holiday_flag(X.index, country = holiday_country)
+        X['holiday_flag_future_'] = holiday_flag(X.index.shift(1, freq = pd.infer_freq(X.index)), country = holiday_country)
     if str(polynomial_degree).isdigit():
         polynomial_degree = abs(int(polynomial_degree))
         from sklearn.preprocessing import PolynomialFeatures
         poly = PolynomialFeatures(polynomial_degree)
         X = poly.fit_transform(X)
-    
+
     X = X.replace([np.inf, -np.inf], np.nan).fillna(method='ffill').fillna(method='bfill')
     
     X.columns = [x for x in range(len(X.columns))]
@@ -96,11 +96,11 @@ class RollingRegression(ModelObject):
         self.magnitude_param_4 = magnitude_param_4
         self.magnitude_param_5 = magnitude_param_5
     def fit(self, df, preord_regressor = []):
-        """Train algorithm given data supplied 
-        
+        """Train algorithm given data supplied.
+
         Args:
             df (pandas.DataFrame): Datetime Indexed 
-        """       
+        """
         df = self.basic_profile(df)
 
         self.df_train = df
@@ -114,7 +114,8 @@ class RollingRegression(ModelObject):
     def _retrieve_regressor(self, regression_model: str = 'Adaboost'):
         if self.regression_model == 'ElasticNet':
             from sklearn.linear_model import MultiTaskElasticNet
-            regr = MultiTaskElasticNet(alpha=1.0, random_state=self.random_seed)
+            regr = MultiTaskElasticNet(alpha=1.0,
+                                       random_state=self.random_seed)
             return regr
         elif self.regression_model == 'DecisionTree':
             from sklearn.tree import DecisionTreeRegressor
@@ -142,16 +143,17 @@ class RollingRegression(ModelObject):
                 loss = 'square'
             else:
                 loss = 'exponential'
+            n_est = 5000 if (self.magnitude_param_2 * 5) > 5000 else (self.magnitude_param_2 * 5)
             if self.magnitude_param_3 <= 100:
                 regr = MultiOutputRegressor(AdaBoostRegressor(
-                    n_estimators=self.magnitude_param_2 * 5,
+                    n_estimators=n_est,
                     loss=loss, random_state=self.random_seed))
                 return regr
             else:
                 from sklearn.svm import SVR
                 svc = SVR(kernel='linear')
                 regr = MultiOutputRegressor(AdaBoostRegressor(
-                    n_estimators=self.magnitude_param_2 * 5,
+                    n_estimators=n_est,
                     base_estimator=svc,
                     loss=loss, random_state=self.random_seed))
                 return regr
@@ -177,10 +179,9 @@ class RollingRegression(ModelObject):
             regr = MultiOutputRegressor(SVR(kernel='rbf',
                                             verbose=self.verbose_bool))
             return regr
-        elif self.regression_model == 'ComplementNB':
-            from sklearn.multioutput import MultiOutputClassifier
-            from sklearn.naive_bayes import ComplementNB
-            regr = MultiOutputClassifier(ComplementNB())
+        elif self.regression_model == 'BayesianRidge':
+            from sklearn.linear_model import BayesianRidge
+            regr = (BayesianRidge())
             return regr
         else:
             self.regression_model = 'RandomForest'
@@ -256,7 +257,7 @@ class RollingRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
-        model_choice = np.random.choice(a = ['RandomForest','ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost', 'SVM', 'ComplementNB', 'xgboost'], size = 1, p = [0.2, 0.1, 0.02, 0.2, 0.02, 0.4, 0.025, 0.01, 0.025]).item()
+        model_choice = np.random.choice(a = ['RandomForest','ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost', 'SVM', 'BayesianRidge', 'xgboost'], size = 1, p = [0.2, 0.1, 0.02, 0.2, 0.02, 0.4, 0.025, 0.01, 0.025]).item()
         mean_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
         std_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
         max_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
