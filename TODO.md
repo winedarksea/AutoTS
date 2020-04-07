@@ -12,6 +12,8 @@ missing 1 required positional argument: 'df' in model VECM  (probably retrieve_t
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
 lower/upper MAE appearing NaN, and then getting a better score
 VECM does not recognize exog to predict
+kbins not working when it assigns fewer bins than n_bins asked for (use the property transformer.n_bins_ ?)
+fastIca no inf or NaN
 
 GluonTS to template, best
 Select Transformers to include in random, resort in function

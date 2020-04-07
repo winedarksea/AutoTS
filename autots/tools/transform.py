@@ -757,7 +757,7 @@ class GeneralTransformer(object):
         
     def _fit(self, df):
         # clean up outliers
-        if self.outlier_position == 'first':
+        if 'first' in str(self.outlier_position):
             df = self.outlier_treatment(df)
         
         # fill NaN
@@ -782,10 +782,12 @@ class GeneralTransformer(object):
             df = df - self.model.predict(X)
         
         # clean up outliers
-        if self.outlier_position == 'middle':
+        if 'middle' in str(self.outlier_position):
             df = self.outlier_treatment(df)
             if self.outlier_method == 'remove':
                 df = self.fill_na(df)
+                if self.fillna in ['fake date']:
+                    self.df_index = df.index
         
         # the second transformation! This one has an optional parameter passed through
         self.second_transformer = self._retrieve_transformer(df, transformation = self.second_transformation, param = self.transformation_param)
@@ -802,10 +804,12 @@ class GeneralTransformer(object):
         df.columns = self.df_colnames
         
         # clean up outliers
-        if self.outlier_position == 'last':
+        if 'last' in str(self.outlier_position):
             df = self.outlier_treatment(df)
             if self.outlier_method == 'remove':
                 df = self.fill_na(df)
+                if self.fillna in ['fake date']:
+                    self.df_index = df.index
             
         # discretization
         if self.discretization not in [None, 'None']:
@@ -851,7 +855,7 @@ class GeneralTransformer(object):
         df = df.copy()
         
         # clean up outliers
-        if self.outlier_position == 'first':
+        if 'first' in str(self.outlier_position):
             df = self.outlier_treatment(df)
         
         # fill NaN
@@ -872,10 +876,12 @@ class GeneralTransformer(object):
             # df = pd.DataFrame(df, index = self.df_index, columns = self.df_colnames)
         
         # clean up outliers
-        if self.outlier_position == 'middle':
+        if 'middle' in str(self.outlier_position):
             df = self.outlier_treatment(df)
             if self.outlier_method == 'remove':
                 df = self.fill_na(df)
+                if self.fillna in ['fake date']:
+                    self.df_index = df.index
         
         # second transformation
         df = pd.DataFrame(self.second_transformer.transform(df))
@@ -888,10 +894,12 @@ class GeneralTransformer(object):
         df.columns = self.df_colnames
         
         # clean up outliers
-        if self.outlier_position == 'last':
+        if 'last' in str(self.outlier_position):
             df = self.outlier_treatment(df)
             if self.outlier_method == 'remove':
                 df = self.fill_na(df)
+                if self.fillna in ['fake date']:
+                    self.df_index = df.index
         
         #discretization
         if self.discretization not in [None, 'None']:
@@ -920,6 +928,7 @@ class GeneralTransformer(object):
                          'RollingMean10thN', 'RollingMean10', 'RollingMean',
                          'PctChangeTransformer', 'CumSumTransformer']
         
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
         # discretization (only needed inverse for sklearn)
         if self.discretization in ['sklearn-quantile', 'sklearn-uniform', 'sklearn-kmeans']:
             df = df.astype(int).clip(lower = 0, upper = (self.n_bins - 1))
@@ -933,6 +942,7 @@ class GeneralTransformer(object):
             df = pd.DataFrame(self.third_transformer.inverse_transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
         
         if self.second_transformation in oddities_list:
             df = pd.DataFrame(self.second_transformer.inverse_transform(df, trans_method = trans_method))
@@ -940,6 +950,7 @@ class GeneralTransformer(object):
             df = pd.DataFrame(self.second_transformer.inverse_transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
         
         if self.detrend == True:
             X = (pd.to_numeric(self.df_index, errors = 'coerce',
@@ -955,7 +966,7 @@ class GeneralTransformer(object):
         df.columns = self.df_colnames
         
         # since inf just causes trouble. Feel free to debate my choice of replacing with zero.
-        df = df.replace([np.inf, -np.inf], 0)
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
         return df
 
 
@@ -983,9 +994,11 @@ def RandomTransform():
     if outlier_method_choice is not None:
         outlier_threshold_choice = np.random.choice(a = [2,3,4,6], size = 1,
                                                     p = [0.2, 0.5, 0.2, 0.1]).item()
-        outlier_position_choice = np.random.choice(a=['first', 'middle', 'last'],
+        outlier_position_choice = np.random.choice(a=['first', 'middle', 'last',
+                                                      'first;last', 'first;middle'],
                                                    size=1,
-                                                   p=[0.5, 0.4, 0.1]).item()
+                                                   p=[0.3, 0.4, 0.1,
+                                                      0.1, 0.1]).item()
     else:
         outlier_threshold_choice = None
         outlier_position_choice = None
@@ -1015,7 +1028,7 @@ def RandomTransform():
     else:
         n_bins_choice = None
     context_choice = np.random.choice(a=[None, 'HalfMax', '2ForecastLength',
-                                         '6ForecastLength', '10ForecastLength'],
+                                         '6ForecastLength', '12ForecastLength'],
                                       size=1,
                                       p=[0.7, 0.05, 0.1, 0.1, 0.05]).item()
     param_dict = {

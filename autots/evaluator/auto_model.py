@@ -1,10 +1,11 @@
+"""Mid-level helper functions for AutoTS."""
 import numpy as np
 import pandas as pd
 import datetime
-import hashlib
 import json
-
+from hashlib import md5
 from autots.evaluator.metrics import PredictionEval
+
 
 def seasonal_int(include_one: bool = False):
     if include_one:
@@ -21,7 +22,7 @@ def create_model_id(model_str: str, parameter_dict: dict = {}, transformation_di
     """
     str_repr = str(model_str) + json.dumps(parameter_dict) + json.dumps(transformation_dict)
     str_repr = ''.join(str_repr.split())
-    hashed = hashlib.md5(str_repr.encode('utf-8')).hexdigest()
+    hashed = md5(str_repr.encode('utf-8')).hexdigest()
     return hashed
 
 class ModelObject(object):
@@ -337,15 +338,15 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     model = model.fit(df_train_transformed, preord_regressor = preord_regressor_train)
     df_forecast = model.predict(forecast_length = forecast_length, preord_regressor = preord_regressor_forecast)
     
+    if df_forecast.forecast.isnull().all(axis = 0).astype(int).sum() > 0:
+        raise ValueError("Model {} returned NaN for one or more series".format(model_str))
+    
     transformationStartTime = datetime.datetime.now()
     # Inverse the transformations
     df_forecast.forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.forecast))#, index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
     df_forecast.lower_forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.lower_forecast))# , index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
     df_forecast.upper_forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.upper_forecast)) #, index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
     
-    if df_forecast.forecast.isnull().all(axis = 0).astype(int).sum() > 0:
-        raise ValueError("Model {} returned NaN for one or more series".format(model_str))
-        
     df_forecast.transformation_parameters = transformation_dict
     # Remove negatives if desired
     # There's df.where(df_forecast.forecast > 0, 0) or  df.clip(lower = 0), not sure which faster

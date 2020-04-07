@@ -197,6 +197,9 @@ class AutoTS(object):
         num_validations = self.num_validations
         verbose = self.verbose
         
+        if verbose <= 0:
+            import warnings
+            warnings.filterwarnings("ignore")
         if result_file != None:
             try:
                 if ".csv" not in str(result_file):

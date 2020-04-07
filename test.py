@@ -1,18 +1,16 @@
-"""
-Informal testing script
-"""
+"""Informal testing script."""
 import numpy as np
 import pandas as pd
-
 from autots.datasets import load_toy_daily
 from autots.datasets import load_toy_hourly
 from autots.datasets import load_toy_monthly
 from autots.datasets import load_toy_yearly
 from autots.datasets import load_toy_weekly
 
+
 #%% 
-forecast_length = 5
-df_long = load_toy_daily()
+forecast_length = 60
+df_long = load_toy_hourly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -36,12 +34,12 @@ model_list = 'superfast'
 
 metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
             'rmse_weighting' : 5, 'containment_weighting' : 1, 'runtime_weighting' : 0,
-            'lower_mae_weighting': 0, 'upper_mae_weighting': 1, 'contour_weighting': 2}
+            'lower_mae_weighting': 0, 'upper_mae_weighting': 0, 'contour_weighting': 2}
 
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                prediction_interval = 0.9, ensemble = False, weighted = False,
-               max_generations = 10, num_validations = 2, validation_method = 'even',
+               max_generations = 50, num_validations = 2, validation_method = 'even',
                model_list = model_list, initial_template = 'General+Random',
                metric_weighting = metric_weighting, models_to_validate = 100,
                max_per_model_class = 10,
