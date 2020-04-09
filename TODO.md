@@ -13,11 +13,9 @@ DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'valu
 lower/upper MAE appearing NaN, and then getting a better score
 VECM does not recognize exog to predict
 kbins not working when it assigns fewer bins than n_bins asked for (use the property transformer.n_bins_ ?)
-fastIca no inf or NaN
+FastICA no inf or NaN
 
-GluonTS to template, best
-Select Transformers to include in random, resort in function
-Select best parameters for contoured motif
+Add to template: Gluon, Motif
 if error occurs in validation but not first sample, what will be the result?
 Would expect to see all transformers delivery roughly same performance with same model
 Bring GeneralTransformer to higher level API.
@@ -34,8 +32,16 @@ Bring GeneralTransformer to higher level API.
 	* migrate arima_model to arima.model
 	* uncomp, dynamic factor with uncertainty intervals
 * Check how fillna methods handle datasets that have entirely NaN series
+* Window regression, 
+		shuffle windows, 
+		1d or 2d (series * forecast_length) output, 
+		normalize each window
+		transfer learning
+		At least one for each of:
+			Tensorflow/Keras
+			Mxnet
+			PyTorch
 * Better X_maker:
-	* add magnitude_1, magnitude2, and so on (new_params have these all the same for models that don't use them)
 	* rolling autocorrelation 
 	* MACD long-term MA - short term MA
 	* Adjust rolling regression additional lag to 28, 364
@@ -50,15 +56,15 @@ Bring GeneralTransformer to higher level API.
 	* moving average +/- moving std deviation
 	* Nystroem kernel, FastICA
 	https://link.springer.com/article/10.1007/s10618-019-00647-x/tables/1
-	RollingRegression
-		Rolling regression magnitude parameters 1 - 5 (0.1, 1, 10, 100, 1000, 10000) which is usually 1, 
-		Pytorch and Tensorflow Simple LSTM/GRU
-		other sequence models
-		Categorical classifier
-		RBF kernel SVR
-		Clustering then separate models
-		ComplementNB
-		PCA or similar -> Univariate Series (Unobserved Components)
+* RollingRegression
+	Model with sub parameter dict
+	Pytorch and Tensorflow Simple LSTM/GRU
+	other sequence models
+	Categorical classifier
+	RBF kernel SVR
+	Clustering then separate models
+	ComplementNB
+	PCA or similar -> Univariate Series (Unobserved Components)
 * Simple performance:
 	* large if collections (ModelMonster, Transformers) with dict lookups
 	* replace try/except with if/else in some cases
@@ -67,7 +73,6 @@ Bring GeneralTransformer to higher level API.
 	* Make sure of rolling regression setup
 	* Modify GluonStart if lots of NaN at start of that series
 	* GPU and CPU ctx
-* Print methods for prediction/model objects that give simple readme how-to's
 * Relative/Absolute Imports and reduce package reloading messages
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
 * Handle categorical forecasts where forecast leaves range of known values, then add to upper/lower forecasts
@@ -122,17 +127,9 @@ Bring GeneralTransformer to higher level API.
 	Simple Decomposition forecasting
 	Statespace variant of ETS which has Confidence Intervals
 	Tensorflow Probability Structural Time Series
-	Neural net with just short series as input, Keras time series generator
-		Transfer learning (model weights pretrained on other time series)
-		Neural net with '2d' output (series * forecast_length)
-		At least one for each of:
-			Tensorflow/Keras
-			Mxnet
-			PyTorch
 	Simulations
 	Ta-lib
 	tslearn
-	Nystroem
 	Multivariate GARCH
 	pydlm - baysesian dynamic linear
 	Survival Analysis

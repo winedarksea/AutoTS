@@ -52,7 +52,7 @@ class ModelObject(object):
         self.verbose_bool = True if self.verbose > 1 else False
     
     def __repr__(self):
-        return 'ModelObject of ' + self.name
+        return 'ModelObject of ' + self.name + ' uses standard .fit/.predict'
     
     def basic_profile(self, df):
         """Capture basic training details
@@ -108,7 +108,15 @@ class PredictionObject(object):
         self.fit_runtime = fit_runtime
         self.transformation_runtime = transformation_runtime
     
+    def __repr__(self):
+        """Print."""
+        if self.forecast != np.nan:
+            return "Prediction object: \nReturn .forecast, \n .upper_forecast, \n .lower_forecast \n .model_parameters \n .transformation_parameters"
+        else:
+            return "Empty prediction object."
+
     def total_runtime(self):
+        """Combine runtimes."""
         return self.fit_runtime + self.predict_runtime + self.transformation_runtime
 
 

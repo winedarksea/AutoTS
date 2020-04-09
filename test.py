@@ -39,7 +39,7 @@ metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                prediction_interval = 0.9, ensemble = False, weighted = False,
-               max_generations = 50, num_validations = 2, validation_method = 'even',
+               max_generations = 5, num_validations = 2, validation_method = 'even',
                model_list = model_list, initial_template = 'General+Random',
                metric_weighting = metric_weighting, models_to_validate = 100,
                max_per_model_class = 10,
@@ -69,6 +69,8 @@ initial_results = model.initial_results.model_results
 # validation results
 validation_results = model.validation_results.model_results
 
+
+# test = initial_results[ initial_results['TransformationParameters'].str.contains('FastICA')]
 #%%
 
 """
