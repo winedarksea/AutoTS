@@ -14,7 +14,7 @@ import logging
 # https://stackoverflow.com/questions/27361427/how-to-properly-deal-with-optional-features-in-python
 try:
     from fbprophet import Prophet
-except Exception: # except ImportError
+except Exception:  # except ImportError
     _has_prophet = False
 else:
     _has_prophet = True

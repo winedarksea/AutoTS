@@ -1,3 +1,4 @@
+"""Higher-level backbone of auto time series modeling."""
 import numpy as np
 import pandas as pd
 import copy
@@ -12,18 +13,18 @@ from autots.tools.shaping import simple_train_test_split
 from autots.evaluator.auto_model import TemplateEvalObject
 from autots.evaluator.auto_model import NewGeneticTemplate
 from autots.evaluator.auto_model import RandomTemplate
-from autots.evaluator.auto_model import TemplateWizard    
+from autots.evaluator.auto_model import TemplateWizard
 from autots.evaluator.auto_model import unpack_ensemble_models
-from autots.evaluator.auto_model import  generate_score
+from autots.evaluator.auto_model import generate_score
 from autots.models.ensemble import EnsembleForecast
-from autots.models.ensemble import EnsembleEvaluate      
+from autots.models.ensemble import EnsembleEvaluate
 from autots.evaluator.auto_model import PredictWitch
 from autots.tools.shaping import categorical_inverse
 from autots.evaluator.auto_model import validation_aggregation
 
+
 class AutoTS(object):
-    """"
-    Automated time series modeling using genetic algorithms.
+    """Automate time series modeling using genetic algorithms.
     
     Args:
         forecast_length (int): number of periods over which to evaluate forecast. Can be overriden later in .predict().
@@ -57,36 +58,42 @@ class AutoTS(object):
         best_model (pandas.DataFrame): DataFrame containing template for the best ranked model
         regression_check (bool): If True, the best_model uses an input 'User' preord_regressor
     """
-    def __init__(self, 
-        forecast_length: int = 14,
-        frequency: str = 'infer',
-        aggfunc: str = 'first',
-        prediction_interval: float = 0.9,
-        no_negatives: bool = False,
-        weighted: bool = False,
-        ensemble: bool = True,
-        initial_template: str = 'General+Random',
-        figures: bool = False,
-        random_seed: int = 425,
-        holiday_country: str = 'US',
-        subset: int = 200,
-        na_tolerance: float = 0.99,
-        metric_weighting: dict = {'smape_weighting' : 10, 'mae_weighting' : 1,
-            'rmse_weighting' : 5, 'containment_weighting' : 0, 'runtime_weighting' : 0,
-            'lower_mae_weighting': 0, 'upper_mae_weighting': 0, 'contour_weighting': 2},
-        drop_most_recent: int = 0,
-        drop_data_older_than_periods: int = 100000,
-        model_list: str = 'default',
-        num_validations: int = 3,
-        models_to_validate: int = 40,
-        max_per_model_class: int = 8,
-        validation_method: str = 'even',
-        per_timestamp_errors: bool = False,
-        per_series_errors: bool = False,
-        min_allowed_train_percent: float = 0.5,
-        max_generations: int = 5,
-        verbose: int = 1 
-        ):
+    def __init__(self,
+                 forecast_length: int = 14,
+                 frequency: str = 'infer',
+                 aggfunc: str = 'first',
+                 prediction_interval: float = 0.9,
+                 no_negatives: bool = False,
+                 weighted: bool = False,
+                 ensemble: bool = True,
+                 initial_template: str = 'General+Random',
+                 figures: bool = False,
+                 random_seed: int = 425,
+                 holiday_country: str = 'US',
+                 subset: int = 200,
+                 na_tolerance: float = 0.99,
+                 metric_weighting: dict = {'smape_weighting' : 10,
+                                           'mae_weighting' : 1,
+                                           'rmse_weighting' : 5,
+                                           'containment_weighting' : 0,
+                                           'runtime_weighting' : 0,
+                                           'lower_mae_weighting': 0,
+                                           'upper_mae_weighting': 0,
+                                           'contour_weighting': 2
+                                           },
+                 drop_most_recent: int = 0,
+                 drop_data_older_than_periods: int = 100000,
+                 model_list: str = 'default',
+                 num_validations: int = 2,
+                 models_to_validate: int = 40,
+                 max_per_model_class: int = 8,
+                 validation_method: str = 'even',
+                 per_timestamp_errors: bool = False,
+                 per_series_errors: bool = False,
+                 min_allowed_train_percent: float = 0.5,
+                 max_generations: int = 5,
+                 verbose: int = 1
+                 ):
         self.weighted = weighted
         self.forecast_length = forecast_length
         self.frequency = frequency
@@ -116,74 +123,97 @@ class AutoTS(object):
             self.per_timestamp_errors = True
             self.per_series_errors = True
         
+        # convert shortcuts of model lists to actual lists of models
         if model_list == 'default':
-            self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'SeasonalNaive',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
-              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor', 'MotifSimulation']
+            self.model_list = ['ZeroesNaive', 'LastValueNaive',
+                               'AverageValueNaive', 'GLS', 'SeasonalNaive',
+                               'GLM', 'ETS', 'ARIMA', 'FBProphet',
+                               'RollingRegression', 'GluonTS',
+                               'UnobservedComponents', 'VARMAX',
+                               'VECM', 'DynamicFactor', 'MotifSimulation']
         if model_list == 'superfast':
-            self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'SeasonalNaive']
+            self.model_list = ['ZeroesNaive', 'LastValueNaive',
+                               'AverageValueNaive', 'GLS', 'SeasonalNaive']
         if model_list == 'fast':
-            self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
-                               'GLM', 'ETS', 'FBProphet', 'RollingRegression', 'SeasonalNaive',
-                               'UnobservedComponents', 'VECM', 'DynamicFactor']
+            self.model_list = ['ZeroesNaive', 'LastValueNaive',
+                               'AverageValueNaive', 'GLS', 'GLM', 'ETS',
+                               'FBProphet', 'RollingRegression',
+                               'SeasonalNaive', 'UnobservedComponents',
+                               'VECM', 'DynamicFactor']
         if model_list == 'probabilistic':
-            self.model_list = ['ARIMA', 'GluonTS', 'FBProphet', 'AverageValueNaive', 'MotifSimulation']
+            self.model_list = ['ARIMA', 'GluonTS', 'FBProphet',
+                               'AverageValueNaive', 'MotifSimulation']
         if model_list == 'multivariate':
-            self.model_list = ['VECM', 'DynamicFactor', 'GluonTS', 'VARMAX', 'RollingRegression']
+            self.model_list = ['VECM', 'DynamicFactor', 'GluonTS', 'VARMAX',
+                               'RollingRegression']
         if model_list == 'all':
-            self.model_list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS', 'SeasonalNaive',
-              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor', 
-              'TSFreshRegressor', 'MotifSimulation']
-            
+            self.model_list = ['ZeroesNaive', 'LastValueNaive',
+                               'AverageValueNaive', 'GLS', 'GLM', 'ETS',
+                               'ARIMA', 'FBProphet', 'RollingRegression',
+                               'GluonTS', 'SeasonalNaive',
+                               'UnobservedComponents', 'VARMAX', 'VECM',
+                               'DynamicFactor', 'TSFreshRegressor',
+                               'MotifSimulation']
+        
+        # generate template to begin with
         if initial_template.lower() == 'random':
-            self.initial_template = RandomTemplate(50, model_list = self.model_list)
+            self.initial_template = RandomTemplate(50,
+                                                   model_list=self.model_list)
         elif initial_template.lower() == 'general':
             from autots.templates.general import general_template
             self.initial_template = general_template
         elif initial_template.lower() == 'general+random':
             from autots.templates.general import general_template
             random_template = RandomTemplate(40, model_list = self.model_list)
-            self.initial_template = pd.concat([general_template, random_template], axis = 0).drop_duplicates()
+            self.initial_template = pd.concat([general_template,
+                                               random_template],
+                                              axis = 0).drop_duplicates()
         else:
             print("Input initial_template either unrecognized or not yet implemented. Using Random.")
             self.initial_template = RandomTemplate(50)
         
+        # remove models not in given model list
         self.initial_template = self.initial_template[self.initial_template['Model'].isin(self.model_list)]
-        
         if len(self.initial_template.index) == 0:
             raise ValueError("No models in template! Adjust initial_template or model_list")
             
         self.best_model = pd.DataFrame()
         self.regressor_used = False
         self.template_cols = ['Model','ModelParameters','TransformationParameters','Ensemble']
-        
         self.initial_results = TemplateEvalObject()
     
     def __repr__(self):
-        if self.best_model.empty == True:
+        """Print."""
+        if self.best_model.empty:
             return "Uninitiated AutoTS object"
         else:
             try:
                 return f"Initiated AutoTS object with best model: \n{self.best_model['Model'].iloc[0]}\n{self.best_model['TransformationParameters'].iloc[0]}\n{self.best_model['ModelParameters'].iloc[0]}"
-            except:
+            except Exception:
                 return "Initiated AutoTS object"
-    def fit(self, df, date_col: str = 'datetime', value_col: str = 'value', id_col: str = None, preord_regressor = [], weights: dict = {}, result_file: str = None):
-        """
-        Train algorithm given data supplied 
+
+    def fit(self, df,
+            date_col: str = 'datetime',value_col: str = 'value',
+            id_col: str = None, preord_regressor = [],
+            weights: dict = {}, result_file: str = None):
+        """Train algorithm given data supplied.
         
         Args:
             df (pandas.DataFrame): Datetime Indexed
+            date_col (str): name of datetime column
+            value_col (str): name of column containing the data of series.
+            id_col (str): name of column identifying different series.
             preord_regressor (numpy.Array): single external regressor matching train.index
-            weights (dict): {'colname1':2, 'colname2':5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
+            weights (dict): {'colname1': 2, 'colname2': 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
             result_file (str): Location of template/results.csv to be saved at intermediate/final time.
         """
         self.preord_regressor_train = preord_regressor
         self.weights = weights
-        self.date_col = date_col 
+        self.date_col = date_col
         self.value_col = value_col
         self.id_col = id_col
         
+        # convert class variables to local variables (makes testing easier)
         forecast_length = self.forecast_length
         weighted = self.weighted
         frequency = self.frequency
@@ -196,10 +226,14 @@ class AutoTS(object):
         metric_weighting = self.metric_weighting
         num_validations = self.num_validations
         verbose = self.verbose
+        template_cols = self.template_cols        
         
+        # shut off warnings if running silently
         if verbose <= 0:
             import warnings
             warnings.filterwarnings("ignore")
+        
+        # clean up result_file input, if given.
         if result_file != None:
             try:
                 if ".csv" not in str(result_file):
@@ -209,61 +243,76 @@ class AutoTS(object):
                 print("Result filename must be a valid 'filename.csv'")
                 result_file = None
         
+        # set random seeds for environment
         random_seed = abs(int(random_seed))
         random.seed(random_seed)
         np.random.seed(random_seed)
         
-        template_cols = self.template_cols
+        # convert data to wide format
+        df_wide = long_to_wide(df, date_col = self.date_col,
+                               value_col = self.value_col,
+                               id_col = self.id_col,
+                               frequency = self.frequency,
+                               na_tolerance = self.na_tolerance,
+                               drop_data_older_than_periods = self.drop_data_older_than_periods,
+                               aggfunc = self.aggfunc,
+                               drop_most_recent = self.drop_most_recent,
+                               verbose = self.verbose)
         
-        
-        df_wide = long_to_wide(df, date_col = self.date_col, value_col = self.value_col,
-                               id_col = self.id_col, frequency = self.frequency, na_tolerance = self.na_tolerance,
-                               drop_data_older_than_periods = self.drop_data_older_than_periods, aggfunc = self.aggfunc,
-                               drop_most_recent = self.drop_most_recent, verbose = self.verbose)
-        
-        if weighted == False:
-            weights = {x:1 for x in df_wide.columns}
-        if weighted == True:
+        # clean up series weighting input
+        if not weighted:
+            weights = {x: 1 for x in df_wide.columns}
+        if weighted:
             # handle not all weights being provided
-            weights = {col:(weights[col] if col in weights else 1) for col in df_wide.columns}
+            weights = {col: (weights[col] if col in weights else 1) for col in df_wide.columns}
             # handle non-numeric inputs
-            weights = {key:(abs(float(weights[key])) if str(weights[key]).isdigit() else 1) for key in weights}
+            weights = {key: (abs(float(weights[key])) if str(weights[key]).isdigit() else 1) for key in weights}
         
+        # handle categorical (not numeric) data if present
         categorical_transformer = values_to_numeric(df_wide)
         self.categorical_transformer = categorical_transformer
-        
         df_wide_numeric = categorical_transformer.dataframe
         self.df_wide_numeric = df_wide_numeric
         
+        # capture some misc information
         profile_df = data_profile(df_wide_numeric)
         self.startTimeStamps = profile_df.loc['FirstDate']
         
+        # take a subset of the data if working with a large number of series
         df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = self.na_tolerance, random_state = random_seed)
         
-        if weighted == False:
+        # subset the weighting information as well
+        if not weighted:
             current_weights = {x:1 for x in df_subset.columns}
-        if weighted == True:
+        if weighted:
             current_weights = {x: weights[x] for x in df_subset.columns}
             
         # split train and test portions, and split regressor if present
-        df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length, min_allowed_train_percent = self.min_allowed_train_percent, verbose = self.verbose)
+        df_train, df_test = simple_train_test_split(df_subset,
+                                                    forecast_length=forecast_length,
+                                                    min_allowed_train_percent=self.min_allowed_train_percent,
+                                                    verbose = self.verbose)
         try:
             preord_regressor = pd.DataFrame(preord_regressor)
-            if not isinstance(preord_regressor.index,pd.DatetimeIndex):
+            if not isinstance(preord_regressor.index, pd.DatetimeIndex):
                 preord_regressor.index = df_subset.index
-            preord_regressor_train = preord_regressor.loc[df_train.index]
-            preord_regressor_test = preord_regressor.loc[df_test.index]
+            preord_regressor_train = preord_regressor.reindex(index=df_train.index)
+            preord_regressor_test = preord_regressor.reindex(index=df_test.index)
         except Exception:
             preord_regressor_train = []
             preord_regressor_test = []
         
         model_count = 0
         
+        # run the initial template
         self.initial_template = unpack_ensemble_models(self.initial_template, template_cols, keep_ensemble = False)
         submitted_parameters = self.initial_template.copy()
-        template_result = TemplateWizard(self.initial_template, df_train, df_test, current_weights,
-                                         model_count = model_count, ensemble = ensemble, 
-                                         forecast_length = forecast_length, frequency=frequency, 
+        template_result = TemplateWizard(self.initial_template, df_train,
+                                         df_test, current_weights,
+                                         model_count = model_count,
+                                         ensemble = ensemble, 
+                                         forecast_length = forecast_length,
+                                         frequency=frequency, 
                                           prediction_interval=prediction_interval, 
                                           no_negatives=no_negatives,
                                           preord_regressor_train = preord_regressor_train,
@@ -272,8 +321,12 @@ class AutoTS(object):
                                           startTimeStamps = self.startTimeStamps,
                                           per_timestamp_errors = self.per_timestamp_errors,
                                           per_series_errors = self.per_series_errors,
-                                          template_cols = template_cols, random_seed = random_seed, verbose = verbose)
+                                          template_cols = template_cols,
+                                          random_seed = random_seed,
+                                          verbose = verbose)
         model_count = template_result.model_count
+        
+        # capture the data from the lower level results
         self.initial_results.model_results = pd.concat([self.initial_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
         self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting,prediction_interval = prediction_interval)
         if result_file != None:
@@ -291,32 +344,41 @@ class AutoTS(object):
             self.initial_results.upper_forecasts.extend(template_result.upper_forecasts)
             self.initial_results.lower_forecasts.extend(template_result.lower_forecasts)
         
-        
+        # now run new generations, trying more models based on past successes.
         current_generation = 0
-        # eventually, have this break if accuracy improvement plateaus before max_generations
         while current_generation < self.max_generations:
             current_generation += 1
             if verbose > 0:
                 print("New Generation: {}".format(current_generation))
-            new_template = NewGeneticTemplate(self.initial_results.model_results, submitted_parameters=submitted_parameters, sort_column = "Score", 
-                               sort_ascending = True, max_results = 40, max_per_model_class = self.max_per_model_class,
-                               top_n = 20, template_cols=template_cols)
+            new_template = NewGeneticTemplate(self.initial_results.model_results,
+                                              submitted_parameters=submitted_parameters,
+                                              sort_column="Score",
+                                              sort_ascending=True,
+                                              max_results=40,
+                                              max_per_model_class=self.max_per_model_class,
+                                              top_n=20,
+                                              template_cols=template_cols)
             submitted_parameters = pd.concat([submitted_parameters, new_template], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
             
-            template_result = TemplateWizard(new_template, df_train, df_test, current_weights,
-                                         model_count = model_count, ensemble = ensemble, 
-                                         forecast_length = forecast_length, frequency=frequency, 
-                                          prediction_interval=prediction_interval, 
-                                          no_negatives=no_negatives,
-                                          preord_regressor_train = preord_regressor_train,
-                                          preord_regressor_forecast = preord_regressor_test, 
-                                          holiday_country = holiday_country,
-                                          startTimeStamps = profile_df.loc['FirstDate'],
-                                          template_cols = template_cols,
-                                          per_timestamp_errors = self.per_timestamp_errors,
-                                          per_series_errors = self.per_series_errors,
-                                          random_seed = random_seed, verbose = verbose)
+            template_result = TemplateWizard(new_template, df_train, df_test,
+                                             current_weights,
+                                             model_count = model_count,
+                                             ensemble = ensemble,
+                                             forecast_length = forecast_length,
+                                             frequency=frequency,
+                                             prediction_interval=prediction_interval,
+                                             no_negatives=no_negatives,
+                                             preord_regressor_train=preord_regressor_train,
+                                             preord_regressor_forecast=preord_regressor_test,
+                                             holiday_country=holiday_country,
+                                             startTimeStamps=profile_df.loc['FirstDate'],
+                                             template_cols=template_cols,
+                                             per_timestamp_errors=self.per_timestamp_errors,
+                                             per_series_errors = self.per_series_errors,
+                                             random_seed = random_seed,
+                                             verbose = verbose)
             model_count = template_result.model_count
+            # capture results from lower-level template run
             self.initial_results.model_results = pd.concat([self.initial_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
             self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
             if result_file != None:
@@ -332,11 +394,9 @@ class AutoTS(object):
                 self.initial_results.forecasts_runtime.extend(template_result.forecasts_runtime)
                 self.initial_results.forecasts.extend(template_result.forecasts)
                 self.initial_results.upper_forecasts.extend(template_result.upper_forecasts)
-                self.initial_results.lower_forecasts.extend(template_result.lower_forecasts)
+                self.initial_results.lower_forecasts.extend(template_result.lower_forecasts)        
         
-        
-        
-        
+        # try ensembling
         if ensemble:
             ensemble_forecasts_list = []
             
@@ -371,8 +431,6 @@ class AutoTS(object):
                               'LastModel':last_model} 
             dist2080_ens_forecast = EnsembleForecast("Dist2080Ensemble", dist2080params, self.initial_results.forecasts_list, self.initial_results.forecasts, self.initial_results.lower_forecasts, self.initial_results.upper_forecasts, self.initial_results.forecasts_runtime, prediction_interval)
             ensemble_forecasts_list.append(dist2080_ens_forecast)
-        
-            
             ens_template_result = EnsembleEvaluate(ensemble_forecasts_list, df_test = df_test, weights = current_weights, model_count = model_count)
             
             model_count = ens_template_result.model_count
@@ -385,7 +443,10 @@ class AutoTS(object):
                 self.initial_results.model_results_per_series_smape = self.initial_results.model_results_per_series_smape.append(ens_template_result.model_results_per_series_smape)
                 self.initial_results.model_results_per_series_mae = self.initial_results.model_results_per_series_mae.append(ens_template_result.model_results_per_series_mae)
         
-        self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(subset = ['ID', 'Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'])
+        # drop any duplicates in results
+        self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(subset = (['ID'] + self.template_cols))
+        
+        # check how many validations are possible given the length of the data.
         num_validations = abs(int(num_validations))
         max_possible = len(df_wide_numeric.index)/forecast_length
         if (max_possible - np.floor(max_possible)) > self.min_allowed_train_percent:
@@ -398,18 +459,18 @@ class AutoTS(object):
                 num_validations = 0
             print("Too many training validations for length of data provided, decreasing num_validations to {}".format(num_validations))
         
-        validation_template = self.initial_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols)
+        # construct validation template
+        validation_template = self.initial_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last')
+        validation_template = validation_template.drop_duplicates(subset=template_cols, keep='first')
         if str(self.max_per_model_class).isdigit():
             validation_template = validation_template.sort_values('Score', ascending = True, na_position = 'last').groupby('Model').head(self.max_per_model_class).reset_index(drop = True)
         validation_template = validation_template.sort_values('Score', ascending = True, na_position = 'last').head(self.models_to_validate)[self.template_cols]
-        
-        # validation_template = self.initial_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols).head(models_to_validate)[template_cols]
         if not ensemble:
-            validation_template[validation_template['Ensemble'] == 0]
+            validation_template = validation_template[validation_template['Ensemble'] == 0]
             
         validation_results = copy.copy(self.initial_results) 
         
-        
+        # run validations
         if num_validations > 0:
             model_count = 0
             if str(self.validation_method).lower() in ['backwards', 'back', 'backward']:
@@ -427,8 +488,8 @@ class AutoTS(object):
                     df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length, min_allowed_train_percent = self.min_allowed_train_percent, verbose = self.verbose)
                     
                     try:
-                        preord_regressor_train = preord_regressor.loc[df_train.index]
-                        preord_regressor_test = preord_regressor.loc[df_test.index]
+                        preord_regressor_train = preord_regressor.reindex(index=df_train.index)
+                        preord_regressor_test = preord_regressor.reindex(index=df_test.index)
                     except Exception:
                         preord_regressor_train = []
                         preord_regressor_test = []
@@ -454,6 +515,9 @@ class AutoTS(object):
                     if self.per_series_errors:
                         validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
                         validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
+                # capture any errors in a single place
+                val_errors = validation_results.model_results[~validation_results.model_results['Exceptions'].isna()]
+                self.error_templates = val_errors[template_cols + ['Exceptions']]
                 validation_results = validation_aggregation(validation_results, per_timestamp_errors = self.per_timestamp_errors, per_series_errors = self.per_series_errors)
         
             if self.validation_method == 'even':
@@ -466,14 +530,14 @@ class AutoTS(object):
                     # subset series (if used) and take a new train/test split
                     df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = self.na_tolerance, random_state = random_seed)
                     if weighted == False:
-                        current_weights = {x:1 for x in df_subset.columns}
+                        current_weights = {x: 1 for x in df_subset.columns}
                     if weighted == True:
-                        current_weights = {x: weights[x] for x in df_subset.columns}                
+                        current_weights = {x: weights[x] for x in df_subset.columns}           
                     df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length, min_allowed_train_percent = self.min_allowed_train_percent, verbose = self.verbose)
                     
                     try:
-                        preord_regressor_train = preord_regressor.loc[df_train.index]
-                        preord_regressor_test = preord_regressor.loc[df_test.index]
+                        preord_regressor_train = preord_regressor.reindex(index=df_train.index)
+                        preord_regressor_test = preord_regressor.reindex(index=df_test.index)
                     except Exception:
                         preord_regressor_train = []
                         preord_regressor_test = []
@@ -481,7 +545,7 @@ class AutoTS(object):
                     template_result = TemplateWizard(validation_template, df_train, df_test, current_weights,
                                                  model_count = model_count, ensemble = ensemble, 
                                                  forecast_length = forecast_length, frequency=frequency, 
-                                                  prediction_interval=prediction_interval, 
+                                                  prediction_interval=prediction_interval,
                                                   no_negatives=no_negatives,
                                                   preord_regressor_train = preord_regressor_train,
                                                   preord_regressor_forecast = preord_regressor_test, 
@@ -500,16 +564,28 @@ class AutoTS(object):
                     if self.per_series_errors:
                         validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
                         validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
+                val_errors = validation_results.model_results[~validation_results.model_results['Exceptions'].isna()]
+                self.error_templates = val_errors[template_cols + ['Exceptions']]
                 validation_results = validation_aggregation(validation_results, per_timestamp_errors = self.per_timestamp_errors, per_series_errors = self.per_series_errors)
+        else:
+            val_errors = initial_results.model_results[~validation_results.model_results['Exceptions'].isna()]
+            self.error_templates = val_errors[template_cols + ['Exceptions']]
         
         if not ensemble:
             validation_template = validation_template[validation_template['Ensemble'] == 0]
         
+        # choose best model
         self.validation_results = validation_results
         eligible_models = validation_results.model_results[validation_results.model_results['Runs'] >= (num_validations + 1)]
-        self.best_model = eligible_models.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = template_cols).head(1)[template_cols]
+        try:
+            self.best_model = eligible_models.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = self.template_cols).head(1)[template_cols]
+            self.ensemble_check = (self.best_model['Ensemble'].iloc[0])
+        except IndexError:
+            raise ValueError("""No models available from validation.
+ Try increasing models_to_validate, max_per_model_class
+ or otherwise increase models available.""")
 
-        self.ensemble_check = (self.best_model['Ensemble'].iloc[0])
+        # set flags to check if regressors or ensemble used in final model.
         param_dict = json.loads(self.best_model['ModelParameters'].iloc[0])
         if self.ensemble_check == 1:
             self.used_regressor_check = False
@@ -523,17 +599,15 @@ class AutoTS(object):
         if self.ensemble_check == 0:
             self.used_regressor_check = False
             try:
-                reg_param =  param_dict['ModelParameters']['regression_type']
+                reg_param = param_dict['ModelParameters']['regression_type']
                 if reg_param == 'User':
                     self.used_regressor_check = True
             except Exception:
                 pass
         return self
     
-    
     def predict(self, forecast_length: int = "self", preord_regressor = [], hierarchy = None, just_point_forecast: bool = False):
-        """
-        Generates forecast data immediately following dates of index supplied to .fit()
+        """Generate forecast data immediately following dates of index supplied to .fit().
         
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
@@ -541,7 +615,7 @@ class AutoTS(object):
             hierarchy: Not yet implemented
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
             
-        Returns:
+        Return:
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
@@ -549,32 +623,37 @@ class AutoTS(object):
             forecast_length = self.forecast_length
         
         # if the models don't need the regressor, ignore it...
-        if self.used_regressor_check == False:
+        if not self.used_regressor_check:
             preord_regressor = []
             self.preord_regressor_train = []
 
-        df_forecast = PredictWitch(self.best_model, df_train = self.df_wide_numeric, 
-                                   forecast_length= forecast_length, frequency= self.frequency, 
-                                          prediction_interval= self.prediction_interval, 
-                                          no_negatives= self.no_negatives,
-                                          preord_regressor_train = self.preord_regressor_train,
-                                          preord_regressor_forecast = preord_regressor, 
-                                          holiday_country = self.holiday_country,
-                                          startTimeStamps = self.startTimeStamps,
-                                          random_seed = self.random_seed, verbose = self.verbose,
-                                       template_cols = self.template_cols)
+        df_forecast = PredictWitch(self.best_model,
+                                   df_train=self.df_wide_numeric,
+                                   forecast_length=forecast_length,
+                                   frequency=self.frequency,
+                                   prediction_interval=self.prediction_interval,
+                                   no_negatives=self.no_negatives,
+                                   preord_regressor_train=self.preord_regressor_train,
+                                   preord_regressor_forecast=preord_regressor,
+                                   holiday_country=self.holiday_country,
+                                   startTimeStamps=self.startTimeStamps,
+                                   random_seed=self.random_seed,
+                                   verbose=self.verbose,
+                                   template_cols=self.template_cols)
         
-        df_forecast.forecast = categorical_inverse(self.categorical_transformer, df_forecast.forecast)
-        #df_forecast.lower_forecast = categorical_inverse(self.categorical_transformer, df_forecast.lower_forecast)
-        #df_forecast.upper_forecast = categorical_inverse(self.categorical_transformer, df_forecast.upper_forecast)
+        df_forecast.forecast = categorical_inverse(self.categorical_transformer,
+                                                   df_forecast.forecast)
+        # df_forecast.lower_forecast = categorical_inverse(self.categorical_transformer, df_forecast.lower_forecast)
+        # df_forecast.upper_forecast = categorical_inverse(self.categorical_transformer, df_forecast.upper_forecast)
         
         if just_point_forecast:
             return df_forecast.forecast
         else:
             return df_forecast
         
-    def export_template(self, filename, models: str = 'best', n: int = 1, max_per_model_class: int = None):
-        """"
+    def export_template(self, filename, models: str = 'best', n: int = 1,
+                        max_per_model_class: int = None):
+        """Export top results as a reusable template.
         
         Args:
             output_format = 'csv' or 'json' (from filename)

@@ -203,12 +203,7 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
                 random_seed=random_seed, verbose=verbose,
                 regression_model=parameters['regression_model'],
                 mean_rolling_periods=parameters['mean_rolling_periods'],
-                std_rolling_periods=parameters['std_rolling_periods'],
-                magnitude_param_1=parameters['magnitude_param_1'],
-                magnitude_param_2=parameters['magnitude_param_2'],
-                magnitude_param_3=parameters['magnitude_param_3'],
-                magnitude_param_4=parameters['magnitude_param_4'],
-                magnitude_param_5=parameters['magnitude_param_5']
+                std_rolling_periods=parameters['std_rolling_periods']
                 )
         return model
     
@@ -549,6 +544,11 @@ def TemplateWizard(template, df_train, df_test, weights,
             ensemble_input = current_template['Ensemble']
             current_template = pd.DataFrame(current_template).transpose()
             template_result.model_count += 1
+            if verbose > 0:
+                if verbose > 1:
+                    print("Model Number: {} with model {} with params {} and transformations {}".format(str(template_result.model_count), model_str, json.dumps(parameter_dict),json.dumps(transformation_dict)))
+                else:
+                    print("Model Number: {} with model {}".format(str(template_result.model_count), model_str))
             df_forecast = PredictWitch(current_template, df_train = df_train, forecast_length=forecast_length,frequency=frequency, 
                                           prediction_interval=prediction_interval, 
                                           no_negatives=no_negatives,
@@ -558,13 +558,6 @@ def TemplateWizard(template, df_train, df_test, weights,
                                           startTimeStamps = startTimeStamps,
                                           random_seed = random_seed, verbose = verbose,
                                        template_cols = template_cols)
-            if verbose > 0:
-                if verbose > 1:
-                    print("Model Number: {} with model {} with params {} and transformations {}".format(str(template_result.model_count), df_forecast.model_name, json.dumps(df_forecast.model_parameters),json.dumps(df_forecast.transformation_parameters)))
-                else:
-                    print("Model Number: {} with model {}".format(str(template_result.model_count), df_forecast.model_name))
-                
-            
             
             model_error = PredictionEval(df_forecast, df_test, series_weights = weights, per_timestamp_errors = per_timestamp_errors)
             model_id = create_model_id(df_forecast.model_name, df_forecast.model_parameters, df_forecast.transformation_parameters)

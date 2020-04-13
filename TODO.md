@@ -7,19 +7,25 @@
 * New models need only be sometimes applicable
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
+
 # Errors: 
-missing 1 required positional argument: 'df' in model VECM  (probably retrieve_transformer)
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
 lower/upper MAE appearing NaN, and then getting a better score
 VECM does not recognize exog to predict
 kbins not working when it assigns fewer bins than n_bins asked for (use the property transformer.n_bins_ ?)
-FastICA no inf or NaN
+FastICA 'array must not contain infs or NaNs'
+Validation is not running all the models that it should. Possibly scoring issue? -> indexer out of bound error if no results.
+If error occurs in validation but not first sample, what will be the result?
+How do fillna methods handle datasets that have entirely NaN series?
+Check if any transformation parameters seem to consistently due poorly, suggesting of problems.
 
+CAPTURE VALIDATION ERRORS
 Add to template: Gluon, Motif
-if error occurs in validation but not first sample, what will be the result?
-Would expect to see all transformers delivery roughly same performance with same model
 Bring GeneralTransformer to higher level API.
 	wide_to_long and long_to_wide in higher-level API
+
+### Ignored Errors:
+xgboost poisson loss does not accept negatives
 
 # To-Do
 * Get the sphinx (google style) documentation and readthedocs.io website up
@@ -31,10 +37,9 @@ Bring GeneralTransformer to higher level API.
 * get_prediction for Statsmodels Statespace models to include confidence interval where possible
 	* migrate arima_model to arima.model
 	* uncomp, dynamic factor with uncertainty intervals
-* Check how fillna methods handle datasets that have entirely NaN series
 * Window regression, 
 		shuffle windows, 
-		1d or 2d (series * forecast_length) output, 
+		1d or 2d (series * forecast_length) output, 1d or 2d input
 		normalize each window
 		transfer learning
 		At least one for each of:
@@ -42,26 +47,15 @@ Bring GeneralTransformer to higher level API.
 			Mxnet
 			PyTorch
 * Better X_maker:
-	* rolling autocorrelation 
-	* MACD long-term MA - short term MA
 	* Adjust rolling regression additional lag to 28, 364
-	* date part simple/expanded date part
-		* day of month, day of year, day of week
-		* month of year, year
-		* length of day at 45N
-		* weekday/weekend
-		* hour of day
-		* days in month (fraction of?)
-		* Season (4 seasons, 2 seasons)
-	* moving average +/- moving std deviation
-	* Nystroem kernel, FastICA
+	* 1d and 2d variations
+		* max training data samples to feed in
+	* Nystroem kernel, FastICA, remove 0 variance
 	https://link.springer.com/article/10.1007/s10618-019-00647-x/tables/1
 * RollingRegression
-	Model with sub parameter dict
 	Pytorch and Tensorflow Simple LSTM/GRU
 	other sequence models
 	Categorical classifier
-	RBF kernel SVR
 	Clustering then separate models
 	ComplementNB
 	PCA or similar -> Univariate Series (Unobserved Components)
@@ -101,7 +95,6 @@ Bring GeneralTransformer to higher level API.
 
 ### Faster Convergence / Faster in General
 * Only search useful parameters, highest probability for most likely effective parameters
-* 'Expert' starting templates to try most likley combinations first
 * Recombine best two of each model parameters, if two or more present (plus option to disable this)
 * Recombination of transformations
 * Remove parameters that are rarely/never useful from get_new_params
@@ -113,6 +106,7 @@ Bring GeneralTransformer to higher level API.
 	* no unlock, but simply very low-probability deep options in get_new_params
 * Exempt or reduce slow models from unnecessary runs, particularly with different transformations
 * Numba and Cythion acceleration (metrics might be easy to start with)
+* GPU - xgboost, GluontTS
 
 #### New datasets:
 	Second level data that is music (like a radio stream)
