@@ -69,32 +69,40 @@ def rolling_x_regressor(df, mean_rolling_periods: int = 30,
     """
     X = df.copy()
     if str(mean_rolling_periods).isdigit():
-        temp = df.rolling(int(mean_rolling_periods), min_periods = 1).mean()
+        temp = df.rolling(int(mean_rolling_periods), min_periods = 1).median()
         X = pd.concat([X, temp], axis = 1)
         if str(macd_periods).isdigit():
-            temp = df.rolling(int(macd_periods), min_periods = 1).mean() - temp
+            temp = df.rolling(int(macd_periods), min_periods = 1).median() - temp
             X = pd.concat([X, temp], axis = 1)
     if str(std_rolling_periods).isdigit():
-        X = pd.concat([X, df.rolling(std_rolling_periods, min_periods = 1).std()], axis = 1)
+        X = pd.concat([X, df.rolling(std_rolling_periods,
+                                     min_periods = 1).std()], axis = 1)
     if str(max_rolling_periods).isdigit():
-        X = pd.concat([X, df.rolling(max_rolling_periods, min_periods = 1).max()], axis = 1)
+        X = pd.concat([X, df.rolling(max_rolling_periods,
+                                     min_periods = 1).max()], axis = 1)
     if str(min_rolling_periods).isdigit():
-        X = pd.concat([X, df.rolling(min_rolling_periods, min_periods = 1).min()], axis = 1)
+        X = pd.concat([X, df.rolling(min_rolling_periods,
+                                     min_periods = 1).min()], axis = 1)
     if str(ewm_alpha).replace('.', '').isdigit():
-        X = pd.concat([X, df.ewm(alpha = ewm_alpha, min_periods = 1).mean()], axis = 1)
+        X = pd.concat([X, df.ewm(alpha = ewm_alpha,
+                                 min_periods=1).mean()], axis=1)
     if str(additional_lag_periods).isdigit():
-        X = pd.concat([X, df.shift(additional_lag_periods)], axis = 1).fillna(method='bfill')
+        X = pd.concat([X, df.shift(additional_lag_periods)],
+                      axis=1).fillna(method='bfill')
     if abs_energy:
-        X = pd.concat([X, df.pow(other = ([2] * len(df.columns))).cumsum()], axis = 1)
+        X = pd.concat([X, df.pow(other = ([2] * len(df.columns))).cumsum()],
+                      axis=1)
     if str(rolling_autocorr_periods).isdigit():
         temp = df.rolling(rolling_autocorr_periods).apply(lambda x: x.autocorr(), raw=False)
         X = pd.concat([X, temp], axis = 1).fillna(method='bfill')
     if (add_date_part) in ['simple', 'expanded']:
-        X = pd.concat([X, date_part(df.index, method = add_date_part)], axis = 1)
+        X = pd.concat([X, date_part(df.index, method = add_date_part)],
+                      axis=1)
     if holiday:
         from autots.tools.holiday import holiday_flag
-        X['holiday_flag_'] = holiday_flag(X.index, country = holiday_country)
-        X['holiday_flag_future_'] = holiday_flag(X.index.shift(1, freq = pd.infer_freq(X.index)), country = holiday_country)
+        X['holiday_flag_'] = holiday_flag(X.index, country=holiday_country)
+        X['holiday_flag_future_'] = holiday_flag(X.index.shift(1,freq=pd.infer_freq(X.index)),
+                                                 country=holiday_country)
     if str(polynomial_degree).isdigit():
         polynomial_degree = abs(int(polynomial_degree))
         from sklearn.preprocessing import PolynomialFeatures
@@ -285,9 +293,11 @@ class RollingRegression(ModelObject):
         regression_type (str): type of regression (None, 'User')
 
     """
+
     def __init__(self, name: str = "RollingRegression",
-                 frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, regression_type: str = None,
+                 frequency: str = 'infer',
+                 prediction_interval: float = 0.9,
+                 regression_type: str = None,
                  holiday_country: str = 'US',
                  verbose: int = 0, random_seed: int = 2020,
                  regression_model: dict =
@@ -305,11 +315,12 @@ class RollingRegression(ModelObject):
                  abs_energy: bool = False,
                  rolling_autocorr_periods: int = None,
                  add_date_part: str = None,
-                 polynomial_degree: int = None):
+                 polynomial_degree: int = None,
+                 x_transform: str = None):
         ModelObject.__init__(self, name, frequency, prediction_interval,
-                             regression_type = regression_type,
-                             holiday_country = holiday_country,
-                             random_seed = random_seed, verbose = verbose)
+                             regression_type=regression_type,
+                             holiday_country=holiday_country,
+                             random_seed=random_seed, verbose=verbose)
         self.regression_model = regression_model
         self.holiday = holiday
         self.mean_rolling_periods = mean_rolling_periods
@@ -323,21 +334,84 @@ class RollingRegression(ModelObject):
         self.rolling_autocorr_periods = rolling_autocorr_periods
         self.add_date_part = add_date_part,
         self.polynomial_degree = polynomial_degree
+        self.x_transform = x_transform
+
+    def _x_transformer(self):
+        if self.x_transform == 'FastICA':
+            from sklearn.decomposition import FastICA
+            x_transformer = FastICA(n_components=None,
+                                    random_state=2020,
+                                    whiten=True)
+        elif self.x_transform == 'Nystroem':
+            from sklearn.kernel_approximation import Nystroem
+            half_size = int(self.sktraindata.shape[0] / 2) + 1
+            max_comp = 200
+            n_comp = max_comp if half_size > max_comp else half_size
+            x_transformer = Nystroem(kernel='rbf', gamma=0.2,
+                                     random_state=2020,
+                                     n_components=n_comp)
+        else:
+            # self.x_transform = 'RmZeroVariance'
+            from sklearn.feature_selection import VarianceThreshold
+            x_transformer = VarianceThreshold(threshold=0.0)
+        return x_transformer
 
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied.
 
         Args:
-            df (pandas.DataFrame): Datetime Indexed 
+            df (pandas.DataFrame): Datetime Indexed
+            preord_regressor (pandas.DataFrame or Series): Datetime Indexed
         """
         df = self.basic_profile(df)
-
         self.df_train = df
+
+        # if external regressor, do some check up
         if self.regression_type is not None:
             if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                 self.regression_type = None
             else:
                 self.regressor_train = preord_regressor
+
+        # define X and Y
+        self.sktraindata = self.df_train.dropna(how='all', axis=0)
+        self.sktraindata = self.sktraindata.fillna(method='ffill').fillna(method='bfill')
+        Y = self.sktraindata.drop(self.sktraindata.head(2).index)
+        Y.columns = [x for x in range(len(Y.columns))]
+        X = rolling_x_regressor(self.sktraindata,
+                                mean_rolling_periods=self.mean_rolling_periods,
+                                macd_periods=self.macd_periods,
+                                std_rolling_periods=self.std_rolling_periods,
+                                additional_lag_periods=self.additional_lag_periods,
+                                ewm_alpha=self.ewm_alpha,
+                                abs_energy=self.abs_energy,
+                                rolling_autocorr_periods=self.rolling_autocorr_periods,
+                                add_date_part=self.add_date_part,
+                                holiday=self.holiday,
+                                holiday_country=self.holiday_country,
+                                polynomial_degree=self.polynomial_degree)
+        if self.regression_type == 'User':
+            X = pd.concat([X, self.regressor_train], axis=1)
+
+        if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
+            self.x_transformer = self._x_transformer()
+            self.x_transformer = self.x_transformer.fit(X)
+            X = pd.DataFrame(self.x_transformer.transform(X))
+            X = X.replace([np.inf, -np.inf], 0).fillna(0)
+        """
+        Tail(1) is dropped to shift data to become forecast 1 ahead
+        and the first one is dropped because it will least accurately represent
+        rolling values
+        """
+        X = X.drop(X.tail(1).index).drop(X.head(1).index)
+        
+        # retrieve model object to train
+        self.regr = retrieve_regressor(regression_model=self.regression_model,
+                                       verbose=self.verbose,
+                                       verbose_bool=self.verbose_bool,
+                                       random_seed=self.random_seed)
+        self.regr = self.regr.fit(X, Y)
+        
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
         
@@ -355,41 +429,16 @@ class RollingRegression(ModelObject):
         """        
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
-        
-        sktraindata = self.df_train.dropna(how = 'all', axis = 0).fillna(method='ffill').fillna(method='bfill')
-        Y = sktraindata.drop(sktraindata.head(2).index)
-        Y.columns = [x for x in range(len(Y.columns))]
-        
-        X = rolling_x_regressor(sktraindata,
-                                mean_rolling_periods=self.mean_rolling_periods,
-                                macd_periods=self.macd_periods,
-                                std_rolling_periods=self.std_rolling_periods,
-                                additional_lag_periods=self.additional_lag_periods,
-                                ewm_alpha=self.ewm_alpha,
-                                abs_energy=self.abs_energy,
-                                rolling_autocorr_periods=self.rolling_autocorr_periods,
-                                add_date_part=self.add_date_part,
-                                holiday=self.holiday,
-                                holiday_country=self.holiday_country,
-                                polynomial_degree=self.polynomial_degree)
         if self.regression_type == 'User':
-            X = pd.concat([X, self.regressor_train], axis = 1)
             complete_regressor = pd.concat([self.regressor_train, preord_regressor], axis = 0)
-        # 1 is dropped to shift data, and the first one is dropped because it will least accurately represnt rolling values
-        X = X.drop(X.tail(1).index).drop(X.head(1).index)
-        
-        regr = retrieve_regressor(regression_model=self.regression_model,
-                                  verbose = self.verbose,
-                                  verbose_bool = self.verbose_bool,
-                                  random_seed = self.random_seed)
-        regr.fit(X, Y)
         
         combined_index = (self.df_train.index.append(index))
         forecast = pd.DataFrame()
-        sktraindata.columns = [x for x in range(len(sktraindata.columns))]
+        self.sktraindata.columns = [x for x in range(len(self.sktraindata.columns))]
         
+        # forecast, 1 step ahead, then another, and so on
         for x in range(forecast_length):
-            x_dat = rolling_x_regressor(sktraindata,
+            x_dat = rolling_x_regressor(self.sktraindata,
                                         mean_rolling_periods=self.mean_rolling_periods,
                                         macd_periods=self.macd_periods,
                                         std_rolling_periods=self.std_rolling_periods,
@@ -402,12 +451,18 @@ class RollingRegression(ModelObject):
                                         holiday_country=self.holiday_country,
                                         polynomial_degree=self.polynomial_degree)
             if self.regression_type == 'User':
-                x_dat = pd.concat([x_dat, complete_regressor.head(len(x_dat.index))], axis = 1)
-            rfPred =  pd.DataFrame(regr.predict(x_dat.tail(1).values))
+                x_dat = pd.concat([x_dat,
+                                   complete_regressor.head(len(x_dat.index))],
+                                  axis=1)
+            if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
+                x_dat = pd.DataFrame(self.x_transformer.transform(x_dat))
+                x_dat = x_dat.replace([np.inf, -np.inf], 0).fillna(0)
+
+            rfPred = pd.DataFrame(self.regr.predict(x_dat.tail(1).values))
         
             forecast = pd.concat([forecast, rfPred], axis = 0, ignore_index = True)
-            sktraindata = pd.concat([sktraindata, rfPred], axis = 0, ignore_index = True)
-            sktraindata.index = combined_index[:len(sktraindata.index)]
+            self.sktraindata = pd.concat([self.sktraindata, rfPred], axis = 0, ignore_index = True)
+            self.sktraindata.index = combined_index[:len(self.sktraindata.index)]
 
         forecast.columns = self.column_names
         forecast.index = index
@@ -434,9 +489,15 @@ class RollingRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         model_choice = generate_regressor_params()
-        mean_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
+        mean_rolling_periods_choice = np.random.choice(a=[None, 2, 5, 7,
+                                                          10, 30],
+                                                       size=1,
+                                                       p=[0.1, 0.1, 0.2, 0.2,
+                                                          0.2, 0.2]).item()
         if mean_rolling_periods_choice is not None:
-            macd_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
+            macd_periods_choice = np.random.choice(a=[None, 5, 7, 10, 30],
+                                                   size=1,
+                                                   p=[0.8, 0.05, 0.05, 0.05, 0.05]).item()
             if macd_periods_choice == mean_rolling_periods_choice:
                 macd_periods_choice = mean_rolling_periods_choice + 10
         else:
@@ -448,9 +509,15 @@ class RollingRegression(ModelObject):
         ewm_choice = np.random.choice(a=[None, 0.2, 0.5, 0.8], size = 1, p = [0.25, 0.25, 0.25, 0.25]).item()
         abs_energy_choice = np.random.choice(a=[True,False], size = 1, p = [0.3, 0.7]).item()
         rolling_autocorr_periods_choice = np.random.choice(a = [None, 2, 6, 11, 30], size = 1, p = [0.8, 0.05, 0.05, 0.05, 0.05]).item()
-        add_date_part_choice = np.random.choice(a=[None,'simple', 'expanded'], size = 1, p = [0.2, 0.2, 0.6]).item()
+        add_date_part_choice = np.random.choice(a=[None, "simple", "expanded"],
+                                                size=1,
+                                                p=[0.4, 0.2, 0.4]).item()
         holiday_choice = np.random.choice(a=[True,False], size = 1, p = [0.3, 0.7]).item()
         polynomial_degree_choice = np.random.choice(a=[None,2], size = 1, p = [0.8, 0.2]).item()
+        x_transform_choice = np.random.choice(a=[None, 'FastICA',
+                                                 'Nystroem', 'RmZeroVariance'],
+                                              size=1, p=[0.7, 0.05,
+                                                         0.05, 0.2]).item()
         regression_choice = np.random.choice(a=[None,'User'], size = 1, p = [0.7, 0.3]).item()
         parameter_dict = {
                         'regression_model': model_choice,
@@ -466,6 +533,7 @@ class RollingRegression(ModelObject):
                         'rolling_autocorr_periods': rolling_autocorr_periods_choice,
                         'add_date_part': add_date_part_choice,
                         'polynomial_degree': polynomial_degree_choice,
+                        'x_transform': x_transform_choice,
                         'regression_type': regression_choice
                         }
         return parameter_dict
@@ -486,7 +554,8 @@ class RollingRegression(ModelObject):
                         'rolling_autocorr_periods': self.rolling_autocorr_periods,
                         'add_date_part': self.add_date_part,
                         'polynomial_degree': self.polynomial_degree,
-                        'regression_type': self.regression_type
+                        'x_transform': self.x_transform,
+                        'regression_type': self.regression_type,
                         }
         return parameter_dict
 

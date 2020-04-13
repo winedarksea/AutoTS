@@ -772,7 +772,7 @@ class GeneralTransformer(object):
         df = pd.DataFrame(self.transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
-        
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
         
         if self.detrend:
             # Note that currently this is slightly different than the detrend in the separate transformers
@@ -795,6 +795,7 @@ class GeneralTransformer(object):
         df = pd.DataFrame(self.second_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
         
         # the third transformation!
         self.third_transformer = self._retrieve_transformer(df, transformation = self.third_transformation, param = self.transformation_param)
@@ -802,6 +803,7 @@ class GeneralTransformer(object):
         df = pd.DataFrame(self.third_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
         
         # clean up outliers
         if 'last' in str(self.outlier_position):
@@ -836,7 +838,8 @@ class GeneralTransformer(object):
                 indices = np.indices(binned.shape)[1]
                 bins_reshaped = self.bins.reshape((self.n_bins, len(df.columns)))
                 df = pd.DataFrame(bins_reshaped[binned, indices], index = self.df_index, columns = self.df_colnames)
-            
+        
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
         return df
     
     def fit(self, df):
@@ -868,6 +871,7 @@ class GeneralTransformer(object):
         df = pd.DataFrame(self.transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
         
         # detrend
         if self.detrend == True:
@@ -887,11 +891,13 @@ class GeneralTransformer(object):
         df = pd.DataFrame(self.second_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
         
         # third transformation
         df = pd.DataFrame(self.third_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
         
         # clean up outliers
         if 'last' in str(self.outlier_position):
@@ -912,7 +918,8 @@ class GeneralTransformer(object):
                 indices = np.indices(binned.shape)[1]
                 bins_reshaped = self.bins.reshape((self.n_bins, df.shape[1]))
                 df = pd.DataFrame(bins_reshaped[binned, indices], index = self.df_index, columns = self.df_colnames)
-            
+        
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
         return df
     
     def inverse_transform(self, df, trans_method: str = "forecast"):
@@ -937,7 +944,7 @@ class GeneralTransformer(object):
             df.columns = self.df_colnames
         
         if self.third_transformation in oddities_list:
-            df = pd.DataFrame(self.third_transformer.inverse_transform(df, trans_method = trans_method))
+            df = pd.DataFrame(self.third_transformer.inverse_transform(df,trans_method = trans_method))
         else:
             df = pd.DataFrame(self.third_transformer.inverse_transform(df))
         df.index = self.df_index

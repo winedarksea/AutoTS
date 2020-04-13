@@ -184,15 +184,26 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
     if model == 'FBProphet':
         from autots.models.prophet import FBProphet
         if parameters == {}:
-            model = FBProphet(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = FBProphet(frequency=frequency,
+                              prediction_interval=prediction_interval,
+                              holiday_country=holiday_country,
+                              random_seed=random_seed, verbose=verbose)
         else:
-            model = FBProphet(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, holiday =parameters['holiday'], regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose)
+            model = FBProphet(frequency=frequency,
+                              prediction_interval=prediction_interval,
+                              holiday_country=holiday_country,
+                              holiday=parameters['holiday'],
+                              regression_type=parameters['regression_type'],
+                              random_seed=random_seed, verbose=verbose)
         return model
-    
+
     if model == 'RollingRegression':
         from autots.models.sklearn import RollingRegression
         if parameters == {}:
-            model = RollingRegression(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = RollingRegression(frequency=frequency,
+                                      prediction_interval=prediction_interval,
+                                      holiday_country=holiday_country,
+                                      random_seed=random_seed, verbose=verbose)
         else:
             model = RollingRegression(
                 frequency=frequency,
@@ -203,23 +214,47 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
                 random_seed=random_seed, verbose=verbose,
                 regression_model=parameters['regression_model'],
                 mean_rolling_periods=parameters['mean_rolling_periods'],
-                std_rolling_periods=parameters['std_rolling_periods']
+                std_rolling_periods=parameters['std_rolling_periods'],
+                macd_periods=parameters['macd_periods'],
+                max_rolling_periods=parameters['max_rolling_periods'],
+                min_rolling_periods=parameters['min_rolling_periods'],
+                ewm_alpha=parameters['ewm_alpha'],
+                additional_lag_periods=parameters['additional_lag_periods'],
+                x_transform=parameters['x_transform'],
+                rolling_autocorr_periods=parameters['rolling_autocorr_periods'],
+                abs_energy=parameters['abs_energy'],
+                add_date_part=parameters['add_date_part'],
+                polynomial_degree=parameters['polynomial_degree']
                 )
         return model
-    
+
     if model == 'UnobservedComponents':
         from autots.models.statsmodels import UnobservedComponents
         if parameters == {}:
-            model = UnobservedComponents(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = UnobservedComponents(
+                frequency=frequency,
+                prediction_interval=prediction_interval,
+                holiday_country=holiday_country,
+                random_seed=random_seed,
+                verbose=verbose)
         else:
-            model = UnobservedComponents(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country,
-                                         regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
-                                         level = parameters['level'], trend=parameters['trend'], cycle = parameters['cycle'],
-                                         damped_cycle = parameters['damped_cycle'], irregular = parameters['irregular'],
-                                         stochastic_trend=parameters['stochastic_trend'], stochastic_level=parameters['stochastic_level'],
-                                         stochastic_cycle=parameters['stochastic_cycle'])
+            model = UnobservedComponents(
+                frequency=frequency,
+                prediction_interval=prediction_interval,
+                holiday_country=holiday_country,
+                regression_type=parameters['regression_type'],
+                random_seed=random_seed,
+                verbose=verbose,
+                level=parameters['level'],
+                trend=parameters['trend'],
+                cycle=parameters['cycle'],
+                damped_cycle=parameters['damped_cycle'],
+                irregular=parameters['irregular'],
+                stochastic_trend=parameters['stochastic_trend'],
+                stochastic_level=parameters['stochastic_level'],
+                stochastic_cycle=parameters['stochastic_cycle'])
         return model
-    
+
     if model == 'DynamicFactor':
         from autots.models.statsmodels import DynamicFactor
         if parameters == {}:

@@ -10,8 +10,8 @@ from autots.datasets import load_toy_weekly
 
 
 #%%
-forecast_length = 6
-df_long = load_toy_yearly()
+forecast_length = 5
+df_long = load_toy_weekly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -31,7 +31,7 @@ model_list = [
               ]
 model_list = 'superfast'
 # model_list = ['MofitSimulation', 'GLM','ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'SeasonalNaive']
-# model_list = ['RollingRegression']
+model_list = ['RollingRegression', 'LastValueNaive']
 
 metric_weighting = {'smape_weighting': 10, 'mae_weighting': 1,
                     'rmse_weighting': 5, 'containment_weighting': 1,
@@ -42,7 +42,7 @@ metric_weighting = {'smape_weighting': 10, 'mae_weighting': 1,
 from autots import AutoTS
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer',
                prediction_interval = 0.9, ensemble = False, weighted = False,
-               max_generations = 2, num_validations = 2, validation_method = 'even',
+               max_generations = 10, num_validations = 2, validation_method = 'even',
                model_list = model_list, initial_template = 'General+Random',
                metric_weighting = metric_weighting, models_to_validate = 50,
                max_per_model_class = 10,
@@ -112,7 +112,7 @@ from autots.tools.shaping import values_to_numeric
 categorical_transformer = values_to_numeric(df_wide)
 df_wide_numeric = categorical_transformer.dataframe
 
-df = df_wide_numeric.tail(50)
+df = df_wide_numeric.tail(50).fillna(0).astype(float)
 
 
 
