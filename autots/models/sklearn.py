@@ -84,7 +84,7 @@ def rolling_x_regressor(df, mean_rolling_periods: int = 30,
         X = pd.concat([X, df.rolling(min_rolling_periods,
                                      min_periods = 1).min()], axis = 1)
     if str(ewm_alpha).replace('.', '').isdigit():
-        X = pd.concat([X, df.ewm(alpha = ewm_alpha,
+        X = pd.concat([X, df.ewm(alpha = ewm_alpha, ignore_na=True,
                                  min_periods=1).mean()], axis=1)
     if str(additional_lag_periods).isdigit():
         X = pd.concat([X, df.shift(additional_lag_periods)],
@@ -107,7 +107,7 @@ def rolling_x_regressor(df, mean_rolling_periods: int = 30,
         polynomial_degree = abs(int(polynomial_degree))
         from sklearn.preprocessing import PolynomialFeatures
         poly = PolynomialFeatures(polynomial_degree)
-        X = poly.fit_transform(X)
+        X = pd.DataFrame(poly.fit_transform(X))
 
     X = X.replace([np.inf, -np.inf], np.nan)
     X = X.fillna(method='ffill').fillna(method='bfill')

@@ -72,11 +72,11 @@ class AutoTS(object):
                  holiday_country: str = 'US',
                  subset: int = 200,
                  na_tolerance: float = 0.99,
-                 metric_weighting: dict = {'smape_weighting' : 10,
-                                           'mae_weighting' : 1,
-                                           'rmse_weighting' : 5,
-                                           'containment_weighting' : 0,
-                                           'runtime_weighting' : 0,
+                 metric_weighting: dict = {'smape_weighting': 10,
+                                           'mae_weighting': 1,
+                                           'rmse_weighting': 5,
+                                           'containment_weighting': 0,
+                                           'runtime_weighting': 0,
                                            'lower_mae_weighting': 0,
                                            'upper_mae_weighting': 0,
                                            'contour_weighting': 2
@@ -119,7 +119,7 @@ class AutoTS(object):
         self.max_generations = max_generations
         self.verbose = int(verbose)
         
-        if ensemble == True:
+        if ensemble:
             self.per_timestamp_errors = True
             self.per_series_errors = True
         
@@ -164,10 +164,10 @@ class AutoTS(object):
             self.initial_template = general_template
         elif initial_template.lower() == 'general+random':
             from autots.templates.general import general_template
-            random_template = RandomTemplate(40, model_list = self.model_list)
+            random_template = RandomTemplate(40, model_list=self.model_list)
             self.initial_template = pd.concat([general_template,
                                                random_template],
-                                              axis = 0).drop_duplicates()
+                                              axis=0).drop_duplicates()
         else:
             print("Input initial_template either unrecognized or not yet implemented. Using Random.")
             self.initial_template = RandomTemplate(50)
@@ -179,7 +179,8 @@ class AutoTS(object):
             
         self.best_model = pd.DataFrame()
         self.regressor_used = False
-        self.template_cols = ['Model','ModelParameters','TransformationParameters','Ensemble']
+        self.template_cols = ['Model', 'ModelParameters',
+                              'TransformationParameters', 'Ensemble']
         self.initial_results = TemplateEvalObject()
     
     def __repr__(self):
@@ -226,7 +227,7 @@ class AutoTS(object):
         metric_weighting = self.metric_weighting
         num_validations = self.num_validations
         verbose = self.verbose
-        template_cols = self.template_cols        
+        template_cols = self.template_cols
         
         # shut off warnings if running silently
         if verbose <= 0:
@@ -234,7 +235,7 @@ class AutoTS(object):
             warnings.filterwarnings("ignore")
         
         # clean up result_file input, if given.
-        if result_file != None:
+        if result_file is not None:
             try:
                 if ".csv" not in str(result_file):
                     print("Result filename must be a valid 'filename.csv'")
@@ -249,15 +250,17 @@ class AutoTS(object):
         np.random.seed(random_seed)
         
         # convert data to wide format
-        df_wide = long_to_wide(df, date_col = self.date_col,
-                               value_col = self.value_col,
-                               id_col = self.id_col,
-                               frequency = self.frequency,
-                               na_tolerance = self.na_tolerance,
-                               drop_data_older_than_periods = self.drop_data_older_than_periods,
-                               aggfunc = self.aggfunc,
-                               drop_most_recent = self.drop_most_recent,
-                               verbose = self.verbose)
+        df_wide = long_to_wide(
+            df, date_col=self.date_col,
+            value_col=self.value_col,
+            id_col=self.id_col,
+            frequency=self.frequency,
+            na_tolerance=self.na_tolerance,
+            drop_data_older_than_periods=self.drop_data_older_than_periods,
+            aggfunc=self.aggfunc,
+            drop_most_recent=self.drop_most_recent,
+            verbose=self.verbose
+            )
         
         # clean up series weighting input
         if not weighted:
@@ -283,7 +286,7 @@ class AutoTS(object):
         
         # subset the weighting information as well
         if not weighted:
-            current_weights = {x:1 for x in df_subset.columns}
+            current_weights = {x: 1 for x in df_subset.columns}
         if weighted:
             current_weights = {x: weights[x] for x in df_subset.columns}
             
@@ -378,6 +381,7 @@ class AutoTS(object):
                                              random_seed = random_seed,
                                              verbose = verbose)
             model_count = template_result.model_count
+            
             # capture results from lower-level template run
             self.initial_results.model_results = pd.concat([self.initial_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
             self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
@@ -468,106 +472,87 @@ class AutoTS(object):
         if not ensemble:
             validation_template = validation_template[validation_template['Ensemble'] == 0]
             
-        validation_results = copy.copy(self.initial_results) 
-        
+        validation_results = copy.copy(self.initial_results)
+
         # run validations
+        """
+        'Even' cuts the data into equal slices of the pie
+        'Backwards' cuts the data backwards starting from the most recent data
+
+        Both will look nearly identical on small datasets.
+        Backwards is more recency focused on data with lots of history.
+        """
         if num_validations > 0:
             model_count = 0
-            if str(self.validation_method).lower() in ['backwards', 'back', 'backward']:
-                for y in range(num_validations):
-                    if verbose > 0:
-                        print("Validation Round: {}".format(str(y)))
+            for y in range(num_validations):
+                if verbose > 0:
+                    print("Validation Round: {}".format(str(y)))
+                # slice the validation data into current slice
+                if self.validation_method == 'even':
+                    # /num_validations biases it towards the last segment
+                    validation_size = (len(df_wide_numeric.index) - forecast_length)
+                    validation_size = validation_size/(num_validations + 1)
+                    validation_size = int(np.floor(validation_size))
+                    current_slice = df_wide_numeric.head(validation_size * (y+1) + forecast_length)
+                elif str(self.validation_method).lower() in ['backwards', 'back', 'backward']:
                     # gradually remove the end
                     current_slice = df_wide_numeric.head(len(df_wide_numeric.index) - (y+1) * forecast_length)
-                    # subset series (if used) and take a new train/test split
-                    df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = self.na_tolerance, random_state = random_seed)
-                    if weighted == False:
-                        current_weights = {x:1 for x in df_subset.columns}
-                    if weighted == True:
-                        current_weights = {x: weights[x] for x in df_subset.columns}                
-                    df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length, min_allowed_train_percent = self.min_allowed_train_percent, verbose = self.verbose)
-                    
-                    try:
-                        preord_regressor_train = preord_regressor.reindex(index=df_train.index)
-                        preord_regressor_test = preord_regressor.reindex(index=df_test.index)
-                    except Exception:
-                        preord_regressor_train = []
-                        preord_regressor_test = []
-        
-                    template_result = TemplateWizard(validation_template, df_train, df_test, current_weights,
-                                                 model_count = model_count, ensemble = ensemble, 
-                                                 forecast_length = forecast_length, frequency=frequency, 
-                                                  prediction_interval=prediction_interval, 
-                                                  no_negatives=no_negatives,
-                                                  preord_regressor_train = preord_regressor_train,
-                                                  preord_regressor_forecast = preord_regressor_test, 
-                                                  holiday_country = holiday_country,
-                                                  startTimeStamps = profile_df.loc['FirstDate'],
-                                                  per_timestamp_errors = self.per_timestamp_errors,
-                                                  per_series_errors = self.per_series_errors,
-                                                  template_cols = template_cols, random_seed = random_seed, verbose = verbose)
-                    model_count = template_result.model_count
-                    validation_results.model_results = pd.concat([validation_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
-                    validation_results.model_results['Score'] = generate_score(validation_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
-                    if self.per_timestamp_errors:
-                        validation_results.model_results_per_timestamp_smape = validation_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
-                        validation_results.model_results_per_timestamp_mae = validation_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
-                    if self.per_series_errors:
-                        validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
-                        validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
-                # capture any errors in a single place
-                val_errors = validation_results.model_results[~validation_results.model_results['Exceptions'].isna()]
-                self.error_templates = val_errors[template_cols + ['Exceptions']]
-                validation_results = validation_aggregation(validation_results, per_timestamp_errors = self.per_timestamp_errors, per_series_errors = self.per_series_errors)
-        
-            if self.validation_method == 'even':
-                for y in range(num_validations):
-                    if verbose > 0:
-                        print("Validation Round: {}".format(str(y)))
-                    # /num_validations biases it towards the last segment (which I prefer), /(num_validations + 1) would remove that
-                    validation_size = int(np.floor((len(df_wide_numeric.index) - forecast_length)/(num_validations + 1)))
-                    current_slice = df_wide_numeric.head(validation_size * (y+1) + forecast_length)
-                    # subset series (if used) and take a new train/test split
-                    df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = self.na_tolerance, random_state = random_seed)
-                    if weighted == False:
-                        current_weights = {x: 1 for x in df_subset.columns}
-                    if weighted == True:
-                        current_weights = {x: weights[x] for x in df_subset.columns}           
-                    df_train, df_test = simple_train_test_split(df_subset, forecast_length = forecast_length, min_allowed_train_percent = self.min_allowed_train_percent, verbose = self.verbose)
-                    
-                    try:
-                        preord_regressor_train = preord_regressor.reindex(index=df_train.index)
-                        preord_regressor_test = preord_regressor.reindex(index=df_test.index)
-                    except Exception:
-                        preord_regressor_train = []
-                        preord_regressor_test = []
-        
-                    template_result = TemplateWizard(validation_template, df_train, df_test, current_weights,
-                                                 model_count = model_count, ensemble = ensemble, 
-                                                 forecast_length = forecast_length, frequency=frequency, 
-                                                  prediction_interval=prediction_interval,
-                                                  no_negatives=no_negatives,
-                                                  preord_regressor_train = preord_regressor_train,
-                                                  preord_regressor_forecast = preord_regressor_test, 
-                                                  holiday_country = holiday_country,
-                                                  startTimeStamps = profile_df.loc['FirstDate'],
-                                                  template_cols = template_cols,
-                                                  per_timestamp_errors = self.per_timestamp_errors,
-                                                  per_series_errors = self.per_series_errors,
-                                                  random_seed = random_seed, verbose = verbose)
-                    model_count = template_result.model_count
-                    validation_results.model_results = pd.concat([validation_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
-                    validation_results.model_results['Score'] = generate_score(validation_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
-                    if self.per_timestamp_errors:
-                        validation_results.model_results_per_timestamp_smape = validation_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
-                        validation_results.model_results_per_timestamp_mae = validation_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
-                    if self.per_series_errors:
-                        validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
-                        validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
-                val_errors = validation_results.model_results[~validation_results.model_results['Exceptions'].isna()]
-                self.error_templates = val_errors[template_cols + ['Exceptions']]
-                validation_results = validation_aggregation(validation_results, per_timestamp_errors = self.per_timestamp_errors, per_series_errors = self.per_series_errors)
+
+                # subset series (if used) and take a new train/test split
+                df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = self.na_tolerance, random_state = random_seed)
+                if not weighted:
+                    current_weights = {x: 1 for x in df_subset.columns}
+                if weighted:
+                    current_weights = {x: weights[x] for x in df_subset.columns}
+                df_train, df_test = simple_train_test_split(
+                    df_subset, forecast_length=forecast_length,
+                    min_allowed_train_percent=self.min_allowed_train_percent,
+                    verbose=self.verbose)
+
+                # slice regressor into current validation slices
+                try:
+                    preord_regressor_train = preord_regressor.reindex(
+                        index=df_train.index)
+                    preord_regressor_test = preord_regressor.reindex(
+                        index=df_test.index)
+                except Exception:
+                    preord_regressor_train = []
+                    preord_regressor_test = []
+
+                # run validation template on current slice
+                template_result = TemplateWizard(
+                    validation_template, df_train, df_test, current_weights,
+                    model_count=model_count, ensemble=ensemble,
+                    forecast_length=forecast_length,
+                    frequency=frequency,
+                    prediction_interval=prediction_interval,
+                    no_negatives=no_negatives,
+                    preord_regressor_forecast=preord_regressor_test,
+                    holiday_country=holiday_country,
+                    startTimeStamps=profile_df.loc['FirstDate'],
+                    template_cols=template_cols,
+                    per_timestamp_errors=self.per_timestamp_errors,
+                    per_series_errors=self.per_series_errors,
+                    random_seed=random_seed, verbose=verbose)
+                model_count = template_result.model_count
+                # gather results of template run
+                validation_results.model_results = pd.concat(
+                    [validation_results.model_results, template_result.model_results],
+                    axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+                validation_results.model_results['Score'] = generate_score(validation_results.model_results, metric_weighting=metric_weighting, prediction_interval=prediction_interval)
+                if self.per_timestamp_errors:
+                    validation_results.model_results_per_timestamp_smape = validation_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
+                    validation_results.model_results_per_timestamp_mae = validation_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
+                if self.per_series_errors:
+                    validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
+                    validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
+            # store errors in separate dataframe
+            val_errors = validation_results.model_results[~validation_results.model_results['Exceptions'].isna()]
+            self.error_templates = val_errors[template_cols + ['Exceptions']]
+            # aggregate remaining results
+            validation_results = validation_aggregation(validation_results, per_timestamp_errors = self.per_timestamp_errors, per_series_errors = self.per_series_errors)
         else:
+            # store errors in separate dataframe (no validation version)
             val_errors = initial_results.model_results[~validation_results.model_results['Exceptions'].isna()]
             self.error_templates = val_errors[template_cols + ['Exceptions']]
         

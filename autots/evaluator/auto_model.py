@@ -8,25 +8,37 @@ from autots.evaluator.metrics import PredictionEval
 
 
 def seasonal_int(include_one: bool = False):
+    """Generate a random integer of typical seasonalities."""
     if include_one:
-        lag = np.random.choice(a=['random_int', 1, 2, 4, 7, 10, 12, 24, 28, 60, 96, 364, 1440, 420, 52, 84], size = 1, p = [0.10, 0.05, 0.05, 0.05, 0.15, 0.01, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.01, 0.01, 0.01, 0.01]).item()
+        lag = np.random.choice(
+            a=['random_int', 1, 2, 4, 7, 10, 12, 24, 28,
+               60, 96, 364, 1440, 420, 52, 84],
+            size=1,
+            p=[0.10, 0.05, 0.05, 0.05, 0.15, 0.01, 0.1, 0.1,
+               0.1, 0.1, 0.05, 0.1, 0.01, 0.01, 0.01, 0.01]).item()
     else:
-        lag = np.random.choice(a=['random_int', 2, 4, 7, 10, 12, 24, 28, 60, 96, 364, 1440, 420, 52, 84], size = 1, p = [0.15, 0.05, 0.05, 0.15, 0.01, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.01, 0.01, 0.01, 0.01]).item()
+        lag = np.random.choice(
+            a=['random_int', 2, 4, 7, 10, 12, 24, 28,
+               60, 96, 364, 1440, 420, 52, 84],
+            size=1, p=[0.15, 0.05, 0.05, 0.15, 0.01, 0.1, 0.1, 0.1,
+                       0.1, 0.05, 0.1, 0.01, 0.01, 0.01, 0.01]).item()
     if lag == 'random_int':
-            lag = np.random.randint(2, 100, size = 1).item()
+        lag = np.random.randint(2, 100, size=1).item()
     return int(lag)
 
-def create_model_id(model_str: str, parameter_dict: dict = {}, transformation_dict: dict = {}):
-    """
-    Create a hash model ID which should be unique to the model parameters
-    """
+
+def create_model_id(model_str: str, parameter_dict: dict = {},
+                    transformation_dict: dict = {}):
+    """Create a hash ID which should be unique to the model parameters."""
     str_repr = str(model_str) + json.dumps(parameter_dict) + json.dumps(transformation_dict)
     str_repr = ''.join(str_repr.split())
     hashed = md5(str_repr.encode('utf-8')).hexdigest()
     return hashed
 
+
 class ModelObject(object):
-    """
+    """Generic class for holding forecasting models.
+    
     Models should all have methods:
         .fit(df) (taking a DataFrame with DatetimeIndex and n columns of n timeseries)
         .predict(forecast_length = int, regressor)
@@ -37,9 +49,11 @@ class ModelObject(object):
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
     """
-    def __init__(self, name: str = "Uninitiated Model Name", frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, regression_type: str = None, 
-                 fit_runtime=datetime.timedelta(0), holiday_country: str = 'US',
+
+    def __init__(self, name: str = "Uninitiated Model Name",
+                 frequency: str = 'infer',
+                 prediction_interval: float = 0.9, regression_type: str = None,
+                 fit_runtime=datetime.timedelta(0), holiday_country: str ='US',
                  random_seed: int = 2020, verbose: int = 0):
         self.name = name
         self.frequency = frequency
@@ -52,47 +66,53 @@ class ModelObject(object):
         self.verbose_bool = True if self.verbose > 1 else False
     
     def __repr__(self):
+        """Print."""
         return 'ModelObject of ' + self.name + ' uses standard .fit/.predict'
     
     def basic_profile(self, df):
-        """Capture basic training details
-        """
+        """Capture basic training details."""
         self.startTime = datetime.datetime.now()
         self.train_shape = df.shape
         self.column_names = df.columns
         self.train_last_date = df.index[-1]
         if self.frequency == 'infer':
-            self.frequency = pd.infer_freq(df.index, warn = False)
+            self.frequency = pd.infer_freq(df.index, warn=False)
         
         return df
     
     def create_forecast_index(self, forecast_length: int):
+        """Generate a pd.DatetimeIndex appropriate for a new forecast.
+        
+        Warnings:
+            Requires ModelObject.basic_profile() being called as part of .fit()
         """
-        Requires ModelObject.basic_profile() being called as part of .fit()
-        """
-        forecast_index = pd.date_range(freq = self.frequency, start = self.train_last_date, periods = forecast_length + 1)
+        forecast_index = pd.date_range(freq=self.frequency,
+                                       start=self.train_last_date,
+                                       periods=forecast_length + 1)
         forecast_index = forecast_index[1:]
         self.forecast_index = forecast_index
         return forecast_index
     
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         return {}
     
     def get_new_params(self, method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
-        """
+        """Return dict of new parameters for parameter tuning."""
         return {}
 
+
 class PredictionObject(object):
+    """Generic class for holding forecast information."""
+
     def __init__(self, model_name: str = 'Uninitiated',
-                 forecast_length: int = 0, 
-                 forecast_index = np.nan, forecast_columns = np.nan,
-                 lower_forecast = np.nan, forecast = np.nan, upper_forecast = np.nan, 
-                 prediction_interval: float = 0.9, predict_runtime=datetime.timedelta(0),
-                 fit_runtime = datetime.timedelta(0),
-                 model_parameters = {}, transformation_parameters = {},
+                 forecast_length: int = 0,
+                 forecast_index=np.nan, forecast_columns=np.nan,
+                 lower_forecast=np.nan, forecast=np.nan, upper_forecast=np.nan,
+                 prediction_interval: float = 0.9,
+                 predict_runtime=datetime.timedelta(0),
+                 fit_runtime=datetime.timedelta(0),
+                 model_parameters={}, transformation_parameters={},
                  transformation_runtime=datetime.timedelta(0)):
         self.model_name = model_name
         self.model_parameters = model_parameters
@@ -107,7 +127,7 @@ class PredictionObject(object):
         self.predict_runtime = predict_runtime
         self.fit_runtime = fit_runtime
         self.transformation_runtime = transformation_runtime
-    
+
     def __repr__(self):
         """Print."""
         if self.forecast != np.nan:
@@ -120,8 +140,8 @@ class PredictionObject(object):
         return self.fit_runtime + self.predict_runtime + self.transformation_runtime
 
 
-def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, holiday_country: str = 'US', 
+def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
+                 prediction_interval: float = 0.9, holiday_country: str = 'US',
                  startTimeStamps = None, forecast_length: int = 14,
                  random_seed: int = 2020, verbose: int = 0):
     """Directs strings and parameters to appropriate model objects.
@@ -134,51 +154,87 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
     
     if model == 'ZeroesNaive':
         from autots.models.basics import ZeroesNaive
-        return ZeroesNaive(frequency = frequency, prediction_interval = prediction_interval)
+        return ZeroesNaive(frequency=frequency,
+                           prediction_interval=prediction_interval)
     
     if model == 'LastValueNaive':
         from autots.models.basics import LastValueNaive
-        return LastValueNaive(frequency = frequency, prediction_interval = prediction_interval)
+        return LastValueNaive(frequency=frequency,
+                              prediction_interval=prediction_interval)
     
     if model == 'AverageValueNaive':
         from autots.models.basics import AverageValueNaive
         if parameters == {}:
-            return AverageValueNaive(frequency = frequency, prediction_interval = prediction_interval)
+            return AverageValueNaive(frequency=frequency,
+                                     prediction_interval=prediction_interval)
         else:
-            return AverageValueNaive(frequency = frequency, prediction_interval = prediction_interval, method = parameters['method'])
+            return AverageValueNaive(frequency=frequency,
+                                     prediction_interval=prediction_interval,
+                                     method=parameters['method'])
     if model == 'SeasonalNaive':
         from autots.models.basics import SeasonalNaive
         if parameters == {}:
-            return SeasonalNaive(frequency = frequency, prediction_interval = prediction_interval)
+            return SeasonalNaive(frequency=frequency,
+                                 prediction_interval=prediction_interval)
         else:
-            return SeasonalNaive(frequency = frequency, prediction_interval = prediction_interval, method = parameters['method'], lag_1 = parameters['lag_1'], lag_2 = parameters['lag_2'])
+            return SeasonalNaive(frequency=frequency,
+                                 prediction_interval=prediction_interval,
+                                 method=parameters['method'],
+                                 lag_1=parameters['lag_1'],
+                                 lag_2=parameters['lag_2'])
     
     if model == 'GLS':
         from autots.models.statsmodels import GLS
-        return GLS(frequency = frequency, prediction_interval = prediction_interval)
+        return GLS(frequency=frequency,
+                   prediction_interval=prediction_interval)
     
     if model == 'GLM':
         from autots.models.statsmodels import GLM
         if parameters == {}:
-            model = GLM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = GLM(frequency=frequency,
+                        prediction_interval=prediction_interval,
+                        holiday_country=holiday_country,
+                        random_seed=random_seed, verbose=verbose)
         else:
-            model = GLM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, family = parameters['family'], constant = parameters['constant'], regression_type=parameters['regression_type'])
+            model = GLM(frequency=frequency,
+                        prediction_interval=prediction_interval,
+                        holiday_country=holiday_country,
+                        random_seed=random_seed, verbose=verbose,
+                        family=parameters['family'],
+                        constant=parameters['constant'],
+                        regression_type=parameters['regression_type'])
         return model
     
     if model == 'ETS':
         from autots.models.statsmodels import ETS
         if parameters == {}:
-            model = ETS(frequency = frequency, prediction_interval = prediction_interval, random_seed = random_seed, verbose = verbose)
+            model = ETS(frequency=frequency,
+                        prediction_interval=prediction_interval,
+                        random_seed=random_seed, verbose=verbose)
         else:
-            model = ETS(frequency = frequency, prediction_interval = prediction_interval, damped=parameters['damped'], trend=parameters['trend'], seasonal=parameters['seasonal'], seasonal_periods=parameters['seasonal_periods'], random_seed = random_seed, verbose = verbose)
+            model = ETS(frequency=frequency,
+                        prediction_interval=prediction_interval,
+                        damped=parameters['damped'],
+                        trend=parameters['trend'],
+                        seasonal=parameters['seasonal'],
+                        seasonal_periods=parameters['seasonal_periods'],
+                        random_seed=random_seed, verbose=verbose)
         return model
     
     if model == 'ARIMA':
         from autots.models.statsmodels import ARIMA
         if parameters == {}:
-            model = ARIMA(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = ARIMA(frequency=frequency,
+                          prediction_interval=prediction_interval,
+                          holiday_country=holiday_country,
+                          random_seed=random_seed, verbose=verbose)
         else:
-            model = ARIMA(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, p =parameters['p'], d=parameters['d'], q=parameters['q'], regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose)
+            model = ARIMA(frequency=frequency,
+                          prediction_interval=prediction_interval,
+                          holiday_country=holiday_country, p=parameters['p'],
+                          d=parameters['d'], q=parameters['q'],
+                          regression_type=parameters['regression_type'],
+                          random_seed=random_seed, verbose=verbose)
         return model
     
     if model == 'FBProphet':
@@ -258,70 +314,121 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
     if model == 'DynamicFactor':
         from autots.models.statsmodels import DynamicFactor
         if parameters == {}:
-            model = DynamicFactor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = DynamicFactor(frequency=frequency,
+                                  prediction_interval=prediction_interval,
+                                  holiday_country=holiday_country,
+                                  random_seed=random_seed, verbose=verbose)
         else:
-            model = DynamicFactor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country,
-                                         regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
-                                         k_factors = parameters['k_factors'], factor_order = parameters['factor_order'])
+            model = DynamicFactor(frequency=frequency,
+                                  prediction_interval=prediction_interval,
+                                  holiday_country=holiday_country,
+                                  regression_type=parameters['regression_type'],
+                                  random_seed=random_seed, verbose=verbose,
+                                  k_factors=parameters['k_factors'],
+                                  factor_order=parameters['factor_order'])
         return model
     
     if model == 'VECM':
         from autots.models.statsmodels import VECM
         if parameters == {}:
-            model = VECM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = VECM(frequency=frequency,
+                         prediction_interval=prediction_interval,
+                         holiday_country=holiday_country,
+                         random_seed=random_seed, verbose=verbose)
         else:
-            model = VECM(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country,
-                                         regression_type=parameters['regression_type'], random_seed = random_seed, verbose = verbose,
-                                         deterministic = parameters['deterministic'], k_ar_diff = parameters['k_ar_diff'])
+            model = VECM(frequency=frequency,
+                         prediction_interval=prediction_interval,
+                         holiday_country=holiday_country,
+                         regression_type=parameters['regression_type'],
+                         random_seed=random_seed, verbose=verbose,
+                         deterministic=parameters['deterministic'],
+                         k_ar_diff=parameters['k_ar_diff'])
         return model
     
     if model == 'VARMAX':
         from autots.models.statsmodels import VARMAX
         if parameters == {}:
-            model = VARMAX(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = VARMAX(frequency=frequency,
+                           prediction_interval=prediction_interval,
+                           holiday_country=holiday_country,
+                           random_seed=random_seed, verbose=verbose)
         else:
-            model = VARMAX(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, 
-                           order = parameters['order'], trend = parameters['trend'])
+            model = VARMAX(frequency=frequency,
+                           prediction_interval=prediction_interval,
+                           holiday_country=holiday_country,
+                           random_seed=random_seed, verbose=verbose,
+                           order=parameters['order'],
+                           trend=parameters['trend'])
         return model
     
     if model == 'GluonTS':
         from autots.models.gluonts import GluonTS
         if parameters == {}:
-            model = GluonTS(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, forecast_length = forecast_length)
+            model = GluonTS(frequency=frequency,
+                            prediction_interval=prediction_interval,
+                            holiday_country=holiday_country,
+                            random_seed=random_seed, verbose=verbose,
+                            forecast_length=forecast_length)
         else:
-            model = GluonTS(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose, 
-                           gluon_model = parameters['gluon_model'], epochs = parameters['epochs'], learning_rate = parameters['learning_rate'],
-                           forecast_length = forecast_length)
+            model = GluonTS(frequency=frequency,
+                            prediction_interval=prediction_interval,
+                            holiday_country=holiday_country,
+                            random_seed=random_seed, verbose=verbose,
+                            gluon_model=parameters['gluon_model'],
+                            epochs=parameters['epochs'],
+                            learning_rate=parameters['learning_rate'],
+                            forecast_length=forecast_length)
         return model
     
     if model == 'TSFreshRegressor':
         from autots.models.tsfresh import TSFreshRegressor
         if parameters == {}:
-            model = TSFreshRegressor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = TSFreshRegressor(frequency=frequency,
+                                     prediction_interval=prediction_interval,
+                                     holiday_country=holiday_country,
+                                     random_seed=random_seed, verbose=verbose)
         else:
-            model = TSFreshRegressor(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose,
-                             max_timeshift = parameters['max_timeshift'],regression_model = parameters['regression_model'], feature_selection = parameters['feature_selection'])
+            model = TSFreshRegressor(frequency=frequency,
+                                     prediction_interval=prediction_interval,
+                                     holiday_country=holiday_country,
+                                     random_seed=random_seed, verbose=verbose,
+                                     max_timeshift=parameters['max_timeshift'],
+                                     regression_model=parameters['regression_model'],
+                                     feature_selection=parameters['feature_selection'])
         return model
     
     if model == 'MotifSimulation':
         from autots.models.basics import MotifSimulation
         if parameters == {}:
-            model = MotifSimulation(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+            model = MotifSimulation(frequency=frequency,
+                                    prediction_interval=prediction_interval,
+                                    holiday_country=holiday_country,
+                                    random_seed=random_seed, verbose=verbose)
         else:
-            model = MotifSimulation(frequency = frequency, prediction_interval = prediction_interval, holiday_country = holiday_country, random_seed = random_seed, verbose = verbose,
-                                             phrase_len = parameters['phrase_len'],comparison = parameters['comparison'],
-                                             shared = parameters['shared'],distance_metric = parameters['distance_metric'],
-                                             max_motifs = parameters['max_motifs'],recency_weighting = parameters['recency_weighting'],
-                                             cutoff_threshold = parameters['cutoff_threshold'],cutoff_minimum = parameters['cutoff_minimum'],
-                                             point_method = parameters['point_method'])
+            model = MotifSimulation(frequency=frequency,
+                                    prediction_interval=prediction_interval,
+                                    holiday_country=holiday_country,
+                                    random_seed=random_seed, verbose=verbose,
+                                    phrase_len=parameters['phrase_len'],
+                                    comparison=parameters['comparison'],
+                                    shared=parameters['shared'],
+                                    distance_metric=parameters['distance_metric'],
+                                    max_motifs=parameters['max_motifs'],
+                                    recency_weighting=parameters['recency_weighting'],
+                                    cutoff_threshold=parameters['cutoff_threshold'],
+                                    cutoff_minimum=parameters['cutoff_minimum'],
+                                    point_method=parameters['point_method'])
         return model
     else:
         raise AttributeError(("Model String '{}' not a recognized model type").format(model))
 
 def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict, 
-                    model_str: str, parameter_dict: dict, frequency: str = 'infer', 
-                    prediction_interval: float = 0.9, no_negatives: bool = False,
-                    preord_regressor_train = [], preord_regressor_forecast = [], 
+                    model_str: str, parameter_dict: dict,
+                    frequency: str = 'infer',
+                    prediction_interval: float = 0.9,
+                    no_negatives: bool = False,
+                    preord_regressor_train = [],
+                    preord_regressor_forecast = [],
                     holiday_country: str = 'US', startTimeStamps = None,
                     random_seed: int = 2020, verbose: int = 0):
     """Feed parameters into modeling pipeline
@@ -345,17 +452,17 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     transformationStartTime = datetime.datetime.now()
     from autots.tools.transform import GeneralTransformer
     transformer_object = GeneralTransformer(
-        outlier_method = transformation_dict['outlier_method'],
-        outlier_threshold = transformation_dict['outlier_threshold'],
-        outlier_position = transformation_dict['outlier_position'],
-        fillna = transformation_dict['fillna'],
-        transformation = transformation_dict['transformation'],
-        detrend = transformation_dict['detrend'],
-        second_transformation = transformation_dict['second_transformation'],
-        transformation_param = transformation_dict['transformation_param'],
-        third_transformation = transformation_dict['third_transformation'],
-        discretization = transformation_dict['discretization'],
-        n_bins = transformation_dict['n_bins']
+        outlier_method=transformation_dict['outlier_method'],
+        outlier_threshold=transformation_dict['outlier_threshold'],
+        outlier_position=transformation_dict['outlier_position'],
+        fillna=transformation_dict['fillna'],
+        transformation=transformation_dict['transformation'],
+        detrend=transformation_dict['detrend'],
+        second_transformation=transformation_dict['second_transformation'],
+        transformation_param=transformation_dict['transformation_param'],
+        third_transformation=transformation_dict['third_transformation'],
+        discretization=transformation_dict['discretization'],
+        n_bins=transformation_dict['n_bins']
                                             ).fit(df_train)
     df_train_transformed = transformer_object.transform(df_train)
     
@@ -370,11 +477,16 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     
     transformation_runtime = datetime.datetime.now() - transformationStartTime
     # from autots.evaluator.auto_model import ModelMonster
-    model = ModelMonster(model_str, parameters=parameter_dict, frequency = frequency, 
-                         prediction_interval = prediction_interval, holiday_country = holiday_country,
-                         random_seed = random_seed, verbose = verbose, forecast_length = forecast_length)
-    model = model.fit(df_train_transformed, preord_regressor = preord_regressor_train)
-    df_forecast = model.predict(forecast_length = forecast_length, preord_regressor = preord_regressor_forecast)
+    model = ModelMonster(model_str, parameters=parameter_dict,
+                         frequency = frequency,
+                         prediction_interval=prediction_interval,
+                         holiday_country=holiday_country,
+                         random_seed=random_seed, verbose=verbose,
+                         forecast_length = forecast_length)
+    model = model.fit(df_train_transformed,
+                      preord_regressor = preord_regressor_train)
+    df_forecast = model.predict(forecast_length = forecast_length,
+                                preord_regressor = preord_regressor_forecast)
     
     if df_forecast.forecast.isnull().all(axis = 0).astype(int).sum() > 0:
         raise ValueError("Model {} returned NaN for one or more series".format(model_str))
@@ -496,9 +608,9 @@ def PredictWitch(template, df_train,forecast_length: int,
                                               no_negatives=no_negatives,
                                               preord_regressor_train = preord_regressor_train,
                                               preord_regressor_forecast = preord_regressor_forecast, 
-                                              holiday_country = holiday_country,
+                                              holiday_country=holiday_country,
                                               startTimeStamps = startTimeStamps,
-                                              random_seed = random_seed, verbose = verbose)
+                                              random_seed=random_seed, verbose=verbose)
                 model_id = create_model_id(df_forecast.model_name, df_forecast.model_parameters, df_forecast.transformation_parameters)
                 total_runtime = df_forecast.fit_runtime + df_forecast.predict_runtime + df_forecast.transformation_runtime
 
@@ -522,8 +634,8 @@ def PredictWitch(template, df_train,forecast_length: int,
                                           no_negatives=no_negatives,
                                           preord_regressor_train = preord_regressor_train,
                                           preord_regressor_forecast = preord_regressor_forecast, 
-                                          holiday_country = holiday_country,
-                                          random_seed = random_seed, verbose = verbose,
+                                          holiday_country=holiday_country,
+                                          random_seed=random_seed, verbose=verbose,
                                           startTimeStamps = startTimeStamps)
     
             return df_forecast
@@ -589,9 +701,9 @@ def TemplateWizard(template, df_train, df_test, weights,
                                           no_negatives=no_negatives,
                                           preord_regressor_train = preord_regressor_train,
                                           preord_regressor_forecast = preord_regressor_forecast, 
-                                          holiday_country = holiday_country,
+                                          holiday_country=holiday_country,
                                           startTimeStamps = startTimeStamps,
-                                          random_seed = random_seed, verbose = verbose,
+                                          random_seed=random_seed, verbose=verbose,
                                        template_cols = template_cols)
             
             model_error = PredictionEval(df_forecast, df_test, series_weights = weights, per_timestamp_errors = per_timestamp_errors)

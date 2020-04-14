@@ -19,16 +19,10 @@ If error occurs in validation but not first sample, what will be the result?
 How do fillna methods handle datasets that have entirely NaN series?
 Check if any transformation parameters seem to consistently perform poorly, suggesting of problems. Also speed.
 
-'macd_periods'
-'numpy.ndarray' object has no attribute 'drop'
-'numpy.ndarray' object has no attribute 'replace'
-
-
 
 Add to template: Gluon, Motif
 Bring GeneralTransformer to higher level API.
 	wide_to_long and long_to_wide in higher-level API
-PASS PARAMETERS FOR SKLEARN IN MODELMONSTER
 
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
