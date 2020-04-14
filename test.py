@@ -43,11 +43,11 @@ metric_weighting = {'smape_weighting': 10, 'mae_weighting': 1,
 
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9, ensemble=False, weighted=False,
-               max_generations=0, num_validations=2, validation_method='even',
+               max_generations=1, num_validations=2, validation_method='even',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=50,
                max_per_model_class=10,
-               drop_most_recent=1, verbose=2)
+               drop_most_recent=1, verbose=1)
 
 
 preord_regressor_train, preord_regressor_forecast = fake_regressor(df_long, dimensions= 1, forecast_length = forecast_length, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
@@ -77,73 +77,6 @@ validation_results = model.validation_results.model_results
 
 error_results = model.error_templates
 
-
-#%%
-import json
-from sklearn.preprocessing import OneHotEncoder
-
-# test = initial_results[ initial_results['TransformationParameters'].str.contains('FastICA')]
-
-cols = ['Model', 'ModelParameters', 'TransformationParameters', 'Exceptions']
-all_results = pd.concat([initial_results[cols], error_results[cols]], axis=0)
-all_results = all_results.drop_duplicates()
-all_results['ExceptionFlag'] = (~all_results['Exceptions'].isna()).astype(int)
-all_results = all_results[all_results['ExceptionFlag'] > 0]
-all_results = all_results.reset_index(drop=True)
-
-trans_df = all_results['TransformationParameters'].apply(json.loads)
-trans_df = pd.io.json.json_normalize(trans_df)  # .fillna(value='NaN')
-trans_cols1 = trans_df.columns
-trans_df = trans_df.astype(str).replace('nan', 'NaNZ')
-trans_transformer = OneHotEncoder(sparse=False).fit(trans_df)
-trans_df = pd.DataFrame(trans_transformer.transform(trans_df))
-# trans_cols = [item for sublist in trans_transformer.categories_ for item in sublist]
-trans_cols = np.array([x1 + x2 for x1, x2 in zip(
-    trans_cols1, trans_transformer.categories_)])
-trans_cols = [item for sublist in trans_cols for item in sublist]
-trans_df.columns = trans_cols
-
-model_df = all_results['ModelParameters'].apply(json.loads)
-model_df = pd.io.json.json_normalize(model_df)  # .fillna(value='NaN')
-model_cols1 = model_df.columns
-model_df = model_df.astype(str).replace('nan', 'NaNZ')
-model_transformer = OneHotEncoder(sparse=False).fit(model_df)
-model_df = pd.DataFrame(model_transformer.transform(model_df))
-model_cols = np.array([x1 + x2 for x1, x2 in zip(
-    model_cols1, model_transformer.categories_)])
-model_cols = [item for sublist in model_cols for item in sublist]
-model_df.columns = model_cols
-
-modelstr_df = all_results['Model']
-modelstr_transformer = OneHotEncoder(sparse=False).fit(
-    modelstr_df.values.reshape(-1, 1))
-modelstr_df = pd.DataFrame(modelstr_transformer.transform(
-    modelstr_df.values.reshape(-1, 1)))
-modelstr_df.columns = modelstr_transformer.categories_[0]
-
-except_df = all_results['Exceptions'].copy()
-except_df = except_df.where(except_df.duplicated(), 'UniqueError')
-except_transformer = OneHotEncoder(sparse=False).fit(
-    except_df.values.reshape(-1, 1))
-except_df = pd.DataFrame(except_transformer.transform(
-    except_df.values.reshape(-1, 1)))
-except_df.columns = except_transformer.categories_[0]
-
-test = pd.concat([except_df, all_results[['ExceptionFlag']],
-                  modelstr_df, model_df, trans_df], axis=1)
-# test_cols = [column for column in test.columns if 'NaNZ' not in column]
-# test = test[test_cols]
-test_corr = test.corr()[except_df.columns]
-
-try:
-    from mlxtend.frequent_patterns import association_rules
-    from mlxtend.frequent_patterns import apriori
-    frequent_itemsets = apriori(test, min_support=0.3, use_colnames=True)
-    rules = association_rules(frequent_itemsets, metric="lift", min_threshold=1.2)
-except Exception as e:
-    print(e)
-    print(repr(e))
-#%%
 
 """
 Import/Export
@@ -192,3 +125,86 @@ twine upload dist/*
 Merge dev to master on GitHub and create release (include .tar.gz)
 """
 # *args, **kwargs
+
+#%%
+"""
+Help correlate errors with parameters
+"""
+if error_results.shape[0] > 0:
+    import json
+    from sklearn.preprocessing import OneHotEncoder
+    # test = initial_results[ initial_results['TransformationParameters'].str.contains('FastICA')]
+
+    cols = ['Model', 'ModelParameters',
+            'TransformationParameters', 'Exceptions']
+    all_results = pd.concat([initial_results[cols],
+                             error_results[cols]], axis=0)
+    all_results = all_results.drop_duplicates()
+    all_results['ExceptionFlag'] = (~all_results['Exceptions'].isna()).astype(int)
+    all_results = all_results[all_results['ExceptionFlag'] > 0]
+    all_results = all_results.reset_index(drop=True)
+    
+    trans_df = all_results['TransformationParameters'].apply(json.loads)
+    trans_df = pd.io.json.json_normalize(trans_df)  # .fillna(value='NaN')
+    trans_cols1 = trans_df.columns
+    trans_df = trans_df.astype(str).replace('nan', 'NaNZ')
+    trans_transformer = OneHotEncoder(sparse=False).fit(trans_df)
+    trans_df = pd.DataFrame(trans_transformer.transform(trans_df))
+    # trans_cols = [item for sublist in trans_transformer.categories_ for item in sublist]
+    trans_cols = np.array([x1 + x2 for x1, x2 in zip(
+        trans_cols1, trans_transformer.categories_)])
+    trans_cols = [item for sublist in trans_cols for item in sublist]
+    trans_df.columns = trans_cols
+    
+    model_df = all_results['ModelParameters'].apply(json.loads)
+    model_df = pd.io.json.json_normalize(model_df)  # .fillna(value='NaN')
+    model_cols1 = model_df.columns
+    model_df = model_df.astype(str).replace('nan', 'NaNZ')
+    model_transformer = OneHotEncoder(sparse=False).fit(model_df)
+    model_df = pd.DataFrame(model_transformer.transform(model_df))
+    model_cols = np.array([x1 + x2 for x1, x2 in zip(
+        model_cols1, model_transformer.categories_)])
+    model_cols = [item for sublist in model_cols for item in sublist]
+    model_df.columns = model_cols
+    
+    modelstr_df = all_results['Model']
+    modelstr_transformer = OneHotEncoder(sparse=False).fit(
+        modelstr_df.values.reshape(-1, 1))
+    modelstr_df = pd.DataFrame(modelstr_transformer.transform(
+        modelstr_df.values.reshape(-1, 1)))
+    modelstr_df.columns = modelstr_transformer.categories_[0]
+    
+    except_df = all_results['Exceptions'].copy()
+    except_df = except_df.where(except_df.duplicated(), 'UniqueError')
+    except_transformer = OneHotEncoder(sparse=False).fit(
+        except_df.values.reshape(-1, 1))
+    except_df = pd.DataFrame(except_transformer.transform(
+        except_df.values.reshape(-1, 1)))
+    except_df.columns = except_transformer.categories_[0]
+    
+    test = pd.concat([except_df, all_results[['ExceptionFlag']],
+                      modelstr_df, model_df, trans_df], axis=1)
+    # test_cols = [column for column in test.columns if 'NaNZ' not in column]
+    # test = test[test_cols]
+    test_corr = test.corr()[except_df.columns]
+    """
+    try:
+        from mlxtend.frequent_patterns import association_rules
+        from mlxtend.frequent_patterns import apriori
+        import re
+        freq_itemsets = apriori(test.drop('ExceptionFlag', axis=1),
+                                min_support=0.3, use_colnames=True)
+        rules = association_rules(freq_itemsets)
+        err_rules = pd.DataFrame()
+        for err in except_df.columns:
+            err = re.sub('[^a-zA-Z0-9\s]', '', err)
+            edf = rules[
+                rules['consequents'].astype(
+                    str).str.replace('[^a-zA-Z0-9\s]', '').str.contains(err)]
+            err_rules = pd.concat([err_rules, edf],
+                                     axis=0, ignore_index=True)
+        err_rules = err_rules.drop_duplicates()
+    except Exception as e:
+        print(repr(e))
+    """
+#%%

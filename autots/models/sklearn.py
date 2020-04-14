@@ -95,7 +95,8 @@ def rolling_x_regressor(df, mean_rolling_periods: int = 30,
     if str(rolling_autocorr_periods).isdigit():
         temp = df.rolling(rolling_autocorr_periods).apply(lambda x: x.autocorr(), raw=False)
         X = pd.concat([X, temp], axis = 1).fillna(method='bfill')
-    if (add_date_part) in ['simple', 'expanded']:
+    
+    if add_date_part in ['simple', 'expanded']:
         X = pd.concat([X, date_part(df.index, method = add_date_part)],
                       axis=1)
     if holiday:
@@ -324,7 +325,7 @@ class RollingRegression(ModelObject):
         self.regression_model = regression_model
         self.holiday = holiday
         self.mean_rolling_periods = mean_rolling_periods
-        self.macd_periods = macd_periods,
+        self.macd_periods = macd_periods
         self.std_rolling_periods = std_rolling_periods
         self.max_rolling_periods = max_rolling_periods
         self.min_rolling_periods = min_rolling_periods
@@ -332,7 +333,7 @@ class RollingRegression(ModelObject):
         self.additional_lag_periods = additional_lag_periods
         self.abs_energy = abs_energy
         self.rolling_autocorr_periods = rolling_autocorr_periods
-        self.add_date_part = add_date_part,
+        self.add_date_part = add_date_part
         self.polynomial_degree = polynomial_degree
         self.x_transform = x_transform
 
@@ -509,7 +510,7 @@ class RollingRegression(ModelObject):
         ewm_choice = np.random.choice(a=[None, 0.2, 0.5, 0.8], size = 1, p = [0.25, 0.25, 0.25, 0.25]).item()
         abs_energy_choice = np.random.choice(a=[True,False], size = 1, p = [0.3, 0.7]).item()
         rolling_autocorr_periods_choice = np.random.choice(a = [None, 2, 6, 11, 30], size = 1, p = [0.8, 0.05, 0.05, 0.05, 0.05]).item()
-        add_date_part_choice = np.random.choice(a=[None, "simple", "expanded"],
+        add_date_part_choice = np.random.choice(a=[None, 'simple', 'expanded'],
                                                 size=1,
                                                 p=[0.4, 0.2, 0.4]).item()
         holiday_choice = np.random.choice(a=[True,False], size = 1, p = [0.3, 0.7]).item()

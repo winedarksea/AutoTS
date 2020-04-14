@@ -466,15 +466,18 @@ class AutoTS(object):
             print("Too many training validations for length of data provided, decreasing num_validations to {}".format(num_validations))
         
         # construct validation template
-        validation_template = self.initial_results.model_results.sort_values(by = "Score", ascending = True, na_position = 'last')
+        validation_template = self.initial_results.model_results[self.initial_results.model_results['Exceptions'].isna()]
         validation_template = validation_template.drop_duplicates(subset=template_cols, keep='first')
+        validation_template = validation_template.sort_values(
+            by="Score", ascending=True, na_position='last')
         if str(self.max_per_model_class).isdigit():
             validation_template = validation_template.sort_values('Score', ascending = True, na_position = 'last').groupby('Model').head(self.max_per_model_class).reset_index(drop = True)
-        validation_template = validation_template.sort_values('Score', ascending = True, na_position = 'last').head(self.models_to_validate)[self.template_cols]
+        validation_template = validation_template.sort_values('Score', ascending = True, na_position = 'last').head(self.models_to_validate)
+        validation_template = validation_template[self.template_cols]
         if not ensemble:
             validation_template = validation_template[validation_template['Ensemble'] == 0]
-            
-        validation_results = copy.copy(self.initial_results)
+        
+        self.validation_template = validation_template
 
         # run validations
         """
@@ -488,7 +491,7 @@ class AutoTS(object):
             model_count = 0
             for y in range(num_validations):
                 if verbose > 0:
-                    print("Validation Round: {}".format(str(y)))
+                    print("Validation Round: {}".format(str(y + 1)))
                 # slice the validation data into current slice
                 if self.validation_method == 'even':
                     # /num_validations biases it towards the last segment
@@ -535,35 +538,35 @@ class AutoTS(object):
                     template_cols=template_cols,
                     per_timestamp_errors=self.per_timestamp_errors,
                     per_series_errors=self.per_series_errors,
-                    random_seed=random_seed, verbose=verbose)
+                    random_seed=random_seed, verbose=verbose,
+                    validation_round = (y + 1))
                 model_count = template_result.model_count
                 # gather results of template run
-                validation_results.model_results = pd.concat(
-                    [validation_results.model_results, template_result.model_results],
+                self.initial_results.model_results = pd.concat(
+                    [self.initial_results.model_results, template_result.model_results],
                     axis=0, ignore_index=True, sort=False).reset_index(drop=True)
-                validation_results.model_results['Score'] = generate_score(validation_results.model_results, metric_weighting=metric_weighting, prediction_interval=prediction_interval)
+                self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting=metric_weighting, prediction_interval=prediction_interval)
                 if self.per_timestamp_errors:
-                    validation_results.model_results_per_timestamp_smape = validation_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
-                    validation_results.model_results_per_timestamp_mae = validation_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
+                    self.initial_results.model_results_per_timestamp_smape = self.initial_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
+                    self.initial_results.model_results_per_timestamp_mae = self.initial_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
                 if self.per_series_errors:
-                    validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
-                    validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
-            # store errors in separate dataframe
-            val_errors = validation_results.model_results[~validation_results.model_results['Exceptions'].isna()]
-            self.error_templates = val_errors[template_cols + ['Exceptions']]
-            # aggregate remaining results
-            validation_results = validation_aggregation(validation_results, per_timestamp_errors = self.per_timestamp_errors, per_series_errors = self.per_series_errors)
-        else:
-            # store errors in separate dataframe (no validation version)
-            val_errors = initial_results.model_results[~validation_results.model_results['Exceptions'].isna()]
-            self.error_templates = val_errors[template_cols + ['Exceptions']]
+                    self.initial_results.model_results_per_series_smape = self.initial_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
+                    self.initial_results.model_results_per_series_mae = self.initial_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
         
-        if not ensemble:
-            validation_template = validation_template[validation_template['Ensemble'] == 0]
+        self.validation_results = copy.copy(self.initial_results)
+        # aggregate validation results
+        self.validation_results = validation_aggregation(
+            self.validation_results,
+            per_timestamp_errors=self.per_timestamp_errors,
+            per_series_errors=self.per_series_errors)
+
+        # store errors in separate dataframe
+        val_errors = self.initial_results.model_results[
+            ~self.initial_results.model_results['Exceptions'].isna()]
+        self.error_templates = val_errors[template_cols + ['Exceptions']]
         
         # choose best model
-        self.validation_results = validation_results
-        eligible_models = validation_results.model_results[validation_results.model_results['Runs'] >= (num_validations + 1)]
+        eligible_models = self.validation_results.model_results[self.validation_results.model_results['Runs'] >= (num_validations + 1)]
         try:
             self.best_model = eligible_models.sort_values(by = "Score", ascending = True, na_position = 'last').drop_duplicates(subset = self.template_cols).head(1)[template_cols]
             self.ensemble_check = (self.best_model['Ensemble'].iloc[0])
@@ -651,7 +654,7 @@ class AutoTS(object):
         if models == 'all':
             export_template = self.initial_results[self.template_cols]
         if models == 'best':
-            export_template = self.validation_results.model_results
+            export_template = self.self.validation_results.model_results
             if str(max_per_model_class).isdigit():
                 export_template = export_template.sort_values('Score', ascending=True).groupby('Model').head(max_per_model_class).reset_index()
             export_template = export_template.nsmallest(n, columns = ['Score'])[self.template_cols]

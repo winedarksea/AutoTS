@@ -643,10 +643,13 @@ def PredictWitch(template, df_train,forecast_length: int,
 def TemplateWizard(template, df_train, df_test, weights,
                    model_count: int = 0, ensemble: bool = True,
                    forecast_length: int = 14, frequency: str = 'infer', 
-                    prediction_interval: float = 0.9, no_negatives: bool = False,
-                    preord_regressor_train = [], preord_regressor_forecast = [], 
+                    prediction_interval: float = 0.9,
+                    no_negatives: bool = False,
+                    preord_regressor_train = [],
+                    preord_regressor_forecast = [], 
                     holiday_country: str = 'US', startTimeStamps = None,
                     random_seed: int = 2020, verbose: int = 0,
+                    validation_round: int = 0,
                     per_timestamp_errors: bool = False,
                     per_series_errors: bool = True,
                     template_cols: list = ['Model','ModelParameters','TransformationParameters','Ensemble']):
@@ -720,7 +723,8 @@ def TemplateWizard(template, df_train, df_test, weights,
                     'TotalRuntime': total_runtime,
                     'Ensemble': ensemble_input,
                     'Exceptions': np.nan,
-                    'Runs': 1
+                    'Runs': 1,
+                    'ValidationRound': validation_round
                     }, index = [0])
             a = pd.DataFrame(model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')).transpose()
             result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1)
@@ -749,7 +753,7 @@ def TemplateWizard(template, df_train, df_test, weights,
                 template_result.lower_forecasts.extend([df_forecast.lower_forecast])
         
         except Exception as e:
-            print('Template Eval Error: {} in model {}'.format(str(repr(e)), model_str))
+            print('Template Eval Error: {} in model {}: {}'.format(str(repr(e)), template_result.model_count, model_str))
             result = pd.DataFrame({
                 'ID': create_model_id(model_str, parameter_dict, transformation_dict),
                 'Model': model_str,
@@ -761,7 +765,8 @@ def TemplateWizard(template, df_train, df_test, weights,
                 'PredictRuntime': datetime.timedelta(0),
                 'TotalRuntime': datetime.timedelta(0),
                 'Exceptions': str(e),
-                'Runs': 1
+                'Runs': 1,
+                'ValidationRound': validation_round
                 }, index = [0])
             template_result.model_results = pd.concat([template_result.model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
 
