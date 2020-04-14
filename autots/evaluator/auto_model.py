@@ -77,12 +77,12 @@ class ModelObject(object):
         self.train_last_date = df.index[-1]
         if self.frequency == 'infer':
             self.frequency = pd.infer_freq(df.index, warn=False)
-        
+
         return df
-    
+
     def create_forecast_index(self, forecast_length: int):
         """Generate a pd.DatetimeIndex appropriate for a new forecast.
-        
+
         Warnings:
             Requires ModelObject.basic_profile() being called as part of .fit()
         """
@@ -145,23 +145,23 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
                  startTimeStamps = None, forecast_length: int = 14,
                  random_seed: int = 2020, verbose: int = 0):
     """Directs strings and parameters to appropriate model objects.
-    
+
     Args:
         model (str): Name of Model Function
         parameters (dict): Dictionary of parameters to pass through to model
     """
     model = str(model)
-    
+
     if model == 'ZeroesNaive':
         from autots.models.basics import ZeroesNaive
         return ZeroesNaive(frequency=frequency,
                            prediction_interval=prediction_interval)
-    
+
     if model == 'LastValueNaive':
         from autots.models.basics import LastValueNaive
         return LastValueNaive(frequency=frequency,
                               prediction_interval=prediction_interval)
-    
+
     if model == 'AverageValueNaive':
         from autots.models.basics import AverageValueNaive
         if parameters == {}:
@@ -749,7 +749,7 @@ def TemplateWizard(template, df_train, df_test, weights,
                 template_result.lower_forecasts.extend([df_forecast.lower_forecast])
         
         except Exception as e:
-            print('Template Eval Error: {} in model {}'.format(str(e), model_str))
+            print('Template Eval Error: {} in model {}'.format(str(repr(e)), model_str))
             result = pd.DataFrame({
                 'ID': create_model_id(model_str, parameter_dict, transformation_dict),
                 'Model': model_str,
@@ -864,14 +864,16 @@ def NewGeneticTemplate(model_results, submitted_parameters, sort_column: str = "
     new_template = UniqueTemplates(sorted_results, new_template, selection_cols = template_cols).head(max_results)
     return new_template
 
-def validation_aggregation(validation_results, per_timestamp_errors: bool = False, per_series_errors: bool = False):
-    """
-    Aggregates a TemplateEvalObject
-    """
-    groupby_cols = ['ID', 'Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'] # , 'Exceptions'
+
+def validation_aggregation(validation_results,
+                           per_timestamp_errors: bool = False,
+                           per_series_errors: bool = False):
+    """Aggregate a TemplateEvalObject."""
+    groupby_cols = ['ID', 'Model', 'ModelParameters',
+                    'TransformationParameters', 'Ensemble']
     col_aggs = {'Runs': 'sum',
-                # 'TransformationRuntime': 'mean', 
-                # 'FitRuntime': 'mean', 
+                # 'TransformationRuntime': 'mean',
+                # 'FitRuntime': 'mean',
                 # 'PredictRuntime': 'mean',
                 'smape': 'mean',
                 'mae': 'mean',
@@ -906,41 +908,41 @@ def validation_aggregation(validation_results, per_timestamp_errors: bool = Fals
             raise KeyError("Per_timestamp data not available. Make sure per_timestamp_errors = True")
     return validation_results
 
-def generate_score(model_results, metric_weighting: dict = {}, prediction_interval: float = 0.9):
-    """
-    Generates score based on relative accuracies
-    """
+
+def generate_score(model_results, metric_weighting: dict = {},
+                   prediction_interval: float = 0.9):
+    """Generate score based on relative accuracies."""
     try:
         smape_weighting = metric_weighting['smape_weighting']
-    except:
+    except KeyError:
         smape_weighting = 1
     try:
         mae_weighting = metric_weighting['mae_weighting']
-    except:
+    except KeyError:
         mae_weighting = 0
     try:
         rmse_weighting = metric_weighting['rmse_weighting']
-    except:
+    except KeyError:
         rmse_weighting = 0
     try:
         containment_weighting = metric_weighting['containment_weighting']
-    except:
+    except KeyError:
         containment_weighting = 0
     try:
         runtime_weighting = metric_weighting['runtime_weighting'] * 0.1
-    except:
+    except KeyError:
         runtime_weighting = 0
     try:
         lower_mae_weighting = metric_weighting['lower_mae_weighting']
-    except:
+    except KeyError:
         lower_mae_weighting = 0
     try:
         upper_mae_weighting = metric_weighting['upper_mae_weighting']
-    except:
+    except KeyError:
         upper_mae_weighting = 0
     try:
         contour_weighting = metric_weighting['contour_weighting']
-    except:
+    except KeyError:
         contour_weighting = 0
     try:
         model_results = model_results.replace([np.inf, -np.inf], np.nan)

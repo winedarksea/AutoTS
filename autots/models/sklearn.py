@@ -69,22 +69,22 @@ def rolling_x_regressor(df, mean_rolling_periods: int = 30,
     """
     X = df.copy()
     if str(mean_rolling_periods).isdigit():
-        temp = df.rolling(int(mean_rolling_periods), min_periods = 1).median()
-        X = pd.concat([X, temp], axis = 1)
+        temp = df.rolling(int(mean_rolling_periods), min_periods=1).median()
+        X = pd.concat([X, temp], axis=1)
         if str(macd_periods).isdigit():
-            temp = df.rolling(int(macd_periods), min_periods = 1).median() - temp
-            X = pd.concat([X, temp], axis = 1)
+            temp = df.rolling(int(macd_periods), min_periods=1).median() - temp
+            X = pd.concat([X, temp], axis=1)
     if str(std_rolling_periods).isdigit():
         X = pd.concat([X, df.rolling(std_rolling_periods,
-                                     min_periods = 1).std()], axis = 1)
+                                     min_periods=1).std()], axis=1)
     if str(max_rolling_periods).isdigit():
         X = pd.concat([X, df.rolling(max_rolling_periods,
-                                     min_periods = 1).max()], axis = 1)
+                                     min_periods=1).max()], axis=1)
     if str(min_rolling_periods).isdigit():
         X = pd.concat([X, df.rolling(min_rolling_periods,
-                                     min_periods = 1).min()], axis = 1)
+                                     min_periods=1).min()], axis=1)
     if str(ewm_alpha).replace('.', '').isdigit():
-        X = pd.concat([X, df.ewm(alpha = ewm_alpha, ignore_na=True,
+        X = pd.concat([X, df.ewm(alpha=ewm_alpha, ignore_na=True,
                                  min_periods=1).mean()], axis=1)
     if str(additional_lag_periods).isdigit():
         X = pd.concat([X, df.shift(additional_lag_periods)],

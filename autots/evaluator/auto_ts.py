@@ -118,11 +118,11 @@ class AutoTS(object):
         self.min_allowed_train_percent = min_allowed_train_percent
         self.max_generations = max_generations
         self.verbose = int(verbose)
-        
+
         if ensemble:
             self.per_timestamp_errors = True
             self.per_series_errors = True
-        
+
         # convert shortcuts of model lists to actual lists of models
         if model_list == 'default':
             self.model_list = ['ZeroesNaive', 'LastValueNaive',
@@ -270,7 +270,7 @@ class AutoTS(object):
             weights = {col: (weights[col] if col in weights else 1) for col in df_wide.columns}
             # handle non-numeric inputs
             weights = {key: (abs(float(weights[key])) if str(weights[key]).isdigit() else 1) for key in weights}
-        
+
         # handle categorical (not numeric) data if present
         categorical_transformer = values_to_numeric(df_wide)
         self.categorical_transformer = categorical_transformer
@@ -280,21 +280,22 @@ class AutoTS(object):
         # capture some misc information
         profile_df = data_profile(df_wide_numeric)
         self.startTimeStamps = profile_df.loc['FirstDate']
-        
+
         # take a subset of the data if working with a large number of series
         df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = self.na_tolerance, random_state = random_seed)
-        
+
         # subset the weighting information as well
         if not weighted:
             current_weights = {x: 1 for x in df_subset.columns}
         if weighted:
             current_weights = {x: weights[x] for x in df_subset.columns}
-            
+
         # split train and test portions, and split regressor if present
-        df_train, df_test = simple_train_test_split(df_subset,
-                                                    forecast_length=forecast_length,
-                                                    min_allowed_train_percent=self.min_allowed_train_percent,
-                                                    verbose = self.verbose)
+        df_train, df_test = simple_train_test_split(
+            df_subset,
+            forecast_length=forecast_length,
+            min_allowed_train_percent=self.min_allowed_train_percent,
+            verbose=self.verbose)
         try:
             preord_regressor = pd.DataFrame(preord_regressor)
             if not isinstance(preord_regressor.index, pd.DatetimeIndex):
@@ -304,31 +305,32 @@ class AutoTS(object):
         except Exception:
             preord_regressor_train = []
             preord_regressor_test = []
-        
+
         model_count = 0
-        
+
         # run the initial template
-        self.initial_template = unpack_ensemble_models(self.initial_template, template_cols, keep_ensemble = False)
+        self.initial_template = unpack_ensemble_models(
+            self.initial_template, template_cols, keep_ensemble=False)
         submitted_parameters = self.initial_template.copy()
         template_result = TemplateWizard(self.initial_template, df_train,
                                          df_test, current_weights,
-                                         model_count = model_count,
-                                         ensemble = ensemble, 
-                                         forecast_length = forecast_length,
+                                         model_count=model_count,
+                                         ensemble=ensemble, 
+                                         forecast_length=forecast_length,
                                          frequency=frequency, 
                                           prediction_interval=prediction_interval, 
                                           no_negatives=no_negatives,
-                                          preord_regressor_train = preord_regressor_train,
-                                          preord_regressor_forecast = preord_regressor_test, 
-                                          holiday_country = holiday_country,
-                                          startTimeStamps = self.startTimeStamps,
-                                          per_timestamp_errors = self.per_timestamp_errors,
-                                          per_series_errors = self.per_series_errors,
-                                          template_cols = template_cols,
-                                          random_seed = random_seed,
-                                          verbose = verbose)
+                                          preord_regressor_train=preord_regressor_train,
+                                          preord_regressor_forecast=preord_regressor_test, 
+                                          holiday_country=holiday_country,
+                                          startTimeStamps=self.startTimeStamps,
+                                          per_timestamp_errors=self.per_timestamp_errors,
+                                          per_series_errors=self.per_series_errors,
+                                          template_cols=template_cols,
+                                          random_seed=random_seed,
+                                          verbose=verbose)
         model_count = template_result.model_count
-        
+
         # capture the data from the lower level results
         self.initial_results.model_results = pd.concat([self.initial_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
         self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting,prediction_interval = prediction_interval)

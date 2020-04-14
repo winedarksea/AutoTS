@@ -18,8 +18,10 @@ Validation is not running all the models that it should. Possibly scoring issue?
 If error occurs in validation but not first sample, what will be the result?
 How do fillna methods handle datasets that have entirely NaN series?
 Check if any transformation parameters seem to consistently perform poorly, suggesting of problems. Also speed.
+Are new templates selecting values with Exceptions?
 
-
+params in [[[param]]] macd, add date part
+ROLLING REGRESSION ISN'T APPEARING IN VALIDATION!
 Add to template: Gluon, Motif
 Bring GeneralTransformer to higher level API.
 	wide_to_long and long_to_wide in higher-level API
