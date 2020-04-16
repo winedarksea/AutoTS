@@ -14,18 +14,24 @@ lower/upper MAE appearing NaN, and then getting a better score
 VECM does not recognize exog to predict
 kbins not working when it assigns fewer bins than n_bins asked for (use the property transformer.n_bins_ ?)
 FastICA 'array must not contain infs or NaNs'
-Validation is not running all the models that it should. Possibly scoring issue? -> indexer out of bound error if no results.
-If error occurs in validation but not first sample, what will be the result?
 How do fillna methods handle datasets that have entirely NaN series?
 Check if any transformation parameters seem to consistently perform poorly, suggesting of problems. Also speed.
-Are new templates selecting values with Exceptions?
 
-params in [[[param]]] macd, add date part
-ROLLING REGRESSION ISN'T APPEARING IN VALIDATION!
+Unobserved Components to forecast intervals + ARIMA to SARIMA
+
 Add to template: Gluon, Motif
 Bring GeneralTransformer to higher level API.
 	wide_to_long and long_to_wide in higher-level API
-
+Option to use full traceback in errors in table
+Improved genetic recombination:
+	Make no new genetic models with just new random transform. Add recombination for rolling regression.
+	Issues to handle:
+		Approve and unapproved for model recombination
+		If not enough (only one example) of that model type
+	Randomly select np.random.choice(list(y.keys/items())) some keys from Y, then {**x, **y} all of x, some of y.
+	2 best + 2 random model
+	2 best from model + 1 best overall + 1 random
+	Allow many models at first, but as generations increase, reduce total allowed but up max per model class
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
 
@@ -49,16 +55,13 @@ xgboost poisson loss does not accept negatives
 			Mxnet
 			PyTorch
 * Better X_maker:
-	* Adjust rolling regression additional lag to 28, 364
 	* 1d and 2d variations
-		* max training data samples to feed in
 	https://link.springer.com/article/10.1007/s10618-019-00647-x/tables/1
 * RollingRegression
 	Pytorch and Tensorflow Simple LSTM/GRU
 	other sequence models
-	Categorical classifier
+	Categorical classifier, ComplementNB
 	Clustering then separate models
-	ComplementNB
 	PCA or similar -> Univariate Series (Unobserved Components)
 * Simple performance:
 	* large if collections (ModelMonster, Transformers) with dict lookups

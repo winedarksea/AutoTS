@@ -159,8 +159,9 @@ class AverageValueNaive(ModelObject):
                  random_seed: int = 2020, verbose: int = 0,
                  method: str = 'Median'):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             holiday_country = holiday_country, random_seed = random_seed,
-                             verbose = verbose)
+                             holiday_country=holiday_country,
+                             random_seed=random_seed,
+                             verbose=verbose)
         self.method = method
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
@@ -179,7 +180,8 @@ class AverageValueNaive(ModelObject):
         self.lower, self.upper = historic_quantile(df, prediction_interval = self.prediction_interval)
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, preord_regressor = [],
+                just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -246,14 +248,17 @@ class SeasonalNaive(ModelObject):
                  random_seed: int = 2020,
                  lag_1: int = 7, lag_2: int = None, method: str = 'LastValue'):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             holiday_country = holiday_country, random_seed = random_seed)
+                             holiday_country =holiday_country, random_seed = random_seed)
         self.lag_1 = abs(int(lag_1))
         self.lag_2 = lag_2
         if str(self.lag_2).isdigit():
             self.lag_2 = abs(int(self.lag_2))
+            if str(self.lag_2_choice) == str(self.lag_1_choice):
+                self.lag_2_choice = 1
         self.method = method
+
     def fit(self, df, preord_regressor = []):
-        """Train algorithm given data supplied 
+        """Train algorithm given data supplied.
         
         Args:
             df (pandas.DataFrame): Datetime Indexed 
@@ -286,7 +291,8 @@ class SeasonalNaive(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int,
+                preord_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -329,7 +335,9 @@ class SeasonalNaive(ModelObject):
         """Returns dict of new parameters for parameter tuning
         """
         lag_1_choice = seasonal_int()
-        lag_2_choice = np.random.choice(a=['None', seasonal_int(include_one = True)], size = 1, p = [0.3, 0.7]).item()
+        lag_2_choice = np.random.choice(a=['None', 
+                                           seasonal_int(include_one=True)],
+                                        size=1, p=[0.3, 0.7]).item()
         if str(lag_2_choice) == str(lag_1_choice):
             lag_2_choice = 1
         method_choice = np.random.choice(a=['Mean', 'LastValue'], size = 1, p = [0.5, 0.5]).item()
@@ -340,8 +348,7 @@ class SeasonalNaive(ModelObject):
                 }
     
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         return {
                 'method' : self.method,
                 'lag_1' : self.lag_1,
@@ -376,8 +383,9 @@ class MotifSimulation(ModelObject):
                  point_method: str = 'median',
                  verbose: int = 1
                  ):
-        ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             holiday_country = holiday_country, random_seed = random_seed)
+        ModelObject.__init__(self, name, frequency, prediction_interval,
+                             holiday_country=holiday_country,
+                             random_seed=random_seed)
         self.phrase_len = phrase_len
         self.comparison = comparison
         self.shared = shared
@@ -389,7 +397,7 @@ class MotifSimulation(ModelObject):
         self.point_method = point_method
         
     def fit(self, df, preord_regressor = []):
-        """Train algorithm given data supplied 
+        """Train algorithm given data supplied.
         
         Args:
             df (pandas.DataFrame): Datetime Indexed 
@@ -572,8 +580,7 @@ class MotifSimulation(ModelObject):
         self.forecasts = forecasts
         self.lower_forecasts = lower_forecasts
         self.upper_forecasts = upper_forecasts
-        
-        # temp = forecasts.head(1000)
+
         """
         In fit phase, only select motifs.
             table: start index, weight, column it applies to, and count of rows that follow motif
@@ -586,18 +593,7 @@ class MotifSimulation(ModelObject):
                 magnitude and percentage change
             account for forecasts not running the full length of forecast_length
                 if longer than comparative, append na df then ffill
-        
-        Similarity:
-            string distance
-                sign
-            unordered pairwise similarity
-                pct_change
-            rmse
-                pct_change
-                magnitude
-        
-        KNN
-        
+
         Profile speed and which code to improve first
             Remove for loops
             Quantile not be calculated until after pos_forecasts narrowed down to only forecast length
@@ -661,27 +657,46 @@ class MotifSimulation(ModelObject):
             
             return prediction
         
-    def get_new_params(self,method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
-        """
-        comparison_choice = np.random.choice(a=['pct_change', 'pct_change_sign', 'magnitude_pct_change_sign', 'magnitude', 'magnitude_pct_change'], size = 1).item()
-        phrase_len_choice = np.random.choice(a=[5, 10, 20, '10thN', '100thN', '1000thN', '20thN'], p = [0.4, 0.1, 0.3, 0.01, 0.1, 0.08, 0.01], size = 1).item()
-        shared_choice = np.random.choice(a=[True, False], size = 1, p = [0.1, 0.9]).item()
-        distance_metric_choice = np.random.choice(a=['other', 'hamming', 'cityblock', 'cosine','euclidean','l1', 'l2', 'manhattan'], size = 1).item()
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning."""
+        comparison_choice = np.random.choice(
+            a=['pct_change', 'pct_change_sign',
+               'magnitude_pct_change_sign',
+               'magnitude', 'magnitude_pct_change'], size=1).item()
+        phrase_len_choice = np.random.choice(
+            a=[5, 10, 20, '10thN', '100thN', '1000thN', '20thN'],
+            p=[0.4, 0.1, 0.3, 0.01, 0.1, 0.08, 0.01], size=1).item()
+        shared_choice = np.random.choice(
+            a=[True, False], size=1, p=[0.1, 0.9]).item()
+        distance_metric_choice = np.random.choice(
+            a=['other', 'hamming', 'cityblock', 'cosine',
+               'euclidean', 'l1', 'l2', 'manhattan'], size=1).item()
         if distance_metric_choice == 'other':
-            distance_metric_choice = np.random.choice(a=['braycurtis', 'canberra', 'chebyshev', 'correlation', 'dice', 'hamming', 'jaccard', 'kulsinski', 'mahalanobis', 'minkowski', 'rogerstanimoto', 'russellrao', 'seuclidean', 'sokalmichener', 'sokalsneath', 'sqeuclidean', 'yule'] , size = 1).item()
-        max_motifs_choice = float(np.random.choice(a=[20, 50, 0.05, 0.2, 0.5], size = 1, p = [0.4, 0.1, 0.3, 0.19, 0.01]).item())
-        recency_weighting_choice = np.random.choice(a=[0, 0.5, 0.1, 0.01, -0.1], size = 1, p = [0.4, 0.1, 0.3, 0.1, 0.1]).item()
-        cutoff_threshold_choice = np.random.choice(a=[0.7, 0.9, 0.99, 1.5], size = 1, p = [0.1, 0.2, 0.4, 0.3]).item()
-        cutoff_minimum_choice = np.random.choice(a=[5, 10, 20, 50, 100], size = 1, p = [0.1, 0.1, 0.2, 0.3, 0.3]).item()
-        point_method_choice = np.random.choice(a=['median', 'sample', 'mean', 'sign_biased_mean'], size = 1, p = [0.5, 0.1, 0.2, 0.2]).item()
-        
-        
+            distance_metric_choice = np.random.choice(
+                a=['braycurtis', 'canberra', 'chebyshev', 'correlation',
+                   'dice', 'hamming', 'jaccard', 'kulsinski', 'mahalanobis',
+                   'minkowski', 'rogerstanimoto', 'russellrao', 'seuclidean',
+                   'sokalmichener', 'sokalsneath', 'sqeuclidean', 'yule'],
+                size=1).item()
+        max_motifs_choice = float(np.random.choice(
+            a=[20, 50, 0.05, 0.2, 0.5], size=1,
+            p=[0.4, 0.1, 0.3, 0.19, 0.01]).item())
+        recency_weighting_choice = np.random.choice(
+            a=[0, 0.5, 0.1, 0.01, -0.1], size=1,
+            p=[0.4, 0.1, 0.3, 0.1, 0.1]).item()
+        cutoff_threshold_choice = np.random.choice(
+            a=[0.7, 0.9, 0.99, 1.5], size=1, p=[0.1, 0.2, 0.4, 0.3]).item()
+        cutoff_minimum_choice = np.random.choice(
+            a=[5, 10, 20, 50, 100], size=1, p=[0.1, 0.1, 0.2, 0.3, 0.3]).item()
+        point_method_choice = np.random.choice(
+            a=['median', 'sample', 'mean', 'sign_biased_mean'], size=1,
+            p=[0.5, 0.1, 0.2, 0.2]).item()
+
         return {
                 'phrase_len': phrase_len_choice,
                 'comparison': comparison_choice,
                 'shared': shared_choice,
-                'distance_metric' : distance_metric_choice,
+                'distance_metric': distance_metric_choice,
                 'max_motifs': max_motifs_choice,
                 'recency_weighting': recency_weighting_choice,
                 'cutoff_threshold': cutoff_threshold_choice,
@@ -690,8 +705,7 @@ class MotifSimulation(ModelObject):
                 }
     
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         return {
                 'phrase_len': self.phrase_len,
                 'comparison': self.comparison,

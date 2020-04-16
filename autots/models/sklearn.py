@@ -6,8 +6,7 @@ Decision Tree, Elastic Net,  Random Forest, MLPRegressor, KNN, Adaboost
 import datetime
 import numpy as np
 import pandas as pd
-from autots.evaluator.auto_model import ModelObject
-from autots.evaluator.auto_model import PredictionObject
+from autots.evaluator.auto_model import ModelObject, PredictionObject, seasonal_int
 from autots.tools.probabilistic import Point_to_Probability
 
 
@@ -142,10 +141,14 @@ def retrieve_regressor(regression_model: dict =
         return regr
     elif regression_model['model'] == 'MLP':
         from sklearn.neural_network import MLPRegressor
-        regr = MLPRegressor(hidden_layer_sizes=(25, 15, 25),
-                            verbose=verbose_bool, max_iter=250,
-                            activation='tanh', solver='lbfgs',
-                            random_state=random_seed)
+        regr = MLPRegressor(
+            hidden_layer_sizes=regression_model["model_params"]['hidden_layer_sizes'],
+            max_iter=regression_model["model_params"]['max_iter'],
+            activation=regression_model["model_params"]['activation'],
+            solver=regression_model["model_params"]['solver'],
+            early_stopping=regression_model["model_params"]['early_stopping'],
+            learning_rate_init=regression_model["model_params"]['learning_rate_init'],
+            random_state=random_seed, verbose=verbose_bool)
         return regr
     elif regression_model['model'] == 'KNN':
         from sklearn.multioutput import MultiOutputRegressor
@@ -157,7 +160,8 @@ def retrieve_regressor(regression_model: dict =
         from sklearn.ensemble import AdaBoostRegressor
         if regression_model["model_params"]['base_estimator'] == 'SVR':
             from sklearn.svm import LinearSVR
-            svc = LinearSVR(verbose = verbose, random_state = random_seed)
+            svc = LinearSVR(verbose = verbose, random_state = random_seed,
+                            max_iter=1500)
             regr = MultiOutputRegressor(AdaBoostRegressor(
                 base_estimator=svc,
                 n_estimators=regression_model["model_params"]['n_estimators'],
@@ -218,12 +222,12 @@ def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                                               'Adaboost', 'SVM', 'BayesianRidge',
                                               'xgboost'],
                               model_probs: list = [0.1, 0.1,
-                                                  0.02, 0.2, 0.02,
-                                                  0.3, 0.025, 0.035,
-                                                  0.2]):
+                                                  0.12, 0.2, 0.07,
+                                                  0.2, 0.025, 0.035,
+                                                  0.15]):
     """Generate new parameters for input to regressor."""
     model = np.random.choice(a=models, size=1, p=model_probs).item()
-    if model in ['xgboost', 'Adaboost', 'DecisionTree']:
+    if model in ['xgboost', 'Adaboost', 'DecisionTree', 'MLP']:
         if model == 'Adaboost':
             param_dict = {"model": 'Adaboost',
                     "model_params": {
@@ -261,6 +265,34 @@ def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                         "subsample": np.random.choice([1, 0.7, 0.5],
                                                       p=[0.9, 0.05, 0.05],
                                                       size=1).item()
+                        }}
+        elif model == 'MLP':
+            solver = np.random.choice(['lbfgs', 'sgd', 'adam'],
+                                      p=[0.5, 0.1, 0.4], size=1).item()
+            if solver in ['sgd', 'adam']:
+                early_stopping = np.random.choice([True, False], size=1).item()
+                learning_rate_init = np.random.choice([0.01, 0.001, 0.0001, 0.00001],
+                                                      p=[0.1, 0.7, 0.1, 0.1],
+                                                      size=1).item()
+            else:
+                early_stopping = False
+                learning_rate_init = 0.001
+            param_dict = {"model": 'MLP',
+                    "model_params": {
+                        "hidden_layer_sizes": np.random.choice(
+                            [(100,), (25, 15, 25), (50, 25, 50), (25, 50, 25)],
+                            p=[0.1, 0.5, 0.3, 0.1],
+                            size=1).item(),
+                        "max_iter": np.random.choice([250, 500, 1000],
+                                                     p=[0.89, 0.1, 0.01],
+                                                     size=1).item(),
+                        "activation": np.random.choice(['identity', 'logistic',
+                                                        'tanh', 'relu'],
+                                                       p=[0.05, 0.05, 0.6, 0.3],
+                                                       size=1).item(),
+                        "solver": solver,
+                        "early_stopping": early_stopping,
+                        "learning_rate_init": learning_rate_init
                         }}
         else:
             min_samples = np.random.choice([1, 2, 0.05],
@@ -471,55 +503,66 @@ class RollingRegression(ModelObject):
         if just_point_forecast:
             return forecast
         else:
-            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, forecast, prediction_interval = self.prediction_interval)
-            
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df_train, forecast,
+                prediction_interval=self.prediction_interval)
+
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name,
+            prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = forecast.index,
-                                          forecast_columns = forecast.columns,
+                                          forecast_index=forecast.index,
+                                          forecast_columns=forecast.columns,
                                           lower_forecast=lower_forecast,
-                                          forecast=forecast, 
+                                          forecast=forecast,
                                           upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
-                                          fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params())
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
             return prediction
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         model_choice = generate_regressor_params()
-        mean_rolling_periods_choice = np.random.choice(a=[None, 2, 5, 7,
-                                                          10, 30],
-                                                       size=1,
-                                                       p=[0.1, 0.1, 0.2, 0.2,
-                                                          0.2, 0.2]).item()
+        mean_rolling_periods_choice = np.random.choice(
+            a=[None, 5, 7, 12, 30], size=1,
+            p=[0.2, 0.2, 0.2, 0.2, 0.2]).item()
         if mean_rolling_periods_choice is not None:
-            macd_periods_choice = np.random.choice(a=[None, 5, 7, 10, 30],
-                                                   size=1,
-                                                   p=[0.8, 0.05, 0.05, 0.05, 0.05]).item()
+            macd_periods_choice = seasonal_int()
             if macd_periods_choice == mean_rolling_periods_choice:
                 macd_periods_choice = mean_rolling_periods_choice + 10
         else:
             macd_periods_choice = None
-        std_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
-        max_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
-        min_rolling_periods_choice = np.random.choice(a = [None, 2, 5, 7, 10, 30], size = 1, p = [0.1, 0.1, 0.2, 0.2, 0.2, 0.2]).item()
-        lag_periods_choice = np.random.choice(a = [None, 2, 6, 11, 30], size = 1, p = [0.2, 0.2, 0.2, 0.2, 0.2]).item()
-        ewm_choice = np.random.choice(a=[None, 0.2, 0.5, 0.8], size = 1, p = [0.25, 0.25, 0.25, 0.25]).item()
-        abs_energy_choice = np.random.choice(a=[True,False], size = 1, p = [0.3, 0.7]).item()
-        rolling_autocorr_periods_choice = np.random.choice(a = [None, 2, 6, 11, 30], size = 1, p = [0.8, 0.05, 0.05, 0.05, 0.05]).item()
+        std_rolling_periods_choice = np.random.choice(
+            a=[None, 5, 7, 10, 30], size=1,
+            p=[0.2, 0.2, 0.2, 0.2, 0.2]).item()
+        max_rolling_periods_choice = np.random.choice(a=[None, seasonal_int()],
+                                                      size=1,
+                                                      p=[0.2, 0.8]).item()
+        min_rolling_periods_choice = np.random.choice(a=[None, seasonal_int()],
+                                                      size=1,
+                                                      p=[0.2, 0.8]).item()
+        lag_periods_choice = seasonal_int() - 1
+        lag_periods_choice = 2 if lag_periods_choice < 2 else lag_periods_choice
+        ewm_choice = np.random.choice(a=[None, 0.2, 0.5, 0.8], size=1,
+                                      p=[0.5, 0.15, 0.15, 0.2]).item()
+        abs_energy_choice = np.random.choice(a=[True, False], size=1,
+                                             p=[0.3, 0.7]).item()
+        rolling_autocorr_periods_choice = np.random.choice(
+            a=[None, 2, 7, 12, 30], size=1,
+            p=[0.8, 0.05, 0.05, 0.05, 0.05]).item()
         add_date_part_choice = np.random.choice(a=[None, 'simple', 'expanded'],
                                                 size=1,
-                                                p=[0.4, 0.2, 0.4]).item()
-        holiday_choice = np.random.choice(a=[True,False], size = 1, p = [0.3, 0.7]).item()
-        polynomial_degree_choice = np.random.choice(a=[None,2], size = 1, p = [0.8, 0.2]).item()
-        x_transform_choice = np.random.choice(a=[None, 'FastICA',
-                                                 'Nystroem', 'RmZeroVariance'],
-                                              size=1, p=[0.7, 0.05,
-                                                         0.05, 0.2]).item()
-        regression_choice = np.random.choice(a=[None,'User'], size = 1, p = [0.7, 0.3]).item()
+                                                p=[0.6, 0.2, 0.2]).item()
+        holiday_choice = np.random.choice(a=[True, False], size=1,
+                                          p=[0.2, 0.8]).item()
+        polynomial_degree_choice = np.random.choice(a=[None, 2], size=1,
+                                                    p=[0.95, 0.05]).item()
+        x_transform_choice = np.random.choice(
+            a=[None, 'FastICA', 'Nystroem', 'RmZeroVariance'], size=1,
+            p=[0.7, 0.05, 0.05, 0.2]).item()
+        regression_choice = np.random.choice(a=[None, 'User'], size=1,
+                                             p=[0.7, 0.3]).item()
         parameter_dict = {
                         'regression_model': model_choice,
                         'holiday': holiday_choice,

@@ -46,7 +46,7 @@ class AutoTS(object):
         model_list (list): list of names of model objects to use
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation
-        max_per_model_class (int): of the models_to_validate and for new generations, what is the maximum to pass from any one model class/family.
+        max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
         validation_method (str): 'even' or 'backwards' where backwards is better for shorter training sets
         per_timestamp_errors (bool): whether to make available a list of errors by series * timestamps. Forced to True with Ensemble == True.
         per_series_errors (bool): whether to make available SMAPE/SME per series. Forced to True if Ensemble == True.
@@ -154,7 +154,7 @@ class AutoTS(object):
                                'UnobservedComponents', 'VARMAX', 'VECM',
                                'DynamicFactor', 'TSFreshRegressor',
                                'MotifSimulation']
-        
+
         # generate template to begin with
         if initial_template.lower() == 'random':
             self.initial_template = RandomTemplate(50,
@@ -312,23 +312,24 @@ class AutoTS(object):
         self.initial_template = unpack_ensemble_models(
             self.initial_template, template_cols, keep_ensemble=False)
         submitted_parameters = self.initial_template.copy()
-        template_result = TemplateWizard(self.initial_template, df_train,
-                                         df_test, current_weights,
-                                         model_count=model_count,
-                                         ensemble=ensemble, 
-                                         forecast_length=forecast_length,
-                                         frequency=frequency, 
-                                          prediction_interval=prediction_interval, 
-                                          no_negatives=no_negatives,
-                                          preord_regressor_train=preord_regressor_train,
-                                          preord_regressor_forecast=preord_regressor_test, 
-                                          holiday_country=holiday_country,
-                                          startTimeStamps=self.startTimeStamps,
-                                          per_timestamp_errors=self.per_timestamp_errors,
-                                          per_series_errors=self.per_series_errors,
-                                          template_cols=template_cols,
-                                          random_seed=random_seed,
-                                          verbose=verbose)
+        template_result = TemplateWizard(
+            self.initial_template, df_train,
+            df_test, current_weights,
+            model_count=model_count,
+            ensemble=ensemble,
+            forecast_length=forecast_length,
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            no_negatives=no_negatives,
+            preord_regressor_train=preord_regressor_train,
+            preord_regressor_forecast=preord_regressor_test,
+            holiday_country=holiday_country,
+            startTimeStamps=self.startTimeStamps,
+            per_timestamp_errors=self.per_timestamp_errors,
+            per_series_errors=self.per_series_errors,
+            template_cols=template_cols,
+            random_seed=random_seed,
+            verbose=verbose)
         model_count = template_result.model_count
 
         # capture the data from the lower level results
@@ -360,16 +361,18 @@ class AutoTS(object):
                                               sort_column="Score",
                                               sort_ascending=True,
                                               max_results=40,
-                                              max_per_model_class=self.max_per_model_class,
+                                              max_per_model_class=5,
                                               top_n=20,
                                               template_cols=template_cols)
-            submitted_parameters = pd.concat([submitted_parameters, new_template], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
-            
+            submitted_parameters = pd.concat(
+                [submitted_parameters, new_template],
+                axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+
             template_result = TemplateWizard(new_template, df_train, df_test,
                                              current_weights,
-                                             model_count = model_count,
-                                             ensemble = ensemble,
-                                             forecast_length = forecast_length,
+                                             model_count=model_count,
+                                             ensemble=ensemble,
+                                             forecast_length=forecast_length,
                                              frequency=frequency,
                                              prediction_interval=prediction_interval,
                                              no_negatives=no_negatives,
@@ -379,9 +382,9 @@ class AutoTS(object):
                                              startTimeStamps=profile_df.loc['FirstDate'],
                                              template_cols=template_cols,
                                              per_timestamp_errors=self.per_timestamp_errors,
-                                             per_series_errors = self.per_series_errors,
-                                             random_seed = random_seed,
-                                             verbose = verbose)
+                                             per_series_errors=self.per_series_errors,
+                                             random_seed=random_seed,
+                                             verbose=verbose)
             model_count = template_result.model_count
             
             # capture results from lower-level template run
@@ -476,8 +479,6 @@ class AutoTS(object):
         validation_template = validation_template[self.template_cols]
         if not ensemble:
             validation_template = validation_template[validation_template['Ensemble'] == 0]
-        
-        self.validation_template = validation_template
 
         # run validations
         """
@@ -717,7 +718,7 @@ def fake_regressor(df_long, forecast_length: int = 14,
                        drop_data_older_than_periods = drop_data_older_than_periods, aggfunc = aggfunc,
                        drop_most_recent = drop_most_recent)
     if frequency == 'infer':
-        frequency = pd.infer_freq(df_wide.index, warn = True)
+        frequency = pd.infer_freq(df_wide.index, warn=True)
     
         
     forecast_index = pd.date_range(freq = frequency, start = df_wide.index[-1], periods = forecast_length + 1)
@@ -730,3 +731,98 @@ def fake_regressor(df_long, forecast_length: int = 14,
         preord_regressor_train = pd.DataFrame(np.random.randint(0, 100, size = (len(df_wide.index), dimensions)), index = df_wide.index)
         preord_regressor_forecast = pd.DataFrame(np.random.randint(0, 100, size = (forecast_length, dimensions)), index = forecast_index)
     return preord_regressor_train, preord_regressor_forecast
+
+
+def error_correlations(all_result, result: str = 'corr'):
+    """
+    Onehot encode AutoTS result df and return df or correlation with errors.
+
+    Args:
+        all_results (pandas.DataFrame): AutoTS model_results df
+        result (str): whether to return 'df', 'corr', 'poly corr' with errors
+    """
+    import json
+    from sklearn.preprocessing import OneHotEncoder
+
+    all_results = all_result.copy()
+    all_results = all_results.drop_duplicates()
+    all_results['ExceptionFlag'] = (~all_results['Exceptions'].isna()).astype(int)
+    all_results = all_results[all_results['ExceptionFlag'] > 0]
+    all_results = all_results.reset_index(drop=True)
+
+    trans_df = all_results['TransformationParameters'].apply(json.loads)
+    trans_df = pd.io.json.json_normalize(trans_df)  # .fillna(value='NaN')
+    trans_cols1 = trans_df.columns
+    trans_df = trans_df.astype(str).replace('nan', 'NaNZ')
+    trans_transformer = OneHotEncoder(sparse=False).fit(trans_df)
+    trans_df = pd.DataFrame(trans_transformer.transform(trans_df))
+    trans_cols = np.array([x1 + x2 for x1, x2 in zip(
+        trans_cols1, trans_transformer.categories_)])
+    trans_cols = [item for sublist in trans_cols for item in sublist]
+    trans_df.columns = trans_cols
+
+    model_df = all_results['ModelParameters'].apply(json.loads)
+    model_df = pd.io.json.json_normalize(model_df)  # .fillna(value='NaN')
+    model_cols1 = model_df.columns
+    model_df = model_df.astype(str).replace('nan', 'NaNZ')
+    model_transformer = OneHotEncoder(sparse=False).fit(model_df)
+    model_df = pd.DataFrame(model_transformer.transform(model_df))
+    model_cols = np.array([x1 + x2 for x1, x2 in zip(
+        model_cols1, model_transformer.categories_)])
+    model_cols = [item for sublist in model_cols for item in sublist]
+    model_df.columns = model_cols
+
+    modelstr_df = all_results['Model']
+    modelstr_transformer = OneHotEncoder(sparse=False).fit(
+        modelstr_df.values.reshape(-1, 1))
+    modelstr_df = pd.DataFrame(modelstr_transformer.transform(
+        modelstr_df.values.reshape(-1, 1)))
+    modelstr_df.columns = modelstr_transformer.categories_[0]
+
+    except_df = all_results['Exceptions'].copy()
+    except_df = except_df.where(except_df.duplicated(), 'UniqueError')
+    except_transformer = OneHotEncoder(sparse=False).fit(
+        except_df.values.reshape(-1, 1))
+    except_df = pd.DataFrame(except_transformer.transform(
+        except_df.values.reshape(-1, 1)))
+    except_df.columns = except_transformer.categories_[0]
+
+    test = pd.concat([except_df, all_results[['ExceptionFlag']],
+                      modelstr_df, model_df, trans_df], axis=1)
+    # test_cols = [column for column in test.columns if 'NaNZ' not in column]
+    # test = test[test_cols]
+    """
+    try:
+        from mlxtend.frequent_patterns import association_rules
+        from mlxtend.frequent_patterns import apriori
+        import re
+        freq_itemsets = apriori(test.drop('ExceptionFlag', axis=1),
+                                min_support=0.3, use_colnames=True)
+        rules = association_rules(freq_itemsets)
+        err_rules = pd.DataFrame()
+        for err in except_df.columns:
+            err = re.sub('[^a-zA-Z0-9\s]', '', err)
+            edf = rules[
+                rules['consequents'].astype(
+                    str).str.replace('[^a-zA-Z0-9\s]', '').str.contains(err)]
+            err_rules = pd.concat([err_rules, edf],
+                                     axis=0, ignore_index=True)
+        err_rules = err_rules.drop_duplicates()
+    except Exception as e:
+        print(repr(e))
+    """
+    if result == 'corr':
+        test_corr = test.corr()[except_df.columns]
+        return test_corr
+    if result == 'poly corr':
+        from sklearn.preprocessing import PolynomialFeatures
+        poly = PolynomialFeatures(interaction_only=True, include_bias=False)
+        poly = poly.fit(test)
+        col_names = poly.get_feature_names(input_features=test.columns)
+        test = pd.DataFrame(poly.transform(test), columns=col_names)
+        test_corr = test.corr()[except_df.columns]
+        return test_corr
+    elif result == 'df':
+        return test
+    else:
+        raise ValueError("arg 'result' not recognized")

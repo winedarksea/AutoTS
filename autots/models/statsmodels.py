@@ -4,7 +4,7 @@ Statsmodels based Models
 import datetime
 import numpy as np
 import pandas as pd
-from autots.evaluator.auto_model import ModelObject
+from autots.evaluator.auto_model import ModelObject, seasonal_int
 from autots.evaluator.auto_model import PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 
@@ -18,7 +18,8 @@ class GLS(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
 
     """
-    def __init__(self, name: str = "GLS", frequency: str = 'infer', 
+
+    def __init__(self, name: str = "GLS", frequency: str = 'infer',
                  prediction_interval: float = 0.9, holiday_country: str = 'US',
                  random_seed: int = 2020):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
@@ -58,16 +59,16 @@ class GLS(ModelObject):
             upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df, prediction_interval = self.prediction_interval)
             
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name,
+            prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = df.index,
-                                          forecast_columns = df.columns,
+                                          forecast_index=df.index,
+                                          forecast_columns=df.columns,
                                           lower_forecast=lower_forecast,
                                           forecast=df, upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
-                                          fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params())
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
             
             return prediction
         
@@ -97,9 +98,9 @@ class GLM(ModelObject):
                  regression_type: str = None,
                  family = 'Gaussian', constant: bool = False, verbose: int = 1):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             regression_type = regression_type,
-                             holiday_country = holiday_country, random_seed = random_seed,
-                             verbose = verbose)
+                             regression_type=regression_type,
+                             holiday_country=holiday_country, random_seed=random_seed,
+                             verbose=verbose)
         self.family = family
         self.constant = constant
         
@@ -189,16 +190,16 @@ class GLM(ModelObject):
             upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df_forecast, prediction_interval = self.prediction_interval)
             
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name,
+            prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = df_forecast.index,
-                                          forecast_columns = df_forecast.columns,
+                                          forecast_index=df_forecast.index,
+                                          forecast_columns=df_forecast.columns,
                                           lower_forecast=lower_forecast,
                                           forecast=df_forecast, upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
-                                          fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params())
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
             
             return prediction
         
@@ -236,21 +237,27 @@ class ETS(ModelObject):
 
     """
     def __init__(self, name: str = "ETS", frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, damped: bool = False, 
-                 trend: str = None, seasonal: str=None, seasonal_periods:int=None, 
-                 holiday_country: str = 'US',random_seed: int = 2020, verbose: int = 0):
+                 prediction_interval: float = 0.9, damped: bool = False,
+                 trend: str = None, seasonal: str=None,
+                 seasonal_periods:int=None, 
+                 holiday_country: str = 'US',random_seed: int = 2020,
+                 verbose: int = 0):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+                             holiday_country=holiday_country,
+                             random_seed=random_seed, verbose=verbose)
         self.damped = damped
         self.trend = trend
         self.seasonal = seasonal
-        self.seasonal_periods = seasonal_periods
+        if seasonal not in ["additive", "multiplicative"]:
+            self.seasonal_periods = None
+        else:
+            self.seasonal_periods = abs(int(seasonal_periods))
         
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
-            df (pandas.DataFrame): Datetime Indexed 
+            df (pandas.DataFrame): Datetime Indexed
         """
         df = self.basic_profile(df)
         
@@ -286,61 +293,59 @@ class ETS(ModelObject):
             return forecast
         else:
             upper_forecast, lower_forecast = Point_to_Probability(self.df_train, forecast, prediction_interval = self.prediction_interval)
-            
+
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name,
+            prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = test_index,
-                                          forecast_columns = forecast.columns,
+                                          forecast_index=test_index,
+                                          forecast_columns=forecast.columns,
                                           lower_forecast=lower_forecast,
-                                          forecast=forecast, 
+                                          forecast=forecast,
                                           upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
-                                          fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params())
-            
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
+
             return prediction
-        
+
     def get_new_params(self, method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
-        """
+        """Return dict of new parameters for parameter tuning."""
         trend_list = ["additive", "multiplicative", None]
         trend_probability = [0.2, 0.2, 0.6]
-        trend_choice = np.random.choice(a = trend_list, size = 1, p = trend_probability).item()
+        trend_choice = np.random.choice(a=trend_list, size=1,
+                                        p=trend_probability).item()
         if trend_choice in ["additive", "multiplicative"]:
-            damped_choice = np.random.choice([True, False], size = 1).item()
+            damped_choice = np.random.choice([True, False], size=1).item()
         else:
             damped_choice = False
         seasonal_list = ["additive", "multiplicative", None]
         seasonal_probability = [0.2, 0.2, 0.6]
-        seasonal_choice = np.random.choice(a = seasonal_list, size = 1, p = seasonal_probability).item()
+        seasonal_choice = np.random.choice(a=seasonal_list, size=1,
+                                           p=seasonal_probability).item()
         if seasonal_choice in ["additive", "multiplicative"]:
-            seasonal_period_choice = np.random.choice(a=['random_int', 2, 7, 12, 24, 28, 60, 364], size = 1, p = [0.15, 0.05, 0.2, 0.1, 0.1, 0.2, 0.1, 0.1]).item()
-            if seasonal_period_choice == 'random_int':
-                seasonal_period_choice = np.random.randint(2, 100, size = 1).item()
+            seasonal_period_choice = seasonal_int()
         else:
             seasonal_period_choice = None
         parameter_dict = {
-                        'damped' : damped_choice,
+                        'damped': damped_choice,
                         'trend': trend_choice,
                         'seasonal': seasonal_choice,
                         'seasonal_periods': seasonal_period_choice
                         }
         return parameter_dict
-    
+
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         parameter_dict = {
-                        'damped' : self.damped,
+                        'damped': self.damped,
                         'trend': self.trend,
                         'seasonal': self.seasonal,
                         'seasonal_periods': self.seasonal_periods
                         }
         return parameter_dict
 
-        
+
 class ARIMA(ModelObject):
     """ARIMA from Statsmodels
     
@@ -350,7 +355,7 @@ class ARIMA(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
         p (int): is the number of autoregressive steps,
         d (int): is the number of differences needed for stationarity
-        q (int): is the number of lagged forecast errors in the prediction . 
+        q (int): is the number of lagged forecast errors in the prediction.
         regression_type (str): type of regression (None, 'User', or 'Holiday')
 
     """
@@ -359,16 +364,16 @@ class ARIMA(ModelObject):
                  q:int = 0, regression_type: str = None, holiday_country: str = 'US',
                  random_seed: int = 2020, verbose: int = 0):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             regression_type = regression_type, 
-                             holiday_country = holiday_country, random_seed = random_seed,
-                             verbose = verbose)
+                             regression_type=regression_type, 
+                             holiday_country=holiday_country, random_seed=random_seed,
+                             verbose=verbose)
         self.p = p
         self.d = d
         self.q = q
         self.order = (p, d, q)
         
     def fit(self, df, preord_regressor = []):
-        """Train algorithm given data supplied 
+        """Train algorithm given data supplied .
         
         Args:
             df (pandas.DataFrame): Datetime Indexed 
@@ -378,7 +383,7 @@ class ARIMA(ModelObject):
             from autots.tools.holiday import holiday_flag
             self.regressor_train = holiday_flag(df.index, country = self.holiday_country).values
         else:
-            if self.regression_type != None:
+            if self.regression_type is not None:
                 if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                     self.regression_type = None
                 else:
@@ -399,7 +404,7 @@ class ARIMA(ModelObject):
         Returns:
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
-        """        
+        """
         predictStartTime = datetime.datetime.now()
         from statsmodels.tsa.arima_model import ARIMA
         test_index = self.create_forecast_index(forecast_length=forecast_length)
@@ -434,49 +439,53 @@ class ARIMA(ModelObject):
         
         if just_point_forecast:
             return forecast
-        else:
-            # upper_forecast, lower_forecast = Point_to_Probability(self.df_train, forecast, prediction_interval = self.prediction_interval)
-            
+        else:  
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name,
+            prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = test_index,
-                                          forecast_columns = forecast.columns,
+                                          forecast_index=test_index,
+                                          forecast_columns=forecast.columns,
                                           lower_forecast=lower_forecast,
-                                          forecast=forecast, 
+                                          forecast=forecast,
                                           upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
-                                          fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params())
-            
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
+
             return prediction
-        
+
     def get_new_params(self, method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
-        
-        large p,d,q can be very slow (a p of 30 can take hours, whereas 5 takes seconds)
+        """Return dict of new parameters for parameter tuning.
+
+        large p,d,q can be very slow (a p of 30 can take hours)
         """
-        p_choice = np.random.choice(a = [0,1,2,3,4,5,7,12], size = 1, p = [0.2,0.2,0.1,0.1,0.1,0.1,0.1,0.1]).item()
-        d_choice = np.random.choice(a = [0,1,2,3], size = 1, p = [0.4, 0.3, 0.2, 0.1]).item()
-        q_choice = np.random.choice(a = [0,1,2,3,4,5,7,12], size = 1, p = [0.2,0.2,0.1,0.1,0.1,0.1,0.1,0.1]).item()
+        p_choice = np.random.choice(a=[0, 1, 2, 3, 4, 5, 7, 12],
+                                    size=1,
+                                    p=[0.2, 0.2, 0.1, 0.1,
+                                       0.1, 0.1, 0.1, 0.1]).item()
+        d_choice = np.random.choice(a=[0, 1, 2, 3], size=1,
+                                    p=[0.4, 0.3, 0.2, 0.1]).item()
+        q_choice = np.random.choice(a=[0, 1, 2, 3, 4, 5, 7, 12], size=1,
+                                    p=[0.2, 0.2, 0.1, 0.1,
+                                       0.1, 0.1, 0.1, 0.1]).item()
         regression_list = [None, 'User', 'Holiday']
         regression_probability = [0.4, 0.4, 0.2]
-        regression_choice = np.random.choice(a = regression_list, size = 1, p = regression_probability).item()
+        regression_choice = np.random.choice(a=regression_list, size=1,
+                                             p=regression_probability).item()
 
         parameter_dict = {
-                        'p' : p_choice,
+                        'p': p_choice,
                         'd': d_choice,
                         'q': q_choice,
                         'regression_type': regression_choice
                         }
         return parameter_dict
-    
+
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         parameter_dict = {
-                        'p' : self.p,
+                        'p': self.p,
                         'd': self.d,
                         'q': self.q,
                         'regression_type': self.regression_type
@@ -485,8 +494,8 @@ class ARIMA(ModelObject):
 
 
 class UnobservedComponents(ModelObject):
-    """UnobservedComponents from Statsmodels
-    
+    """UnobservedComponents from Statsmodels.
+
     Args:
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
@@ -495,18 +504,22 @@ class UnobservedComponents(ModelObject):
         regression_type (str): type of regression (None, 'User', or 'Holiday')
 
     """
-    def __init__(self, name: str = "UnobservedComponents", frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, 
+
+    def __init__(self, name: str = "UnobservedComponents",
+                 frequency: str = 'infer',
+                 prediction_interval: float = 0.9,
                  regression_type: str = None, holiday_country: str = 'US',
                  random_seed: int = 2020, verbose: int = 0,
-                 level: bool = False, trend: bool = False, 
+                 level: bool = False, trend: bool = False,
                  cycle: bool = False, damped_cycle: bool = False,
                  irregular: bool = False, stochastic_cycle: bool = False,
-                 stochastic_trend: bool = False, stochastic_level: bool = False):
-        ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             regression_type = regression_type, 
-                             holiday_country = holiday_country, random_seed = random_seed,
-                             verbose = verbose)
+                 stochastic_trend: bool = False,
+                 stochastic_level: bool = False):
+        ModelObject.__init__(self, name, frequency, prediction_interval,
+                             regression_type=regression_type,
+                             holiday_country=holiday_country,
+                             random_seed=random_seed,
+                             verbose=verbose)
         self.level = level
         self.trend = trend
         self.cycle = cycle
@@ -527,7 +540,8 @@ class UnobservedComponents(ModelObject):
         
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
-            self.regressor_train = holiday_flag(df.index, country = self.holiday_country).values
+            self.regressor_train = holiday_flag(
+                df.index,country=self.holiday_country).values
         else:
             if self.regression_type != None:
                 """
@@ -541,7 +555,8 @@ class UnobservedComponents(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int,
+                preord_regressor = [], just_point_forecast: bool = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -566,18 +581,18 @@ class UnobservedComponents(ModelObject):
             current_series = self.df_train[series].copy()
             try:
                 if (self.regression_type == "User") or (self.regression_type == "Holiday"):
-                    maModel = UnobservedComponents(current_series, freq = self.frequency, exog = self.regressor_train, 
-                                                   level = self.level, trend = self.trend,cycle=self.cycle, 
+                    maModel = UnobservedComponents(current_series, freq=self.frequency, exog=self.regressor_train, 
+                                                   level=self.level, trend=self.trend,cycle=self.cycle, 
                                                    damped_cycle=self.damped_cycle,irregular=self.irregular,
                                                    stochastic_cycle=self.stochastic_cycle, stochastic_level=self.stochastic_level,
-                                                   stochastic_trend = self.stochastic_trend).fit(disp = self.verbose_bool)
+                                                   stochastic_trend=self.stochastic_trend).fit(disp=self.verbose_bool)
                     maPred = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
                 else:
-                    maModel = UnobservedComponents(current_series, freq = self.frequency, 
-                                                   level = self.level, trend = self.trend,cycle=self.cycle, 
+                    maModel = UnobservedComponents(current_series, freq=self.frequency, 
+                                                   level=self.level, trend=self.trend,cycle=self.cycle, 
                                                    damped_cycle=self.damped_cycle,irregular=self.irregular,
                                                    stochastic_cycle=self.stochastic_cycle, stochastic_level=self.stochastic_level,
-                                                   stochastic_trend = self.stochastic_trend).fit(disp = self.verbose_bool)
+                                                   stochastic_trend=self.stochastic_trend).fit(disp=self.verbose_bool)
                     maPred = maModel.predict(start=test_index[0], end=test_index[-1])
             except Exception:
                 maPred = pd.Series((np.zeros((forecast_length,))), index = test_index)
@@ -590,17 +605,17 @@ class UnobservedComponents(ModelObject):
             upper_forecast, lower_forecast = Point_to_Probability(self.df_train, forecast, prediction_interval = self.prediction_interval)
             
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name,
+            prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = test_index,
-                                          forecast_columns = forecast.columns,
+                                          forecast_index=test_index,
+                                          forecast_columns=forecast.columns,
                                           lower_forecast=lower_forecast,
                                           forecast=forecast, 
                                           upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
-                                          fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params())
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
             
             return prediction
         
@@ -672,10 +687,11 @@ class DynamicFactor(ModelObject):
                  regression_type: str = None, holiday_country: str = 'US',
                  random_seed: int = 2020, verbose: int = 0,
                  k_factors: int = 1, factor_order: int = 0):
-        ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             regression_type = regression_type, 
-                             holiday_country = holiday_country, random_seed = random_seed,
-                             verbose = verbose)
+        ModelObject.__init__(self, name, frequency, prediction_interval,
+                             regression_type=regression_type,
+                             holiday_country=holiday_country,
+                             random_seed=random_seed,
+                             verbose=verbose)
         self.k_factors = k_factors
         self.factor_order = factor_order
         
@@ -726,61 +742,94 @@ class DynamicFactor(ModelObject):
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
             preord_regressor = holiday_flag(test_index, country = self.holiday_country).values
-        if self.regression_type != None:
+        if self.regression_type is not None:
             assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"     
-        
-        if (self.regression_type == "User") or (self.regression_type == "Holiday"):
-            maModel = DynamicFactor(self.df_train, freq = self.frequency, exog = self.regressor_train, 
-                                           k_factors = self.k_factors, factor_order=self.factor_order).fit(disp = self.verbose, maxiter=100)
-            forecast = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor.values.reshape(-1,1))
+
+        if (self.regression_type in ["User", "Holiday"]):
+            maModel = DynamicFactor(self.df_train, freq=self.frequency,
+                                    exog=self.regressor_train,
+                                    k_factors=self.k_factors,
+                                    factor_order=self.factor_order
+                                    ).fit(disp=self.verbose, maxiter=100)
+            if preord_regressor.values.ndim == 1:
+                exog = preord_regressor.values.reshape(-1, 1)
+            else:
+                exog = preord_regressor.values
+            forecast = maModel.predict(start=test_index[0],
+                                       end=test_index[-1],
+                                       exog=exog)
         else:
-            maModel = DynamicFactor(self.df_train, freq = self.frequency, 
-                                           k_factors = self.k_factors, factor_order=self.factor_order).fit(disp = self.verbose, maxiter=100)
+            maModel = DynamicFactor(
+                self.df_train, freq=self.frequency,
+                k_factors=self.k_factors, factor_order=self.factor_order
+                ).fit(disp=self.verbose, maxiter=100)
             forecast = maModel.predict(start=test_index[0], end=test_index[-1])
-        
+
         if just_point_forecast:
             return forecast
         else:
-            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, forecast, prediction_interval = self.prediction_interval)
-            
+            """
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df_train, forecast,
+                prediction_interval=self.prediction_interval)
+            """
+            # outer forecasts
+            alpha = 1 - self.prediction_interval
+            # predict_results = maModel.get_prediction(start='2020',end='2021')
+            if (self.regression_type in ["User", "Holiday"]):
+                outer_forecasts = maModel.get_forecast(steps=forecast_length,
+                                                       exog=exog)
+            else:
+                outer_forecasts = maModel.get_forecast(steps=forecast_length)
+            outer_forecasts_df = outer_forecasts.conf_int(alpha=alpha)
+            df_size = int(outer_forecasts_df.shape[1]/2)
+            lower_df = outer_forecasts_df.iloc[:, 0:df_size]
+            lower_df = lower_df.rename(columns=lambda x: x[6:])
+            upper_df = outer_forecasts_df.iloc[:, df_size:]
+            upper_df = upper_df.rename(columns=lambda x: x[6:])
+
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name,
+            prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = test_index,
-                                          forecast_columns = forecast.columns,
-                                          lower_forecast=lower_forecast,
+                                          forecast_index=test_index,
+                                          forecast_columns=forecast.columns,
+                                          lower_forecast=lower_df,
                                           forecast=forecast, 
-                                          upper_forecast=upper_forecast,
+                                          upper_forecast=upper_df,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
-                                          fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params())
-            
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
+
             return prediction
-        
+
     def get_new_params(self, method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
-        """
-        k_factors_choice = np.random.choice(a = [0,1,2,3,10], size = 1, p = [0.1, 0.4, 0.2, 0.2, 0.1]).item()
-        factor_order_choice = np.random.choice(a = [0,1,2,3], size = 1, p = [0.4, 0.3, 0.2, 0.1]).item()
-        
+        """Return dict of new parameters for parameter tuning."""
+        k_factors_choice = np.random.choice(a=[0, 1, 2, 3, 10],
+                                            size=1,
+                                            p=[0.1, 0.4, 0.2, 0.2, 0.1]).item()
+        factor_order_choice = np.random.choice(a=[0, 1, 2, 3],
+                                               size=1,
+                                               p=[0.4, 0.3, 0.2, 0.1]).item()
+
         regression_list = [None, 'User', 'Holiday']
         regression_probability = [0.6, 0.2, 0.2]
-        regression_choice = np.random.choice(a = regression_list, size = 1, p = regression_probability).item()
+        regression_choice = np.random.choice(a=regression_list,
+                                             size=1,
+                                             p=regression_probability).item()
 
         parameter_dict = {
-                        'k_factors' : k_factors_choice, 
-                        'factor_order' : factor_order_choice,
+                        'k_factors': k_factors_choice,
+                        'factor_order': factor_order_choice,
                         'regression_type': regression_choice
                         }
         return parameter_dict
-    
+
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         parameter_dict = {
-                        'k_factors' : self.k_factors, 
-                        'factor_order' : self.factor_order,
+                        'k_factors': self.k_factors,
+                        'factor_order': self.factor_order,
                         'regression_type': self.regression_type
                         }
         return parameter_dict
@@ -797,41 +846,45 @@ class VECM(ModelObject):
         regression_type (str): type of regression (None, 'User', or 'Holiday')
 
     """
-    def __init__(self, name: str = "VECM", frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, 
+    
+    def __init__(self, name: str = "VECM", frequency: str = 'infer',
+                 prediction_interval: float = 0.9,
                  regression_type: str = None, holiday_country: str = 'US',
                  random_seed: int = 2020, verbose: int = 0,
                  deterministic: str = 'nc', k_ar_diff: int = 1):
-        ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             regression_type = regression_type, 
-                             holiday_country = holiday_country, random_seed = random_seed,
-                             verbose = verbose)
+        ModelObject.__init__(self, name, frequency, prediction_interval,
+                             regression_type=regression_type,
+                             holiday_country=holiday_country,
+                             random_seed=random_seed,
+                             verbose=verbose)
         self.deterministic = deterministic
         self.k_ar_diff = k_ar_diff
         
     def fit(self, df, preord_regressor = []):
-        """Train algorithm given data supplied 
-        
+        """Train algorithm given data supplied.
+
         Args:
-            df (pandas.DataFrame): Datetime Indexed 
+            df (pandas.DataFrame): Datetime Indexed
         """
         df = self.basic_profile(df)
         self.df_train = df
-        
+
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
-            self.regressor_train = holiday_flag(df.index, country = self.holiday_country).values
+            self.regressor_train = holiday_flag(
+                df.index, country=self.holiday_country).values
         else:
-            if self.regression_type != None:
+            if self.regression_type is not None:
                 if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                     self.regression_type = None
                 else:
                     self.regressor_train = preord_regressor
-        
+
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int,
+                preord_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -849,8 +902,8 @@ class VECM(ModelObject):
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
             preord_regressor = holiday_flag(test_index, country = self.holiday_country).values
-        if self.regression_type != None:
-            assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"     
+        if self.regression_type is not None:
+            assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"
         
         if (self.regression_type == "User") or (self.regression_type == "Holiday"):
             maModel = VECM(self.df_train, freq = self.frequency, exog = self.regressor_train, 
@@ -858,45 +911,52 @@ class VECM(ModelObject):
             # forecast = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
             forecast = maModel.predict(steps = len(test_index), exog = preord_regressor)
         else:
-            maModel = VECM(self.df_train, freq = self.frequency, 
-                                           deterministic=self.deterministic,k_ar_diff=self.k_ar_diff).fit()
-            # forecast = maModel.predict(start=test_index[0], end=test_index[-1])
-            forecast = maModel.predict(steps = len(test_index))
-        forecast = pd.DataFrame(forecast, index = test_index, columns = self.column_names)
-        
+            maModel = VECM(self.df_train, freq=self.frequency,
+                           deterministic=self.deterministic,
+                           k_ar_diff=self.k_ar_diff).fit()
+            forecast = maModel.predict(steps=len(test_index))
+        forecast = pd.DataFrame(forecast,
+                                index=test_index,
+                                columns=self.column_names)
+
         if just_point_forecast:
             return forecast
         else:
-            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, forecast, prediction_interval = self.prediction_interval)
-            
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df_train, forecast,
+                prediction_interval=self.prediction_interval)
+
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name,
+            prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = test_index,
-                                          forecast_columns = forecast.columns,
+                                          forecast_index=test_index,
+                                          forecast_columns=forecast.columns,
                                           lower_forecast=lower_forecast,
-                                          forecast=forecast, 
+                                          forecast=forecast,
                                           upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
-                                          fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params())
-            
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
+
             return prediction
-        
+
     def get_new_params(self, method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
-        """
-        deterministic_choice = np.random.choice(a = ["nc", "co", "ci", "lo", "li","cili","colo"], size = 1, p = [0.4, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]).item()
-        k_ar_diff_choice = np.random.choice(a = [0,1,2,3], size = 1, p = [0.1, 0.5, 0.2, 0.2]).item()
-        
+        """Return dict of new parameters for parameter tuning."""
+        deterministic_choice = np.random.choice(
+            a=["nc", "co", "ci", "lo", "li", "cili", "colo"],
+            size=1, p=[0.4, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]).item()
+        k_ar_diff_choice = np.random.choice(a=[0, 1, 2, 3], size=1,
+                                            p=[0.1, 0.5, 0.2, 0.2]).item()
+
         regression_list = [None, 'User', 'Holiday']
-        regression_probability = [0.6, 0.2, 0.2]
-        regression_choice = np.random.choice(a = regression_list, size = 1, p = regression_probability).item()
+        regression_probability = [0.9, 0.05, 0.05]
+        regression_choice = np.random.choice(a=regression_list, size=1,
+                                             p=regression_probability).item()
 
         parameter_dict = {
-                        'deterministic' : deterministic_choice, 
-                        'k_ar_diff' : k_ar_diff_choice,
+                        'deterministic': deterministic_choice,
+                        'k_ar_diff': k_ar_diff_choice,
                         'regression_type': regression_choice
                         }
         return parameter_dict
@@ -922,15 +982,17 @@ class VARMAX(ModelObject):
 
         regression_type (str): type of regression (None, 'User', or 'Holiday')
     """
-    def __init__(self, name: str = "VARMAX", frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, 
+
+    def __init__(self, name: str = "VARMAX", frequency: str = 'infer',
+                 prediction_interval: float = 0.9,
                  regression_type: str = None, holiday_country: str = 'US',
                  random_seed: int = 2020, verbose: int = 0,
                  order: tuple = (1, 0), trend: str = 'c'):
-        ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             regression_type = regression_type, 
-                             holiday_country = holiday_country, random_seed = random_seed,
-                             verbose = verbose)
+        ModelObject.__init__(self, name, frequency, prediction_interval,
+                             regression_type=regression_type,
+                             holiday_country=holiday_country,
+                             random_seed=random_seed,
+                             verbose=verbose)
         self.order = order
         self.trend = trend
     def fit(self, df, preord_regressor = []):
@@ -947,65 +1009,79 @@ class VARMAX(ModelObject):
         return self
 
     def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
-        """Generates forecast data immediately following dates of index supplied to .fit()
+        """Generate forecast data immediately following dates of index supplied to .fit().
         
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
             regressor (numpy.Array): additional regressor, not used
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
-            
+   
         Returns:
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
-            
-        """        
+
+        """
         predictStartTime = datetime.datetime.now()
-        test_index = self.create_forecast_index(forecast_length=forecast_length)
+        test_index = self.create_forecast_index(
+            forecast_length=forecast_length)
         from statsmodels.tsa.statespace.varmax import VARMAX
 
-        maModel = VARMAX(self.df_train, freq = self.frequency, order = self.order, trend = self.trend).fit(disp = self.verbose_bool)
+        maModel = VARMAX(self.df_train, freq=self.frequency,
+                         order=self.order, trend=self.trend
+                         ).fit(disp=self.verbose_bool)
         forecast = maModel.predict(start=test_index[0], end=test_index[-1])
-        
         if just_point_forecast:
             return forecast
         else:
-            # point, lower_forecast, upper_forecast = maModel.forecast_interval(steps = self.forecast_length, alpha = 1 - self.prediction_interval)            
-            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, forecast, prediction_interval = self.prediction_interval)
+            # outer forecasts
+            alpha = 1 - self.prediction_interval
+            # predict_results = maModel.get_prediction(start='2020',end='2021')
+            outer_forecasts = maModel.get_forecast(steps=forecast_length)
+            outer_forecasts_df = outer_forecasts.conf_int(alpha=alpha)
+            df_size = int(outer_forecasts_df.shape[1]/2)
+            lower_df = outer_forecasts_df.iloc[:, 0:df_size]
+            lower_df = lower_df.rename(columns=lambda x: x[6:])
+            upper_df = outer_forecasts_df.iloc[:, df_size:]
+            upper_df = upper_df.rename(columns=lambda x: x[6:])
 
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name,
+            prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = test_index,
-                                          forecast_columns = forecast.columns,
-                                          lower_forecast=lower_forecast,
-                                          forecast=forecast, 
-                                          upper_forecast=upper_forecast,
+                                          forecast_index=test_index,
+                                          forecast_columns=forecast.columns,
+                                          lower_forecast=lower_df,
+                                          forecast=forecast,
+                                          upper_forecast=upper_df,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
-                                          fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params())
-            
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
+
             return prediction
-    
+
     def get_new_params(self, method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
-        """
-        ar_choice = np.random.choice(a = [0,1,2,7], size = 1, p = [0.1, 0.5, 0.2, 0.2]).item()
-        ma_choice = np.random.choice(a = [0,1,2], size = 1, p = [0.5, 0.3, 0.2]).item()
-        trend_choice = np.random.choice(a = ['n','c','t','ct', 'poly'], size = 1, p = [0.1, 0.5, 0.1, 0.2, 0.1]).item()
+        """Return dict of new parameters for parameter tuning."""
+        ar_choice = np.random.choice(a=[0, 1, 2, 7], size=1,
+                                     p=[0.1, 0.5, 0.2, 0.2]).item()
+        ma_choice = np.random.choice(a=[0, 1, 2], size=1,
+                                     p=[0.5, 0.3, 0.2]).item()
+        trend_choice = np.random.choice(a=['n', 'c', 't', 'ct', 'poly'],
+                                        size=1,
+                                        p=[0.1, 0.5, 0.1, 0.2, 0.1]).item()
         if trend_choice == 'poly':
-            trend_choice = [np.random.randint(0,2,1).item(), np.random.randint(0,2,1).item(),np.random.randint(0,2,1).item(),np.random.randint(0,2,1).item()]
+            trend_choice = [np.random.randint(0, 2, 1).item(),
+                            np.random.randint(0, 2, 1).item(),
+                            np.random.randint(0, 2, 1).item(),
+                            np.random.randint(0, 2, 1).item()]
         return {
-                'order':(ar_choice, ma_choice),
-                'trend':trend_choice
+                'order': (ar_choice, ma_choice),
+                'trend': trend_choice
                 }
-    
+
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         parameter_dict = {
-                'order':self.order,
-                'trend':self.trend
+                'order': self.order,
+                'trend': self.trend
                 }
         return parameter_dict
-    
