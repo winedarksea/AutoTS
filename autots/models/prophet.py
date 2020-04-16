@@ -35,18 +35,19 @@ class FBProphet(ModelObject):
         regression_type (str): type of regression (None, 'User')
 
     """
-    def __init__(self, name: str = "FBProphet", frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, 
-                 holiday: bool = False, 
+    def __init__(self, name: str = "FBProphet", frequency: str = 'infer',
+                 prediction_interval: float = 0.9,
+                 holiday: bool = False,
                  regression_type: str = None, holiday_country: str = 'US',
                  random_seed: int = 2020, verbose: int = 0):
-        ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             regression_type = regression_type, 
-                             holiday_country = holiday_country, random_seed = random_seed, verbose = verbose)
+        ModelObject.__init__(self, name, frequency, prediction_interval,
+                             regression_type=regression_type,
+                             holiday_country=holiday_country,
+                             random_seed=random_seed, verbose = verbose)
         self.holiday = holiday
         
     def fit(self, df, preord_regressor = []):
-        """Train algorithm given data supplied 
+        """Train algorithm given data supplied.
         
         Args:
             df (pandas.DataFrame): Datetime Indexed 
@@ -78,7 +79,8 @@ class FBProphet(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, preord_regressor = [],
+                just_point_forecast: bool = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -110,8 +112,8 @@ class FBProphet(ModelObject):
             if self.regression_type == 'User':
                 current_series[self.regressor_name] = self.regressor_train
             
-            m = Prophet(interval_width = self.prediction_interval)
-            if self.holiday == True:
+            m = Prophet(interval_width=self.prediction_interval)
+            if self.holiday:
                 m.add_country_holidays(country_name= self.holiday_country)
             if self.regression_type == 'User':
                 m.add_regressor(self.regressor_name)
@@ -124,11 +126,13 @@ class FBProphet(ModelObject):
                 else:
                     a = np.append(self.regressor_train, preord_regressor.values)
                 future[self.regressor_name] = a
-            fcst = m.predict(future)  
-            fcst = fcst.tail(forecast_length) # remove the backcast
-            forecast = pd.concat([forecast, fcst['yhat']], axis = 1)
-            lower_forecast = pd.concat([lower_forecast, fcst['yhat_lower']], axis = 1)
-            upper_forecast = pd.concat([upper_forecast, fcst['yhat_upper']], axis = 1)
+            fcst = m.predict(future)
+            fcst = fcst.tail(forecast_length)  # remove the backcast
+            forecast = pd.concat([forecast, fcst['yhat']], axis=1)
+            lower_forecast = pd.concat([lower_forecast,
+                                        fcst['yhat_lower']], axis=1)
+            upper_forecast = pd.concat([upper_forecast,
+                                        fcst['yhat_upper']], axis=1)
         forecast.columns = self.column_names
         forecast.index = test_index
         lower_forecast.columns = self.column_names
@@ -138,41 +142,41 @@ class FBProphet(ModelObject):
         
         if just_point_forecast:
             return forecast
-        else:           
+        else:
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name,
+            prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = forecast.index,
-                                          forecast_columns = forecast.columns,
+                                          forecast_index=forecast.index,
+                                          forecast_columns=forecast.columns,
                                           lower_forecast=lower_forecast,
-                                          forecast=forecast, 
+                                          forecast=forecast,
                                           upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
-                                          fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params())
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
             
             return prediction
         
     def get_new_params(self, method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
-        """
-        holiday_choice = np.random.choice(a = [True, False], size = 1, p = [0.5, 0.5]).item()
+        """Return dict of new parameters for parameter tuning."""
+        holiday_choice = np.random.choice(a=[True, False], size=1,
+                                          p=[0.8, 0.2]).item()
         regression_list = [None, 'User']
-        regression_probability = [0.5, 0.5]
-        regression_choice = np.random.choice(a = regression_list, size = 1, p = regression_probability).item()
+        regression_probability = [0.8, 0.2]
+        regression_choice = np.random.choice(a=regression_list, size=1,
+                                             p=regression_probability).item()
 
         parameter_dict = {
-                        'holiday' : holiday_choice,
+                        'holiday': holiday_choice,
                         'regression_type': regression_choice
                         }
         return parameter_dict
-    
+
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         parameter_dict = {
-                        'holiday' : self.holiday,
+                        'holiday': self.holiday,
                         'regression_type': self.regression_type
                         }
         return parameter_dict

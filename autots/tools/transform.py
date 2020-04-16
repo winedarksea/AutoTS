@@ -1,10 +1,12 @@
+"""Preprocessing data methods."""
 import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA
 # pylint disable=W293,E251
 
+
 def remove_outliers(df, std_threshold: float = 3):
-    """Replace outliers with np.nan
+    """Replace outliers with np.nan.
     https://stackoverflow.com/questions/23199796/detect-and-exclude-outliers-in-pandas-data-frame
 
     Args:
@@ -12,28 +14,29 @@ def remove_outliers(df, std_threshold: float = 3):
         std_threshold (float): The number of standard deviations away from mean to count as outlier.
 
     """
+
     df = df[np.abs(df - df.mean()) <= (std_threshold * df.std())]
     return df
 
 def clip_outliers(df, std_threshold: float = 3):
-    """Replace outliers above threshold with that threshold. Axis = 0
+    """Replace outliers above threshold with that threshold. Axis = 0.
     
     Args:
         df (pandas.DataFrame): DataFrame containing numeric data
         std_threshold (float): The number of standard deviations away from mean to count as outlier.
     """
-    df_std = df.std(axis = 0, skipna = True)
-    df_mean = df.mean(axis = 0, skipna = True)
+    df_std = df.std(axis=0, skipna=True)
+    df_mean = df.mean(axis=0, skipna=True)
     
     lower = df_mean - (df_std * std_threshold)
     upper = df_mean + (df_std * std_threshold)
-    df2 = df.clip(lower =  lower, upper = upper, axis = 1)
+    df2 = df.clip(lower=lower, upper=upper, axis=1)
     
     return df2
 
 def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
     """Condensed version of context_slicer with more limited options.
-    
+
     Args:
         df (pandas.DataFrame): training data frame to slice
         method (str): Option to slice dataframe
@@ -45,18 +48,26 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
     """
     if method in [None, "None"]:
         return df
-    
+
     df = df.sort_index(ascending=True)
-    
-    # organized by those most likely to occur, thus faster
+
+    if 'forecastlength' in str(method).lower():
+        len_int = int([x for x in str(method) if x.isdigit()][0])
+        return df.tail(len_int * forecast_length)
+    elif method == 'HalfMax':
+        return df.tail(int(len(df.index)/2))
+    elif str(method).isdigit():
+        return df.tail(int(method))
+    else:
+        print("Context Slicer Method not recognized")
+        return df
+    """
     if method == '2ForecastLength':
         return df.tail(2 * forecast_length)
     elif method == '6ForecastLength':
         return df.tail(6 * forecast_length)
     elif method == '12ForecastLength':
         return df.tail(12 * forecast_length)
-    elif method == 'HalfMax':
-        return df.tail(int(len(df.index)/2))
     elif method == 'ForecastLength':
         return df.tail(forecast_length)
     elif method == '4ForecastLength':
@@ -65,10 +76,8 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
         return df.tail(8 * forecast_length)
     elif method == '10ForecastLength':
         return df.tail(10 * forecast_length)
-    else:
-        print("Context Slicer Method not recognized")
-        return df
-        
+    """
+
 
 class Detrend(object):
     """Remove a linear trend from the data."""
@@ -86,28 +95,30 @@ class Detrend(object):
         try:
             df = df.astype(float)
         except Exception:
-            raise ValueError ("Data Cannot Be Converted to Numeric Float")
-            
+            raise ValueError("Data Cannot Be Converted to Numeric Float")
+
         # formerly df.index.astype( int ).values
         y = df.values
-        X = (pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values)
+        X = (pd.to_numeric(df.index,
+                           errors='coerce', downcast='integer').values)
         # from statsmodels.tools import add_constant
         # X = add_constant(X, has_constant='add')
-        self.model = GLS(y, X, missing = 'drop').fit()
+        self.model = GLS(y, X, missing='drop').fit()
         self.shape = df.shape
-        return self        
-        
+        return self
+
     def fit_transform(self, df):
-        """Fits and Returns Detrended DataFrame
+        """Fit and Return Detrended DataFrame.
+        
         Args:
             df (pandas.DataFrame): input dataframe
         """
         self.fit(df)
-        return self.transform(df)
-        
+        return self.transform(df)        
 
     def transform(self, df):
-        """Returns detrended data
+        """Return detrended data.
+        
         Args:
             df (pandas.DataFrame): input dataframe
         """

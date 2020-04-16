@@ -17,7 +17,9 @@ FastICA 'array must not contain infs or NaNs'
 How do fillna methods handle datasets that have entirely NaN series?
 Check if any transformation parameters seem to consistently perform poorly, suggesting of problems. Also speed.
 
-Unobserved Components to forecast intervals + ARIMA to SARIMA
+Test updated VARMAX, DynamicFactor
+Test updated context_slicer
+Test updated GluonTS
 
 Add to template: Gluon, Motif
 Bring GeneralTransformer to higher level API.
@@ -28,6 +30,7 @@ Improved genetic recombination:
 	Issues to handle:
 		Approve and unapproved for model recombination
 		If not enough (only one example) of that model type
+		RollingRegression nested dict
 	Randomly select np.random.choice(list(y.keys/items())) some keys from Y, then {**x, **y} all of x, some of y.
 	2 best + 2 random model
 	2 best from model + 1 best overall + 1 random

@@ -357,7 +357,10 @@ class RollingRegression(ModelObject):
         self.regression_model = regression_model
         self.holiday = holiday
         self.mean_rolling_periods = mean_rolling_periods
-        self.macd_periods = macd_periods
+        if mean_rolling_periods is None:
+            self.macd_periods = None
+        else:
+            self.macd_periods = macd_periods
         self.std_rolling_periods = std_rolling_periods
         self.max_rolling_periods = max_rolling_periods
         self.min_rolling_periods = min_rolling_periods

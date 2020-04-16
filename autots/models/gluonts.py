@@ -39,11 +39,12 @@ class GluonTS(ModelObject):
         
     """
     def __init__(self, name: str = "GluonTS", frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, 
+                 prediction_interval: float = 0.9,
                  regression_type: str = None, holiday_country: str = 'US',
                  random_seed: int = 2020, verbose: int = 0,
                  gluon_model: str = 'DeepAR', epochs: int = 20,
-                 learning_rate: float = 0.001, context_length: str = '2ForecastLength',
+                 learning_rate: float = 0.001,
+                 context_length: str = '2ForecastLength',
                  forecast_length: int = 14
                  ):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
@@ -70,15 +71,17 @@ class GluonTS(ModelObject):
             mxnet_seed(self.random_seed)
         except Exception:
             pass
-        
+
         gluon_train = df.transpose()
         self.train_index = gluon_train.index
-        
+
         gluon_freq = str(self.frequency).split('-')[0]
-        
-        # Context Length is deal with in Transformations, this takes that, or a fraction of that
-        if (str(self.context_length).lower() == 'full'):
-            self.gluon_context_length = len(df.index)
+
+        if str(self.context_length).isdigit():
+            self.gluon_context_length = int(self.context_length)
+        elif 'forecastlength' in str(self.context_length).lower():
+            len_int = int([x for x in str(self.context_length) if x.isdigit()][0])
+            self.gluon_context_length = len_int * self.forecast_length
         else:
             self.gluon_context_length = 2 * self.forecast_length
             self.context_length = '2ForecastLength'
@@ -218,40 +221,45 @@ class GluonTS(ModelObject):
             upper_forecast = all_forecast.pivot_table(values='UpperForecast', index='ForecastDate', columns='series_id')
             upper_forecast = upper_forecast[self.column_names]
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name,
+            prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = test_index,
-                                          forecast_columns = forecast.columns,
+                                          forecast_index=test_index,
+                                          forecast_columns=forecast.columns,
                                           lower_forecast=lower_forecast,
-                                          forecast=forecast, 
+                                          forecast=forecast,
                                           upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
-                                          fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params())
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
             
             return prediction
-    
+
     def get_new_params(self, method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
-        """
-        gluon_model_choice = np.random.choice(a=['DeepAR', 'NPTS', 'DeepState', 'WaveNet','DeepFactor', 'Transformer','SFF', 'MQCNN'], size = 1, p = [0.2, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1]).item()
-        epochs_choice = np.random.choice(a=[20, 40, 80, 150], size = 1, p = [0.58, 0.35, 0.05, 0.02]).item()
-        learning_rate_choice = np.random.choice(a=[0.01, 0.001, 0.0001], size = 1, p = [0.3, 0.6, 0.1]).item()
-        context_length_choice = np.random.choice(a=['full','2ForecastLength'], size = 1, p = [0.9, 0.1]).item()
+        """Return dict of new parameters for parameter tuning."""
+        gluon_model_choice = np.random.choice(
+            a=['DeepAR', 'NPTS', 'DeepState', 'WaveNet',
+               'DeepFactor', 'Transformer', 'SFF', 'MQCNN'], size=1,
+            p=[0.2, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1]).item()
+        epochs_choice = np.random.choice(a=[20, 40, 80, 150], size=1,
+                                         p=[0.58, 0.35, 0.05, 0.02]).item()
+        learning_rate_choice = np.random.choice(
+            a=[0.01, 0.001, 0.0001], size=1, p=[0.3, 0.6, 0.1]).item()
+        context_length_choice = np.random.choice(
+            a=[5, 10, 30, '1ForecastLength', '2ForecastLength'], size=1,
+            p=[0.2, 0.3, 0.1, 0.1, 0.3]).item()
         return {
                 'gluon_model': gluon_model_choice,
                 'epochs': epochs_choice,
                 'learning_rate': learning_rate_choice,
                 'context_length': context_length_choice
                 }
-    
+
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         parameter_dict = {
-                'gluon_model':self.gluon_model,
-                'epochs':self.epochs,
+                'gluon_model': self.gluon_model,
+                'epochs': self.epochs,
                 'learning_rate': self.learning_rate,
                 'context_length': self.context_length
                 }

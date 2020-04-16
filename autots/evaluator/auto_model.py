@@ -853,7 +853,9 @@ def NewGeneticTemplate(model_results, submitted_parameters,
     no_recombination = ['ZeroesNaive', 'LastValueNaive',
                         'AverageValueNaive', 'GLS']
     recombination_approved = ['SeasonalNaive', 'MotifSimulation', "ETS",
-                              'DynamicFactor', 'VECM', 'VARMAX']
+                              'DynamicFactor', 'VECM', 'VARMAX', 'GLM',
+                              'ARIMA', 'FBProphet', 'GluonTS',
+                              'RollingRegression']
     # mutation
     for index, row in sorted_results.iterrows():
         param_dict = ModelMonster(row['Model']).get_new_params()

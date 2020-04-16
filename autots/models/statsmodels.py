@@ -1,6 +1,4 @@
-"""
-Statsmodels based Models
-"""
+"""Statsmodels based forecasting models."""
 import datetime
 import numpy as np
 import pandas as pd
@@ -202,24 +200,27 @@ class GLM(ModelObject):
                                           model_parameters=self.get_params())
             
             return prediction
-        
-    def get_new_params(self,method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
-        """
-        family_choice = np.random.choice(a = ['Gaussian', 'Poisson','Binomial','NegativeBinomial','Tweedie', 'Gamma'], size = 1, p = [0.1, 0.3, 0.1, 0.3, 0.1, 0.1]).item()
-        constant_choice = np.random.choice(a = [False, True], size = 1, p = [0.95, 0.05]).item()
-        regression_type_choice = np.random.choice(a = [None, 'User'], size = 1, p = [0.8, 0.2]).item()
-        return {'family':family_choice,
-                'constant':constant_choice,
+
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning."""
+        family_choice = np.random.choice(
+            a=['Gaussian', 'Poisson', 'Binomial',
+               'NegativeBinomial', 'Tweedie', 'Gamma'], size=1,
+            p=[0.1, 0.3, 0.1, 0.3, 0.1, 0.1]).item()
+        constant_choice = np.random.choice(a=[False, True], size=1,
+                                           p=[0.95, 0.05]).item()
+        regression_type_choice = np.random.choice(a=[None, 'User'], size=1,
+                                                  p=[0.8, 0.2]).item()
+        return {'family': family_choice,
+                'constant': constant_choice,
                 'regression_type': regression_type_choice
                 }
-    
+
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         return {
-                'family':self.family,
-                'constant':self.constant,
+                'family': self.family,
+                'constant': self.constant,
                 'regression_type': self.regression_type
                 }
 
@@ -239,10 +240,10 @@ class ETS(ModelObject):
     def __init__(self, name: str = "ETS", frequency: str = 'infer', 
                  prediction_interval: float = 0.9, damped: bool = False,
                  trend: str = None, seasonal: str=None,
-                 seasonal_periods:int=None, 
-                 holiday_country: str = 'US',random_seed: int = 2020,
+                 seasonal_periods:int = None, 
+                 holiday_country: str = 'US', random_seed: int = 2020,
                  verbose: int = 0):
-        ModelObject.__init__(self, name, frequency, prediction_interval, 
+        ModelObject.__init__(self, name, frequency, prediction_interval,
                              holiday_country=holiday_country,
                              random_seed=random_seed, verbose=verbose)
         self.damped = damped
@@ -285,7 +286,7 @@ class ETS(ModelObject):
             current_series = self.df_train[series].copy()
             esModel = ExponentialSmoothing(current_series, damped = self.damped, trend = self.trend, seasonal=self.seasonal,seasonal_periods=self.seasonal_periods, freq = self.frequency).fit()
             esPred = esModel.predict(start=test_index[0], end=test_index[-1])
-            forecast = pd.concat([forecast, esPred], axis = 1)
+            forecast = pd.concat([forecast, esPred], axis=1)
         forecast.columns = self.column_names
         if forecast.isnull().all(axis = 0).astype(int).sum() > 0:
             print("One or more series have failed to optimize with ETS model")
@@ -359,19 +360,21 @@ class ARIMA(ModelObject):
         regression_type (str): type of regression (None, 'User', or 'Holiday')
 
     """
-    def __init__(self, name: str = "ARIMA", frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, p:int = 0, d:int = 1,
-                 q:int = 0, regression_type: str = None, holiday_country: str = 'US',
+
+    def __init__(self, name: str = "ARIMA", frequency: str = 'infer',
+                 prediction_interval: float = 0.9, p: int = 0, d: int = 1,
+                 q: int = 0, regression_type: str = None,
+                 holiday_country: str = 'US',
                  random_seed: int = 2020, verbose: int = 0):
-        ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             regression_type=regression_type, 
-                             holiday_country=holiday_country, random_seed=random_seed,
-                             verbose=verbose)
+        ModelObject.__init__(self, name, frequency, prediction_interval,
+                             regression_type=regression_type,
+                             holiday_country=holiday_country,
+                             random_seed=random_seed, verbose=verbose)
         self.p = p
         self.d = d
         self.q = q
         self.order = (p, d, q)
-        
+
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied .
         
@@ -394,8 +397,8 @@ class ARIMA(ModelObject):
         return self
 
     def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
-        """Generates forecast data immediately following dates of index supplied to .fit()
-        
+        """Generate forecast data immediately following dates of index supplied to .fit().
+
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
             regressor (numpy.Array): additional regressor, not used
@@ -419,27 +422,28 @@ class ARIMA(ModelObject):
         for series in self.df_train.columns:
             current_series = self.df_train[series].copy()
             try:
-                if (self.regression_type == "User") or (self.regression_type == "Holiday"):
+                if (self.regression_type in ["User", "Holiday"]):
                     maModel = ARIMA(current_series, order = self.order, freq = self.frequency, exog = self.regressor_train).fit(maxiter = 600)
                     # maPred = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
-                    maPred, stderr, conf = maModel.forecast(steps = self.forecast_length, alpha = (1 - self.prediction_interval), exog = preord_regressor)
+                    maPred, stderr, conf = maModel.forecast(steps=self.forecast_length, alpha = (1 - self.prediction_interval), exog = preord_regressor)
                 else:
                     maModel = ARIMA(current_series, order = self.order, freq = self.frequency).fit(maxiter = 400, disp = self.verbose)
                     # maPred = maModel.predict(start=test_index[0], end=test_index[-1])
-                    maPred, stderr, conf = maModel.forecast(steps = self.forecast_length, alpha = (1 - self.prediction_interval))
+                    maPred, stderr, conf = maModel.forecast(steps=self.forecast_length, alpha = (1 - self.prediction_interval))
             except Exception:
                 # maPred = pd.Series((np.zeros((forecast_length,))), index = test_index)
                 maPred = np.zeros((forecast_length,))
                 conf = np.zeros((forecast_length, 2))
-            forecast = pd.concat([forecast, pd.Series(maPred, index = test_index)], axis = 1)
-            conf = pd.DataFrame(conf, index = test_index)
-            lower_forecast = pd.concat([lower_forecast, conf[0]], axis = 1)
-            upper_forecast = pd.concat([upper_forecast, conf[1]], axis = 1)
+            forecast = pd.concat([forecast,
+                                  pd.Series(maPred, index=test_index)], axis=1)
+            conf = pd.DataFrame(conf, index=test_index)
+            lower_forecast = pd.concat([lower_forecast, conf[0]], axis=1)
+            upper_forecast = pd.concat([upper_forecast, conf[1]], axis=1)
         forecast.columns = self.column_names
-        
+
         if just_point_forecast:
             return forecast
-        else:  
+        else:
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
@@ -533,7 +537,7 @@ class UnobservedComponents(ModelObject):
         """Train algorithm given data supplied 
         
         Args:
-            df (pandas.DataFrame): Datetime Indexed 
+            df (pandas.DataFrame): Datetime Indexed
         """
         df = self.basic_profile(df)
         self.df_train = df
@@ -541,13 +545,9 @@ class UnobservedComponents(ModelObject):
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
             self.regressor_train = holiday_flag(
-                df.index,country=self.holiday_country).values
+                df.index, country=self.holiday_country).values
         else:
-            if self.regression_type != None:
-                """
-                print("the shape of the input is: {}".format(str(((np.array(preord_regressor).shape[0])))))
-                print("the shape of the training data is: {}".format(str(df.shape[0])))
-                """
+            if self.regression_type is not None:
                 if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                     self.regression_type = None
                 else:
@@ -557,7 +557,7 @@ class UnobservedComponents(ModelObject):
 
     def predict(self, forecast_length: int,
                 preord_regressor = [], just_point_forecast: bool = False):
-        """Generates forecast data immediately following dates of index supplied to .fit()
+        """Generate forecast data immediately following dates of index supplied to .fit().
         
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
@@ -567,38 +567,51 @@ class UnobservedComponents(ModelObject):
         Returns:
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
-        """        
+        """
         predictStartTime = datetime.datetime.now()
         from statsmodels.tsa.statespace.structural import UnobservedComponents
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
             preord_regressor = holiday_flag(test_index, country = self.holiday_country).values
-        if self.regression_type != None:
+        if self.regression_type is not None:
             assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"
         forecast = pd.DataFrame()
         for series in self.df_train.columns:
             current_series = self.df_train[series].copy()
             try:
-                if (self.regression_type == "User") or (self.regression_type == "Holiday"):
-                    maModel = UnobservedComponents(current_series, freq=self.frequency, exog=self.regressor_train, 
-                                                   level=self.level, trend=self.trend,cycle=self.cycle, 
-                                                   damped_cycle=self.damped_cycle,irregular=self.irregular,
-                                                   stochastic_cycle=self.stochastic_cycle, stochastic_level=self.stochastic_level,
-                                                   stochastic_trend=self.stochastic_trend).fit(disp=self.verbose_bool)
-                    maPred = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
+                if (self.regression_type in ["User", "Holiday"]):
+                    maModel = UnobservedComponents(
+                        current_series, freq=self.frequency,
+                        exog=self.regressor_train,
+                        level=self.level, trend=self.trend, cycle=self.cycle,
+                        damped_cycle=self.damped_cycle,
+                        irregular=self.irregular,
+                        stochastic_cycle=self.stochastic_cycle,
+                        stochastic_level=self.stochastic_level,
+                        stochastic_trend=self.stochastic_trend
+                        ).fit(disp=self.verbose_bool)
+                    maPred = maModel.predict(start=test_index[0],
+                                             end=test_index[-1],
+                                             exog=preord_regressor)
                 else:
-                    maModel = UnobservedComponents(current_series, freq=self.frequency, 
-                                                   level=self.level, trend=self.trend,cycle=self.cycle, 
-                                                   damped_cycle=self.damped_cycle,irregular=self.irregular,
-                                                   stochastic_cycle=self.stochastic_cycle, stochastic_level=self.stochastic_level,
-                                                   stochastic_trend=self.stochastic_trend).fit(disp=self.verbose_bool)
-                    maPred = maModel.predict(start=test_index[0], end=test_index[-1])
+                    maModel = UnobservedComponents(
+                        current_series, freq=self.frequency,
+                        level=self.level, trend=self.trend, cycle=self.cycle,
+                        damped_cycle=self.damped_cycle,
+                        irregular=self.irregular,
+                        stochastic_cycle=self.stochastic_cycle,
+                        stochastic_level=self.stochastic_level,
+                        stochastic_trend=self.stochastic_trend
+                        ).fit(disp=self.verbose_bool)
+                    maPred = maModel.predict(start=test_index[0],
+                                             end=test_index[-1])
             except Exception:
-                maPred = pd.Series((np.zeros((forecast_length,))), index = test_index)
-            forecast = pd.concat([forecast, maPred], axis = 1)
+                maPred = pd.Series((np.zeros((forecast_length,))),
+                                   index=test_index)
+            forecast = pd.concat([forecast, maPred], axis=1)
         forecast.columns = self.column_names
-        
+
         if just_point_forecast:
             return forecast
         else:
@@ -610,39 +623,46 @@ class UnobservedComponents(ModelObject):
                                           forecast_index=test_index,
                                           forecast_columns=forecast.columns,
                                           lower_forecast=lower_forecast,
-                                          forecast=forecast, 
+                                          forecast=forecast,
                                           upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
                                           fit_runtime=self.fit_runtime,
                                           model_parameters=self.get_params())
-            
+
             return prediction
-        
+
     def get_new_params(self, method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
-        """
-        level_choice = np.random.choice(a = [True, False], size = 1, p = [0.5, 0.5]).item()
+        """Return dict of new parameters for parameter tuning."""
+        level_choice = np.random.choice(a=[True, False], size=1,
+                                        p=[0.5, 0.5]).item()
         if level_choice:
-            trend_choice = np.random.choice(a = [True, False], size = 1, p = [0.5, 0.5]).item()
+            trend_choice = np.random.choice(a=[True, False], size=1,
+                                            p=[0.5, 0.5]).item()
         else:
             trend_choice = False
-        cycle_choice = np.random.choice(a = [True, False], size = 1, p = [0.5, 0.5]).item()
+        cycle_choice = np.random.choice(a=[True, False], size=1,
+                                        p=[0.5, 0.5]).item()
         if cycle_choice:
-            damped_cycle_choice = np.random.choice(a = [True, False], size = 1, p = [0.5, 0.5]).item()
+            damped_cycle_choice = np.random.choice(a=[True, False], size=1,
+                                                   p=[0.5, 0.5]).item()
         else:
             damped_cycle_choice = False
-        irregular_choice = np.random.choice(a = [True, False], size = 1, p = [0.5, 0.5]).item()
-        stochastic_trend_choice = np.random.choice(a = [True, False], size = 1, p = [0.5, 0.5]).item()
-        stochastic_level_choice = np.random.choice(a = [True, False], size = 1, p = [0.5, 0.5]).item()
-        stochastic_cycle_choice = np.random.choice(a = [True, False], size = 1, p = [0.5, 0.5]).item()
-        
+        irregular_choice = np.random.choice(a=[True, False], size=1,
+                                            p=[0.5, 0.5]).item()
+        stochastic_trend_choice = np.random.choice(a=[True, False], size=1,
+                                                   p=[0.5, 0.5]).item()
+        stochastic_level_choice = np.random.choice(a=[True, False], size=1,
+                                                   p=[0.5, 0.5]).item()
+        stochastic_cycle_choice = np.random.choice(a=[True, False], size=1,
+                                                   p=[0.5, 0.5]).item()
         regression_list = [None, 'User', 'Holiday']
         regression_probability = [0.6, 0.2, 0.2]
-        regression_choice = np.random.choice(a = regression_list, size = 1, p = regression_probability).item()
+        regression_choice = np.random.choice(a=regression_list, size=1,
+                                             p=regression_probability).item()
 
         parameter_dict = {
-                        'level' : level_choice,
+                        'level': level_choice,
                         'trend': trend_choice,
                         'cycle': cycle_choice,
                         'damped_cycle': damped_cycle_choice,
@@ -653,24 +673,23 @@ class UnobservedComponents(ModelObject):
                         'regression_type': regression_choice
                         }
         return parameter_dict
-    
+
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         parameter_dict = {
-                        'level' : self.level,
+                        'level': self.level,
                         'trend': self.trend,
                         'cycle': self.cycle,
                         'damped_cycle': self.damped_cycle,
-                        'irregular':self.irregular,
+                        'irregular': self.irregular,
                         'stochastic_trend': self.stochastic_trend,
                         'stochastic_level': self.stochastic_level,
                         'stochastic_cycle': self.stochastic_cycle,
                         'regression_type': self.regression_type
                         }
         return parameter_dict
-    
-    
+
+
 class DynamicFactor(ModelObject):
     """DynamicFactor from Statsmodels
     
@@ -682,8 +701,9 @@ class DynamicFactor(ModelObject):
         regression_type (str): type of regression (None, 'User', or 'Holiday')
 
     """
-    def __init__(self, name: str = "DynamicFactor", frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, 
+
+    def __init__(self, name: str = "DynamicFactor", frequency: str = 'infer',
+                 prediction_interval: float = 0.9,
                  regression_type: str = None, holiday_country: str = 'US',
                  random_seed: int = 2020, verbose: int = 0,
                  k_factors: int = 1, factor_order: int = 0):
@@ -694,12 +714,12 @@ class DynamicFactor(ModelObject):
                              verbose=verbose)
         self.k_factors = k_factors
         self.factor_order = factor_order
-        
+
     def fit(self, df, preord_regressor = []):
-        """Train algorithm given data supplied 
+        """Train algorithm given data supplied.
         
         Args:
-            df (pandas.DataFrame): Datetime Indexed 
+            df (pandas.DataFrame): Datetime Indexed
         """
         df = self.basic_profile(df)
         if self.verbose > 1:
@@ -905,7 +925,7 @@ class VECM(ModelObject):
         if self.regression_type is not None:
             assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"
         
-        if (self.regression_type == "User") or (self.regression_type == "Holiday"):
+        if (self.regression_type in ["User", "Holiday"]):
             maModel = VECM(self.df_train, freq = self.frequency, exog = self.regressor_train, 
                                            deterministic=self.deterministic, k_ar_diff=self.k_ar_diff).fit()
             # forecast = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
@@ -962,11 +982,10 @@ class VECM(ModelObject):
         return parameter_dict
     
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         parameter_dict = {
-                        'deterministic' : self.deterministic, 
-                        'k_ar_diff' : self.k_ar_diff,
+                        'deterministic': self.deterministic, 
+                        'k_ar_diff': self.k_ar_diff,
                         'regression_type': self.regression_type
                         }
         return parameter_dict
