@@ -7,6 +7,37 @@
 * New models need only be sometimes applicable
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
+Latest:
+	Changed default for Series_id so it is no longer required if univariate
+	Fixed a bug where 'One or more series is 90% or more NaN' was printing when it shouldn't
+	Fixed (or more accurately, reduced) a bug where multiple initial runs were counting as validation runs.
+	Made serious efforts to make the code prettier with pylint, still lots to do, however...
+	Improved genetic recombination so optimal models should be reached more quickly.
+	Added a number of new Transformer options
+		Multiple new Sklearn-sourced transformers (QuantileTransformer, etc)
+		SinTrend
+		DifferencedDetrend
+		CumSumTransformer
+		PctChangeTransformer
+	Entirely changed the general transformer to add three levels of transformation
+	GLM
+		Error where it apparently won't tolerate any zeroes was compensated for.
+	RollingRegression
+		Added SVM model
+		Added option to tune some model parameters to sklearn
+		Fixed Holidays to work
+		Added new feature construction parameters
+	GluonTS:
+		fixed the use of context_length, added more options to that param
+	
+	Point to Probabilistic
+		More stable quantile based version for AvgNaive, LastValueNaive
+	Dynamic Factor added uncertainty from Statsmodels Statespace
+	VARMAX added uncertainty from Statsmodels Statespace
+		
+	New models:
+		SeasonalNaive model
+		ContouredMotifSimulation
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -17,9 +48,7 @@ FastICA 'array must not contain infs or NaNs'
 How do fillna methods handle datasets that have entirely NaN series?
 Check if any transformation parameters seem to consistently perform poorly, suggesting of problems. Also speed.
 
-Test updated VARMAX, DynamicFactor
 Test updated context_slicer
-Test updated GluonTS
 
 Add to template: Gluon, Motif
 Bring GeneralTransformer to higher level API.
@@ -31,12 +60,13 @@ Improved genetic recombination:
 		Approve and unapproved for model recombination
 		If not enough (only one example) of that model type
 		RollingRegression nested dict
-	Randomly select np.random.choice(list(y.keys/items())) some keys from Y, then {**x, **y} all of x, some of y.
-	2 best + 2 random model
-	2 best from model + 1 best overall + 1 random
+		Only one model in all of template
+	2 best + 2 random model param
+	2 best from model + 1 best overall + 1 random Transform
 	Allow many models at first, but as generations increase, reduce total allowed but up max per model class
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
+GluonTS not accepting quite a lot of frequencies
 
 # To-Do
 * Get the sphinx (google style) documentation and readthedocs.io website up

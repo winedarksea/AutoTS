@@ -154,15 +154,18 @@ class AverageValueNaive(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
 
     """
-    def __init__(self, name: str = "AverageValueNaive", frequency: str = 'infer', 
+
+    def __init__(self, name: str = "AverageValueNaive",
+                 frequency: str = 'infer',
                  prediction_interval: float = 0.9, holiday_country: str = 'US',
                  random_seed: int = 2020, verbose: int = 0,
                  method: str = 'Median'):
-        ModelObject.__init__(self, name, frequency, prediction_interval, 
+        ModelObject.__init__(self, name, frequency, prediction_interval,
                              holiday_country=holiday_country,
                              random_seed=random_seed,
                              verbose=verbose)
         self.method = method
+
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
@@ -194,7 +197,7 @@ class AverageValueNaive(ModelObject):
             if just_point_forecast == True, a dataframe of point forecasts
         """
         predictStartTime = datetime.datetime.now()
-        df = pd.DataFrame(np.tile(self.average_values, (forecast_length,1)), columns = self.column_names, index = self.create_forecast_index(forecast_length=forecast_length))
+        df = pd.DataFrame(np.tile(self.average_values, (forecast_length, 1)), columns = self.column_names, index = self.create_forecast_index(forecast_length=forecast_length))
         if just_point_forecast:
             return df
         else:
@@ -224,15 +227,16 @@ class AverageValueNaive(ModelObject):
                 }
     
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         return {
-                'method' : self.method
+                'method': self.method
                 }
 
 
 class SeasonalNaive(ModelObject):
     """Naive forecasting predicting a dataframe with seasonal (lag) forecasts.
+    
+    Concerto No. 2 in G minor, Op. 8, RV 315
     
     Args:
         name (str): String to identify class
@@ -243,12 +247,14 @@ class SeasonalNaive(ModelObject):
         lag_2 (int): Optional second lag of seasonality which is averaged with first lag to produce forecast.
 
     """
-    def __init__(self, name: str = "SeasonalNaive", frequency: str = 'infer', 
+
+    def __init__(self, name: str = "SeasonalNaive", frequency: str = 'infer',
                  prediction_interval: float = 0.9, holiday_country: str = 'US',
                  random_seed: int = 2020,
                  lag_1: int = 7, lag_2: int = None, method: str = 'LastValue'):
-        ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             holiday_country =holiday_country, random_seed = random_seed)
+        ModelObject.__init__(self, name, frequency, prediction_interval,
+                             holiday_country=holiday_country,
+                             random_seed=random_seed)
         self.lag_1 = abs(int(lag_1))
         self.lag_2 = lag_2
         if str(self.lag_2).isdigit():
@@ -259,30 +265,40 @@ class SeasonalNaive(ModelObject):
 
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied.
-        
+
         Args:
-            df (pandas.DataFrame): Datetime Indexed 
+            df (pandas.DataFrame): Datetime Indexed
         """
         if self.lag_1 == self.lag_2:
             raise ValueError("Lag 2 cannot equal Lag 1")
         df = self.basic_profile(df)
         self.df_train = df
-        
+
         df_length = (self.train_shape[0])
         self.tile_values_lag_2 = None
-        if self.method == 'Mean':
-            tile_index = np.tile(np.arange(self.lag_1), int(np.ceil(df_length/self.lag_1)))
+        if self.method in ['Mean', 'Median']:
+            tile_index = np.tile(np.arange(self.lag_1),
+                                 int(np.ceil(df_length/self.lag_1)))
             tile_index = tile_index[len(tile_index)-(df_length):]
             df.index = tile_index
-            self.tile_values_lag_1 = df.groupby(level = 0, axis = 0).mean()
+            if self.method == "Median":
+                self.tile_values_lag_1 = df.groupby(level=0, axis=0).median()
+            else:
+                self.tile_values_lag_1 = df.groupby(level=0, axis=0).mean()
             if str(self.lag_2).isdigit():
                 if self.lag_2 == 1:
                     self.tile_values_lag_2 = df.tail(self.lag_2)
                 else:
-                    tile_index = np.tile(np.arange(self.lag_2), int(np.ceil(df_length/self.lag_2)))
+                    tile_index = np.tile(np.arange(self.lag_2),
+                                         int(np.ceil(df_length/self.lag_2)))
                     tile_index = tile_index[len(tile_index)-(df_length):]
                     df.index = tile_index
-                    self.tile_values_lag_2 = df.groupby(level = 0, axis = 0).mean()
+                    if self.method == "Median":
+                        self.tile_values_lag_2 = df.groupby(
+                            level=0, axis=0).median()
+                    else:
+                        self.tile_values_lag_2 = df.groupby(
+                            level=0, axis=0).mean()
         else:
             self.method == 'LastValue'
             self.tile_values_lag_1 = df.tail(self.lag_1)
@@ -308,7 +324,7 @@ class SeasonalNaive(ModelObject):
         tile_len = len(self.tile_values_lag_1.index)
         df = pd.DataFrame(np.tile(self.tile_values_lag_1, (int(np.ceil(forecast_length/tile_len)),1))[0:forecast_length], columns = self.column_names, index = self.create_forecast_index(forecast_length=forecast_length))
         if str(self.lag_2).isdigit():
-            y = pd.DataFrame(np.tile(self.tile_values_lag_2, (int(np.ceil(forecast_length/len(self.tile_values_lag_2.index))),1))[0:forecast_length], columns = self.column_names, index = self.create_forecast_index(forecast_length=forecast_length))
+            y = pd.DataFrame(np.tile(self.tile_values_lag_2, (int(np.ceil(forecast_length/len(self.tile_values_lag_2.index))), 1))[0:forecast_length], columns = self.column_names, index = self.create_forecast_index(forecast_length=forecast_length))
             df = (df + y) / 2
         # df = df.apply(pd.to_numeric, errors='coerce')
         df = df.astype(float)
@@ -316,45 +332,47 @@ class SeasonalNaive(ModelObject):
             return df
         else:
             upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df, prediction_interval = self.prediction_interval)
-            
+
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name,
+            prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = df.index,
-                                          forecast_columns = df.columns,
+                                          forecast_index=df.index,
+                                          forecast_columns=df.columns,
                                           lower_forecast=lower_forecast,
-                                          forecast=df, upper_forecast=upper_forecast,
+                                          forecast=df,
+                                          upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
-                                          fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params())
-            
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
             return prediction
-        
+
     def get_new_params(self,method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
         lag_1_choice = seasonal_int()
-        lag_2_choice = np.random.choice(a=['None', 
+        lag_2_choice = np.random.choice(a=['None',
                                            seasonal_int(include_one=True)],
                                         size=1, p=[0.3, 0.7]).item()
         if str(lag_2_choice) == str(lag_1_choice):
             lag_2_choice = 1
-        method_choice = np.random.choice(a=['Mean', 'LastValue'], size = 1, p = [0.5, 0.5]).item()
+        method_choice = np.random.choice(a=['Mean', 'Median', 'LastValue'],
+                                         size=1,
+                                         p=[0.4, 0.2, 0.4]).item()
         return {
-                'method' : method_choice,
-                'lag_1' : lag_1_choice,
-                'lag_2' : lag_2_choice
+                'method': method_choice,
+                'lag_1': lag_1_choice,
+                'lag_2': lag_2_choice
                 }
-    
+
     def get_params(self):
         """Return dict of current parameters."""
         return {
-                'method' : self.method,
-                'lag_1' : self.lag_1,
-                'lag_2' : self.lag_2
+                'method': self.method,
+                'lag_1': self.lag_1,
+                'lag_2': self.lag_2
                 }
-        
+
 
 class MotifSimulation(ModelObject):
     """More dark magic created by the evil mastermind of this project.
@@ -370,8 +388,10 @@ class MotifSimulation(ModelObject):
         distance_metric (str): passed through to sklearn pairwise_distances
         max_motifs (float): number of motifs to compare per series. If less 1, used as % of length training data
     """
-    def __init__(self, name: str = "MotifSimulation", frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, holiday_country: str = 'US', random_seed: int = 2020,
+
+    def __init__(self, name: str = "MotifSimulation", frequency: str = 'infer',
+                 prediction_interval: float = 0.9, holiday_country: str = 'US',
+                 random_seed: int = 2020,
                  phrase_len: str = '5',
                  comparison: str = 'magnitude_pct_change_sign',
                  shared: bool = False,

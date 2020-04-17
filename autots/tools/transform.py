@@ -989,13 +989,11 @@ class GeneralTransformer(object):
 
 
 def RandomTransform():
-    """
-    Returns a dict of randomly choosen transformation selections
-    """
-    transformer_list = [None,'MinMaxScaler','PowerTransformer', 'QuantileTransformer',
-                        'MaxAbsScaler','StandardScaler','RobustScaler','PCA', 
-                        'FastICA', 'Detrend','RollingMean10','RollingMean100thN',
-                        'DifferencedTransformer','SinTrend', 'PctChangeTransformer',
+    """Return a dict of randomly choosen transformation selections."""
+    transformer_list = [None, 'MinMaxScaler', 'PowerTransformer', 'QuantileTransformer',
+                        'MaxAbsScaler', 'StandardScaler', 'RobustScaler', 'PCA',
+                        'FastICA', 'Detrend', 'RollingMean10', 'RollingMean100thN',
+                        'DifferencedTransformer', 'SinTrend', 'PctChangeTransformer',
                         'CumSumTransformer']
     first_transformer_prob = [0.3, 0.05, 0.22, 0.05,
                               0.05, 0.05, 0.05, 0.01,
@@ -1007,13 +1005,15 @@ def RandomTransform():
                               0.05, 0.05, 0.03, 0.02,
                               0.1, 0.01, 0.04,
                               0.03]
-    outlier_method_choice = np.random.choice(a = [None, 'clip', 'remove'],
-                                             size = 1, p = [0.5, 0.3, 0.2]).item()
+    outlier_method_choice = np.random.choice(a=[None, 'clip', 'remove'],
+                                             size=1, p=[0.5, 0.3, 0.2]).item()
     if outlier_method_choice is not None:
-        outlier_threshold_choice = np.random.choice(a = [2,3,4,6], size = 1,
-                                                    p = [0.2, 0.5, 0.2, 0.1]).item()
-        outlier_position_choice = np.random.choice(a=['first', 'middle', 'last',
-                                                      'first;last', 'first;middle'],
+        outlier_threshold_choice = np.random.choice(a=[2, 3, 4, 6], size=1,
+                                                    p=[0.2, 0.5, 0.2, 0.1]
+                                                    ).item()
+        outlier_position_choice = np.random.choice(a=['first', 'middle',
+                                                      'last', 'first;last',
+                                                      'first;middle'],
                                                    size=1,
                                                    p=[0.3, 0.4, 0.1,
                                                       0.1, 0.1]).item()
@@ -1021,40 +1021,50 @@ def RandomTransform():
         outlier_threshold_choice = None
         outlier_position_choice = None
 
-    na_choice = np.random.choice(a = ['ffill', 'fake date', 'rolling mean',
-                                      'mean','zero', 'ffill mean biased', 'median'],
-                                 size = 1, p = [0.2, 0.2, 0.2,
-                                                0.1, 0.1, 0.1, 0.1]).item()
-    transformation_choice = np.random.choice(a = transformer_list, size = 1, p = first_transformer_prob).item()
-    detrend_choice = np.random.choice(a = [True, False], size = 1, p = [0.2, 0.8]).item()
-    second_transformation_choice = np.random.choice(a = [None,'RollingMean','FixedRollingMean', 'other'],
-                                                    size = 1, p = [0.3, 0.4, 0.1, 0.2]).item()
+    na_choice = np.random.choice(a=['ffill', 'fake date', 'rolling mean',
+                                    'mean', 'zero',
+                                    'ffill mean biased', 'median'],
+                                 size=1, p=[0.2, 0.2, 0.2,
+                                            0.1, 0.1, 0.1, 0.1]).item()
+    transformation_choice = np.random.choice(a=transformer_list, size=1,
+                                             p=first_transformer_prob).item()
+    detrend_choice = np.random.choice(a=[True, False], size=1,
+                                      p=[0.2, 0.8]).item()
+    second_transformation_choice = np.random.choice(
+        a=[None, 'RollingMean', 'FixedRollingMean', 'other'], size=1,
+        p=[0.3, 0.4, 0.1, 0.2]).item()
     if second_transformation_choice == 'other':
-        second_transformation_choice = np.random.choice(a = transformer_list, size = 1, p = first_transformer_prob).item()
+        second_transformation_choice = np.random.choice(
+            a=transformer_list, size=1,
+            p=first_transformer_prob).item()
     if second_transformation_choice in ['RollingMean', 'FixedRollingMean']:
-        transformation_param_choice = np.random.choice(a = [3, 10, 14, 28, '10thN', '25thN', '100thN'], size = 1, p = [0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1]).item()
+        transformation_param_choice = np.random.choice(
+            a=[3, 10, 14, 28, '10thN', '25thN', '100thN'], size=1,
+            p=[0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1]).item()
     else:
         transformation_param_choice = None
-    third_transformation_choice = np.random.choice(a = transformer_list, size = 1, p = third_transformer_prob).item()
-    discretization_choice = np.random.choice(a = [None, 'center', 'lower', 'upper',
-                                                  'sklearn-quantile', 'sklearn-uniform', 'sklearn-kmeans'],
-                                             size = 1,
-                                             p = [0.7, 0.1, 0.05, 0.05,
-                                                  0.04, 0.03, 0.03]).item()
+    third_transformation_choice = np.random.choice(a=transformer_list, size=1,
+                                                   p=third_transformer_prob
+                                                   ).item()
+    discretization_choice = np.random.choice(
+        a=[None, 'center', 'lower', 'upper', 'sklearn-quantile',
+           'sklearn-uniform', 'sklearn-kmeans'], size=1,
+        p=[0.7, 0.1, 0.05, 0.05, 0.04, 0.03, 0.03]).item()
     if discretization_choice is not None:
-        n_bins_choice = np.random.choice(a = [5, 10, 25], size = 1, p = [0.8, 0.1, 0.1]).item()
+        n_bins_choice = np.random.choice(a=[5, 10, 25], size=1,
+                                         p=[0.8, 0.1, 0.1]).item()
     else:
         n_bins_choice = None
-    context_choice = np.random.choice(a=[None, 'HalfMax', '2ForecastLength',
-                                         '6ForecastLength', '12ForecastLength'],
-                                      size=1,
-                                      p=[0.7, 0.05, 0.1, 0.1, 0.05]).item()
+    context_choice = np.random.choice(
+        a=[None, 'HalfMax', '2ForecastLength', '6ForecastLength',
+           10, '12ForecastLength'], size=1,
+        p=[0.7, 0.05, 0.1, 0.05, 0.05, 0.05]).item()
     param_dict = {
-            'outlier_method' : outlier_method_choice,
-            'outlier_threshold' : outlier_threshold_choice,
+            'outlier_method': outlier_method_choice,
+            'outlier_threshold': outlier_threshold_choice,
             'outlier_position': outlier_position_choice,
-            'fillna' : na_choice,
-            'transformation' : transformation_choice,
+            'fillna': na_choice,
+            'transformation': transformation_choice,
             'detrend' : detrend_choice,
             'second_transformation' : second_transformation_choice,
             'transformation_param' : transformation_param_choice,

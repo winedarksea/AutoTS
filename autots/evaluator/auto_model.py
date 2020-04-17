@@ -5,6 +5,7 @@ import datetime
 import json
 from hashlib import md5
 from autots.evaluator.metrics import PredictionEval
+from autots.tools.transform import RandomTransform
 
 
 def seasonal_int(include_one: bool = False):
@@ -652,7 +653,9 @@ def TemplateWizard(template, df_train, df_test, weights,
                     validation_round: int = 0,
                     per_timestamp_errors: bool = False,
                     per_series_errors: bool = True,
-                    template_cols: list = ['Model','ModelParameters','TransformationParameters','Ensemble']):
+                    template_cols: list = ['Model', 'ModelParameters',
+                                           'TransformationParameters',
+                                           'Ensemble']):
 
     """
     takes Template, returns Results
@@ -773,7 +776,6 @@ def TemplateWizard(template, df_train, df_test, weights,
     return template_result 
 
 
-from autots.tools.transform import RandomTransform
 def RandomTemplate(n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
               'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
               'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']):
@@ -817,11 +819,57 @@ def UniqueTemplates(existing_templates, new_possibilities, selection_cols: list 
     return new_template
 
 
+def dict_recombination(a: dict, b: dict):
+    """Recombine two dictionaries with identical keys. Return new dict."""
+    b_keys = [*b]
+    key_size = int(len(b_keys)/2) if len(b_keys) > 1 else 1
+    bs_keys = np.random.choice(b_keys, size=key_size)
+    b_prime = {k: b[k] for k in bs_keys}
+    c = {**a, **b_prime}  # overwrites with B
+    return c
+
+
+def trans_dict_recomb(dict_array):
+    """Recombine two transformation param dictionaries from array of dicts."""
+    r_sel = np.random.choice(dict_array, size=2, replace=False)
+    a = r_sel[0]
+    b = r_sel[1]
+    c = dict_recombination(a, b)
+
+    out_keys = ['outlier_method', 'outlier_threshold', 'outlier_position']
+    current_dict = np.random.choice([a, b], size=1).item()
+    c = {**c, **{k: current_dict[k] for k in out_keys}}
+
+    mid_trans_keys = ['second_transformation', 'transformation_param']
+    current_dict = np.random.choice([a, b], size=1).item()
+    c = {**c, **{k: current_dict[k] for k in mid_trans_keys}}
+
+    disc_keys = ['discretization', 'n_bins']
+    current_dict = np.random.choice([a, b], size=1).item()
+    c = {**c, **{k: current_dict[k] for k in disc_keys}}
+    return c
+
+
+def _trans_dicts(current_ops, best = None, n: int = 5):
+    fir = json.loads(current_ops.iloc[0, :]['TransformationParameters'])
+    if current_ops.shape[0] > 1:
+        r_id = np.random.randint(1, (current_ops.shape[0]))
+        sec = json.loads(current_ops.iloc[r_id, :]['TransformationParameters'])
+    else:
+        sec = RandomTransform()
+    r = RandomTransform()
+    if best is None:
+        best = RandomTransform()
+    arr = [fir, sec, best, r]
+    trans_dicts = [json.dumps(trans_dict_recomb(arr)) for _ in range(n)]
+    return trans_dicts
+
+
 def NewGeneticTemplate(model_results, submitted_parameters,
                        sort_column: str = "smape_weighted",
-                       sort_ascending: bool = True, max_results: int = 40,
+                       sort_ascending: bool = True, max_results: int = 50,
                        max_per_model_class: int = 5,
-                       top_n: int = 15,
+                       top_n: int = 50,
                        template_cols: list = ['Model', 'ModelParameters',
                                               'TransformationParameters',
                                               'Ensemble']):
@@ -834,7 +882,7 @@ def NewGeneticTemplate(model_results, submitted_parameters,
 
     """
     new_template = pd.DataFrame()
-    
+
     # filter existing templates
     sorted_results = model_results[model_results['Ensemble'] == 0].copy()
     sorted_results = sorted_results.sort_values(by=sort_column,
@@ -850,12 +898,68 @@ def NewGeneticTemplate(model_results, submitted_parameters,
                                                 ascending=sort_ascending,
                                                 na_position='last').head(top_n)
 
-    no_recombination = ['ZeroesNaive', 'LastValueNaive',
-                        'AverageValueNaive', 'GLS']
+    no_params = ['ZeroesNaive', 'LastValueNaive', 'GLS']
     recombination_approved = ['SeasonalNaive', 'MotifSimulation', "ETS",
                               'DynamicFactor', 'VECM', 'VARMAX', 'GLM',
                               'ARIMA', 'FBProphet', 'GluonTS',
                               'RollingRegression']
+    best = json.loads(sorted_results.iloc[0, :]['TransformationParameters'])
+
+    for model_type in sorted_results['Model'].unique():
+        if model_type in no_params:
+            current_ops = sorted_results[sorted_results['Model'] == model_type]
+            n = 3
+            trans_dicts = _trans_dicts(current_ops, best=best, n=n)
+            model_param = current_ops.iloc[0, :]['ModelParameters']
+            new_row = pd.DataFrame({
+                'Model': model_type,
+                'ModelParameters': model_param,
+                'TransformationParameters': trans_dicts,
+                'Ensemble': 0
+                }, index=list(range(n)))
+        elif model_type in recombination_approved:
+            current_ops = sorted_results[sorted_results['Model'] == model_type]
+            n = 4
+            trans_dicts = _trans_dicts(current_ops, best=best, n=n)
+            fir = json.loads(current_ops.iloc[0, :]['ModelParameters'])
+            if current_ops.shape[0] > 1:
+                r_id = np.random.randint(1, (current_ops.shape[0]))
+                sec = json.loads(current_ops.iloc[r_id, :]['ModelParameters'])
+            else:
+                sec = ModelMonster(model_type).get_new_params()
+            r = ModelMonster(model_type).get_new_params()
+            r2 = ModelMonster(model_type).get_new_params()
+            arr = [fir, sec, r2, r]
+            model_dicts = list()
+            for _ in range(n):
+                r_sel = np.random.choice(arr, size=2, replace=False)
+                a = r_sel[0]
+                b = r_sel[1]
+                c = dict_recombination(a, b)
+                model_dicts.append(json.dumps(c))
+            new_row = pd.DataFrame({
+                'Model': model_type,
+                'ModelParameters': model_dicts,
+                'TransformationParameters': trans_dicts,
+                'Ensemble': 0
+                }, index=list(range(n)))
+        else:
+            current_ops = sorted_results[sorted_results['Model'] == model_type]
+            n = 3
+            trans_dicts = _trans_dicts(current_ops, best=best, n=n)
+            model_dicts = list()
+            for _ in range(n):
+                c = ModelMonster(model_type).get_new_params()
+                model_dicts.append(json.dumps(c))
+            new_row = pd.DataFrame({
+                'Model': model_type,
+                'ModelParameters': model_dicts,
+                'TransformationParameters': trans_dicts,
+                'Ensemble': 0
+                }, index=list(range(n)))
+        new_template = pd.concat([new_template, new_row],
+                                 axis=0, ignore_index=True, sort=False)
+    """
     # mutation
     for index, row in sorted_results.iterrows():
         param_dict = ModelMonster(row['Model']).get_new_params()
@@ -882,14 +986,15 @@ def NewGeneticTemplate(model_results, submitted_parameters,
     recombination['TransformationParameters'] = sorted_results['TransformationParameters'].shift(1).tail(len(sorted_results.index) - 1)
     new_template = pd.concat([new_template,
                               recombination.head(top_n)[template_cols]],
-                             axis=0, ignore_index = True, sort = False)
-    
-    # internal recombination of model parameters, not implemented because some options are mutually exclusive.
-    # Recombine best two of each model, if two or more present
-    
+                             axis=0, ignore_index=True, sort=False)
+    """
     # remove generated models which have already been tried
-    sorted_results = pd.concat([submitted_parameters, sorted_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
-    new_template = UniqueTemplates(sorted_results, new_template, selection_cols = template_cols).head(max_results)
+    sorted_results = pd.concat([submitted_parameters, sorted_results], axis=0,
+                               ignore_index=True, sort=False
+                               ).reset_index(drop=True)
+    new_template = UniqueTemplates(sorted_results, new_template,
+                                   selection_cols=template_cols
+                                   ).head(max_results)
     return new_template
 
 

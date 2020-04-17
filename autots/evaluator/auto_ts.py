@@ -142,7 +142,8 @@ class AutoTS(object):
                                'VECM', 'DynamicFactor']
         if model_list == 'probabilistic':
             self.model_list = ['ARIMA', 'GluonTS', 'FBProphet',
-                               'AverageValueNaive', 'MotifSimulation']
+                               'AverageValueNaive', 'MotifSimulation',
+                               'VARMAX', 'DynamicFactor']
         if model_list == 'multivariate':
             self.model_list = ['VECM', 'DynamicFactor', 'GluonTS', 'VARMAX',
                                'RollingRegression']
@@ -356,13 +357,15 @@ class AutoTS(object):
             current_generation += 1
             if verbose > 0:
                 print("New Generation: {}".format(current_generation))
+            cutoff_multiple = 5 if current_generation < 10 else 3
+            top_n = len(self.model_list) * cutoff_multiple
             new_template = NewGeneticTemplate(self.initial_results.model_results,
                                               submitted_parameters=submitted_parameters,
                                               sort_column="Score",
                                               sort_ascending=True,
-                                              max_results=40,
+                                              max_results=top_n,
                                               max_per_model_class=5,
-                                              top_n=20,
+                                              top_n=top_n,
                                               template_cols=template_cols)
             submitted_parameters = pd.concat(
                 [submitted_parameters, new_template],
