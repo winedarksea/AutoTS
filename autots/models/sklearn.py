@@ -334,12 +334,12 @@ class RollingRegression(ModelObject):
                  holiday_country: str = 'US',
                  verbose: int = 0, random_seed: int = 2020,
                  regression_model: dict =
-                    {"model": 'Adaboost',
-                     "model_params":
-                         {'n_estimators': 50,
-                          'base_estimator': 'DecisionTree',
-                          'loss': 'linear',
-                          'learning_rate': 1.0}},
+                 {"model": 'Adaboost',
+                  "model_params":
+                      {'n_estimators': 50,
+                       'base_estimator': 'DecisionTree',
+                       'loss': 'linear',
+                       'learning_rate': 1.0}},
                  holiday: bool = False, mean_rolling_periods: int = 30,
                  macd_periods: int = None,
                  std_rolling_periods: int = 7,
@@ -609,9 +609,114 @@ class RollingRegression(ModelObject):
 
 
 
-"""
-model = RandomForestRolling(regression_type = 'User')
-model = model.fit(df_wide.fillna(method='ffill').fillna(method='bfill'), preord_regressor = preord_regressor_train)
-prediction = model.predict(forecast_length = 3, preord_regressor = preord_regressor_forecast)
-prediction.forecast
-"""
+
+
+class WindowRegression(ModelObject):
+    """Regression use the last n values as the basis of training data.
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+    """
+
+    def __init__(self, name: str = "WindowRegression",
+                 frequency: str = 'infer',
+                 prediction_interval: float = 0.9, holiday_country: str = 'US',
+                 random_seed: int = 2020, verbose: int = 0,
+                 window_size: int = 10,
+                 regression_model: dict =
+                 {"model": 'Adaboost',
+                  "model_params":
+                      {'n_estimators': 50,
+                       'base_estimator': 'DecisionTree',
+                       'loss': 'linear',
+                       'learning_rate': 1.0}},
+                 input_dim: int = '1', output_dim: int = 1,
+                 normalize_window: bool = False,
+                 transfer_learning: str = None,
+                 transfer_learning_transformation: dict = None,
+                 regression_type: str = None
+                 ):
+        ModelObject.__init__(self, name, frequency, prediction_interval,
+                             holiday_country=holiday_country,
+                             random_seed=random_seed, verbose=verbose)
+
+    def fit(self, df, preord_regressor = []):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        df = self.basic_profile(df)
+        self.df_train = df
+
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(self, forecast_length: int,
+                preord_regressor = [], just_point_forecast: bool = False):
+        """Generate forecast data immediately following dates of .fit().
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        index = self.create_forecast_index(forecast_length=forecast_length)
+
+        if just_point_forecast:
+            return df
+        else:
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df_train, df,
+                prediction_interval=self.prediction_interval)
+
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(model_name=self.name,
+                                          forecast_length=forecast_length,
+                                          forecast_index=df.index,
+                                          forecast_columns=df.columns,
+                                          lower_forecast=lower_forecast,
+                                          forecast=df,
+                                          upper_forecast=upper_forecast,
+                                          prediction_interval=self.prediction_interval,
+                                          predict_runtime=predict_runtime,
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning."""
+        model_choice = generate_regressor_params()
+        lag_1_choice = seasonal_int()
+        lag_2_choice = np.random.choice(a=['None',
+                                           seasonal_int(include_one=True)],
+                                        size=1, p=[0.3, 0.7]).item()
+        if str(lag_2_choice) == str(lag_1_choice):
+            lag_2_choice = 1
+        method_choice = np.random.choice(a=['Mean', 'Median', 'LastValue'],
+                                         size=1,
+                                         p=[0.4, 0.2, 0.4]).item()
+        regression_choice = np.random.choice(a=[None, 'User'], size=1,
+                                             p=[0.7, 0.3]).item()
+        return {
+                'regression_model': model_choice,
+                'regression_type': regression_choice,
+                'lag_1': lag_1_choice,
+                'lag_2': lag_2_choice
+                }
+
+    def get_params(self):
+        """Return dict of current parameters."""
+        return {
+                'regression_model': self.regression_model,
+                'regression_type': self.regression_type,
+                'lag_1': self.lag_1,
+                'lag_2': self.lag_2,
+                }

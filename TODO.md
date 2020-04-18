@@ -54,16 +54,7 @@ Add to template: Gluon, Motif
 Bring GeneralTransformer to higher level API.
 	wide_to_long and long_to_wide in higher-level API
 Option to use full traceback in errors in table
-Improved genetic recombination:
-	Make no new genetic models with just new random transform. Add recombination for rolling regression.
-	Issues to handle:
-		Approve and unapproved for model recombination
-		If not enough (only one example) of that model type
-		RollingRegression nested dict
-		Only one model in all of template
-	2 best + 2 random model param
-	2 best from model + 1 best overall + 1 random Transform
-	Allow many models at first, but as generations increase, reduce total allowed but up max per model class
+
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
 GluonTS not accepting quite a lot of frequencies
@@ -75,9 +66,10 @@ GluonTS not accepting quite a lot of frequencies
 	* Data, split, normalize, find distribution exponentially weighted to most recent, center around forecast, shared variant
 	* Data quantile, recentered around median of forecast.
 	* Categorical class probabilities as range for RollingRegression
-* get_prediction for Statsmodels Statespace models to include confidence interval where possible
+* get_forecast for Statsmodels Statespace models to include confidence interval where possible
 	* migrate arima_model to arima.model
-	* uncomp, dynamic factor with uncertainty intervals
+	* uncomp with uncertainty intervals
+* make datetime input optional, just allow dataframes of numbers
 * Window regression, 
 		shuffle windows, 
 		1d or 2d (series * forecast_length) output, 1d or 2d input

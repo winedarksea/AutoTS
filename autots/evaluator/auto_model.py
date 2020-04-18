@@ -960,27 +960,6 @@ def NewGeneticTemplate(model_results, submitted_parameters,
         new_template = pd.concat([new_template, new_row],
                                  axis=0, ignore_index=True, sort=False)
     """
-    # mutation
-    for index, row in sorted_results.iterrows():
-        param_dict = ModelMonster(row['Model']).get_new_params()
-        trans_dict = RandomTransform()
-        new_row = pd.DataFrame({
-                'Model': row['Model'],
-                'ModelParameters': json.dumps(param_dict),
-                'TransformationParameters': row['TransformationParameters'],
-                'Ensemble': 0
-                }, index=[0])
-        new_template = pd.concat([new_template, new_row],
-                                 axis=0, ignore_index=True, sort=False)
-        new_row = pd.DataFrame({
-                'Model': row['Model'],
-                'ModelParameters': row['ModelParameters'],
-                'TransformationParameters': json.dumps(trans_dict),
-                'Ensemble': 0
-                }, index=[0])
-        new_template = pd.concat([new_template, new_row],
-                                 axis=0, ignore_index=True, sort=False)
-
     # recombination of transforms across models by shifting transforms
     recombination = sorted_results.tail(len(sorted_results.index) - 1).copy()
     recombination['TransformationParameters'] = sorted_results['TransformationParameters'].shift(1).tail(len(sorted_results.index) - 1)

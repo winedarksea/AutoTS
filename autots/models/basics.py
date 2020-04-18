@@ -235,9 +235,9 @@ class AverageValueNaive(ModelObject):
 
 class SeasonalNaive(ModelObject):
     """Naive forecasting predicting a dataframe with seasonal (lag) forecasts.
-    
+
     Concerto No. 2 in G minor, Op. 8, RV 315
-    
+
     Args:
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
@@ -250,11 +250,11 @@ class SeasonalNaive(ModelObject):
 
     def __init__(self, name: str = "SeasonalNaive", frequency: str = 'infer',
                  prediction_interval: float = 0.9, holiday_country: str = 'US',
-                 random_seed: int = 2020,
+                 random_seed: int = 2020, verbose: int = 0,
                  lag_1: int = 7, lag_2: int = None, method: str = 'LastValue'):
         ModelObject.__init__(self, name, frequency, prediction_interval,
                              holiday_country=holiday_country,
-                             random_seed=random_seed)
+                             random_seed=random_seed, verbose=verbose)
         self.lag_1 = abs(int(lag_1))
         self.lag_2 = lag_2
         if str(self.lag_2).isdigit():
@@ -308,14 +308,14 @@ class SeasonalNaive(ModelObject):
         return self
 
     def predict(self, forecast_length: int,
-                preord_regressor = [], just_point_forecast = False):
-        """Generates forecast data immediately following dates of index supplied to .fit()
-        
+                preord_regressor = [], just_point_forecast: bool = False):
+        """Generate forecast data immediately following dates of .fit().
+
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
             regressor (numpy.Array): additional regressor, not used
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
-            
+
         Returns:
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
@@ -331,7 +331,9 @@ class SeasonalNaive(ModelObject):
         if just_point_forecast:
             return df
         else:
-            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df, prediction_interval = self.prediction_interval)
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df_train, df,
+                prediction_interval=self.prediction_interval)
 
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name=self.name,
@@ -347,9 +349,8 @@ class SeasonalNaive(ModelObject):
                                           model_parameters=self.get_params())
             return prediction
 
-    def get_new_params(self,method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
-        """
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning."""
         lag_1_choice = seasonal_int()
         lag_2_choice = np.random.choice(a=['None',
                                            seasonal_int(include_one=True)],
