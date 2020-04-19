@@ -632,7 +632,8 @@ class WindowRegression(ModelObject):
                        'base_estimator': 'DecisionTree',
                        'loss': 'linear',
                        'learning_rate': 1.0}},
-                 input_dim: int = '1', output_dim: int = 1,
+                 input_dim: str = 'univariate',
+                 output_dim: str = '1step',
                  normalize_window: bool = False,
                  transfer_learning: str = None,
                  transfer_learning_transformation: dict = None,
@@ -650,6 +651,17 @@ class WindowRegression(ModelObject):
         """
         df = self.basic_profile(df)
         self.df_train = df
+
+        numbers = np.random.choice((df.shape[0] - phrase_n),
+                                           size=max_motifs_n,
+                                           replace=False)
+        motif_vecs = pd.DataFrame()
+        # takes random slices of the time series and rearranges as phrase_n length vectors
+        for z in numbers:
+            rand_slice = df.iloc[z:(z + phrase_n), ]
+            rand_slice = rand_slice.reset_index(drop=True).transpose().set_index(np.repeat(z, (df.shape[1], )), append=True)
+            motif_vecs = pd.concat([motif_vecs, rand_slice], axis=0)
+
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -675,7 +687,8 @@ class WindowRegression(ModelObject):
         else:
             upper_forecast, lower_forecast = Point_to_Probability(
                 self.df_train, df,
-                prediction_interval=self.prediction_interval)
+                prediction_interval=self.prediction_interval,
+                method='historic_quantile')
 
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name=self.name,

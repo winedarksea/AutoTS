@@ -259,8 +259,8 @@ class SeasonalNaive(ModelObject):
         self.lag_2 = lag_2
         if str(self.lag_2).isdigit():
             self.lag_2 = abs(int(self.lag_2))
-            if str(self.lag_2_choice) == str(self.lag_1_choice):
-                self.lag_2_choice = 1
+            if str(self.lag_2) == str(self.lag_1):
+                self.lag_2 = 1
         self.method = method
 
     def fit(self, df, preord_regressor = []):
@@ -269,8 +269,6 @@ class SeasonalNaive(ModelObject):
         Args:
             df (pandas.DataFrame): Datetime Indexed
         """
-        if self.lag_1 == self.lag_2:
-            raise ValueError("Lag 2 cannot equal Lag 1")
         df = self.basic_profile(df)
         self.df_train = df
 
@@ -492,21 +490,23 @@ class MotifSimulation(ModelObject):
             last_motif = df.where(df >= 0, -1).where(df <= 0, 1).tail(phrase_n)
         else:
             last_motif = df.tail(phrase_n)
-        
-        numbers = np.random.choice((df.shape[0] - phrase_n), size=max_motifs_n, replace=False)
-        
+
+        numbers = np.random.choice((df.shape[0] - phrase_n),
+                                   size=max_motifs_n,
+                                   replace=False)
+
         # make this faster
         motif_vecs = pd.DataFrame()
         # takes random slices of the time series and rearranges as phrase_n length vectors
         for z in numbers:
-            rand_slice = df.iloc[z:(z + phrase_n),]
-            rand_slice = rand_slice.reset_index(drop = True).transpose().set_index(np.repeat(z, (df.shape[1],)), append = True)
-            motif_vecs = pd.concat([motif_vecs, rand_slice], axis = 0)
+            rand_slice = df.iloc[z:(z + phrase_n), ]
+            rand_slice = rand_slice.reset_index(drop=True).transpose().set_index(np.repeat(z, (df.shape[1], )), append=True)
+            motif_vecs = pd.concat([motif_vecs, rand_slice], axis=0)
 
         if 'pct_change_sign' in comparison:
             motif_vecs = motif_vecs.where(motif_vecs >= 0, -1).where(motif_vecs <= 0, 1)
-        
-        # compare the motif vectors to the last (most recent) vector of the series
+
+        # compare the motif vectors to the most recent vector of the series
         from sklearn.metrics.pairwise import pairwise_distances
         if shared:
             comparative = pd.DataFrame(pairwise_distances(motif_vecs, last_motif.transpose(), metric = distance_metric))
@@ -521,13 +521,13 @@ class MotifSimulation(ModelObject):
                 current_comparative = pd.DataFrame(pairwise_distances(x, y, metric = distance_metric))
                 current_comparative.index = x.index
                 current_comparative.columns = [column]
-                comparative = pd.concat([comparative, current_comparative], axis = 0, sort = True)
-            comparative = comparative.groupby(level = [0,1]).sum(min_count = 0)
-        
+                comparative = pd.concat([comparative, current_comparative], axis=0, sort = True)
+            comparative = comparative.groupby(level=[0, 1]).sum(min_count=0)
+
         # comparative is a df of motifs (in index) with their value to each series (per column)
         if recency_weighting != 0:
-            rec_weights = np.repeat(((comparative.index.get_level_values(1))/df.shape[0]).values.reshape(-1,1) * recency_weighting, len(comparative.columns), axis = 1)
-            comparative = comparative.add(rec_weights, fill_value = 0)
+            rec_weights = np.repeat(((comparative.index.get_level_values(1))/df.shape[0]).values.reshape(-1,1) * recency_weighting, len(comparative.columns), axis=1)
+            comparative = comparative.add(rec_weights, fill_value=0)
         
         # make this faster
         upper_forecasts = pd.DataFrame()
@@ -535,16 +535,16 @@ class MotifSimulation(ModelObject):
         lower_forecasts = pd.DataFrame()
         for col in comparative.columns:
             # comparative.idxmax()
-            vals = comparative[col].sort_values(ascending = False)
+            vals = comparative[col].sort_values(ascending=False)
             if not shared:
                 vals = vals[vals.index.get_level_values(0) == col]
             vals = vals[vals > cutoff_threshold]
             if vals.shape[0] < cutoff_minimum:
-                vals = comparative[col].sort_values(ascending = False)
+                vals = comparative[col].sort_values(ascending=False)
                 if not shared:
                     vals = vals[vals.index.get_level_values(0) == col]
                 vals = vals.head(cutoff_minimum)
-                
+
             pos_forecasts = pd.DataFrame()
             for val_index, val_value in vals.items():
                 sec_start = (val_index[1] + phrase_n)
@@ -552,52 +552,50 @@ class MotifSimulation(ModelObject):
                     current_pos = original_df[val_index[0]].iloc[sec_start + 1:]
                 else:
                     current_pos = df[val_index[0]].iloc[sec_start:]
-                pos_forecasts = pd.concat([pos_forecasts, current_pos.reset_index(drop = True)], axis = 1, sort = False)
-            
-            
+                pos_forecasts = pd.concat([pos_forecasts, current_pos.reset_index(drop=True)], axis=1, sort=False)
+
             thresh = int(np.ceil(pos_forecasts.shape[1] * na_threshold))
             if point_method == 'mean':
-                current_forecast = pos_forecasts.mean(axis = 1)
+                current_forecast = pos_forecasts.mean(axis=1)
             elif point_method == 'sign_biased_mean':
-                axis_means = pos_forecasts.mean(axis = 0)
+                axis_means = pos_forecasts.mean(axis=0)
                 if axis_means.mean() > 0:
                     pos_forecasts = pos_forecasts[pos_forecasts.columns[~(axis_means < 0)]]
                 else:
                     pos_forecasts = pos_forecasts[pos_forecasts.columns[~(axis_means > 0)]]
-                current_forecast = pos_forecasts.mean(axis = 1)
+                current_forecast = pos_forecasts.mean(axis=1)
             elif point_method == 'sample':
-                current_forecast = pos_forecasts.sample(n = 1, axis = 1, weights = vals.values)
+                current_forecast = pos_forecasts.sample(n = 1, axis=1, weights = vals.values)
             else:
                 point_method = 'median'
-                current_forecast = pos_forecasts.median(axis = 1)
+                current_forecast = pos_forecasts.median(axis=1)
             # current_forecast.columns = [col]
-            forecasts = pd.concat([forecasts, current_forecast], axis = 1, sort = False)
-            
-            
+            forecasts = pd.concat([forecasts, current_forecast],
+                                  axis=1, sort=False)
+
             if point_method == 'sample':
                 n_samples = int(np.ceil(pos_forecasts.shape[1]/2))
-                current_forecast = pos_forecasts.sample(n = n_samples, axis = 1, weights = vals.values).dropna(thresh = thresh, axis = 0).quantile(q = [(1 - (prediction_interval* 1.1)), (prediction_interval * 1.1)], axis = 1).transpose()
+                current_forecast = pos_forecasts.sample(n = n_samples, axis=1, weights = vals.values).dropna(thresh = thresh, axis=0).quantile(q = [(1 - (prediction_interval* 1.1)), (prediction_interval * 1.1)], axis=1).transpose()
             else:
-                current_forecast = pos_forecasts.dropna(thresh = thresh, axis = 0).quantile(q = [(1 - prediction_interval), prediction_interval], axis = 1).transpose()
+                current_forecast = pos_forecasts.dropna(thresh = thresh, axis=0).quantile(q = [(1 - prediction_interval), prediction_interval], axis=1).transpose()
             # current_forecast.columns = [col, col]
-            lower_forecasts = pd.concat([lower_forecasts, current_forecast.iloc[:,0]], axis = 1, sort = False)
-            upper_forecasts = pd.concat([upper_forecasts, current_forecast.iloc[:,1]], axis = 1, sort = False)
+            lower_forecasts = pd.concat([lower_forecasts, current_forecast.iloc[:,0]], axis=1, sort=False)
+            upper_forecasts = pd.concat([upper_forecasts, current_forecast.iloc[:,1]], axis=1, sort=False)
         forecasts.columns = comparative.columns
         lower_forecasts.columns = comparative.columns
         upper_forecasts.columns = comparative.columns
-        
-        
+
         if comparison in ['pct_change', 'pct_change_sign']:
             forecasts = (forecasts + 1).replace([0], np.nan)
             forecasts = forecasts.fillna(abs(df[df != 0]).min()).fillna(0.1)
-            forecasts = pd.concat([last_row.reset_index(drop = True), (forecasts)], axis = 0, sort = False).cumprod()
+            forecasts = pd.concat([last_row.reset_index(drop=True), (forecasts)], axis=0, sort=False).cumprod()
             upper_forecasts = (upper_forecasts + 1).replace([0], np.nan)
             upper_forecasts = upper_forecasts.fillna(abs(df[df != 0]).min()).fillna(0.1)
-            upper_forecasts = pd.concat([last_row.reset_index(drop = True), (upper_forecasts)], axis = 0, sort = False).cumprod()
+            upper_forecasts = pd.concat([last_row.reset_index(drop=True), (upper_forecasts)], axis=0, sort=False).cumprod()
             lower_forecasts = (lower_forecasts + 1).replace([0], np.nan)
             lower_forecasts = lower_forecasts.fillna(abs(df[df != 0]).min()).fillna(0.1)
-            lower_forecasts = pd.concat([last_row.reset_index(drop = True), (lower_forecasts)], axis = 0, sort = False).cumprod()
-        
+            lower_forecasts = pd.concat([last_row.reset_index(drop=True), (lower_forecasts)], axis=0, sort=False).cumprod()
+
         self.forecasts = forecasts
         self.lower_forecasts = lower_forecasts
         self.upper_forecasts = upper_forecasts
@@ -641,7 +639,7 @@ class MotifSimulation(ModelObject):
         if forecasts.shape[0] < forecast_length:
             extra_len = forecast_length - forecasts.shape[0]
             empty_frame = pd.DataFrame(index=np.arange(extra_len), columns=forecasts.columns)
-            forecasts = pd.concat([forecasts, empty_frame], axis = 0, sort = False).fillna(method='ffill')
+            forecasts = pd.concat([forecasts, empty_frame], axis=0, sort=False).fillna(method='ffill')
         forecasts.columns = self.column_names
         forecasts.index = self.create_forecast_index(forecast_length=forecast_length)
         
@@ -653,14 +651,14 @@ class MotifSimulation(ModelObject):
             if lower_forecasts.shape[0] < forecast_length:
                 extra_len = forecast_length - lower_forecasts.shape[0]
                 empty_frame = pd.DataFrame(index=np.arange(extra_len), columns=lower_forecasts.columns)
-                lower_forecasts = pd.concat([lower_forecasts, empty_frame], axis = 0, sort = False).fillna(method='ffill')
+                lower_forecasts = pd.concat([lower_forecasts, empty_frame], axis=0, sort=False).fillna(method='ffill')
             lower_forecasts.columns = self.column_names
             lower_forecasts.index = self.create_forecast_index(forecast_length=forecast_length)
             
             if upper_forecasts.shape[0] < forecast_length:
                 extra_len = forecast_length - upper_forecasts.shape[0]
                 empty_frame = pd.DataFrame(index=np.arange(extra_len), columns=upper_forecasts.columns)
-                upper_forecasts = pd.concat([upper_forecasts, empty_frame], axis = 0, sort = False).fillna(method='ffill')
+                upper_forecasts = pd.concat([upper_forecasts, empty_frame], axis=0, sort=False).fillna(method='ffill')
             upper_forecasts.columns = self.column_names
             upper_forecasts.index = self.create_forecast_index(forecast_length=forecast_length)
             

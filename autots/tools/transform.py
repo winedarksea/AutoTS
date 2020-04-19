@@ -109,16 +109,16 @@ class Detrend(object):
 
     def fit_transform(self, df):
         """Fit and Return Detrended DataFrame.
-        
+
         Args:
             df (pandas.DataFrame): input dataframe
         """
         self.fit(df)
-        return self.transform(df)        
+        return self.transform(df)
 
     def transform(self, df):
         """Return detrended data.
-        
+
         Args:
             df (pandas.DataFrame): input dataframe
         """
@@ -127,12 +127,13 @@ class Detrend(object):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
         # formerly X = df.index.astype( int ).values
-        X = (pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values)
+        X = (pd.to_numeric(df.index, errors='coerce',
+                           downcast='integer').values)
         # from statsmodels.tools import add_constant
         # X = add_constant(X, has_constant='add')
         df = df.astype(float) - self.model.predict(X)
         return df
-    
+
     def inverse_transform(self, df):
         """Return data to original form.
 
@@ -142,16 +143,18 @@ class Detrend(object):
         try:
             df = df.astype(float)
         except Exception:
-            raise ValueError ("Data Cannot Be Converted to Numeric Float")
-        X = pd.to_numeric(df.index, errors = 'coerce',downcast='integer').values
+            raise ValueError("Data Cannot Be Converted to Numeric Float")
+        X = pd.to_numeric(df.index, errors='coerce',
+                          downcast='integer').values
         # from statsmodels.tools import add_constant
         # X = add_constant(X, has_constant='add')
         df = df.astype(float) + self.model.predict(X)
         return df
 
+
 class SinTrend(object):
-    """Modelling sin"""
-    
+    """Modelling sin."""
+
     def __init__(self):
         self.name = 'SinTrend'
     def fit_sin(self, tt, yy):
@@ -252,6 +255,114 @@ class SinTrend(object):
         df.index = df_index
         return df
 
+
+class PositiveShift(object):
+    """Shift each series if necessary to assure all values >= 1."""
+
+    def __init__(self, log: bool = False):
+        self.name = 'PositiveShift'
+        self.log = log
+
+    def fit(self, df):
+        """Fits shift interval.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        shift_amount = df.min(axis=0) - 1
+        self.shift_amount = shift_amount.where(shift_amount < 0, 0).abs()
+
+        return self
+
+    def fit_transform(self, df):
+        """Fit and Return Detrended DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+    def transform(self, df):
+        """Return detrended data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        df = df + self.shift_amount
+        if self.log:
+            df_log = pd.DataFrame(np.log(df))
+            return df_log
+        else:
+            return df
+
+    def inverse_transform(self, df):
+        """Return data to original form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.log:
+            df = pd.DataFrame(np.exp(df))
+        
+        df = df - self.shift_amount
+        return df
+
+
+class Occurrence(object):
+    """Intermittent inspired transform predicts probability not median."""
+
+    def __init__(self):
+        self.name = ''
+
+    def fit(self, df):
+        """Fits shift interval.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.df_med = df.median(axis=0)
+        self.upper_mean = df[df > df_med].mean(axis=0) - df_med
+        self.lower_mean = df[df < df_med].mean(axis=0) - df_med
+        return self
+
+    def fit_transform(self, df):
+        """Fit and Return Detrended DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+    def transform(self, df):
+        """Return detrended data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        temp = df.where(df >= self.df_med, -1)
+        temp = temp.where(df <= self.df_med, 1).where(df != self.df_med, 0)
+        return temp
+
+    def inverse_transform(self, df):
+        """Return data to original form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        invtrans_df = df.copy()
+
+        invtrans_df = invtrans_df.where(df <= 0,
+                                        self.upper_mean * df, axis=1)
+        invtrans_df = invtrans_df.where(df >= 0,
+                                        (self.lower_mean * df).abs() * -1,
+                                        axis=1)
+        invtrans_df = invtrans_df + self.df_med
+        invtrans_df = invtrans_df.where(df != 0, self.df_med, axis=1)
+        return invtrans_df
+
+
 class RollingMeanTransformer(object):
     """Attempt at Rolling Mean with built-in inverse_transform for time series
     inverse_transform can only be applied to the original series, or an immediately following forecast
@@ -261,6 +372,7 @@ class RollingMeanTransformer(object):
     Args:
         window (int): number of periods to take mean over
     """
+
     def __init__(self, window: int = 10, fixed: bool = False):
         self.window = window
         self.fixed = fixed
@@ -573,6 +685,8 @@ class GeneralTransformer(object):
             'PctChangeTransformer' - converts to pct_change, not recommended if lots of zeroes in data
             'SinTrend' - removes a sin trend (fitted to each column) from the data
             'CumSumTransformer' - makes value sum of all previous
+            'PositiveShift' - makes all values >= 1
+            'Log' - log transform (uses PositiveShift first as necessary)
         
         second_transformation (str): second transformation to apply. Same options as transformation, but with transformation_param passed in if used
 
@@ -659,34 +773,38 @@ class GeneralTransformer(object):
         Returns:
             transformer object
         """
-        
+
         if transformation in [None, 'None', 'Detrend', 'SinTrend',
                               'DifferencedTransformer', 'RollingMean10',
-                              'PctChangeTransformer', 'CumSumTransformer']:
-            return {'None': EmptyTransformer(), 
+                              'PctChangeTransformer', 'CumSumTransformer',
+                              'PositiveShift', "Log"]:
+            return {'None': EmptyTransformer(),
                     None: EmptyTransformer(),
-                    'RollingMean10': RollingMeanTransformer(window = 10),
-                    'Detrend':Detrend(),
+                    'RollingMean10': RollingMeanTransformer(window=10),
+                    'Detrend': Detrend(),
                     'DifferencedTransformer': DifferencedTransformer(),
                     'PctChangeTransformer': PctChangeTransformer(),
                     'SinTrend': SinTrend(),
+                    'PositiveShift': PositiveShift(),
+                    'Log': PositiveShift(log=True),
                     'CumSumTransformer': CumSumTransformer()
                     }[transformation]
-        
+
         elif (transformation == 'MinMaxScaler'):
             from sklearn.preprocessing import MinMaxScaler
             transformer = MinMaxScaler(feature_range=(0, 1), copy=True)
             return transformer
-        
+
         elif (transformation == 'PowerTransformer'):
             from sklearn.preprocessing import PowerTransformer
-            transformer = PowerTransformer(method = 'yeo-johnson', standardize=True, copy=True)
+            transformer = PowerTransformer(method='yeo-johnson',
+                                           standardize=True, copy=True)
             return transformer
-        
+
         elif (transformation == 'QuantileTransformer'):
             from sklearn.preprocessing import QuantileTransformer
             quants = 1000 if df.shape[0] > 1000 else int(df.shape[0] / 3)
-            transformer = QuantileTransformer(n_quantiles = quants, copy=True)
+            transformer = QuantileTransformer(n_quantiles=quants, copy=True)
             return transformer
         
         elif (transformation == 'StandardScaler'):
@@ -994,17 +1112,17 @@ def RandomTransform():
                         'MaxAbsScaler', 'StandardScaler', 'RobustScaler', 'PCA',
                         'FastICA', 'Detrend', 'RollingMean10', 'RollingMean100thN',
                         'DifferencedTransformer', 'SinTrend', 'PctChangeTransformer',
-                        'CumSumTransformer']
-    first_transformer_prob = [0.3, 0.05, 0.22, 0.05,
+                        'CumSumTransformer', 'PositiveShift', 'Log']
+    first_transformer_prob = [0.3, 0.05, 0.2, 0.05,
                               0.05, 0.05, 0.05, 0.01,
                               0.01, 0.01, 0.03, 0.02,
                               0.06, 0.01, 0.05,
-                              0.03]
-    third_transformer_prob = [0.22, 0.05, 0.1, 0.05,
+                              0.02, 0.02, 0.01]
+    third_transformer_prob = [0.2, 0.05, 0.1, 0.05,
                               0.05, 0.1, 0.05, 0.05,
                               0.05, 0.05, 0.03, 0.02,
                               0.1, 0.01, 0.04,
-                              0.03]
+                              0.02, 0.02, 0.01]
     outlier_method_choice = np.random.choice(a=[None, 'clip', 'remove'],
                                              size=1, p=[0.5, 0.3, 0.2]).item()
     if outlier_method_choice is not None:

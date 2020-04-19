@@ -19,6 +19,7 @@ Latest:
 		DifferencedDetrend
 		CumSumTransformer
 		PctChangeTransformer
+		PositiveShift Transformer
 	Entirely changed the general transformer to add three levels of transformation
 	GLM
 		Error where it apparently won't tolerate any zeroes was compensated for.
@@ -49,18 +50,35 @@ How do fillna methods handle datasets that have entirely NaN series?
 Check if any transformation parameters seem to consistently perform poorly, suggesting of problems. Also speed.
 
 Test updated context_slicer
-
-Add to template: Gluon, Motif
-Bring GeneralTransformer to higher level API.
-	wide_to_long and long_to_wide in higher-level API
-Option to use full traceback in errors in table
+Log Positive Shifting
+1 if > lower quantile, else 0. Result * mean of all values > lower quantile
+1 if > median, -1 if < median. result * (mean - median)
 
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
 GluonTS not accepting quite a lot of frequencies
 
+## General Tasks
+* Add RNN and other DNNs
+* Improve distance ensembling speed
+* Add horizontal/clustered ensembling
+	* intermittent/non-intermittent
+* Improve history-driven point to probability
+* Add weighting option
+	* Sum of all as weight
+	* sum of last N% as weight
+* Adding hierarchail
+
 # To-Do
 * Get the sphinx (google style) documentation and readthedocs.io website up
+* Add to template: Gluon, Motif
+* Bring GeneralTransformer to higher level API.
+	* wide_to_long and long_to_wide in higher-level API
+* Option to use full traceback in errors in table
+* Hierarchial
+	* every level must be included in forecasting data
+	* 'bottom-up' and 'mid' levels
+	* one level. User would have to specify all as based on lowest-level keys if wanted sum-up.
 * Better point to probabilistic (uncertainty of naive last-value forecast) - linear reg of abs error of samples - simulations
 	* Data, pct change, find window with % max change pos, and neg then avg. Bound is first point + that percent, roll from that first point and adjust if points cross, variant where all series share knowledge
 	* Data, split, normalize, find distribution exponentially weighted to most recent, center around forecast, shared variant
@@ -81,9 +99,11 @@ GluonTS not accepting quite a lot of frequencies
 			PyTorch
 * Better X_maker:
 	* 1d and 2d variations
+	* .cov, .skew, .kurt, .var
 	https://link.springer.com/article/10.1007/s10618-019-00647-x/tables/1
 * RollingRegression
 	Pytorch and Tensorflow Simple LSTM/GRU
+		Neural net random seed as a parameter
 	other sequence models
 	Categorical classifier, ComplementNB
 	Clustering then separate models
@@ -152,6 +172,7 @@ GluonTS not accepting quite a lot of frequencies
 	Tensorflow Probability Structural Time Series
 	Simulations
 	Ta-lib
+	Pyflux
 	tslearn
 	Multivariate GARCH
 	pydlm - baysesian dynamic linear
@@ -159,7 +180,7 @@ GluonTS not accepting quite a lot of frequencies
 	MarkovAutoRegression
 	TPOT if it adds multioutput functionality
 	https://towardsdatascience.com/pyspark-forecasting-with-pandas-udf-and-fb-prophet-e9d70f86d802
-	Compressive Transformer, if they go anywhere
+	Compressive Transformer
 
 #### New Transformations:
 	Weighted moving average
@@ -167,5 +188,5 @@ GluonTS not accepting quite a lot of frequencies
 	Seasonal means/std/last value differencing
 		- random row, find other rows closest to it, retrieve indexes, see if indexes have divisible difference between.
 	Shared discretization (all series get same binning)
-	Ordinal discretization (invertible, all values to bins labeled 1, 2, 3, etc.)
+	Last Value Centering
 	

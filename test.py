@@ -11,8 +11,8 @@ from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 
-forecast_length = 8
-df_long = load_toy_monthly()
+forecast_length = 6
+df_long = load_toy_daily()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -32,7 +32,7 @@ model_list = [
               ]
 model_list = 'superfast'
 # model_list = ['RollingRegression', 'AverageValueNaive', 'GLS']
-model_list = ['LastValueNaive']
+# model_list = ['LastValueNaive']
 
 metric_weighting = {'smape_weighting': 10, 'mae_weighting': 1,
                     'rmse_weighting': 5, 'containment_weighting': 1,
@@ -43,7 +43,7 @@ metric_weighting = {'smape_weighting': 10, 'mae_weighting': 1,
 
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9, ensemble=False, weighted=False,
-               max_generations=5000, num_validations=2, validation_method='even',
+               max_generations=50, num_validations=2, validation_method='even',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=50,
                max_per_model_class=10,
@@ -138,8 +138,9 @@ Help correlate errors with parameters
 cols = ['Model', 'ModelParameters',
         'TransformationParameters', 'Exceptions']
 all_results = pd.concat([initial_results[cols], error_results[cols]], axis=0)
-# test = initial_results[ initial_results['TransformationParameters'].str.contains('FastICA')]
+
+test = initial_results[ initial_results['TransformationParameters'].str.contains('PositiveShift')]
 
 if error_results.shape[0] > 0:
-    test_corr2 = error_correlations(all_results,
-                                    result='corr')  # result='poly corr'
+    test_corr = error_correlations(all_results,
+                                   result='corr')  # result='poly corr'
