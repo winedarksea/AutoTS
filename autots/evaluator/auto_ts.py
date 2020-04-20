@@ -17,7 +17,6 @@ from autots.evaluator.auto_model import TemplateWizard
 from autots.evaluator.auto_model import unpack_ensemble_models
 from autots.evaluator.auto_model import generate_score
 from autots.models.ensemble import EnsembleForecast
-from autots.models.ensemble import EnsembleEvaluate
 from autots.evaluator.auto_model import PredictWitch
 from autots.tools.shaping import categorical_inverse
 from autots.evaluator.auto_model import validation_aggregation
@@ -48,8 +47,6 @@ class AutoTS(object):
         models_to_validate (int): top n models to pass through to cross validation
         max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
         validation_method (str): 'even' or 'backwards' where backwards is better for shorter training sets
-        per_timestamp_errors (bool): whether to make available a list of errors by series * timestamps. Forced to True with Ensemble == True.
-        per_series_errors (bool): whether to make available SMAPE/SME per series. Forced to True if Ensemble == True.
         min_allowed_train_percent (float): useful in (unrecommended) cases where forecast_length > training length. Percent of forecast length to allow as min training, else raises error.
         max_generations (int): number of genetic algorithms generations to run. More runs = better chance of better accuracy.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give slightly more output.
@@ -65,7 +62,7 @@ class AutoTS(object):
                  prediction_interval: float = 0.9,
                  no_negatives: bool = False,
                  weighted: bool = False,
-                 ensemble: bool = True,
+                 ensemble: str = None,
                  initial_template: str = 'General+Random',
                  figures: bool = False,
                  random_seed: int = 425,
@@ -88,8 +85,6 @@ class AutoTS(object):
                  models_to_validate: int = 40,
                  max_per_model_class: int = 8,
                  validation_method: str = 'even',
-                 per_timestamp_errors: bool = False,
-                 per_series_errors: bool = False,
                  min_allowed_train_percent: float = 0.5,
                  max_generations: int = 5,
                  verbose: int = 1
@@ -113,15 +108,12 @@ class AutoTS(object):
         self.models_to_validate = models_to_validate
         self.max_per_model_class = max_per_model_class
         self.validation_method = validation_method
-        self.per_timestamp_errors = per_timestamp_errors
-        self.per_series_errors = per_series_errors
         self.min_allowed_train_percent = min_allowed_train_percent
         self.max_generations = max_generations
         self.verbose = int(verbose)
+        if self.ensemble is not None:
+            self.ensemble = str(self.ensemble).lower()
 
-        if ensemble:
-            self.per_timestamp_errors = True
-            self.per_series_errors = True
 
         # convert shortcuts of model lists to actual lists of models
         if model_list == 'default':
@@ -326,31 +318,28 @@ class AutoTS(object):
             preord_regressor_forecast=preord_regressor_test,
             holiday_country=holiday_country,
             startTimeStamps=self.startTimeStamps,
-            per_timestamp_errors=self.per_timestamp_errors,
-            per_series_errors=self.per_series_errors,
             template_cols=template_cols,
             random_seed=random_seed,
             verbose=verbose)
         model_count = template_result.model_count
 
         # capture the data from the lower level results
-        self.initial_results.model_results = pd.concat([self.initial_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+        self.initial_results.model_results = pd.concat(
+            [self.initial_results.model_results,
+             template_result.model_results],
+            axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+        self.initial_results.per_series_mae = pd.concat(
+            [self.initial_results.per_series_mae,
+             template_result.per_series_mae],
+            axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+        self.initial_results.per_timestamp_smape = pd.concat(
+                [self.initial_results.per_timestamp_smape,
+                 template_result.per_timestamp_smape],
+                axis=0, sort=False)
         self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting,prediction_interval = prediction_interval)
-        if result_file != None:
-            self.initial_results.model_results.to_csv(result_file, index = False)
-        if self.per_timestamp_errors:
-            self.initial_results.model_results_per_timestamp_smape = self.initial_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
-            self.initial_results.model_results_per_timestamp_mae = self.initial_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
-        if self.per_series_errors:
-            self.initial_results.model_results_per_series_smape = self.initial_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
-            self.initial_results.model_results_per_series_mae = self.initial_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
-        if ensemble:
-            self.initial_results.forecasts_list.extend(template_result.forecasts_list)
-            self.initial_results.forecasts_runtime.extend(template_result.forecasts_runtime)
-            self.initial_results.forecasts.extend(template_result.forecasts)
-            self.initial_results.upper_forecasts.extend(template_result.upper_forecasts)
-            self.initial_results.lower_forecasts.extend(template_result.lower_forecasts)
-        
+        if result_file is not None:
+            self.initial_results.model_results.to_csv(result_file, index=False)
+
         # now run new generations, trying more models based on past successes.
         current_generation = 0
         while current_generation < self.max_generations:
@@ -384,77 +373,162 @@ class AutoTS(object):
                                              holiday_country=holiday_country,
                                              startTimeStamps=profile_df.loc['FirstDate'],
                                              template_cols=template_cols,
-                                             per_timestamp_errors=self.per_timestamp_errors,
-                                             per_series_errors=self.per_series_errors,
                                              random_seed=random_seed,
                                              verbose=verbose)
             model_count = template_result.model_count
             
             # capture results from lower-level template run
-            self.initial_results.model_results = pd.concat([self.initial_results.model_results, template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+            self.initial_results.model_results = pd.concat(
+                [self.initial_results.model_results,
+                 template_result.model_results],
+                axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+            self.initial_results.per_series_mae = pd.concat(
+                [self.initial_results.per_series_mae,
+                 template_result.per_series_mae],
+                axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+            self.initial_results.per_timestamp_smape = pd.concat(
+                [self.initial_results.per_timestamp_smape,
+                 template_result.per_timestamp_smape],
+                axis=0, sort=False)
             self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
-            if result_file != None:
-                self.initial_results.model_results.to_csv(result_file, index = False)
-            if self.per_timestamp_errors:
-                self.initial_results.model_results_per_timestamp_smape = self.initial_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
-                self.initial_results.model_results_per_timestamp_mae = self.initial_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
-            if self.per_series_errors:
-                self.initial_results.model_results_per_series_smape = self.initial_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
-                self.initial_results.model_results_per_series_mae = self.initial_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
-            if ensemble:
-                self.initial_results.forecasts_list.extend(template_result.forecasts_list)
-                self.initial_results.forecasts_runtime.extend(template_result.forecasts_runtime)
-                self.initial_results.forecasts.extend(template_result.forecasts)
-                self.initial_results.upper_forecasts.extend(template_result.upper_forecasts)
-                self.initial_results.lower_forecasts.extend(template_result.lower_forecasts)        
-        
+            if result_file is not None:
+                self.initial_results.model_results.to_csv(result_file,
+                                                          index=False)
+
         # try ensembling
-        if ensemble:
-            ensemble_forecasts_list = []
+        if ensemble is not None:
+            ensemble_templates = pd.DataFrame()
+            if 'simple' in ensemble:
+                ens_temp = self.initial_results.model_results
+                ens_temp = ens_temp[ens_temp['Ensemble'] == 0]
+                # best 3, all can be of same model type
+                best3nonunique = ens_temp.nsmallest(3, columns=['Score'])
+                if best3nonunique.shape[0] == 3:
+                    ensemble_models = {}
+                    for index, row in best3nonunique.iterrows():
+                        temp_dict = {
+                            'Model': row['Model'],
+                            'ModelParameters': row['ModelParameters'],
+                            'TransformationParameters': row['TransformationParameters']
+                            }
+                        ensemble_models[row['ID']] = temp_dict
+                    best3nu_params = {'Model': 'Ensemble',
+                                      'ModelParameters':
+                                          json.dumps({'model_name': 'Best3',
+                                                      'models': ensemble_models}),
+                                      'TransformationParameters': '{}',
+                                      'Ensemble': 1}
+                    best3nu_params = pd.DataFrame(best3nu_params, index=[0])
+                    ensemble_templates = pd.concat([ensemble_templates,
+                                                    best3nu_params],
+                                                   axis=0)
+                # best 3, by SMAPE, RMSE, MAE
+                bestsmape = ens_temp.nsmallest(1, columns=['smape_weighted'])
+                bestrmse = ens_temp.nsmallest(2, columns=['rmse_weighted'])
+                bestmae = ens_temp.nsmallest(3, columns=['mae_weighted'])
+                best3metric = pd.concat([bestsmape, bestrmse, bestmae], axis=0)
+                best3metric = best3metric.drop_duplicates().head(3)
+                if best3metric.shape[0] == 3:
+                    ensemble_models = {}
+                    for index, row in best3metric.iterrows():
+                        temp_dict = {
+                            'Model': row['Model'],
+                            'ModelParameters': row['ModelParameters'],
+                            'TransformationParameters': row['TransformationParameters']
+                            }
+                        ensemble_models[row['ID']] = temp_dict
+                    best3m_params = {'Model': 'Ensemble',
+                                      'ModelParameters':
+                                          json.dumps({'model_name': 'Best3',
+                                                      'models': ensemble_models}),
+                                      'TransformationParameters': '{}',
+                                      'Ensemble': 1}
+                    best3m_params = pd.DataFrame(best3m_params, index=[0])
+                    ensemble_templates = pd.concat([ensemble_templates,
+                                                    best3m_params],
+                                                   axis=0)
+                # best 3, all must be of different model types
+                ens_temp = ens_temp.sort_values('Score', ascending=True, na_position='last').groupby('Model').head(1).reset_index(drop=True)
+                best3unique = ens_temp.nsmallest(3, columns=['Score'])
+                if best3unique.shape[0] == 3:
+                    ensemble_models = {}
+                    for index, row in best3unique.iterrows():
+                        temp_dict = {
+                            'Model': row['Model'],
+                            'ModelParameters': row['ModelParameters'],
+                            'TransformationParameters': row['TransformationParameters']
+                            }
+                        ensemble_models[row['ID']] = temp_dict
+                    best3u_params = {'Model': 'Ensemble',
+                                     'ModelParameters':
+                                         json.dumps({'model_name': 'Best3',
+                                                     'models': ensemble_models}),
+                                     'TransformationParameters': '{}',
+                                     'Ensemble': 1}
+                    best3u_params = pd.DataFrame(best3u_params, index=[0])
+                    ensemble_templates = pd.concat([ensemble_templates,
+                                                    best3u_params],
+                                                   axis=0, ignore_index=True)
+
+            if 'distance' in ensemble:
+                try:
+                    first_bit = int(np.ceil(forecast_length * 0.2))
+                    last_bit = int(np.floor(forecast_length * 0.8))
+                    not_ens_list = self.initial_results.model_results[self.initial_results.model_results['Ensemble'] == 0]['ID'].tolist()
+                    ens_per_ts = self.initial_results.per_timestamp_smape[self.initial_results.per_timestamp_smape.index.isin(not_ens_list)]
+                    first_model = ens_per_ts.iloc[:, 0:first_bit].mean(axis=1).idxmin()
+                    last_model = ens_per_ts.iloc[:, first_bit:(last_bit + first_bit)].mean(axis = 1).idxmin()
+                    ensemble_models = {}
+                    best3 = self.initial_results.model_results[self.initial_results.model_results['ID'].isin([first_model,last_model])].drop_duplicates(subset=['Model','ModelParameters','TransformationParameters'])
+                    for index, row in best3.iterrows():
+                        temp_dict = {
+                            'Model': row['Model'],
+                            'ModelParameters': row['ModelParameters'],
+                            'TransformationParameters': row['TransformationParameters']
+                            }
+                        ensemble_models[row['ID']] = temp_dict
+                    best3u_params = {'Model': 'Ensemble',
+                                     'ModelParameters':
+                                         json.dumps({'model_name': 'Dist2080',
+                                                     'models': ensemble_models,
+                                                     'FirstModel': first_model,
+                                                     'LastModel': last_model}),
+                                     'TransformationParameters': '{}',
+                                     'Ensemble': 1}
+                    best3u_params = pd.DataFrame(best3u_params, index=[0])
+                    ensemble_templates = pd.concat([ensemble_templates,
+                                                    best3u_params],
+                                                   axis=0, ignore_index=True)
+                except Exception as e:
+                    print(e)
+
+            template_result = TemplateWizard(ensemble_templates, df_train,
+                                             df_test,
+                                             current_weights,
+                                             model_count=model_count,
+                                             forecast_length=forecast_length,
+                                             frequency=frequency,
+                                             prediction_interval=prediction_interval,
+                                             no_negatives=no_negatives,
+                                             preord_regressor_train=preord_regressor_train,
+                                             preord_regressor_forecast=preord_regressor_test,
+                                             holiday_country=holiday_country,
+                                             startTimeStamps=profile_df.loc['FirstDate'],
+                                             template_cols=template_cols,
+                                             random_seed=random_seed,
+                                             verbose=verbose)
+            model_count = template_result.model_count
             
-            best3 = self.initial_results.model_results[self.initial_results.model_results['Ensemble'] == 0].nsmallest(3, columns = ['Score'])
-            ensemble_models = {}
-            for index, row in best3.iterrows():
-                temp_dict = {'Model': row['Model'],
-                 'ModelParameters': row['ModelParameters'],
-                 'TransformationParameters': row['TransformationParameters']
-                 }
-                ensemble_models[row['ID']] = temp_dict
-            best3params = {'models': ensemble_models}    
-            
-            best3_ens_forecast = EnsembleForecast("Best3Ensemble", best3params, self.initial_results.forecasts_list, self.initial_results.forecasts, self.initial_results.lower_forecasts, self.initial_results.upper_forecasts, self.initial_results.forecasts_runtime, prediction_interval)
-            ensemble_forecasts_list.append(best3_ens_forecast)
-            
-            first_bit = int(np.ceil(forecast_length * 0.2))
-            last_bit = int(np.floor(forecast_length * 0.8))
-            ens_per_ts = self.initial_results.model_results_per_timestamp_smape[self.initial_results.model_results_per_timestamp_smape.index.isin(self.initial_results.model_results[self.initial_results.model_results['Ensemble'] == 0]['ID'].tolist())]
-            first_model = ens_per_ts.iloc[:,0:first_bit].mean(axis = 1).idxmin()
-            last_model = ens_per_ts.iloc[:,first_bit:(last_bit + first_bit)].mean(axis = 1).idxmin()
-            ensemble_models = {}
-            best3 = self.initial_results.model_results[self.initial_results.model_results['ID'].isin([first_model,last_model])].drop_duplicates(subset = ['Model','ModelParameters','TransformationParameters'])
-            for index, row in best3.iterrows():
-                temp_dict = {'Model': row['Model'],
-                 'ModelParameters': row['ModelParameters'],
-                 'TransformationParameters': row['TransformationParameters']
-                 }
-                ensemble_models[row['ID']] = temp_dict
-            dist2080params = {'models': ensemble_models,
-                              'FirstModel':first_model,
-                              'LastModel':last_model} 
-            dist2080_ens_forecast = EnsembleForecast("Dist2080Ensemble", dist2080params, self.initial_results.forecasts_list, self.initial_results.forecasts, self.initial_results.lower_forecasts, self.initial_results.upper_forecasts, self.initial_results.forecasts_runtime, prediction_interval)
-            ensemble_forecasts_list.append(dist2080_ens_forecast)
-            ens_template_result = EnsembleEvaluate(ensemble_forecasts_list, df_test = df_test, weights = current_weights, model_count = model_count)
-            
-            model_count = ens_template_result.model_count
-            self.initial_results.model_results = pd.concat([self.initial_results.model_results, ens_template_result.model_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+            # capture results from lower-level template run
+            self.initial_results.model_results = pd.concat(
+                [self.initial_results.model_results,
+                 template_result.model_results],
+                axis=0, ignore_index=True, sort=False).reset_index(drop=True)
             self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
-            if self.per_timestamp_errors:
-                self.initial_results.model_results_per_timestamp_smape = self.initial_results.model_results_per_timestamp_smape.append(ens_template_result.model_results_per_timestamp_smape)
-                self.initial_results.model_results_per_timestamp_mae = self.initial_results.model_results_per_timestamp_mae.append(ens_template_result.model_results_per_timestamp_mae)
-            if self.per_series_errors:
-                self.initial_results.model_results_per_series_smape = self.initial_results.model_results_per_series_smape.append(ens_template_result.model_results_per_series_smape)
-                self.initial_results.model_results_per_series_mae = self.initial_results.model_results_per_series_mae.append(ens_template_result.model_results_per_series_mae)
-        
+            if result_file is not None:
+                self.initial_results.model_results.to_csv(result_file,
+                                                          index=False)
+
         # drop any duplicates in results
         self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(subset = (['ID'] + self.template_cols))
         
@@ -477,7 +551,7 @@ class AutoTS(object):
         validation_template = validation_template.sort_values(
             by="Score", ascending=True, na_position='last')
         if str(self.max_per_model_class).isdigit():
-            validation_template = validation_template.sort_values('Score', ascending = True, na_position = 'last').groupby('Model').head(self.max_per_model_class).reset_index(drop = True)
+            validation_template = validation_template.sort_values('Score', ascending = True, na_position = 'last').groupby('Model').head(self.max_per_model_class).reset_index(drop=True)
         validation_template = validation_template.sort_values('Score', ascending = True, na_position = 'last').head(self.models_to_validate)
         validation_template = validation_template[self.template_cols]
         if not ensemble:
@@ -531,7 +605,7 @@ class AutoTS(object):
                 # run validation template on current slice
                 template_result = TemplateWizard(
                     validation_template, df_train, df_test, current_weights,
-                    model_count=model_count, ensemble=ensemble,
+                    model_count=model_count,
                     forecast_length=forecast_length,
                     frequency=frequency,
                     prediction_interval=prediction_interval,
@@ -540,29 +614,21 @@ class AutoTS(object):
                     holiday_country=holiday_country,
                     startTimeStamps=profile_df.loc['FirstDate'],
                     template_cols=template_cols,
-                    per_timestamp_errors=self.per_timestamp_errors,
-                    per_series_errors=self.per_series_errors,
                     random_seed=random_seed, verbose=verbose,
-                    validation_round = (y + 1))
+                    validation_round=(y + 1))
                 model_count = template_result.model_count
                 # gather results of template run
                 self.initial_results.model_results = pd.concat(
-                    [self.initial_results.model_results, template_result.model_results],
-                    axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+                    [self.initial_results.model_results,
+                     template_result.model_results],
+                    axis=0, ignore_index=True,
+                    sort=False).reset_index(drop=True)
                 self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting=metric_weighting, prediction_interval=prediction_interval)
-                if self.per_timestamp_errors:
-                    self.initial_results.model_results_per_timestamp_smape = self.initial_results.model_results_per_timestamp_smape.append(template_result.model_results_per_timestamp_smape)
-                    self.initial_results.model_results_per_timestamp_mae = self.initial_results.model_results_per_timestamp_mae.append(template_result.model_results_per_timestamp_mae)
-                if self.per_series_errors:
-                    self.initial_results.model_results_per_series_smape = self.initial_results.model_results_per_series_smape.append(template_result.model_results_per_series_smape)
-                    self.initial_results.model_results_per_series_mae = self.initial_results.model_results_per_series_mae.append(template_result.model_results_per_series_mae)
-        
+
         self.validation_results = copy.copy(self.initial_results)
         # aggregate validation results
         self.validation_results = validation_aggregation(
-            self.validation_results,
-            per_timestamp_errors=self.per_timestamp_errors,
-            per_series_errors=self.per_series_errors)
+            self.validation_results)
 
         # store errors in separate dataframe
         val_errors = self.initial_results.model_results[
@@ -664,9 +730,9 @@ class AutoTS(object):
             export_template = export_template.nsmallest(n, columns = ['Score'])[self.template_cols]
         try:
             if '.csv' in filename:
-                return export_template.to_csv(filename, index = False)
+                return export_template.to_csv(filename, index=False)
             if '.json' in filename:
-                return export_template.to_json(filename, orient = 'columns')
+                return export_template.to_json(filename, orient='columns')
         except PermissionError:
             raise PermissionError("Permission Error: directory or existing file is locked for editing.")
     def import_template(self, filename: str, method: str = "Add On"):
@@ -680,7 +746,7 @@ class AutoTS(object):
         if '.csv' in filename:
             import_template = pd.read_csv(filename)
         if '.json' in filename:
-            import_template = pd.read_json(filename, orient = 'columns')
+            import_template = pd.read_json(filename, orient='columns')
         
         try:
             import_template = import_template[self.template_cols]
@@ -700,7 +766,7 @@ class AutoTS(object):
         """
         past_results = pd.read_csv(filename)
         past_results = past_results[pd.isnull(past_results['Exceptions'])]
-        self.initial_results.model_results = pd.concat([self.initial_results.model_results, past_results], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+        self.initial_results.model_results = pd.concat([self.initial_results.model_results, past_results], axis=0, ignore_index=True, sort=False).reset_index(drop=True)
         return self
     def get_params(self):
         pass

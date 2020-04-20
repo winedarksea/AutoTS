@@ -510,58 +510,61 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     
     return df_forecast
 
+
 class TemplateEvalObject(object):
-    """Object to contain all your failures!
-    """
-    def __init__(self, model_results = pd.DataFrame(), model_results_per_timestamp_smape=pd.DataFrame(),
-                 model_results_per_timestamp_mae=pd.DataFrame(), model_results_per_series_mae =pd.DataFrame(),
-                 model_results_per_series_smape = pd.DataFrame(), forecasts= [],
-                 upper_forecasts = [], lower_forecasts=[], forecasts_list = [],
-                 forecasts_runtime = [], model_count: int = 0
+    """Object to contain all your failures!."""
+
+    def __init__(self, model_results=pd.DataFrame(),
+                 per_timestamp_smape=pd.DataFrame(),
+                 per_series_mae=pd.DataFrame(),
+                 model_count: int = 0
                  ):
         self.model_results = model_results
-        self.model_results_per_timestamp_smape = model_results_per_timestamp_smape
-        self.model_results_per_timestamp_mae = model_results_per_timestamp_mae
-        self.model_results_per_series_mae = model_results_per_series_mae
-        self.model_results_per_series_smape = model_results_per_series_smape
-        self.forecasts = forecasts
-        self.upper_forecasts = upper_forecasts
-        self.lower_forecasts = lower_forecasts
-        self.forecasts_list = forecasts_list
-        self.forecasts_runtime = forecasts_runtime
         self.model_count = model_count
+        self.per_series_mae = per_series_mae
+        self.per_timestamp_smape = per_timestamp_smape
 
-def unpack_ensemble_models(template, 
-                           template_cols: list = ['Model','ModelParameters','TransformationParameters','Ensemble'],
+
+def unpack_ensemble_models(template,
+                           template_cols: list = ['Model', 'ModelParameters',
+                                                  'TransformationParameters',
+                                                  'Ensemble'],
                            keep_ensemble: bool = True):
-    """
-    Takes ensemble models from a template and returns template + ensemble models
-    """
+    """Take ensemble models from template and add as new rows."""
     ensemble_template = pd.DataFrame()
     for index, value in template[template['Ensemble'] == 1]['ModelParameters'].iteritems():
         model_dict = json.loads(value)['models']
         model_df = pd.DataFrame.from_dict(model_dict, orient='index')
-        model_df = model_df.rename_axis('ID').reset_index(drop = False)
+        model_df = model_df.rename_axis('ID').reset_index(drop=False)
         model_df['Ensemble'] = 0
-        ensemble_template = pd.concat([ensemble_template, model_df], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
-    
-    template = pd.concat([template, ensemble_template], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+        ensemble_template = pd.concat([ensemble_template, model_df], axis=0,
+                                      ignore_index=True,
+                                      sort=False).reset_index(drop=True)
+
+    template = pd.concat([template, ensemble_template], axis=0,
+                         ignore_index=True,
+                         sort=False).reset_index(drop=True)
     template = template.drop_duplicates(subset = template_cols)
     if not keep_ensemble:
         template = template[template['Ensemble'] == 0]
     return template
 
-def PredictWitch(template, df_train,forecast_length: int,
-                    frequency: str = 'infer', 
-                    prediction_interval: float = 0.9, no_negatives: bool = False,
-                    preord_regressor_train = [], preord_regressor_forecast = [], 
-                    holiday_country: str = 'US', startTimeStamps = None,
-                    random_seed: int = 2020, verbose: int = 0,
-                    template_cols: list = ['Model','ModelParameters','TransformationParameters','Ensemble']):
+
+def PredictWitch(template, df_train, forecast_length: int,
+                 frequency: str = 'infer',
+                 prediction_interval: float = 0.9,
+                 no_negatives: bool = False,
+                 preord_regressor_train = [],
+                 preord_regressor_forecast = [],
+                 holiday_country: str = 'US', startTimeStamps = None,
+                 random_seed: int = 2020, verbose: int = 0,
+                 template_cols: list = ['Model', 'ModelParameters',
+                                        'TransformationParameters',
+                                        'Ensemble']):
     """
     Takes numeric data, returns numeric forecasts.
     Only one model (albeit potentially an ensemble)!
-    
+
     Well, she turned me into a newt.
     A newt?
     I got better. -Python
@@ -579,13 +582,13 @@ def PredictWitch(template, df_train,forecast_length: int,
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.            
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
         template_cols (list): column names of columns used as model template
-        
+
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object):
     """
     if isinstance(template, pd.Series):
         template = pd.DataFrame(template).transpose()
-    template = template.head(1) 
+    template = template.head(1)
     for index_upper, row_upper in template.iterrows():
         # if an ensemble
         if row_upper['Ensemble'] == 1:
@@ -620,54 +623,57 @@ def PredictWitch(template, df_train,forecast_length: int,
                 forecasts.extend([df_forecast.forecast])
                 upper_forecasts.extend([df_forecast.upper_forecast])
                 lower_forecasts.extend([df_forecast.lower_forecast])
-            ens_forecast = EnsembleForecast(ens_model_str, ens_params, forecasts_list=forecasts_list, forecasts=forecasts, 
-                                            lower_forecasts=lower_forecasts, upper_forecasts=upper_forecasts, forecasts_runtime=forecasts_runtime, prediction_interval=prediction_interval)
+            ens_forecast = EnsembleForecast(ens_model_str, ens_params,
+                                            forecasts_list=forecasts_list,
+                                            forecasts=forecasts,
+                                            lower_forecasts=lower_forecasts,
+                                            upper_forecasts=upper_forecasts,
+                                            forecasts_runtime=forecasts_runtime,
+                                            prediction_interval=prediction_interval)
             return ens_forecast
         # if not an ensemble
         else:
             model_str = row_upper['Model']
             parameter_dict = json.loads(row_upper['ModelParameters'])
             transformation_dict = json.loads(row_upper['TransformationParameters'])
-            
-            df_forecast = ModelPrediction(df_train, forecast_length,transformation_dict, 
-                                          model_str, parameter_dict, frequency=frequency, 
-                                          prediction_interval=prediction_interval, 
-                                          no_negatives=no_negatives,
-                                          preord_regressor_train = preord_regressor_train,
-                                          preord_regressor_forecast = preord_regressor_forecast, 
-                                          holiday_country=holiday_country,
-                                          random_seed=random_seed, verbose=verbose,
-                                          startTimeStamps = startTimeStamps)
-    
-            return df_forecast
-   
-def TemplateWizard(template, df_train, df_test, weights,
-                   model_count: int = 0, ensemble: bool = True,
-                   forecast_length: int = 14, frequency: str = 'infer', 
-                    prediction_interval: float = 0.9,
-                    no_negatives: bool = False,
-                    preord_regressor_train = [],
-                    preord_regressor_forecast = [], 
-                    holiday_country: str = 'US', startTimeStamps = None,
-                    random_seed: int = 2020, verbose: int = 0,
-                    validation_round: int = 0,
-                    per_timestamp_errors: bool = False,
-                    per_series_errors: bool = True,
-                    template_cols: list = ['Model', 'ModelParameters',
-                                           'TransformationParameters',
-                                           'Ensemble']):
 
+            df_forecast = ModelPrediction(
+                df_train, forecast_length, transformation_dict,
+                model_str, parameter_dict, frequency=frequency,
+                prediction_interval=prediction_interval,
+                no_negatives=no_negatives,
+                preord_regressor_train=preord_regressor_train,
+                preord_regressor_forecast=preord_regressor_forecast,
+                holiday_country=holiday_country, random_seed=random_seed,
+                verbose=verbose, startTimeStamps=startTimeStamps)
+
+            return df_forecast
+
+
+def TemplateWizard(template, df_train, df_test, weights,
+                   model_count: int = 0, ensemble: str = True,
+                   forecast_length: int = 14, frequency: str = 'infer',
+                   prediction_interval: float = 0.9,
+                   no_negatives: bool = False,
+                   preord_regressor_train=[],
+                   preord_regressor_forecast=[],
+                   holiday_country: str = 'US', startTimeStamps=None,
+                   random_seed: int = 2020, verbose: int = 0,
+                   validation_round: int = 0,
+                   template_cols: list = ['Model', 'ModelParameters',
+                                          'TransformationParameters',
+                                          'Ensemble']):
     """
-    takes Template, returns Results
-    
+    Take Template, returns Results.
+
     There are some who call me... Tim. - Python
-    
+
     Args:
         template (pandas.DataFrame): containing model str, and json of transformations and hyperparamters
         df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
         df_test (pandas.DataFrame): dataframe of actual values of (forecast length * n series)
         weights (dict): key = column/series_id, value = weight
-        
+        ensemble (str): desc of ensemble types to prepare metric collection
         forecast_length (int): number of periods to forecast
         transformation_dict (dict): a dictionary of outlier, fillNA, and transformation methods to be used
         model_str (str): a string to be direct to the appropriate model, used in ModelMonster
@@ -676,18 +682,18 @@ def TemplateWizard(template, df_train, df_test, weights,
         no_negatives (bool): whether to force all forecasts to be > 0
         preord_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
         preord_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
-        holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.            
+        holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
         template_cols (list): column names of columns used as model template
-    
+
     Returns:
         TemplateEvalObject
     """
+    ensemble = str(ensemble)
     template_result = TemplateEvalObject()
     template_result.model_count = model_count
-    
     # template = unpack_ensemble_models(template, template_cols, keep_ensemble = False)
-    
+
     for index in template.index:
         try:
             current_template = template.loc[index]
@@ -702,18 +708,25 @@ def TemplateWizard(template, df_train, df_test, weights,
                     print("Model Number: {} with model {} with params {} and transformations {}".format(str(template_result.model_count), model_str, json.dumps(parameter_dict),json.dumps(transformation_dict)))
                 else:
                     print("Model Number: {} with model {}".format(str(template_result.model_count), model_str))
-            df_forecast = PredictWitch(current_template, df_train = df_train, forecast_length=forecast_length,frequency=frequency, 
-                                          prediction_interval=prediction_interval, 
-                                          no_negatives=no_negatives,
-                                          preord_regressor_train = preord_regressor_train,
-                                          preord_regressor_forecast = preord_regressor_forecast, 
-                                          holiday_country=holiday_country,
-                                          startTimeStamps = startTimeStamps,
-                                          random_seed=random_seed, verbose=verbose,
-                                       template_cols = template_cols)
-            
-            model_error = PredictionEval(df_forecast, df_test, series_weights = weights, per_timestamp_errors = per_timestamp_errors)
-            model_id = create_model_id(df_forecast.model_name, df_forecast.model_parameters, df_forecast.transformation_parameters)
+            df_forecast = PredictWitch(
+                current_template, df_train = df_train,
+                forecast_length=forecast_length, frequency=frequency,
+                prediction_interval=prediction_interval,
+                no_negatives=no_negatives,
+                preord_regressor_train = preord_regressor_train,
+                preord_regressor_forecast = preord_regressor_forecast,
+                holiday_country=holiday_country,
+                startTimeStamps = startTimeStamps,
+                random_seed=random_seed, verbose=verbose,
+                template_cols = template_cols)
+
+            per_ts = True if 'distance' in ensemble else False
+            model_error = PredictionEval(df_forecast, df_test,
+                                         series_weights=weights,
+                                         per_timestamp_errors=per_ts)
+            model_id = create_model_id(df_forecast.model_name,
+                                       df_forecast.model_parameters,
+                                       df_forecast.transformation_parameters)
             total_runtime = df_forecast.fit_runtime + df_forecast.predict_runtime + df_forecast.transformation_runtime
             result = pd.DataFrame({
                     'ID': model_id,
@@ -730,35 +743,30 @@ def TemplateWizard(template, df_train, df_test, weights,
                     'ValidationRound': validation_round
                     }, index = [0])
             a = pd.DataFrame(model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')).transpose()
-            result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis = 1)
-            
-            template_result.model_results = pd.concat([template_result.model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
-            if per_timestamp_errors:
-                temp = pd.DataFrame(model_error.per_timestamp_metrics.loc['smape']).transpose()
-                temp.index = result['ID'] 
-                template_result.model_results_per_timestamp_smape = template_result.model_results_per_timestamp_smape.append(temp)
-                temp = pd.DataFrame(model_error.per_timestamp_metrics.loc['mae']).transpose()
-                temp.index = result['ID']  
-                template_result.model_results_per_timestamp_mae = template_result.model_results_per_timestamp_mae.append(temp)
-            if per_series_errors:    
-                temp = pd.DataFrame(model_error.per_series_metrics.loc['smape']).transpose()
-                temp.index = result['ID']            
-                template_result.model_results_per_series_smape = template_result.model_results_per_series_smape.append(temp)
-                temp = pd.DataFrame(model_error.per_series_metrics.loc['mae']).transpose()
-                temp.index = result['ID']
-                template_result.model_results_per_series_mae = template_result.model_results_per_series_mae.append(temp)
-                
-            if ensemble:
-                template_result.forecasts_list.extend([model_id])
-                template_result.forecasts_runtime.extend([total_runtime])
-                template_result.forecasts.extend([df_forecast.forecast])
-                template_result.upper_forecasts.extend([df_forecast.upper_forecast])
-                template_result.lower_forecasts.extend([df_forecast.lower_forecast])
-        
+            result = pd.concat([result, pd.DataFrame(model_error.avg_metrics).transpose(), a], axis=1)
+            template_result.model_results = pd.concat([template_result.model_results, result], axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+            if 'horizontal' in ensemble:
+                cur_mae = model_error.per_series_metrics.loc['mae']
+                cur_mae = pd.DataFrame(cur_mae).transpose()
+                template_result.per_series_mae = pd.concat(
+                    [template_result.per_series_mae, cur_mae],
+                    axis=0
+                    ).reset_index(drop=True)
+            if 'distance' in ensemble:
+                cur_smape = model_error.per_timestamp.loc['weighted_smape']
+                cur_smape = pd.DataFrame(cur_smape).transpose()
+                cur_smape.index = [model_id]
+                template_result.per_timestamp_smape = pd.concat(
+                    [template_result.per_timestamp_smape, cur_smape],
+                    axis=0
+                    )
+
         except Exception as e:
-            print('Template Eval Error: {} in model {}: {}'.format(str(repr(e)), template_result.model_count, model_str))
+            print('Template Eval Error: {} in model {}: {}'.format((repr(e)), template_result.model_count, model_str))
             result = pd.DataFrame({
-                'ID': create_model_id(model_str, parameter_dict, transformation_dict),
+                'ID': create_model_id(model_str,
+                                      parameter_dict,
+                                      transformation_dict),
                 'Model': model_str,
                 'ModelParameters': json.dumps(parameter_dict),
                 'TransformationParameters': json.dumps(transformation_dict),
@@ -770,10 +778,10 @@ def TemplateWizard(template, df_train, df_test, weights,
                 'Exceptions': str(e),
                 'Runs': 1,
                 'ValidationRound': validation_round
-                }, index = [0])
-            template_result.model_results = pd.concat([template_result.model_results, result], axis = 0, ignore_index = True, sort = False).reset_index(drop = True)
+                }, index=[0])
+            template_result.model_results = pd.concat([template_result.model_results, result], axis=0, ignore_index=True, sort=False).reset_index(drop=True)
 
-    return template_result 
+    return template_result
 
 
 def RandomTemplate(n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
@@ -798,7 +806,7 @@ def RandomTemplate(n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNai
                 'TransformationParameters': json.dumps(trans_dict),
                 'Ensemble': 0
                 }, index = [0])
-        template = pd.concat([template, row], axis = 0, ignore_index = True)
+        template = pd.concat([template, row], axis=0, ignore_index=True)
         template.drop_duplicates(inplace = True)
         counter += 1
         if counter > (n * 3):
@@ -977,9 +985,7 @@ def NewGeneticTemplate(model_results, submitted_parameters,
     return new_template
 
 
-def validation_aggregation(validation_results,
-                           per_timestamp_errors: bool = False,
-                           per_series_errors: bool = False):
+def validation_aggregation(validation_results):
     """Aggregate a TemplateEvalObject."""
     groupby_cols = ['ID', 'Model', 'ModelParameters',
                     'TransformationParameters', 'Ensemble']
@@ -1006,18 +1012,6 @@ def validation_aggregation(validation_results,
     validation_results.model_results = validation_results.model_results.replace([np.inf, -np.inf], np.nan)
     validation_results.model_results = validation_results.model_results.groupby(groupby_cols).agg(col_aggs)
     validation_results.model_results = validation_results.model_results.reset_index(drop = False)
-    if per_timestamp_errors:
-        try:
-            validation_results.model_results_per_timestamp_smape = validation_results.model_results_per_timestamp_smape.groupby('ID').mean()
-            validation_results.model_results_per_timestamp_mae = validation_results.model_results_per_timestamp_mae.groupby('ID').mean()
-        except KeyError:
-            raise KeyError("Per_timestamp data not available. Make sure per_timestamp_errors = True")
-    if per_series_errors:
-        try:
-            validation_results.model_results_per_series_smape = validation_results.model_results_per_series_smape.groupby('ID').mean()
-            validation_results.model_results_per_series_mae = validation_results.model_results_per_series_mae.groupby('ID').mean()
-        except KeyError:
-            raise KeyError("Per_timestamp data not available. Make sure per_timestamp_errors = True")
     return validation_results
 
 

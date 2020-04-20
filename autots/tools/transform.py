@@ -309,11 +309,11 @@ class PositiveShift(object):
         return df
 
 
-class Occurrence(object):
-    """Intermittent inspired transform predicts probability not median."""
+class IntermittentOccurrence(object):
+    """Intermittent inspired binning predicts probability of not median."""
 
     def __init__(self):
-        self.name = ''
+        self.name = 'IntermittentOccurrence'
 
     def fit(self, df):
         """Fits shift interval.
@@ -322,8 +322,8 @@ class Occurrence(object):
             df (pandas.DataFrame): input dataframe
         """
         self.df_med = df.median(axis=0)
-        self.upper_mean = df[df > df_med].mean(axis=0) - df_med
-        self.lower_mean = df[df < df_med].mean(axis=0) - df_med
+        self.upper_mean = df[df > self.df_med].mean(axis=0) - self.df_med
+        self.lower_mean = df[df < self.df_med].mean(axis=0) - self.df_med
         return self
 
     def fit_transform(self, df):
@@ -687,6 +687,7 @@ class GeneralTransformer(object):
             'CumSumTransformer' - makes value sum of all previous
             'PositiveShift' - makes all values >= 1
             'Log' - log transform (uses PositiveShift first as necessary)
+            'IntermittentOccurrence' - -1, 1 for non median values
         
         second_transformation (str): second transformation to apply. Same options as transformation, but with transformation_param passed in if used
 
@@ -777,7 +778,8 @@ class GeneralTransformer(object):
         if transformation in [None, 'None', 'Detrend', 'SinTrend',
                               'DifferencedTransformer', 'RollingMean10',
                               'PctChangeTransformer', 'CumSumTransformer',
-                              'PositiveShift', "Log"]:
+                              'PositiveShift', "Log",
+                              'IntermittentOccurrence']:
             return {'None': EmptyTransformer(),
                     None: EmptyTransformer(),
                     'RollingMean10': RollingMeanTransformer(window=10),
@@ -787,6 +789,7 @@ class GeneralTransformer(object):
                     'SinTrend': SinTrend(),
                     'PositiveShift': PositiveShift(),
                     'Log': PositiveShift(log=True),
+                    'IntermittentOccurrence': IntermittentOccurrence(),
                     'CumSumTransformer': CumSumTransformer()
                     }[transformation]
 
@@ -1112,17 +1115,20 @@ def RandomTransform():
                         'MaxAbsScaler', 'StandardScaler', 'RobustScaler', 'PCA',
                         'FastICA', 'Detrend', 'RollingMean10', 'RollingMean100thN',
                         'DifferencedTransformer', 'SinTrend', 'PctChangeTransformer',
-                        'CumSumTransformer', 'PositiveShift', 'Log']
+                        'CumSumTransformer', 'PositiveShift', 'Log',
+                        'IntermittentOccurrence']
     first_transformer_prob = [0.3, 0.05, 0.2, 0.05,
                               0.05, 0.05, 0.05, 0.01,
                               0.01, 0.01, 0.03, 0.02,
-                              0.06, 0.01, 0.05,
-                              0.02, 0.02, 0.01]
+                              0.05, 0.01, 0.05,
+                              0.02, 0.02, 0.01,
+                              0.01]
     third_transformer_prob = [0.2, 0.05, 0.1, 0.05,
                               0.05, 0.1, 0.05, 0.05,
                               0.05, 0.05, 0.03, 0.02,
-                              0.1, 0.01, 0.04,
-                              0.02, 0.02, 0.01]
+                              0.09, 0.01, 0.04,
+                              0.02, 0.02, 0.01,
+                              0.01]
     outlier_method_choice = np.random.choice(a=[None, 'clip', 'remove'],
                                              size=1, p=[0.5, 0.3, 0.2]).item()
     if outlier_method_choice is not None:

@@ -20,6 +20,8 @@ Latest:
 		CumSumTransformer
 		PctChangeTransformer
 		PositiveShift Transformer
+		Log
+		IntermittentOccurrence
 	Entirely changed the general transformer to add three levels of transformation
 	GLM
 		Error where it apparently won't tolerate any zeroes was compensated for.
@@ -162,14 +164,38 @@ GluonTS not accepting quite a lot of frequencies
 	Ecological data
 
 #### New Ensembles:
-	best 3 (unique algorithms not just variations of same)
-	forecast distance 30/30/30
-	best per series ensemble ('horizontal ensemble')
-	best point with best probalistic containment
+	Ensemble:
+		unpack_ensemble_models
+		TemplateWizard (ensemble and per_timestamp)
+		validation_aggregation (per timestamp)
+		EnsembleForecast
+		EnsembleEvaluate
+		PredictionEval
+		Currently runs each template separate, then feeds in array of forecasts to combiner
+	All as Model_str = 'Ensemble'
+	Ensemble not bool but [None, 'Simple', 'Distance', 'Horizontal']
+	Other:
+		Best SMAPE/MAE for point with Best Containment/UpperMAE/LowerMAE for probabilistic
+		Best 10 combined with Decision Tree
+	Distance:
+		Weighted SMAPE (just need single best model so far for each distance)
+			DEFINITELY NEEDS MORE BALANCING TOWARDS MAE, RMSE
+		20/80
+		30/30/30
+		3/remainder
+	Horizontal:
+		MAE (list of all models per series by MAE)
+		best per series ensemble (unlimited models)
+		best per series, top N
+			select top N rows (3 best per each), choose most common models in that.
+			Assign each series there with best model of the ones choosen.
+			how common would a model be routinely having second place?
+		Use KNN or other classifier to assign to untested time series
 #### New models:
 	Simple Decomposition forecasting
 	Statespace variant of ETS which has Confidence Intervals
 	Tensorflow Probability Structural Time Series
+	Croston, SBA, TSB, ADIDA, iMAPA,
 	Simulations
 	Ta-lib
 	Pyflux
