@@ -42,7 +42,8 @@ metric_weighting = {'smape_weighting': 10, 'mae_weighting': 1,
 
 
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
-               prediction_interval=0.9, ensemble='simple,distance', weighted=False,
+               prediction_interval=0.9, ensemble='simple,distance,horizontal',
+               weighted=False,
                max_generations=5, num_validations=2, validation_method='even',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=50,

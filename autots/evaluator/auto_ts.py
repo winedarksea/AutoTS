@@ -16,7 +16,7 @@ from autots.evaluator.auto_model import RandomTemplate
 from autots.evaluator.auto_model import TemplateWizard
 from autots.evaluator.auto_model import unpack_ensemble_models
 from autots.evaluator.auto_model import generate_score
-from autots.models.ensemble import EnsembleForecast
+from autots.models.ensemble import EnsembleTemplateGenerator
 from autots.evaluator.auto_model import PredictWitch
 from autots.tools.shaping import categorical_inverse
 from autots.evaluator.auto_model import validation_aggregation
@@ -32,7 +32,7 @@ class AutoTS(object):
         prediction_interval (float): 0-1, uncertainty range for upper and lower forecasts. Adjust range, but rarely matches actual containment.
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         weighted (bool): if True, considers series weights passed through to .fit(). Weights affect metrics and subsetting.
-        ensemble (bool): whether or not to include ensemble models in evaluation
+        ensemble (str): None, 'simple', 'distance', 'simple,distance'
         initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
         figures (bool): Not yet implemented
         random_seed (int): random seed allows (slightly) more consistent results.
@@ -55,6 +55,7 @@ class AutoTS(object):
         best_model (pandas.DataFrame): DataFrame containing template for the best ranked model
         regression_check (bool): If True, the best_model uses an input 'User' preord_regressor
     """
+
     def __init__(self,
                  forecast_length: int = 14,
                  frequency: str = 'infer',
@@ -62,7 +63,7 @@ class AutoTS(object):
                  prediction_interval: float = 0.9,
                  no_negatives: bool = False,
                  weighted: bool = False,
-                 ensemble: str = None,
+                 ensemble: str = "simple",
                  initial_template: str = 'General+Random',
                  figures: bool = False,
                  random_seed: int = 425,
@@ -274,6 +275,12 @@ class AutoTS(object):
         profile_df = data_profile(df_wide_numeric)
         self.startTimeStamps = profile_df.loc['FirstDate']
 
+        # record if subset or not
+        if self.subset >= self.df_wide_numeric.shape[1]:
+            subset_flag = False
+        else:
+            subset_flag = True
+
         # take a subset of the data if working with a large number of series
         df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = self.na_tolerance, random_state = random_seed)
 
@@ -303,7 +310,7 @@ class AutoTS(object):
 
         # run the initial template
         self.initial_template = unpack_ensemble_models(
-            self.initial_template, template_cols, keep_ensemble=False)
+            self.initial_template, template_cols, keep_ensemble=True)
         submitted_parameters = self.initial_template.copy()
         template_result = TemplateWizard(
             self.initial_template, df_train,
@@ -331,7 +338,7 @@ class AutoTS(object):
         self.initial_results.per_series_mae = pd.concat(
             [self.initial_results.per_series_mae,
              template_result.per_series_mae],
-            axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+            axis=0, sort=False)
         self.initial_results.per_timestamp_smape = pd.concat(
                 [self.initial_results.per_timestamp_smape,
                  template_result.per_timestamp_smape],
@@ -385,7 +392,7 @@ class AutoTS(object):
             self.initial_results.per_series_mae = pd.concat(
                 [self.initial_results.per_series_mae,
                  template_result.per_series_mae],
-                axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+                axis=0, sort=False)
             self.initial_results.per_timestamp_smape = pd.concat(
                 [self.initial_results.per_timestamp_smape,
                  template_result.per_timestamp_smape],
@@ -397,110 +404,9 @@ class AutoTS(object):
 
         # try ensembling
         if ensemble is not None:
-            ensemble_templates = pd.DataFrame()
-            if 'simple' in ensemble:
-                ens_temp = self.initial_results.model_results
-                ens_temp = ens_temp[ens_temp['Ensemble'] == 0]
-                # best 3, all can be of same model type
-                best3nonunique = ens_temp.nsmallest(3, columns=['Score'])
-                if best3nonunique.shape[0] == 3:
-                    ensemble_models = {}
-                    for index, row in best3nonunique.iterrows():
-                        temp_dict = {
-                            'Model': row['Model'],
-                            'ModelParameters': row['ModelParameters'],
-                            'TransformationParameters': row['TransformationParameters']
-                            }
-                        ensemble_models[row['ID']] = temp_dict
-                    best3nu_params = {'Model': 'Ensemble',
-                                      'ModelParameters':
-                                          json.dumps({'model_name': 'Best3',
-                                                      'models': ensemble_models}),
-                                      'TransformationParameters': '{}',
-                                      'Ensemble': 1}
-                    best3nu_params = pd.DataFrame(best3nu_params, index=[0])
-                    ensemble_templates = pd.concat([ensemble_templates,
-                                                    best3nu_params],
-                                                   axis=0)
-                # best 3, by SMAPE, RMSE, MAE
-                bestsmape = ens_temp.nsmallest(1, columns=['smape_weighted'])
-                bestrmse = ens_temp.nsmallest(2, columns=['rmse_weighted'])
-                bestmae = ens_temp.nsmallest(3, columns=['mae_weighted'])
-                best3metric = pd.concat([bestsmape, bestrmse, bestmae], axis=0)
-                best3metric = best3metric.drop_duplicates().head(3)
-                if best3metric.shape[0] == 3:
-                    ensemble_models = {}
-                    for index, row in best3metric.iterrows():
-                        temp_dict = {
-                            'Model': row['Model'],
-                            'ModelParameters': row['ModelParameters'],
-                            'TransformationParameters': row['TransformationParameters']
-                            }
-                        ensemble_models[row['ID']] = temp_dict
-                    best3m_params = {'Model': 'Ensemble',
-                                      'ModelParameters':
-                                          json.dumps({'model_name': 'Best3',
-                                                      'models': ensemble_models}),
-                                      'TransformationParameters': '{}',
-                                      'Ensemble': 1}
-                    best3m_params = pd.DataFrame(best3m_params, index=[0])
-                    ensemble_templates = pd.concat([ensemble_templates,
-                                                    best3m_params],
-                                                   axis=0)
-                # best 3, all must be of different model types
-                ens_temp = ens_temp.sort_values('Score', ascending=True, na_position='last').groupby('Model').head(1).reset_index(drop=True)
-                best3unique = ens_temp.nsmallest(3, columns=['Score'])
-                if best3unique.shape[0] == 3:
-                    ensemble_models = {}
-                    for index, row in best3unique.iterrows():
-                        temp_dict = {
-                            'Model': row['Model'],
-                            'ModelParameters': row['ModelParameters'],
-                            'TransformationParameters': row['TransformationParameters']
-                            }
-                        ensemble_models[row['ID']] = temp_dict
-                    best3u_params = {'Model': 'Ensemble',
-                                     'ModelParameters':
-                                         json.dumps({'model_name': 'Best3',
-                                                     'models': ensemble_models}),
-                                     'TransformationParameters': '{}',
-                                     'Ensemble': 1}
-                    best3u_params = pd.DataFrame(best3u_params, index=[0])
-                    ensemble_templates = pd.concat([ensemble_templates,
-                                                    best3u_params],
-                                                   axis=0, ignore_index=True)
-
-            if 'distance' in ensemble:
-                try:
-                    first_bit = int(np.ceil(forecast_length * 0.2))
-                    last_bit = int(np.floor(forecast_length * 0.8))
-                    not_ens_list = self.initial_results.model_results[self.initial_results.model_results['Ensemble'] == 0]['ID'].tolist()
-                    ens_per_ts = self.initial_results.per_timestamp_smape[self.initial_results.per_timestamp_smape.index.isin(not_ens_list)]
-                    first_model = ens_per_ts.iloc[:, 0:first_bit].mean(axis=1).idxmin()
-                    last_model = ens_per_ts.iloc[:, first_bit:(last_bit + first_bit)].mean(axis = 1).idxmin()
-                    ensemble_models = {}
-                    best3 = self.initial_results.model_results[self.initial_results.model_results['ID'].isin([first_model,last_model])].drop_duplicates(subset=['Model','ModelParameters','TransformationParameters'])
-                    for index, row in best3.iterrows():
-                        temp_dict = {
-                            'Model': row['Model'],
-                            'ModelParameters': row['ModelParameters'],
-                            'TransformationParameters': row['TransformationParameters']
-                            }
-                        ensemble_models[row['ID']] = temp_dict
-                    best3u_params = {'Model': 'Ensemble',
-                                     'ModelParameters':
-                                         json.dumps({'model_name': 'Dist2080',
-                                                     'models': ensemble_models,
-                                                     'FirstModel': first_model,
-                                                     'LastModel': last_model}),
-                                     'TransformationParameters': '{}',
-                                     'Ensemble': 1}
-                    best3u_params = pd.DataFrame(best3u_params, index=[0])
-                    ensemble_templates = pd.concat([ensemble_templates,
-                                                    best3u_params],
-                                                   axis=0, ignore_index=True)
-                except Exception as e:
-                    print(e)
+            ensemble_templates = EnsembleTemplateGenerator(
+                self.initial_results, forecast_length=forecast_length,
+                ensemble=ensemble, subset_flag=subset_flag)
 
             template_result = TemplateWizard(ensemble_templates, df_train,
                                              df_test,
@@ -665,23 +571,25 @@ class AutoTS(object):
             except Exception:
                 pass
         return self
-    
-    def predict(self, forecast_length: int = "self", preord_regressor = [], hierarchy = None, just_point_forecast: bool = False):
+  
+    def predict(self, forecast_length: int = "self",
+                preord_regressor = [], hierarchy = None,
+                just_point_forecast: bool = False):
         """Generate forecast data immediately following dates of index supplied to .fit().
-        
+
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
             preord_regressor (numpy.Array): additional regressor, not used
             hierarchy: Not yet implemented
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
-            
+
         Return:
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
         if forecast_length == 'self':
             forecast_length = self.forecast_length
-        
+
         # if the models don't need the regressor, ignore it...
         if not self.used_regressor_check:
             preord_regressor = []
@@ -700,17 +608,17 @@ class AutoTS(object):
                                    random_seed=self.random_seed,
                                    verbose=self.verbose,
                                    template_cols=self.template_cols)
-        
+   
         df_forecast.forecast = categorical_inverse(self.categorical_transformer,
                                                    df_forecast.forecast)
         # df_forecast.lower_forecast = categorical_inverse(self.categorical_transformer, df_forecast.lower_forecast)
         # df_forecast.upper_forecast = categorical_inverse(self.categorical_transformer, df_forecast.upper_forecast)
-        
+
         if just_point_forecast:
             return df_forecast.forecast
         else:
             return df_forecast
-        
+
     def export_template(self, filename, models: str = 'best', n: int = 1,
                         max_per_model_class: int = None):
         """Export top results as a reusable template.
@@ -760,10 +668,9 @@ class AutoTS(object):
             self.initial_template = import_template
         
         return self
+
     def import_results(self, filename):
-        """
-        Add results from another run on the same data.
-        """
+        """Add results from another run on the same data."""
         past_results = pd.read_csv(filename)
         past_results = past_results[pd.isnull(past_results['Exceptions'])]
         self.initial_results.model_results = pd.concat([self.initial_results.model_results, past_results], axis=0, ignore_index=True, sort=False).reset_index(drop=True)
@@ -771,16 +678,16 @@ class AutoTS(object):
     def get_params(self):
         pass
 
+
 def fake_regressor(df_long, forecast_length: int = 14,
-                   date_col: str = 'datetime', value_col: str = 'value', id_col: str = 'series_id',
+                   date_col: str = 'datetime', value_col: str = 'value',
+                   id_col: str = 'series_id',
                    frequency: str = 'infer', aggfunc: str = 'first',
                    drop_most_recent: int = 0, na_tolerance: float = 0.95,
                    drop_data_older_than_periods: int = 10000,
                    dimensions: int = 1):
-    """
-    creates a fake regressor of random numbers for testing purposes
-    """
-        
+    """Creates a fake regressor of random numbers for testing purposes."""
+
     from autots.tools.shaping import long_to_wide
     df_wide = long_to_wide(df_long, date_col = date_col, value_col = value_col,
                        id_col = id_col, frequency = frequency, na_tolerance = na_tolerance,

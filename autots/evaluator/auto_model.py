@@ -748,10 +748,11 @@ def TemplateWizard(template, df_train, df_test, weights,
             if 'horizontal' in ensemble:
                 cur_mae = model_error.per_series_metrics.loc['mae']
                 cur_mae = pd.DataFrame(cur_mae).transpose()
+                cur_mae.index = [model_id]
                 template_result.per_series_mae = pd.concat(
                     [template_result.per_series_mae, cur_mae],
                     axis=0
-                    ).reset_index(drop=True)
+                    )
             if 'distance' in ensemble:
                 cur_smape = model_error.per_timestamp.loc['weighted_smape']
                 cur_smape = pd.DataFrame(cur_smape).transpose()

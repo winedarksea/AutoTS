@@ -13,6 +13,7 @@ Latest:
 	Fixed (or more accurately, reduced) a bug where multiple initial runs were counting as validation runs.
 	Made serious efforts to make the code prettier with pylint, still lots to do, however...
 	Improved genetic recombination so optimal models should be reached more quickly.
+	Improved ensembling with new parameter options.
 	Added a number of new Transformer options
 		Multiple new Sklearn-sourced transformers (QuantileTransformer, etc)
 		SinTrend
@@ -77,6 +78,7 @@ GluonTS not accepting quite a lot of frequencies
 * Bring GeneralTransformer to higher level API.
 	* wide_to_long and long_to_wide in higher-level API
 * Option to use full traceback in errors in table
+* Remove duplication of weighed: bool and weights
 * Hierarchial
 	* every level must be included in forecasting data
 	* 'bottom-up' and 'mid' levels
@@ -174,6 +176,7 @@ GluonTS not accepting quite a lot of frequencies
 		Currently runs each template separate, then feeds in array of forecasts to combiner
 	All as Model_str = 'Ensemble'
 	Ensemble not bool but [None, 'Simple', 'Distance', 'Horizontal']
+	REDUCE OVERFITTING IN MODEL CHOICE
 	Other:
 		Best SMAPE/MAE for point with Best Containment/UpperMAE/LowerMAE for probabilistic
 		Best 10 combined with Decision Tree
@@ -185,6 +188,7 @@ GluonTS not accepting quite a lot of frequencies
 		3/remainder
 	Horizontal:
 		MAE (list of all models per series by MAE)
+		ALLOW NESTED ENSEMBLE INSIDE ENSEMBLE
 		best per series ensemble (unlimited models)
 		best per series, top N
 			select top N rows (3 best per each), choose most common models in that.
