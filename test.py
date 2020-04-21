@@ -12,7 +12,7 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 
 forecast_length = 6
-df_long = load_toy_daily()
+df_long = load_toy_monthly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -42,13 +42,13 @@ metric_weighting = {'smape_weighting': 10, 'mae_weighting': 1,
 
 
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
-               prediction_interval=0.9, ensemble='simple,distance,horizontal',
+               prediction_interval=0.9, ensemble='all',
                weighted=False,
                max_generations=5, num_validations=2, validation_method='even',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=50,
                max_per_model_class=10,
-               drop_most_recent=1, verbose=1)
+               drop_most_recent=1, verbose=0)
 
 
 preord_regressor_train, preord_regressor_forecast = fake_regressor(

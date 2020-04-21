@@ -76,7 +76,8 @@ def DistEnsemble(ensemble_params, forecasts_list, forecasts, lower_forecasts, up
                                       forecast_index=ens_df.index,
                                       forecast_columns=ens_df.columns,
                                       lower_forecast=ens_df_lower,
-                                      forecast=ens_df, upper_forecast=ens_df_upper,
+                                      forecast=ens_df,
+                                      upper_forecast=ens_df_upper,
                                       prediction_interval=prediction_interval,
                                       predict_runtime=datetime.timedelta(0),
                                       fit_runtime=ens_runtime,
@@ -86,43 +87,45 @@ def DistEnsemble(ensemble_params, forecasts_list, forecasts, lower_forecasts, up
 
 
 def HorizontalEnsemble(ensemble_params, forecasts_list, forecasts,
-                  lower_forecasts, upper_forecasts, forecasts_runtime,
-                  prediction_interval):
-    """Generate forecast for ensemble of 3 models."""
+                       lower_forecasts, upper_forecasts, forecasts_runtime,
+                       prediction_interval):
+    """Generate forecast for per_series ensembling."""
     id_list = list(ensemble_params['models'].keys())
-    model_indexes = [idx for idx, x in enumerate(forecasts_list) if x in id_list]
+    mod_dic = {x: idx for idx, x in enumerate(forecasts_list) if x in id_list}
+    print(forecasts_list)
+    print(mod_dic)
 
-    ensemble_params['series']
-
-    ens_df = pd.DataFrame(0, index=forecasts[0].index, columns=forecasts[0].columns)
-    for idx, x in enumerate(forecasts):
-        if idx in model_indexes:
-            ens_df = ens_df + forecasts[idx]
-    ens_df = ens_df / len(model_indexes)
-
-    ens_df_lower = pd.DataFrame(0, index=forecasts[0].index, columns=forecasts[0].columns)
-    for idx, x in enumerate(lower_forecasts):
-        if idx in model_indexes:
-            ens_df_lower = ens_df_lower + lower_forecasts[idx]
-    ens_df_lower = ens_df_lower / len(model_indexes)
-
-    ens_df_upper = pd.DataFrame(0, index=forecasts[0].index, columns=forecasts[0].columns)
-    for idx, x in enumerate(upper_forecasts):
-        if idx in model_indexes:
-            ens_df_upper = ens_df_upper + upper_forecasts[idx]
-    ens_df_upper = ens_df_upper / len(model_indexes)
+    forecast_df, u_forecast_df, l_forecast_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+    for series, mod_id in ensemble_params['series'].items():
+        l_idx = mod_dic[mod_id]
+        try:
+            c_fore = forecasts[l_idx][series]
+            forecast_df = pd.concat([forecast_df, c_fore], axis=1)
+        except Exception as e:
+            repr(e)
+            print(forecasts[l_idx].columns)
+            print(forecasts[l_idx].head())
+        # upper
+        c_fore = upper_forecasts[l_idx][series]
+        u_forecast_df = pd.concat([u_forecast_df, c_fore], axis=1)
+        # lower
+        c_fore = lower_forecasts[l_idx][series]
+        l_forecast_df = pd.concat([l_forecast_df, c_fore], axis=1)
 
     ens_runtime = datetime.timedelta(0)
     for idx, x in enumerate(forecasts_runtime):
-        if idx in model_indexes:
+        if idx in list(mod_dic.values()):
             ens_runtime = ens_runtime + forecasts_runtime[idx]
 
+    print("Horz ensemble finished!")
+
     ens_result = PredictionObject(model_name="Ensemble",
-                                  forecast_length=len(ens_df.index),
-                                  forecast_index=ens_df.index,
-                                  forecast_columns=ens_df.columns,
-                                  lower_forecast=ens_df_lower,
-                                  forecast=ens_df, upper_forecast=ens_df_upper,
+                                  forecast_length=len(forecast_df.index),
+                                  forecast_index=forecast_df.index,
+                                  forecast_columns=forecast_df.columns,
+                                  lower_forecast=l_forecast_df,
+                                  forecast=forecast_df,
+                                  upper_forecast=u_forecast_df,
                                   prediction_interval=prediction_interval,
                                   predict_runtime=datetime.timedelta(0),
                                   fit_runtime=ens_runtime,
@@ -135,7 +138,7 @@ def EnsembleForecast(ensemble_str, ensemble_params, forecasts_list, forecasts, l
     """
     Returns PredictionObject for given ensemble method
     """
-    if ensemble_params['model_name'].lower().strip() == 'best3':
+    if ensemble_params['model_name'].lower().strip() in ['best3','best3horizontal']:
         ens_forecast = Best3Ensemble(ensemble_params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval)
         return ens_forecast
 
@@ -291,15 +294,29 @@ def EnsembleTemplateGenerator(initial_results,
     if 'horizontal' in ensemble:
         # per_series = model.initial_results.per_series_mae.copy()
         per_series = initial_results.per_series_mae.copy()
-        per_series_des = initial_results.per_series_mae.copy()
-        max_models = 3
-        n_depth = 5 if per_series.shape[0] > 5 else per_series.shape[0]
-        models_pos = []
-        for _ in range(n_depth):
-            models_pos.extend(per_series_des.idxmin().tolist())
-            per_series_des[per_series_des == per_series_des.min()] = np.nan
-        mods = pd.Series(models_pos).value_counts()
-        mods = mods.sort_values(ascending=False).head(max_models)
+        mods = pd.Series()
+        per_series_des = per_series.copy()
+        n_models = 3
+        # choose best per series, remove those series, then choose next best
+        for x in range(n_models):
+            n_dep = 5 if x < 2 else 10
+            n_dep = n_dep if per_series_des.shape[0] > n_dep else per_series_des.shape[0]
+            models_pos = []
+            tr_df = pd.DataFrame()
+            for _ in range(n_dep):
+                cr_df = pd.DataFrame(per_series_des.idxmin()).transpose()
+                tr_df = pd.concat([tr_df, cr_df], axis=0)
+                models_pos.extend(per_series_des.idxmin().tolist())
+                per_series_des[per_series_des == per_series_des.min()] = np.nan
+            cur_mods = pd.Series(models_pos).value_counts()
+            cur_mods = cur_mods.sort_values(ascending=False).head(1)
+            mods = mods.combine(cur_mods, max, fill_value=0)
+            rm_cols = tr_df[tr_df.isin(mods.index.tolist())]
+            rm_cols = rm_cols.dropna(how='all',axis=1).columns
+            per_series_des = per_series.copy().drop(mods.index, axis=0)
+            per_series_des = per_series_des.drop(rm_cols, axis=1)
+            if per_series_des.shape[1] == 0:
+                per_series_des = per_series.copy().drop(mods.index, axis=0)
 
         ensemble_models = {}
         best3 = initial_results.model_results[initial_results.model_results['ID'].isin(mods.index.tolist())].drop_duplicates(subset=['Model', 'ModelParameters', 'TransformationParameters'])
@@ -312,7 +329,7 @@ def EnsembleTemplateGenerator(initial_results,
             ensemble_models[row['ID']] = temp_dict
         best3_params = {'Model': 'Ensemble',
                          'ModelParameters':
-                             json.dumps({'model_name': 'Best3',
+                             json.dumps({'model_name': 'best3horizontal',
                                          'models': ensemble_models
                                          }),
                          'TransformationParameters': '{}',
@@ -322,27 +339,41 @@ def EnsembleTemplateGenerator(initial_results,
                                         best3_params],
                                        axis=0, ignore_index=True)
         if not subset_flag:
-            per_series_des = initial_results.per_series_mae.copy()
-            max_models = 5
-            n_depth = 5 if per_series.shape[0] > 5 else per_series.shape[0]
-            models_pos = []
-            for _ in range(n_depth):
-                models_pos.extend(per_series_des.idxmin().tolist())
-                per_series_des[per_series_des == per_series_des.min()] = np.nan
-            mods = pd.Series(models_pos).value_counts()
-            mods = mods.sort_values(ascending=False).head(max_models)
+            mods = pd.Series()
+            per_series_des = per_series.copy()
+            n_models = 5
+            # choose best per series, remove those series, then choose next best
+            for x in range(n_models):
+                n_dep = 5 if x < 2 else 10
+                n_dep = n_dep if per_series_des.shape[0] > n_dep else per_series_des.shape[0]
+                models_pos = []
+                tr_df = pd.DataFrame()
+                for _ in range(n_dep):
+                    cr_df = pd.DataFrame(per_series_des.idxmin()).transpose()
+                    tr_df = pd.concat([tr_df, cr_df], axis=0)
+                    models_pos.extend(per_series_des.idxmin().tolist())
+                    per_series_des[per_series_des == per_series_des.min()] = np.nan
+                cur_mods = pd.Series(models_pos).value_counts()
+                cur_mods = cur_mods.sort_values(ascending=False).head(1)
+                mods = mods.combine(cur_mods, max, fill_value=0)
+                rm_cols = tr_df[tr_df.isin(mods.index.tolist())]
+                rm_cols = rm_cols.dropna(how='all',axis=1).columns
+                per_series_des = per_series.copy().drop(mods.index, axis=0)
+                per_series_des = per_series_des.drop(rm_cols, axis=1)
+                if per_series_des.shape[1] == 0:
+                    per_series_des = per_series.copy().drop(mods.index, axis=0)
+
             mods_per_series = per_series.loc[mods.index].idxmin()
-    
             ensemble_models = {}
-            best3 = initial_results.model_results[initial_results.model_results['ID'].isin(mods.index.tolist())].drop_duplicates(subset=['Model', 'ModelParameters', 'TransformationParameters'])
-            for index, row in best3.iterrows():
+            best5 = initial_results.model_results[initial_results.model_results['ID'].isin(mods.index.tolist())].drop_duplicates(subset=['Model', 'ModelParameters', 'TransformationParameters'])
+            for index, row in best5.iterrows():
                 temp_dict = {
                     'Model': row['Model'],
                     'ModelParameters': row['ModelParameters'],
                     'TransformationParameters': row['TransformationParameters']
                     }
                 ensemble_models[row['ID']] = temp_dict
-            best3_params = {'Model': 'Ensemble',
+            best5_params = {'Model': 'Ensemble',
                              'ModelParameters':
                                  json.dumps({'model_name': 'Horizontal',
                                              'models': ensemble_models,
@@ -350,8 +381,55 @@ def EnsembleTemplateGenerator(initial_results,
                                              }),
                              'TransformationParameters': '{}',
                              'Ensemble': 1}
-            best3_params = pd.DataFrame(best3_params, index=[0])
+            best5_params = pd.DataFrame(best5_params, index=[0])
             ensemble_templates = pd.concat([ensemble_templates,
-                                            best3_params],
+                                            best5_params],
+                                           axis=0, ignore_index=True)
+            
+            mods = pd.Series()
+            per_series_des = per_series.copy()
+            n_models = 3
+            # choose best per series, remove those series, then choose next best
+            for x in range(n_models):
+                n_dep = x + 1
+                n_dep = n_dep if per_series_des.shape[0] > n_dep else per_series_des.shape[0]
+                models_pos = []
+                tr_df = pd.DataFrame()
+                for _ in range(n_dep):
+                    cr_df = pd.DataFrame(per_series_des.idxmin()).transpose()
+                    tr_df = pd.concat([tr_df, cr_df], axis=0)
+                    models_pos.extend(per_series_des.idxmin().tolist())
+                    per_series_des[per_series_des == per_series_des.min()] = np.nan
+                cur_mods = pd.Series(models_pos).value_counts()
+                cur_mods = cur_mods.sort_values(ascending=False).head(1)
+                mods = mods.combine(cur_mods, max, fill_value=0)
+                rm_cols = tr_df[tr_df.isin(mods.index.tolist())]
+                rm_cols = rm_cols.dropna(how='all',axis=1).columns
+                per_series_des = per_series.copy().drop(mods.index, axis=0)
+                per_series_des = per_series_des.drop(rm_cols, axis=1)
+                if per_series_des.shape[1] == 0:
+                    per_series_des = per_series.copy().drop(mods.index, axis=0)
+
+            mods_per_series = per_series.loc[mods.index].idxmin()
+            ensemble_models = {}
+            best5 = initial_results.model_results[initial_results.model_results['ID'].isin(mods.index.tolist())].drop_duplicates(subset=['Model', 'ModelParameters', 'TransformationParameters'])
+            for index, row in best5.iterrows():
+                temp_dict = {
+                    'Model': row['Model'],
+                    'ModelParameters': row['ModelParameters'],
+                    'TransformationParameters': row['TransformationParameters']
+                    }
+                ensemble_models[row['ID']] = temp_dict
+            best5_params = {'Model': 'Ensemble',
+                             'ModelParameters':
+                                 json.dumps({'model_name': 'Horizontal',
+                                             'models': ensemble_models,
+                                             'series': mods_per_series.to_dict()
+                                             }),
+                             'TransformationParameters': '{}',
+                             'Ensemble': 1}
+            best5_params = pd.DataFrame(best5_params, index=[0])
+            ensemble_templates = pd.concat([ensemble_templates,
+                                            best5_params],
                                            axis=0, ignore_index=True)
     return ensemble_templates

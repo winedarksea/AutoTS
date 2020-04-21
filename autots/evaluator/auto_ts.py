@@ -32,7 +32,7 @@ class AutoTS(object):
         prediction_interval (float): 0-1, uncertainty range for upper and lower forecasts. Adjust range, but rarely matches actual containment.
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         weighted (bool): if True, considers series weights passed through to .fit(). Weights affect metrics and subsetting.
-        ensemble (str): None, 'simple', 'distance', 'simple,distance'
+        ensemble (str): None, 'simple', 'distance', 'horizontal', 'all'
         initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
         figures (bool): Not yet implemented
         random_seed (int): random seed allows (slightly) more consistent results.
@@ -114,7 +114,8 @@ class AutoTS(object):
         self.verbose = int(verbose)
         if self.ensemble is not None:
             self.ensemble = str(self.ensemble).lower()
-
+            if self.ensemble == 'all':
+                self.ensemble = 'simple,distance,horizontal'
 
         # convert shortcuts of model lists to actual lists of models
         if model_list == 'default':
@@ -277,12 +278,17 @@ class AutoTS(object):
 
         # record if subset or not
         if self.subset >= self.df_wide_numeric.shape[1]:
-            subset_flag = False
+            self.subset_flag = False
         else:
-            subset_flag = True
+            self.subset_flag = True
 
         # take a subset of the data if working with a large number of series
-        df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = self.na_tolerance, random_state = random_seed)
+        if self.subset_flag:
+            df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n=subset, na_tolerance=self.na_tolerance, random_state=random_seed)
+            if self.verbose > 1:
+                print(f'First subset is of: {df_subset.columns}')
+        else:
+            df_subset = df_wide_numeric.copy()
 
         # subset the weighting information as well
         if not weighted:
@@ -404,36 +410,38 @@ class AutoTS(object):
 
         # try ensembling
         if ensemble is not None:
-            ensemble_templates = EnsembleTemplateGenerator(
-                self.initial_results, forecast_length=forecast_length,
-                ensemble=ensemble, subset_flag=subset_flag)
-
-            template_result = TemplateWizard(ensemble_templates, df_train,
-                                             df_test,
-                                             current_weights,
-                                             model_count=model_count,
-                                             forecast_length=forecast_length,
-                                             frequency=frequency,
-                                             prediction_interval=prediction_interval,
-                                             no_negatives=no_negatives,
-                                             preord_regressor_train=preord_regressor_train,
-                                             preord_regressor_forecast=preord_regressor_test,
-                                             holiday_country=holiday_country,
-                                             startTimeStamps=profile_df.loc['FirstDate'],
-                                             template_cols=template_cols,
-                                             random_seed=random_seed,
-                                             verbose=verbose)
-            model_count = template_result.model_count
-            
-            # capture results from lower-level template run
-            self.initial_results.model_results = pd.concat(
-                [self.initial_results.model_results,
-                 template_result.model_results],
-                axis=0, ignore_index=True, sort=False).reset_index(drop=True)
-            self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
-            if result_file is not None:
-                self.initial_results.model_results.to_csv(result_file,
-                                                          index=False)
+            try:
+                ensemble_templates = EnsembleTemplateGenerator(
+                    self.initial_results, forecast_length=forecast_length,
+                    ensemble=ensemble, subset_flag=self.subset_flag)
+    
+                template_result = TemplateWizard(ensemble_templates, df_train,
+                                                 df_test,
+                                                 current_weights,
+                                                 model_count=model_count,
+                                                 forecast_length=forecast_length,
+                                                 frequency=frequency,
+                                                 prediction_interval=prediction_interval,
+                                                 no_negatives=no_negatives,
+                                                 preord_regressor_train=preord_regressor_train,
+                                                 preord_regressor_forecast=preord_regressor_test,
+                                                 holiday_country=holiday_country,
+                                                 startTimeStamps=profile_df.loc['FirstDate'],
+                                                 template_cols=template_cols,
+                                                 random_seed=random_seed,
+                                                 verbose=verbose)
+                model_count = template_result.model_count
+                # capture results from lower-level template run
+                self.initial_results.model_results = pd.concat(
+                    [self.initial_results.model_results,
+                     template_result.model_results],
+                    axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+                self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
+                if result_file is not None:
+                    self.initial_results.model_results.to_csv(result_file,
+                                                              index=False)
+            except Exception as e:
+                print(f"Ensembling Error: {e}")
 
         # drop any duplicates in results
         self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(subset = (['ID'] + self.template_cols))
@@ -486,9 +494,17 @@ class AutoTS(object):
                 elif str(self.validation_method).lower() in ['backwards', 'back', 'backward']:
                     # gradually remove the end
                     current_slice = df_wide_numeric.head(len(df_wide_numeric.index) - (y+1) * forecast_length)
+                else:
+                    raise ValueError("Validation Method not recognized try 'even', 'backwards'")
 
                 # subset series (if used) and take a new train/test split
-                df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n = subset, na_tolerance = self.na_tolerance, random_state = random_seed)
+                # df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n=subset, na_tolerance=self.na_tolerance, random_state=random_seed)
+                if self.subset_flag:
+                    df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n=subset, na_tolerance=self.na_tolerance, random_state=random_seed)
+                    if self.verbose > 1:
+                        print(f'{y + 1} subset is of: {df_subset.columns}')
+                else:
+                    df_subset = df_wide_numeric.copy()
                 if not weighted:
                     current_weights = {x: 1 for x in df_subset.columns}
                 if weighted:

@@ -600,21 +600,25 @@ def PredictWitch(template, df_train, forecast_length: int,
             lower_forecasts = []
             ens_model_str = row_upper['Model']
             ens_params = json.loads(row_upper['ModelParameters'])
-            ens_template = unpack_ensemble_models(template, template_cols, keep_ensemble = False)
+            ens_template = unpack_ensemble_models(template, template_cols,
+                                                  keep_ensemble=False)
             for index, row in ens_template.iterrows():
                 model_str = row['Model']
                 parameter_dict = json.loads(row['ModelParameters'])
                 transformation_dict = json.loads(row['TransformationParameters'])
 
-                df_forecast = ModelPrediction(df_train, forecast_length,transformation_dict, 
-                                              model_str, parameter_dict, frequency=frequency, 
-                                              prediction_interval=prediction_interval, 
+                df_forecast = ModelPrediction(df_train, forecast_length,
+                                              transformation_dict,
+                                              model_str, parameter_dict,
+                                              frequency=frequency, 
+                                              prediction_interval=prediction_interval,
                                               no_negatives=no_negatives,
-                                              preord_regressor_train = preord_regressor_train,
-                                              preord_regressor_forecast = preord_regressor_forecast, 
+                                              preord_regressor_train=preord_regressor_train,
+                                              preord_regressor_forecast=preord_regressor_forecast,
                                               holiday_country=holiday_country,
-                                              startTimeStamps = startTimeStamps,
-                                              random_seed=random_seed, verbose=verbose)
+                                              startTimeStamps=startTimeStamps,
+                                              random_seed=random_seed, 
+                                              verbose=verbose)
                 model_id = create_model_id(df_forecast.model_name, df_forecast.model_parameters, df_forecast.transformation_parameters)
                 total_runtime = df_forecast.fit_runtime + df_forecast.predict_runtime + df_forecast.transformation_runtime
 
@@ -763,7 +767,8 @@ def TemplateWizard(template, df_train, df_test, weights,
                     )
 
         except Exception as e:
-            print('Template Eval Error: {} in model {}: {}'.format((repr(e)), template_result.model_count, model_str))
+            if verbose >= 0:
+                print('Template Eval Error: {} in model {}: {}'.format((repr(e)), template_result.model_count, model_str))
             result = pd.DataFrame({
                 'ID': create_model_id(model_str,
                                       parameter_dict,
@@ -776,7 +781,7 @@ def TemplateWizard(template, df_train, df_test, weights,
                 'FitRuntime': datetime.timedelta(0),
                 'PredictRuntime': datetime.timedelta(0),
                 'TotalRuntime': datetime.timedelta(0),
-                'Exceptions': str(e),
+                'Exceptions': repr(e),
                 'Runs': 1,
                 'ValidationRound': validation_round
                 }, index=[0])

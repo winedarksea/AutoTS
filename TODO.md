@@ -11,9 +11,12 @@ Latest:
 	Changed default for Series_id so it is no longer required if univariate
 	Fixed a bug where 'One or more series is 90% or more NaN' was printing when it shouldn't
 	Fixed (or more accurately, reduced) a bug where multiple initial runs were counting as validation runs.
+	Fixed (partially!) bug where validation subsetting was behaving oddly
 	Made serious efforts to make the code prettier with pylint, still lots to do, however...
 	Improved genetic recombination so optimal models should be reached more quickly.
 	Improved ensembling with new parameter options.
+		New 'horizontal' ensembling
+		Added mean and horizontal ensemble types
 	Added a number of new Transformer options
 		Multiple new Sklearn-sourced transformers (QuantileTransformer, etc)
 		SinTrend
@@ -51,11 +54,10 @@ kbins not working when it assigns fewer bins than n_bins asked for (use the prop
 FastICA 'array must not contain infs or NaNs'
 How do fillna methods handle datasets that have entirely NaN series?
 Check if any transformation parameters seem to consistently perform poorly, suggesting of problems. Also speed.
+Subsetting for validation samples seems to be funky.
 
 Test updated context_slicer
-Log Positive Shifting
-1 if > lower quantile, else 0. Result * mean of all values > lower quantile
-1 if > median, -1 if < median. result * (mean - median)
+Test dist forecast working in validations
 
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
@@ -166,16 +168,6 @@ GluonTS not accepting quite a lot of frequencies
 	Ecological data
 
 #### New Ensembles:
-	Ensemble:
-		unpack_ensemble_models
-		TemplateWizard (ensemble and per_timestamp)
-		validation_aggregation (per timestamp)
-		EnsembleForecast
-		EnsembleEvaluate
-		PredictionEval
-		Currently runs each template separate, then feeds in array of forecasts to combiner
-	All as Model_str = 'Ensemble'
-	Ensemble not bool but [None, 'Simple', 'Distance', 'Horizontal']
 	REDUCE OVERFITTING IN MODEL CHOICE
 	Other:
 		Best SMAPE/MAE for point with Best Containment/UpperMAE/LowerMAE for probabilistic
