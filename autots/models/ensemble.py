@@ -92,8 +92,6 @@ def HorizontalEnsemble(ensemble_params, forecasts_list, forecasts,
     """Generate forecast for per_series ensembling."""
     id_list = list(ensemble_params['models'].keys())
     mod_dic = {x: idx for idx, x in enumerate(forecasts_list) if x in id_list}
-    print(forecasts_list)
-    print(mod_dic)
 
     forecast_df, u_forecast_df, l_forecast_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     for series, mod_id in ensemble_params['series'].items():
@@ -116,8 +114,6 @@ def HorizontalEnsemble(ensemble_params, forecasts_list, forecasts,
     for idx, x in enumerate(forecasts_runtime):
         if idx in list(mod_dic.values()):
             ens_runtime = ens_runtime + forecasts_runtime[idx]
-
-    print("Horz ensemble finished!")
 
     ens_result = PredictionObject(model_name="Ensemble",
                                   forecast_length=len(forecast_df.index),
@@ -388,7 +384,7 @@ def EnsembleTemplateGenerator(initial_results,
             
             mods = pd.Series()
             per_series_des = per_series.copy()
-            n_models = 3
+            n_models = 15
             # choose best per series, remove those series, then choose next best
             for x in range(n_models):
                 n_dep = x + 1

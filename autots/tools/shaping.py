@@ -166,7 +166,7 @@ def categorical_inverse(categorical_transformer_object, df):
     """Wrapper for Inverse Categorical Transformations
     Args:
         categorical_transformer_object (object): a NumericTransformer object from values_to_numeric
-        df (pandas.DataFrame): Datetime Indexed 
+        df (pandas.DataFrame): Datetime Indexed
     """
     categorical_transformer = categorical_transformer_object
     cat_features = categorical_transformer.categorical_features
@@ -176,19 +176,19 @@ def categorical_inverse(categorical_transformer_object, df):
         categorical = pd.DataFrame(categorical)
         categorical.columns = cat_features
         categorical.index = df.index
-        df = pd.concat([df.drop(cat_features, axis = 1), categorical], axis = 1)
+        df = pd.concat([df.drop(cat_features, axis=1), categorical], axis=1)
         df = df[col_namen]
         return df
     else:
         return df
 
 
-def subset_series(df, weights, n: int = 1000, na_tolerance: float = 1.0, random_state: int = 425):
-    """
-    Expects a pandas DataFrame in format of output from long_to_wide()
+def subset_series(df, weights, n: int = 1000,
+                  random_state: int = 2020):
+    """Expects a pandas DataFrame in format of output from long_to_wide().
     That is, in the format where the Index is a Date
     and Columns are each a unique time series
-    
+
     Args:
         n (int): - number of unique time series to keep
         na_tolerance (float): - allow up to this percent of values to be NaN, else drop the entire series
@@ -196,15 +196,15 @@ def subset_series(df, weights, n: int = 1000, na_tolerance: float = 1.0, random_
         random_state (int): - random seed
     """
     # remove series with way too many NaNs - probably those of a different frequency, or brand new
-    na_threshold = int(len(df.index) * (1 - na_tolerance))
-    df = df.dropna(axis = 1, thresh=na_threshold)
-    
+    # na_threshold = int(len(df.index) * (1 - na_tolerance))
+    # df = df.dropna(axis = 1, thresh=na_threshold)
+
     if isinstance(n, (int, float, complex)) and not isinstance(n, bool):
-        if n > len(df.columns):
-            n = len(df.columns)
+        if n > len(df.shape[1]):
             return df
         else:
-            df = df.sample(n, axis = 1, random_state = random_state, replace = False, weights = weights)    
+            df = df.sample(n, axis=1, random_state=random_state,
+                           replace=False, weights=weights)
             return df
 
 
@@ -237,34 +237,3 @@ def simple_train_test_split(df, forecast_length: int = 10,
     if (verbose > 0) and ((test.isnull().sum(axis=0)/test.shape[0]).max() > 0.9):
         print("One or more series is 90% or more NaN in this test split")
     return train, test
-
-
-def multiple_train_test_split(df, forecast_length: int = 10,
-                              context_length: int = None,
-                              train_na_tolerance: float = 0.95,
-                              test_na_tolerance: float = 0.75):
-    """Uses the last periods of forecast_length as the test set
-    
-    Args:
-        context_length (int):, the length (number of periods) of the train dataset
-        
-        forecast_length (int):, the length of the test dataset
-        
-        train_na_tolerance (float): percent na allowed in train
-        test_na_tolerance (float): percent na allowed in test (1.0 would allow a series of entirely NaN)
-    
-    Returns:
-        train, test    (both pd DataFrames)
-    """
-    assert forecast_length > 0, "forecast_length must be greater than 0"
-    
-    if context_length is None:
-        context_length = 2 * forecast_length
-    
-    if forecast_length > int(len(df.index) * (min_allowed_train_percent)):
-        raise ValueError("forecast_length is too large, not enough training data, alter min_allowed_train_percent to override")
-    
-    else:
-        train = df.head(len(df.index) - forecast_length)
-        test = df.tail(forecast_length)
-        return train, test

@@ -150,8 +150,6 @@ GluonTS not accepting quite a lot of frequencies
 
 ### Faster Convergence / Faster in General
 * Only search useful parameters, highest probability for most likely effective parameters
-* Recombine best two of each model parameters, if two or more present (plus option to disable this)
-* Recombination of transformations
 * Remove parameters that are rarely/never useful from get_new_params
 * Don't apply transformations to Zeroes naive, possibly other naives
 * Option to run generations until generations no longer see improvement of at least X % over n generations
@@ -173,11 +171,7 @@ GluonTS not accepting quite a lot of frequencies
 		Best SMAPE/MAE for point with Best Containment/UpperMAE/LowerMAE for probabilistic
 		Best 10 combined with Decision Tree
 	Distance:
-		Weighted SMAPE (just need single best model so far for each distance)
-			DEFINITELY NEEDS MORE BALANCING TOWARDS MAE, RMSE
-		20/80
-		30/30/30
-		3/remainder
+		DEFINITELY NEEDS MORE BALANCING TOWARDS MAE, RMSE
 	Horizontal:
 		MAE (list of all models per series by MAE)
 		ALLOW NESTED ENSEMBLE INSIDE ENSEMBLE

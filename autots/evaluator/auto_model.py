@@ -532,6 +532,8 @@ def unpack_ensemble_models(template,
                            keep_ensemble: bool = True):
     """Take ensemble models from template and add as new rows."""
     ensemble_template = pd.DataFrame()
+    template['Ensemble'] = np.where(template['Model'] == 'Ensemble',
+                                    1, template['Ensemble'])
     for index, value in template[template['Ensemble'] == 1]['ModelParameters'].iteritems():
         model_dict = json.loads(value)['models']
         model_df = pd.DataFrame.from_dict(model_dict, orient='index')
@@ -540,13 +542,12 @@ def unpack_ensemble_models(template,
         ensemble_template = pd.concat([ensemble_template, model_df], axis=0,
                                       ignore_index=True,
                                       sort=False).reset_index(drop=True)
-
+    if not keep_ensemble:
+        template = template[template['Ensemble'] == 0]
     template = pd.concat([template, ensemble_template], axis=0,
                          ignore_index=True,
                          sort=False).reset_index(drop=True)
-    template = template.drop_duplicates(subset = template_cols)
-    if not keep_ensemble:
-        template = template[template['Ensemble'] == 0]
+    template = template.drop_duplicates(subset=template_cols)
     return template
 
 
@@ -554,9 +555,9 @@ def PredictWitch(template, df_train, forecast_length: int,
                  frequency: str = 'infer',
                  prediction_interval: float = 0.9,
                  no_negatives: bool = False,
-                 preord_regressor_train = [],
-                 preord_regressor_forecast = [],
-                 holiday_country: str = 'US', startTimeStamps = None,
+                 preord_regressor_train=[],
+                 preord_regressor_forecast=[],
+                 holiday_country: str = 'US', startTimeStamps=None,
                  random_seed: int = 2020, verbose: int = 0,
                  template_cols: list = ['Model', 'ModelParameters',
                                         'TransformationParameters',
@@ -591,7 +592,7 @@ def PredictWitch(template, df_train, forecast_length: int,
     template = template.head(1)
     for index_upper, row_upper in template.iterrows():
         # if an ensemble
-        if row_upper['Ensemble'] == 1:
+        if row_upper['Model'] == 'Ensemble':
             from autots.models.ensemble import EnsembleForecast
             forecasts_list = []
             forecasts_runtime = []
@@ -603,22 +604,18 @@ def PredictWitch(template, df_train, forecast_length: int,
             ens_template = unpack_ensemble_models(template, template_cols,
                                                   keep_ensemble=False)
             for index, row in ens_template.iterrows():
-                model_str = row['Model']
-                parameter_dict = json.loads(row['ModelParameters'])
-                transformation_dict = json.loads(row['TransformationParameters'])
-
-                df_forecast = ModelPrediction(df_train, forecast_length,
-                                              transformation_dict,
-                                              model_str, parameter_dict,
-                                              frequency=frequency, 
-                                              prediction_interval=prediction_interval,
-                                              no_negatives=no_negatives,
-                                              preord_regressor_train=preord_regressor_train,
-                                              preord_regressor_forecast=preord_regressor_forecast,
-                                              holiday_country=holiday_country,
-                                              startTimeStamps=startTimeStamps,
-                                              random_seed=random_seed, 
-                                              verbose=verbose)
+                # recursive recursion!
+                df_forecast = PredictWitch(
+                    row, df_train=df_train,
+                    forecast_length=forecast_length, frequency=frequency,
+                    prediction_interval=prediction_interval,
+                    no_negatives=no_negatives,
+                    preord_regressor_train=preord_regressor_train,
+                    preord_regressor_forecast=preord_regressor_forecast,
+                    holiday_country=holiday_country,
+                    startTimeStamps=startTimeStamps,
+                    random_seed=random_seed, verbose=verbose,
+                    template_cols=template_cols)
                 model_id = create_model_id(df_forecast.model_name, df_forecast.model_parameters, df_forecast.transformation_parameters)
                 total_runtime = df_forecast.fit_runtime + df_forecast.predict_runtime + df_forecast.transformation_runtime
 

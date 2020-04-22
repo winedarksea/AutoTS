@@ -44,11 +44,11 @@ metric_weighting = {'smape_weighting': 10, 'mae_weighting': 1,
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9, ensemble='all',
                weighted=False,
-               max_generations=5, num_validations=2, validation_method='even',
+               max_generations=50, num_validations=2, validation_method='even',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=50,
                max_per_model_class=10,
-               drop_most_recent=1, verbose=0)
+               drop_most_recent=1, verbose=1)
 
 
 preord_regressor_train, preord_regressor_forecast = fake_regressor(
@@ -108,7 +108,7 @@ Edgey Cases:
 
 # %%
 from autots.tools.shaping import long_to_wide
-df_wide = long_to_wide(df_long, date_col = 'datetime', value_col = 'value',
+df_wide = long_to_wide(df_long, date_col='datetime', value_col='value',
                        id_col='series_id', frequency='infer', aggfunc='first')
 
 # df = df_wide[df_wide.columns[0:3]].fillna(0).astype(float)
@@ -140,7 +140,7 @@ cols = ['Model', 'ModelParameters',
         'TransformationParameters', 'Exceptions']
 all_results = pd.concat([initial_results[cols], error_results[cols]], axis=0)
 
-test = initial_results[ initial_results['TransformationParameters'].str.contains('IntermittentOccurrence')]
+# test = initial_results[ initial_results['TransformationParameters'].str.contains('IntermittentOccurrence')]
 
 if error_results.shape[0] > 0:
     test_corr = error_correlations(all_results,

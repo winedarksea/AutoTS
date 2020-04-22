@@ -23,8 +23,8 @@ from autots.evaluator.auto_model import validation_aggregation
 
 
 class AutoTS(object):
-    """Automate time series modeling using genetic algorithms.
-    
+    """Automate time series modeling using a genetic algorithm.
+
     Args:
         forecast_length (int): number of periods over which to evaluate forecast. Can be overriden later in .predict().
         frequency (str): 'infer' or a specific pandas datetime offset. Can be used to force rollup of data (ie daily input, but frequency 'M' will rollup to monthly).
@@ -166,18 +166,18 @@ class AutoTS(object):
         else:
             print("Input initial_template either unrecognized or not yet implemented. Using Random.")
             self.initial_template = RandomTemplate(50)
-        
+
         # remove models not in given model list
         self.initial_template = self.initial_template[self.initial_template['Model'].isin(self.model_list)]
         if len(self.initial_template.index) == 0:
             raise ValueError("No models in template! Adjust initial_template or model_list")
-            
+
         self.best_model = pd.DataFrame()
         self.regressor_used = False
         self.template_cols = ['Model', 'ModelParameters',
                               'TransformationParameters', 'Ensemble']
         self.initial_results = TemplateEvalObject()
-    
+
     def __repr__(self):
         """Print."""
         if self.best_model.empty:
@@ -189,11 +189,11 @@ class AutoTS(object):
                 return "Initiated AutoTS object"
 
     def fit(self, df,
-            date_col: str = 'datetime',value_col: str = 'value',
-            id_col: str = None, preord_regressor = [],
+            date_col: str = 'datetime', value_col: str = 'value',
+            id_col: str = None, preord_regressor=[],
             weights: dict = {}, result_file: str = None):
         """Train algorithm given data supplied.
-        
+
         Args:
             df (pandas.DataFrame): Datetime Indexed
             date_col (str): name of datetime column
@@ -208,7 +208,7 @@ class AutoTS(object):
         self.date_col = date_col
         self.value_col = value_col
         self.id_col = id_col
-        
+
         # convert class variables to local variables (makes testing easier)
         forecast_length = self.forecast_length
         weighted = self.weighted
@@ -218,7 +218,7 @@ class AutoTS(object):
         random_seed = self.random_seed
         holiday_country = self.holiday_country
         ensemble = self.ensemble
-        subset = self.subset
+        subset = abs(int(self.subset))
         metric_weighting = self.metric_weighting
         num_validations = self.num_validations
         verbose = self.verbose
@@ -284,7 +284,7 @@ class AutoTS(object):
 
         # take a subset of the data if working with a large number of series
         if self.subset_flag:
-            df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n=subset, na_tolerance=self.na_tolerance, random_state=random_seed)
+            df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n=subset, random_state=random_seed)
             if self.verbose > 1:
                 print(f'First subset is of: {df_subset.columns}')
         else:
@@ -413,7 +413,8 @@ class AutoTS(object):
             try:
                 ensemble_templates = EnsembleTemplateGenerator(
                     self.initial_results, forecast_length=forecast_length,
-                    ensemble=ensemble, subset_flag=self.subset_flag)
+                    ensemble=ensemble.replace('horizontal', ''),
+                    subset_flag=self.subset_flag)
     
                 template_result = TemplateWizard(ensemble_templates, df_train,
                                                  df_test,
@@ -423,6 +424,7 @@ class AutoTS(object):
                                                  frequency=frequency,
                                                  prediction_interval=prediction_interval,
                                                  no_negatives=no_negatives,
+                                                 ensemble=ensemble,
                                                  preord_regressor_train=preord_regressor_train,
                                                  preord_regressor_forecast=preord_regressor_test,
                                                  holiday_country=holiday_country,
@@ -436,10 +438,45 @@ class AutoTS(object):
                     [self.initial_results.model_results,
                      template_result.model_results],
                     axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+                self.initial_results.per_series_mae = pd.concat(
+                    [self.initial_results.per_series_mae,
+                     template_result.per_series_mae],
+                    axis=0, sort=False)
                 self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
                 if result_file is not None:
                     self.initial_results.model_results.to_csv(result_file,
                                                               index=False)
+                if 'horizontal' in ensemble:
+                    ensemble_templates = EnsembleTemplateGenerator(
+                        self.initial_results, forecast_length=forecast_length,
+                        ensemble=ensemble.replace('simple', '').replace('distance', ''),
+                        subset_flag=self.subset_flag)
+                    template_result = TemplateWizard(ensemble_templates,
+                                                     df_train,
+                                                     df_test,
+                                                     current_weights,
+                                                     model_count=model_count,
+                                                     forecast_length=forecast_length,
+                                                     frequency=frequency,
+                                                     prediction_interval=prediction_interval,
+                                                     no_negatives=no_negatives,
+                                                     preord_regressor_train=preord_regressor_train,
+                                                     preord_regressor_forecast=preord_regressor_test,
+                                                     holiday_country=holiday_country,
+                                                     startTimeStamps=profile_df.loc['FirstDate'],
+                                                     template_cols=template_cols,
+                                                     random_seed=random_seed,
+                                                     verbose=verbose)
+                    model_count = template_result.model_count
+                    # capture results from lower-level template run
+                    self.initial_results.model_results = pd.concat(
+                        [self.initial_results.model_results,
+                         template_result.model_results],
+                        axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+                    self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
+                    if result_file is not None:
+                        self.initial_results.model_results.to_csv(result_file,
+                                                                  index=False)
             except Exception as e:
                 print(f"Ensembling Error: {e}")
 
@@ -498,9 +535,8 @@ class AutoTS(object):
                     raise ValueError("Validation Method not recognized try 'even', 'backwards'")
 
                 # subset series (if used) and take a new train/test split
-                # df_subset = subset_series(current_slice, list((weights.get(i)) for i in df_wide_numeric.columns), n=subset, na_tolerance=self.na_tolerance, random_state=random_seed)
                 if self.subset_flag:
-                    df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n=subset, na_tolerance=self.na_tolerance, random_state=random_seed)
+                    df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n=subset, random_state=random_seed)
                     if self.verbose > 1:
                         print(f'{y + 1} subset is of: {df_subset.columns}')
                 else:
