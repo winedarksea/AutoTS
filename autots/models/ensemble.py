@@ -428,4 +428,28 @@ def EnsembleTemplateGenerator(initial_results,
             ensemble_templates = pd.concat([ensemble_templates,
                                             best5_params],
                                            axis=0, ignore_index=True)
+            ###########################################
+            mods_per_series = per_series.idxmin()
+            mods = mods_per_series.unique()
+            ensemble_models = {}
+            best5 = initial_results.model_results[initial_results.model_results['ID'].isin(mods.tolist())].drop_duplicates(subset=['Model', 'ModelParameters', 'TransformationParameters'])
+            for index, row in best5.iterrows():
+                temp_dict = {
+                    'Model': row['Model'],
+                    'ModelParameters': row['ModelParameters'],
+                    'TransformationParameters': row['TransformationParameters']
+                    }
+                ensemble_models[row['ID']] = temp_dict
+            best5_params = {'Model': 'Ensemble',
+                            'ModelParameters':
+                                json.dumps({'model_name': 'Horizontal',
+                                            'models': ensemble_models,
+                                            'series': mods_per_series.to_dict()
+                                            }),
+                            'TransformationParameters': '{}',
+                            'Ensemble': 1}
+            best5_params = pd.DataFrame(best5_params, index=[0])
+            ensemble_templates = pd.concat([ensemble_templates,
+                                            best5_params],
+                                           axis=0, ignore_index=True)
     return ensemble_templates

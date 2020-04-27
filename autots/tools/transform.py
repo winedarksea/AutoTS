@@ -1117,10 +1117,10 @@ def RandomTransform():
                         'DifferencedTransformer', 'SinTrend', 'PctChangeTransformer',
                         'CumSumTransformer', 'PositiveShift', 'Log',
                         'IntermittentOccurrence']
-    first_transformer_prob = [0.3, 0.05, 0.2, 0.05,
+    first_transformer_prob = [0.25, 0.05, 0.2, 0.05,
                               0.05, 0.05, 0.05, 0.01,
                               0.01, 0.01, 0.03, 0.02,
-                              0.05, 0.01, 0.05,
+                              0.1, 0.01, 0.05,
                               0.02, 0.02, 0.01,
                               0.01]
     third_transformer_prob = [0.2, 0.05, 0.1, 0.05,

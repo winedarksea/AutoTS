@@ -17,6 +17,7 @@ Latest:
 	Improved ensembling with new parameter options.
 		New 'horizontal' ensembling
 		Added mean and horizontal ensemble types
+		Recursive ensembling now enabled
 	Added a number of new Transformer options
 		Multiple new Sklearn-sourced transformers (QuantileTransformer, etc)
 		SinTrend
@@ -50,6 +51,7 @@ Latest:
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
 lower/upper MAE appearing NaN, and then getting a better score
 VECM does not recognize exog to predict
+ARIMA with User or Holiday ValueError('Can only compare identically-labeled DataFrame objects',)
 kbins not working when it assigns fewer bins than n_bins asked for (use the property transformer.n_bins_ ?)
 FastICA 'array must not contain infs or NaNs'
 How do fillna methods handle datasets that have entirely NaN series?
@@ -57,7 +59,13 @@ Check if any transformation parameters seem to consistently perform poorly, sugg
 Subsetting for validation samples seems to be funky.
 
 Test updated context_slicer
-Test dist forecast working in validations
+
+ValueError: Found input variables with inconsistent numbers of samples: [799, 798]
+X and Y not same length!
+line 662 in auto_ts.py
+line 488 in ModelPrediciton preord_regressor = preord_regressor_train)
+line 449 in sklearn
+line 152 in accept_sparse = True in multioutput sklearn
 
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
@@ -65,14 +73,12 @@ GluonTS not accepting quite a lot of frequencies
 
 ## General Tasks
 * Add RNN and other DNNs
-* Improve distance ensembling speed
-* Add horizontal/clustered ensembling
-	* intermittent/non-intermittent
 * Improve history-driven point to probability
 * Add weighting option
 	* Sum of all as weight
 	* sum of last N% as weight
 * Adding hierarchail
+* new products
 
 # To-Do
 * Get the sphinx (google style) documentation and readthedocs.io website up
@@ -129,16 +135,12 @@ GluonTS not accepting quite a lot of frequencies
 * Parallelization, and Distributed options (Dask) for general greater speed
 * Improve usability on rarer frequenices (ie monthly data where some series start on 1st, others on 15th, etc.)
 * Figures: Add option to output figures of train/test + forecast, other performance figures
-* Pre-clustering on many time series
 * If all input are Int, convert floats back to int
-* Trim whitespace/case-desensitize on string inputs
 * Option to print % improvement of best over last value naive
 * Hierachial correction (bottom-up to start with)
 * Because I'm a biologist, incorporate more genetics and such. Also as a neuro person, there must be a way to fit networks in...
 * Improved verbosity controls and options. 
 * Replace most 'print' with logging.
-* AIC metric, other accuracy metrics
-	* MAE of upper and lower forecasts, balance with Containment
 * Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
 * Development tools:
 	* Add to Conda distribution as well as pip
@@ -167,20 +169,11 @@ GluonTS not accepting quite a lot of frequencies
 
 #### New Ensembles:
 	REDUCE OVERFITTING IN MODEL CHOICE
+	Min per all series regardless
 	Other:
 		Best SMAPE/MAE for point with Best Containment/UpperMAE/LowerMAE for probabilistic
 		Best 10 combined with Decision Tree
-	Distance:
-		DEFINITELY NEEDS MORE BALANCING TOWARDS MAE, RMSE
-	Horizontal:
-		MAE (list of all models per series by MAE)
-		ALLOW NESTED ENSEMBLE INSIDE ENSEMBLE
-		best per series ensemble (unlimited models)
-		best per series, top N
-			select top N rows (3 best per each), choose most common models in that.
-			Assign each series there with best model of the ones choosen.
-			how common would a model be routinely having second place?
-		Use KNN or other classifier to assign to untested time series
+
 #### New models:
 	Simple Decomposition forecasting
 	Statespace variant of ETS which has Confidence Intervals

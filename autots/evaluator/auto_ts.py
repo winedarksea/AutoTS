@@ -32,7 +32,7 @@ class AutoTS(object):
         prediction_interval (float): 0-1, uncertainty range for upper and lower forecasts. Adjust range, but rarely matches actual containment.
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         weighted (bool): if True, considers series weights passed through to .fit(). Weights affect metrics and subsetting.
-        ensemble (str): None, 'simple', 'distance', 'horizontal', 'all'
+        ensemble (str): None, 'simple'
         initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
         figures (bool): Not yet implemented
         random_seed (int): random seed allows (slightly) more consistent results.
@@ -707,26 +707,30 @@ class AutoTS(object):
             import_template = pd.read_csv(filename)
         if '.json' in filename:
             import_template = pd.read_json(filename, orient='columns')
-        
+
         try:
             import_template = import_template[self.template_cols]
         except Exception:
             print("Column names {} were not recognized as matching template columns: {}".format(str(import_template.columns), str(self.template_cols)))
-        
+
         if method.lower() in ['add on', 'addon']:
-            self.initial_template = self.initial_template.merge(import_template, on = self.initial_template.columns.intersection(import_template.columns).to_list())
-            self.initial_template = self.initial_template.drop_duplicates(subset = self.template_cols)
-        if method.lower() == 'only' or  method.lower() == 'user only':
+            self.initial_template = self.initial_template.merge(import_template, on=self.initial_template.columns.intersection(import_template.columns).to_list())
+            self.initial_template = self.initial_template.drop_duplicates(subset=self.template_cols)
+        if method.lower() in ['only', 'user only']:
             self.initial_template = import_template
-        
         return self
 
     def import_results(self, filename):
         """Add results from another run on the same data."""
         past_results = pd.read_csv(filename)
         past_results = past_results[pd.isnull(past_results['Exceptions'])]
-        self.initial_results.model_results = pd.concat([self.initial_results.model_results, past_results], axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+        past_results['TotalRuntime'] = pd.to_timedelta(past_results['TotalRuntime'])
+        self.initial_results.model_results = pd.concat(
+            [past_results, self.initial_results.model_results],
+            axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+        self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(subset=self.template_cols, keep='first')
         return self
+
     def get_params(self):
         pass
 

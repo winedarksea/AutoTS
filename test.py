@@ -44,7 +44,7 @@ metric_weighting = {'smape_weighting': 10, 'mae_weighting': 1,
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9, ensemble='all',
                weighted=False,
-               max_generations=50, num_validations=2, validation_method='even',
+               max_generations=1, num_validations=2, validation_method='even',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=50,
                max_per_model_class=10,
@@ -66,7 +66,9 @@ model = model.fit(df_long, weights = weights_hourly,
                   date_col = 'datetime', value_col = 'value',
                   id_col = 'series_id')  # and weighted = True
 """
+# model = model.import_results('04222020test.csv')
 model = model.fit(df_long, preord_regressor=preord_regressor_train2d,
+                  result_file='04222027test.csv',
                   date_col='datetime', value_col='value', id_col='series_id')
 
 print(model.best_model['Model'].iloc[0])
