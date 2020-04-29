@@ -75,6 +75,9 @@ GluonTS not accepting quite a lot of frequencies
 	* sum of last N% as weight
 * Adding hierarchail
 * new products
+* distance 20/80 horizontal, horizontal-max
+* handle series with many NaN at beginning
+* overfitting with Ensembles
 
 # To-Do
 * Get the sphinx (google style) documentation and readthedocs.io website up

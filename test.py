@@ -12,7 +12,7 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 
 forecast_length = 6
-df_long = load_toy_monthly()
+df_long = load_toy_daily()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -32,7 +32,7 @@ model_list = [
               ]
 model_list = 'superfast'
 # model_list = ['GluonTS', 'AverageValueNaive', 'GLS']
-# model_list = ['LastValueNaive']
+model_list = ['LastValueNaive', 'WindowRegression', 'RollingRegression']
 
 metric_weighting = {'smape_weighting': 10, 'mae_weighting': 1,
                     'rmse_weighting': 5, 'containment_weighting': 1,
@@ -109,15 +109,7 @@ Edgey Cases:
 """
 
 # %%
-from autots.tools.shaping import long_to_wide
-df_wide = long_to_wide(df_long, date_col='datetime', value_col='value',
-                       id_col='series_id', frequency='infer', aggfunc='first')
-
-# df = df_wide[df_wide.columns[0:3]].fillna(0).astype(float)
-
-from autots.tools.shaping import values_to_numeric
-categorical_transformer = values_to_numeric(df_wide)
-df_wide_numeric = categorical_transformer.dataframe
+df_wide_numeric = model.df_wide_numeric
 
 df = df_wide_numeric.tail(50).fillna(0).astype(float)
 

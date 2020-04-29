@@ -124,7 +124,8 @@ class AutoTS(object):
                                'GLM', 'ETS', 'ARIMA', 'FBProphet',
                                'RollingRegression', 'GluonTS',
                                'UnobservedComponents', 'VARMAX',
-                               'VECM', 'DynamicFactor', 'MotifSimulation']
+                               'VECM', 'DynamicFactor', 'MotifSimulation',
+                               'WindowRegression']
         if model_list == 'superfast':
             self.model_list = ['ZeroesNaive', 'LastValueNaive',
                                'AverageValueNaive', 'GLS', 'SeasonalNaive']
@@ -140,7 +141,7 @@ class AutoTS(object):
                                'VARMAX', 'DynamicFactor']
         if model_list == 'multivariate':
             self.model_list = ['VECM', 'DynamicFactor', 'GluonTS', 'VARMAX',
-                               'RollingRegression']
+                               'RollingRegression', 'WindowRegression']
         if model_list == 'all':
             self.model_list = ['ZeroesNaive', 'LastValueNaive',
                                'AverageValueNaive', 'GLS', 'GLM', 'ETS',
@@ -148,7 +149,7 @@ class AutoTS(object):
                                'GluonTS', 'SeasonalNaive',
                                'UnobservedComponents', 'VARMAX', 'VECM',
                                'DynamicFactor', 'TSFreshRegressor',
-                               'MotifSimulation']
+                               'MotifSimulation', 'WindowRegression']
 
         # generate template to begin with
         if initial_template.lower() == 'random':
@@ -679,7 +680,7 @@ class AutoTS(object):
         """Export top results as a reusable template.
 
         Args:
-            output_format = 'csv' or 'json' (from filename)
+            filename (str): 'csv' or 'json' (in filename)
             models (str): 'best' or 'all'
             n (int): if models = 'best', how many n-best to export
             max_per_model_class (int): if models = 'best', the max number of each model class to include in template
@@ -687,7 +688,7 @@ class AutoTS(object):
         if models == 'all':
             export_template = self.initial_results[self.template_cols]
         if models == 'best':
-            export_template = self.self.validation_results.model_results
+            export_template = self.validation_results.model_results
             if str(max_per_model_class).isdigit():
                 export_template = export_template.sort_values('Score', ascending=True).groupby('Model').head(max_per_model_class).reset_index()
             export_template = export_template.nsmallest(n, columns = ['Score'])[self.template_cols]

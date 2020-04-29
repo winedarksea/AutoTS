@@ -150,6 +150,10 @@ def retrieve_regressor(regression_model: dict =
             learning_rate_init=regression_model["model_params"]['learning_rate_init'],
             random_state=random_seed, verbose=verbose_bool)
         return regr
+    elif regression_model['model'] == 'KerasRNN':
+        from autots.models.dnn import KerasRNN
+        regr = KerasRNN()
+        return regr
     elif regression_model['model'] == 'KNN':
         from sklearn.multioutput import MultiOutputRegressor
         from sklearn.neighbors import KNeighborsRegressor
@@ -220,11 +224,11 @@ def retrieve_regressor(regression_model: dict =
 def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                                               'MLP', 'DecisionTree', 'KNN',
                                               'Adaboost', 'SVM', 'BayesianRidge',
-                                              'xgboost'],
+                                              'xgboost', 'KerasRNN'],
                               model_probs: list = [0.1, 0.1,
                                                   0.12, 0.2, 0.07,
-                                                  0.2, 0.025, 0.035,
-                                                  0.15]):
+                                                  0.1, 0.025, 0.035,
+                                                  0.05, 0.2]):
     """Generate new parameters for input to regressor."""
     model = np.random.choice(a=models, size=1, p=model_probs).item()
     if model in ['xgboost', 'Adaboost', 'DecisionTree', 'MLP']:
@@ -607,8 +611,64 @@ class RollingRegression(ModelObject):
         return parameter_dict
 
 
+def window_maker(df, window_size: int = 10,
+                 input_dim: str = 'multivariate',
+                 normalize_window: bool = False,
+                 shuffle: bool = True,
+                 output_dim: str = 'forecast_length',
+                 forecast_length: int = 1,
+                 max_windows: int = 5000
+                 ):
+    """Convert a dataset into slices with history and y forecast."""
+    if output_dim == '1step':
+        forecast_length = 1
+    phrase_n = (forecast_length + window_size)
+    max_pos_wind = df.shape[0] - phrase_n + 1
+    max_pos_wind = max_windows if max_pos_wind > max_windows else max_pos_wind
+    if max_pos_wind == max_windows:
+        numbers = np.random.choice((df.shape[0] - phrase_n),
+                                   size=max_pos_wind,
+                                   replace=False)
+        if not shuffle:
+            numbers = np.sort(numbers)
+    else:
+        numbers = np.array(range(max_pos_wind))
+        if shuffle:
+            np.random.shuffle(numbers)
+
+    X = pd.DataFrame()
+    Y = pd.DataFrame()
+    for z in numbers:
+        if input_dim == 'univariate':
+            rand_slice = df.iloc[z:(z + phrase_n), ]
+            rand_slice = rand_slice.reset_index(drop=True).transpose().set_index(np.repeat(z, (df.shape[1], )), append=True)
+            cX = rand_slice.iloc[:, 0:(window_size)]
+            cY = rand_slice.iloc[:, window_size:]
+        else:
+            cX = df.iloc[z:(z + window_size), ]
+            cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
+            cY = df.iloc[(z + window_size):(z + phrase_n), ]
+            cY = pd.DataFrame(cY.stack().reset_index(drop=True)).transpose()
+        X = pd.concat([X, cX], axis=0)
+        Y = pd.concat([Y, cY], axis=0)
+    if normalize_window:
+        X  = X.div(X.sum(axis=1), axis=0)
+    return X, Y
 
 
+def last_window(df, window_size: int = 10,
+                input_dim: str = 'multivariate',
+                normalize_window: bool = False):
+    z = df.shape[0] - window_size
+    if input_dim == 'univariate':
+        cX = df.iloc[z:(z + window_size), ]
+        cX = cX.reset_index(drop=True).transpose().set_index(np.repeat(z, (df.shape[1], )), append=True)
+    else:
+        cX = df.iloc[z:(z + window_size), ]
+        cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
+    if normalize_window:
+        cX  = cX.div(cX.sum(axis=1), axis=0)
+    return cX
 
 
 class WindowRegression(ModelObject):
@@ -618,6 +678,9 @@ class WindowRegression(ModelObject):
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
+        # transfer_learning: str = None,
+        # transfer_learning_transformation: dict = None,
+        # regression_type: str = None,
     """
 
     def __init__(self, name: str = "WindowRegression",
@@ -632,16 +695,24 @@ class WindowRegression(ModelObject):
                        'base_estimator': 'DecisionTree',
                        'loss': 'linear',
                        'learning_rate': 1.0}},
-                 input_dim: str = 'univariate',
+                 input_dim: str = 'multivariate',
                  output_dim: str = '1step',
                  normalize_window: bool = False,
-                 transfer_learning: str = None,
-                 transfer_learning_transformation: dict = None,
-                 regression_type: str = None
+                 shuffle: bool = True,
+                 forecast_length: int = 1,
+                 max_windows: int = 5000
                  ):
         ModelObject.__init__(self, name, frequency, prediction_interval,
                              holiday_country=holiday_country,
                              random_seed=random_seed, verbose=verbose)
+        self.window_size = abs(int(window_size))
+        self.regression_model = regression_model
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.normalize_window = normalize_window
+        self.shuffle = shuffle
+        self.forecast_length = forecast_length
+        self.max_windows = abs(int(max_windows))
 
     def fit(self, df, preord_regressor=[]):
         """Train algorithm given data supplied.
@@ -651,19 +722,19 @@ class WindowRegression(ModelObject):
         """
         df = self.basic_profile(df)
         self.df_train = df
-
-
-        numbers = np.random.choice((df.shape[0] - phrase_n),
-                                           size=max_motifs_n,
-                                           replace=False)
-        motif_vecs = pd.DataFrame()
-        # takes random slices of the time series and rearranges as phrase_n length vectors
-        for z in numbers:
-            rand_slice = df.iloc[z:(z + phrase_n), ]
-            rand_slice = rand_slice.reset_index(drop=True).transpose().set_index(np.repeat(z, (df.shape[1], )), append=True)
-            motif_vecs = pd.concat([motif_vecs, rand_slice], axis=0)
-
-
+        X, Y = window_maker(df, window_size=self.window_size,
+                            input_dim=self.input_dim,
+                            normalize_window=self.normalize_window,
+                            shuffle=self.shuffle,
+                            output_dim=self.output_dim,
+                            forecast_length=self.forecast_length,
+                            max_windows=self.max_windows)
+        self.regr = retrieve_regressor(regression_model=self.regression_model,
+                                       verbose=self.verbose,
+                                       verbose_bool=self.verbose_bool,
+                                       random_seed=self.random_seed)
+        self.regr = self.regr.fit(X, Y)
+        self.last_window = df.tail(self.window_size)
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -680,9 +751,60 @@ class WindowRegression(ModelObject):
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
+        """
+        A VALUE IS BEING DROPPED FROM Y!
+        for forecast:
+        output_dim = 1
+        don't forget to normalize if used
+        collapse an output_dim into a forecastdf
+        
+        if univariate and 1, transpose
+        """
+        if int(forecast_length) > int(self.forecast_length):
+            print("GluonTS must be refit to change forecast length!")
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
 
+        if self.output_dim == '1step':
+            # combined_index = (self.df_train.index.append(index))
+            forecast = pd.DataFrame()
+            # forecast, 1 step ahead, then another, and so on
+            for x in range(forecast_length):
+                pred = last_window(self.last_window,
+                                   window_size=self.window_size,
+                                   input_dim=self.input_dim,
+                                   normalize_window=self.normalize_window)
+                rfPred = pd.DataFrame(self.regr.predict(pred))
+                if self.input_dim == 'univariate':
+                    rfPred = pd.DataFrame(rfPred).transpose()
+                forecast = pd.concat([forecast, rfPred], axis=0,
+                                     ignore_index=True)
+                self.last_window = pd.concat([self.last_window, rfPred],
+                                             axis=0, ignore_index=True)
+                # self.sktraindata.index = combined_index[:len(self.sktraindata.index)]
+            df = forecast
+
+        else:
+            pred = last_window(self.last_window, window_size=self.window_size,
+                               input_dim=self.input_dim,
+                               normalize_window=self.normalize_window)
+            cY = pd.DataFrame(self.regr.predict(pred))
+            if self.input_dim == 'multivariate':
+                # cY = Y.tail(1)
+                cY.index = ['values']
+                cY.columns = np.tile(self.column_names,
+                                     reps=self.forecast_length)
+                cY = cY.transpose().reset_index()
+                cY['timestep'] = np.repeat(range(forecast_length),
+                                           repeats=len(self.column_names))
+                cY = pd.pivot_table(cY, index='timestep', columns='index')
+            else:
+                # cY = Y.tail(df.shape[1])
+                cY = cY.transpose()
+            df = cY
+
+        df.columns = self.column_names
+        df.index = index
         if just_point_forecast:
             return df
         else:
@@ -707,50 +829,63 @@ class WindowRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
+        window_size_choice = np.random.choice([5, 10, 20], size=1).item()
         model_choice = generate_regressor_params()
-        lag_1_choice = seasonal_int()
-        lag_2_choice = np.random.choice(a=['None',
-                                           seasonal_int(include_one=True)],
-                                        size=1, p=[0.3, 0.7]).item()
-        if str(lag_2_choice) == str(lag_1_choice):
-            lag_2_choice = 1
-        method_choice = np.random.choice(a=['Mean', 'Median', 'LastValue'],
-                                         size=1,
-                                         p=[0.4, 0.2, 0.4]).item()
-        regression_choice = np.random.choice(a=[None, 'User'], size=1,
-                                             p=[0.7, 0.3]).item()
+        input_dim_choice = np.random.choice(['multivariate', 'univariate'],
+                                            size=1).item()
+        output_dim_choice = np.random.choice(['forecast_length', '1step'],
+                                             size=1).item()
+        normalize_window_choice = np.random.choice(a=[True, False],
+                                                   size=1,
+                                                   p=[0.05, 0.95]).item()
+        shuffle_choice = np.random.choice(a=[True, False], size=1).item()
+        max_windows_choice = 5000
         return {
+                'window_size': window_size_choice,
                 'regression_model': model_choice,
-                'regression_type': regression_choice,
-                'lag_1': lag_1_choice,
-                'lag_2': lag_2_choice
+                'input_dim': input_dim_choice,
+                'output_dim': output_dim_choice,
+                'normalize_window': normalize_window_choice,
+                'shuffle': shuffle_choice,
+                'max_windows': max_windows_choice
                 }
 
     def get_params(self):
         """Return dict of current parameters."""
         return {
-                'regression_model': self.regression_model,
-                'regression_type': self.regression_type,
-                'lag_1': self.lag_1,
-                'lag_2': self.lag_2,
+            'window_size': self.window_size,
+            'regression_model': self.regression_model,
+            'input_dim': self.input_dim,
+            'output_dim': self.output_dim,
+            'normalize_window': self.normalize_window,
+            'shuffle': self.shuffle,
+            'max_windows': self.max_windows
                 }
 
-def multivariate_data(dataset, target, start_index, end_index, history_size,
-              target_size, step, single_step=False):
-    data = []
-    labels = []
-  
-    start_index = start_index + history_size
-    if end_index is None:
-      end_index = len(dataset) - target_size
+"""
+window_size: int = 10,
+input_dim: str = 'multivariate',
+output_dim: str = forecast_len, '1step'
+normalize_window: bool = False, -rowwise, that is
+regression_type: str = None
 
-    for i in range(start_index, end_index):
-      indices = range(i-history_size, i, step)
-      data.append(dataset[indices])
-  
-      if single_step:
-        labels.append(target[i+target_size])
-      else:
-        labels.append(target[i:i+target_size])
-  
-    return np.array(data), np.array(labels)
+max number of windows to make...
+forecast_length is passed into init
+shuffle or not
+
+df = df_wide_numeric.fillna(0).astype(float)
+window_size = 10
+input_dim = 'univariate'
+input_dim = 'multivariate'
+output_dim = 'forecast_length'
+max_windows = 5000
+
+for forecast:
+    just last window
+    output_dim = 1
+    don't forget to normalize if used
+    collapse an output_dim into a forecast df
+"""
+
+
+

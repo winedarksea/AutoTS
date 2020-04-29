@@ -420,6 +420,28 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
                                     cutoff_minimum=parameters['cutoff_minimum'],
                                     point_method=parameters['point_method'])
         return model
+    if model == 'WindowRegression':
+        from autots.models.sklearn import WindowRegression
+        if parameters == {}:
+            model = WindowRegression(frequency=frequency,
+                                     prediction_interval=prediction_interval,
+                                     holiday_country=holiday_country,
+                                     random_seed=random_seed, verbose=verbose,
+                                     forecast_length=forecast_length)
+        else:
+            model = WindowRegression(
+                frequency=frequency, prediction_interval=prediction_interval,
+                holiday_country=holiday_country,
+                random_seed=random_seed, verbose=verbose,
+                window_size=parameters['window_size'],
+                regression_model=parameters['regression_model'],
+                input_dim=parameters['input_dim'],
+                output_dim=parameters['output_dim'],
+                normalize_window=parameters['normalize_window'],
+                shuffle=parameters['shuffle'],
+                max_windows=parameters['max_windows'],
+                forecast_length=forecast_length)
+        return model
     else:
         raise AttributeError(("Model String '{}' not a recognized model type").format(model))
 
