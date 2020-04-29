@@ -203,7 +203,6 @@ class AutoTS(object):
             weights (dict): {'colname1': 2, 'colname2': 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
             result_file (str): Location of template/results.csv to be saved at intermediate/final time.
         """
-        self.preord_regressor_train = preord_regressor
         self.weights = weights
         self.date_col = date_col
         self.value_col = value_col
@@ -306,6 +305,7 @@ class AutoTS(object):
             preord_regressor = pd.DataFrame(preord_regressor)
             if not isinstance(preord_regressor.index, pd.DatetimeIndex):
                 preord_regressor.index = df_subset.index
+            self.preord_regressor_train = preord_regressor
             preord_regressor_train = preord_regressor.reindex(index=df_train.index)
             preord_regressor_test = preord_regressor.reindex(index=df_test.index)
         except Exception:
@@ -646,6 +646,9 @@ class AutoTS(object):
         if not self.used_regressor_check:
             preord_regressor = []
             self.preord_regressor_train = []
+        else:
+            preord_regressor = pd.DataFrame(preord_regressor)
+            self.preord_regressor_train = self.preord_regressor_train.reindex(index=self.df_wide_numeric.index)
 
         df_forecast = PredictWitch(self.best_model,
                                    df_train=self.df_wide_numeric,
@@ -660,7 +663,7 @@ class AutoTS(object):
                                    random_seed=self.random_seed,
                                    verbose=self.verbose,
                                    template_cols=self.template_cols)
-   
+
         df_forecast.forecast = categorical_inverse(self.categorical_transformer,
                                                    df_forecast.forecast)
         # df_forecast.lower_forecast = categorical_inverse(self.categorical_transformer, df_forecast.lower_forecast)
@@ -674,7 +677,7 @@ class AutoTS(object):
     def export_template(self, filename, models: str = 'best', n: int = 1,
                         max_per_model_class: int = None):
         """Export top results as a reusable template.
-        
+
         Args:
             output_format = 'csv' or 'json' (from filename)
             models (str): 'best' or 'all'

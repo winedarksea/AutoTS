@@ -144,7 +144,7 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 `pip install autots`
 #### Requirements:
 	numpy
-	Python >= 3.5 (typing) >= 3.6 (GluonTS)
+	Python >= 3.6
 	pandas
 	sklearn >= 0.20.0 (ColumnTransformer)
 	statsmodels
@@ -155,8 +155,10 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 	fbprophet
 	fredapi
 	tsfresh
-	mxnet==1.4.1 (mxnet-mkl, mxnet-cu91, mxnet-cu92mkl, etc.)
+	mxnet==1.4.1 (mxnet-mkl, mxnet-cu91, mxnet-cu101mkl, etc.)
 	gluonts
+
+As of writing, if accelerating with GPU, CUDA 10.1 is the only version usable on all three of mxnet, Tensorflow, and PyTorch.
 
 If using Anaconda, fbprophet is easier to install with `conda install -c conda-forge fbprophet`
 

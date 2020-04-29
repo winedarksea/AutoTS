@@ -2,7 +2,6 @@
 import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA
-# pylint disable=W293,E251
 
 
 def remove_outliers(df, std_threshold: float = 3):
@@ -446,9 +445,11 @@ class RollingMeanTransformer(object):
                     staged = pd.concat([staged, temp_row], axis = 0)
                 staged = staged.tail(len(diffed.index))
                 return staged
+
+
 """
-df = df_wide_numeric.tail(60).head(50)
-df_forecast = (df_wide_numeric).tail(10)
+df = df_wide_numeric.tail(60).head(50).fillna(0)
+df_forecast = (df_wide_numeric).tail(10).fillna(0)
 forecats = transformed.tail(10)
 test = RollingMeanTransformer().fit(df)
 transformed = test.transform(df)
@@ -456,6 +457,98 @@ inverse = test.inverse_transform(forecats, trans_method = 'forecast')
 df == test.inverse_transform(test.transform(df), trans_method = 'original')
 inverse == df_wide_numeric.tail(10)
 """
+"""
+df = df_wide_numeric.tail(60).fillna(0)
+test = SeasonalDifference().fit(df)
+transformed = test.transform(df)
+forecats = transformed.tail(10)
+df == test.inverse_transform(transformed, trans_method = 'original')
+
+df = df_wide_numeric.tail(60).head(50).fillna(0)
+test = SeasonalDifference().fit(df)
+inverse = test.inverse_transform(forecats, trans_method = 'forecast')
+inverse == df_wide_numeric.tail(10).fillna(0)
+"""
+
+
+class SeasonalDifference(object):
+    """Remove seasonal component.
+    
+    Args:
+        lag_1 (int): length of seasonal period to remove.
+        method (str): 'LastValue', 'Mean', 'Median' to construct seasonality
+    """
+
+    def __init__(self, lag_1: int = 7, method: str = 'LastValue'):
+        self.lag_1 = 7 # abs(int(lag_1))
+        self.method = method
+
+    def fit(self, df):
+        """Fits.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        df_length = (df.shape[0])
+
+        if self.method in ['Mean', 'Median']:
+            tile_index = np.tile(np.arange(self.lag_1),
+                                 int(np.ceil(df_length/self.lag_1)))
+            tile_index = tile_index[len(tile_index)-(df_length):]
+            df.index = tile_index
+            if self.method == "Median":
+                self.tile_values_lag_1 = df.groupby(level=0, axis=0).median()
+            else:
+                self.tile_values_lag_1 = df.groupby(level=0, axis=0).mean()
+        else:
+            self.method == 'LastValue'
+            self.tile_values_lag_1 = df.tail(self.lag_1)
+        return self
+
+    def transform(self, df):
+        """Returns rolling data
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        tile_len = len(self.tile_values_lag_1.index)
+        df_len = df.shape[0]
+        sdf = pd.DataFrame(np.tile(self.tile_values_lag_1,
+                                   (int(np.ceil(df_len/tile_len)), 1)))
+        sdf = sdf.tail(df_len)
+        sdf.index = df.index
+        sdf.columns = df.columns
+        return df - sdf
+
+    def fit_transform(self, df):
+        """Fits and Returns Magical DataFrame
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+    
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Returns data to original *or* forecast form
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+            trans_method (str): whether to inverse on original data, or on a following sequence
+                - 'original' return original data to original numbers 
+                - 'forecast' inverse the transform on a dataset immediately following the original
+        """
+        tile_len = len(self.tile_values_lag_1.index)
+        df_len = df.shape[0]
+        sdf = pd.DataFrame(np.tile(self.tile_values_lag_1,
+                                   (int(np.ceil(df_len/tile_len)), 1)))
+        if trans_method == 'original':
+            sdf = sdf.tail(df_len)
+        else:
+            sdf = sdf.head(df_len)
+        sdf.index = df.index
+        sdf.columns = df.columns
+        return df + sdf
+
+
 class DifferencedTransformer(object):
     """Difference from lag n value
     inverse_transform can only be applied to the original series, or an immediately following forecast
@@ -632,6 +725,22 @@ class EmptyTransformer(object):
         return df
 
 
+trans_dict = {'None': EmptyTransformer(),
+              None: EmptyTransformer(),
+              'RollingMean10': RollingMeanTransformer(window=10),
+              'Detrend': Detrend(),
+              'DifferencedTransformer': DifferencedTransformer(),
+              'PctChangeTransformer': PctChangeTransformer(),
+              'SinTrend': SinTrend(),
+              'PositiveShift': PositiveShift(),
+              'Log': PositiveShift(log=True),
+              'IntermittentOccurrence': IntermittentOccurrence(),
+              'CumSumTransformer': CumSumTransformer(),
+              'SeasonalDifference7': SeasonalDifference(lag_1=7, method='LastValue'),
+              'SeasonalDifference12': SeasonalDifference(lag_1=12, method='Mean')
+              }
+
+
 class GeneralTransformer(object):
     """Remove outliers, fillNA, then mathematical transformations.
     
@@ -688,7 +797,10 @@ class GeneralTransformer(object):
             'PositiveShift' - makes all values >= 1
             'Log' - log transform (uses PositiveShift first as necessary)
             'IntermittentOccurrence' - -1, 1 for non median values
-        
+            'SeasonalDifference' - remove the last lag values from all values
+            'SeasonalDifferenceMean' - remove the average lag values from all
+            'SeasonalDifference7' also '12' - non-parameterized version of Seasonal
+
         second_transformation (str): second transformation to apply. Same options as transformation, but with transformation_param passed in if used
 
         transformation_param (str): passed to second_transformation, not used by most transformers.
@@ -703,7 +815,7 @@ class GeneralTransformer(object):
             'sklearn-quantile', 'sklearn-uniform', 'sklearn-kmeans' - sklearn kbins discretizer
             
         n_bins (int): number of quantile bins to split data into
-        
+
         random_seed (int): random state passed through where applicable
     """
     
@@ -770,28 +882,13 @@ class GeneralTransformer(object):
         Args:
             df (pandas.DataFrame): Datetime Indexed - required to set params for some transformers
             transformation (str): name of desired method
-            
+
         Returns:
             transformer object
         """
 
-        if transformation in [None, 'None', 'Detrend', 'SinTrend',
-                              'DifferencedTransformer', 'RollingMean10',
-                              'PctChangeTransformer', 'CumSumTransformer',
-                              'PositiveShift', "Log",
-                              'IntermittentOccurrence']:
-            return {'None': EmptyTransformer(),
-                    None: EmptyTransformer(),
-                    'RollingMean10': RollingMeanTransformer(window=10),
-                    'Detrend': Detrend(),
-                    'DifferencedTransformer': DifferencedTransformer(),
-                    'PctChangeTransformer': PctChangeTransformer(),
-                    'SinTrend': SinTrend(),
-                    'PositiveShift': PositiveShift(),
-                    'Log': PositiveShift(log=True),
-                    'IntermittentOccurrence': IntermittentOccurrence(),
-                    'CumSumTransformer': CumSumTransformer()
-                    }[transformation]
+        if transformation in (trans_dict.keys()):
+            return trans_dict[transformation]
 
         elif (transformation == 'MinMaxScaler'):
             from sklearn.preprocessing import MinMaxScaler
@@ -835,16 +932,22 @@ class GeneralTransformer(object):
             window = 2 if window < 2 else window
             self.window = window
             if transformation == 'FixedRollingMean':
-                transformer = RollingMeanTransformer(window = self.window, fixed = True)
+                transformer = RollingMeanTransformer(window=self.window, fixed=True)
             else:
-                transformer = RollingMeanTransformer(window = self.window, fixed = False)
+                transformer = RollingMeanTransformer(window=self.window, fixed=False)
             return transformer
-        
+
+        elif transformation in ['SeasonalDifference', 'SeasonalDifferenceMean']:
+            if (transformation == 'SeasonalDifference'):
+                return SeasonalDifference(lag_1=param, method='LastValue')
+            else:
+                return SeasonalDifference(lag_1=param, method='Mean')
+
         elif (transformation == 'RollingMean100thN'):
             window = int(df.shape[0]/100)
             window = 2 if window < 2 else window
             self.window = window
-            transformer = RollingMeanTransformer(window = self.window)
+            transformer = RollingMeanTransformer(window=self.window)
             return transformer
         
         elif (transformation == 'RollingMean10thN'):
@@ -1065,7 +1168,9 @@ class GeneralTransformer(object):
         self.df_colnames = df.columns
         oddities_list = ['DifferencedTransformer', 'RollingMean100thN',
                          'RollingMean10thN', 'RollingMean10', 'RollingMean',
-                         'PctChangeTransformer', 'CumSumTransformer']
+                         'PctChangeTransformer', 'CumSumTransformer',
+                         'SeasonalDifference', 'SeasonalDifferenceMean',
+                         'SeasonalDifference7', 'SeasonalDifference12']
         
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
         # discretization (only needed inverse for sklearn)
@@ -1116,19 +1221,22 @@ def RandomTransform():
                         'FastICA', 'Detrend', 'RollingMean10', 'RollingMean100thN',
                         'DifferencedTransformer', 'SinTrend', 'PctChangeTransformer',
                         'CumSumTransformer', 'PositiveShift', 'Log',
-                        'IntermittentOccurrence']
+                        'IntermittentOccurrence',
+                        'SeasonalDifference7', 'SeasonalDifference12']
     first_transformer_prob = [0.25, 0.05, 0.2, 0.05,
-                              0.05, 0.05, 0.05, 0.01,
+                              0.05, 0.04, 0.05, 0.01,
                               0.01, 0.01, 0.03, 0.02,
-                              0.1, 0.01, 0.05,
+                              0.1, 0.01, 0.04,
                               0.02, 0.02, 0.01,
-                              0.01]
+                              0.01,
+                              0.01, 0.01]
     third_transformer_prob = [0.2, 0.05, 0.1, 0.05,
                               0.05, 0.1, 0.05, 0.05,
                               0.05, 0.05, 0.03, 0.02,
-                              0.09, 0.01, 0.04,
+                              0.07, 0.01, 0.04,
                               0.02, 0.02, 0.01,
-                              0.01]
+                              0.01,
+                              0.01, 0.01]
     outlier_method_choice = np.random.choice(a=[None, 'clip', 'remove'],
                                              size=1, p=[0.5, 0.3, 0.2]).item()
     if outlier_method_choice is not None:
@@ -1155,8 +1263,10 @@ def RandomTransform():
     detrend_choice = np.random.choice(a=[True, False], size=1,
                                       p=[0.2, 0.8]).item()
     second_transformation_choice = np.random.choice(
-        a=[None, 'RollingMean', 'FixedRollingMean', 'other'], size=1,
-        p=[0.3, 0.4, 0.1, 0.2]).item()
+        a=[None, 'RollingMean', 'FixedRollingMean', 'SeasonalDifference',
+           'SeasonalDifferenceMean', 'other'],
+        size=1,
+        p=[0.3, 0.3, 0.1, 0.05, 0.05, 0.2]).item()
     if second_transformation_choice == 'other':
         second_transformation_choice = np.random.choice(
             a=transformer_list, size=1,
@@ -1165,6 +1275,9 @@ def RandomTransform():
         transformation_param_choice = np.random.choice(
             a=[3, 10, 14, 28, '10thN', '25thN', '100thN'], size=1,
             p=[0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1]).item()
+    elif second_transformation_choice in ['SeasonalDifference', 'SeasonalDifferenceMean']:
+        from autots.evaluator.auto_model import seasonal_int
+        transformation_param_choice = str(seasonal_int())
     else:
         transformation_param_choice = None
     third_transformation_choice = np.random.choice(a=transformer_list, size=1,

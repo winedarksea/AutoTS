@@ -80,11 +80,13 @@ class GluonTS(ModelObject):
         self.train_index = gluon_train.index
 
         gluon_freq = str(self.frequency).split('-')[0]
-        
+        if gluon_freq in ["MS", "1MS"]:
+            gluon_freq = "M"
+
         if int(self.verbose) > 1:
             print(f"Gluon Frequency is {gluon_freq}")
 
-        if str(self.context_length).replace('.','').isdigit():
+        if str(self.context_length).replace('.', '').isdigit():
             self.gluon_context_length = int(float(self.context_length))
         elif 'forecastlength' in str(self.context_length).lower():
             len_int = int([x for x in str(self.context_length) if x.isdigit()][0])
@@ -100,7 +102,7 @@ class GluonTS(ModelObject):
                              }
         self.test_ds = ListDataset([{FieldName.TARGET: target, 
                                  FieldName.START: start
-                                 } 
+                                 }
                                 for (target, start) in zip(
                                         gluon_train.values, 
                                         ts_metadata['gluon_start']

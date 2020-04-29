@@ -27,6 +27,7 @@ Latest:
 		PositiveShift Transformer
 		Log
 		IntermittentOccurrence
+		SeasonalDetrend
 	Entirely changed the general transformer to add three levels of transformation
 	GLM
 		Error where it apparently won't tolerate any zeroes was compensated for.
@@ -53,6 +54,7 @@ lower/upper MAE appearing NaN, and then getting a better score
 VECM does not recognize exog to predict
 ARIMA with User or Holiday ValueError('Can only compare identically-labeled DataFrame objects',)
 kbins not working when it assigns fewer bins than n_bins asked for (use the property transformer.n_bins_ ?)
+Drop Most Recent does not play well logically with added external (preord) regressors.
 FastICA 'array must not contain infs or NaNs'
 How do fillna methods handle datasets that have entirely NaN series?
 Check if any transformation parameters seem to consistently perform poorly, suggesting of problems. Also speed.
@@ -60,19 +62,13 @@ Subsetting for validation samples seems to be funky.
 
 Test updated context_slicer
 
-ValueError: Found input variables with inconsistent numbers of samples: [799, 798]
-X and Y not same length!
-line 662 in auto_ts.py
-line 488 in ModelPrediciton preord_regressor = preord_regressor_train)
-line 449 in sklearn
-line 152 in accept_sparse = True in multioutput sklearn
-
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
 GluonTS not accepting quite a lot of frequencies
 
 ## General Tasks
 * Add RNN and other DNNs
+* Window regression
 * Improve history-driven point to probability
 * Add weighting option
 	* Sum of all as weight
@@ -194,8 +190,6 @@ GluonTS not accepting quite a lot of frequencies
 #### New Transformations:
 	Weighted moving average
 	Symbolic aggregate approximation (SAX) and (PAA) (basically these are just binning)
-	Seasonal means/std/last value differencing
-		- random row, find other rows closest to it, retrieve indexes, see if indexes have divisible difference between.
 	Shared discretization (all series get same binning)
 	Last Value Centering
 	

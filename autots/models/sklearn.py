@@ -488,8 +488,8 @@ class RollingRegression(ModelObject):
                                         polynomial_degree=self.polynomial_degree)
             if self.regression_type == 'User':
                 x_dat = pd.concat([x_dat,
-                                   complete_regressor.head(len(x_dat.index))],
-                                  axis=1)
+                                   complete_regressor.head(x_dat.shape[0])],
+                                  axis=1).fillna(0)
             if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
                 x_dat = pd.DataFrame(self.x_transformer.transform(x_dat))
                 x_dat = x_dat.replace([np.inf, -np.inf], 0).fillna(0)
@@ -643,7 +643,7 @@ class WindowRegression(ModelObject):
                              holiday_country=holiday_country,
                              random_seed=random_seed, verbose=verbose)
 
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, preord_regressor=[]):
         """Train algorithm given data supplied.
 
         Args:
@@ -651,6 +651,7 @@ class WindowRegression(ModelObject):
         """
         df = self.basic_profile(df)
         self.df_train = df
+
 
         numbers = np.random.choice((df.shape[0] - phrase_n),
                                            size=max_motifs_n,
@@ -733,3 +734,23 @@ class WindowRegression(ModelObject):
                 'lag_1': self.lag_1,
                 'lag_2': self.lag_2,
                 }
+
+def multivariate_data(dataset, target, start_index, end_index, history_size,
+              target_size, step, single_step=False):
+    data = []
+    labels = []
+  
+    start_index = start_index + history_size
+    if end_index is None:
+      end_index = len(dataset) - target_size
+
+    for i in range(start_index, end_index):
+      indices = range(i-history_size, i, step)
+      data.append(dataset[indices])
+  
+      if single_step:
+        labels.append(target[i+target_size])
+      else:
+        labels.append(target[i:i+target_size])
+  
+    return np.array(data), np.array(labels)
