@@ -152,19 +152,31 @@ def retrieve_regressor(regression_model: dict =
         return regr
     elif regression_model['model'] == 'KerasRNN':
         from autots.models.dnn import KerasRNN
-        regr = KerasRNN()
+        regr = KerasRNN(
+            verbose=verbose,
+            kernel_initializer=regression_model["model_params"]['kernel_initializer'],
+            epochs=regression_model["model_params"]['epochs'],
+            batch_size=regression_model["model_params"]['batch_size'],
+            optimizer=regression_model["model_params"]['optimizer'],
+            loss=regression_model["model_params"]['loss'],
+            hidden_layer_sizes=regression_model["model_params"]['hidden_layer_sizes'],
+            rnn_type=regression_model["model_params"]['rnn_type']
+                        )
         return regr
     elif regression_model['model'] == 'KNN':
         from sklearn.multioutput import MultiOutputRegressor
         from sklearn.neighbors import KNeighborsRegressor
-        regr = MultiOutputRegressor(KNeighborsRegressor())
+        regr = MultiOutputRegressor(KNeighborsRegressor(
+            n_neighbors=regression_model["model_params"]['n_neighbors'],
+            weights=regression_model["model_params"]['weights']
+            ))
         return regr
     elif regression_model['model'] == 'Adaboost':
         from sklearn.multioutput import MultiOutputRegressor
         from sklearn.ensemble import AdaBoostRegressor
         if regression_model["model_params"]['base_estimator'] == 'SVR':
             from sklearn.svm import LinearSVR
-            svc = LinearSVR(verbose = verbose, random_state = random_seed,
+            svc = LinearSVR(verbose=verbose, random_state=random_seed,
                             max_iter=1500)
             regr = MultiOutputRegressor(AdaBoostRegressor(
                 base_estimator=svc,
@@ -230,8 +242,10 @@ def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                                                   0.1, 0.025, 0.035,
                                                   0.05, 0.2]):
     """Generate new parameters for input to regressor."""
-    model = np.random.choice(a=models, size=1, p=model_probs).item()
-    if model in ['xgboost', 'Adaboost', 'DecisionTree', 'MLP']:
+    # model = np.random.choice(a=models, size=1, p=model_probs).item()
+    model = np.random.choice(a=['KerasRNN', "DecisionTree"], size=1).item()
+    if model in ['xgboost', 'Adaboost', 'DecisionTree',
+                 'MLP', 'KNN', 'KerasRNN']:
         if model == 'Adaboost':
             param_dict = {"model": 'Adaboost',
                     "model_params": {
@@ -284,8 +298,9 @@ def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
             param_dict = {"model": 'MLP',
                     "model_params": {
                         "hidden_layer_sizes": np.random.choice(
-                            [(100,), (25, 15, 25), (50, 25, 50), (25, 50, 25)],
-                            p=[0.1, 0.5, 0.3, 0.1],
+                            [(100,), (25, 15, 25), (72, 36, 72), (25, 50, 25),
+                             (32, 64, 32), (32, 32, 32)],
+                            p=[0.1, 0.3, 0.3, 0.1, 0.1, 0.1],
                             size=1).item(),
                         "max_iter": np.random.choice([250, 500, 1000],
                                                      p=[0.89, 0.1, 0.01],
@@ -297,6 +312,47 @@ def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                         "solver": solver,
                         "early_stopping": early_stopping,
                         "learning_rate_init": learning_rate_init
+                        }}
+        elif model == 'KNN':
+            param_dict = {"model": 'KNN',
+                    "model_params": {
+                        "n_neighbors": np.random.choice([3, 5, 10],
+                                                         p=[0.2, 0.7, 0.1],
+                                                         size=1).item(),
+                        "weights": np.random.choice(['uniform', 'distance'],
+                                                         p=[0.7, 0.3],
+                                                         size=1).item()
+                        }}
+        elif model == 'KerasRNN':
+            init_list = ['glorot_uniform', 'lecun_uniform',
+                         'glorot_normal', 'orthogonal', 'he_normal']
+            param_dict = {"model": 'KerasRNN',
+                    "model_params": {
+                        "kernel_initializer": np.random.choice(init_list,
+                                                               size=1).item(),
+                        "epochs": np.random.choice([20, 50, 100, 500],
+                                                   p=[0.5, 0.2, 0.2, 0.1],
+                                                   size=1).item(),
+                        "batch_size": np.random.choice([8, 16, 32, 72],
+                                                       p=[0.2, 0.2, 0.5, 0.1],
+                                                       size=1).item(),
+                        "optimizer": np.random.choice(['adam', 'rmsprop',
+                                                       'adagrad'],
+                                                      p=[0.4, 0.5, 0.1],
+                                                      size=1).item(),
+                        "loss": np.random.choice(['mae', 'Huber',
+                                                  'poisson', 'mse', 'mape'],
+                                                 p=[0.2, 0.5,
+                                                    0.1, 0.1, 0.1],
+                                                 size=1).item(),
+                        "hidden_layer_sizes": np.random.choice(
+                            [(100,), (25,), (72, 36, 72), (25, 50, 25),
+                             (32, 64, 32), (32, 32, 32)],
+                            p=[0.1, 0.1, 0.3, 0.1, 0.1, 0.3],
+                            size=1).item(),
+                        "rnn_type": np.random.choice(['LSTM', 'GRU'],
+                                                     p=[0.7, 0.3],
+                                                     size=1).item()
                         }}
         else:
             min_samples = np.random.choice([1, 2, 0.05],

@@ -36,6 +36,7 @@ Latest:
 		Added option to tune some model parameters to sklearn
 		Fixed Holidays to work
 		Added new feature construction parameters
+		Added RNNs with Keras
 	GluonTS:
 		fixed the use of context_length, added more options to that param
 	
@@ -46,7 +47,8 @@ Latest:
 		
 	New models:
 		SeasonalNaive model
-		ContouredMotifSimulation
+		MotifSimulation
+		WindowRegression
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -68,7 +70,7 @@ GluonTS not accepting quite a lot of frequencies
 
 ## General Tasks
 * Add RNN and other DNNs
-* Window regression
+	* TF from GitHub Attention etc
 * Improve history-driven point to probability
 * Add weighting option
 	* Sum of all as weight

@@ -5,7 +5,7 @@ required = [
 ]
 
 extras = {
-    'additional' : ["holidays>=0.9",'fbprophet>=0.4.*', 'fredapi', 'mxnet>=1.4.1', 'gluonts']
+    'additional' : ["holidays>=0.9",'fbprophet>=0.4.*', 'fredapi', 'mxnet>=1.4.1', 'gluonts', 'tensorflow']
 }
 
 with open("README.md", "r") as fh:
