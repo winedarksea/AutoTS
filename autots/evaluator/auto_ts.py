@@ -44,7 +44,7 @@ class AutoTS(object):
         drop_data_older_than_periods (int): take only the n most recent timestamps
         model_list (list): list of names of model objects to use
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
-        models_to_validate (int): top n models to pass through to cross validation
+        models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
         max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
         validation_method (str): 'even' or 'backwards' where backwards is better for shorter training sets
         min_allowed_train_percent (float): useful in (unrecommended) cases where forecast_length > training length. Percent of forecast length to allow as min training, else raises error.
@@ -83,8 +83,8 @@ class AutoTS(object):
                  drop_data_older_than_periods: int = 100000,
                  model_list: str = 'default',
                  num_validations: int = 2,
-                 models_to_validate: int = 40,
-                 max_per_model_class: int = 8,
+                 models_to_validate: float = 0.05,
+                 max_per_model_class: int = None,
                  validation_method: str = 'even',
                  min_allowed_train_percent: float = 0.5,
                  max_generations: int = 5,
@@ -483,7 +483,17 @@ class AutoTS(object):
 
         # drop any duplicates in results
         self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(subset = (['ID'] + self.template_cols))
-        
+
+        # validations if float
+        if (self.models_to_validate < 1) and (self.models_to_validate > 0):
+            temp_len = self.initial_results.model_results.shape[0]
+            self.models_to_validate = self.models_to_validate * temp_len
+            self.models_to_validate = int(np.ceil(self.models_to_validate))
+        if (self.max_per_model_class is None):
+            temp_len = len(self.model_list)
+            self.max_per_model_class = (self.models_to_validate / temp_len) + 1
+            self.max_per_model_class = int(np.ceil(self.max_per_model_class))
+
         # check how many validations are possible given the length of the data.
         num_validations = abs(int(num_validations))
         max_possible = len(df_wide_numeric.index)/forecast_length

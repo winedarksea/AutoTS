@@ -9,23 +9,8 @@ else:
     _has_tf = True
 """
 X, Y = window_maker(df, forecast_length = 6, shuffle = False,
-                    input_dim = 'multivariate', window_size = 10, 
+                    input_dim = 'multivariate', window_size = 10,
                     output_dim = '1step')
-
-        "hidden_layer_sizes": np.random.choice(
-            [(100,), (25, 15, 25), (50, 25, 50), (25, 50, 25)],
-            p=[0.1, 0.5, 0.3, 0.1],
-            size=1).item(),
-        "max_iter": np.random.choice([250, 500, 1000],
-                                     p=[0.89, 0.1, 0.01],
-                                     size=1).item(),
-        "activation": np.random.choice(['identity', 'logistic',
-                                        'tanh', 'relu'],
-                                       p=[0.05, 0.05, 0.6, 0.3],
-                                       size=1).item(),
-        "solver": solver,
-        "early_stopping": early_stopping,
-        "learning_rate_init"
 """
 
 
@@ -41,6 +26,7 @@ class KerasRNN(object):
         epochs (int): Passed to keras model.fit
         batch_size (int): Passed to keras model.fit
         verbose (int): 0, 1 or 2. Passed to keras model.fit
+        random_seed (int): passed to tf.random.set_seed()
     """
 
     def __init__(self, rnn_type: str = 'LSTM',
@@ -48,11 +34,12 @@ class KerasRNN(object):
                  hidden_layer_sizes: tuple = (32, 32, 32),
                  optimizer: str = 'adam', loss: str = 'huber',
                  epochs: int = 50, batch_size: int = 32,
-                 verbose: int = 1):
+                 verbose: int = 1, random_seed: int = 2020):
         self.name = 'KerasRNN'
         verbose = 0 if verbose < 0 else verbose
         verbose = 2 if verbose > 2 else verbose
         self.verbose = verbose
+        self.random_seed = random_seed
         self.kernel_initializer = kernel_initializer
         self.epochs = epochs
         self.batch_size = batch_size
@@ -63,8 +50,11 @@ class KerasRNN(object):
 
     def fit(self, X, Y):
         """Train the model on dataframes of X and Y."""
+        if not _has_tf:
+            raise ImportError("Tensorflow not available, install with pip install tensorflow.")
         tf.keras.backend.clear_session()
-        train_X = X.values
+        tf.random.set_seed(self.random_seed)
+        train_X = pd.DataFrame(X).values
         train_X = train_X.reshape((train_X.shape[0], 1, train_X.shape[1]))
         INPUT_SHAPE = (train_X.shape[1], train_X.shape[2])
         OUTPUT_SHAPE = Y.shape[1]
@@ -77,13 +67,11 @@ class KerasRNN(object):
                         strides=1, padding='causal',
                         kernel_initializer=self.kernel_initializer,
                         input_shape=INPUT_SHAPE),
-                    tf.keras.layers.Dropout(0.2),
                     tf.keras.layers.GRU(self.hidden_layer_sizes[1],
                                         return_sequences=True),
                     tf.keras.layers.Dropout(0.2),
                     tf.keras.layers.GRU(self.hidden_layer_sizes[2]),
-                    tf.keras.layers.Dense(OUTPUT_SHAPE),
-                    tf.keras.layers.Lambda(lambda x: x * 100.0)
+                    tf.keras.layers.Dense(OUTPUT_SHAPE)
                 ])
             else:
                 simple_lstm_model = tf.keras.models.Sequential([
@@ -102,11 +90,12 @@ class KerasRNN(object):
         if len(self.hidden_layer_sizes) == 1:
             if self.rnn_type == 'GRU':
                 simple_lstm_model = tf.keras.models.Sequential([
-                    tf.keras.layers.GRU(self.hidden_layer_sizes[0],
-                                        kernel_initializer=self.kernel_initializer,
-                                        input_shape=INPUT_SHAPE),
-                    tf.keras.layers.Dense(OUTPUT_SHAPE),
-                    tf.keras.layers.Lambda(lambda x: x * 100.0)
+                    tf.keras.layers.GRU(
+                        self.hidden_layer_sizes[0],
+                        kernel_initializer=self.kernel_initializer,
+                        input_shape=INPUT_SHAPE),
+                    tf.keras.layers.Dense(10, activation='relu'),
+                    tf.keras.layers.Dense(OUTPUT_SHAPE)
                 ])
             else:
                 simple_lstm_model = tf.keras.models.Sequential([
@@ -134,28 +123,5 @@ class KerasRNN(object):
 
     def predict(self, X):
         """Predict on dataframe of X."""
-        test = X.values.reshape((X.shape[0], 1, X.shape[1]))
+        test = pd.DataFrame(X).values.reshape((X.shape[0], 1, X.shape[1]))
         return pd.DataFrame(self.model.predict(test))
-"""
-LSTM
-tf.keras.layers.LSTM(
-    units, activation='tanh', recurrent_activation='sigmoid', use_bias=True,
-    kernel_initializer='glorot_uniform', recurrent_initializer='orthogonal',
-    bias_initializer='zeros', unit_forget_bias=True, kernel_regularizer=None,
-    recurrent_regularizer=None, bias_regularizer=None, activity_regularizer=None,
-    kernel_constraint=None, recurrent_constraint=None, bias_constraint=None,
-    dropout=0.0, recurrent_dropout=0.0, implementation=2, return_sequences=False,
-    return_state=False, go_backwards=False, stateful=False, time_major=False,
-    unroll=False, **kwargs
-)
-
-The requirements to use the cuDNN implementation are:
-
-    activation == tanh
-    recurrent_activation == sigmoid
-    recurrent_dropout == 0
-    unroll is False
-    use_bias is True
-    Inputs are not masked or strictly right padded.
-
-"""

@@ -61,17 +61,22 @@ FastICA 'array must not contain infs or NaNs'
 How do fillna methods handle datasets that have entirely NaN series?
 Check if any transformation parameters seem to consistently perform poorly, suggesting of problems. Also speed.
 Subsetting for validation samples seems to be funky.
+WindowRegression + KerasRNN + 1step + univariate = ValueError('Length mismatch: Expected axis has 54 elements, new values have 9 elements',)
+
 
 Test updated context_slicer
 
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
 GluonTS not accepting quite a lot of frequencies
+KerasRNN errors due to parameters not working on all dataset
+Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
 * Add RNN and other DNNs
 	* TF from GitHub Attention etc
 * Improve history-driven point to probability
+* Validation as % of models run
 * Add weighting option
 	* Sum of all as weight
 	* sum of last N% as weight

@@ -153,7 +153,7 @@ def retrieve_regressor(regression_model: dict =
     elif regression_model['model'] == 'KerasRNN':
         from autots.models.dnn import KerasRNN
         regr = KerasRNN(
-            verbose=verbose,
+            verbose=verbose, random_seed=random_seed,
             kernel_initializer=regression_model["model_params"]['kernel_initializer'],
             epochs=regression_model["model_params"]['epochs'],
             batch_size=regression_model["model_params"]['batch_size'],
@@ -237,13 +237,13 @@ def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                                               'MLP', 'DecisionTree', 'KNN',
                                               'Adaboost', 'SVM', 'BayesianRidge',
                                               'xgboost', 'KerasRNN'],
-                              model_probs: list = [0.1, 0.1,
-                                                  0.12, 0.2, 0.07,
-                                                  0.1, 0.025, 0.035,
-                                                  0.05, 0.2]):
+                              model_probs: list = [0.05, 0.05,
+                                                  0.12, 0.2, 0.12,
+                                                  0.2, 0.025, 0.035,
+                                                  0.1, 0.1]):
     """Generate new parameters for input to regressor."""
-    # model = np.random.choice(a=models, size=1, p=model_probs).item()
-    model = np.random.choice(a=['KerasRNN', "DecisionTree"], size=1).item()
+    model = np.random.choice(a=models, size=1, p=model_probs).item()
+    # model = 'KerasRNN'
     if model in ['xgboost', 'Adaboost', 'DecisionTree',
                  'MLP', 'KNN', 'KerasRNN']:
         if model == 'Adaboost':
@@ -307,7 +307,8 @@ def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                                                      size=1).item(),
                         "activation": np.random.choice(['identity', 'logistic',
                                                         'tanh', 'relu'],
-                                                       p=[0.05, 0.05, 0.6, 0.3],
+                                                       p=[0.05, 0.05,
+                                                          0.6, 0.3],
                                                        size=1).item(),
                         "solver": solver,
                         "early_stopping": early_stopping,
@@ -325,13 +326,13 @@ def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                         }}
         elif model == 'KerasRNN':
             init_list = ['glorot_uniform', 'lecun_uniform',
-                         'glorot_normal', 'orthogonal', 'he_normal']
+                         'glorot_normal', 'RandomUniform', 'he_normal']
             param_dict = {"model": 'KerasRNN',
                     "model_params": {
                         "kernel_initializer": np.random.choice(init_list,
                                                                size=1).item(),
-                        "epochs": np.random.choice([20, 50, 100, 500],
-                                                   p=[0.5, 0.2, 0.2, 0.1],
+                        "epochs": np.random.choice([50, 100, 500],
+                                                   p=[0.7, 0.2, 0.1],
                                                    size=1).item(),
                         "batch_size": np.random.choice([8, 16, 32, 72],
                                                        p=[0.2, 0.2, 0.5, 0.1],
@@ -342,11 +343,11 @@ def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                                                       size=1).item(),
                         "loss": np.random.choice(['mae', 'Huber',
                                                   'poisson', 'mse', 'mape'],
-                                                 p=[0.2, 0.5,
-                                                    0.1, 0.1, 0.1],
+                                                 p=[0.2, 0.3,
+                                                    0.1, 0.2, 0.2],
                                                  size=1).item(),
                         "hidden_layer_sizes": np.random.choice(
-                            [(100,), (25,), (72, 36, 72), (25, 50, 25),
+                            [(100,), (32,), (72, 36, 72), (25, 50, 25),
                              (32, 64, 32), (32, 32, 32)],
                             p=[0.1, 0.1, 0.3, 0.1, 0.1, 0.3],
                             size=1).item(),
