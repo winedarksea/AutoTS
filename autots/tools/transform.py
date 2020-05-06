@@ -256,11 +256,17 @@ class SinTrend(object):
 
 
 class PositiveShift(object):
-    """Shift each series if necessary to assure all values >= 1."""
+    """Shift each series if necessary to assure all values >= 1.
+    
+    Args:
+        log (bool): whether to include a log transform.
+        center_one (bool): whether to shift to 1 instead of 0.
+    """
 
-    def __init__(self, log: bool = False):
+    def __init__(self, log: bool = False, center_one: bool = True):
         self.name = 'PositiveShift'
         self.log = log
+        self.center_one = center_one
 
     def fit(self, df):
         """Fits shift interval.
@@ -268,7 +274,10 @@ class PositiveShift(object):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        shift_amount = df.min(axis=0) - 1
+        if self.log or self.center_one:
+            shift_amount = df.min(axis=0) - 1
+        else:
+            shift_amount = df.min(axis=0)
         self.shift_amount = shift_amount.where(shift_amount < 0, 0).abs()
 
         return self
@@ -1295,7 +1304,7 @@ def RandomTransform():
     context_choice = np.random.choice(
         a=[None, 'HalfMax', '2ForecastLength', '6ForecastLength',
            10, '12ForecastLength'], size=1,
-        p=[0.7, 0.05, 0.1, 0.05, 0.05, 0.05]).item()
+        p=[0.75, 0.05, 0.05, 0.05, 0.05, 0.05]).item()
     param_dict = {
             'outlier_method': outlier_method_choice,
             'outlier_threshold': outlier_threshold_choice,

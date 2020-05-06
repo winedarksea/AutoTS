@@ -65,9 +65,17 @@ general_template_dict = {
   'ModelParameters': '{"family": "NegativeBinomial", "constant": false, "regression_type": null}',
   'TransformationParameters': '{"outlier_method": null, "outlier_threshold": null, "outlier_position": "first", "fillna": "ffill", "transformation": null, "detrend": false, "second_transformation": null, "transformation_param": null, "third_transformation": "MinMaxScaler", "discretization": null, "n_bins": null, "context_slicer": "HalfMax"}',
   'Ensemble': 0},
- 16: {'Model': 'MotifSimulation',
+ 16: {'Model': 'GLM',
+  'ModelParameters': '{"family": "Gaussian", "constant": true, "regression_type": null}',
+  'TransformationParameters': '{"outlier_method": "remove", "outlier_threshold": 4, "outlier_position": "first;last", "fillna": "zero", "transformation": "DifferencedTransformer", "detrend": true, "second_transformation": "SeasonalDifferenceMean", "transformation_param": "28", "third_transformation": "IntermittentOccurrence", "discretization": null, "n_bins": null, "context_slicer": null}',
+  'Ensemble': 0}, 
+ 17: {'Model': 'MotifSimulation',
   'ModelParameters': '{"phrase_len": "20", "comparison": "pct_change_sign", "shared": false, "distance_metric": "hamming", "max_motifs": 0.2, "recency_weighting": 0.0,"cutoff_threshold": 0.9, "cutoff_minimum": 50, "point_method": "median"}',
   'TransformationParameters': '{"outlier_method": null, "outlier_threshold": null, "outlier_position": "first", "fillna": "ffill", "transformation": "StandardScaler", "detrend": false, "second_transformation": "RollingMean", "transformation_param": "10", "third_transformation": null, "discretization": null, "n_bins": null, "context_slicer": null}',
+  'Ensemble': 0},
+ 18: {'Model': 'GLS',
+  'ModelParameters': '{"family": "Gaussian", "constant": true, "regression_type": null}',
+  'TransformationParameters': '{"outlier_method": "remove", "outlier_threshold": 3, "outlier_position": "middle", "fillna": "median", "transformation": "QuantileTransformer", "detrend": false, "second_transformation": "RobustScaler", "transformation_param": null, "third_transformation": "PowerTransformer", "discretization": "upper", "n_bins": 10, "context_slicer": "6ForecastLength"}',
   'Ensemble': 0}
  }
 

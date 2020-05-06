@@ -8,15 +8,15 @@
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
 Latest:
-	Changed default for Series_id so it is no longer required if univariate
+	Changed default for `series_id` so it is no longer required if univariate
+	Changed default of `subset` to None.
+	Removed `weighted` parameter, now passing weights to .fit() alone is sufficient.
 	Fixed a bug where 'One or more series is 90% or more NaN' was printing when it shouldn't
 	Fixed (or more accurately, reduced) a bug where multiple initial runs were counting as validation runs.
 	Fixed (partially!) bug where validation subsetting was behaving oddly
 	Made serious efforts to make the code prettier with pylint, still lots to do, however...
 	Improved genetic recombination so optimal models should be reached more quickly.
 	Improved ensembling with new parameter options.
-		New 'horizontal' ensembling
-		Added mean and horizontal ensemble types
 		Recursive ensembling now enabled
 	Added a number of new Transformer options
 		Multiple new Sklearn-sourced transformers (QuantileTransformer, etc)
@@ -29,6 +29,7 @@ Latest:
 		IntermittentOccurrence
 		SeasonalDetrend
 	Entirely changed the general transformer to add three levels of transformation
+	Added VAR from Statsmodels (faster than VARMAX statespace)
 	GLM
 		Error where it apparently won't tolerate any zeroes was compensated for.
 	RollingRegression
@@ -59,12 +60,13 @@ kbins not working when it assigns fewer bins than n_bins asked for (use the prop
 Drop Most Recent does not play well logically with added external (preord) regressors.
 FastICA 'array must not contain infs or NaNs'
 How do fillna methods handle datasets that have entirely NaN series?
-Check if any transformation parameters seem to consistently perform poorly, suggesting of problems. Also speed.
 Subsetting for validation samples seems to be funky.
+VAR ValueError('Length of passed values is 4, index implies 9',)
 WindowRegression + KerasRNN + 1step + univariate = ValueError('Length mismatch: Expected axis has 54 elements, new values have 9 elements',)
+Categorical forecast leaves bounds: IndexError: index 7 is out of bounds for axis 0 with size 6
+	categorical = categorical_transformer.encoder.inverse_transform(df[cat_features].astype(int).values)
+	THIS BREAKS PREDICT
 
-
-Test updated context_slicer
 
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
@@ -73,26 +75,22 @@ KerasRNN errors due to parameters not working on all dataset
 Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
-* Add RNN and other DNNs
-	* TF from GitHub Attention etc
+* Tensorflow Probability Structural Time Series
 * Improve history-driven point to probability
-* Validation as % of models run
-* Add weighting option
-	* Sum of all as weight
-	* sum of last N% as weight
-* Adding hierarchail
-* new products
 * distance 20/80 horizontal, horizontal-max
-* handle series with many NaN at beginning
-* overfitting with Ensembles
+* horizontal ensembling for probabilistic
+
+* Fix categorical forecast when out of known values
+* new products - focus on initial_results being from most recent data
+* handle series with many NaN at beginning  - use of 'backwards' and by focusing on end for initial_results
+
 
 # To-Do
 * Get the sphinx (google style) documentation and readthedocs.io website up
-* Add to template: Gluon, Motif
+* Add to template: Gluon, Motif, WindowRegression
 * Bring GeneralTransformer to higher level API.
 	* wide_to_long and long_to_wide in higher-level API
 * Option to use full traceback in errors in table
-* Remove duplication of weighed: bool and weights
 * Hierarchial
 	* every level must be included in forecasting data
 	* 'bottom-up' and 'mid' levels
@@ -106,28 +104,17 @@ Tensorflow GPU backend may crash on occasion.
 	* migrate arima_model to arima.model
 	* uncomp with uncertainty intervals
 * make datetime input optional, just allow dataframes of numbers
-* Window regression, 
-		shuffle windows, 
-		1d or 2d (series * forecast_length) output, 1d or 2d input
-		normalize each window
-		transfer learning
-		At least one for each of:
-			Tensorflow/Keras
-			Mxnet
-			PyTorch
-* Better X_maker:
-	* 1d and 2d variations
-	* .cov, .skew, .kurt, .var
-	https://link.springer.com/article/10.1007/s10618-019-00647-x/tables/1
+* Window regression
+	* transfer learning
 * RollingRegression
-	Pytorch and Tensorflow Simple LSTM/GRU
-		Neural net random seed as a parameter
-	other sequence models
-	Categorical classifier, ComplementNB
-	Clustering then separate models
-	PCA or similar -> Univariate Series (Unobserved Components)
+	* Better X_maker:
+		* 1d and 2d variations
+		* .cov, .skew, .kurt, .var
+		* https://link.springer.com/article/10.1007/s10618-019-00647-x/tables/1
+	* other sequence models
+	* Categorical classifier, ComplementNB
+	* PCA or similar -> Univariate Series (Unobserved Components)
 * Simple performance:
-	* large if collections (ModelMonster, Transformers) with dict lookups
 	* replace try/except with if/else in some cases
 * GluonTS
 	* Add support for preord_regressor
@@ -142,7 +129,6 @@ Tensorflow GPU backend may crash on occasion.
 * Improve usability on rarer frequenices (ie monthly data where some series start on 1st, others on 15th, etc.)
 * Figures: Add option to output figures of train/test + forecast, other performance figures
 * If all input are Int, convert floats back to int
-* Option to print % improvement of best over last value naive
 * Hierachial correction (bottom-up to start with)
 * Because I'm a biologist, incorporate more genetics and such. Also as a neuro person, there must be a way to fit networks in...
 * Improved verbosity controls and options. 
@@ -175,24 +161,22 @@ Tensorflow GPU backend may crash on occasion.
 
 #### New Ensembles:
 	REDUCE OVERFITTING IN MODEL CHOICE
-	Min per all series regardless
 	Other:
 		Best SMAPE/MAE for point with Best Containment/UpperMAE/LowerMAE for probabilistic
 		Best 10 combined with Decision Tree
 
 #### New models:
-	Simple Decomposition forecasting
-	Statespace variant of ETS which has Confidence Intervals
 	Tensorflow Probability Structural Time Series
-	Croston, SBA, TSB, ADIDA, iMAPA,
+	Statsmodels VAR (NOT VARMAX)
+	Croston, SBA, TSB, ADIDA, iMAPA
 	Simulations
 	Ta-lib
 	Pyflux
 	tslearn
-	Multivariate GARCH
+	GARCH (arch library seems best maintained, none have multivariate)
 	pydlm - baysesian dynamic linear
-	Survival Analysis
 	MarkovAutoRegression
+	hmmlearn
 	TPOT if it adds multioutput functionality
 	https://towardsdatascience.com/pyspark-forecasting-with-pandas-udf-and-fb-prophet-e9d70f86d802
 	Compressive Transformer
@@ -200,6 +184,6 @@ Tensorflow GPU backend may crash on occasion.
 #### New Transformations:
 	Weighted moving average
 	Symbolic aggregate approximation (SAX) and (PAA) (basically these are just binning)
-	Shared discretization (all series get same binning)
+	Shared discretization (all series get same shared binning)
 	Last Value Centering
 	

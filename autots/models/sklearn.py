@@ -886,9 +886,11 @@ class WindowRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        window_size_choice = np.random.choice([5, 10, 20], size=1).item()
+        window_size_choice = np.random.choice([5, 10, 20, seasonal_int()],
+                                              size=1).item()
         model_choice = generate_regressor_params()
         input_dim_choice = np.random.choice(['multivariate', 'univariate'],
+                                            p=[0.3, 0.7],
                                             size=1).item()
         output_dim_choice = np.random.choice(['forecast_length', '1step'],
                                              size=1).item()
@@ -896,7 +898,9 @@ class WindowRegression(ModelObject):
                                                    size=1,
                                                    p=[0.05, 0.95]).item()
         shuffle_choice = np.random.choice(a=[True, False], size=1).item()
-        max_windows_choice = 5000
+        max_windows_choice = np.random.choice(a=[5000, 1000, 50000],
+                                              size=1,
+                                              p=[0.95, 0.04, 0.01]).item()
         return {
                 'window_size': window_size_choice,
                 'regression_model': model_choice,

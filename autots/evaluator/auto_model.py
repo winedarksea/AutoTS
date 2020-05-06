@@ -328,7 +328,25 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
                                   k_factors=parameters['k_factors'],
                                   factor_order=parameters['factor_order'])
         return model
-    
+
+    if model == 'VAR':
+        from autots.models.statsmodels import VAR
+        if parameters == {}:
+            model = VAR(frequency=frequency,
+                        prediction_interval=prediction_interval,
+                        holiday_country=holiday_country,
+                        random_seed=random_seed, verbose=verbose)
+        else:
+            model = VAR(frequency=frequency,
+                        prediction_interval=prediction_interval,
+                        holiday_country=holiday_country,
+                        regression_type=parameters['regression_type'],
+                        maxlags=parameters['maxlags'],
+                        ic=parameters['ic'],
+                        random_seed=random_seed, verbose=verbose
+                        )
+        return model
+
     if model == 'VECM':
         from autots.models.statsmodels import VECM
         if parameters == {}:
@@ -935,7 +953,7 @@ def NewGeneticTemplate(model_results, submitted_parameters,
     recombination_approved = ['SeasonalNaive', 'MotifSimulation', "ETS",
                               'DynamicFactor', 'VECM', 'VARMAX', 'GLM',
                               'ARIMA', 'FBProphet', 'GluonTS',
-                              'RollingRegression']
+                              'RollingRegression', 'VAR', 'WindowRegression']
     best = json.loads(sorted_results.iloc[0, :]['TransformationParameters'])
 
     for model_type in sorted_results['Model'].unique():

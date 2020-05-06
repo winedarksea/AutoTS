@@ -31,8 +31,7 @@ class AutoTS(object):
         aggfunc (str): if data is to be rolled up to a higher frequency (daily -> monthly) or duplicates are included. Default 'first' removes duplicates, for rollup try 'mean' or 'sum'. Beware numeric aggregations like 'mean' will *drop* categorical features as cat->num occurs later.
         prediction_interval (float): 0-1, uncertainty range for upper and lower forecasts. Adjust range, but rarely matches actual containment.
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
-        weighted (bool): if True, considers series weights passed through to .fit(). Weights affect metrics and subsetting.
-        ensemble (str): None, 'simple'
+        ensemble (str): None, 'simple', 'distance'
         initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
         figures (bool): Not yet implemented
         random_seed (int): random seed allows (slightly) more consistent results.
@@ -62,22 +61,21 @@ class AutoTS(object):
                  aggfunc: str = 'first',
                  prediction_interval: float = 0.9,
                  no_negatives: bool = False,
-                 weighted: bool = False,
-                 ensemble: str = "simple",
+                 ensemble: str = None,
                  initial_template: str = 'General+Random',
                  figures: bool = False,
-                 random_seed: int = 425,
+                 random_seed: int = 2020,
                  holiday_country: str = 'US',
-                 subset: int = 200,
+                 subset: int = None,
                  na_tolerance: float = 0.99,
                  metric_weighting: dict = {'smape_weighting': 10,
-                                           'mae_weighting': 1,
+                                           'mae_weighting': 5,
                                            'rmse_weighting': 5,
-                                           'containment_weighting': 0,
+                                           'containment_weighting': 1,
                                            'runtime_weighting': 0,
                                            'lower_mae_weighting': 0,
                                            'upper_mae_weighting': 0,
-                                           'contour_weighting': 2
+                                           'contour_weighting': 1
                                            },
                  drop_most_recent: int = 0,
                  drop_data_older_than_periods: int = 100000,
@@ -90,7 +88,6 @@ class AutoTS(object):
                  max_generations: int = 5,
                  verbose: int = 1
                  ):
-        self.weighted = weighted
         self.forecast_length = forecast_length
         self.frequency = frequency
         self.aggfunc = aggfunc
@@ -115,7 +112,7 @@ class AutoTS(object):
         if self.ensemble is not None:
             self.ensemble = str(self.ensemble).lower()
             if self.ensemble == 'all':
-                self.ensemble = 'simple,distance,horizontal'
+                self.ensemble = 'simple,distance'
 
         # convert shortcuts of model lists to actual lists of models
         if model_list == 'default':
@@ -132,16 +129,17 @@ class AutoTS(object):
         if model_list == 'fast':
             self.model_list = ['ZeroesNaive', 'LastValueNaive',
                                'AverageValueNaive', 'GLS', 'GLM', 'ETS',
-                               'FBProphet', 'RollingRegression',
+                               'RollingRegression', 'WindowRegression',
+                               'GluonTS', 'VAR',
                                'SeasonalNaive', 'UnobservedComponents',
-                               'VECM', 'DynamicFactor']
+                               'VECM']
         if model_list == 'probabilistic':
             self.model_list = ['ARIMA', 'GluonTS', 'FBProphet',
                                'AverageValueNaive', 'MotifSimulation',
-                               'VARMAX', 'DynamicFactor']
+                               'VARMAX', 'DynamicFactor', 'VAR']
         if model_list == 'multivariate':
             self.model_list = ['VECM', 'DynamicFactor', 'GluonTS', 'VARMAX',
-                               'RollingRegression', 'WindowRegression']
+                               'RollingRegression', 'WindowRegression','VAR']
         if model_list == 'all':
             self.model_list = ['ZeroesNaive', 'LastValueNaive',
                                'AverageValueNaive', 'GLS', 'GLM', 'ETS',
@@ -149,7 +147,7 @@ class AutoTS(object):
                                'GluonTS', 'SeasonalNaive',
                                'UnobservedComponents', 'VARMAX', 'VECM',
                                'DynamicFactor', 'TSFreshRegressor',
-                               'MotifSimulation', 'WindowRegression']
+                               'MotifSimulation', 'WindowRegression', 'VAR']
 
         # generate template to begin with
         if initial_template.lower() == 'random':
@@ -211,24 +209,28 @@ class AutoTS(object):
 
         # convert class variables to local variables (makes testing easier)
         forecast_length = self.forecast_length
-        weighted = self.weighted
+        # flag if weights are given
+        if bool(weights):
+            weighted = True
+        else:
+            weighted = False
+        self.weighted = weighted   
         frequency = self.frequency
         prediction_interval = self.prediction_interval
         no_negatives = self.no_negatives
         random_seed = self.random_seed
         holiday_country = self.holiday_country
         ensemble = self.ensemble
-        subset = abs(int(self.subset))
         metric_weighting = self.metric_weighting
         num_validations = self.num_validations
         verbose = self.verbose
         template_cols = self.template_cols
-        
+
         # shut off warnings if running silently
         if verbose <= 0:
             import warnings
             warnings.filterwarnings("ignore")
-        
+
         # clean up result_file input, if given.
         if result_file is not None:
             try:
@@ -238,12 +240,12 @@ class AutoTS(object):
             except Exception:
                 print("Result filename must be a valid 'filename.csv'")
                 result_file = None
-        
+
         # set random seeds for environment
         random_seed = abs(int(random_seed))
         random.seed(random_seed)
         np.random.seed(random_seed)
-        
+
         # convert data to wide format
         df_wide = long_to_wide(
             df, date_col=self.date_col,
@@ -256,12 +258,22 @@ class AutoTS(object):
             drop_most_recent=self.drop_most_recent,
             verbose=self.verbose
             )
-        
+
         # clean up series weighting input
         if not weighted:
             weights = {x: 1 for x in df_wide.columns}
-        if weighted:
+        else:
             # handle not all weights being provided
+            if self.verbose > 1:
+                key_count = 0
+                for col in df_wide.columns:
+                    if col in weights:
+                        key_count += 1
+                key_count = df_wide.shape[1] - key_count
+                if key_count > 0:
+                    print(f"{key_count} series_id not in weights. Inferring 1.")
+                else:
+                    print("All series_id present in weighting.")
             weights = {col: (weights[col] if col in weights else 1) for col in df_wide.columns}
             # handle non-numeric inputs
             weights = {key: (abs(float(weights[key])) if str(weights[key]).isdigit() else 1) for key in weights}
@@ -271,20 +283,24 @@ class AutoTS(object):
         self.categorical_transformer = categorical_transformer
         df_wide_numeric = categorical_transformer.dataframe
         self.df_wide_numeric = df_wide_numeric
-        
+
         # capture some misc information
         profile_df = data_profile(df_wide_numeric)
         self.startTimeStamps = profile_df.loc['FirstDate']
 
         # record if subset or not
-        if self.subset >= self.df_wide_numeric.shape[1]:
-            self.subset_flag = False
+        if self.subset is not None:
+            self.subset = abs(int(self.subset))
+            if self.subset >= self.df_wide_numeric.shape[1]:
+                self.subset_flag = False
+            else:
+                self.subset_flag = True
         else:
-            self.subset_flag = True
+            self.subset_flag = False
 
         # take a subset of the data if working with a large number of series
         if self.subset_flag:
-            df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n=subset, random_state=random_seed)
+            df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n=self.subset, random_state=random_seed)
             if self.verbose > 1:
                 print(f'First subset is of: {df_subset.columns}')
         else:
@@ -293,7 +309,7 @@ class AutoTS(object):
         # subset the weighting information as well
         if not weighted:
             current_weights = {x: 1 for x in df_subset.columns}
-        if weighted:
+        else:
             current_weights = {x: weights[x] for x in df_subset.columns}
 
         # split train and test portions, and split regressor if present
@@ -321,7 +337,7 @@ class AutoTS(object):
         submitted_parameters = self.initial_template.copy()
         template_result = TemplateWizard(
             self.initial_template, df_train,
-            df_test, current_weights,
+            df_test, weights=current_weights,
             model_count=model_count,
             ensemble=ensemble,
             forecast_length=forecast_length,
@@ -350,7 +366,7 @@ class AutoTS(object):
                 [self.initial_results.per_timestamp_smape,
                  template_result.per_timestamp_smape],
                 axis=0, sort=False)
-        self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting,prediction_interval = prediction_interval)
+        self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting=metric_weighting,prediction_interval=prediction_interval)
         if result_file is not None:
             self.initial_results.model_results.to_csv(result_file, index=False)
 
@@ -362,35 +378,35 @@ class AutoTS(object):
                 print("New Generation: {}".format(current_generation))
             cutoff_multiple = 5 if current_generation < 10 else 3
             top_n = len(self.model_list) * cutoff_multiple
-            new_template = NewGeneticTemplate(self.initial_results.model_results,
-                                              submitted_parameters=submitted_parameters,
-                                              sort_column="Score",
-                                              sort_ascending=True,
-                                              max_results=top_n,
-                                              max_per_model_class=5,
-                                              top_n=top_n,
-                                              template_cols=template_cols)
+            new_template = NewGeneticTemplate(
+                self.initial_results.model_results,
+                submitted_parameters=submitted_parameters,
+                sort_column="Score", sort_ascending=True,
+                max_results=top_n, max_per_model_class=5,
+                top_n=top_n, template_cols=template_cols
+                )
             submitted_parameters = pd.concat(
                 [submitted_parameters, new_template],
                 axis=0, ignore_index=True, sort=False).reset_index(drop=True)
 
-            template_result = TemplateWizard(new_template, df_train, df_test,
-                                             current_weights,
-                                             model_count=model_count,
-                                             ensemble=ensemble,
-                                             forecast_length=forecast_length,
-                                             frequency=frequency,
-                                             prediction_interval=prediction_interval,
-                                             no_negatives=no_negatives,
-                                             preord_regressor_train=preord_regressor_train,
-                                             preord_regressor_forecast=preord_regressor_test,
-                                             holiday_country=holiday_country,
-                                             startTimeStamps=profile_df.loc['FirstDate'],
-                                             template_cols=template_cols,
-                                             random_seed=random_seed,
-                                             verbose=verbose)
+            template_result = TemplateWizard(
+                new_template, df_train, df_test,
+                weights=current_weights,
+                model_count=model_count,
+                ensemble=ensemble,
+                forecast_length=forecast_length,
+                frequency=frequency,
+                prediction_interval=prediction_interval,
+                no_negatives=no_negatives,
+                preord_regressor_train=preord_regressor_train,
+                preord_regressor_forecast=preord_regressor_test,
+                holiday_country=holiday_country,
+                startTimeStamps=profile_df.loc['FirstDate'],
+                template_cols=template_cols,
+                random_seed=random_seed, verbose=verbose
+                )
             model_count = template_result.model_count
-            
+
             # capture results from lower-level template run
             self.initial_results.model_results = pd.concat(
                 [self.initial_results.model_results,
@@ -404,7 +420,7 @@ class AutoTS(object):
                 [self.initial_results.per_timestamp_smape,
                  template_result.per_timestamp_smape],
                 axis=0, sort=False)
-            self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
+            self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting=metric_weighting, prediction_interval=prediction_interval)
             if result_file is not None:
                 self.initial_results.model_results.to_csv(result_file,
                                                           index=False)
@@ -416,34 +432,34 @@ class AutoTS(object):
                     self.initial_results, forecast_length=forecast_length,
                     ensemble=ensemble.replace('horizontal', ''),
                     subset_flag=self.subset_flag)
-    
-                template_result = TemplateWizard(ensemble_templates, df_train,
-                                                 df_test,
-                                                 current_weights,
-                                                 model_count=model_count,
-                                                 forecast_length=forecast_length,
-                                                 frequency=frequency,
-                                                 prediction_interval=prediction_interval,
-                                                 no_negatives=no_negatives,
-                                                 ensemble=ensemble,
-                                                 preord_regressor_train=preord_regressor_train,
-                                                 preord_regressor_forecast=preord_regressor_test,
-                                                 holiday_country=holiday_country,
-                                                 startTimeStamps=profile_df.loc['FirstDate'],
-                                                 template_cols=template_cols,
-                                                 random_seed=random_seed,
-                                                 verbose=verbose)
+
+                template_result = TemplateWizard(
+                    ensemble_templates, df_train, df_test,
+                    weights=current_weights,
+                    model_count=model_count,
+                    forecast_length=forecast_length,
+                    frequency=frequency,
+                    prediction_interval=prediction_interval,
+                    no_negatives=no_negatives,
+                    ensemble=ensemble,
+                    preord_regressor_train=preord_regressor_train,
+                    preord_regressor_forecast=preord_regressor_test,
+                    holiday_country=holiday_country,
+                    startTimeStamps=profile_df.loc['FirstDate'],
+                    template_cols=template_cols,
+                    random_seed=random_seed, verbose=verbose)
                 model_count = template_result.model_count
                 # capture results from lower-level template run
                 self.initial_results.model_results = pd.concat(
                     [self.initial_results.model_results,
                      template_result.model_results],
-                    axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+                    axis=0, ignore_index=True, sort=False
+                    ).reset_index(drop=True)
                 self.initial_results.per_series_mae = pd.concat(
                     [self.initial_results.per_series_mae,
                      template_result.per_series_mae],
                     axis=0, sort=False)
-                self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
+                self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting=metric_weighting, prediction_interval=prediction_interval)
                 if result_file is not None:
                     self.initial_results.model_results.to_csv(result_file,
                                                               index=False)
@@ -455,7 +471,7 @@ class AutoTS(object):
                     template_result = TemplateWizard(ensemble_templates,
                                                      df_train,
                                                      df_test,
-                                                     current_weights,
+                                                     weights=current_weights,
                                                      model_count=model_count,
                                                      forecast_length=forecast_length,
                                                      frequency=frequency,
@@ -474,7 +490,7 @@ class AutoTS(object):
                         [self.initial_results.model_results,
                          template_result.model_results],
                         axis=0, ignore_index=True, sort=False).reset_index(drop=True)
-                    self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting = metric_weighting, prediction_interval = prediction_interval)
+                    self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting=metric_weighting, prediction_interval=prediction_interval)
                     if result_file is not None:
                         self.initial_results.model_results.to_csv(result_file,
                                                                   index=False)
@@ -547,14 +563,14 @@ class AutoTS(object):
 
                 # subset series (if used) and take a new train/test split
                 if self.subset_flag:
-                    df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n=subset, random_state=random_seed)
+                    df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n=self.subset, random_state=random_seed)
                     if self.verbose > 1:
                         print(f'{y + 1} subset is of: {df_subset.columns}')
                 else:
                     df_subset = df_wide_numeric.copy()
                 if not weighted:
                     current_weights = {x: 1 for x in df_subset.columns}
-                if weighted:
+                else:
                     current_weights = {x: weights[x] for x in df_subset.columns}
                 df_train, df_test = simple_train_test_split(
                     df_subset, forecast_length=forecast_length,
@@ -573,7 +589,8 @@ class AutoTS(object):
 
                 # run validation template on current slice
                 template_result = TemplateWizard(
-                    validation_template, df_train, df_test, current_weights,
+                    validation_template, df_train, df_test,
+                    weights=current_weights,
                     model_count=model_count,
                     forecast_length=forecast_length,
                     frequency=frequency,

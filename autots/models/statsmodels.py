@@ -1104,3 +1104,151 @@ class VARMAX(ModelObject):
                 'trend': self.trend
                 }
         return parameter_dict
+
+
+class VAR(ModelObject):
+    """VAR from Statsmodels.
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+
+        regression_type (str): type of regression (None, 'User', or 'Holiday')
+    """
+
+    def __init__(self, name: str = "VAR", frequency: str = 'infer',
+                 prediction_interval: float = 0.9,
+                 regression_type: str = None, holiday_country: str = 'US',
+                 random_seed: int = 2020, verbose: int = 0,
+                 maxlags: int = 15, ic: str = 'fpe'
+                 ):
+        ModelObject.__init__(self, name, frequency, prediction_interval,
+                             regression_type=regression_type,
+                             holiday_country=holiday_country,
+                             random_seed=random_seed,
+                             verbose=verbose)
+        self.maxlags = maxlags
+        self.ic = ic
+
+    def fit(self, df, preord_regressor = []):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        df = self.basic_profile(df)
+        self.df_train = df
+
+        if self.regression_type == 'Holiday':
+            from autots.tools.holiday import holiday_flag
+            self.regressor_train = holiday_flag(
+                df.index, country=self.holiday_country).values
+        else:
+            if self.regression_type is not None:
+                if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
+                    self.regression_type = None
+                else:
+                    self.regressor_train = preord_regressor
+
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(self, forecast_length: int,
+                preord_regressor = [], just_point_forecast = False):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+        
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+            
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        from statsmodels.tsa.api import VAR
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+        if self.regression_type == 'Holiday':
+            from autots.tools.holiday import holiday_flag
+            preord_regressor = holiday_flag(test_index, country=self.holiday_country).values
+        if self.regression_type is not None:
+            assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"
+        if (self.df_train < 0).any(axis=None):
+            from autots.tools.transform import PositiveShift
+            transformer = PositiveShift(center_one=False).fit(self.df_train)
+            self.df_train = transformer.transform(self.df_train)
+        else:
+            from autots.tools.transform import EmptyTransformer
+            transformer = EmptyTransformer()
+
+        if (self.regression_type in ["User", "Holiday"]):
+            maModel = VAR(self.df_train, freq=self.frequency,
+                          exog=self.regressor_train
+                          ).fit(maxlags=15, ic='fpe', trend='nc')
+            forecast, lower_forecast, upper_forecast = maModel.forecast_interval(
+                steps=len(test_index),
+                exog_future=preord_regressor,
+                y=self.df_train.values)
+        else:
+            maModel = VAR(self.df_train, freq=self.frequency
+                          ).fit(ic=self.ic, maxlags=self.maxlags)
+            forecast, lower_forecast, upper_forecast = maModel.forecast_interval(
+                steps=len(test_index),
+                y=self.df_train.values,
+                alpha=1-self.prediction_interval
+                )
+        forecast = pd.DataFrame(transformer.inverse_transform(forecast),
+                                index=test_index,
+                                columns=self.column_names)
+        lower_forecast = pd.DataFrame(
+            transformer.inverse_transform(lower_forecast),
+            index=test_index, columns=self.column_names)
+        upper_forecast = pd.DataFrame(
+            transformer.inverse_transform(upper_forecast),
+            index=test_index, columns=self.column_names)
+
+        if just_point_forecast:
+            return forecast
+        else:
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(model_name=self.name,
+                                          forecast_length=forecast_length,
+                                          forecast_index=test_index,
+                                          forecast_columns=forecast.columns,
+                                          lower_forecast=lower_forecast,
+                                          forecast=forecast,
+                                          upper_forecast=upper_forecast,
+                                          prediction_interval=self.prediction_interval,
+                                          predict_runtime=predict_runtime,
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
+
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning."""
+        regression_list = [None, 'User', 'Holiday']
+        regression_probability = [0.9, 0.05, 0.05]
+        regression_choice = np.random.choice(a=regression_list, size=1,
+                                             p=regression_probability).item()
+        maxlags_choice = np.random.choice([None, 5, 15], size=1).item()
+        ic_choice = np.random.choice(['fpe', 'aic', 'bic', 'hqic'],
+                                     size=1).item()
+
+        parameter_dict = {
+                        'regression_type': regression_choice,
+                        'maxlags': maxlags_choice,
+                        'ic': ic_choice
+                        }
+        return parameter_dict
+
+    def get_params(self):
+        """Return dict of current parameters."""
+        parameter_dict = {
+                        'regression_type': self.regression_type,
+                        'maxlags': self.maxlags,
+                        'ic': self.ic
+                        }
+        return parameter_dict
