@@ -349,7 +349,7 @@ def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                         "hidden_layer_sizes": np.random.choice(
                             [(100,), (32,), (72, 36, 72), (25, 50, 25),
                              (32, 64, 32), (32, 32, 32)],
-                            p=[0.1, 0.1, 0.3, 0.1, 0.1, 0.3],
+                            p=[0.1, 0.1, 0.1, 0.1, 0.1, 0.5],
                             size=1).item(),
                         "rnn_type": np.random.choice(['LSTM', 'GRU'],
                                                      p=[0.7, 0.3],

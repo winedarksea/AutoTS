@@ -716,6 +716,7 @@ class AutoTS(object):
             export_template = self.initial_results[self.template_cols]
         if models == 'best':
             export_template = self.validation_results.model_results
+            export_template = export_template[export_template['Runs'] >= (self.num_validations + 1)]
             if str(max_per_model_class).isdigit():
                 export_template = export_template.sort_values('Score', ascending=True).groupby('Model').head(max_per_model_class).reset_index()
             export_template = export_template.nsmallest(n, columns = ['Score'])[self.template_cols]
