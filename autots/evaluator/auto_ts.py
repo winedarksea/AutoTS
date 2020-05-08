@@ -147,7 +147,8 @@ class AutoTS(object):
                                'GluonTS', 'SeasonalNaive',
                                'UnobservedComponents', 'VARMAX', 'VECM',
                                'DynamicFactor', 'TSFreshRegressor',
-                               'MotifSimulation', 'WindowRegression', 'VAR']
+                               'MotifSimulation', 'WindowRegression', 'VAR',
+                               'TensorflowSTS']
 
         # generate template to begin with
         if initial_template.lower() == 'random':

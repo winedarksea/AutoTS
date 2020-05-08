@@ -567,6 +567,7 @@ class DifferencedTransformer(object):
     """
     def __init__(self):
         self.lag = 1
+        self.beta = 1
         
     def fit(self, df):
         """Fits

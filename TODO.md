@@ -75,6 +75,9 @@ KerasRNN errors due to parameters not working on all dataset
 Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
+Fix Regressor split for prediction in M5
+regressor to TensorflowSTS
+Tensorflow Regression with Probabilistic Output
 * Tensorflow Probability Structural Time Series
 * Improve history-driven point to probability
 * distance 20/80 horizontal, horizontal-max
@@ -88,6 +91,7 @@ Tensorflow GPU backend may crash on occasion.
 # To-Do
 * Get the sphinx (google style) documentation and readthedocs.io website up
 * Add to template: Gluon, Motif, WindowRegression
+* Convert 'Holiday' regressors into Datepart + Holiday 2d
 * Bring GeneralTransformer to higher level API.
 	* wide_to_long and long_to_wide in higher-level API
 * Option to use full traceback in errors in table
@@ -182,6 +186,7 @@ Tensorflow GPU backend may crash on occasion.
 	Compressive Transformer
 
 #### New Transformations:
+	lag and beta to DifferencedTransformer to make it more of an AR process
 	Weighted moving average
 	Symbolic aggregate approximation (SAX) and (PAA) (basically these are just binning)
 	Shared discretization (all series get same shared binning)

@@ -131,7 +131,7 @@ class PredictionObject(object):
 
     def __repr__(self):
         """Print."""
-        if self.forecast != np.nan:
+        if isinstance(self.forecast, pd.DataFrame):
             return "Prediction object: \nReturn .forecast, \n .upper_forecast, \n .lower_forecast \n .model_parameters \n .transformation_parameters"
         else:
             return "Empty prediction object."
@@ -459,6 +459,25 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
                 shuffle=parameters['shuffle'],
                 max_windows=parameters['max_windows'],
                 forecast_length=forecast_length)
+        return model
+    if model == 'TensorflowSTS':
+        from autots.models.tfp import TensorflowSTS
+        if parameters == {}:
+            model = TensorflowSTS(frequency=frequency,
+                                    prediction_interval=prediction_interval,
+                                    holiday_country=holiday_country,
+                                    random_seed=random_seed, verbose=verbose)
+        else:
+            model = TensorflowSTS(frequency=frequency,
+                                    prediction_interval=prediction_interval,
+                                    holiday_country=holiday_country,
+                                    random_seed=random_seed, verbose=verbose,
+                                    seasonal_periods=parameters['seasonal_periods'],
+                                    ar_order=parameters['ar_order'],
+                                    trend=parameters['trend'],
+                                    fit_method=parameters['fit_method'],
+                                    num_steps=parameters['num_steps']
+                                    )
         return model
     else:
         raise AttributeError(("Model String '{}' not a recognized model type").format(model))
