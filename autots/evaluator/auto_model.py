@@ -464,20 +464,41 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
         from autots.models.tfp import TensorflowSTS
         if parameters == {}:
             model = TensorflowSTS(frequency=frequency,
-                                    prediction_interval=prediction_interval,
-                                    holiday_country=holiday_country,
-                                    random_seed=random_seed, verbose=verbose)
+                                  prediction_interval=prediction_interval,
+                                  holiday_country=holiday_country,
+                                  random_seed=random_seed, verbose=verbose)
         else:
             model = TensorflowSTS(frequency=frequency,
-                                    prediction_interval=prediction_interval,
-                                    holiday_country=holiday_country,
-                                    random_seed=random_seed, verbose=verbose,
-                                    seasonal_periods=parameters['seasonal_periods'],
-                                    ar_order=parameters['ar_order'],
-                                    trend=parameters['trend'],
-                                    fit_method=parameters['fit_method'],
-                                    num_steps=parameters['num_steps']
-                                    )
+                                  prediction_interval=prediction_interval,
+                                  holiday_country=holiday_country,
+                                  random_seed=random_seed, verbose=verbose,
+                                  seasonal_periods=parameters['seasonal_periods'],
+                                  ar_order=parameters['ar_order'],
+                                  trend=parameters['trend'],
+                                  fit_method=parameters['fit_method'],
+                                  num_steps=parameters['num_steps']
+                                  )
+        return model
+    if model == 'TFPRegression':
+        from autots.models.tfp import TFPRegression
+        if parameters == {}:
+            model = TFPRegression(frequency=frequency,
+                                  prediction_interval=prediction_interval,
+                                  holiday_country=holiday_country,
+                                  random_seed=random_seed, verbose=verbose)
+        else:
+            model = TFPRegression(frequency=frequency,
+                                  prediction_interval=prediction_interval,
+                                  holiday_country=holiday_country,
+                                  random_seed=random_seed, verbose=verbose,
+                                  kernel_initializer=parameters['kernel_initializer'],
+                                  epochs=parameters['epochs'],
+                                  batch_size=parameters['batch_size'],
+                                  optimizer=parameters['optimizer'],
+                                  loss=parameters['loss'],
+                                  dist=parameters['dist'],
+                                  regression_type=parameters['regression_type']
+                                  )
         return model
     else:
         raise AttributeError(("Model String '{}' not a recognized model type").format(model))

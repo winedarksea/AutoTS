@@ -30,7 +30,7 @@ class KerasRNN(object):
     """
 
     def __init__(self, rnn_type: str = 'LSTM',
-                 kernel_initializer: str = 'glorot_uniform',
+                 kernel_initializer: str = 'lecun_uniform',
                  hidden_layer_sizes: tuple = (32, 32, 32),
                  optimizer: str = 'adam', loss: str = 'huber',
                  epochs: int = 50, batch_size: int = 32,

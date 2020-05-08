@@ -564,11 +564,11 @@ class AutoTS(object):
 
                 # subset series (if used) and take a new train/test split
                 if self.subset_flag:
-                    df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n=self.subset, random_state=random_seed)
+                    df_subset = subset_series(current_slice, list((weights.get(i)) for i in current_slice.columns), n=self.subset, random_state=random_seed)
                     if self.verbose > 1:
                         print(f'{y + 1} subset is of: {df_subset.columns}')
                 else:
-                    df_subset = df_wide_numeric.copy()
+                    df_subset = current_slice
                 if not weighted:
                     current_weights = {x: 1 for x in df_subset.columns}
                 else:
@@ -577,6 +577,7 @@ class AutoTS(object):
                     df_subset, forecast_length=forecast_length,
                     min_allowed_train_percent=self.min_allowed_train_percent,
                     verbose=self.verbose)
+                print(f'Validation index is {df_train.index}')
 
                 # slice regressor into current validation slices
                 try:

@@ -75,8 +75,7 @@ KerasRNN errors due to parameters not working on all dataset
 Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
-Fix Regressor split for prediction in M5
-regressor to TensorflowSTS
+* Fix Regressor split for prediction in M5
 Tensorflow Regression with Probabilistic Output
 * Tensorflow Probability Structural Time Series
 * Improve history-driven point to probability
@@ -125,6 +124,7 @@ Tensorflow Regression with Probabilistic Output
 	* Make sure of rolling regression setup
 	* Modify GluonStart if lots of NaN at start of that series
 	* GPU and CPU ctx
+* Regressor to TensorflowSTS
 * Relative/Absolute Imports and reduce package reloading messages
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
 * Handle categorical forecasts where forecast leaves range of known values, then add to upper/lower forecasts
@@ -145,6 +145,11 @@ Tensorflow Regression with Probabilistic Output
 * Ability to automatically add external datasets of parallel time series of global usability (ie from FRED or others)
 * Option to import either long or wide data
 * Infer column names for df_long to wide based on which is datetime, which is string, and which is numeric
+
+### Links
+* https://link.springer.com/article/10.1007/s10618-019-00647-x/tables/1
+* https://github.com/gantheory/TPA-LSTM
+* https://github.com/huseinzol05/Stock-Prediction-Models/tree/master/deep-learning
 
 ### Faster Convergence / Faster in General
 * Only search useful parameters, highest probability for most likely effective parameters

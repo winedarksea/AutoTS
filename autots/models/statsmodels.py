@@ -138,7 +138,11 @@ class GLM(ModelObject):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         from statsmodels.api import GLM
-        X = (pd.to_numeric(self.df_train.index, errors = 'coerce',downcast='integer').values)
+        from autots.models.sklearn import date_part
+        if self.regression_type == 'datepart':
+            X = date_part(self.df_train.index, method='expanded').values
+        else:
+            X = (pd.to_numeric(self.df_train.index, errors = 'coerce',downcast='integer').values)
         if self.constant in [True, 'True', 'true']:
             from statsmodels.tools import add_constant
             X = add_constant(X, has_constant='add')
@@ -150,6 +154,16 @@ class GLM(ModelObject):
         self.df_train = self.df_train.replace(0, np.nan)
         fill_vals = self.df_train.abs().min(axis = 0, skipna = True)
         self.df_train = self.df_train.fillna(fill_vals).fillna(0.1)
+        if self.regression_type == 'datepart':
+            Xf = date_part(test_index, method='expanded').values
+        else:
+            Xf = pd.to_numeric(test_index, errors = 'coerce',downcast='integer').values
+        if self.constant or self.constant == 'True':
+            Xf = add_constant(Xf, has_constant='add')
+        if self.regression_type == 'User':
+            if preord_regressor.ndim == 1:
+                preord_regressor = np.array(preord_regressor).reshape(-1, 1)
+            Xf = np.concatenate((Xf.reshape(-1, 1), preord_regressor), axis = 1)
         for y in self.df_train.columns:
             current_series = self.df_train[y]
             if str(self.family).lower() == 'poisson':
@@ -169,14 +183,7 @@ class GLM(ModelObject):
                 model = GLM(current_series.values, X, family= Gamma(), missing = 'drop').fit(disp = self.verbose)
             else:
                 self.family = 'Gaussian'
-                model = GLM(current_series.values, X, missing = 'drop').fit()
-            Xf = pd.to_numeric(test_index, errors = 'coerce',downcast='integer').values
-            if self.constant or self.constant == 'True':
-                Xf = add_constant(Xf, has_constant='add')
-            if self.regression_type == 'User':
-                if preord_regressor.ndim == 1:
-                    preord_regressor = np.array(preord_regressor).reshape(-1, 1)
-                Xf = np.concatenate((Xf.reshape(-1, 1), preord_regressor), axis = 1)   
+                model = GLM(current_series.values, X, missing = 'drop').fit() 
             current_forecast = model.predict((Xf))
             forecast = pd.concat([forecast, pd.Series(current_forecast)], axis = 1)
         df_forecast = pd.DataFrame(forecast)
@@ -209,8 +216,9 @@ class GLM(ModelObject):
             p=[0.1, 0.3, 0.1, 0.3, 0.1, 0.1]).item()
         constant_choice = np.random.choice(a=[False, True], size=1,
                                            p=[0.95, 0.05]).item()
-        regression_type_choice = np.random.choice(a=[None, 'User'], size=1,
-                                                  p=[0.8, 0.2]).item()
+        regression_type_choice = np.random.choice(a=[None, 'datepart', 'User'],
+                                                  size=1,
+                                                  p=[0.4, 0.4, 0.2]).item()
         return {'family': family_choice,
                 'constant': constant_choice,
                 'regression_type': regression_type_choice

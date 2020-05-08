@@ -137,7 +137,7 @@ class TensorflowSTS(ModelObject):
             prediction_interval = self.prediction_interval
             # assume follows rules of normal because those are conventional
             from scipy.stats import norm
-            adj = norm.sf(abs(prediction_interval))*2
+            # adj = norm.sf(abs(prediction_interval))*2
             p_int = 1 - ((1 - prediction_interval) / 2)
             adj = norm.ppf(p_int)
             forecast_scale = forecast_dist.stddev().numpy()[..., 0] 
@@ -197,89 +197,182 @@ class TensorflowSTS(ModelObject):
                         }
         return parameter_dict
 
+class TFPRegressor(object):
+    """Wrapper for Tensorflow Keras based RNN.
+
+    Args:
+        rnn_type (str): Keras cell type 'GRU' or default 'LSTM'
+        kernel_initializer (str): passed to first keras LSTM or GRU layer
+        hidden_layer_sizes (tuple): of len 1 or 3 passed to first keras LSTM or GRU layers
+        optimizer (str): Passed to keras model.compile
+        loss (str): Passed to keras model.compile
+        epochs (int): Passed to keras model.fit
+        batch_size (int): Passed to keras model.fit
+        verbose (int): 0, 1 or 2. Passed to keras model.fit
+        random_seed (int): passed to tf.random.set_seed()
+    """
+
+    def __init__(self, kernel_initializer: str = 'lecun_uniform',
+                 optimizer: str = 'adam', loss: str = 'negloglike',
+                 epochs: int = 50, batch_size: int = 32,
+                 dist: str = 'normal',
+                 verbose: int = 1, random_seed: int = 2020):
+        self.name = 'TFPRegressor'
+        verbose += 1
+        verbose = 0 if verbose < 0 else verbose
+        verbose = 2 if verbose > 2 else verbose
+        self.verbose = verbose
+        self.random_seed = random_seed
+        self.kernel_initializer = kernel_initializer
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.optimizer = optimizer
+        self.loss = loss  # negloglike, Huber, mae
+        self.dist = dist  # normal, poisson, negbinom
+
+    def fit(self, X, Y):
+        """Train the model on dataframes of X and Y."""
+        if not _has_tf:
+            raise ImportError("TensorflowProbability not installed.")
+        tf.keras.backend.clear_session()
+        tf.keras.backend.set_floatx('float64')
+        tf.random.set_seed(self.random_seed)
+        train_X = pd.DataFrame(X).values
+        INPUT_SHAPE = (train_X.shape[1],)
+        OUTPUT_SHAPE = Y.shape[1]
+        train_Y = pd.DataFrame(Y).values
+        if self.dist == 'other':
+            tfd = tfp.distributions
+            tfk = tf.keras
+            n_batches = 10
+            prior = tfd.Independent(tfd.Normal(loc=tf.zeros(OUTPUT_SHAPE,
+                                                            dtype=tf.float64),
+                                               scale=1.0),
+                                    reinterpreted_batch_ndims=1)
+            self.nn_model = tf.keras.Sequential([
+                tfk.layers.InputLayer(input_shape=INPUT_SHAPE, name="input"),
+                tfk.layers.Dense(10, activation="relu", name="dense_1"),
+                tfk.layers.Dense(tfp.layers.MultivariateNormalTriL.params_size(
+                    OUTPUT_SHAPE), activation=None,
+                    name="distribution_weights"),
+                tfp.layers.MultivariateNormalTriL(OUTPUT_SHAPE, activity_regularizer=tfp.layers.KLDivergenceRegularizer(prior, weight=1/n_batches), name="output")
+            ], name="model")
+        elif self.dist == 'poisson':
+            self.nn_model = tf.keras.models.Sequential()
+            self.nn_model.add(tf.keras.layers.Dense(10, activation="relu"))
+            self.nn_model.add(tf.keras.layers.Dense(
+                tfp.layers.IndependentPoisson.params_size(OUTPUT_SHAPE + 1)))
+            self.nn_model.add(tfp.layers.DistributionLambda(
+                lambda t: tfp.distributions.Normal(
+                    loc=t[..., :1],
+                    scale=1e-3 + tf.math.softplus(0.05 * t[..., 1:]))))
+        else:
+            self.dist = 'normal'
+            self.nn_model = tf.keras.models.Sequential()
+            self.nn_model.add(tf.keras.layers.Dense(OUTPUT_SHAPE + 1))
+            self.nn_model.add(tfp.layers.DistributionLambda(
+                lambda t: tfp.distributions.Normal(
+                    loc=t[..., :1],
+                    scale=1e-3 + tf.math.softplus(0.05 * t[..., 1:]))))
+
+        if self.loss == 'negloglike':
+            self.nn_model.compile(optimizer=self.optimizer,
+                             loss=lambda y, model: -model.log_prob(y))
+        else:
+            if self.loss == 'Huber':
+                loss = tf.keras.losses.Huber()
+            else:
+                loss = self.loss
+            self.nn_model.compile(optimizer=self.optimizer, loss=loss)
+
+        self.nn_model.fit(x=train_X, y=train_Y, epochs=self.epochs,
+                     batch_size=self.batch_size,
+                     verbose=self.verbose)
+        """
+        nn_model.fit(x=train_X, y=train_Y, epochs=50,
+                     batch_size=32)
+        """
+        return self
+
+    def predict(self, X, conf_int: float = None):
+        """Predict on dataframe of X."""
+        test = pd.DataFrame(X).values
+        if conf_int is None:
+            return pd.DataFrame(self.nn_model.predict(test))
+        else:
+            p_int = 1 - ((1 - conf_int) / 2)
+            from scipy.stats import norm
+            adj = norm.ppf(p_int)
+
+            yhat = self.nn_model(test)
+            mean = self.nn_model.predict(test)
+            stddev = yhat.stddev().numpy()
+            mean_plus = mean - adj * stddev
+            mean_minus = mean + adj * stddev
+            return mean, mean_minus, mean_plus
+
 
 class TFPRegression(ModelObject):
     """Tensorflow Probability regression.
-    
+
     Args:
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
         regression_type (str): type of regression (None, 'User')
     """
-    def __init__(self, name: str = "TFPRegression", frequency: str = 'infer', 
+
+    def __init__(self, name: str = "TFPRegression", frequency: str = 'infer',
                  prediction_interval: float = 0.9, holiday_country: str = 'US',
                  random_seed: int = 2020, verbose: int = 1,
+                 kernel_initializer: str = 'lecun_uniform',
+                 optimizer: str = 'adam', loss: str = 'negloglike',
+                 epochs: int = 50, batch_size: int = 32,
+                 dist: str = 'normal',
                  regression_type: str = None):
-        ModelObject.__init__(self, name, frequency, prediction_interval, 
+        ModelObject.__init__(self, name, frequency, prediction_interval,
                              regression_type=regression_type,
-                             holiday_country=holiday_country, random_seed=random_seed,
+                             holiday_country=holiday_country,
+                             random_seed=random_seed,
                              verbose=verbose)
-        self.family = family
-        self.constant = constant
-        
+        self.verbose = verbose
+        self.random_seed = random_seed
+        self.kernel_initializer = kernel_initializer
+        self.epochs = int(epochs)
+        self.batch_size = int(batch_size)
+        self.optimizer = optimizer
+        self.loss = loss  # negloglike, Huber, mae
+        self.dist = dist  # normal, poisson, negbinom
+
     def fit(self, df, preord_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
             df (pandas.DataFrame): Datetime Indexed 
-
-        num_inducing_points = 40
-        model = tf.keras.Sequential([
-            tf.keras.layers.InputLayer(input_shape=[1], dtype=x.dtype),
-            tf.keras.layers.Dense(1, kernel_initializer='ones', use_bias=False),
-            tfp.layers.VariationalGaussianProcess(
-                num_inducing_points=num_inducing_points,
-                kernel_provider=RBFKernelFn(dtype=x.dtype),
-                event_shape=[1],
-                inducing_index_points_initializer=tf.constant_initializer(
-                    np.linspace(*x_range, num=num_inducing_points,
-                                dtype=x.dtype)[..., np.newaxis]),
-                unconstrained_observation_noise_variance_initializer=(
-                    tf.constant_initializer(
-                        np.log(np.expm1(1.)).astype(x.dtype))),
-            ),
-        ])
-        funky_loss = lambda y, rv_y: rv_y.variational_loss(
-            y, kl_weight=np.array(batch_size, x.dtype) / x.shape[0])
-        yhats = [model(x_tst) for _ in range(100)]
         """
-        # Build model.
-        model = tfk.Sequential([
-          tf.keras.layers.Dense(1 + 1),
-          tfp.layers.DistributionLambda(
-              lambda t: tfd.Normal(loc=t[..., :1],
-                                   scale=1e-3 + tf.math.softplus(0.05 * t[..., 1:]))),
-        ])
-        model = tfk.Sequential([
-            tfkl.Dense(tfpl.IndependentPoisson.params_size(1)),
-            tfpl.IndependentPoisson(1)
-        ])
-        negloglik=lambda y, model: -model.log_prob(y)
-        # Do inference.
-        model.compile(optimizer=tf.optimizers.Adam(learning_rate=0.05),
-                      loss=negloglik)
-        model.fit(x, y, epochs=100, verbose=False)
-        
-        # Make predictions.
-        yhat = model(x_tst)
-        mean = yhat.mean()
-        stddev = yhat.stddev()
-        mean_plus_2_stddev = mean - 2. * stddev
-        mean_minus_2_stddev = mean + 2. * stddev
 
         df = self.basic_profile(df)
-        self.df_train = df
-        if self.verbose > 1:
-            self.verbose = True
-        else:
-            self.verbose = False
         if self.regression_type == 'User':
             if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
                 self.regression_type = None
             else:
                 self.preord_regressor_train = preord_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
+
+        from autots.models.sklearn import date_part
+        X = date_part(df.index, method='expanded')
+        if self.regression_type == 'User':
+            # if self.preord_regressor_train.ndim == 1:
+            #     self.preord_regressor_train = np.array(self.preord_regressor_train).reshape(-1, 1)
+            # X = np.concatenate((X.reshape(-1, 1), self.preord_regressor_train), axis=1)
+            X = pd.concat([X, pd.DataFrame(self.preord_regressor_train).reset_index(drop=True)], axis=1)
+        y = df
+        self.model = TFPRegressor(
+            verbose=self.verbose, random_seed=self.random_seed,
+            kernel_initializer=self.kernel_initializer,
+            epochs=self.epochs, batch_size=self.batch_size,
+            optimizer=self.optimizer, loss=self.loss,
+            dist=self.dist).fit(X.values, y)
         return self
 
     def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
@@ -296,44 +389,28 @@ class TFPRegression(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
-        from statsmodels.api import GLM
-        X = (pd.to_numeric(self.df_train.index, errors = 'coerce',downcast='integer').values)
-        if self.constant in [True, 'True', 'true']:
-            from statsmodels.tools import add_constant
-            X = add_constant(X, has_constant='add')
+
+        from autots.models.sklearn import date_part
+        Xf = date_part(test_index, method='expanded')
         if self.regression_type == 'User':
-            if self.preord_regressor_train.ndim == 1:
-                self.preord_regressor_train = np.array(self.preord_regressor_train).reshape(-1, 1)
-            X = np.concatenate((X.reshape(-1, 1), self.preord_regressor_train), axis = 1)
-        forecast = pd.DataFrame()
-        self.df_train = self.df_train.replace(0, np.nan)
-        fill_vals = self.df_train.abs().min(axis = 0, skipna = True)
-        self.df_train = self.df_train.fillna(fill_vals).fillna(0.1)
-        for y in self.df_train.columns:
-            current_series = self.df_train[y]
-            if str(self.family).lower() == 'poisson':
-                from statsmodels.genmod.families.family import Poisson
-                model = GLM(current_series.values, X, family= Poisson(), missing = 'drop').fit(disp = self.verbose)
-            else:
-                self.family = 'Gaussian'
-                model = GLM(current_series.values, X, missing = 'drop').fit()
-            Xf = pd.to_numeric(test_index, errors = 'coerce',downcast='integer').values
-            if self.constant or self.constant == 'True':
-                Xf = add_constant(Xf, has_constant='add')
-            if self.regression_type == 'User':
-                if preord_regressor.ndim == 1:
-                    preord_regressor = np.array(preord_regressor).reshape(-1, 1)
-                Xf = np.concatenate((Xf.reshape(-1, 1), preord_regressor), axis = 1)   
-            current_forecast = model.predict((Xf))
-            forecast = pd.concat([forecast, pd.Series(current_forecast)], axis = 1)
+            # if preord_regressor.ndim == 1:
+            #     preord_regressor = np.array(preord_regressor).reshape(-1, 1)
+            # Xf = np.concatenate((Xf.reshape(-1, 1), preord_regressor), axis=1)
+            Xf = pd.concat([Xf, pd.DataFrame(preord_regressor).reset_index(drop=True)], axis=1)
+        forecast, lower_forecast, upper_forecast = self.model.predict(
+            Xf.values, conf_int=self.prediction_interval)
         df_forecast = pd.DataFrame(forecast)
         df_forecast.columns = self.column_names
         df_forecast.index = test_index
         if just_point_forecast:
             return df_forecast
         else:
-            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df_forecast, prediction_interval = self.prediction_interval)
-            
+            lower_forecast = pd.DataFrame(lower_forecast,
+                                          index=test_index,
+                                          columns=self.column_names)
+            upper_forecast = pd.DataFrame(upper_forecast,
+                                          index=test_index,
+                                          columns=self.column_names)
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
@@ -345,33 +422,59 @@ class TFPRegression(ModelObject):
                                           predict_runtime=predict_runtime,
                                           fit_runtime=self.fit_runtime,
                                           model_parameters=self.get_params())
-            
             return prediction
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        family_choice = np.random.choice(
-            a=['Gaussian', 'Poisson', 'Binomial',
-               'NegativeBinomial', 'Tweedie', 'Gamma'], size=1,
-            p=[0.1, 0.3, 0.1, 0.3, 0.1, 0.1]).item()
-        constant_choice = np.random.choice(a=[False, True], size=1,
-                                           p=[0.95, 0.05]).item()
+        init_list = ['glorot_uniform', 'lecun_uniform',
+                     'glorot_normal', 'RandomUniform', 'he_normal']
+        kernel_initializer = np.random.choice(init_list,
+                                              size=1).item()
+        epochs = np.random.choice([15, 50, 150],
+                                  p=[0.2, 0.7, 0.1],
+                                  size=1).item()
+        batch_size = np.random.choice([8, 16, 32, 72],
+                                      p=[0.2, 0.2, 0.5, 0.1],
+                                      size=1).item()
+        optimizer = np.random.choice(['adam', 'rmsprop', 'adagrad'],
+                                     p=[0.4, 0.5, 0.1],
+                                     size=1).item()
+        loss = np.random.choice(['negloglike', 'mae', 'Huber',
+                                 'poisson', 'mse', 'mape'],
+                                p=[0.3, 0.3, 0.1,
+                                   0.1, 0.1, 0.1],
+                                size=1).item()
+        dist_choice = np.random.choice(
+            a=['normal', 'poisson', 'other'], size=1,
+            p=[0.3, 0.3, 0.4]).item()
         regression_type_choice = np.random.choice(a=[None, 'User'], size=1,
                                                   p=[0.8, 0.2]).item()
-        return {'family': family_choice,
-                'constant': constant_choice,
+        return {'kernel_initializer': kernel_initializer,
+                'epochs': epochs,
+                'batch_size': batch_size,
+                'optimizer': optimizer,
+                'loss': loss,  # negloglike, Huber, mae
+                'dist':  dist_choice,
                 'regression_type': regression_type_choice
                 }
 
     def get_params(self):
         """Return dict of current parameters."""
         return {
-                'family': self.family,
-                'constant': self.constant,
+                'kernel_initializer': self.kernel_initializer,
+                'epochs': self.epochs,
+                'batch_size': self.batch_size,
+                'optimizer': self.optimizer,
+                'loss': self.loss,
+                'dist':  self.dist,
                 'regression_type': self.regression_type
                 }
 
 """
+temp = TFPRegressor().fit(X, Y)
+test = TFPRegression().fit(df)
+test.predict(14).forecast
+
 test = TensorflowSTS().fit(df).predict(14)
 test.forecast
 """
