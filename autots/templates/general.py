@@ -76,6 +76,14 @@ general_template_dict = {
  18: {'Model': 'GLS',
   'ModelParameters': '{"family": "Gaussian", "constant": true, "regression_type": null}',
   'TransformationParameters': '{"outlier_method": "remove", "outlier_threshold": 3, "outlier_position": "middle", "fillna": "median", "transformation": "QuantileTransformer", "detrend": false, "second_transformation": "RobustScaler", "transformation_param": null, "third_transformation": "PowerTransformer", "discretization": "upper", "n_bins": 10, "context_slicer": "6ForecastLength"}',
+  'Ensemble': 0},
+ 19: {'Model': 'TensorflowSTS',
+  'ModelParameters': '{"fit_method": "hmc", "num_steps": 200, "ar_order": 7, "seasonal_periods": 7, "trend": "semilocal"}',
+  'TransformationParameters': '{"outlier_method": "clip", "outlier_threshold": 3, "outlier_position": "first;middle", "fillna": "mean", "transformation": "PowerTransformer", "detrend": false, "second_transformation": "FixedRollingMean", "transformation_param": "100thN", "third_transformation": "RobustScaler", "discretization": null, "n_bins": null, "context_slicer": null}',
+  'Ensemble': 0},
+ 20: {'Model': 'TensorflowSTS',
+  'ModelParameters': '{"fit_method": "variational", "num_steps": 50, "ar_order": 1, "seasonal_periods": 364, "trend": "local"}',
+  'TransformationParameters': '{"outlier_method": "clip", "outlier_threshold": 3, "outlier_position": "first", "fillna": "ffill", "transformation": null, "detrend": true, "second_transformation": "FixedRollingMean", "transformation_param": "14", "third_transformation": "SinTrend", "discretization": "sklearn-uniform", "n_bins": 5, "context_slicer": null}',
   'Ensemble': 0}
  }
 

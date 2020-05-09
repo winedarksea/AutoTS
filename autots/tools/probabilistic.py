@@ -90,6 +90,36 @@ def historic_quantile(df_train, prediction_interval: float = 0.9):
         np.where(lower != 0, lower, (bins[2] - bins[0])/4)
     return lower, upper
 
+def inferred_normal(train, forecast, n: int = 5,
+                    prediction_interval: float = 0.9):
+    """A corruption of Bayes theorem.
+    It will be highly sensitive to the transformations of the data."""
+    prior_mu = train.mean()
+    prior_sigma = train.std()
+    from scipy.stats import norm
+    p_int = 1 - ((1 - prediction_interval) / 2)
+    adj = norm.ppf(p_int)
+    upper_forecast, lower_forecast = pd.DataFrame(), pd.DataFrame()
+    for index, row in forecast.iterrows():
+        data_mu = row
+        post_mu = ((prior_mu/prior_sigma ** 2) + ((n * data_mu)/prior_sigma ** 2)) / ((1/prior_sigma ** 2) + (n/prior_sigma ** 2))
+        lower = pd.DataFrame(post_mu - adj * prior_sigma).transpose()
+        lower = lower.where(lower <= data_mu, data_mu, axis = 1)
+        upper = pd.DataFrame(post_mu + adj * prior_sigma).transpose()
+        upper = upper.where(upper >= data_mu, data_mu, axis = 1)
+        lower_forecast = pd.concat([lower_forecast, lower], axis=0)
+        upper_forecast = pd.concat([upper_forecast, upper], axis=0)
+    lower_forecast.index = forecast.index
+    upper_forecast.index = forecast.index
+    return upper_forecast, lower_forecast
+
+"""
+post_mu = ((prior_mu/prior_sigma ** 2) + ((n * data_mu)/data_sigma ** 2))/
+      ((1/prior_sigma ** 2) + (n/data_sigma ** 2))
+post_sigma = sqrt(1/((1/prior_sigma ** 2) + (n/data_sigma ** 2)))
+"""
+    
+
 def Point_to_Probability(train, forecast, prediction_interval = 0.9, method: str = 'variable_pct_change'):
     """Data driven placeholder for model error estimation
     
@@ -128,3 +158,6 @@ def Point_to_Probability(train, forecast, prediction_interval = 0.9, method: str
         upper_forecast = forecast.astype(float) + upper
         lower_forecast = forecast.astype(float) - lower
         return upper_forecast, lower_forecast
+    if method == 'inferred_normal':
+        return inferred_normal(train, forecast, n=5,
+                    prediction_interval=prediction_interval)

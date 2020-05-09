@@ -76,15 +76,11 @@ Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
 * Fix Regressor split for prediction in M5
-Tensorflow Regression with Probabilistic Output
-* Tensorflow Probability Structural Time Series
 * Improve history-driven point to probability
 * distance 20/80 horizontal, horizontal-max
 * horizontal ensembling for probabilistic
-
+* method to test effectiveness across multiple probabilistic intervals.
 * Fix categorical forecast when out of known values
-* new products - focus on initial_results being from most recent data
-* handle series with many NaN at beginning  - use of 'backwards' and by focusing on end for initial_results
 
 
 # To-Do
@@ -100,6 +96,8 @@ Tensorflow Regression with Probabilistic Output
 	* one level. User would have to specify all as based on lowest-level keys if wanted sum-up.
 * Better point to probabilistic (uncertainty of naive last-value forecast) - linear reg of abs error of samples - simulations
 	* Data, pct change, find window with % max change pos, and neg then avg. Bound is first point + that percent, roll from that first point and adjust if points cross, variant where all series share knowledge
+	* Bayesian posterior update of prior
+	* variance of k nearest neighbors
 	* Data, split, normalize, find distribution exponentially weighted to most recent, center around forecast, shared variant
 	* Data quantile, recentered around median of forecast.
 	* Categorical class probabilities as range for RollingRegression
@@ -175,8 +173,6 @@ Tensorflow Regression with Probabilistic Output
 		Best 10 combined with Decision Tree
 
 #### New models:
-	Tensorflow Probability Structural Time Series
-	Statsmodels VAR (NOT VARMAX)
 	Croston, SBA, TSB, ADIDA, iMAPA
 	Simulations
 	Ta-lib

@@ -54,7 +54,9 @@ class GLS(ModelObject):
         if just_point_forecast:
             return df
         else:
-            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df, prediction_interval = self.prediction_interval)
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df_train, df, method='variable_pct_change',
+                prediction_interval=self.prediction_interval)
             
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name=self.name,
@@ -192,7 +194,9 @@ class GLM(ModelObject):
         if just_point_forecast:
             return df_forecast
         else:
-            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df_forecast, prediction_interval = self.prediction_interval)
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df_train, df_forecast, method='inferred_normal',
+                prediction_interval=self.prediction_interval)
             
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name=self.name,
@@ -301,7 +305,9 @@ class ETS(ModelObject):
         if just_point_forecast:
             return forecast
         else:
-            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, forecast, prediction_interval = self.prediction_interval)
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df_train, forecast, method='inferred_normal',
+                prediction_interval = self.prediction_interval)
 
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name=self.name,
@@ -623,7 +629,9 @@ class UnobservedComponents(ModelObject):
         if just_point_forecast:
             return forecast
         else:
-            upper_forecast, lower_forecast = Point_to_Probability(self.df_train, forecast, prediction_interval = self.prediction_interval)
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df_train, forecast, method='historic_quantile',
+                prediction_interval = self.prediction_interval)
             
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name=self.name,
@@ -796,11 +804,6 @@ class DynamicFactor(ModelObject):
         if just_point_forecast:
             return forecast
         else:
-            """
-            upper_forecast, lower_forecast = Point_to_Probability(
-                self.df_train, forecast,
-                prediction_interval=self.prediction_interval)
-            """
             # outer forecasts
             alpha = 1 - self.prediction_interval
             # predict_results = maModel.get_prediction(start='2020',end='2021')
@@ -951,7 +954,7 @@ class VECM(ModelObject):
             return forecast
         else:
             upper_forecast, lower_forecast = Point_to_Probability(
-                self.df_train, forecast,
+                self.df_train, forecast, method='historic_quantile',
                 prediction_interval=self.prediction_interval)
 
             predict_runtime = datetime.datetime.now() - predictStartTime
