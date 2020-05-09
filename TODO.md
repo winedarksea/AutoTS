@@ -76,7 +76,6 @@ Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
 * Fix Regressor split for prediction in M5
-* Improve history-driven point to probability
 * distance 20/80 horizontal, horizontal-max
 * horizontal ensembling for probabilistic
 * method to test effectiveness across multiple probabilistic intervals.
@@ -94,7 +93,8 @@ Tensorflow GPU backend may crash on occasion.
 	* every level must be included in forecasting data
 	* 'bottom-up' and 'mid' levels
 	* one level. User would have to specify all as based on lowest-level keys if wanted sum-up.
-* Better point to probabilistic (uncertainty of naive last-value forecast) - linear reg of abs error of samples - simulations
+* Better point to probabilistic (uncertainty of naive last-value forecast) 
+	* linear reg of abs error of samples - simulations
 	* Data, pct change, find window with % max change pos, and neg then avg. Bound is first point + that percent, roll from that first point and adjust if points cross, variant where all series share knowledge
 	* Bayesian posterior update of prior
 	* variance of k nearest neighbors
