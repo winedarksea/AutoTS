@@ -577,7 +577,8 @@ class AutoTS(object):
                     df_subset, forecast_length=forecast_length,
                     min_allowed_train_percent=self.min_allowed_train_percent,
                     verbose=self.verbose)
-                print(f'Validation index is {df_train.index}')
+                if self.verbose > 2:
+                    print(f'Validation index is {df_train.index}')
 
                 # slice regressor into current validation slices
                 try:
