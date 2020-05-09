@@ -148,7 +148,7 @@ class AutoTS(object):
                                'UnobservedComponents', 'VARMAX', 'VECM',
                                'DynamicFactor', 'TSFreshRegressor',
                                'MotifSimulation', 'WindowRegression', 'VAR',
-                               'TensorflowSTS']
+                               'TensorflowSTS', 'TFPRegression']
 
         # generate template to begin with
         if initial_template.lower() == 'random':

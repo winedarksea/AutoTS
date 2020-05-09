@@ -201,7 +201,6 @@ class AverageValueNaive(ModelObject):
         if just_point_forecast:
             return df
         else:
-            # upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df, prediction_interval = self.prediction_interval, method = 'historic_quantile')
             upper_forecast = df.astype(float) + self.upper
             lower_forecast = df.astype(float) - self.lower
             predict_runtime = datetime.datetime.now() - predictStartTime
@@ -330,7 +329,7 @@ class SeasonalNaive(ModelObject):
             return df
         else:
             upper_forecast, lower_forecast = Point_to_Probability(
-                self.df_train, df,
+                self.df_train, df, method='variable_pct_change',
                 prediction_interval=self.prediction_interval)
 
             predict_runtime = datetime.datetime.now() - predictStartTime

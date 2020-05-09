@@ -568,7 +568,7 @@ class RollingRegression(ModelObject):
             return forecast
         else:
             upper_forecast, lower_forecast = Point_to_Probability(
-                self.df_train, forecast,
+                self.df_train, forecast, method='inferred_normal',
                 prediction_interval=self.prediction_interval)
 
             predict_runtime = datetime.datetime.now() - predictStartTime

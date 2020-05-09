@@ -8,10 +8,60 @@ from scipy.stats import percentileofscore
 def percentileofscore_appliable(x, a, kind = 'rank'):
     return percentileofscore(a, score = x, kind = kind)
 
-def Variable_Point_to_Probability(train, forecast, alpha = 0.3, beta = 1):
-    """Data driven placeholder for model error estimation
+def historic_quantile(df_train, prediction_interval: float = 0.9):
+    """
+    Computes the difference between the median and the prediction interval range in historic data.
     
-    Catlin Point to Probability method ('a mixture of dark magic and gum disease')
+    Args:
+        df_train (pd.DataFrame): a dataframe of training data
+        prediction_interval (float): the desired forecast interval range
+    
+    Returns:
+        lower, upper (np.array): two 1D arrays
+    """
+    quantiles = [0, 1 - prediction_interval, 0.5, prediction_interval, 1]
+    bins = np.nanquantile(df_train.astype(float), quantiles, axis=0, keepdims=False)
+    upper = bins[3] - bins[2]
+    if 0 in upper:
+        np.where(upper != 0, upper, (bins[4] - bins[2])/4)
+    lower = bins[2] - bins[1]
+    if 0 in lower:
+        np.where(lower != 0, lower, (bins[2] - bins[0])/4)
+    return lower, upper
+
+def inferred_normal(train, forecast, n: int = 5,
+                    prediction_interval: float = 0.9):
+    """A corruption of Bayes theorem.
+    It will be sensitive to the transformations of the data."""
+    prior_mu = train.mean()
+    prior_sigma = train.std()
+    from scipy.stats import norm
+    p_int = 1 - ((1 - prediction_interval) / 2)
+    adj = norm.ppf(p_int)
+    upper_forecast, lower_forecast = pd.DataFrame(), pd.DataFrame()
+    for index, row in forecast.iterrows():
+        data_mu = row
+        post_mu = ((prior_mu/prior_sigma ** 2) + ((n * data_mu)/prior_sigma ** 2)) / ((1/prior_sigma ** 2) + (n/prior_sigma ** 2))
+        lower = pd.DataFrame(post_mu - adj * prior_sigma).transpose()
+        lower = lower.where(lower <= data_mu, data_mu, axis = 1)
+        upper = pd.DataFrame(post_mu + adj * prior_sigma).transpose()
+        upper = upper.where(upper >= data_mu, data_mu, axis = 1)
+        lower_forecast = pd.concat([lower_forecast, lower], axis=0)
+        upper_forecast = pd.concat([upper_forecast, upper], axis=0)
+    lower_forecast.index = forecast.index
+    upper_forecast.index = forecast.index
+    return upper_forecast, lower_forecast
+
+
+"""
+post_mu = ((prior_mu/prior_sigma ** 2) + ((n * data_mu)/data_sigma ** 2))/
+      ((1/prior_sigma ** 2) + (n/data_sigma ** 2))
+post_sigma = sqrt(1/((1/prior_sigma ** 2) + (n/data_sigma ** 2)))
+"""
+
+
+def Variable_Point_to_Probability(train, forecast, alpha = 0.3, beta = 1):
+    """Data driven placeholder for model error estimation.
     
     ErrorRange = beta * (En + alpha * En-1 [cum sum of En])
     En = abs(0.5 - QTP) * D
@@ -68,63 +118,42 @@ def Variable_Point_to_Probability(train, forecast, alpha = 0.3, beta = 1):
     ErrorRange = ErrorRange.fillna(method = 'bfill').fillna(method = 'ffill')
     
     return ErrorRange
+   
 
-def historic_quantile(df_train, prediction_interval: float = 0.9):
-    """
-    Computes the difference between the median and the prediction interval range in historic data.
-    
-    Args:
-        df_train (pd.DataFrame): a dataframe of training data
-        prediction_interval (float): the desired forecast interval range
-    
-    Returns:
-        lower, upper (np.array): two 1D arrays
-    """
-    quantiles = [0, 1 - prediction_interval, 0.5, prediction_interval, 1]
-    bins = np.nanquantile(df_train.astype(float), quantiles, axis=0, keepdims=False)
-    upper = bins[3] - bins[2]
-    if 0 in upper:
-        np.where(upper != 0, upper, (bins[4] - bins[2])/4)
-    lower = bins[2] - bins[1]
-    if 0 in lower:
-        np.where(lower != 0, lower, (bins[2] - bins[0])/4)
-    return lower, upper
-
-def Point_to_Probability(train, forecast, prediction_interval = 0.9, method: str = 'variable_pct_change'):
-    """Data driven placeholder for model error estimation
+def Point_to_Probability(train, forecast, prediction_interval = 0.9,
+                         method: str = 'historic_quantile'):
+    """Data driven placeholder for model error estimation.
     
     Catlin Point to Probability method ('a mixture of dark magic and gum disease')
-    
-    Does not tune alpha and beta, simply uses defaults!
-    
+
     Args:
         train (pandas.DataFrame): DataFrame of time series where index is DatetimeIndex
         forecast (pandas.DataFrame): DataFrame of forecast time series 
             in which the index is a DatetimeIndex and columns/series aligned with train.
             Forecast must be > 1 in length.
-        alpha (float): parameter which effects the broadening of error range over time
-            Usually 0 < alpha < 1 (although it can be larger than 1)
-        beta (float): parameter which effects the general width of the error bar
-            Usually 0 < beta < 1 (although it can be larger than 1)
-            
+        prediction_interval (float): confidence or perhaps credible interval
+        method (str): spell to cast to create dark magic.
+            'historic_quantile', 'inferred_normal', 'variable_pct_change'
+            gum disease available separately upon request.
+
     Returns:
         upper_error, lower_error (two pandas.DataFrames for upper and lower bound respectively)
     """
-    if method == 'variable_pct_change':
-        import warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            beta = np.exp(prediction_interval * 10)
-            alpha = 0.3
-            errorranges = Variable_Point_to_Probability(train, forecast, alpha = alpha, beta = beta)
-            # make symmetric error ranges
-            errorranges = errorranges / 2 
-            
-            upper_forecast = forecast + errorranges
-            lower_forecast = forecast - errorranges
-            return upper_forecast, lower_forecast
     if method == 'historic_quantile':
         lower, upper = historic_quantile(train, prediction_interval)
         upper_forecast = forecast.astype(float) + upper
         lower_forecast = forecast.astype(float) - lower
+        return upper_forecast, lower_forecast
+    if method == 'inferred_normal':
+        return inferred_normal(train, forecast, n=5,
+                    prediction_interval=prediction_interval)
+    if method == 'variable_pct_change':
+        beta = np.exp(prediction_interval * 10)
+        alpha = 0.3
+        errorranges = Variable_Point_to_Probability(train, forecast, alpha = alpha, beta = beta)
+        # make symmetric error ranges
+        errorranges = errorranges / 2 
+        
+        upper_forecast = forecast + errorranges
+        lower_forecast = forecast - errorranges
         return upper_forecast, lower_forecast
