@@ -69,12 +69,12 @@ class AutoTS(object):
                  subset: int = None,
                  na_tolerance: float = 0.99,
                  metric_weighting: dict = {'smape_weighting': 10,
-                                           'mae_weighting': 5,
-                                           'rmse_weighting': 5,
-                                           'containment_weighting': 1,
+                                           'mae_weighting': 2,
+                                           'rmse_weighting': 2,
+                                           'containment_weighting': 0,
                                            'runtime_weighting': 0,
-                                           'spl_weighting': 0,
-                                           'contour_weighting': 1
+                                           'spl_weighting': 1,
+                                           'contour_weighting': 0
                                            },
                  drop_most_recent: int = 0,
                  drop_data_older_than_periods: int = 100000,
@@ -87,7 +87,7 @@ class AutoTS(object):
                  max_generations: int = 5,
                  verbose: int = 1
                  ):
-        self.forecast_length = forecast_length
+        self.forecast_length = int(abs(forecast_length))
         self.frequency = frequency
         self.aggfunc = aggfunc
         self.prediction_interval = prediction_interval
@@ -112,6 +112,10 @@ class AutoTS(object):
             self.ensemble = str(self.ensemble).lower()
             if self.ensemble == 'all':
                 self.ensemble = 'simple,distance'
+
+        if self.forecast_length == 1:
+            if metric_weighting['contour_weighting'] > 0:
+                print("Contour metric does not work with forecast_length == 1")
 
         # convert shortcuts of model lists to actual lists of models
         if model_list == 'default':

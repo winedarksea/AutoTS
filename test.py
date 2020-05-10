@@ -19,13 +19,13 @@ df_long = load_toy_weekly()
 weights_hourly = {'traffic_volume': 10}
 
 model_list = [
-              # 'ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
-              'GLM', 'ETS', 'RollingRegression', 'ARIMA',
-              'FBProphet', 'UnobservedComponents'
-              # ,'VECM', 'DynamicFactor'
+              'ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
+              # 'GLM', 'ETS', 'RollingRegression', 'ARIMA',
+              'FBProphet', 'VAR', 'GluonTS'
+              , 'VECM', 'DynamicFactor'
               # ,'VARMAX', 'GluonTS'
               ]
-model_list = 'superfast'
+# model_list = 'superfast'
 # model_list = ['FBProphet', 'VAR']
 # model_list = ['GLM', 'TFPRegression']  # 'TensorflowSTS'
 
@@ -34,7 +34,7 @@ metric_weighting = {'smape_weighting': 10, 'mae_weighting': 1,
                     'runtime_weighting': 0, 'spl_weighting': 0,
                     'contour_weighting': 2
                     }
-metric_weighting = {'smape_weighting': 0, 'mae_weighting': 0,
+metric_weighting = {'smape_weighting': 1, 'mae_weighting': 1,
                     'rmse_weighting': 0, 'containment_weighting': 0,
                     'runtime_weighting': 0, 'spl_weighting': 1,
                     'contour_weighting': 0
@@ -43,7 +43,7 @@ metric_weighting = {'smape_weighting': 0, 'mae_weighting': 0,
 
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9, ensemble='none',
-               max_generations=1, num_validations=2, validation_method='even',
+               max_generations=10, num_validations=2, validation_method='even',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=0.1,
                max_per_model_class=None,

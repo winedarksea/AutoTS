@@ -119,8 +119,8 @@ class LastValueNaive(ModelObject):
             return df
         else:
             # upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df, prediction_interval = self.prediction_interval, method = 'historic_quantile')
-            upper_forecast = df.astype(float) + self.upper
-            lower_forecast = df.astype(float) - self.lower
+            upper_forecast = df.astype(float) + (self.upper * 0.8)
+            lower_forecast = df.astype(float) - (self.lower * 0.8)
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(model_name = self.name,
                                           forecast_length=forecast_length,
@@ -329,7 +329,7 @@ class SeasonalNaive(ModelObject):
             return df
         else:
             upper_forecast, lower_forecast = Point_to_Probability(
-                self.df_train, df, method='variable_pct_change',
+                self.df_train, df, method='inferred_normal',
                 prediction_interval=self.prediction_interval)
 
             predict_runtime = datetime.datetime.now() - predictStartTime

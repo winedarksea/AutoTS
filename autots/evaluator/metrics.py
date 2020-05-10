@@ -119,7 +119,8 @@ def containment(lower_forecast, upper_forecast, actual):
         actual (numpy.array): known true values
         forecast (numpy.array): predicted values
     """
-    return np.count_nonzero((upper_forecast >= actual) & (lower_forecast <= actual), axis=0)/actual.shape[0]
+    result = np.count_nonzero((upper_forecast >= actual) & (lower_forecast <= actual), axis=0)/actual.shape[0]
+    return result
 
 
 def contour(A, F):
@@ -132,16 +133,18 @@ def contour(A, F):
         A (numpy.array): known true values
         F (numpy.array): predicted values
     """
-
-    try:
-        X = np.nan_to_num(np.diff(A, axis=0))
-        Y = np.nan_to_num(np.diff(F, axis=0))
-        # On the assumption flat lines common in forecasts, but exceedingly rare in real world
-        X = X >= 0
-        Y = Y > 0
-        contour_result = np.sum(X == Y, axis=0)/X.shape[0]
-    except Exception:
-        contour_result = np.nan
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        try:
+            X = np.nan_to_num(np.diff(A, axis=0))
+            Y = np.nan_to_num(np.diff(F, axis=0))
+            # On the assumption flat lines common in forecasts,
+            # but exceedingly rare in real world
+            X = X >= 0
+            Y = Y > 0
+            contour_result = np.sum(X == Y, axis=0)/X.shape[0]
+        except Exception:
+            contour_result = np.nan
     return contour_result
 
 
@@ -193,7 +196,7 @@ def PredictionEval(PredictionObject, actual,
                        quantile=PredictionObject.prediction_interval) +
             SPL(A=actual, F=PredictionObject.lower_forecast,
                 df_train=df_train,
-                quantile=PredictionObject.prediction_interval),
+                quantile=(1-PredictionObject.prediction_interval)),
             # 'lower_mae': mae(actual, PredictionObject.lower_forecast),
             # 'upper_mae': mae(actual, PredictionObject.upper_forecast),
             'contour': contour(actual, PredictionObject.forecast)

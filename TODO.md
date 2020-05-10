@@ -16,6 +16,12 @@ Latest:
 	Fixed (partially!) bug where validation subsetting was behaving oddly
 	Made serious efforts to make the code prettier with pylint, still lots to do, however...
 	Improved genetic recombination so optimal models should be reached more quickly.
+	Improved Point to Probabilistic methods:
+		'historic_quantile' more stable quantile-based error ranges
+		'inferred normal' Bayesian-inspired method
+	Metrics:
+		Added Scaled Pinball Loss (SPL)
+		Removed upper/lower MAE
 	Improved ensembling with new parameter options.
 		Recursive ensembling now enabled
 	Added a number of new Transformer options
@@ -31,6 +37,7 @@ Latest:
 	Entirely changed the general transformer to add three levels of transformation.
 	GLM
 		Error where it apparently won't tolerate any zeroes was compensated for.
+		Speed improvement.
 	RollingRegression
 		Added SVM model
 		Added option to tune some model parameters to sklearn
@@ -39,15 +46,9 @@ Latest:
 		Added RNNs with Keras
 	GluonTS:
 		fixed the use of context_length, added more options to that param
-	
-	Improved Point to Probabilistic methods:
-		'historic_quantile' more stable quantile-based error ranges
-		'inferred normal' Bayesian-inspired method
+
 	Dynamic Factor added uncertainty from Statsmodels Statespace
 	VARMAX added uncertainty from Statsmodels Statespace
-	Metrics:
-		Added Scaled Pinball Loss (SPL)
-		Removed upper/lower MAE
 		
 	New models:
 		SeasonalNaive model
@@ -84,8 +85,6 @@ Tensorflow GPU backend may crash on occasion.
 ## General Tasks
 * Fix Regressor split for prediction in M5
 * distance 20/80 horizontal, horizontal-max
-* Scaled pinball loss
-	* TEST IT!
 * horizontal ensembling for probabilistic
 	* capture SPL per series
 * method to test effectiveness across multiple probabilistic intervals.
@@ -93,8 +92,7 @@ Tensorflow GPU backend may crash on occasion.
 	* run for each new prediction intervals (on just most recent)
 	* capture containment/SPL from each round.
 * Fix categorical forecast when out of known values
-* generate score  value/median of values (with 0's to NaN before median) + fill NaNs with maxes
-* test forecast_length of 1
+* max output constrained by max + (n * st devs)
 
 
 # To-Do

@@ -126,7 +126,7 @@ This weighting is not to be confused with series weighting, which effects how eq
 ```
 metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1, 'rmse_weighting' : 5, 
 					'containment_weighting' : 1, 'runtime_weighting' : 0,
-					'lower_mae_weighting': 0, 'upper_mae_weighting': 0, 'contour_weighting': 3}
+					'spl_weighting': 0, 'contour_weighting': 3}
 
 model = AutoTS(forecast_length = forecast_length, frequency = 'infer', metric_weighting = metric_weighting)
 ```		
@@ -136,9 +136,11 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 
 `sMAPE` is generally the most versatile across multiple series, but doesn't handle forecasts with lots of zeroes well. 
 
+`SPL` is *Scaled Pinball Loss* used for assessing upper/lower quantile forecast accuracies.
+
 `Containment` measures the percent of test data that falls between the upper and lower forecasts. As containment would tend to drive towards massive forecast ranges, `lower_mae` and `upper_mae`, the MAE on the upper and lower forecasts, are available. `Containment` and `upper/lower_mae` counteract each other and help balance the assessement of probabilistic forecasts.
 
-`Contour` is another unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference.
+`Contour` is another unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. Does not work with forecast_length = 1.
 
 ## Installation and Dependency Versioning
 `pip install autots`
