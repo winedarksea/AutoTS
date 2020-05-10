@@ -73,8 +73,7 @@ class AutoTS(object):
                                            'rmse_weighting': 5,
                                            'containment_weighting': 1,
                                            'runtime_weighting': 0,
-                                           'lower_mae_weighting': 0,
-                                           'upper_mae_weighting': 0,
+                                           'spl_weighting': 0,
                                            'contour_weighting': 1
                                            },
                  drop_most_recent: int = 0,

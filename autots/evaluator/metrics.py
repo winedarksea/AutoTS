@@ -56,12 +56,13 @@ def smape(actual, forecast):
         https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error
     """
     return (np.nansum((abs(forecast - actual) / (abs(forecast) + abs(actual))), axis = 0)* 200) / np.count_nonzero(~np.isnan(actual), axis = 0)
-    
+
+
 def mae(A, F):
-    """Expects two, 2-D numpy arrays of forecast_length * n series
-    
+    """Expects two, 2-D numpy arrays of forecast_length * n series.
+
     Returns a 1-D array of results in len n series
-    
+
     Args:
         A (numpy.array): known true values
         F (numpy.array): predicted values
@@ -71,6 +72,26 @@ def mae(A, F):
         warnings.simplefilter("ignore", category=RuntimeWarning)
         mae_result = np.nanmean(mae_result, axis=0)
     return mae_result
+
+
+def pinball_loss(A, F, quantile):
+    """Bigger is bad-er."""
+    pl = np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        result = np.nanmean(pl, axis=0)
+    return result
+
+
+def SPL(A, F, df_train, quantile):
+    """Scaled pinball loss."""
+    scaler = df_train.tail(1000).diff().abs().mean(axis=0)
+    # need to handle zeroes to prevent div 0 errors.
+    # this will tend to make that series irrelevant to the overall evaluation
+    fill_val = scaler.max()
+    fill_val = fill_val if fill_val > 0 else 1
+    scaler = scaler.replace(0, np.nan).fillna(fill_val)
+    return pinball_loss(A=A, F=F, quantile=quantile) / scaler
 
 
 def rmse(actual, forecast):
@@ -98,7 +119,7 @@ def containment(lower_forecast, upper_forecast, actual):
         actual (numpy.array): known true values
         forecast (numpy.array): predicted values
     """
-    return np.count_nonzero((upper_forecast > actual) & (lower_forecast < actual), axis = 0)/actual.shape[0]
+    return np.count_nonzero((upper_forecast >= actual) & (lower_forecast <= actual), axis=0)/actual.shape[0]
 
 
 def contour(A, F):
@@ -142,6 +163,7 @@ class EvalObject(object):
 
 def PredictionEval(PredictionObject, actual,
                    series_weights: dict = {},
+                   df_train=np.nan,
                    per_timestamp_errors: bool = False):
     """Evalute prediction against test actual.
 
@@ -166,8 +188,14 @@ def PredictionEval(PredictionObject, actual,
             'containment': containment(PredictionObject.lower_forecast,
                                        PredictionObject.upper_forecast,
                                        actual),
-            'lower_mae': mae(actual, PredictionObject.lower_forecast),
-            'upper_mae': mae(actual, PredictionObject.upper_forecast),
+            'spl': SPL(A=actual, F=PredictionObject.upper_forecast,
+                       df_train=df_train,
+                       quantile=PredictionObject.prediction_interval) +
+            SPL(A=actual, F=PredictionObject.lower_forecast,
+                df_train=df_train,
+                quantile=PredictionObject.prediction_interval),
+            # 'lower_mae': mae(actual, PredictionObject.lower_forecast),
+            # 'upper_mae': mae(actual, PredictionObject.upper_forecast),
             'contour': contour(actual, PredictionObject.forecast)
             }).transpose()
     per_series.columns = actual.columns

@@ -55,7 +55,7 @@ class GLS(ModelObject):
             return df
         else:
             upper_forecast, lower_forecast = Point_to_Probability(
-                self.df_train, df, method='variable_pct_change',
+                self.df_train, df, method='inferred_normal',
                 prediction_interval=self.prediction_interval)
             
             predict_runtime = datetime.datetime.now() - predictStartTime

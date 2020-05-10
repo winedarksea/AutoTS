@@ -621,10 +621,10 @@ class RollingRegression(ModelObject):
         holiday_choice = np.random.choice(a=[True, False], size=1,
                                           p=[0.2, 0.8]).item()
         polynomial_degree_choice = np.random.choice(a=[None, 2], size=1,
-                                                    p=[0.95, 0.05]).item()
+                                                    p=[0.97, 0.03]).item()
         x_transform_choice = np.random.choice(
             a=[None, 'FastICA', 'Nystroem', 'RmZeroVariance'], size=1,
-            p=[0.7, 0.05, 0.05, 0.2]).item()
+            p=[0.8, 0.05, 0.05, 0.1]).item()
         regression_choice = np.random.choice(a=[None, 'User'], size=1,
                                              p=[0.7, 0.3]).item()
         parameter_dict = {

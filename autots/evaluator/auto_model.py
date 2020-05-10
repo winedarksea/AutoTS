@@ -804,6 +804,7 @@ def TemplateWizard(template, df_train, df_test, weights,
             per_ts = True if 'distance' in ensemble else False
             model_error = PredictionEval(df_forecast, df_test,
                                          series_weights=weights,
+                                         df_train=df_train,
                                          per_timestamp_errors=per_ts)
             model_id = create_model_id(df_forecast.model_name,
                                        df_forecast.model_parameters,
@@ -1080,8 +1081,9 @@ def validation_aggregation(validation_results):
                 'mae': 'mean',
                 'rmse': 'mean',
                 'containment': 'mean',
-                'lower_mae': 'mean',
-                'upper_mae': 'mean',
+                'spl': 'mean',
+                # 'lower_mae': 'mean',
+                # 'upper_mae': 'mean',
                 'contour': 'mean',
                 'smape_weighted': 'mean',
                 'mae_weighted': 'mean',
@@ -1122,13 +1124,9 @@ def generate_score(model_results, metric_weighting: dict = {},
     except KeyError:
         runtime_weighting = 0
     try:
-        lower_mae_weighting = metric_weighting['lower_mae_weighting']
+        spl_weighting = metric_weighting['spl_weighting']
     except KeyError:
-        lower_mae_weighting = 0
-    try:
-        upper_mae_weighting = metric_weighting['upper_mae_weighting']
-    except KeyError:
-        upper_mae_weighting = 0
+        spl_weighting = 0
     try:
         contour_weighting = metric_weighting['contour_weighting']
     except KeyError:
@@ -1141,11 +1139,10 @@ def generate_score(model_results, metric_weighting: dict = {},
         mae_score = model_results['mae_weighted']/(model_results['mae_weighted'].min(skipna=True) + 1) # smaller better
         containment_score = (abs(prediction_interval - model_results['containment'])) # from 0 to 1, smaller better
         runtime_score = model_results['TotalRuntime']/(model_results['TotalRuntime'].min(skipna=True) + datetime.timedelta(minutes = 1)) # smaller better
-        lower_mae_score = model_results['lower_mae_weighted']/(model_results['lower_mae_weighted'].min(skipna=True) +1) # smaller better
-        upper_mae_score = model_results['upper_mae_weighted']/(model_results['upper_mae_weighted'].min(skipna=True) +1) # smaller better
+        spl_score = model_results['spl_weighted']/(model_results['spl_weighted'].min(skipna=True) +1) # smaller better
         contour_score =  (1/(model_results['contour_weighted'])).replace([np.inf, -np.inf, np.nan], 10).clip(upper = 10)
     except KeyError:
         raise KeyError("Inconceivable! Evaluation Metrics are missing and all models have failed, by an error in TemplateWizard or metrics. A new template may help, or an adjusted model_list.")
         
-    return (smape_score * smape_weighting) + (mae_score * mae_weighting) + (rmse_score * rmse_weighting) + (containment_score * containment_weighting) + (runtime_score * runtime_weighting) + (lower_mae_score * lower_mae_weighting) + (upper_mae_score * upper_mae_weighting) + (contour_score * contour_weighting)
+    return (smape_score * smape_weighting) + (mae_score * mae_weighting) + (rmse_score * rmse_weighting) + (containment_score * containment_weighting) + (runtime_score * runtime_weighting) + (spl_score * spl_weighting) + (contour_score * contour_weighting)
 

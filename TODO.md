@@ -28,8 +28,7 @@ Latest:
 		Log
 		IntermittentOccurrence
 		SeasonalDetrend
-	Entirely changed the general transformer to add three levels of transformation
-	Added VAR from Statsmodels (faster than VARMAX statespace)
+	Entirely changed the general transformer to add three levels of transformation.
 	GLM
 		Error where it apparently won't tolerate any zeroes was compensated for.
 	RollingRegression
@@ -41,15 +40,22 @@ Latest:
 	GluonTS:
 		fixed the use of context_length, added more options to that param
 	
-	Point to Probabilistic
-		More stable quantile based version for AvgNaive, LastValueNaive
+	Improved Point to Probabilistic methods:
+		'historic_quantile' more stable quantile-based error ranges
+		'inferred normal' Bayesian-inspired method
 	Dynamic Factor added uncertainty from Statsmodels Statespace
 	VARMAX added uncertainty from Statsmodels Statespace
+	Metrics:
+		Added Scaled Pinball Loss (SPL)
+		Removed upper/lower MAE
 		
 	New models:
 		SeasonalNaive model
+		VAR from Statsmodels (faster than VARMAX statespace)
 		MotifSimulation
 		WindowRegression
+		TensorflowSTS
+		TFPRegression
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -63,6 +69,7 @@ How do fillna methods handle datasets that have entirely NaN series?
 Subsetting for validation samples seems to be funky.
 VAR ValueError('Length of passed values is 4, index implies 9',)
 WindowRegression + KerasRNN + 1step + univariate = ValueError('Length mismatch: Expected axis has 54 elements, new values have 9 elements',)
+Is Template Eval Error: ValueError('array must not contain infs or NaNs',) related to Point to Probability HISTORIC QUANTILE?
 Categorical forecast leaves bounds: IndexError: index 7 is out of bounds for axis 0 with size 6
 	categorical = categorical_transformer.encoder.inverse_transform(df[cat_features].astype(int).values)
 	THIS BREAKS PREDICT
@@ -77,13 +84,21 @@ Tensorflow GPU backend may crash on occasion.
 ## General Tasks
 * Fix Regressor split for prediction in M5
 * distance 20/80 horizontal, horizontal-max
+* Scaled pinball loss
+	* TEST IT!
 * horizontal ensembling for probabilistic
+	* capture SPL per series
 * method to test effectiveness across multiple probabilistic intervals.
+	* generate base template (based mainly on best point forecast, validated)
+	* run for each new prediction intervals (on just most recent)
+	* capture containment/SPL from each round.
 * Fix categorical forecast when out of known values
+* generate score  value/median of values (with 0's to NaN before median) + fill NaNs with maxes
+* test forecast_length of 1
 
 
 # To-Do
-* Get the sphinx (google style) documentation and readthedocs.io website up
+* Get the sphinx (google style) documentation and github pages website up
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
 * Bring GeneralTransformer to higher level API.
@@ -112,6 +127,8 @@ Tensorflow GPU backend may crash on occasion.
 		* 1d and 2d variations
 		* .cov, .skew, .kurt, .var
 		* https://link.springer.com/article/10.1007/s10618-019-00647-x/tables/1
+	* Probabilistic:
+		https://scikit-learn.org/stable/auto_examples/ensemble/plot_gradient_boosting_quantile.html
 	* other sequence models
 	* Categorical classifier, ComplementNB
 	* PCA or similar -> Univariate Series (Unobserved Components)

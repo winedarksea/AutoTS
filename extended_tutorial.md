@@ -143,8 +143,8 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 ## Installation and Dependency Versioning
 `pip install autots`
 #### Requirements:
+	Python >= 3.5
 	numpy
-	Python >= 3.6
 	pandas
 	sklearn >= 0.20.0 (ColumnTransformer)
 	statsmodels
@@ -155,15 +155,40 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 	fbprophet
 	fredapi
 	tsfresh
-	mxnet==1.4.1 (mxnet-mkl, mxnet-cu91, mxnet-cu101mkl, etc.)
+	mxnet (mxnet-mkl, mxnet-cu91, mxnet-cu101mkl, etc.)
 	gluonts
-	tensorflow >= 2.0.0
+	tensorflow >= 2.0.0 (tensorflow-mkl)
+	tensorflow-probability
 
-As of writing, if accelerating with GPU, CUDA 10.1 is the only version usable on all three of mxnet, Tensorflow, and PyTorch.
+#### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
+Download Anaconda or Miniconda.
 
-If using Anaconda, fbprophet is easier to install with `conda install -c conda-forge fbprophet`
+(install Visual Studio if on Windows)
 
-Check out `functional_environments.md` for specific versions tested to work.
+If you have an Nvidia GPU, download NVIDIA CUDA (10.1 is currently supported by all of mxnet, Tensorflow, and Pytorch) and CuDNN. 
+MKL is included with `anaconda`.
+```
+# conda env remove -n timeseries
+conda create -n timeseries python=3.6
+conda activate timeseries
+
+# for simplicity: 
+conda install anaconda
+# elsewise: 
+conda install numpy scipy scikit-learn
+pip install statsmodels
+
+# additional packages
+# use pip install mxnet-cu101mkl or similar if you know you have CUDA, MKL
+pip install mxnet
+pip install gluonts
+# conda update anaconda (if you find the old versions required by gluonts annoying. It generally works fine with newer).
+# fbprophet can be installed with pip, but seems to work more reliably via conda
+conda install -c conda-forge fbprophet
+# there are conda install tensorflow-mkl and pip install intel-tensorflow for Windows.
+pip install tensorflow
+pip install tensorflow-probability
+```
 
 ## Caveats and Advice
 
