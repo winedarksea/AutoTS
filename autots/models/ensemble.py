@@ -429,6 +429,7 @@ def EnsembleTemplateGenerator(initial_results,
                                             best5_params],
                                            axis=0, ignore_index=True)
             ###########################################
+        if 'horizontal-max' in ensemble:
             mods_per_series = per_series.idxmin()
             mods = mods_per_series.unique()
             ensemble_models = {}

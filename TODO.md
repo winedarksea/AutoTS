@@ -84,7 +84,7 @@ Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
 * Fix Regressor split for prediction in M5
-* distance 20/80 horizontal, horizontal-max
+* distance 20/80 horizontal
 * horizontal ensembling for probabilistic
 	* capture SPL per series
 * method to test effectiveness across multiple probabilistic intervals.
@@ -92,7 +92,7 @@ Tensorflow GPU backend may crash on occasion.
 	* run for each new prediction intervals (on just most recent)
 	* capture containment/SPL from each round.
 * Fix categorical forecast when out of known values
-* max output constrained by max + (n * st devs)
+* test whether bottum up significantly overestimates on rollup
 
 
 # To-Do
@@ -174,7 +174,7 @@ Tensorflow GPU backend may crash on occasion.
 	* potentially a method = 'deep' to get_new_params used after n generations
 	* no unlock, but simply very low-probability deep options in get_new_params
 * Exempt or reduce slow models from unnecessary runs, particularly with different transformations
-* Numba and Cythion acceleration (metrics might be easy to start with)
+* Numba and Cython acceleration (metrics might be easy to start with)
 * GPU - xgboost, GluontTS
 
 #### New datasets:

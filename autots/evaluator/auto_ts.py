@@ -31,6 +31,7 @@ class AutoTS(object):
         aggfunc (str): if data is to be rolled up to a higher frequency (daily -> monthly) or duplicates are included. Default 'first' removes duplicates, for rollup try 'mean' or 'sum'. Beware numeric aggregations like 'mean' will *drop* categorical features as cat->num occurs later.
         prediction_interval (float): 0-1, uncertainty range for upper and lower forecasts. Adjust range, but rarely matches actual containment.
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
+        constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.
         ensemble (str): None, 'simple', 'distance'
         initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
         figures (bool): Not yet implemented
@@ -61,6 +62,7 @@ class AutoTS(object):
                  aggfunc: str = 'first',
                  prediction_interval: float = 0.9,
                  no_negatives: bool = False,
+                 constraint: float = None,
                  ensemble: str = None,
                  initial_template: str = 'General+Random',
                  figures: bool = False,
@@ -92,6 +94,7 @@ class AutoTS(object):
         self.aggfunc = aggfunc
         self.prediction_interval = prediction_interval
         self.no_negatives = no_negatives
+        self.constraint = constraint
         self.random_seed = random_seed
         self.holiday_country = holiday_country
         self.ensemble = ensemble
@@ -348,6 +351,7 @@ class AutoTS(object):
             frequency=frequency,
             prediction_interval=prediction_interval,
             no_negatives=no_negatives,
+            constraint=self.constraint,
             preord_regressor_train=preord_regressor_train,
             preord_regressor_forecast=preord_regressor_test,
             holiday_country=holiday_country,
@@ -365,6 +369,10 @@ class AutoTS(object):
         self.initial_results.per_series_mae = pd.concat(
             [self.initial_results.per_series_mae,
              template_result.per_series_mae],
+            axis=0, sort=False)
+        self.initial_results.per_series_spl = pd.concat(
+            [self.initial_results.per_series_spl,
+             template_result.per_series_spl],
             axis=0, sort=False)
         self.initial_results.per_timestamp_smape = pd.concat(
                 [self.initial_results.per_timestamp_smape,
@@ -402,6 +410,7 @@ class AutoTS(object):
                 frequency=frequency,
                 prediction_interval=prediction_interval,
                 no_negatives=no_negatives,
+                constraint=self.constraint,
                 preord_regressor_train=preord_regressor_train,
                 preord_regressor_forecast=preord_regressor_test,
                 holiday_country=holiday_country,
@@ -419,6 +428,10 @@ class AutoTS(object):
             self.initial_results.per_series_mae = pd.concat(
                 [self.initial_results.per_series_mae,
                  template_result.per_series_mae],
+                axis=0, sort=False)
+            self.initial_results.per_series_spl = pd.concat(
+                [self.initial_results.per_series_spl,
+                 template_result.per_series_spl],
                 axis=0, sort=False)
             self.initial_results.per_timestamp_smape = pd.concat(
                 [self.initial_results.per_timestamp_smape,
@@ -445,6 +458,7 @@ class AutoTS(object):
                     frequency=frequency,
                     prediction_interval=prediction_interval,
                     no_negatives=no_negatives,
+                    constraint=self.constraint,
                     ensemble=ensemble,
                     preord_regressor_train=preord_regressor_train,
                     preord_regressor_forecast=preord_regressor_test,
@@ -463,6 +477,10 @@ class AutoTS(object):
                     [self.initial_results.per_series_mae,
                      template_result.per_series_mae],
                     axis=0, sort=False)
+                self.initial_results.per_series_spl = pd.concat(
+                    [self.initial_results.per_series_spl,
+                     template_result.per_series_spl],
+                    axis=0, sort=False)
                 self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting=metric_weighting, prediction_interval=prediction_interval)
                 if result_file is not None:
                     self.initial_results.model_results.to_csv(result_file,
@@ -472,22 +490,21 @@ class AutoTS(object):
                         self.initial_results, forecast_length=forecast_length,
                         ensemble=ensemble.replace('simple', '').replace('distance', ''),
                         subset_flag=self.subset_flag)
-                    template_result = TemplateWizard(ensemble_templates,
-                                                     df_train,
-                                                     df_test,
-                                                     weights=current_weights,
-                                                     model_count=model_count,
-                                                     forecast_length=forecast_length,
-                                                     frequency=frequency,
-                                                     prediction_interval=prediction_interval,
-                                                     no_negatives=no_negatives,
-                                                     preord_regressor_train=preord_regressor_train,
-                                                     preord_regressor_forecast=preord_regressor_test,
-                                                     holiday_country=holiday_country,
-                                                     startTimeStamps=profile_df.loc['FirstDate'],
-                                                     template_cols=template_cols,
-                                                     random_seed=random_seed,
-                                                     verbose=verbose)
+                    template_result = TemplateWizard(
+                        ensemble_templates, df_train, df_test,
+                        weights=current_weights,
+                        model_count=model_count,
+                        forecast_length=forecast_length,
+                        frequency=frequency,
+                        prediction_interval=prediction_interval,
+                        no_negatives=no_negatives,
+                        constraint=self.constraint,
+                        preord_regressor_train=preord_regressor_train,
+                        preord_regressor_forecast=preord_regressor_test,
+                        holiday_country=holiday_country,
+                        startTimeStamps=profile_df.loc['FirstDate'],
+                        template_cols=template_cols,
+                        random_seed=random_seed, verbose=verbose)
                     model_count = template_result.model_count
                     # capture results from lower-level template run
                     self.initial_results.model_results = pd.concat(
@@ -602,6 +619,7 @@ class AutoTS(object):
                     frequency=frequency,
                     prediction_interval=prediction_interval,
                     no_negatives=no_negatives,
+                    constraint=self.constraint,
                     preord_regressor_forecast=preord_regressor_test,
                     holiday_country=holiday_country,
                     startTimeStamps=profile_df.loc['FirstDate'],
@@ -690,6 +708,7 @@ class AutoTS(object):
                                    frequency=self.frequency,
                                    prediction_interval=self.prediction_interval,
                                    no_negatives=self.no_negatives,
+                                   constraint=self.constraint,
                                    preord_regressor_train=self.preord_regressor_train,
                                    preord_regressor_forecast=preord_regressor,
                                    holiday_country=self.holiday_country,

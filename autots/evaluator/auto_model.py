@@ -508,6 +508,7 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
                     frequency: str = 'infer',
                     prediction_interval: float = 0.9,
                     no_negatives: bool = False,
+                    constraint: float = None,
                     preord_regressor_train = [],
                     preord_regressor_forecast = [],
                     holiday_country: str = 'US', startTimeStamps = None,
@@ -522,6 +523,7 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
         frequency (str): str representing frequency alias of time series
         prediction_interval (float): width of errors (note: rarely do the intervals accurately match the % asked for...)
         no_negatives (bool): whether to force all forecasts to be > 0
+        constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values.
         preord_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
         preord_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.            
@@ -585,9 +587,20 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
         df_forecast.lower_forecast = df_forecast.lower_forecast.clip(lower = 0)
         df_forecast.forecast = df_forecast.forecast.clip(lower = 0)
         df_forecast.upper_forecast = df_forecast.upper_forecast.clip(lower = 0)
+    if constraint is not None:
+        if verbose > 2:
+            print("Using constraint.")
+        constraint = float(constraint)
+        train_std = df_train.std(axis=0)
+        train_min = df_train.min(axis=0) - (constraint * train_std)
+        train_max = df_train.max(axis=0) + (constraint * train_std)
+        df_forecast.forecast = df_forecast.forecast.clip(lower = train_min,
+                                                         axis=1)
+        df_forecast.forecast = df_forecast.forecast.clip(upper = train_max,
+                                                         axis=1)
     transformation_runtime = transformation_runtime + (datetime.datetime.now() - transformationStartTime)
     df_forecast.transformation_runtime = transformation_runtime
-    
+
     return df_forecast
 
 
@@ -597,12 +610,18 @@ class TemplateEvalObject(object):
     def __init__(self, model_results=pd.DataFrame(),
                  per_timestamp_smape=pd.DataFrame(),
                  per_series_mae=pd.DataFrame(),
+                 per_series_spl=pd.DataFrame(),
                  model_count: int = 0
                  ):
         self.model_results = model_results
         self.model_count = model_count
         self.per_series_mae = per_series_mae
+        self.per_series_spl = per_series_spl
         self.per_timestamp_smape = per_timestamp_smape
+
+    def __repr__(self):
+        """Print."""
+        return 'Results objects, result table at self.model_results (pd.df)'
 
 
 def unpack_ensemble_models(template,
@@ -635,6 +654,7 @@ def PredictWitch(template, df_train, forecast_length: int,
                  frequency: str = 'infer',
                  prediction_interval: float = 0.9,
                  no_negatives: bool = False,
+                 constraint: float = None,
                  preord_regressor_train=[],
                  preord_regressor_forecast=[],
                  holiday_country: str = 'US', startTimeStamps=None,
@@ -658,6 +678,7 @@ def PredictWitch(template, df_train, forecast_length: int,
         frequency (str): str representing frequency alias of time series
         prediction_interval (float): width of errors (note: rarely do the intervals accurately match the % asked for...)
         no_negatives (bool): whether to force all forecasts to be > 0
+        constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values.
         preord_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
         preord_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.            
@@ -690,6 +711,7 @@ def PredictWitch(template, df_train, forecast_length: int,
                     forecast_length=forecast_length, frequency=frequency,
                     prediction_interval=prediction_interval,
                     no_negatives=no_negatives,
+                    constraint=constraint,
                     preord_regressor_train=preord_regressor_train,
                     preord_regressor_forecast=preord_regressor_forecast,
                     holiday_country=holiday_country,
@@ -723,6 +745,7 @@ def PredictWitch(template, df_train, forecast_length: int,
                 model_str, parameter_dict, frequency=frequency,
                 prediction_interval=prediction_interval,
                 no_negatives=no_negatives,
+                constraint=constraint,
                 preord_regressor_train=preord_regressor_train,
                 preord_regressor_forecast=preord_regressor_forecast,
                 holiday_country=holiday_country, random_seed=random_seed,
@@ -736,6 +759,7 @@ def TemplateWizard(template, df_train, df_test, weights,
                    forecast_length: int = 14, frequency: str = 'infer',
                    prediction_interval: float = 0.9,
                    no_negatives: bool = False,
+                   constraint: float = None,
                    preord_regressor_train=[],
                    preord_regressor_forecast=[],
                    holiday_country: str = 'US', startTimeStamps=None,
@@ -761,6 +785,7 @@ def TemplateWizard(template, df_train, df_test, weights,
         frequency (str): str representing frequency alias of time series
         prediction_interval (float): width of errors (note: rarely do the intervals accurately match the % asked for...)
         no_negatives (bool): whether to force all forecasts to be > 0
+        constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values.
         preord_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
         preord_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.
@@ -794,6 +819,7 @@ def TemplateWizard(template, df_train, df_test, weights,
                 forecast_length=forecast_length, frequency=frequency,
                 prediction_interval=prediction_interval,
                 no_negatives=no_negatives,
+                constraint=constraint,
                 preord_regressor_train = preord_regressor_train,
                 preord_regressor_forecast = preord_regressor_forecast,
                 holiday_country=holiday_country,
@@ -833,6 +859,14 @@ def TemplateWizard(template, df_train, df_test, weights,
                 cur_mae.index = [model_id]
                 template_result.per_series_mae = pd.concat(
                     [template_result.per_series_mae, cur_mae],
+                    axis=0
+                    )
+            if 'probabilistic' in ensemble:
+                cur_spl = model_error.per_series_metrics.loc['spl']
+                cur_spl = pd.DataFrame(cur_spl).transpose()
+                cur_spl.index = [model_id]
+                template_result.per_series_spl = pd.concat(
+                    [template_result.per_series_spl, cur_spl],
                     axis=0
                     )
             if 'distance' in ensemble:

@@ -25,7 +25,7 @@ model_list = [
               , 'VECM', 'DynamicFactor'
               # ,'VARMAX', 'GluonTS'
               ]
-# model_list = 'superfast'
+model_list = 'superfast'
 # model_list = ['FBProphet', 'VAR']
 # model_list = ['GLM', 'TFPRegression']  # 'TensorflowSTS'
 
@@ -42,8 +42,9 @@ metric_weighting = {'smape_weighting': 1, 'mae_weighting': 1,
 
 
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
-               prediction_interval=0.9, ensemble='none',
-               max_generations=10, num_validations=2, validation_method='even',
+               prediction_interval=0.9, ensemble='probabilistic',
+               constraint=1,
+               max_generations=2, num_validations=2, validation_method='even',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=0.1,
                max_per_model_class=None,
