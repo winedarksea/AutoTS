@@ -130,31 +130,38 @@ def HorizontalEnsemble(ensemble_params, forecasts_list, forecasts,
     return ens_result
 
 
-def EnsembleForecast(ensemble_str, ensemble_params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval):
-    """
-    Returns PredictionObject for given ensemble method
-    """
-    if ensemble_params['model_name'].lower().strip() in ['best3','best3horizontal']:
-        ens_forecast = Best3Ensemble(ensemble_params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval)
+def EnsembleForecast(ensemble_str, ensemble_params, forecasts_list,
+                     forecasts, lower_forecasts, upper_forecasts,
+                     forecasts_runtime, prediction_interval):
+    """Return PredictionObject for given ensemble method."""
+    s3list = ['best3', 'best3horizontal']
+    if ensemble_params['model_name'].lower().strip() in s3list:
+        ens_forecast = Best3Ensemble(
+            ensemble_params, forecasts_list, forecasts, lower_forecasts,
+            upper_forecasts, forecasts_runtime, prediction_interval)
         return ens_forecast
 
     if ensemble_params['model_name'].lower().strip() == 'dist':
-        ens_forecast = DistEnsemble(ensemble_params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval)
+        ens_forecast = DistEnsemble(
+            ensemble_params, forecasts_list, forecasts, lower_forecasts,
+            upper_forecasts, forecasts_runtime, prediction_interval)
         return ens_forecast
-    
+
     if ensemble_params['model_name'].lower().strip() == 'horizontal':
-        ens_forecast = HorizontalEnsemble(ensemble_params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval)
+        ens_forecast = HorizontalEnsemble(
+            ensemble_params, forecasts_list, forecasts, lower_forecasts,
+            upper_forecasts, forecasts_runtime, prediction_interval)
         return ens_forecast
 
 
 def EnsembleTemplateGenerator(initial_results,
                               forecast_length: int = 14,
-                              ensemble: str = "simple",
-                              subset_flag: bool = True
+                              ensemble: str = "simple"
                               ):
+    """Generate ensemble templates given a table of results."""
     ensemble_templates = pd.DataFrame()
     if 'simple' in ensemble:
-        ens_temp = initial_results.model_results
+        ens_temp = initial_results.model_results.drop_duplicates(subset='ID')
         ens_temp = ens_temp[ens_temp['Ensemble'] == 0]
         # best 3, all can be of same model type
         best3nonunique = ens_temp.nsmallest(3, columns=['Score'])
@@ -177,10 +184,10 @@ def EnsembleTemplateGenerator(initial_results,
             ensemble_templates = pd.concat([ensemble_templates,
                                             best3nu_params],
                                            axis=0)
-        # best 3, by SMAPE, RMSE, MAE
+        # best 3, by SMAPE, RMSE, SPL
         bestsmape = ens_temp.nsmallest(1, columns=['smape_weighted'])
         bestrmse = ens_temp.nsmallest(2, columns=['rmse_weighted'])
-        bestmae = ens_temp.nsmallest(3, columns=['mae_weighted'])
+        bestmae = ens_temp.nsmallest(3, columns=['spl_weighted'])
         best3metric = pd.concat([bestsmape, bestrmse, bestmae], axis=0)
         best3metric = best3metric.drop_duplicates().head(3)
         if best3metric.shape[0] == 3:
@@ -203,8 +210,11 @@ def EnsembleTemplateGenerator(initial_results,
                                             best3m_params],
                                            axis=0)
         # best 3, all must be of different model types
-        ens_temp = ens_temp.sort_values('Score', ascending=True, na_position='last').groupby('Model').head(1).reset_index(drop=True)
+        ens_temp = ens_temp.sort_values(
+            'Score', ascending=True, na_position='last'
+            ).groupby('Model').head(1).reset_index(drop=True)
         best3unique = ens_temp.nsmallest(3, columns=['Score'])
+        # only run if there are more than 3 model types available...
         if best3unique.shape[0] == 3:
             ensemble_models = {}
             for index, row in best3unique.iterrows():
@@ -287,9 +297,12 @@ def EnsembleTemplateGenerator(initial_results,
         ensemble_templates = pd.concat([ensemble_templates,
                                         best3u_params],
                                        axis=0, ignore_index=True)
-    if 'horizontal' in ensemble:
+    if ('horizontal' in ensemble) or ('probabilistic' in ensemble):
         # per_series = model.initial_results.per_series_mae.copy()
-        per_series = initial_results.per_series_mae.copy()
+        if 'horizontal' in ensemble:
+            per_series = initial_results.per_series_mae.copy()
+        elif 'probabilistic' in ensemble:
+            per_series = initial_results.per_series_spl.copy()
         mods = pd.Series()
         per_series_des = per_series.copy()
         n_models = 3
@@ -308,7 +321,7 @@ def EnsembleTemplateGenerator(initial_results,
             cur_mods = cur_mods.sort_values(ascending=False).head(1)
             mods = mods.combine(cur_mods, max, fill_value=0)
             rm_cols = tr_df[tr_df.isin(mods.index.tolist())]
-            rm_cols = rm_cols.dropna(how='all',axis=1).columns
+            rm_cols = rm_cols.dropna(how='all', axis=1).columns
             per_series_des = per_series.copy().drop(mods.index, axis=0)
             per_series_des = per_series_des.drop(rm_cols, axis=1)
             if per_series_des.shape[1] == 0:
@@ -334,7 +347,43 @@ def EnsembleTemplateGenerator(initial_results,
         ensemble_templates = pd.concat([ensemble_templates,
                                         best3_params],
                                        axis=0, ignore_index=True)
-        if not subset_flag:
+    return ensemble_templates
+        ##################################################################
+def HorizontalTemplateGenerator(per_series, model_results,
+                              forecast_length: int = 14,
+                              ensemble: str = "horizontal",
+                              subset_flag: bool = True
+                              ):
+    """Generate horizontal ensemble templates given a table of results."""
+    ensemble_templates = pd.DataFrame()
+    if (('horizontal' in ensemble) or ('probabilistic' in ensemble)) and not subset_flag:
+        if ('horizontal-max' in ensemble) or ('probabilistic-max' in ensemble):
+            mods_per_series = per_series.idxmin()
+            mods = mods_per_series.unique()
+            ensemble_models = {}
+            best5 = model_results[model_results['ID'].isin(mods.tolist())].drop_duplicates(subset=['Model', 'ModelParameters', 'TransformationParameters'])
+            for index, row in best5.iterrows():
+                temp_dict = {
+                    'Model': row['Model'],
+                    'ModelParameters': row['ModelParameters'],
+                    'TransformationParameters': row['TransformationParameters']
+                    }
+                ensemble_models[row['ID']] = temp_dict
+            best5_params = {'Model': 'Ensemble',
+                            'ModelParameters':
+                                json.dumps({'model_name': 'Horizontal',
+                                            'model_count': mods.shape[0],
+                                            'models': ensemble_models,
+                                            'series': mods_per_series.to_dict()
+                                            }),
+                            'TransformationParameters': '{}',
+                            'Ensemble': 1}
+            best5_params = pd.DataFrame(best5_params, index=[0])
+            ensemble_templates = pd.concat([ensemble_templates,
+                                            best5_params],
+                                           axis=0, ignore_index=True)
+        else:
+            """
             mods = pd.Series()
             per_series_des = per_series.copy()
             n_models = 5
@@ -361,7 +410,7 @@ def EnsembleTemplateGenerator(initial_results,
 
             mods_per_series = per_series.loc[mods.index].idxmin()
             ensemble_models = {}
-            best5 = initial_results.model_results[initial_results.model_results['ID'].isin(mods.index.tolist())].drop_duplicates(subset=['Model', 'ModelParameters', 'TransformationParameters'])
+            best5 = model_results[model_results['ID'].isin(mods_per_series.unique().tolist())].drop_duplicates(subset=['Model', 'ModelParameters', 'TransformationParameters'])
             for index, row in best5.iterrows():
                 temp_dict = {
                     'Model': row['Model'],
@@ -370,18 +419,19 @@ def EnsembleTemplateGenerator(initial_results,
                     }
                 ensemble_models[row['ID']] = temp_dict
             best5_params = {'Model': 'Ensemble',
-                             'ModelParameters':
-                                 json.dumps({'model_name': 'Horizontal',
-                                             'models': ensemble_models,
-                                             'series': mods_per_series.to_dict()
-                                             }),
-                             'TransformationParameters': '{}',
-                             'Ensemble': 1}
+                            'ModelParameters':
+                                json.dumps({'model_name': 'Horizontal',
+                                            'model_count': mods_per_series.unique().shape[0],
+                                            'models': ensemble_models,
+                                            'series': mods_per_series.to_dict()
+                                            }),
+                            'TransformationParameters': '{}',
+                            'Ensemble': 1}
             best5_params = pd.DataFrame(best5_params, index=[0])
             ensemble_templates = pd.concat([ensemble_templates,
                                             best5_params],
                                            axis=0, ignore_index=True)
-            
+            """
             mods = pd.Series()
             per_series_des = per_series.copy()
             n_models = 15
@@ -408,32 +458,7 @@ def EnsembleTemplateGenerator(initial_results,
 
             mods_per_series = per_series.loc[mods.index].idxmin()
             ensemble_models = {}
-            best5 = initial_results.model_results[initial_results.model_results['ID'].isin(mods.index.tolist())].drop_duplicates(subset=['Model', 'ModelParameters', 'TransformationParameters'])
-            for index, row in best5.iterrows():
-                temp_dict = {
-                    'Model': row['Model'],
-                    'ModelParameters': row['ModelParameters'],
-                    'TransformationParameters': row['TransformationParameters']
-                    }
-                ensemble_models[row['ID']] = temp_dict
-            best5_params = {'Model': 'Ensemble',
-                             'ModelParameters':
-                                 json.dumps({'model_name': 'Horizontal',
-                                             'models': ensemble_models,
-                                             'series': mods_per_series.to_dict()
-                                             }),
-                             'TransformationParameters': '{}',
-                             'Ensemble': 1}
-            best5_params = pd.DataFrame(best5_params, index=[0])
-            ensemble_templates = pd.concat([ensemble_templates,
-                                            best5_params],
-                                           axis=0, ignore_index=True)
-            ###########################################
-        if 'horizontal-max' in ensemble:
-            mods_per_series = per_series.idxmin()
-            mods = mods_per_series.unique()
-            ensemble_models = {}
-            best5 = initial_results.model_results[initial_results.model_results['ID'].isin(mods.tolist())].drop_duplicates(subset=['Model', 'ModelParameters', 'TransformationParameters'])
+            best5 = model_results[model_results['ID'].isin(mods_per_series.unique().tolist())].drop_duplicates(subset=['Model', 'ModelParameters', 'TransformationParameters'])
             for index, row in best5.iterrows():
                 temp_dict = {
                     'Model': row['Model'],
@@ -444,6 +469,7 @@ def EnsembleTemplateGenerator(initial_results,
             best5_params = {'Model': 'Ensemble',
                             'ModelParameters':
                                 json.dumps({'model_name': 'Horizontal',
+                                            'model_count': mods_per_series.unique().shape[0],
                                             'models': ensemble_models,
                                             'series': mods_per_series.to_dict()
                                             }),
@@ -452,5 +478,5 @@ def EnsembleTemplateGenerator(initial_results,
             best5_params = pd.DataFrame(best5_params, index=[0])
             ensemble_templates = pd.concat([ensemble_templates,
                                             best5_params],
-                                           axis=0, ignore_index=True)
+                                           axis=0, ignore_index=True)            
     return ensemble_templates

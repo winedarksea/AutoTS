@@ -14,6 +14,7 @@ Latest:
 	Fixed a bug where 'One or more series is 90% or more NaN' was printing when it shouldn't
 	Fixed (or more accurately, reduced) a bug where multiple initial runs were counting as validation runs.
 	Fixed (partially!) bug where validation subsetting was behaving oddly
+	Fixed bug where regressor wasn't being passed to validation.
 	Made serious efforts to make the code prettier with pylint, still lots to do, however...
 	Improved genetic recombination so optimal models should be reached more quickly.
 	Improved Point to Probabilistic methods:
@@ -83,6 +84,13 @@ KerasRNN errors due to parameters not working on all dataset
 Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
+* simple, dist, (best3)horizontal
+* mae, rmse1/rmse2, spl
+	* max, top n
+	* test on first segment before accepting
+* Best 3 horizontal to before validation
+* Horizontal but not max in pre stage
+* handle subsetting with horizontal
 * distance 20/80 horizontal
 	* make model count of horizontal more visible
 * horizontal ensembling for probabilistic
@@ -97,6 +105,7 @@ Tensorflow GPU backend may crash on occasion.
 	* can do both before and after validations
 	* could do no validations and get ensemble, compare with run with more validations
 * Fix categorical forecast when out of known values
+	* .clip() on max and min for those with categorical
 * test whether bottum up significantly overestimates on rollup
 
 
