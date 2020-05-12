@@ -83,14 +83,19 @@ KerasRNN errors due to parameters not working on all dataset
 Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
-* Fix Regressor split for prediction in M5
 * distance 20/80 horizontal
+	* make model count of horizontal more visible
 * horizontal ensembling for probabilistic
 	* capture SPL per series
 * method to test effectiveness across multiple probabilistic intervals.
 	* generate base template (based mainly on best point forecast, validated)
 	* run for each new prediction intervals (on just most recent)
 	* capture containment/SPL from each round.
+* overfitting of ensembles
+	* after validation then run it on validation again
+	* constraint effecting ensembling
+	* can do both before and after validations
+	* could do no validations and get ensemble, compare with run with more validations
 * Fix categorical forecast when out of known values
 * test whether bottum up significantly overestimates on rollup
 

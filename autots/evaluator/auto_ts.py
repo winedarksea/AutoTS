@@ -374,6 +374,15 @@ class AutoTS(object):
             [self.initial_results.per_series_spl,
              template_result.per_series_spl],
             axis=0, sort=False)
+        if 'hdist' in self.ensemble:
+            self.initial_results.per_series_rmse1 = pd.concat(
+                [self.initial_results.per_series_rmse1,
+                 template_result.per_series_rmse1],
+                axis=0, sort=False)
+            self.initial_results.per_series_rmse2 = pd.concat(
+                [self.initial_results.per_series_rmse2,
+                 template_result.per_series_rmse2],
+                axis=0, sort=False)
         self.initial_results.per_timestamp_smape = pd.concat(
                 [self.initial_results.per_timestamp_smape,
                  template_result.per_timestamp_smape],
@@ -433,6 +442,15 @@ class AutoTS(object):
                 [self.initial_results.per_series_spl,
                  template_result.per_series_spl],
                 axis=0, sort=False)
+            if 'hdist' in self.ensemble:
+                self.initial_results.per_series_rmse1 = pd.concat(
+                    [self.initial_results.per_series_rmse1,
+                     template_result.per_series_rmse1],
+                    axis=0, sort=False)
+                self.initial_results.per_series_rmse2 = pd.concat(
+                    [self.initial_results.per_series_rmse2,
+                     template_result.per_series_rmse2],
+                    axis=0, sort=False)
             self.initial_results.per_timestamp_smape = pd.concat(
                 [self.initial_results.per_timestamp_smape,
                  template_result.per_timestamp_smape],
@@ -481,6 +499,15 @@ class AutoTS(object):
                     [self.initial_results.per_series_spl,
                      template_result.per_series_spl],
                     axis=0, sort=False)
+                if 'hdist' in self.ensemble:
+                    self.initial_results.per_series_rmse1 = pd.concat(
+                        [self.initial_results.per_series_rmse1,
+                         template_result.per_series_rmse1],
+                        axis=0, sort=False)
+                    self.initial_results.per_series_rmse2 = pd.concat(
+                        [self.initial_results.per_series_rmse2,
+                         template_result.per_series_rmse2],
+                        axis=0, sort=False)
                 self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting=metric_weighting, prediction_interval=prediction_interval)
                 if result_file is not None:
                     self.initial_results.model_results.to_csv(result_file,

@@ -611,12 +611,16 @@ class TemplateEvalObject(object):
                  per_timestamp_smape=pd.DataFrame(),
                  per_series_mae=pd.DataFrame(),
                  per_series_spl=pd.DataFrame(),
+                 per_series_rmse1=pd.DataFrame(),
+                 per_series_rmse2=pd.DataFrame(),
                  model_count: int = 0
                  ):
         self.model_results = model_results
         self.model_count = model_count
         self.per_series_mae = per_series_mae
         self.per_series_spl = per_series_spl
+        self.per_series_rmse1 = per_series_rmse1
+        self.per_series_rmse2 = per_series_rmse2
         self.per_timestamp_smape = per_timestamp_smape
 
     def __repr__(self):
@@ -828,10 +832,15 @@ def TemplateWizard(template, df_train, df_test, weights,
                 template_cols = template_cols)
 
             per_ts = True if 'distance' in ensemble else False
+            if 'hdist' in ensemble:
+                dist_n = int(np.ceil(0.25 * forecast_length))
+            else:
+                dist_n = None
             model_error = PredictionEval(df_forecast, df_test,
                                          series_weights=weights,
                                          df_train=df_train,
-                                         per_timestamp_errors=per_ts)
+                                         per_timestamp_errors=per_ts,
+                                         dist_n=dist_n)
             model_id = create_model_id(df_forecast.model_name,
                                        df_forecast.model_parameters,
                                        df_forecast.transformation_parameters)
@@ -867,16 +876,27 @@ def TemplateWizard(template, df_train, df_test, weights,
                 cur_spl.index = [model_id]
                 template_result.per_series_spl = pd.concat(
                     [template_result.per_series_spl, cur_spl],
-                    axis=0
-                    )
+                    axis=0)
             if 'distance' in ensemble:
                 cur_smape = model_error.per_timestamp.loc['weighted_smape']
                 cur_smape = pd.DataFrame(cur_smape).transpose()
                 cur_smape.index = [model_id]
                 template_result.per_timestamp_smape = pd.concat(
                     [template_result.per_timestamp_smape, cur_smape],
-                    axis=0
-                    )
+                    axis=0)
+            if 'hdist' in ensemble:
+                cur_rmse1 = model_error.per_series_metrics.loc['rmse1']
+                cur_rmse2 = model_error.per_series_metrics.loc['rmse2']
+                cur_rmse1 = pd.DataFrame(cur_rmse1).transpose()
+                cur_rmse2 = pd.DataFrame(cur_rmse2).transpose()
+                cur_rmse1.index = [model_id]
+                cur_rmse2.index = [model_id]
+                template_result.per_series_rmse1 = pd.concat(
+                    [template_result.per_series_rmse1, cur_rmse1],
+                    axis=0)
+                template_result.per_series_rmse2 = pd.concat(
+                    [template_result.per_series_rmse2, cur_rmse2],
+                    axis=0)
 
         except Exception as e:
             if verbose >= 0:
