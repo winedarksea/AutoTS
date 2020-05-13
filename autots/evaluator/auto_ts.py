@@ -6,7 +6,6 @@ import json
 
 from autots.tools.shaping import long_to_wide
 import random
-from autots.tools.shaping import values_to_numeric
 from autots.tools.profile import data_profile
 from autots.tools.shaping import subset_series
 from autots.tools.shaping import simple_train_test_split
@@ -18,7 +17,7 @@ from autots.evaluator.auto_model import unpack_ensemble_models
 from autots.evaluator.auto_model import generate_score
 from autots.models.ensemble import EnsembleTemplateGenerator, HorizontalTemplateGenerator
 from autots.evaluator.auto_model import PredictWitch
-from autots.tools.shaping import categorical_inverse
+from autots.tools.shaping import NumericTransformer
 from autots.evaluator.auto_model import validation_aggregation
 
 
@@ -46,7 +45,10 @@ class AutoTS(object):
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
         max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
-        validation_method (str): 'even' or 'backwards' where backwards is better for shorter training sets
+        validation_method (str): 'even', 'backwards', or 'seasonal n' where n is an integer of seasonal
+            'backwards' is better for recency and for shorter training sets
+            'even splits' the data into equally-sized slices best for more consistent data
+            'seasonal n' for example 'seasonal 364' would test all data on each previous year of the forecast_length that would immediately follow the training data.
         min_allowed_train_percent (float): useful in (unrecommended) cases where forecast_length > training length. Percent of forecast length to allow as min training, else raises error.
         max_generations (int): number of genetic algorithms generations to run. More runs = better chance of better accuracy.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give slightly more output.
@@ -104,10 +106,10 @@ class AutoTS(object):
         self.drop_most_recent = drop_most_recent
         self.drop_data_older_than_periods = drop_data_older_than_periods
         self.model_list = model_list
-        self.num_validations = num_validations
+        self.num_validations = abs(int(num_validations))
         self.models_to_validate = models_to_validate
         self.max_per_model_class = max_per_model_class
-        self.validation_method = validation_method
+        self.validation_method = str(validation_method).lower()
         self.min_allowed_train_percent = min_allowed_train_percent
         self.max_generations = max_generations
         self.verbose = int(verbose)
@@ -117,6 +119,10 @@ class AutoTS(object):
         if self.forecast_length == 1:
             if metric_weighting['contour_weighting'] > 0:
                 print("Contour metric does not work with forecast_length == 1")
+
+        if 'seasonal' in self.validation_method:
+            val_list = [x for x in str(self.validation_method) if x.isdigit()]
+            self.seasonal_val_periods = int(''.join(val_list))
 
         # convert shortcuts of model lists to actual lists of models
         if model_list == 'default':
@@ -143,7 +149,7 @@ class AutoTS(object):
                                'VARMAX', 'DynamicFactor', 'VAR']
         if model_list == 'multivariate':
             self.model_list = ['VECM', 'DynamicFactor', 'GluonTS', 'VARMAX',
-                               'RollingRegression', 'WindowRegression','VAR']
+                               'RollingRegression', 'WindowRegression', 'VAR']
         if model_list == 'all':
             self.model_list = ['ZeroesNaive', 'LastValueNaive',
                                'AverageValueNaive', 'GLS', 'GLM', 'ETS',
@@ -284,9 +290,14 @@ class AutoTS(object):
             weights = {key: (abs(float(weights[key])) if str(weights[key]).isdigit() else 1) for key in weights}
 
         # handle categorical (not numeric) data if present
-        categorical_transformer = values_to_numeric(df_wide)
-        self.categorical_transformer = categorical_transformer
-        df_wide_numeric = categorical_transformer.dataframe
+        # categorical_transformer = values_to_numeric(df_wide)
+        # self.categorical_transformer = categorical_transformer
+        # df_wide_numeric = categorical_transformer.dataframe
+
+        # handle categorical (not numeric) data if present
+        self.categorical_transformer = NumericTransformer(
+            verbose=self.verbose).fit(df_wide)
+        df_wide_numeric = self.categorical_transformer.transform(df_wide)
         self.df_wide_numeric = df_wide_numeric
 
         # capture some misc information
@@ -517,7 +528,7 @@ class AutoTS(object):
                 print(f"Ensembling Error: {e}")
 
         # drop any duplicates in results
-        self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(subset = (['ID'] + self.template_cols))
+        self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(subset=(['ID'] + self.template_cols))
 
         # validations if float
         if (self.models_to_validate < 1) and (self.models_to_validate > 0):
@@ -530,8 +541,11 @@ class AutoTS(object):
             self.max_per_model_class = int(np.ceil(self.max_per_model_class))
 
         # check how many validations are possible given the length of the data.
-        num_validations = abs(int(num_validations))
-        max_possible = len(df_wide_numeric.index)/forecast_length
+        if 'seasonal' in self.validation_method:
+            temp = (df_wide_numeric.shape[0] + self.forecast_length)
+            max_possible = temp/self.seasonal_val_periods
+        else:
+            max_possible = (df_wide_numeric.shape[0])/forecast_length
         if (max_possible - np.floor(max_possible)) > self.min_allowed_train_percent:
             max_possible = int(max_possible)
         else:
@@ -542,15 +556,15 @@ class AutoTS(object):
                 num_validations = 0
             print("Too many training validations for length of data provided, decreasing num_validations to {}".format(num_validations))
         self.num_validations = num_validations
-        
+
         # construct validation template
         validation_template = self.initial_results.model_results[self.initial_results.model_results['Exceptions'].isna()]
         validation_template = validation_template.drop_duplicates(subset=template_cols, keep='first')
         validation_template = validation_template.sort_values(
             by="Score", ascending=True, na_position='last')
         if str(self.max_per_model_class).isdigit():
-            validation_template = validation_template.sort_values('Score', ascending = True, na_position = 'last').groupby('Model').head(self.max_per_model_class).reset_index(drop=True)
-        validation_template = validation_template.sort_values('Score', ascending = True, na_position = 'last').head(self.models_to_validate)
+            validation_template = validation_template.sort_values('Score', ascending=True, na_position='last').groupby('Model').head(self.max_per_model_class).reset_index(drop=True)
+        validation_template = validation_template.sort_values('Score', ascending=True, na_position='last').head(self.models_to_validate)
         validation_template = validation_template[self.template_cols]
         if not ensemble:
             validation_template = validation_template[validation_template['Ensemble'] == 0]
@@ -569,15 +583,21 @@ class AutoTS(object):
                 if verbose > 0:
                     print("Validation Round: {}".format(str(y + 1)))
                 # slice the validation data into current slice
-                if self.validation_method == 'even':
+                val_list = ['backwards', 'back', 'backward']
+                if self.validation_method in val_list:
+                    # gradually remove the end
+                    current_slice = df_wide_numeric.head(df_wide_numeric.shape[0] - (y+1) * forecast_length)
+                elif self.validation_method == 'even':
                     # /num_validations biases it towards the last segment
                     validation_size = (len(df_wide_numeric.index) - forecast_length)
                     validation_size = validation_size/(num_validations + 1)
                     validation_size = int(np.floor(validation_size))
                     current_slice = df_wide_numeric.head(validation_size * (y+1) + forecast_length)
-                elif str(self.validation_method).lower() in ['backwards', 'back', 'backward']:
-                    # gradually remove the end
-                    current_slice = df_wide_numeric.head(len(df_wide_numeric.index) - (y+1) * forecast_length)
+                elif 'seasonal' in self.validation_method:
+                    val_per = ((y+1) * self.seasonal_val_periods)
+                    val_per = (val_per - forecast_length)
+                    val_per = df_wide_numeric.shape[0] - val_per
+                    current_slice = df_wide_numeric.head(val_per)
                 else:
                     raise ValueError("Validation Method not recognized try 'even', 'backwards'")
 
@@ -839,25 +859,29 @@ or otherwise increase models available."""
             preord_regressor = pd.DataFrame(preord_regressor)
             self.preord_regressor_train = self.preord_regressor_train.reindex(index=self.df_wide_numeric.index)
 
-        df_forecast = PredictWitch(self.best_model,
-                                   df_train=self.df_wide_numeric,
-                                   forecast_length=forecast_length,
-                                   frequency=self.frequency,
-                                   prediction_interval=self.prediction_interval,
-                                   no_negatives=self.no_negatives,
-                                   constraint=self.constraint,
-                                   preord_regressor_train=self.preord_regressor_train,
-                                   preord_regressor_forecast=preord_regressor,
-                                   holiday_country=self.holiday_country,
-                                   startTimeStamps=self.startTimeStamps,
-                                   random_seed=self.random_seed,
-                                   verbose=self.verbose,
-                                   template_cols=self.template_cols)
+        df_forecast = PredictWitch(
+            self.best_model,
+            df_train=self.df_wide_numeric,
+            forecast_length=forecast_length,
+            frequency=self.frequency,
+            prediction_interval=self.prediction_interval,
+            no_negatives=self.no_negatives,
+            constraint=self.constraint,
+            preord_regressor_train=self.preord_regressor_train,
+            preord_regressor_forecast=preord_regressor,
+            holiday_country=self.holiday_country,
+            startTimeStamps=self.startTimeStamps,
+            random_seed=self.random_seed, verbose=self.verbose,
+            template_cols=self.template_cols)
 
-        df_forecast.forecast = categorical_inverse(self.categorical_transformer,
-                                                   df_forecast.forecast)
-        # df_forecast.lower_forecast = categorical_inverse(self.categorical_transformer, df_forecast.lower_forecast)
-        # df_forecast.upper_forecast = categorical_inverse(self.categorical_transformer, df_forecast.upper_forecast)
+        trans = self.categorical_transformer
+        df_forecast.forecast = trans.inverse_transform(
+            df_forecast.forecast)
+        df_forecast.lower_forecast = trans.inverse_transform(
+            df_forecast.lower_forecast)
+        df_forecast.upper_forecast = trans.inverse_transform(
+            df_forecast.upper_forecast)
+        # df_forecast.forecast = categorical_inverse(self.categorical_transformer, df_forecast.forecast)
 
         if just_point_forecast:
             return df_forecast.forecast

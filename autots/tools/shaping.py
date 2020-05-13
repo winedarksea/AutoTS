@@ -112,76 +112,80 @@ def long_to_wide(df, date_col: str = 'datetime', value_col: str = 'value', id_co
     
     return pd.DataFrame(df_wide)
 
+
 class NumericTransformer(object):
-    """
-    Results of values_to_numeric
-        categorical_features - list of columns (series_ids) which were encoded
-    """
-    def __init__(self, dataframe = None, categorical_features = [], categorical_transformed = False, encoder = None):
-        self.dataframe = dataframe
-        self.categorical_features = categorical_features
-        self.categorical_transformed = categorical_transformed
-        self.encoder = encoder
+    """Test numeric conversion."""
 
-def values_to_numeric(df, na_strings: list = ['', ' ', 'NULL', 'NA','NaN','na','nan'],
-                      categorical_impute_strategy: str = 'constant'):
-    """Uses sklearn to convert all non-numeric columns to numerics using Sklearn
-    
-    Args:
-        na_strings (list): - a list of values to read in as np.nan
-        categorical_impute_strategy (str): to be passed to Sklearn SimpleImputer
-            "most_frequent" or "constant" are allowed
-    """   
-    transformer_result = NumericTransformer("Categorical Transformer")
-    df.replace(na_strings, np.nan, inplace=True)
-    
-    for col in df.columns:
-        df[col] = df[col].astype(float, errors = 'ignore')
-    
-    df = df.astype(float, errors = 'ignore')
-    numeric_features = list(set(df.select_dtypes(include=[np.number]).columns.tolist()))
-    categorical_features = list(set(list(df)) - set(numeric_features))
-    
-    if len(categorical_features) > 0:
-        from sklearn.preprocessing import OrdinalEncoder
-        from sklearn.impute import SimpleImputer
-        df_enc = SimpleImputer(strategy = categorical_impute_strategy).fit_transform(df[categorical_features])
-        enc = OrdinalEncoder()
-        enc.fit(df_enc)
-        df_enc = enc.transform(df_enc)
-        df = pd.concat([
-            pd.DataFrame(df[numeric_features], columns = numeric_features),
-            pd.DataFrame(df_enc, columns = categorical_features, index = df.index)
-               ], axis = 1)
-        print("Categorical features converted to numeric")
-        transformer_result.categorical_transformed = True
-        transformer_result.encoder = enc
-    
-    transformer_result.categorical_features = categorical_features
-    transformer_result.dataframe = df
-    
-    return transformer_result
+    def __init__(self,
+                 na_strings: list = ['', ' ', 'NULL', 'NA', 'NaN', 'na', 'nan'],
+                 categorical_impute_strategy: str = 'constant',
+                 verbose: int = 0):
+        self.na_strings = na_strings
+        self.categorical_impute_strategy = categorical_impute_strategy
+        self.verbose = verbose
+        self.categorical_flag = False
 
-def categorical_inverse(categorical_transformer_object, df):
-    """Wrapper for Inverse Categorical Transformations
-    Args:
-        categorical_transformer_object (object): a NumericTransformer object from values_to_numeric
-        df (pandas.DataFrame): Datetime Indexed
-    """
-    categorical_transformer = categorical_transformer_object
-    cat_features = categorical_transformer.categorical_features
-    if len(cat_features) > 0:
-        col_namen = df.columns
-        categorical = categorical_transformer.encoder.inverse_transform(df[cat_features].astype(int).values) # .reshape(-1, 1)
-        categorical = pd.DataFrame(categorical)
-        categorical.columns = cat_features
-        categorical.index = df.index
-        df = pd.concat([df.drop(cat_features, axis=1), categorical], axis=1)
-        df = df[col_namen]
+    def fit(self, df):
+        """Fit categorical to numeric."""
+        # replace some common nan datatypes from strings to np.nan
+        df.replace(self.na_strings, np.nan, inplace=True)
+
+        # convert series to numeric which can be readily converted.
+        df = df.apply(pd.to_numeric, errors='ignore')
+
+        # record which columns are which dtypes
+        self.column_order = df.columns
+        # df_datatypes = df.dtypes
+        self.numeric_features = (df.select_dtypes(include=[np.number]).columns.tolist())
+        self.categorical_features = list(set(df.columns.tolist()) - set(self.numeric_features))
+
+        if len(self.categorical_features) > 0:
+            self.categorical_flag = True
+        if self.categorical_flag:
+            from sklearn.preprocessing import OrdinalEncoder
+            from sklearn.impute import SimpleImputer
+            imp_enc = SimpleImputer(strategy=self.categorical_impute_strategy)
+            df_enc = imp_enc.fit_transform(df[self.categorical_features])
+            self.cat_transformer = OrdinalEncoder()
+            self.cat_transformer.fit(df_enc)
+
+            df_enc = self.cat_transformer.transform(df_enc)
+            self.cat_max = df_enc.max(axis=0)
+            self.cat_min = df_enc.min(axis=0)
+            if self.verbose >= 0:
+                print("Categorical features converted to numeric")
+        return self
+
+    def transform(self, df):
+        """Convert categorical dataset to numeric."""
+        df.replace(self.na_strings, np.nan, inplace=True)
+        df = df.apply(pd.to_numeric, errors='ignore')
+        if self.categorical_flag:
+            from sklearn.impute import SimpleImputer
+            imp_enc = SimpleImputer(strategy=self.categorical_impute_strategy)
+            df_enc = imp_enc.fit_transform(df[self.categorical_features])
+            df_enc = self.cat_transformer.transform(df_enc)
+            df = pd.concat([
+                pd.DataFrame(df[self.numeric_features],
+                             columns=self.numeric_features),
+                pd.DataFrame(df_enc, columns=self.categorical_features,
+                             index=df.index)
+                   ], axis=1)[self.column_order]
+        return df.astype(float)
+
+    def inverse_transform(self, df):
+        """Convert numeric back to categorical."""
+        if self.categorical_flag:
+            df_enc = df[self.categorical_features].clip(
+                upper=self.cat_max, lower=self.cat_min, axis=1)
+            df_enc = self.cat_transformer.inverse_transform(df_enc)
+            df = pd.concat([
+                pd.DataFrame(df[self.numeric_features],
+                             columns=self.numeric_features),
+                pd.DataFrame(df_enc, columns=self.categorical_features,
+                             index=df.index)
+                   ], axis=1)[self.column_order]
         return df
-    else:
-        return df
-
 
 def subset_series(df, weights, n: int = 1000,
                   random_state: int = 2020):

@@ -16,15 +16,19 @@ Latest:
 	Fixed (partially!) bug where validation subsetting was behaving oddly
 	Fixed bug where regressor wasn't being passed to validation.
 	Made serious efforts to make the code prettier with pylint, still lots to do, however...
-	Improved genetic recombination so optimal models should be reached more quickly.
+	Improved genetic recombination so optimal models should be reached more quickly
 	Improved Point to Probabilistic methods:
 		'historic_quantile' more stable quantile-based error ranges
 		'inferred normal' Bayesian-inspired method
 	Metrics:
 		Added Scaled Pinball Loss (SPL)
 		Removed upper/lower MAE
-	Improved ensembling with new parameter options.
-		Recursive ensembling now enabled
+	Improved ensembling with new parameter options
+		Recursive ensembling (ensemble of ensembles) now enabled
+	Validation:
+		Added 'seasonal' validation method
+	Categorical transformer improved, now tolerant to leaving bounds.
+
 	Added a number of new Transformer options
 		Multiple new Sklearn-sourced transformers (QuantileTransformer, etc)
 		SinTrend
@@ -36,21 +40,21 @@ Latest:
 		IntermittentOccurrence
 		SeasonalDetrend
 	Entirely changed the general transformer to add three levels of transformation.
+	Allowed context_slicer to receive direct integer inputs
+
 	GLM
 		Error where it apparently won't tolerate any zeroes was compensated for.
 		Speed improvement.
 	RollingRegression
 		Added SVM model
 		Added option to tune some model parameters to sklearn
-		Fixed Holidays to work
 		Added new feature construction parameters
 		Added RNNs with Keras
 	GluonTS:
 		fixed the use of context_length, added more options to that param
-
 	Dynamic Factor added uncertainty from Statsmodels Statespace
 	VARMAX added uncertainty from Statsmodels Statespace
-		
+
 	New models:
 		SeasonalNaive model
 		VAR from Statsmodels (faster than VARMAX statespace)
@@ -84,15 +88,11 @@ KerasRNN errors due to parameters not working on all dataset
 Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
-* distance 20/80 horizontal
 * method to test effectiveness across multiple probabilistic intervals.
 	* generate base template (based mainly on best point forecast, validated)
 	* run for each new prediction intervals (on just most recent)
 	* capture containment/SPL from each round.
 * test unpacking of horizontal ensembles at init
-* seasonal validation
-* Fix categorical forecast when out of known values
-	* .clip() on max and min for those with categorical
 * test whether bottum up significantly overestimates on rollup
 
 
@@ -201,6 +201,7 @@ Tensorflow GPU backend may crash on occasion.
 	TPOT if it adds multioutput functionality
 	https://towardsdatascience.com/pyspark-forecasting-with-pandas-udf-and-fb-prophet-e9d70f86d802
 	Compressive Transformer
+	Reinforcement Learning
 
 #### New Transformations:
 	lag and beta to DifferencedTransformer to make it more of an AR process
