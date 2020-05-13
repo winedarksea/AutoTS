@@ -65,10 +65,8 @@ Latest:
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
-lower/upper MAE appearing NaN, and then getting a better score
 VECM does not recognize exog to predict
 ARIMA with User or Holiday ValueError('Can only compare identically-labeled DataFrame objects',)
-kbins not working when it assigns fewer bins than n_bins asked for (use the property transformer.n_bins_ ?)
 Drop Most Recent does not play well logically with added external (preord) regressors.
 FastICA 'array must not contain infs or NaNs'
 How do fillna methods handle datasets that have entirely NaN series?
@@ -76,9 +74,6 @@ Subsetting for validation samples seems to be funky.
 VAR ValueError('Length of passed values is 4, index implies 9',)
 WindowRegression + KerasRNN + 1step + univariate = ValueError('Length mismatch: Expected axis has 54 elements, new values have 9 elements',)
 Is Template Eval Error: ValueError('array must not contain infs or NaNs',) related to Point to Probability HISTORIC QUANTILE?
-Categorical forecast leaves bounds: IndexError: index 7 is out of bounds for axis 0 with size 6
-	categorical = categorical_transformer.encoder.inverse_transform(df[cat_features].astype(int).values)
-	THIS BREAKS PREDICT
 
 
 ### Ignored Errors:
@@ -93,6 +88,8 @@ Tensorflow GPU backend may crash on occasion.
 	* run for each new prediction intervals (on just most recent)
 	* capture containment/SPL from each round.
 * test unpacking of horizontal ensembles at init
+* figure out how to bring together all the different training templates
+* test submission
 * test whether bottum up significantly overestimates on rollup
 
 
@@ -118,7 +115,7 @@ Tensorflow GPU backend may crash on occasion.
 * get_forecast for Statsmodels Statespace models to include confidence interval where possible
 	* migrate arima_model to arima.model
 	* uncomp with uncertainty intervals
-* make datetime input optional, just allow dataframes of numbers
+
 * Window regression
 	* transfer learning
 * RollingRegression
@@ -141,15 +138,11 @@ Tensorflow GPU backend may crash on occasion.
 * Regressor to TensorflowSTS
 * Relative/Absolute Imports and reduce package reloading messages
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
-* Handle categorical forecasts where forecast leaves range of known values, then add to upper/lower forecasts
 * Speed improvements, Profiling
 * Parallelization, and Distributed options (Dask) for general greater speed
 * Improve usability on rarer frequenices (ie monthly data where some series start on 1st, others on 15th, etc.)
 * Figures: Add option to output figures of train/test + forecast, other performance figures
 * If all input are Int, convert floats back to int
-* Hierachial correction (bottom-up to start with)
-* Because I'm a biologist, incorporate more genetics and such. Also as a neuro person, there must be a way to fit networks in...
-* Improved verbosity controls and options. 
 * Replace most 'print' with logging.
 * Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
 * Development tools:
@@ -157,6 +150,7 @@ Tensorflow GPU backend may crash on occasion.
 	* Continuous integration
 	* Code/documentation quality checkers
 * Ability to automatically add external datasets of parallel time series of global usability (ie from FRED or others)
+* make datetime input optional, just allow dataframes of numbers
 * Option to import either long or wide data
 * Infer column names for df_long to wide based on which is datetime, which is string, and which is numeric
 
@@ -183,10 +177,7 @@ Tensorflow GPU backend may crash on occasion.
 	Ecological data
 
 #### New Ensembles:
-	REDUCE OVERFITTING IN MODEL CHOICE
-	Other:
-		Best SMAPE/MAE for point with Best Containment/UpperMAE/LowerMAE for probabilistic
-		Best 10 combined with Decision Tree
+	Best N combined with Decision Tree
 
 #### New models:
 	Croston, SBA, TSB, ADIDA, iMAPA

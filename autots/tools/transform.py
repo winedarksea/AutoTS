@@ -981,51 +981,35 @@ class GeneralTransformer(object):
             print("Transformation method not known or improperly entered, returning untransformed df")
             transformer = EmptyTransformer
             return transformer
-        """
-        elif (transformation =='Detrend'):
-            transformer = Detrend()
-            return transformer
-        
-        elif (transformation =='DifferencedTransformer'):
-            transformer = DifferencedTransformer()
-            return transformer
-        
-        elif (transformation =='SinTrend'):
-            transformer = SinTrend()
-            return transformer
-        
-        elif (transformation == 'RollingMean10'):
-            self.window = 10
-            transformer = RollingMeanTransformer(window = self.window)
-            return transformer
-        """
-        
+
     def _fit(self, df):
         # clean up outliers
         if 'first' in str(self.outlier_position):
             df = self.outlier_treatment(df)
-        
+
         # fill NaN
         df = self.fill_na(df)
-        
+
         self.df_index = df.index
         self.df_colnames = df.columns
-        
+
         # the first transformation!
-        self.transformer = self._retrieve_transformer(df, transformation = self.transformation)
+        self.transformer = self._retrieve_transformer(
+            df, transformation=self.transformation)
         self.transformer = self.transformer.fit(df)
         df = pd.DataFrame(self.transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
-        
+
         if self.detrend:
             # Note that currently this is slightly different than the detrend in the separate transformers
             from sklearn.linear_model import LinearRegression
-            X = (pd.to_numeric(self.df_index, errors = 'coerce',downcast='integer').values).reshape((-1, 1))
+            X = (pd.to_numeric(self.df_index, errors='coerce',
+                               downcast='integer').values).reshape((-1, 1))
             self.model = LinearRegression(fit_intercept=True).fit(X, df.values)
             df = df - self.model.predict(X)
-        
+
         # clean up outliers
         if 'middle' in str(self.outlier_position):
             df = self.outlier_treatment(df)
@@ -1057,21 +1041,25 @@ class GeneralTransformer(object):
                 df = self.fill_na(df)
                 if self.fillna in ['fake date']:
                     self.df_index = df.index
-            
+
         # discretization
         if self.discretization not in [None, 'None']:
             if self.discretization in ['sklearn-quantile', 'sklearn-uniform', 'sklearn-kmeans']:
                 from sklearn.preprocessing import KBinsDiscretizer
-                self.kbins_discretizer = KBinsDiscretizer(n_bins=self.n_bins, encode='ordinal', strategy=self.discretization.split('-')[1]).fit(df)
+                self.kbins_discretizer = KBinsDiscretizer(
+                    n_bins=self.n_bins, encode='ordinal',
+                    strategy=self.discretization.split('-')[1]).fit(df)
                 df = pd.DataFrame(self.kbins_discretizer.transform(df))
                 df.index = self.df_index
                 df.columns = self.df_colnames
+                self.bin_min = df.min(axis=0)
+                self.bin_max = df.max(axis=0)
             else:
                 steps = 1/self.n_bins
                 quantiles = np.arange(0, 1 + steps, steps)
                 bins = np.nanquantile(df, quantiles, axis=0, keepdims=True)
                 if self.discretization == 'center':
-                    bins = np.cumsum(bins, dtype=float, axis = 0)
+                    bins = np.cumsum(bins, dtype=float, axis=0)
                     bins[2:] = bins[2:] - bins[:-2]
                     bins = bins[2 - 1:] / 2
                 elif self.discretization == 'lower':
@@ -1079,11 +1067,13 @@ class GeneralTransformer(object):
                 elif self.discretization == 'upper':
                     bins = np.delete(bins, (0), axis=0)
                 self.bins = bins
-                binned = (np.abs(df.values - self.bins)).argmin(axis = 0)
+                binned = (np.abs(df.values - self.bins)).argmin(axis=0)
                 indices = np.indices(binned.shape)[1]
                 bins_reshaped = self.bins.reshape((self.n_bins, len(df.columns)))
-                df = pd.DataFrame(bins_reshaped[binned, indices], index = self.df_index, columns = self.df_colnames)
-        
+                df = pd.DataFrame(bins_reshaped[binned, indices],
+                                  index=self.df_index,
+                                  columns=self.df_colnames)
+
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
         return df
     
@@ -1185,6 +1175,7 @@ class GeneralTransformer(object):
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
         # discretization (only needed inverse for sklearn)
         if self.discretization in ['sklearn-quantile', 'sklearn-uniform', 'sklearn-kmeans']:
+            df = df.clip(upper=self.bin_max, lower=self.bin_min, axis=1)
             df = df.astype(int).clip(lower = 0, upper = (self.n_bins - 1))
             df = pd.DataFrame(self.kbins_discretizer.inverse_transform(df))
             df.index = self.df_index
