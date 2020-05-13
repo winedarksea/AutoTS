@@ -97,7 +97,7 @@ class AutoTS(object):
         self.constraint = constraint
         self.random_seed = random_seed
         self.holiday_country = holiday_country
-        self.ensemble = ensemble
+        self.ensemble = str(ensemble).lower()
         self.subset = subset
         self.na_tolerance = na_tolerance
         self.metric_weighting = metric_weighting
@@ -111,10 +111,8 @@ class AutoTS(object):
         self.min_allowed_train_percent = min_allowed_train_percent
         self.max_generations = max_generations
         self.verbose = int(verbose)
-        if self.ensemble is not None:
-            self.ensemble = str(self.ensemble).lower()
-            if self.ensemble == 'all':
-                self.ensemble = 'simple,distance'
+        if self.ensemble == 'all':
+            self.ensemble = 'simple,distance'
 
         if self.forecast_length == 1:
             if metric_weighting['contour_weighting'] > 0:
@@ -598,7 +596,7 @@ class AutoTS(object):
                     df_subset, forecast_length=forecast_length,
                     min_allowed_train_percent=self.min_allowed_train_percent,
                     verbose=self.verbose)
-                if self.verbose >= 0:
+                if self.verbose >= 2:
                     print(f'Validation index is {val_df_train.index}')
 
                 # slice regressor into current validation slices
@@ -642,7 +640,8 @@ class AutoTS(object):
                     metric_weighting=metric_weighting,
                     prediction_interval=prediction_interval)
                 # collect ensemble data
-                if ('horizontal' in ensemble) or ('probabilistic' in self.ensemble):
+                ensy = ['probabilistic', 'horizontal']
+                if any(x in self.ensemble for x in ensy):
                     self.initial_results.per_series_mae = pd.concat(
                         [self.initial_results.per_series_mae,
                          template_result.per_series_mae],
@@ -669,22 +668,64 @@ class AutoTS(object):
 Try increasing models_to_validate, max_per_model_class
 or otherwise increase models available."""
 
-        # per_series = model.initial_results.per_series_mae.copy()
-        if ('horizontal' in ensemble) or ('probabilistic' in ensemble):
+        # Construct horizontal style ensembles
+        ensy = ['horizontal', 'probabilistic', 'hdist']
+        if any(x in ensemble for x in ensy):
+            ensemble_templates = pd.DataFrame()
             if 'horizontal' in ensemble:
                 per_series = self.initial_results.per_series_mae.copy()
-            elif 'probabilistic' in ensemble:
+                temp = per_series.iloc[:, 0].groupby(level=0).count()
+                temp = temp[temp >= (num_validations + 1)]
+                per_series = per_series[per_series.index.isin(temp.index)]
+                per_series.groupby(level=0).mean()
+                ens_templates = HorizontalTemplateGenerator(
+                    per_series,
+                    model_results=self.initial_results.model_results,
+                    forecast_length=forecast_length,
+                    ensemble=ensemble.replace(
+                        'probabilistic', ' ').replace('hdist', ' '),
+                    subset_flag=self.subset_flag)
+                ensemble_templates = pd.concat([ensemble_templates,
+                                                ens_templates],
+                                               axis=0)
+            if 'hdist' in ensemble:
+                per_series = self.initial_results.per_series_rmse1.copy()
+                temp = per_series.iloc[:, 0].groupby(level=0).count()
+                temp = temp[temp >= (num_validations + 1)]
+                per_series = per_series[per_series.index.isin(temp.index)]
+                per_series.groupby(level=0).mean()
+                per_series2 = self.initial_results.per_series_rmse2.copy()
+                temp = per_series2.iloc[:, 0].groupby(level=0).count()
+                temp = temp[temp >= (num_validations + 1)]
+                per_series2 = per_series2[per_series2.index.isin(temp.index)]
+                per_series2.groupby(level=0).mean()
+                ens_templates = HorizontalTemplateGenerator(
+                    per_series,
+                    model_results=self.initial_results.model_results,
+                    forecast_length=forecast_length,
+                    ensemble=ensemble.replace(
+                        'horizontal', ' ').replace('probabilistic', ' '),
+                    subset_flag=self.subset_flag, per_series2=per_series2)
+                ensemble_templates = pd.concat([ensemble_templates,
+                                                ens_templates],
+                                               axis=0)
+            if 'probabilistic' in ensemble:
                 per_series = self.initial_results.per_series_spl.copy()
-            temp = per_series.iloc[:,0].groupby(level=0).count()
-            temp = temp[temp>=(num_validations + 1)]
-            per_series = per_series[per_series.index.isin(temp.index)]
-            per_series.groupby(level=0).mean()
-
-            ensemble_templates = HorizontalTemplateGenerator(
-                per_series, model_results=self.initial_results.model_results,
-                forecast_length=forecast_length,
-                ensemble=ensemble,
-                subset_flag=self.subset_flag)
+                temp = per_series.iloc[:, 0].groupby(level=0).count()
+                temp = temp[temp >= (num_validations + 1)]
+                per_series = per_series[per_series.index.isin(temp.index)]
+                per_series.groupby(level=0).mean()
+                ens_templates = HorizontalTemplateGenerator(
+                    per_series,
+                    model_results=self.initial_results.model_results,
+                    forecast_length=forecast_length,
+                    ensemble=ensemble.replace(
+                        'horizontal', ' ').replace('hdist', ' '),
+                    subset_flag=self.subset_flag)
+                ensemble_templates = pd.concat([ensemble_templates,
+                                                ens_templates],
+                                               axis=0)
+            # test on initial test split to make sure they work
             template_result = TemplateWizard(
                 ensemble_templates, df_train, df_test,
                 weights=current_weights,
@@ -712,9 +753,17 @@ or otherwise increase models available."""
             if result_file is not None:
                 self.initial_results.model_results.to_csv(result_file,
                                                           index=False)
+            # use the best of these if any ran successfully
             if template_result.model_results['smape'].sum(min_count=0) > 0:
-                self.best_model = ensemble_templates
+                template_result.model_results['Score'] = generate_score(
+                    template_result.model_results,
+                    metric_weighting=metric_weighting,
+                    prediction_interval=prediction_interval)
+                self.best_model = template_result.model_results.sort_values(
+                        by="Score", ascending=True, na_position='last'
+                        ).head(1)[template_cols]
                 self.ensemble_check = 1
+            # else use the best of the previous
             else:
                 print("Horizontal ensemble failed. Using best non-horizontal.")
                 eligible_models = self.validation_results.model_results[self.validation_results.model_results['Runs'] >= (num_validations + 1)]

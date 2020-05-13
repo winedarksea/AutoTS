@@ -11,8 +11,8 @@ from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 
-forecast_length = 4
-df_long = load_toy_monthly()
+forecast_length = 18
+df_long = load_toy_weekly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -25,9 +25,9 @@ model_list = [
               , 'VECM', 'DynamicFactor'
               # ,'VARMAX', 'GluonTS'
               ]
-# model_list = 'superfast'
+model_list = 'superfast'
 # model_list = ['FBProphet', 'VAR']
-model_list = ['GLM', 'GLS']  # 'TensorflowSTS', 'TFPRegression'
+# model_list = ['GLM', 'GLS']  # 'TensorflowSTS', 'TFPRegression'
 
 metric_weighting = {'smape_weighting': 10, 'mae_weighting': 1,
                     'rmse_weighting': 5, 'containment_weighting': 1,
@@ -35,15 +35,15 @@ metric_weighting = {'smape_weighting': 10, 'mae_weighting': 1,
                     'contour_weighting': 2
                     }
 metric_weighting = {'smape_weighting': 1, 'mae_weighting': 1,
-                    'rmse_weighting': 0, 'containment_weighting': 0,
-                    'runtime_weighting': 0, 'spl_weighting': 1,
+                    'rmse_weighting': 5, 'containment_weighting': 0,
+                    'runtime_weighting': 0, 'spl_weighting': 0,
                     'contour_weighting': 0
                     }
 
 
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9,
-               ensemble='simple,distance,horizontal', # 'probabilistic,hdist',
+               ensemble='simple,distance,probabilistic-max,horizontal-max,hdist', # 'probabilistic,hdist,horizontal'
                constraint=2,
                max_generations=10, num_validations=2,
                validation_method='backwards',

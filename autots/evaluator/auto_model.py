@@ -802,16 +802,17 @@ def TemplateWizard(template, df_train, df_test, weights,
     ensemble = str(ensemble)
     template_result = TemplateEvalObject()
     template_result.model_count = model_count
+    if isinstance(template, pd.Series):
+        template = pd.DataFrame(template).transpose()
     # template = unpack_ensemble_models(template, template_cols, keep_ensemble = False)
 
-    for index in template.index:
+    for index, row in template.iterrows():
         try:
-            current_template = template.loc[index]
-            model_str = current_template['Model']
-            parameter_dict = json.loads(current_template['ModelParameters'])
-            transformation_dict = json.loads(current_template['TransformationParameters'])
-            ensemble_input = current_template['Ensemble']
-            current_template = pd.DataFrame(current_template).transpose()
+            model_str = row['Model']
+            parameter_dict = json.loads(row['ModelParameters'])
+            transformation_dict = json.loads(row['TransformationParameters'])
+            ensemble_input = row['Ensemble']
+            current_template = pd.DataFrame(row).transpose()
             template_result.model_count += 1
             if verbose > 0:
                 if verbose > 1:
@@ -833,7 +834,7 @@ def TemplateWizard(template, df_train, df_test, weights,
 
             per_ts = True if 'distance' in ensemble else False
             if 'hdist' in ensemble:
-                dist_n = int(np.ceil(0.25 * forecast_length))
+                dist_n = int(np.ceil(0.3 * forecast_length))
             else:
                 dist_n = None
             model_error = PredictionEval(df_forecast, df_test,

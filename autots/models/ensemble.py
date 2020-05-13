@@ -130,6 +130,79 @@ def HorizontalEnsemble(ensemble_params, forecasts_list, forecasts,
     return ens_result
 
 
+def HDistEnsemble(ensemble_params, forecasts_list, forecasts,
+                       lower_forecasts, upper_forecasts, forecasts_runtime,
+                       prediction_interval):
+    """Generate forecast for per_series per distance ensembling."""
+    id_list = list(ensemble_params['models'].keys())
+    mod_dic = {x: idx for idx, x in enumerate(forecasts_list) if x in id_list}
+    forecast_length = forecasts[0].shape[0]
+    dist_n = int(np.ceil(ensemble_params['dis_frac'] * forecast_length))
+    dist_last = forecast_length - dist_n
+
+
+    forecast_df, u_forecast_df, l_forecast_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+    for series, mod_id in ensemble_params['series1'].items():
+        l_idx = mod_dic[mod_id]
+        try:
+            c_fore = forecasts[l_idx][series]
+            forecast_df = pd.concat([forecast_df, c_fore], axis=1)
+        except Exception as e:
+            repr(e)
+            print(forecasts[l_idx].columns)
+            print(forecasts[l_idx].head())
+        # upper
+        c_fore = upper_forecasts[l_idx][series]
+        u_forecast_df = pd.concat([u_forecast_df, c_fore], axis=1)
+        # lower
+        c_fore = lower_forecasts[l_idx][series]
+        l_forecast_df = pd.concat([l_forecast_df, c_fore], axis=1)
+
+    forecast_df2, u_forecast_df2, l_forecast_df2 = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+    for series, mod_id in ensemble_params['series2'].items():
+        l_idx = mod_dic[mod_id]
+        try:
+            c_fore = forecasts[l_idx][series]
+            forecast_df2 = pd.concat([forecast_df2, c_fore], axis=1)
+        except Exception as e:
+            repr(e)
+            print(forecasts[l_idx].columns)
+            print(forecasts[l_idx].head())
+        # upper
+        c_fore = upper_forecasts[l_idx][series]
+        u_forecast_df2 = pd.concat([u_forecast_df2, c_fore], axis=1)
+        # lower
+        c_fore = lower_forecasts[l_idx][series]
+        l_forecast_df2 = pd.concat([l_forecast_df2, c_fore], axis=1)
+        
+    forecast_df = pd.concat([forecast_df.head(dist_n),
+                             forecast_df2.tail(dist_last)], axis=0)
+    u_forecast_df = pd.concat([u_forecast_df.head(dist_n),
+                               u_forecast_df2.tail(dist_last)], axis=0)
+    l_forecast_df = pd.concat([l_forecast_df.head(dist_n),
+                               l_forecast_df2.tail(dist_last)], axis=0)
+
+    ens_runtime = datetime.timedelta(0)
+    for idx, x in enumerate(forecasts_runtime):
+        if idx in list(mod_dic.values()):
+            ens_runtime = ens_runtime + forecasts_runtime[idx]
+
+    ens_result = PredictionObject(model_name="Ensemble",
+                                  forecast_length=len(forecast_df.index),
+                                  forecast_index=forecast_df.index,
+                                  forecast_columns=forecast_df.columns,
+                                  lower_forecast=l_forecast_df,
+                                  forecast=forecast_df,
+                                  upper_forecast=u_forecast_df,
+                                  prediction_interval=prediction_interval,
+                                  predict_runtime=datetime.timedelta(0),
+                                  fit_runtime=ens_runtime,
+                                  model_parameters=ensemble_params
+                                  )
+    return ens_result
+
+
+
 def EnsembleForecast(ensemble_str, ensemble_params, forecasts_list,
                      forecasts, lower_forecasts, upper_forecasts,
                      forecasts_runtime, prediction_interval):
@@ -147,8 +220,15 @@ def EnsembleForecast(ensemble_str, ensemble_params, forecasts_list,
             upper_forecasts, forecasts_runtime, prediction_interval)
         return ens_forecast
 
-    if ensemble_params['model_name'].lower().strip() == 'horizontal':
+    hlist = ['horizontal', 'probabilistic']
+    if ensemble_params['model_name'].lower().strip() in hlist:
         ens_forecast = HorizontalEnsemble(
+            ensemble_params, forecasts_list, forecasts, lower_forecasts,
+            upper_forecasts, forecasts_runtime, prediction_interval)
+        return ens_forecast
+    
+    if ensemble_params['model_name'].lower().strip() == 'hdist':
+        ens_forecast = HDistEnsemble(
             ensemble_params, forecasts_list, forecasts, lower_forecasts,
             upper_forecasts, forecasts_runtime, prediction_interval)
         return ens_forecast
@@ -348,15 +428,18 @@ def EnsembleTemplateGenerator(initial_results,
                                         best3_params],
                                        axis=0, ignore_index=True)
     return ensemble_templates
-        ##################################################################
+
+
 def HorizontalTemplateGenerator(per_series, model_results,
-                              forecast_length: int = 14,
-                              ensemble: str = "horizontal",
-                              subset_flag: bool = True
-                              ):
+                                forecast_length: int = 14,
+                                ensemble: str = "horizontal",
+                                subset_flag: bool = True,
+                                per_series2 = None
+                                ):
     """Generate horizontal ensemble templates given a table of results."""
     ensemble_templates = pd.DataFrame()
-    if (('horizontal' in ensemble) or ('probabilistic' in ensemble)) and not subset_flag:
+    ensy = ['horizontal', 'probabilistic', 'hdist']
+    if any(x in ensemble for x in ensy) and not subset_flag:
         if ('horizontal-max' in ensemble) or ('probabilistic-max' in ensemble):
             mods_per_series = per_series.idxmin()
             mods = mods_per_series.unique()
@@ -369,12 +452,42 @@ def HorizontalTemplateGenerator(per_series, model_results,
                     'TransformationParameters': row['TransformationParameters']
                     }
                 ensemble_models[row['ID']] = temp_dict
+            nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
             best5_params = {'Model': 'Ensemble',
                             'ModelParameters':
-                                json.dumps({'model_name': 'Horizontal',
+                                json.dumps({'model_name': nomen,
                                             'model_count': mods.shape[0],
                                             'models': ensemble_models,
                                             'series': mods_per_series.to_dict()
+                                            }),
+                            'TransformationParameters': '{}',
+                            'Ensemble': 1}
+            best5_params = pd.DataFrame(best5_params, index=[0])
+            ensemble_templates = pd.concat([ensemble_templates,
+                                            best5_params],
+                                           axis=0, ignore_index=True)
+        elif ('hdist' in ensemble):
+            mods_per_series = per_series.idxmin()
+            mods_per_series2 = per_series2.idxmin()
+            mods = pd.concat([mods_per_series, mods_per_series2]).unique()
+            ensemble_models = {}
+            best5 = model_results[model_results['ID'].isin(mods.tolist())].drop_duplicates(subset=['Model', 'ModelParameters', 'TransformationParameters'])
+            for index, row in best5.iterrows():
+                temp_dict = {
+                    'Model': row['Model'],
+                    'ModelParameters': row['ModelParameters'],
+                    'TransformationParameters': row['TransformationParameters']
+                    }
+                ensemble_models[row['ID']] = temp_dict
+            nomen = 'hdist'
+            best5_params = {'Model': 'Ensemble',
+                            'ModelParameters':
+                                json.dumps({'model_name': nomen,
+                                            'model_count': mods.shape[0],
+                                            'models': ensemble_models,
+                                            'dis_frac': 0.3,
+                                            'series1': mods_per_series.to_dict(),
+                                            'series2': mods_per_series2.to_dict()
                                             }),
                             'TransformationParameters': '{}',
                             'Ensemble': 1}
@@ -418,9 +531,10 @@ def HorizontalTemplateGenerator(per_series, model_results,
                     'TransformationParameters': row['TransformationParameters']
                     }
                 ensemble_models[row['ID']] = temp_dict
+            nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
             best5_params = {'Model': 'Ensemble',
                             'ModelParameters':
-                                json.dumps({'model_name': 'Horizontal',
+                                json.dumps({'model_name': nomen,
                                             'model_count': mods_per_series.unique().shape[0],
                                             'models': ensemble_models,
                                             'series': mods_per_series.to_dict()
@@ -466,9 +580,10 @@ def HorizontalTemplateGenerator(per_series, model_results,
                     'TransformationParameters': row['TransformationParameters']
                     }
                 ensemble_models[row['ID']] = temp_dict
+            nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
             best5_params = {'Model': 'Ensemble',
                             'ModelParameters':
-                                json.dumps({'model_name': 'Horizontal',
+                                json.dumps({'model_name': nomen,
                                             'model_count': mods_per_series.unique().shape[0],
                                             'models': ensemble_models,
                                             'series': mods_per_series.to_dict()

@@ -84,26 +84,13 @@ KerasRNN errors due to parameters not working on all dataset
 Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
-* simple, dist, (best3)horizontal
-* mae, rmse1/rmse2, spl
-	* max, top n
-	* test on first segment before accepting
-* Best 3 horizontal to before validation
-* Horizontal but not max in pre stage
-* handle subsetting with horizontal
 * distance 20/80 horizontal
-	* make model count of horizontal more visible
-* horizontal ensembling for probabilistic
-	* capture SPL per series
 * method to test effectiveness across multiple probabilistic intervals.
 	* generate base template (based mainly on best point forecast, validated)
 	* run for each new prediction intervals (on just most recent)
 	* capture containment/SPL from each round.
-* overfitting of ensembles
-	* after validation then run it on validation again
-	* constraint effecting ensembling
-	* can do both before and after validations
-	* could do no validations and get ensemble, compare with run with more validations
+* test unpacking of horizontal ensembles at init
+* seasonal validation
 * Fix categorical forecast when out of known values
 	* .clip() on max and min for those with categorical
 * test whether bottum up significantly overestimates on rollup
