@@ -1,9 +1,6 @@
 """Manage holiday features."""
-
 import numpy as np
 import pandas as pd
-import holidays
-from pandas.tseries.holiday import USFederalHolidayCalendar
 
 
 def holiday_flag(DTindex, country: str = 'US'):
@@ -18,6 +15,7 @@ def holiday_flag(DTindex, country: str = 'US'):
     """
     if country.upper() == 'US':
         try:
+            import holidays
             country_holidays = holidays.CountryHoliday('US')
             country_holidays = country_holidays[DTindex[0]:DTindex[-1]]
             all_days = pd.Series(np.repeat(0, len(DTindex)), index = DTindex)
@@ -26,6 +24,7 @@ def holiday_flag(DTindex, country: str = 'US'):
             holi_days = all_days.combine(holi_days, func = max).fillna(0)
             holi_days.rename("HolidayFlag", inplace = True)
         except Exception:
+            from pandas.tseries.holiday import USFederalHolidayCalendar
             # uses pandas calendar as backup in the event holidays fails
             holi_days = USFederalHolidayCalendar().holidays().to_series()[DTindex[0]:DTindex[-1]]
             all_days = pd.Series(np.repeat(0, len(DTindex)), index = DTindex)
@@ -33,6 +32,7 @@ def holiday_flag(DTindex, country: str = 'US'):
             holi_days = all_days.combine(holi_days, func = max).fillna(0)
             holi_days.rename("HolidayFlag", inplace = True)
     else:
+        import holidays
         country_holidays = holidays.CountryHoliday(country.upper())
         country_holidays = country_holidays[DTindex[0]:DTindex[-1]]
         all_days = pd.Series(np.repeat(0, len(DTindex)), index = DTindex)

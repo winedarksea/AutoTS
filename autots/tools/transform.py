@@ -814,32 +814,33 @@ class GeneralTransformer(object):
         second_transformation (str): second transformation to apply. Same options as transformation, but with transformation_param passed in if used
 
         transformation_param (str): passed to second_transformation, not used by most transformers.
-        
+
         third_transformation (str): third transformation to apply. Sames options as transformation.
-        
+
         discretization (str): method of binning to apply
             None - no discretization
             'center' - values are rounded to center value of each bin
             'lower' - values are rounded to lower range of closest bin
             'upper' - values are rounded up to upper edge of closest bin
             'sklearn-quantile', 'sklearn-uniform', 'sklearn-kmeans' - sklearn kbins discretizer
-            
+
         n_bins (int): number of quantile bins to split data into
 
         random_seed (int): random state passed through where applicable
     """
-    
+
     def __init__(self,
                  outlier_method: str = None, outlier_threshold: float = 3,
                  outlier_position: str = 'first',
                  fillna: str = 'ffill',
-                 transformation: str = None, detrend: bool = False,
+                 transformation: str = None,
+                 detrend: bool = False,
                  second_transformation: str = None,
                  transformation_param: str = None,
                  third_transformation: str = None,
                  discretization: str = 'center', n_bins: int = None,
                  random_seed: int = 2020):
-        
+
         self.outlier_method = outlier_method
         self.outlier_threshold = outlier_threshold
         self.outlier_position = outlier_position
@@ -880,14 +881,15 @@ class GeneralTransformer(object):
         Args:
             df (pandas.DataFrame): Datetime Indexed
             window (int): passed through to rolling mean fill technique
-        
+
         Returns:
             pandas.DataFrame
         """
-        df = FillNA(df, method = self.fillna, window = window)
+        df = FillNA(df, method=self.fillna, window=window)
         return df
-        
-    def _retrieve_transformer(self, df = None, transformation: str = None, param: str = None):
+
+    def _retrieve_transformer(self, transformation: str = None,
+                              param: str = None, df=None):
         """
         Args:
             df (pandas.DataFrame): Datetime Indexed - required to set params for some transformers
@@ -916,22 +918,22 @@ class GeneralTransformer(object):
             quants = 1000 if df.shape[0] > 1000 else int(df.shape[0] / 3)
             transformer = QuantileTransformer(n_quantiles=quants, copy=True)
             return transformer
-        
+
         elif (transformation == 'StandardScaler'):
             from sklearn.preprocessing import StandardScaler
             transformer = StandardScaler(copy=True)
             return transformer
-        
+
         elif (transformation == 'MaxAbsScaler'):
             from sklearn.preprocessing import MaxAbsScaler
             transformer = MaxAbsScaler(copy=True)
             return transformer
-        
+
         elif (transformation == 'RobustScaler'):
             from sklearn.preprocessing import RobustScaler
             transformer = RobustScaler(copy=True)
             return transformer
-        
+
         elif (transformation in ['RollingMean', 'FixedRollingMean']):
             param = 10 if param is None else param
             if not str(param).isdigit():
@@ -942,9 +944,11 @@ class GeneralTransformer(object):
             window = 2 if window < 2 else window
             self.window = window
             if transformation == 'FixedRollingMean':
-                transformer = RollingMeanTransformer(window=self.window, fixed=True)
+                transformer = RollingMeanTransformer(window=self.window,
+                                                     fixed=True)
             else:
-                transformer = RollingMeanTransformer(window=self.window, fixed=False)
+                transformer = RollingMeanTransformer(window=self.window,
+                                                     fixed=False)
             return transformer
 
         elif transformation in ['SeasonalDifference', 'SeasonalDifferenceMean']:
@@ -959,28 +963,62 @@ class GeneralTransformer(object):
             self.window = window
             transformer = RollingMeanTransformer(window=self.window)
             return transformer
-        
+
         elif (transformation == 'RollingMean10thN'):
             window = int(df.shape[0]/10)
             window = 2 if window < 2 else window
             self.window = window
-            transformer = RollingMeanTransformer(window = self.window)
+            transformer = RollingMeanTransformer(window=self.window)
             return transformer
-        
-        elif (transformation =='PCA'):
+
+        elif (transformation == 'PCA'):
             from sklearn.decomposition import PCA
-            transformer = PCA(n_components=df.shape[1], whiten = False, random_state = self.random_seed)
+            transformer = PCA(n_components=df.shape[1], whiten=False,
+                              random_state=self.random_seed)
             return transformer
-        
-        elif (transformation =='FastICA'):
+
+        elif (transformation == 'FastICA'):
             from sklearn.decomposition import FastICA
-            transformer = FastICA(n_components=df.shape[1], whiten = True, random_state = self.random_seed)
+            transformer = FastICA(n_components=df.shape[1], whiten=True,
+                                  random_state=self.random_seed)
             return transformer
-        
+
         else:
             print("Transformation method not known or improperly entered, returning untransformed df")
             transformer = EmptyTransformer
             return transformer
+
+    def _retrieve_detrend(self, detrend: str = "Linear"):
+        self.need_positive = ['Poisson', 'Gamma', 'Tweedie']
+        if detrend == 'Linear':
+            from sklearn.linear_model import LinearRegression
+            return LinearRegression(fit_intercept=True)
+        elif detrend == "Poisson":
+            from sklearn.linear_model import PoissonRegressor
+            from sklearn.multioutput import MultiOutputRegressor
+            return MultiOutputRegressor(PoissonRegressor(fit_intercept=True))
+        elif detrend == 'Tweedie':
+            from sklearn.linear_model import TweedieRegressor
+            from sklearn.multioutput import MultiOutputRegressor
+            return MultiOutputRegressor(TweedieRegressor(power=1.5))
+        elif detrend == 'Gamma':
+            from sklearn.linear_model import GammaRegressor
+            from sklearn.multioutput import MultiOutputRegressor
+            return MultiOutputRegressor(GammaRegressor(fit_intercept=True))
+        elif detrend == 'TheilSen':
+            from sklearn.linear_model import TheilSenRegressor
+            from sklearn.multioutput import MultiOutputRegressor
+            return MultiOutputRegressor(TheilSenRegressor())
+        elif detrend == 'RANSAC':
+            from sklearn.linear_model import RANSACRegressor
+            return RANSACRegressor()
+        elif detrend == 'ARD':
+            from sklearn.linear_model import ARDRegression
+            from sklearn.multioutput import MultiOutputRegressor
+            return MultiOutputRegressor(ARDRegression())
+        else:
+            from sklearn.linear_model import LinearRegression
+            return LinearRegression()
 
     def _fit(self, df):
         # clean up outliers
@@ -995,20 +1033,32 @@ class GeneralTransformer(object):
 
         # the first transformation!
         self.transformer = self._retrieve_transformer(
-            df, transformation=self.transformation)
+            transformation=self.transformation, df=df)
         self.transformer = self.transformer.fit(df)
         df = pd.DataFrame(self.transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
 
-        if self.detrend:
-            # Note that currently this is slightly different than the detrend in the separate transformers
-            from sklearn.linear_model import LinearRegression
+        if self.detrend is not None:
+            self.model = self._retrieve_detrend(detrend=self.detrend)
+            if self.detrend in self.need_positive:
+                self.trnd_trans = self._retrieve_transformer("PositiveShift")
+                self.trnd_trans.fit(df)
+                Y = pd.DataFrame(self.trnd_trans.transform(df)).values
+            else:
+                Y = df.values
             X = (pd.to_numeric(self.df_index, errors='coerce',
                                downcast='integer').values).reshape((-1, 1))
-            self.model = LinearRegression(fit_intercept=True).fit(X, df.values)
-            df = df - self.model.predict(X)
+            self.model.fit(X, Y)
+            if self.detrend in self.need_positive:
+                temp = pd.DataFrame(self.model.predict(X),
+                                    index=self.df_index,
+                                    columns=self.df_colnames)
+                temp = self.trnd_trans.inverse_transform(temp)
+                df = df - temp
+            else:
+                df = df - self.model.predict(X)
 
         # clean up outliers
         if 'middle' in str(self.outlier_position):
@@ -1017,23 +1067,27 @@ class GeneralTransformer(object):
                 df = self.fill_na(df)
                 if self.fillna in ['fake date']:
                     self.df_index = df.index
-        
+
         # the second transformation! This one has an optional parameter passed through
-        self.second_transformer = self._retrieve_transformer(df, transformation = self.second_transformation, param = self.transformation_param)
+        self.second_transformer = self._retrieve_transformer(
+            transformation=self.second_transformation,
+            param=self.transformation_param, df=df)
         self.second_transformer = self.second_transformer.fit(df)
         df = pd.DataFrame(self.second_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
-        
+
         # the third transformation!
-        self.third_transformer = self._retrieve_transformer(df, transformation = self.third_transformation, param = self.transformation_param)
+        self.third_transformer = self._retrieve_transformer(
+            transformation=self.third_transformation,
+            param=self.transformation_param, df=df)
         self.third_transformer = self.third_transformer.fit(df)
         df = pd.DataFrame(self.third_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
-        
+
         # clean up outliers
         if 'last' in str(self.outlier_position):
             df = self.outlier_treatment(df)
@@ -1044,7 +1098,8 @@ class GeneralTransformer(object):
 
         # discretization
         if self.discretization not in [None, 'None']:
-            if self.discretization in ['sklearn-quantile', 'sklearn-uniform', 'sklearn-kmeans']:
+            if self.discretization in ['sklearn-quantile', 'sklearn-uniform',
+                                       'sklearn-kmeans']:
                 from sklearn.preprocessing import KBinsDiscretizer
                 self.kbins_discretizer = KBinsDiscretizer(
                     n_bins=self.n_bins, encode='ordinal',
@@ -1069,17 +1124,18 @@ class GeneralTransformer(object):
                 self.bins = bins
                 binned = (np.abs(df.values - self.bins)).argmin(axis=0)
                 indices = np.indices(binned.shape)[1]
-                bins_reshaped = self.bins.reshape((self.n_bins, len(df.columns)))
+                bins_reshaped = self.bins.reshape((self.n_bins,
+                                                   len(df.columns)))
                 df = pd.DataFrame(bins_reshaped[binned, indices],
                                   index=self.df_index,
                                   columns=self.df_colnames)
 
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
         return df
-    
+
     def fit(self, df):
-        """Apply transformations and return transformer object
-        
+        """Apply transformations and return transformer object.
+
         Args:
             df (pandas.DataFrame): Datetime Indexed 
         """
@@ -1090,30 +1146,37 @@ class GeneralTransformer(object):
         return self._fit(df)
 
     def transform(self, df):
+        """Apply transformations to convert df."""
         df = df.copy()
-        
+
         # clean up outliers
         if 'first' in str(self.outlier_position):
             df = self.outlier_treatment(df)
-        
+
         # fill NaN
         df = self.fill_na(df)
-        
+
         self.df_index = df.index
         self.df_colnames = df.columns
-        
+
         # first transformation
         df = pd.DataFrame(self.transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
-        
+
         # detrend
-        if self.detrend == True:
-            X = (pd.to_numeric(self.df_index, errors = 'coerce',downcast='integer').values).reshape((-1, 1))
-            df = df - self.model.predict(X)
-            # df = pd.DataFrame(df, index = self.df_index, columns = self.df_colnames)
-        
+        if self.detrend is not None:
+            X = (pd.to_numeric(self.df_index, errors='coerce',
+                               downcast='integer').values).reshape((-1, 1))
+            if self.detrend in self.need_positive:
+                temp = self.model.predict(X)
+                temp = pd.DataFrame(temp, index=self.df_index,
+                                    columns=self.df_colnames)
+                df = df - self.trnd_trans.inverse_transform(temp)
+            else:
+                df = df - self.model.predict(X)
+
         # clean up outliers
         if 'middle' in str(self.outlier_position):
             df = self.outlier_treatment(df)
@@ -1121,19 +1184,19 @@ class GeneralTransformer(object):
                 df = self.fill_na(df)
                 if self.fillna in ['fake date']:
                     self.df_index = df.index
-        
+
         # second transformation
         df = pd.DataFrame(self.second_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
-        
+
         # third transformation
         df = pd.DataFrame(self.third_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
-        
+
         # clean up outliers
         if 'last' in str(self.outlier_position):
             df = self.outlier_treatment(df)
@@ -1141,25 +1204,28 @@ class GeneralTransformer(object):
                 df = self.fill_na(df)
                 if self.fillna in ['fake date']:
                     self.df_index = df.index
-        
-        #discretization
+
+        # discretization
         if self.discretization not in [None, 'None']:
-            if self.discretization in ['sklearn-quantile', 'sklearn-uniform', 'sklearn-kmeans']:
+            if self.discretization in ['sklearn-quantile', 'sklearn-uniform',
+                                       'sklearn-kmeans']:
                 df = pd.DataFrame(self.kbins_discretizer.transform(df))
                 df.index = self.df_index
                 df.columns = self.df_colnames
             else:
-                binned = (np.abs(df.values - self.bins)).argmin(axis = 0)
+                binned = (np.abs(df.values - self.bins)).argmin(axis=0)
                 indices = np.indices(binned.shape)[1]
                 bins_reshaped = self.bins.reshape((self.n_bins, df.shape[1]))
-                df = pd.DataFrame(bins_reshaped[binned, indices], index = self.df_index, columns = self.df_colnames)
-        
+                df = pd.DataFrame(bins_reshaped[binned, indices],
+                                  index=self.df_index,
+                                  columns=self.df_colnames)
+
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
         return df
-    
+
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Undo the madness
-        
+
         Args:
             df (pandas.DataFrame): Datetime Indexed 
             trans_method (str): 'forecast' or 'original' passed through to RollingTransformer, DifferencedTransformer, if used
@@ -1171,46 +1237,54 @@ class GeneralTransformer(object):
                          'PctChangeTransformer', 'CumSumTransformer',
                          'SeasonalDifference', 'SeasonalDifferenceMean',
                          'SeasonalDifference7', 'SeasonalDifference12']
-        
+
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
         # discretization (only needed inverse for sklearn)
-        if self.discretization in ['sklearn-quantile', 'sklearn-uniform', 'sklearn-kmeans']:
+        if self.discretization in ['sklearn-quantile', 'sklearn-uniform',
+                                   'sklearn-kmeans']:
             df = df.clip(upper=self.bin_max, lower=self.bin_min, axis=1)
-            df = df.astype(int).clip(lower = 0, upper = (self.n_bins - 1))
+            df = df.astype(int).clip(lower=0, upper=(self.n_bins - 1))
             df = pd.DataFrame(self.kbins_discretizer.inverse_transform(df))
             df.index = self.df_index
             df.columns = self.df_colnames
-        
+
         if self.third_transformation in oddities_list:
-            df = pd.DataFrame(self.third_transformer.inverse_transform(df,trans_method = trans_method))
+            df = pd.DataFrame(self.third_transformer.inverse_transform(
+                df, trans_method=trans_method))
         else:
             df = pd.DataFrame(self.third_transformer.inverse_transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
-        
+
         if self.second_transformation in oddities_list:
-            df = pd.DataFrame(self.second_transformer.inverse_transform(df, trans_method = trans_method))
+            df = pd.DataFrame(self.second_transformer.inverse_transform(
+                df, trans_method=trans_method))
         else:
             df = pd.DataFrame(self.second_transformer.inverse_transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
-        
-        if self.detrend == True:
-            X = (pd.to_numeric(self.df_index, errors = 'coerce',
+
+        if self.detrend is not None:
+            X = (pd.to_numeric(self.df_index, errors='coerce',
                                downcast='integer').values).reshape((-1, 1))
-            df = df + self.model.predict(X)
-            # df = pd.DataFrame(df, index = self.df_index, columns = self.df_colnames)
-        
+            if self.detrend in self.need_positive:
+                temp = pd.DataFrame(self.model.predict(X), index=self.df_index,
+                                    columns=self.df_colnames)
+                df = df + self.trnd_trans.inverse_transform(temp)
+            else:
+                df = df + self.model.predict(X)
+
         if self.transformation in oddities_list:
-            df = pd.DataFrame(self.transformer.inverse_transform(df, trans_method = trans_method))
+            df = pd.DataFrame(self.transformer.inverse_transform(
+                df, trans_method=trans_method))
         else:
             df = pd.DataFrame(self.transformer.inverse_transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
-        
-        # since inf just causes trouble. Feel free to debate my choice of replacing with zero.
+
+        # since inf just causes trouble.
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
         return df
 
@@ -1261,8 +1335,10 @@ def RandomTransform():
                                             0.1, 0.1, 0.1, 0.1]).item()
     transformation_choice = np.random.choice(a=transformer_list, size=1,
                                              p=first_transformer_prob).item()
-    detrend_choice = np.random.choice(a=[True, False], size=1,
-                                      p=[0.2, 0.8]).item()
+    detrend_choice = np.random.choice(
+        a=[None, 'Linear', 'Poisson', 'Tweedie',
+           'Gamma', 'RANSAC', 'ARD'], size=1,
+        p=[0.6, 0.3, 0.02, 0.02, 0.02, 0.02, 0.02]).item()
     second_transformation_choice = np.random.choice(
         a=[None, 'RollingMean', 'FixedRollingMean', 'SeasonalDifference',
            'SeasonalDifferenceMean', 'other'],

@@ -171,6 +171,16 @@ def retrieve_regressor(regression_model: dict =
             weights=regression_model["model_params"]['weights']
             ))
         return regr
+    elif regression_model['model'] == 'HistGradientBoost':
+        from sklearn.multioutput import MultiOutputRegressor
+        from sklearn.neighbors import HistGradientBoostingRegressor
+        regr = MultiOutputRegressor(HistGradientBoostingRegressor(
+            loss=regression_model["model_params"]['loss'],
+            learning_rate=regression_model["model_params"]['learning_rate'],
+            max_iter=200,
+            verbose=int(verbose_bool), random_state=random_seed
+            ))
+        return regr
     elif regression_model['model'] == 'Adaboost':
         from sklearn.multioutput import MultiOutputRegressor
         from sklearn.ensemble import AdaBoostRegressor
@@ -236,16 +246,18 @@ def retrieve_regressor(regression_model: dict =
 def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                                               'MLP', 'DecisionTree', 'KNN',
                                               'Adaboost', 'SVM', 'BayesianRidge',
-                                              'xgboost', 'KerasRNN'],
+                                              'xgboost', 'KerasRNN',
+                                              'HistGradientBoost'],
                               model_probs: list = [0.05, 0.05,
                                                   0.12, 0.2, 0.12,
                                                   0.2, 0.025, 0.035,
-                                                  0.1, 0.1]):
+                                                  0.05, 0.1,
+                                                  0.05]):
     """Generate new parameters for input to regressor."""
     model = np.random.choice(a=models, size=1, p=model_probs).item()
-    # model = 'KerasRNN'
+    # model = 'HistGradientBoost'
     if model in ['xgboost', 'Adaboost', 'DecisionTree',
-                 'MLP', 'KNN', 'KerasRNN']:
+                 'MLP', 'KNN', 'KerasRNN', 'HistGradientBoost']:
         if model == 'Adaboost':
             param_dict = {"model": 'Adaboost',
                     "model_params": {
@@ -355,6 +367,17 @@ def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                                                      p=[0.7, 0.3],
                                                      size=1).item()
                         }}
+        elif model == 'HistGradientBoost':
+            param_dict = {"model": 'HistGradientBoost',
+                          "model_params": {
+                              "loss": np.random.choice(
+                                  a=['least_squares', 'poisson',
+                                     'least_absolute_deviation'],
+                                  p=[0.4, 0.3, 0.3], size=1).item(),
+                              "learning_rate": np.random.choice(
+                                  a=[1, 0.1, 0.01],
+                                  p=[0.3, 0.4, 0.3], size=1).item()
+                              }}
         else:
             min_samples = np.random.choice([1, 2, 0.05],
                                            p=[0.5, 0.3, 0.2],

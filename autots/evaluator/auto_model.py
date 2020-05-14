@@ -1189,20 +1189,20 @@ def generate_score(model_results, metric_weighting: dict = {},
     try:
         # smaller better
         model_results = model_results.replace([np.inf, -np.inf], np.nan)
-        # model_results = model_results.fillna(value = model_results.max(axis = 0))
-        smape_score = model_results['smape_weighted']/(model_results['smape_weighted'].min(skipna=True) + 1) # smaller better
+        # model_results = model_results.fillna(value=model_results.max(axis=0))
+        smape_score = model_results['smape_weighted']/(model_results['smape_weighted'].min(skipna=True) + 1)  # smaller better
         rmse_scaler = (model_results['rmse_weighted'].median(skipna=True))
         rmse_scaler = 1 if rmse_scaler == 0 else rmse_scaler
         rmse_score = model_results['rmse_weighted']/rmse_scaler
         mae_scaler = (model_results['mae_weighted'].median(skipna=True))
         mae_scaler = 1 if mae_scaler == 0 else mae_scaler
         mae_score = model_results['mae_weighted']/mae_scaler
-        containment_score = (abs(prediction_interval - model_results['containment'])) + 1 # from 1 to 2, smaller better
-        runtime_score = model_results['TotalRuntime']/(model_results['TotalRuntime'].min(skipna=True) + datetime.timedelta(minutes = 1)) # smaller better
-        spl_score = model_results['spl_weighted']/(model_results['spl_weighted'].min(skipna=True) +1) # smaller better
-        contour_score =  (1/(model_results['contour_weighted'])).replace([np.inf, -np.inf, np.nan], 10).clip(upper = 10)
+        containment_score = (abs(prediction_interval - model_results['containment'])) + 1  # from 1 to 2, smaller better
+        runtime = model_results['TotalRuntime'].dt.seconds + 120
+        runtime_score = runtime/(runtime.min(skipna=True))  # smaller better
+        spl_score = model_results['spl_weighted']/(model_results['spl_weighted'].min(skipna=True) + 1)  # smaller better
+        contour_score = (1/(model_results['contour_weighted'])).replace(
+            [np.inf, -np.inf, np.nan], 10).clip(upper=10)
     except KeyError:
         raise KeyError("Inconceivable! Evaluation Metrics are missing and all models have failed, by an error in TemplateWizard or metrics. A new template may help, or an adjusted model_list.")
-        
     return (smape_score * smape_weighting) + (mae_score * mae_weighting) + (rmse_score * rmse_weighting) + (containment_score * containment_weighting) + (runtime_score * runtime_weighting) + (spl_score * spl_weighting) + (contour_score * contour_weighting)
-

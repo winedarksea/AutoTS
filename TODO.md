@@ -83,6 +83,8 @@ KerasRNN errors due to parameters not working on all dataset
 Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
+* Rename preord
+* Second parameterized transformer
 * method to test effectiveness across multiple probabilistic intervals.
 	* generate base template (based mainly on best point forecast, validated)
 	* run for each new prediction intervals (on just most recent)
@@ -94,12 +96,14 @@ Tensorflow GPU backend may crash on occasion.
 
 
 # To-Do
+* Sklearn iterative imputer 
 * Get the sphinx (google style) documentation and github pages website up
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
 * Bring GeneralTransformer to higher level API.
 	* wide_to_long and long_to_wide in higher-level API
 * Option to use full traceback in errors in table
+* Deeper GPU integration (NVIDIA Rapids?)
 * Hierarchial
 	* every level must be included in forecasting data
 	* 'bottom-up' and 'mid' levels
@@ -115,7 +119,6 @@ Tensorflow GPU backend may crash on occasion.
 * get_forecast for Statsmodels Statespace models to include confidence interval where possible
 	* migrate arima_model to arima.model
 	* uncomp with uncertainty intervals
-
 * Window regression
 	* transfer learning
 * RollingRegression
@@ -137,6 +140,8 @@ Tensorflow GPU backend may crash on occasion.
 	* GPU and CPU ctx
 * Regressor to TensorflowSTS
 * Relative/Absolute Imports and reduce package reloading messages
+* Allow FillNA to be None
+* Replace OrdinalEncoder with non-external code
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
 * Speed improvements, Profiling
 * Parallelization, and Distributed options (Dask) for general greater speed

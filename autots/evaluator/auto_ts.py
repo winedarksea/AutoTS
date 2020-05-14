@@ -767,7 +767,7 @@ or otherwise increase models available."""
                  template_result.model_results],
                 axis=0, ignore_index=True, sort=False).reset_index(drop=True)
             self.initial_results.model_results['Score'] = generate_score(
-                self.initial_results.model_results,
+                self.initial_results.model_results.fillna(0),
                 metric_weighting=metric_weighting,
                 prediction_interval=prediction_interval)
             if result_file is not None:

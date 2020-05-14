@@ -143,9 +143,8 @@ class NumericTransformer(object):
             self.categorical_flag = True
         if self.categorical_flag:
             from sklearn.preprocessing import OrdinalEncoder
-            from sklearn.impute import SimpleImputer
-            imp_enc = SimpleImputer(strategy=self.categorical_impute_strategy)
-            df_enc = imp_enc.fit_transform(df[self.categorical_features])
+            df_enc = (df[self.categorical_features]).fillna(method='ffill')
+            df_enc = df_enc.fillna(method='bfill').fillna('missing_value')
             self.cat_transformer = OrdinalEncoder()
             self.cat_transformer.fit(df_enc)
 
@@ -161,9 +160,8 @@ class NumericTransformer(object):
         df.replace(self.na_strings, np.nan, inplace=True)
         df = df.apply(pd.to_numeric, errors='ignore')
         if self.categorical_flag:
-            from sklearn.impute import SimpleImputer
-            imp_enc = SimpleImputer(strategy=self.categorical_impute_strategy)
-            df_enc = imp_enc.fit_transform(df[self.categorical_features])
+            df_enc = (df[self.categorical_features]).fillna(method='ffill')
+            df_enc = df_enc.fillna(method='bfill').fillna('missing_value')
             df_enc = self.cat_transformer.transform(df_enc)
             df = pd.concat([
                 pd.DataFrame(df[self.numeric_features],

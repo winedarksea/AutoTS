@@ -149,6 +149,7 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 	numpy
 	pandas
 	sklearn >= 0.20.0 (ColumnTransformer)
+			>= 0.23.0 (PoissonReg)
 	statsmodels
 	holidays
 
@@ -161,6 +162,7 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 	gluonts
 	tensorflow >= 2.0.0 (tensorflow-mkl)
 	tensorflow-probability
+	xgboost
 
 #### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
 Download Anaconda or Miniconda.
