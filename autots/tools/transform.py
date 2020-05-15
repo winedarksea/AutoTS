@@ -775,7 +775,7 @@ class GeneralTransformer(object):
         outlier_position (str): when to remove outliers
             'first' - remove outliers before other transformations
             'middle' - remove outliers after first_transformation
-            'last' - remove outliers after third_transformation
+            'last' - remove outliers after fourth_transformation
 
         fillNA (str): - method to fill NA, passed through to FillNA()
             'ffill' - fill most recent non-na value forward until another non-na value is reached
@@ -813,9 +813,14 @@ class GeneralTransformer(object):
 
         second_transformation (str): second transformation to apply. Same options as transformation, but with transformation_param passed in if used
 
+        detrend(str): Model and remove a linear component from the data.
+            None, 'Linear', 'Poisson', 'Tweedie', 'Gamma', 'RANSAC', 'ARD'
+
+        second_transformation (str): second transformation to apply. Same options as transformation, but with transformation_param passed in if used
+
         transformation_param (str): passed to second_transformation, not used by most transformers.
 
-        third_transformation (str): third transformation to apply. Sames options as transformation.
+        fourth_transformation (str): third transformation to apply. Sames options as transformation.
 
         discretization (str): method of binning to apply
             None - no discretization
@@ -834,10 +839,12 @@ class GeneralTransformer(object):
                  outlier_position: str = 'first',
                  fillna: str = 'ffill',
                  transformation: str = None,
-                 detrend: bool = False,
                  second_transformation: str = None,
                  transformation_param: str = None,
+                 detrend: str = None,
                  third_transformation: str = None,
+                 transformation_param2: str = None,
+                 fourth_transformation: str = None,
                  discretization: str = 'center', n_bins: int = None,
                  random_seed: int = 2020):
 
@@ -850,7 +857,9 @@ class GeneralTransformer(object):
         self.second_transformation = second_transformation
         self.transformation_param = transformation_param
         self.third_transformation = third_transformation
-        self.discretization = discretization 
+        self.transformation_param2 = transformation_param2
+        self.fourth_transformation = fourth_transformation
+        self.discretization = discretization
         self.n_bins = n_bins
         self.random_seed = random_seed
 
@@ -1040,6 +1049,16 @@ class GeneralTransformer(object):
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
 
+        # the second transformation! This one has an optional parameter.
+        self.second_transformer = self._retrieve_transformer(
+            transformation=self.second_transformation,
+            param=self.transformation_param, df=df)
+        self.second_transformer = self.second_transformer.fit(df)
+        df = pd.DataFrame(self.second_transformer.transform(df))
+        df.index = self.df_index
+        df.columns = self.df_colnames
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
+
         if self.detrend is not None:
             self.model = self._retrieve_detrend(detrend=self.detrend)
             if self.detrend in self.need_positive:
@@ -1068,22 +1087,22 @@ class GeneralTransformer(object):
                 if self.fillna in ['fake date']:
                     self.df_index = df.index
 
-        # the second transformation! This one has an optional parameter passed through
-        self.second_transformer = self._retrieve_transformer(
-            transformation=self.second_transformation,
-            param=self.transformation_param, df=df)
-        self.second_transformer = self.second_transformer.fit(df)
-        df = pd.DataFrame(self.second_transformer.transform(df))
+        # the third transformation! This one has an optional parameter.
+        self.third_transformer = self._retrieve_transformer(
+            transformation=self.third_transformation,
+            param=self.transformation_param2, df=df)
+        self.third_transformer = self.third_transformer.fit(df)
+        df = pd.DataFrame(self.third_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
 
-        # the third transformation!
-        self.third_transformer = self._retrieve_transformer(
-            transformation=self.third_transformation,
+        # the fourth transformation!
+        self.fourth_transformer = self._retrieve_transformer(
+            transformation=self.fourth_transformation,
             param=self.transformation_param, df=df)
-        self.third_transformer = self.third_transformer.fit(df)
-        df = pd.DataFrame(self.third_transformer.transform(df))
+        self.fourth_transformer = self.fourth_transformer.fit(df)
+        df = pd.DataFrame(self.fourth_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
@@ -1165,6 +1184,12 @@ class GeneralTransformer(object):
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
 
+        # second transformation
+        df = pd.DataFrame(self.second_transformer.transform(df))
+        df.index = self.df_index
+        df.columns = self.df_colnames
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
+
         # detrend
         if self.detrend is not None:
             X = (pd.to_numeric(self.df_index, errors='coerce',
@@ -1185,14 +1210,14 @@ class GeneralTransformer(object):
                 if self.fillna in ['fake date']:
                     self.df_index = df.index
 
-        # second transformation
-        df = pd.DataFrame(self.second_transformer.transform(df))
+        # third transformation
+        df = pd.DataFrame(self.third_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
 
-        # third transformation
-        df = pd.DataFrame(self.third_transformer.transform(df))
+        # fourth transformation
+        df = pd.DataFrame(self.fourth_transformer.transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
@@ -1227,7 +1252,7 @@ class GeneralTransformer(object):
         """Undo the madness
 
         Args:
-            df (pandas.DataFrame): Datetime Indexed 
+            df (pandas.DataFrame): Datetime Indexed
             trans_method (str): 'forecast' or 'original' passed through to RollingTransformer, DifferencedTransformer, if used
         """
         self.df_index = df.index
@@ -1239,6 +1264,7 @@ class GeneralTransformer(object):
                          'SeasonalDifference7', 'SeasonalDifference12']
 
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
+
         # discretization (only needed inverse for sklearn)
         if self.discretization in ['sklearn-quantile', 'sklearn-uniform',
                                    'sklearn-kmeans']:
@@ -1248,20 +1274,20 @@ class GeneralTransformer(object):
             df.index = self.df_index
             df.columns = self.df_colnames
 
+        if self.fourth_transformation in oddities_list:
+            df = pd.DataFrame(self.fourth_transformer.inverse_transform(
+                df, trans_method=trans_method))
+        else:
+            df = pd.DataFrame(self.fourth_transformer.inverse_transform(df))
+        df.index = self.df_index
+        df.columns = self.df_colnames
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
+
         if self.third_transformation in oddities_list:
             df = pd.DataFrame(self.third_transformer.inverse_transform(
                 df, trans_method=trans_method))
         else:
             df = pd.DataFrame(self.third_transformer.inverse_transform(df))
-        df.index = self.df_index
-        df.columns = self.df_colnames
-        df = df.replace([np.inf, -np.inf], 0).fillna(0)
-
-        if self.second_transformation in oddities_list:
-            df = pd.DataFrame(self.second_transformer.inverse_transform(
-                df, trans_method=trans_method))
-        else:
-            df = pd.DataFrame(self.second_transformer.inverse_transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
@@ -1275,6 +1301,15 @@ class GeneralTransformer(object):
                 df = df + self.trnd_trans.inverse_transform(temp)
             else:
                 df = df + self.model.predict(X)
+
+        if self.second_transformation in oddities_list:
+            df = pd.DataFrame(self.second_transformer.inverse_transform(
+                df, trans_method=trans_method))
+        else:
+            df = pd.DataFrame(self.second_transformer.inverse_transform(df))
+        df.index = self.df_index
+        df.columns = self.df_colnames
+        df = df.replace([np.inf, -np.inf], 0).fillna(0)
 
         if self.transformation in oddities_list:
             df = pd.DataFrame(self.transformer.inverse_transform(
@@ -1305,13 +1340,13 @@ def RandomTransform():
                               0.02, 0.02, 0.01,
                               0.01,
                               0.01, 0.01]
-    third_transformer_prob = [0.2, 0.05, 0.1, 0.05,
-                              0.05, 0.1, 0.05, 0.05,
-                              0.05, 0.05, 0.03, 0.02,
-                              0.07, 0.01, 0.04,
-                              0.02, 0.02, 0.01,
-                              0.01,
-                              0.01, 0.01]
+    fourth_transformer_prob = [0.2, 0.05, 0.1, 0.05,
+                               0.05, 0.1, 0.05, 0.05,
+                               0.05, 0.05, 0.03, 0.02,
+                               0.07, 0.01, 0.04,
+                               0.02, 0.02, 0.01,
+                               0.01,
+                               0.01, 0.01]
     outlier_method_choice = np.random.choice(a=[None, 'clip', 'remove'],
                                              size=1, p=[0.5, 0.3, 0.2]).item()
     if outlier_method_choice is not None:
@@ -1339,6 +1374,7 @@ def RandomTransform():
         a=[None, 'Linear', 'Poisson', 'Tweedie',
            'Gamma', 'RANSAC', 'ARD'], size=1,
         p=[0.6, 0.3, 0.02, 0.02, 0.02, 0.02, 0.02]).item()
+
     second_transformation_choice = np.random.choice(
         a=[None, 'RollingMean', 'FixedRollingMean', 'SeasonalDifference',
            'SeasonalDifferenceMean', 'other'],
@@ -1352,14 +1388,36 @@ def RandomTransform():
         transformation_param_choice = np.random.choice(
             a=[3, 10, 14, 28, '10thN', '25thN', '100thN'], size=1,
             p=[0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1]).item()
-    elif second_transformation_choice in ['SeasonalDifference', 'SeasonalDifferenceMean']:
+    elif second_transformation_choice in ['SeasonalDifference',
+                                          'SeasonalDifferenceMean']:
         from autots.evaluator.auto_model import seasonal_int
         transformation_param_choice = str(seasonal_int())
     else:
         transformation_param_choice = None
-    third_transformation_choice = np.random.choice(a=transformer_list, size=1,
-                                                   p=third_transformer_prob
-                                                   ).item()
+
+    third_transformation_choice = np.random.choice(
+        a=[None, 'RollingMean', 'FixedRollingMean', 'SeasonalDifference',
+           'SeasonalDifferenceMean', 'other'],
+        size=1,
+        p=[0.3, 0.3, 0.1, 0.05, 0.05, 0.2]).item()
+    if third_transformation_choice == 'other':
+        third_transformation_choice = np.random.choice(
+            a=transformer_list, size=1,
+            p=first_transformer_prob).item()
+    if third_transformation_choice in ['RollingMean', 'FixedRollingMean']:
+        transformation_param_choice2 = np.random.choice(
+            a=[3, 10, 14, 28, '10thN', '25thN', '100thN'], size=1,
+            p=[0.2, 0.2, 0.2, 0.1, 0.1, 0.1, 0.1]).item()
+    elif third_transformation_choice in ['SeasonalDifference',
+                                         'SeasonalDifferenceMean']:
+        from autots.evaluator.auto_model import seasonal_int
+        transformation_param_choice2 = str(seasonal_int())
+    else:
+        transformation_param_choice2 = None
+
+    fourth_transformation_choice = np.random.choice(a=transformer_list, size=1,
+                                                    p=fourth_transformer_prob
+                                                    ).item()
     discretization_choice = np.random.choice(
         a=[None, 'center', 'lower', 'upper', 'sklearn-quantile',
            'sklearn-uniform', 'sklearn-kmeans'], size=1,
@@ -1379,12 +1437,14 @@ def RandomTransform():
             'outlier_position': outlier_position_choice,
             'fillna': na_choice,
             'transformation': transformation_choice,
-            'detrend' : detrend_choice,
-            'second_transformation' : second_transformation_choice,
-            'transformation_param' : transformation_param_choice,
-            'third_transformation' : third_transformation_choice,
-            'discretization' : discretization_choice,
-            'n_bins' : n_bins_choice,
-            'context_slicer' : context_choice
+            'second_transformation': second_transformation_choice,
+            'transformation_param': transformation_param_choice,
+            'detrend': detrend_choice,
+            'third_transformation': third_transformation_choice,
+            'transformation_param2': transformation_param_choice2,
+            'fourth_transformation': fourth_transformation_choice,
+            'discretization': discretization_choice,
+            'n_bins': n_bins_choice,
+            'context_slicer': context_choice
             }
     return param_dict

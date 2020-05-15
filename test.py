@@ -10,8 +10,8 @@ from autots.datasets import load_toy_weekly
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
-forecast_length = 3
-df_long = load_toy_daily()
+forecast_length = 36
+df_long = load_toy_hourly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -26,11 +26,11 @@ model_list = [
               # ,'VARMAX', 'GluonTS'
               ]
 model_list = 'superfast'
-model_list = ['RollingRegression', 'LastValueNaive']
+model_list = ['AverageValueNaive', 'LastValueNaive', 'ZeroesNaive']
 # model_list = ['GLM', 'GLS']  # 'TensorflowSTS', 'TFPRegression'
 
 metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
-                    'rmse_weighting': 5, 'containment_weighting': 0,
+                    'rmse_weighting': 2, 'containment_weighting': 0,
                     'runtime_weighting': 0, 'spl_weighting': 1,
                     'contour_weighting': 0
                     }
@@ -38,7 +38,7 @@ metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
 
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9,
-               ensemble='simple,distance',  # ',probabilistic-max,horizontal-max',
+               ensemble='simple,distance,probabilistic-max,horizontal-max',
                constraint=2,
                max_generations=2, num_validations=2,
                validation_method='backwards',

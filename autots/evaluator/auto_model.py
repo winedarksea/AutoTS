@@ -544,42 +544,44 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
         second_transformation=transformation_dict['second_transformation'],
         transformation_param=transformation_dict['transformation_param'],
         third_transformation=transformation_dict['third_transformation'],
+        transformation_param2=transformation_dict['transformation_param2'],
+        fourth_transformation=transformation_dict['fourth_transformation'],
         discretization=transformation_dict['discretization'],
         n_bins=transformation_dict['n_bins']
                                             ).fit(df_train)
     df_train_transformed = transformer_object.transform(df_train)
-    
+
     # slice the context, ie shorten the amount of data available.
     if transformation_dict['context_slicer'] not in [None, 'None']:
         from autots.tools.transform import simple_context_slicer
         df_train_transformed = simple_context_slicer(df_train_transformed, method = transformation_dict['context_slicer'], forecast_length = forecast_length)
-    
+
     # make sure regressor has same length. This could be a problem if wrong size regressor is passed.
     if len(preord_regressor_train) > 0:
         preord_regressor_train = preord_regressor_train.tail(df_train_transformed.shape[0])
-    
+
     transformation_runtime = datetime.datetime.now() - transformationStartTime
     # from autots.evaluator.auto_model import ModelMonster
     model = ModelMonster(model_str, parameters=parameter_dict,
-                         frequency = frequency,
+                         frequency=frequency,
                          prediction_interval=prediction_interval,
                          holiday_country=holiday_country,
                          random_seed=random_seed, verbose=verbose,
-                         forecast_length = forecast_length)
+                         forecast_length=forecast_length)
     model = model.fit(df_train_transformed,
-                      preord_regressor = preord_regressor_train)
-    df_forecast = model.predict(forecast_length = forecast_length,
-                                preord_regressor = preord_regressor_forecast)
-    
-    if df_forecast.forecast.isnull().all(axis = 0).astype(int).sum() > 0:
+                      preord_regressor=preord_regressor_train)
+    df_forecast = model.predict(forecast_length=forecast_length,
+                                preord_regressor=preord_regressor_forecast)
+
+    if df_forecast.forecast.isnull().all(axis=0).astype(int).sum() > 0:
         raise ValueError("Model {} returned NaN for one or more series".format(model_str))
-    
+
     transformationStartTime = datetime.datetime.now()
     # Inverse the transformations
     df_forecast.forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.forecast))#, index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
     df_forecast.lower_forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.lower_forecast))# , index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
     df_forecast.upper_forecast = pd.DataFrame(transformer_object.inverse_transform(df_forecast.upper_forecast)) #, index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
-    
+
     df_forecast.transformation_parameters = transformation_dict
     # Remove negatives if desired
     # There's df.where(df_forecast.forecast > 0, 0) or  df.clip(lower = 0), not sure which faster
@@ -988,6 +990,10 @@ def trans_dict_recomb(dict_array):
     c = {**c, **{k: current_dict[k] for k in out_keys}}
 
     mid_trans_keys = ['second_transformation', 'transformation_param']
+    current_dict = np.random.choice([a, b], size=1).item()
+    c = {**c, **{k: current_dict[k] for k in mid_trans_keys}}
+    
+    mid_trans_keys = ['third_transformation', 'transformation_param2']
     current_dict = np.random.choice([a, b], size=1).item()
     c = {**c, **{k: current_dict[k] for k in mid_trans_keys}}
 

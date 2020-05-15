@@ -39,8 +39,9 @@ Latest:
 		Log
 		IntermittentOccurrence
 		SeasonalDetrend
-	Entirely changed the general transformer to add three levels of transformation.
+	Entirely changed the general transformer to add ~~three~~ four levels of transformation.
 	Allowed context_slicer to receive direct integer inputs
+	Added new 'Detrend' options to allow more sklearn linear models.
 
 	GLM
 		Error where it apparently won't tolerate any zeroes was compensated for.
@@ -83,8 +84,6 @@ KerasRNN errors due to parameters not working on all dataset
 Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
-* Rename preord
-* Second parameterized transformer
 * method to test effectiveness across multiple probabilistic intervals.
 	* generate base template (based mainly on best point forecast, validated)
 	* run for each new prediction intervals (on just most recent)
@@ -96,14 +95,13 @@ Tensorflow GPU backend may crash on occasion.
 
 
 # To-Do
-* Sklearn iterative imputer 
+* Rename preord
 * Get the sphinx (google style) documentation and github pages website up
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
 * Bring GeneralTransformer to higher level API.
 	* wide_to_long and long_to_wide in higher-level API
 * Option to use full traceback in errors in table
-* Deeper GPU integration (NVIDIA Rapids?)
 * Hierarchial
 	* every level must be included in forecasting data
 	* 'bottom-up' and 'mid' levels
@@ -200,6 +198,7 @@ Tensorflow GPU backend may crash on occasion.
 	Reinforcement Learning
 
 #### New Transformations:
+	Sklearn iterative imputer 
 	lag and beta to DifferencedTransformer to make it more of an AR process
 	Weighted moving average
 	Symbolic aggregate approximation (SAX) and (PAA) (basically these are just binning)
