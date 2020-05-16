@@ -96,10 +96,13 @@ Tensorflow GPU backend may crash on occasion.
 * figure out how to bring together all the different training templates
 * test submission
 * test whether bottum up significantly overestimates on rollup
+* test used_regressor_check
 
 
 # To-Do
 * Rename preord
+* make a function that captures Template Wizard output and does all the pd.concats of AutoTS
+* clean up long_to_wide inputs like self.min_allowed_train_percent
 * Get the sphinx (google style) documentation and github pages website up
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d

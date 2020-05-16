@@ -645,10 +645,12 @@ def unpack_ensemble_models(template,
         model_df = pd.DataFrame.from_dict(model_dict, orient='index')
         model_df = model_df.rename_axis('ID').reset_index(drop=False)
         model_df['Ensemble'] = 0
+        # unpack nested ensembles, if recursive specified
         if recursive and 'Ensemble' in model_df['Model'].tolist():
-            model_df = pd.concat([unpack_ensemble_models(model_df),
-                                  model_df], axis=0, ignore_index=True,
-                                 sort=False).reset_index(drop=True)
+            model_df = pd.concat([unpack_ensemble_models(
+                model_df, recursive=True, template_cols=template_cols),
+                model_df], axis=0, ignore_index=True,
+                sort=False).reset_index(drop=True)
         ensemble_template = pd.concat([ensemble_template, model_df], axis=0,
                                       ignore_index=True,
                                       sort=False).reset_index(drop=True)

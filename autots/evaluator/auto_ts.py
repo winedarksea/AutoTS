@@ -187,6 +187,7 @@ class AutoTS(object):
 
         self.best_model = pd.DataFrame()
         self.regressor_used = False
+        # do not add 'ID' to the below unless you want to refactor things.
         self.template_cols = ['Model', 'ModelParameters',
                               'TransformationParameters', 'Ensemble']
         self.initial_results = TemplateEvalObject()
@@ -418,7 +419,10 @@ class AutoTS(object):
                 [self.initial_results.per_timestamp_smape,
                  template_result.per_timestamp_smape],
                 axis=0, sort=False)
-        self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting=metric_weighting,prediction_interval=prediction_interval)
+        self.initial_results.model_results['Score'] = generate_score(
+            self.initial_results.model_results,
+            metric_weighting=metric_weighting,
+            prediction_interval=prediction_interval)
         if result_file is not None:
             self.initial_results.model_results.to_csv(result_file, index=False)
 
@@ -634,6 +638,7 @@ class AutoTS(object):
                     current_weights = {x: 1 for x in df_subset.columns}
                 else:
                     current_weights = {x: weights[x] for x in df_subset.columns}
+
                 val_df_train, val_df_test = simple_train_test_split(
                     df_subset, forecast_length=forecast_length,
                     min_allowed_train_percent=self.min_allowed_train_percent,
@@ -667,7 +672,7 @@ class AutoTS(object):
                     preord_regressor_forecast=val_preord_regressor_test,
                     holiday_country=holiday_country,
                     startTimeStamps=self.startTimeStamps,
-                    template_cols=template_cols,
+                    template_cols=self.template_cols,
                     random_seed=random_seed, verbose=verbose,
                     validation_round=(y + 1))
                 model_count = template_result.model_count
@@ -836,25 +841,10 @@ or otherwise increase models available."""
             ~self.initial_results.model_results['Exceptions'].isna()]
         self.error_templates = val_errors[template_cols + ['Exceptions']]
 
-        def regr_param_check(param_dict):
-            out = False
-            for key in param_dict['models']:
-                cur_dict = json.loads(param_dict['models'][key]['ModelParameters'])
-                try:
-                    reg_param = cur_dict['regression_type']
-                    if reg_param == 'User':
-                        return True 
-                except KeyError:
-                    pass
-                if param_dict['models'][key]['Model'] == 'Ensemble':
-                    out = regr_param_check(cur_dict)
-                    if out:
-                        return out
-            return out
         # set flags to check if regressors or ensemble used in final model.
         param_dict = json.loads(self.best_model.iloc[0]['ModelParameters'])
         if self.ensemble_check == 1:
-            self.used_regressor_check = regr_param_check(param_dict)
+            self.used_regressor_check = self._regr_param_check(param_dict)
 
         if self.ensemble_check == 0:
             self.used_regressor_check = False
@@ -865,6 +855,23 @@ or otherwise increase models available."""
             except KeyError:
                 pass
         return self
+
+    def _regr_param_check(self, param_dict):
+        """Help to search for if a regressor was used in model."""
+        out = False
+        for key in param_dict['models']:
+            cur_dict = json.loads(param_dict['models'][key]['ModelParameters'])
+            try:
+                reg_param = cur_dict['regression_type']
+                if reg_param == 'User':
+                    return True
+            except KeyError:
+                pass
+            if param_dict['models'][key]['Model'] == 'Ensemble':
+                out = self._regr_param_check(cur_dict)
+                if out:
+                    return out
+        return out
 
     def predict(self, forecast_length: int = "self",
                 preord_regressor=[], hierarchy=None,
@@ -1022,12 +1029,15 @@ or otherwise increase models available."""
     def import_results(self, filename):
         """Add results from another run on the same data."""
         past_results = pd.read_csv(filename)
+        # remove those that succeeded (ie had no Exception)
         past_results = past_results[pd.isnull(past_results['Exceptions'])]
         past_results['TotalRuntime'] = pd.to_timedelta(past_results['TotalRuntime'])
+        # combine with any existing results
         self.initial_results.model_results = pd.concat(
             [past_results, self.initial_results.model_results],
             axis=0, ignore_index=True, sort=False).reset_index(drop=True)
-        self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(subset=self.template_cols, keep='first')
+        self.initial_results.model_results.drop_duplicates(
+            subset=self.template_cols, keep='first', inplace=True)
         return self
 
 
