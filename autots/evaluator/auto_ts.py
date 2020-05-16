@@ -950,12 +950,14 @@ or otherwise increase models available."""
             if any(x in self.ensemble for x in ens_list):
                 temp = self.initial_results.model_results
                 temp = temp[temp['Model'] == 'Ensemble']
-                temp = temp[temp['ModelParameters'].str.contains('"Horizontal"') |
-                     temp['ModelParameters'].str.contains('"Probabilistic"') |
-                     temp['ModelParameters'].str.contains('"hdist"')
+                temp = temp[temp['ModelParameters'].str.contains('Horizontal') |
+                     temp['ModelParameters'].str.contains('Probabilistic') |
+                     temp['ModelParameters'].str.contains('hdist')
                      ]
-                export_template = pd.concat([export_template,
-                                             temp], axis=0)
+                export_template = export_template.merge(
+                    temp, how='outer',
+                    on=export_template.columns.intersection(
+                        temp.columns).to_list())
             if str(max_per_model_class).isdigit():
                 export_template = export_template.sort_values(
                     'Score', ascending=True
@@ -1028,9 +1030,14 @@ or otherwise increase models available."""
 
     def import_results(self, filename):
         """Add results from another run on the same data."""
-        past_results = pd.read_csv(filename)
+        if isinstance(filename, pd.DataFrame):
+            past_results = filename.copy()
+        else:
+            past_results = pd.read_csv(filename)
         # remove those that succeeded (ie had no Exception)
         past_results = past_results[pd.isnull(past_results['Exceptions'])]
+        # remove validation results
+        past_results = past_results[(past_results['ValidationRound']) == 0]
         past_results['TotalRuntime'] = pd.to_timedelta(past_results['TotalRuntime'])
         # combine with any existing results
         self.initial_results.model_results = pd.concat(
@@ -1094,7 +1101,10 @@ def error_correlations(all_result, result: str = 'corr'):
     all_results = all_results.reset_index(drop=True)
 
     trans_df = all_results['TransformationParameters'].apply(json.loads)
-    trans_df = pd.json_normalize(trans_df)  # .fillna(value='NaN')
+    try:
+        trans_df = pd.json_normalize(trans_df)  # .fillna(value='NaN')
+    except Exception:
+        trans_df = pd.io.json.json_normalize(trans_df)
     trans_cols1 = trans_df.columns
     trans_df = trans_df.astype(str).replace('nan', 'NaNZ')
     trans_transformer = OneHotEncoder(sparse=False).fit(trans_df)
@@ -1105,7 +1115,10 @@ def error_correlations(all_result, result: str = 'corr'):
     trans_df.columns = trans_cols
 
     model_df = all_results['ModelParameters'].apply(json.loads)
-    model_df = pd.json_normalize(model_df)  # .fillna(value='NaN')
+    try:
+        model_df = pd.json_normalize(model_df)  # .fillna(value='NaN')
+    except Exception:
+        model_df = pd.io.json.json_normalize(model_df)
     model_cols1 = model_df.columns
     model_df = model_df.astype(str).replace('nan', 'NaNZ')
     model_transformer = OneHotEncoder(sparse=False).fit(model_df)

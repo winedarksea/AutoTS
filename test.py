@@ -99,6 +99,7 @@ Edgey Cases:
         Single Time Series
         Forecast Length of 1
         Very short training data
+        Lots of NaN
 """
 
 # %%
