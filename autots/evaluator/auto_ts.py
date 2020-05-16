@@ -50,7 +50,8 @@ class AutoTS(object):
             'even splits' the data into equally-sized slices best for more consistent data
             'seasonal n' for example 'seasonal 364' would test all data on each previous year of the forecast_length that would immediately follow the training data.
         min_allowed_train_percent (float): useful in (unrecommended) cases where forecast_length > training length. Percent of forecast length to allow as min training, else raises error.
-        max_generations (int): number of genetic algorithms generations to run. More runs = better chance of better accuracy.
+        max_generations (int): umber of genetic algorithms generations to run. More runs = better chance of better accuracy.
+        remove_leading_zeroes (bool): replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn't started yet.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give slightly more output.
         
     Attributes:
@@ -89,6 +90,7 @@ class AutoTS(object):
                  validation_method: str = 'even',
                  min_allowed_train_percent: float = 0.5,
                  max_generations: int = 5,
+                 remove_leading_zeroes: bool = False,
                  verbose: int = 1
                  ):
         self.forecast_length = int(abs(forecast_length))
@@ -112,6 +114,7 @@ class AutoTS(object):
         self.validation_method = str(validation_method).lower()
         self.min_allowed_train_percent = min_allowed_train_percent
         self.max_generations = max_generations
+        self.remove_leading_zeroes = remove_leading_zeroes
         self.verbose = int(verbose)
         if self.ensemble == 'all':
             self.ensemble = 'simple,distance'
@@ -179,7 +182,7 @@ class AutoTS(object):
 
         # remove models not in given model list
         self.initial_template = self.initial_template[self.initial_template['Model'].isin(self.model_list)]
-        if len(self.initial_template.index) == 0:
+        if self.initial_template.shape[0] == 0:
             raise ValueError("No models in template! Adjust initial_template or model_list")
 
         self.best_model = pd.DataFrame()
@@ -298,6 +301,16 @@ class AutoTS(object):
         self.categorical_transformer = NumericTransformer(
             verbose=self.verbose).fit(df_wide)
         df_wide_numeric = self.categorical_transformer.transform(df_wide)
+
+        if self.remove_leading_zeroes:
+            # keep the last row unaltered to keep metrics happier if all zeroes
+            temp = df_wide_numeric.head(df_wide_numeric.shape[0] - 1)
+            temp = temp.abs().cumsum(axis=0).replace(0, np.nan)
+            temp = df_wide_numeric[~temp.isna()]
+            temp = temp.head(df_wide_numeric.shape[0] - 1)
+            df_wide_numeric = pd.concat([temp, df_wide_numeric.tail(1)],
+                                        axis=0)
+
         self.df_wide_numeric = df_wide_numeric
 
         # capture some misc information
@@ -349,7 +362,19 @@ class AutoTS(object):
 
         # run the initial template
         self.initial_template = unpack_ensemble_models(
-            self.initial_template, template_cols, keep_ensemble=True)
+            self.initial_template, self.template_cols,
+            keep_ensemble=True, recursive=True)
+        # remove horizontal ensembles from initial_template
+        if 'Ensemble' in self.initial_template['Model'].tolist():
+            temp = self.initial_template
+            # so this means no parameters can ever contain these strings...
+            # and then be used as an imported template
+            temp = temp[~temp['ModelParameters'].str.contains('Horizontal') &
+                        ~temp['ModelParameters'].str.contains('Probabilistic') &
+                        ~temp['ModelParameters'].str.contains('hdist')
+                        ]
+            self.initial_template = temp.copy()
+
         submitted_parameters = self.initial_template.copy()
         template_result = TemplateWizard(
             self.initial_template, df_train,
@@ -470,7 +495,7 @@ class AutoTS(object):
                                                           index=False)
 
         # try ensembling
-        if ensemble is not None:
+        if ensemble not in [None, 'none']:
             try:
                 ensemble_templates = EnsembleTemplateGenerator(
                     self.initial_results, forecast_length=forecast_length,
@@ -660,8 +685,8 @@ class AutoTS(object):
                     metric_weighting=metric_weighting,
                     prediction_interval=prediction_interval)
                 # collect ensemble data
-                ensy = ['probabilistic', 'horizontal']
-                if any(x in self.ensemble for x in ensy):
+                ens_list = ['probabilistic', 'horizontal']
+                if any(x in self.ensemble for x in ens_list):
                     self.initial_results.per_series_mae = pd.concat(
                         [self.initial_results.per_series_mae,
                          template_result.per_series_mae],
@@ -689,8 +714,8 @@ Try increasing models_to_validate, max_per_model_class
 or otherwise increase models available."""
 
         # Construct horizontal style ensembles
-        ensy = ['horizontal', 'probabilistic', 'hdist']
-        if any(x in ensemble for x in ensy):
+        ens_list = ['horizontal', 'probabilistic', 'hdist']
+        if any(x in ensemble for x in ens_list):
             ensemble_templates = pd.DataFrame()
             if 'horizontal' in ensemble:
                 per_series = self.initial_results.per_series_mae.copy()
@@ -832,9 +857,9 @@ or otherwise increase models available."""
             except Exception:
                 pass
         return self
-  
+
     def predict(self, forecast_length: int = "self",
-                preord_regressor = [], hierarchy = None,
+                preord_regressor=[], hierarchy=None,
                 just_point_forecast: bool = False):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
@@ -857,7 +882,8 @@ or otherwise increase models available."""
             self.preord_regressor_train = []
         else:
             preord_regressor = pd.DataFrame(preord_regressor)
-            self.preord_regressor_train = self.preord_regressor_train.reindex(index=self.df_wide_numeric.index)
+            self.preord_regressor_train = self.preord_regressor_train.reindex(
+                index=self.df_wide_numeric.index)
 
         df_forecast = PredictWitch(
             self.best_model,
@@ -881,61 +907,108 @@ or otherwise increase models available."""
             df_forecast.lower_forecast)
         df_forecast.upper_forecast = trans.inverse_transform(
             df_forecast.upper_forecast)
-        # df_forecast.forecast = categorical_inverse(self.categorical_transformer, df_forecast.forecast)
 
         if just_point_forecast:
             return df_forecast.forecast
         else:
             return df_forecast
 
-    def export_template(self, filename, models: str = 'best', n: int = 1,
-                        max_per_model_class: int = None):
+    def export_template(self, filename, models: str = 'best', n: int = 5,
+                        max_per_model_class: int = None,
+                        include_results: bool = False):
         """Export top results as a reusable template.
 
         Args:
             filename (str): 'csv' or 'json' (in filename)
             models (str): 'best' or 'all'
             n (int): if models = 'best', how many n-best to export
-            max_per_model_class (int): if models = 'best', the max number of each model class to include in template
+            max_per_model_class (int): if models = 'best',
+                the max number of each model class to include in template
+            include_results (bool): whether to include performance metrics
         """
         if models == 'all':
-            export_template = self.initial_results[self.template_cols]
-        if models == 'best':
+            export_template = self.initial_results.model_results[self.template_cols]
+        elif models == 'best':
             export_template = self.validation_results.model_results
             export_template = export_template[export_template['Runs'] >= (self.num_validations + 1)]
+            ens_list = ['horizontal', 'probabilistic', 'hdist']
+            if any(x in self.ensemble for x in ens_list):
+                temp = self.initial_results.model_results
+                temp = temp[temp['Model'] == 'Ensemble']
+                temp = temp[temp['ModelParameters'].str.contains('"Horizontal"') |
+                     temp['ModelParameters'].str.contains('"Probabilistic"') |
+                     temp['ModelParameters'].str.contains('"hdist"')
+                     ]
+                export_template = pd.concat([export_template,
+                                             temp], axis=0)
             if str(max_per_model_class).isdigit():
-                export_template = export_template.sort_values('Score', ascending=True).groupby('Model').head(max_per_model_class).reset_index()
-            export_template = export_template.nsmallest(n, columns = ['Score'])[self.template_cols]
+                export_template = export_template.sort_values(
+                    'Score', ascending=True
+                    ).groupby('Model').head(max_per_model_class).reset_index()
+            export_template = export_template.nsmallest(n, columns=['Score'])
+            if not include_results:
+                export_template = export_template[self.template_cols]
+        else:
+            raise ValueError("`models` must be 'all' or 'best'")
         try:
             if '.csv' in filename:
                 return export_template.to_csv(filename, index=False)
-            if '.json' in filename:
+            elif '.json' in filename:
                 return export_template.to_json(filename, orient='columns')
+            else:
+                raise ValueError("file must be .csv or .json")
         except PermissionError:
             raise PermissionError("Permission Error: directory or existing file is locked for editing.")
-    def import_template(self, filename: str, method: str = "Add On"):
-        """"
+
+    def import_template(self, filename: str, method: str = "Add On",
+                        enforce_model_list: bool = True):
+        """Import a previously exported template of model parameters.
+        Must be done before the AutoTS object is .fit().
+
         "Hello. Would you like to destroy some evil today?" - Sanderson
-        
+
         Args:
-            filename (str): file location
+            filename (str): file location (or a pd.DataFrame already loaded)
             method (str): 'Add On' or 'Only'
+            enforce_model_list (bool): if True, remove model types not in model_list
         """
-        if '.csv' in filename:
+        if isinstance(filename, pd.DataFrame):
+            import_template = filename.copy()
+        elif '.csv' in filename:
             import_template = pd.read_csv(filename)
-        if '.json' in filename:
+        elif '.json' in filename:
             import_template = pd.read_json(filename, orient='columns')
+        else:
+            raise ValueError("file must be .csv or .json")
 
         try:
             import_template = import_template[self.template_cols]
         except Exception:
             print("Column names {} were not recognized as matching template columns: {}".format(str(import_template.columns), str(self.template_cols)))
 
+        import_template = unpack_ensemble_models(
+            import_template, self.template_cols,
+            keep_ensemble=True, recursive=True)
+
+        if enforce_model_list:
+            # remove models not in given model list
+            mod_list = self.model_list + ['Ensemble']
+            import_template = import_template[import_template['Model'].isin(mod_list)]
+            if import_template.shape[0] == 0:
+                raise ValueError("Len 0. Model_list does not match models in template! Try enforce_model_list=False.")
+
         if method.lower() in ['add on', 'addon']:
-            self.initial_template = self.initial_template.merge(import_template, on=self.initial_template.columns.intersection(import_template.columns).to_list())
-            self.initial_template = self.initial_template.drop_duplicates(subset=self.template_cols)
-        if method.lower() in ['only', 'user only']:
+            self.initial_template = self.initial_template.merge(
+                import_template, how='outer',
+                on=self.initial_template.columns.intersection(
+                    import_template.columns).to_list())
+            self.initial_template = self.initial_template.drop_duplicates(
+                subset=self.template_cols)
+        elif method.lower() in ['only', 'user only']:
             self.initial_template = import_template
+        else:
+            return ValueError("method must be 'add on' or 'only'")
+
         return self
 
     def import_results(self, filename):
@@ -949,9 +1022,6 @@ or otherwise increase models available."""
         self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(subset=self.template_cols, keep='first')
         return self
 
-    def get_params(self):
-        pass
-
 
 def fake_regressor(df_long, forecast_length: int = 14,
                    date_col: str = 'datetime', value_col: str = 'value',
@@ -960,26 +1030,31 @@ def fake_regressor(df_long, forecast_length: int = 14,
                    drop_most_recent: int = 0, na_tolerance: float = 0.95,
                    drop_data_older_than_periods: int = 10000,
                    dimensions: int = 1):
-    """Creates a fake regressor of random numbers for testing purposes."""
-
+    """Create a fake regressor of random numbers for testing purposes."""
     from autots.tools.shaping import long_to_wide
-    df_wide = long_to_wide(df_long, date_col = date_col, value_col = value_col,
-                       id_col = id_col, frequency = frequency, na_tolerance = na_tolerance,
-                       drop_data_older_than_periods = drop_data_older_than_periods, aggfunc = aggfunc,
-                       drop_most_recent = drop_most_recent)
+    df_wide = long_to_wide(df_long, date_col=date_col, value_col=value_col,
+                           id_col=id_col, frequency=frequency,
+                           na_tolerance=na_tolerance, aggfunc=aggfunc,
+                           drop_data_older_than_periods=drop_data_older_than_periods,
+                           drop_most_recent=drop_most_recent)
     if frequency == 'infer':
         frequency = pd.infer_freq(df_wide.index, warn=True)
-    
-        
-    forecast_index = pd.date_range(freq = frequency, start = df_wide.index[-1], periods = forecast_length + 1)
+
+    forecast_index = pd.date_range(freq=frequency, start=df_wide.index[-1],
+                                   periods=forecast_length + 1)
     forecast_index = forecast_index[1:]
-    
+
     if dimensions <= 1:
-        preord_regressor_train = pd.Series(np.random.randint(0, 100, size = len(df_wide.index)), index = df_wide.index)
-        preord_regressor_forecast = pd.Series(np.random.randint(0, 100, size = (forecast_length)), index = forecast_index)
+        preord_regressor_train = pd.Series(np.random.randint(
+            0, 100, size=len(df_wide.index)), index=df_wide.index)
+        preord_regressor_forecast = pd.Series(np.random.randint(
+            0, 100, size=(forecast_length)), index=forecast_index)
     else:
-        preord_regressor_train = pd.DataFrame(np.random.randint(0, 100, size = (len(df_wide.index), dimensions)), index = df_wide.index)
-        preord_regressor_forecast = pd.DataFrame(np.random.randint(0, 100, size = (forecast_length, dimensions)), index = forecast_index)
+        preord_regressor_train = pd.DataFrame(np.random.randint(
+            0, 100, size=(len(df_wide.index), dimensions)),
+            index=df_wide.index)
+        preord_regressor_forecast = pd.DataFrame(np.random.randint(
+            0, 100, size=(forecast_length, dimensions)), index=forecast_index)
     return preord_regressor_train, preord_regressor_forecast
 
 

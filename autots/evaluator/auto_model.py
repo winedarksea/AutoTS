@@ -634,7 +634,8 @@ def unpack_ensemble_models(template,
                            template_cols: list = ['Model', 'ModelParameters',
                                                   'TransformationParameters',
                                                   'Ensemble'],
-                           keep_ensemble: bool = True):
+                           keep_ensemble: bool = True,
+                           recursive: bool = False):
     """Take ensemble models from template and add as new rows."""
     ensemble_template = pd.DataFrame()
     template['Ensemble'] = np.where(template['Model'] == 'Ensemble',
@@ -644,6 +645,10 @@ def unpack_ensemble_models(template,
         model_df = pd.DataFrame.from_dict(model_dict, orient='index')
         model_df = model_df.rename_axis('ID').reset_index(drop=False)
         model_df['Ensemble'] = 0
+        if recursive and 'Ensemble' in model_df['Model'].tolist():
+            model_df = pd.concat([unpack_ensemble_models(model_df),
+                                  model_df], axis=0, ignore_index=True,
+                                 sort=False).reset_index(drop=True)
         ensemble_template = pd.concat([ensemble_template, model_df], axis=0,
                                       ignore_index=True,
                                       sort=False).reset_index(drop=True)

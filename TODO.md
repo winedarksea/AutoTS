@@ -28,6 +28,7 @@ Latest:
 	Validation:
 		Added 'seasonal' validation method
 	Categorical transformer improved, now tolerant to leaving bounds.
+	Added remove_leading_zeroes option for convenience.
 
 	Added a number of new Transformer options
 		Multiple new Sklearn-sourced transformers (QuantileTransformer, etc)
@@ -71,10 +72,13 @@ ARIMA with User or Holiday ValueError('Can only compare identically-labeled Data
 Drop Most Recent does not play well logically with added external (preord) regressors.
 FastICA 'array must not contain infs or NaNs'
 How do fillna methods handle datasets that have entirely NaN series?
+Horizontal models and NaN in per_series?
 Subsetting for validation samples seems to be funky.
 VAR ValueError('Length of passed values is 4, index implies 9',)
 WindowRegression + KerasRNN + 1step + univariate = ValueError('Length mismatch: Expected axis has 54 elements, new values have 9 elements',)
 Is Template Eval Error: ValueError('array must not contain infs or NaNs',) related to Point to Probability HISTORIC QUANTILE?
+'Fake Date' doesn't work on entirely NaN series - ValueError('Found array with 0 sample(s) (shape=(0, 1)) while a minimum of 1 is required.',)
+
 
 
 ### Ignored Errors:
@@ -149,7 +153,7 @@ Tensorflow GPU backend may crash on occasion.
 * Replace most 'print' with logging.
 * Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
 * Development tools:
-	* Add to Conda distribution as well as pip
+	* Add to Conda (Forge) distribution as well as pip
 	* Continuous integration
 	* Code/documentation quality checkers
 * Ability to automatically add external datasets of parallel time series of global usability (ie from FRED or others)

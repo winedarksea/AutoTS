@@ -148,7 +148,8 @@ class NumericTransformer(object):
             self.cat_transformer = OrdinalEncoder()
             self.cat_transformer.fit(df_enc)
 
-            df_enc = self.cat_transformer.transform(df_enc)
+            # the + 1 makes it compatible with remove_leading_zeroes
+            df_enc = self.cat_transformer.transform(df_enc) + 1
             self.cat_max = df_enc.max(axis=0)
             self.cat_min = df_enc.min(axis=0)
             if self.verbose >= 0:
@@ -162,7 +163,7 @@ class NumericTransformer(object):
         if self.categorical_flag:
             df_enc = (df[self.categorical_features]).fillna(method='ffill')
             df_enc = df_enc.fillna(method='bfill').fillna('missing_value')
-            df_enc = self.cat_transformer.transform(df_enc)
+            df_enc = self.cat_transformer.transform(df_enc) + 1
             df = pd.concat([
                 pd.DataFrame(df[self.numeric_features],
                              columns=self.numeric_features),
@@ -175,7 +176,7 @@ class NumericTransformer(object):
         """Convert numeric back to categorical."""
         if self.categorical_flag:
             df_enc = df[self.categorical_features].clip(
-                upper=self.cat_max, lower=self.cat_min, axis=1)
+                upper=self.cat_max, lower=self.cat_min, axis=1) - 1
             df_enc = self.cat_transformer.inverse_transform(df_enc)
             df = pd.concat([
                 pd.DataFrame(df[self.numeric_features],

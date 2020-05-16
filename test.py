@@ -26,7 +26,7 @@ model_list = [
               # ,'VARMAX', 'GluonTS'
               ]
 model_list = 'superfast'
-model_list = ['AverageValueNaive', 'LastValueNaive', 'ZeroesNaive']
+# model_list = ['AverageValueNaive', 'LastValueNaive', 'ZeroesNaive']
 # model_list = ['GLM', 'GLS']  # 'TensorflowSTS', 'TFPRegression'
 
 metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
@@ -43,7 +43,7 @@ model = AutoTS(forecast_length=forecast_length, frequency='infer',
                max_generations=2, num_validations=2,
                validation_method='backwards',
                model_list=model_list, initial_template='General+Random',
-               metric_weighting=metric_weighting, models_to_validate=0.1,
+               metric_weighting=metric_weighting, models_to_validate=0.2,
                max_per_model_class=None,
                drop_most_recent=0, verbose=0)
 
@@ -82,6 +82,8 @@ Import/Export
 example_filename = "example_export.csv" #.csv/.json
 model.export_template(example_filename, models='best',
                       n=15, max_per_model_class=3)
+
+del(model)
 model = model.import_template(example_filename, method='add on')
 print("Overwrite template is: {}".format(str(model.initial_template)))
 """

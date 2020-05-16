@@ -179,7 +179,8 @@ conda activate timeseries
 # for simplicity: 
 conda install anaconda
 # elsewise: 
-conda install numpy scipy scikit-learn
+conda install numpy scipy
+conda install -c conda-forge scikit-learn
 pip install statsmodels
 
 # additional packages
