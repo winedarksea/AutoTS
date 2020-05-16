@@ -40,12 +40,12 @@ model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9,
                ensemble='simple,distance,probabilistic-max,horizontal-max',
                constraint=2,
-               max_generations=2, num_validations=2,
+               max_generations=0, num_validations=2,
                validation_method='backwards',
                model_list=model_list, initial_template='General+Random',
-               metric_weighting=metric_weighting, models_to_validate=0.2,
+               metric_weighting=metric_weighting, models_to_validate=0.1,
                max_per_model_class=None,
-               drop_most_recent=0, verbose=0)
+               drop_most_recent=0, verbose=1)
 
 
 preord_regressor_train, preord_regressor_forecast = fake_regressor(

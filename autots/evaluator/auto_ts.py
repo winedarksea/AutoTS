@@ -312,10 +312,7 @@ class AutoTS(object):
                                         axis=0)
 
         self.df_wide_numeric = df_wide_numeric
-
-        # capture some misc information
-        profile_df = data_profile(df_wide_numeric)
-        self.startTimeStamps = profile_df.loc['FirstDate']
+        self.startTimeStamps = df_wide_numeric.notna().idxmax()
 
         # record if subset or not
         if self.subset is not None:
@@ -457,7 +454,7 @@ class AutoTS(object):
                 preord_regressor_train=preord_regressor_train,
                 preord_regressor_forecast=preord_regressor_test,
                 holiday_country=holiday_country,
-                startTimeStamps=profile_df.loc['FirstDate'],
+                startTimeStamps=self.startTimeStamps,
                 template_cols=template_cols,
                 random_seed=random_seed, verbose=verbose
                 )
@@ -515,7 +512,7 @@ class AutoTS(object):
                     preord_regressor_train=preord_regressor_train,
                     preord_regressor_forecast=preord_regressor_test,
                     holiday_country=holiday_country,
-                    startTimeStamps=profile_df.loc['FirstDate'],
+                    startTimeStamps=self.startTimeStamps,
                     template_cols=template_cols,
                     random_seed=random_seed, verbose=verbose)
                 model_count = template_result.model_count
@@ -669,7 +666,7 @@ class AutoTS(object):
                     preord_regressor_train=val_preord_regressor_train,
                     preord_regressor_forecast=val_preord_regressor_test,
                     holiday_country=holiday_country,
-                    startTimeStamps=profile_df.loc['FirstDate'],
+                    startTimeStamps=self.startTimeStamps,
                     template_cols=template_cols,
                     random_seed=random_seed, verbose=verbose,
                     validation_round=(y + 1))
@@ -783,16 +780,18 @@ or otherwise increase models available."""
                 preord_regressor_train=preord_regressor_train,
                 preord_regressor_forecast=preord_regressor_test,
                 holiday_country=holiday_country,
-                startTimeStamps=profile_df.loc['FirstDate'],
+                startTimeStamps=self.startTimeStamps,
                 template_cols=template_cols,
                 random_seed=random_seed, verbose=verbose)
             # capture results from lower-level template run
+            template_result.model_results['TotalRuntime'].fillna(
+                pd.Timedelta(seconds=60), inplace=True)
             self.initial_results.model_results = pd.concat(
                 [self.initial_results.model_results,
                  template_result.model_results],
                 axis=0, ignore_index=True, sort=False).reset_index(drop=True)
             self.initial_results.model_results['Score'] = generate_score(
-                self.initial_results.model_results.fillna(0),
+                self.initial_results.model_results,
                 metric_weighting=metric_weighting,
                 prediction_interval=prediction_interval)
             if result_file is not None:
@@ -837,24 +836,33 @@ or otherwise increase models available."""
             ~self.initial_results.model_results['Exceptions'].isna()]
         self.error_templates = val_errors[template_cols + ['Exceptions']]
 
-        # set flags to check if regressors or ensemble used in final model.
-        param_dict = json.loads(self.best_model['ModelParameters'].iloc[0])
-        if self.ensemble_check == 1:
-            self.used_regressor_check = False
+        def regr_param_check(param_dict):
+            out = False
             for key in param_dict['models']:
+                cur_dict = json.loads(param_dict['models'][key]['ModelParameters'])
                 try:
-                    reg_param = json.loads(param_dict['models'][key]['ModelParameters'])['regression_type']
+                    reg_param = cur_dict['regression_type']
                     if reg_param == 'User':
-                        self.used_regressor_check = True
-                except Exception:
+                        return True 
+                except KeyError:
                     pass
+                if param_dict['models'][key]['Model'] == 'Ensemble':
+                    out = regr_param_check(cur_dict)
+                    if out:
+                        return out
+            return out
+        # set flags to check if regressors or ensemble used in final model.
+        param_dict = json.loads(self.best_model.iloc[0]['ModelParameters'])
+        if self.ensemble_check == 1:
+            self.used_regressor_check = regr_param_check(param_dict)
+
         if self.ensemble_check == 0:
             self.used_regressor_check = False
             try:
-                reg_param = param_dict['ModelParameters']['regression_type']
+                reg_param = param_dict['regression_type']
                 if reg_param == 'User':
                     self.used_regressor_check = True
-            except Exception:
+            except KeyError:
                 pass
         return self
 
@@ -1076,7 +1084,7 @@ def error_correlations(all_result, result: str = 'corr'):
     all_results = all_results.reset_index(drop=True)
 
     trans_df = all_results['TransformationParameters'].apply(json.loads)
-    trans_df = pd.io.json.json_normalize(trans_df)  # .fillna(value='NaN')
+    trans_df = pd.json_normalize(trans_df)  # .fillna(value='NaN')
     trans_cols1 = trans_df.columns
     trans_df = trans_df.astype(str).replace('nan', 'NaNZ')
     trans_transformer = OneHotEncoder(sparse=False).fit(trans_df)
@@ -1087,7 +1095,7 @@ def error_correlations(all_result, result: str = 'corr'):
     trans_df.columns = trans_cols
 
     model_df = all_results['ModelParameters'].apply(json.loads)
-    model_df = pd.io.json.json_normalize(model_df)  # .fillna(value='NaN')
+    model_df = pd.json_normalize(model_df)  # .fillna(value='NaN')
     model_cols1 = model_df.columns
     model_df = model_df.astype(str).replace('nan', 'NaNZ')
     model_transformer = OneHotEncoder(sparse=False).fit(model_df)

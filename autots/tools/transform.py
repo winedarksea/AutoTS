@@ -1373,7 +1373,7 @@ def RandomTransform():
     detrend_choice = np.random.choice(
         a=[None, 'Linear', 'Poisson', 'Tweedie',
            'Gamma', 'RANSAC', 'ARD'], size=1,
-        p=[0.6, 0.3, 0.02, 0.02, 0.02, 0.02, 0.02]).item()
+        p=[0.6, 0.3, 0.02, 0.02, 0.02, 0.0399, 0.0001]).item()
 
     second_transformation_choice = np.random.choice(
         a=[None, 'RollingMean', 'FixedRollingMean', 'SeasonalDifference',
