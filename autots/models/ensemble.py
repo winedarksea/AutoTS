@@ -461,7 +461,7 @@ def HorizontalTemplateGenerator(per_series, model_results,
                                             'series': mods_per_series.to_dict()
                                             }),
                             'TransformationParameters': '{}',
-                            'Ensemble': 1}
+                            'Ensemble': 2}
             best5_params = pd.DataFrame(best5_params, index=[0])
             ensemble_templates = pd.concat([ensemble_templates,
                                             best5_params],
@@ -490,7 +490,7 @@ def HorizontalTemplateGenerator(per_series, model_results,
                                             'series2': mods_per_series2.to_dict()
                                             }),
                             'TransformationParameters': '{}',
-                            'Ensemble': 1}
+                            'Ensemble': 2}
             best5_params = pd.DataFrame(best5_params, index=[0])
             ensemble_templates = pd.concat([ensemble_templates,
                                             best5_params],
@@ -540,7 +540,7 @@ def HorizontalTemplateGenerator(per_series, model_results,
                                             'series': mods_per_series.to_dict()
                                             }),
                             'TransformationParameters': '{}',
-                            'Ensemble': 1}
+                            'Ensemble': 2}
             best5_params = pd.DataFrame(best5_params, index=[0])
             ensemble_templates = pd.concat([ensemble_templates,
                                             best5_params],
@@ -589,7 +589,7 @@ def HorizontalTemplateGenerator(per_series, model_results,
                                             'series': mods_per_series.to_dict()
                                             }),
                             'TransformationParameters': '{}',
-                            'Ensemble': 1}
+                            'Ensemble': 2}
             best5_params = pd.DataFrame(best5_params, index=[0])
             ensemble_templates = pd.concat([ensemble_templates,
                                             best5_params],

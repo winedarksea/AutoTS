@@ -93,6 +93,7 @@ Tensorflow GPU backend may crash on occasion.
 	* run for each new prediction intervals (on just most recent)
 	* capture containment/SPL from each round.
 * figure out how to bring together all the different training templates
+	* renumber all Ensemble to 2 where Horizontal
 * test submission
 * test whether bottum up significantly overestimates on rollup
 * test used_regressor_check
@@ -102,11 +103,9 @@ Tensorflow GPU backend may crash on occasion.
 * Rename preord
 * Improve TemplateEvalObject:
 	* add self.used_regressor_check function
-	* add a .merge thing
-* AutoTS .result() alias to .initial_results.model_results
-* make a function that captures Template Wizard output and does all the pd.concats of AutoTS
 * clean up subsetting
-* clean up long_to_wide inputs like self.min_allowed_train_percent
+* clean up long_to_wide inputs like na_tolerance
+	* upsampling does not work, esp with categorical
 * better document ensembling
 * Get the sphinx (google style) documentation and github pages website up
 * Add to template: Gluon, Motif, WindowRegression

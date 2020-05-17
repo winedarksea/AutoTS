@@ -27,7 +27,7 @@ class AutoTS(object):
     Args:
         forecast_length (int): number of periods over which to evaluate forecast. Can be overriden later in .predict().
         frequency (str): 'infer' or a specific pandas datetime offset. Can be used to force rollup of data (ie daily input, but frequency 'M' will rollup to monthly).
-        aggfunc (str): if data is to be rolled up to a higher frequency (daily -> monthly) or duplicates are included. Default 'first' removes duplicates, for rollup try 'mean' or 'sum'. Beware numeric aggregations like 'mean' will *drop* categorical features as cat->num occurs later.
+        aggfunc (str): if data is to be rolled up to a higher frequency (daily -> monthly) or duplicate timestamps are included. Default 'first' removes duplicates, for rollup try 'mean' or np.sum. Beware numeric aggregations like 'mean' will not work with categorical features as cat->num occurs later.
         prediction_interval (float): 0-1, uncertainty range for upper and lower forecasts. Adjust range, but rarely matches actual containment.
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.
@@ -296,16 +296,12 @@ class AutoTS(object):
             # handle non-numeric inputs
             weights = {key: (abs(float(weights[key])) if str(weights[key]).isdigit() else 1) for key in weights}
 
-        # handle categorical (not numeric) data if present
-        # categorical_transformer = values_to_numeric(df_wide)
-        # self.categorical_transformer = categorical_transformer
-        # df_wide_numeric = categorical_transformer.dataframe
-
-        # handle categorical (not numeric) data if present
+        # handle categorical data if present
         self.categorical_transformer = NumericTransformer(
             verbose=self.verbose).fit(df_wide)
         df_wide_numeric = self.categorical_transformer.transform(df_wide)
 
+        # replace any zeroes that occur prior to all non-zero values
         if self.remove_leading_zeroes:
             # keep the last row unaltered to keep metrics happier if all zeroes
             temp = df_wide_numeric.head(df_wide_numeric.shape[0] - 1)
@@ -361,21 +357,14 @@ class AutoTS(object):
 
         model_count = 0
 
-        # run the initial template
+        # unpack ensemble models so sub models appear at highest level
         self.initial_template = unpack_ensemble_models(
             self.initial_template, self.template_cols,
             keep_ensemble=True, recursive=True)
         # remove horizontal ensembles from initial_template
         if 'Ensemble' in self.initial_template['Model'].tolist():
-            temp = self.initial_template
-            # so this means no parameters can ever contain these strings...
-            # and then be used as an imported template
-            temp = temp[~temp['ModelParameters'].str.contains('Horizontal') &
-                        ~temp['ModelParameters'].str.contains('Probabilistic') &
-                        ~temp['ModelParameters'].str.contains('hdist')
-                        ]
-            self.initial_template = temp.copy()
-
+            self.initial_template = self.initial_template[self.initial_template['Ensemble'] <= 1]
+        # run the initial template
         submitted_parameters = self.initial_template.copy()
         template_result = TemplateWizard(
             self.initial_template, df_train,
@@ -397,31 +386,7 @@ class AutoTS(object):
         model_count = template_result.model_count
 
         # capture the data from the lower level results
-        self.initial_results.model_results = pd.concat(
-            [self.initial_results.model_results,
-             template_result.model_results],
-            axis=0, ignore_index=True, sort=False).reset_index(drop=True)
-        self.initial_results.per_series_mae = pd.concat(
-            [self.initial_results.per_series_mae,
-             template_result.per_series_mae],
-            axis=0, sort=False)
-        self.initial_results.per_series_spl = pd.concat(
-            [self.initial_results.per_series_spl,
-             template_result.per_series_spl],
-            axis=0, sort=False)
-        if 'hdist' in self.ensemble:
-            self.initial_results.per_series_rmse1 = pd.concat(
-                [self.initial_results.per_series_rmse1,
-                 template_result.per_series_rmse1],
-                axis=0, sort=False)
-            self.initial_results.per_series_rmse2 = pd.concat(
-                [self.initial_results.per_series_rmse2,
-                 template_result.per_series_rmse2],
-                axis=0, sort=False)
-        self.initial_results.per_timestamp_smape = pd.concat(
-                [self.initial_results.per_timestamp_smape,
-                 template_result.per_timestamp_smape],
-                axis=0, sort=False)
+        self.initial_results = self.initial_results.concat(template_result)
         self.initial_results.model_results['Score'] = generate_score(
             self.initial_results.model_results,
             metric_weighting=metric_weighting,
@@ -468,32 +433,11 @@ class AutoTS(object):
             model_count = template_result.model_count
 
             # capture results from lower-level template run
-            self.initial_results.model_results = pd.concat(
-                [self.initial_results.model_results,
-                 template_result.model_results],
-                axis=0, ignore_index=True, sort=False).reset_index(drop=True)
-            self.initial_results.per_series_mae = pd.concat(
-                [self.initial_results.per_series_mae,
-                 template_result.per_series_mae],
-                axis=0, sort=False)
-            self.initial_results.per_series_spl = pd.concat(
-                [self.initial_results.per_series_spl,
-                 template_result.per_series_spl],
-                axis=0, sort=False)
-            if 'hdist' in self.ensemble:
-                self.initial_results.per_series_rmse1 = pd.concat(
-                    [self.initial_results.per_series_rmse1,
-                     template_result.per_series_rmse1],
-                    axis=0, sort=False)
-                self.initial_results.per_series_rmse2 = pd.concat(
-                    [self.initial_results.per_series_rmse2,
-                     template_result.per_series_rmse2],
-                    axis=0, sort=False)
-            self.initial_results.per_timestamp_smape = pd.concat(
-                [self.initial_results.per_timestamp_smape,
-                 template_result.per_timestamp_smape],
-                axis=0, sort=False)
-            self.initial_results.model_results['Score'] = generate_score(self.initial_results.model_results, metric_weighting=metric_weighting, prediction_interval=prediction_interval)
+            self.initial_results = self.initial_results.concat(template_result)
+            self.initial_results.model_results['Score'] = generate_score(
+                self.initial_results.model_results,
+                metric_weighting=metric_weighting,
+                prediction_interval=prediction_interval)
             if result_file is not None:
                 self.initial_results.model_results.to_csv(result_file,
                                                           index=False)
@@ -505,7 +449,6 @@ class AutoTS(object):
                     self.initial_results, forecast_length=forecast_length,
                     ensemble=ensemble
                     )
-
                 template_result = TemplateWizard(
                     ensemble_templates, df_train, df_test,
                     weights=current_weights,
@@ -524,28 +467,7 @@ class AutoTS(object):
                     random_seed=random_seed, verbose=verbose)
                 model_count = template_result.model_count
                 # capture results from lower-level template run
-                self.initial_results.model_results = pd.concat(
-                    [self.initial_results.model_results,
-                     template_result.model_results],
-                    axis=0, ignore_index=True, sort=False
-                    ).reset_index(drop=True)
-                self.initial_results.per_series_mae = pd.concat(
-                    [self.initial_results.per_series_mae,
-                     template_result.per_series_mae],
-                    axis=0, sort=False)
-                self.initial_results.per_series_spl = pd.concat(
-                    [self.initial_results.per_series_spl,
-                     template_result.per_series_spl],
-                    axis=0, sort=False)
-                if 'hdist' in self.ensemble:
-                    self.initial_results.per_series_rmse1 = pd.concat(
-                        [self.initial_results.per_series_rmse1,
-                         template_result.per_series_rmse1],
-                        axis=0, sort=False)
-                    self.initial_results.per_series_rmse2 = pd.concat(
-                        [self.initial_results.per_series_rmse2,
-                         template_result.per_series_rmse2],
-                        axis=0, sort=False)
+                self.initial_results = self.initial_results.concat(template_result)
                 self.initial_results.model_results['Score'] = generate_score(
                     self.initial_results.model_results,
                     metric_weighting=metric_weighting,
@@ -588,7 +510,8 @@ class AutoTS(object):
 
         # construct validation template
         validation_template = self.initial_results.model_results[self.initial_results.model_results['Exceptions'].isna()]
-        validation_template = validation_template.drop_duplicates(subset=template_cols, keep='first')
+        validation_template = validation_template.drop_duplicates(
+            subset=template_cols, keep='first')
         validation_template = validation_template.sort_values(
             by="Score", ascending=True, na_position='last')
         if str(self.max_per_model_class).isdigit():
@@ -599,13 +522,6 @@ class AutoTS(object):
             validation_template = validation_template[validation_template['Ensemble'] == 0]
 
         # run validations
-        """
-        'Even' cuts the data into equal slices of the pie
-        'Backwards' cuts the data backwards starting from the most recent data
-
-        Both will look nearly identical on small datasets.
-        Backwards is more recency focused on data with lots of history.
-        """
         if num_validations > 0:
             model_count = 0
             for y in range(num_validations):
@@ -680,35 +596,11 @@ class AutoTS(object):
                     validation_round=(y + 1))
                 model_count = template_result.model_count
                 # gather results of template run
-                self.initial_results.model_results = pd.concat(
-                    [self.initial_results.model_results,
-                     template_result.model_results],
-                    axis=0, ignore_index=True,
-                    sort=False).reset_index(drop=True)
+                self.initial_results = self.initial_results.concat(template_result)
                 self.initial_results.model_results['Score'] = generate_score(
                     self.initial_results.model_results,
                     metric_weighting=metric_weighting,
                     prediction_interval=prediction_interval)
-                # collect ensemble data
-                ens_list = ['probabilistic', 'horizontal']
-                if any(x in self.ensemble for x in ens_list):
-                    self.initial_results.per_series_mae = pd.concat(
-                        [self.initial_results.per_series_mae,
-                         template_result.per_series_mae],
-                        axis=0, sort=False)
-                    self.initial_results.per_series_spl = pd.concat(
-                        [self.initial_results.per_series_spl,
-                         template_result.per_series_spl],
-                        axis=0, sort=False)
-                if 'hdist' in self.ensemble:
-                    self.initial_results.per_series_rmse1 = pd.concat(
-                        [self.initial_results.per_series_rmse1,
-                         template_result.per_series_rmse1],
-                        axis=0, sort=False)
-                    self.initial_results.per_series_rmse2 = pd.concat(
-                        [self.initial_results.per_series_rmse2,
-                         template_result.per_series_rmse2],
-                        axis=0, sort=False)
 
         self.validation_results = copy.copy(self.initial_results)
         # aggregate validation results
@@ -824,7 +716,7 @@ or otherwise increase models available."""
                         by="Score", ascending=True, na_position='last'
                         ).drop_duplicates(subset=self.template_cols
                                           ).head(1)[template_cols]
-                    self.ensemble_check = (self.best_model['Ensemble'].iloc[0])
+                    self.ensemble_check = int((self.best_model['Ensemble'].iloc[0]) > 0)
                 except IndexError:
                     raise ValueError(error_msg_template)
         else:
@@ -835,7 +727,7 @@ or otherwise increase models available."""
                     by="Score", ascending=True, na_position='last'
                     ).drop_duplicates(subset=self.template_cols
                                       ).head(1)[template_cols]
-                self.ensemble_check = (self.best_model['Ensemble'].iloc[0])
+                self.ensemble_check = int((self.best_model['Ensemble'].iloc[0]) > 0)
             except IndexError:
                 raise ValueError(error_msg_template)
 
@@ -931,6 +823,10 @@ or otherwise increase models available."""
         else:
             return df_forecast
 
+    def results(self):
+        """Convenience function to return tested models table."""
+        return self.initial_results.model_results
+
     def export_template(self, filename, models: str = 'best', n: int = 5,
                         max_per_model_class: int = None,
                         include_results: bool = False):
@@ -952,11 +848,7 @@ or otherwise increase models available."""
             ens_list = ['horizontal', 'probabilistic', 'hdist']
             if any(x in self.ensemble for x in ens_list):
                 temp = self.initial_results.model_results
-                temp = temp[temp['Model'] == 'Ensemble']
-                temp = temp[temp['ModelParameters'].str.contains('Horizontal') |
-                     temp['ModelParameters'].str.contains('Probabilistic') |
-                     temp['ModelParameters'].str.contains('hdist')
-                     ]
+                temp = temp[temp['Ensemble'] >= 2]
                 export_template = export_template.merge(
                     temp, how='outer',
                     on=export_template.columns.intersection(

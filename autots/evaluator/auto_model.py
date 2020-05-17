@@ -628,6 +628,34 @@ class TemplateEvalObject(object):
     def __repr__(self):
         """Print."""
         return 'Results objects, result table at self.model_results (pd.df)'
+    def concat(self, another_eval):
+        """Merge another TemplateEvalObject onto this one."""
+        self.model_results = pd.concat(
+            [self.model_results,
+             another_eval.model_results],
+            axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+        self.per_series_mae = pd.concat(
+            [self.per_series_mae,
+             another_eval.per_series_mae],
+            axis=0, sort=False)
+        self.per_series_spl = pd.concat(
+            [self.per_series_spl,
+             another_eval.per_series_spl],
+            axis=0, sort=False)
+        self.per_series_rmse1 = pd.concat(
+            [self.per_series_rmse1,
+             another_eval.per_series_rmse1],
+            axis=0, sort=False)
+        self.per_series_rmse2 = pd.concat(
+            [self.per_series_rmse2,
+             another_eval.per_series_rmse2],
+                axis=0, sort=False)
+        self.per_timestamp_smape = pd.concat(
+                [self.per_timestamp_smape,
+                 another_eval.per_timestamp_smape],
+                axis=0, sort=False)
+        self.model_count = self.model_count + another_eval.model_count
+        return self
 
 
 def unpack_ensemble_models(template,
@@ -640,7 +668,7 @@ def unpack_ensemble_models(template,
     ensemble_template = pd.DataFrame()
     template['Ensemble'] = np.where(template['Model'] == 'Ensemble',
                                     1, template['Ensemble'])
-    for index, value in template[template['Ensemble'] == 1]['ModelParameters'].iteritems():
+    for index, value in template[template['Ensemble'] != 0]['ModelParameters'].iteritems():
         model_dict = json.loads(value)['models']
         model_df = pd.DataFrame.from_dict(model_dict, orient='index')
         model_df = model_df.rename_axis('ID').reset_index(drop=False)
