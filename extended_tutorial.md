@@ -20,10 +20,10 @@ from autots.datasets import load_toy_monthly # also: _daily _yearly or _hourly
 df_long = load_toy_monthly()
 
 from autots import AutoTS
-model = AutoTS(forecast_length = 3, frequency = 'infer',
-			   ensemble = False, drop_data_older_than_periods = 240,
-               max_generations = 5, num_validations = 2)
-model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
+model = AutoTS(forecast_length=3, frequency='infer',
+			   ensemble=False, drop_data_older_than_periods=240,
+               max_generations=5, num_validations=2)
+model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id')
 
 # Print the name of the best model
 print(model)
@@ -31,23 +31,23 @@ print(model)
 
 If your data is already wide (one column for each value), to bring to a long format:
 ```
-df_long = df_wide.melt(id_vars = ['datetime_col_name'], var_name = 'series_id', value_name = 'value')
+df_long = df_wide.melt(id_vars=['datetime_col_name'], var_name='series_id', value_name='value')
 ```
 
 #### You can tailor the process in a few ways...
-The simplest thing is to increase the number of generations `max_generations = 15`. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.
+The simplest thing is to increase the number of generations `max_generations=15`. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.
 
-Another approach that may improve accuracy is to set `ensemble = True`. As this means storing and processing the result of every model, this takes much more time and memory, and *is not recommended with more than a few generations*.
+Another approach that may improve accuracy is to set `ensemble=True`. As this means storing and processing the result of every model, this takes much more time and memory, and *is not recommended with more than a few generations*.
 
-A handy parameter for when your data is expected to always be 0 or greater (such as unit sales) is to set `no_negatives = True`. This forces forecasts to be greater than or equal to 0.
+A handy parameter for when your data is expected to always be 0 or greater (such as unit sales) is to set `no_negatives=True`. This forces forecasts to be greater than or equal to 0.
 
-Another convenience function is `drop_most_recent = 1` specifing the number of most recent periods to drop. This can be handy with monthly data, where often the most recent month is incomplete. 
+Another convenience function is `drop_most_recent=1` specifing the number of most recent periods to drop. This can be handy with monthly data, where often the most recent month is incomplete. 
 `drop_data_older_than_periods` provides similar functionality but drops the oldest data.
 
-When working with many time series, it can be helpful to take advantage of `subset = 100`. Subset specifies the interger number of time series to test models on, and can be useful with many related time series (1000's of customer's sales). Usually the best model on a 100 related time series is very close to that tested on many thousands (or more) of series. This speeds up the model process in these cases.
+When working with many time series, it can be helpful to take advantage of `subset=100`. Subset specifies the interger number of time series to test models on, and can be useful with many related time series (1000's of customer's sales). Usually the best model on a 100 related time series is very close to that tested on many thousands (or more) of series. This speeds up the model process in these cases.
 
 Subset takes advantage of weighting, more highly-weighted series are more likely to be selected. Weighting is used with multiple time series to tell the evaluator which series are most important. Series weights are assumed to all be equal to 1, values need only be passed in when a value other than 1 is desired. 
-Note for weighting, `weighted = True` and `weights = dict` must both be passed into the model. Larger weights = more important.
+Note for weighting, larger weights = more important.
 
 ### Validation and Cross Validation
 Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future. 
@@ -61,7 +61,7 @@ Here, two methods of cross validation are in place, `'even'` and '`backwards'`.
 
 **Backwards** cross validation works backwards from the most recent data. First the most recent forecast_length samples are taken, then the next most recent forecast_length samples, and so on. This makes it more ideal for smaller or fast-changing datasets. 
 
-Only a subset of models are based from initial validation to cross validation. The number of models is set such as `models_to_validate = 10`. If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter. 
+Only a subset of models are based from initial validation to cross validation. The number of models is set such as `models_to_validate=10`. If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter. 
 
 ### A more detailed example:
 Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in (lovely) Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting. 
@@ -77,23 +77,22 @@ df_long = load_toy_hourly()
 weights_hourly = {'traffic_volume': 20} # all other series assumed to be weight of 1
 
 model_list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
-              'ETS',  'RollingRegression', 'UnobservedComponents', 'VARMAX', 'VECM']
+			  'ETS',  'RollingRegression', 'UnobservedComponents', 'VECM']
 
 from autots import AutoTS
-model = AutoTS(forecast_length = 73, frequency = 'infer',
-               prediction_interval = 0.95, ensemble = False, weighted = True,
-               max_generations = 5, num_validations = 2, validation_method = 'even',
-               model_list = model_list, models_to_validate = 15,
-               drop_most_recent = 1)
+model = AutoTS(forecast_length=73, frequency='infer',
+               prediction_interval=0.95, ensemble=False,
+               max_generations=5, num_validations=2, validation_method='even',
+               model_list=model_list, models_to_validate=15,
+               drop_most_recent=1)
 		
-model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id', weights = weights_hourly) # and weighted = True
+model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id', weights=weights_hourly)
 
 prediction = model.predict()
 # point forecasts dataframe
 forecasts_df = prediction.forecast
 ```
 Probabilistic forecasts are *available* for all models, but in many cases are just general estimates in lieu of model estimates, so be careful. 
-FBProphet, GluonTS, and ARIMA are all sources of probabilistic intervals.
 ```
 upper_forecasts_df = prediction.upper_forecast
 lower_forecasts_df = prediction.lower_forecast
@@ -102,7 +101,7 @@ lower_forecasts_df = prediction.lower_forecast
 ### Model Lists
 By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of 'probabilistic', 'multivariate', 'fast', 'superfast', or 'all'.
 
-One note of warning is that the TSFreshRegressor, included only in 'all', does not appear to work very reliably on Windows. It can be very slow, especially with large amounts of data. 
+On multivariate series, TSFreshRegressor and VARMAX can be impractically slow.
 
 ## Deployment and Template Import/Export
 Many models can be reverse engineered with relative simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package. 
@@ -111,11 +110,11 @@ This allows for improved fault tolerance (by relying not on one, but several pos
 ```
 # after fitting an AutoTS model
 example_filename = "example_export.csv" # .csv/.json
-model.export_template(example_filename, models = 'best', n = 15, max_per_model_class = 3)
+model.export_template(example_filename, models='best', n=15, max_per_model_class=3)
 
 # on new training
-model = AutoTS(forecast_length = forecast_length, frequency = 'infer', max_generations = 0, num_validations = 0, verbose = 0)
-model = model.import_template(example_filename, method = 'only') # method = 'add on'
+model = AutoTS(forecast_length=forecast_length, frequency='infer', max_generations=0, num_validations=0, verbose=0)
+model = model.import_template(example_filename, method='only') # method='add on'
 print("Overwrite template is: {}".format(str(model.initial_template)))
 ```
 
@@ -128,7 +127,7 @@ metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1, 'rmse_weighting
 					'containment_weighting' : 1, 'runtime_weighting' : 0,
 					'spl_weighting': 0, 'contour_weighting': 3}
 
-model = AutoTS(forecast_length = forecast_length, frequency = 'infer', metric_weighting = metric_weighting)
+model = AutoTS(forecast_length=forecast_length, frequency='infer', metric_weighting=metric_weighting)
 ```		
 It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE. 
 			
@@ -138,9 +137,9 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 
 `SPL` is *Scaled Pinball Loss* used for assessing upper/lower quantile forecast accuracies.
 
-`Containment` measures the percent of test data that falls between the upper and lower forecasts. As containment would tend to drive towards massive forecast ranges, `lower_mae` and `upper_mae`, the MAE on the upper and lower forecasts, are available. `Containment` and `upper/lower_mae` counteract each other and help balance the assessement of probabilistic forecasts.
+`Containment` measures the percent of test data that falls between the upper and lower forecasts.
 
-`Contour` is another unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. Does not work with forecast_length = 1.
+`Contour` is another unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. Does not work with forecast_length=1.
 
 ## Installation and Dependency Versioning
 `pip install autots`
@@ -148,13 +147,17 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 	Python >= 3.5
 	numpy
 	pandas
-	sklearn >= 0.20.0 (ColumnTransformer)
-			>= 0.23.0 (PoissonReg)
+	sklearn 	>= 0.20.0 (ColumnTransformer)
+				>= 0.23.0 (PoissonReg)
 	statsmodels
-	holidays
+
+Of these, numpy and pandas are critical. 
+Some limited functionality should exist without scikit-learn. 
+Nearly full functionality should be maintained without statsmodels. 
 
 `pip install autots['additional']`
 #### Optional Requirements
+	holidays
 	fbprophet
 	fredapi
 	tsfresh
@@ -172,7 +175,6 @@ Download Anaconda or Miniconda.
 If you have an Nvidia GPU, download NVIDIA CUDA (10.1 is currently supported by all of mxnet, Tensorflow, and Pytorch) and CuDNN. 
 MKL is included with `anaconda`.
 ```
-# conda env remove -n timeseries
 conda create -n timeseries python=3.6
 conda activate timeseries
 
@@ -183,14 +185,11 @@ conda install numpy scipy
 conda install -c conda-forge scikit-learn
 pip install statsmodels
 
-# additional packages
-# use pip install mxnet-cu101mkl or similar if you know you have CUDA, MKL
+# use pip install mxnet-cu101mkl or similar if applicable
 pip install mxnet
 pip install gluonts
-# conda update anaconda (if you find the old versions required by gluonts annoying. It generally works fine with newer).
-# fbprophet can be installed with pip, but seems to work more reliably via conda
+conda update anaconda
 conda install -c conda-forge fbprophet
-# there are conda install tensorflow-mkl and pip install intel-tensorflow for Windows.
 pip install tensorflow
 pip install tensorflow-probability
 ```
@@ -199,13 +198,13 @@ pip install tensorflow-probability
 
 ### Short Training History
 How much data is 'too little' depends on the seasonality and volatility of the data. 
-Minimal training data most greatly impacts the ability to do proper cross validation. Set num_validations = 0 in such cases. 
-Since ensembles are based on the test dataset, it would also be wise to set ensemble = False if num_validations = 0.
+Minimal training data most greatly impacts the ability to do proper cross validation. Set num_validations=0 in such cases. 
+Since ensembles are based on the test dataset, it would also be wise to set ensemble=False if num_validations=0.
 
 ### Too much training data.
 Too much data is already handled to some extent by 'context_slicer' in the transformations, which tests using less training data. 
 That said, large datasets will be slower and more memory intensive, for high frequency data (say hourly) it can often be advisable to roll that up to a higher level (daily, hourly, etc.). 
-Rollup can be accomplished by specifying the frequency = your rollup frequency, and then setting the agg_func = 'sum' or 'mean' or other appropriate statistic.
+Rollup can be accomplished by specifying the frequency = your rollup frequency, and then setting the agg_func='sum' or 'mean' or other appropriate statistic.
 
 ### Lots of NaN in data
 Various NaN filling techniques are tested in the transformation. Rolling up data to a less-frequent frequency may also help deal with NaNs.
@@ -222,9 +221,9 @@ The some models here can utilize the additional information they provide to help
 To prevent forecast accuracy for considering these additional series too heavily, input series weights that lower or remove their forecast accuracy from consideration.
 
 ### Categorical Data
-Categorical data is handled, but it is handled poorly. For example, optimization metrics do not currently include any categorical accuracy metrics. 
+Categorical data is handled, but it is handled crudely. For example, optimization metrics do not currently include any categorical accuracy metrics. 
 For categorical data that has a meaningful order (ie 'low', 'medium', 'high') it is best for the user to encode that data before passing it in, 
-thus properly capturing the relative sequence (ie 'low' = 1, 'medium' = 2, 'high' = 3).
+thus properly capturing the relative sequence (ie 'low'=1, 'medium'=2, 'high'=3).
 
 ### Custom and Unusual Frequencies
 Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects 

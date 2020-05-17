@@ -192,6 +192,9 @@ class AutoTS(object):
                               'TransformationParameters', 'Ensemble']
         self.initial_results = TemplateEvalObject()
 
+        if verbose > 2:
+            print('"Hello. Would you like to destroy some evil today?" - Sanderson')
+
     def __repr__(self):
         """Print."""
         if self.best_model.empty:
@@ -981,8 +984,6 @@ or otherwise increase models available."""
                         enforce_model_list: bool = True):
         """Import a previously exported template of model parameters.
         Must be done before the AutoTS object is .fit().
-
-        "Hello. Would you like to destroy some evil today?" - Sanderson
 
         Args:
             filename (str): file location (or a pd.DataFrame already loaded)

@@ -1091,8 +1091,8 @@ class VARMAX(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        ar_choice = np.random.choice(a=[0, 1, 2, 7], size=1,
-                                     p=[0.1, 0.5, 0.2, 0.2]).item()
+        ar_choice = np.random.choice(a=[0, 1, 2], size=1,
+                                     p=[0.3, 0.5, 0.2]).item()
         ma_choice = np.random.choice(a=[0, 1, 2], size=1,
                                      p=[0.5, 0.3, 0.2]).item()
         trend_choice = np.random.choice(a=['n', 'c', 't', 'ct', 'poly'],

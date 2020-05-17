@@ -9,7 +9,7 @@ Simple package for comparing and predicting with open-source time series impleme
 For other time series needs, check out the list [here](https://github.com/MaxBenChrist/awesome_time_series_in_python).
 
 ## Features
-* Fourteen available model classes, with thousands of possible hyperparameter configurations
+* Twenty available model classes, with tens of thousands of possible hyperparameter configurations
 * Finds optimal time series models by genetic programming
 * Handles univariate and multivariate/parallel time series
 * Point and probabilistic forecasts
@@ -18,7 +18,7 @@ For other time series needs, check out the list [here](https://github.com/MaxBen
 * Allows automatic ensembling of best models
 * Multiple cross validation options
 * Subsetting and weighting to improve search on many multivariate series
-* Option to use one or a combination of SMAPE, RMSE, MAE, and Runtime for model selection
+* Option to use one or a combination of metrics for model selection
 * Ability to upsample data to a custom frequency
 * Import and export of templates allowing greater user customization
 
@@ -40,11 +40,11 @@ from autots.datasets import load_toy_monthly # also: _daily _yearly or _hourly
 df_long = load_toy_monthly()
 
 from autots import AutoTS
-model = AutoTS(forecast_length = 3, frequency = 'infer',
-               prediction_interval = 0.9, ensemble = False, weighted = False,
-			   drop_data_older_than_periods = 240,
-               max_generations = 5, num_validations = 2, validation_method = 'even')
-model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
+model = AutoTS(forecast_length=3, frequency='infer',
+               prediction_interval=0.9, ensemble=False,
+			   model_list='superfast',
+               max_generations=5, num_validations=2, validation_method='even')
+model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id')
 
 # Print the name of the best model
 print(model)

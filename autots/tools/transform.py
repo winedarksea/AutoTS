@@ -1423,14 +1423,14 @@ def RandomTransform():
            'sklearn-uniform', 'sklearn-kmeans'], size=1,
         p=[0.7, 0.1, 0.05, 0.05, 0.04, 0.03, 0.03]).item()
     if discretization_choice is not None:
-        n_bins_choice = np.random.choice(a=[5, 10, 25], size=1,
-                                         p=[0.8, 0.1, 0.1]).item()
+        n_bins_choice = np.random.choice(a=[5, 10, 25, 50], size=1,
+                                         p=[0.1, 0.3, 0.5, 0.1]).item()
     else:
         n_bins_choice = None
     context_choice = np.random.choice(
         a=[None, 'HalfMax', '2ForecastLength', '6ForecastLength',
-           10, '12ForecastLength'], size=1,
-        p=[0.75, 0.05, 0.05, 0.05, 0.05, 0.05]).item()
+           10, 50, '12ForecastLength'], size=1,
+        p=[0.75, 0.05, 0.05, 0.05, 0.025, 0.025, 0.05]).item()
     param_dict = {
             'outlier_method': outlier_method_choice,
             'outlier_threshold': outlier_threshold_choice,

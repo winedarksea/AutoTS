@@ -105,7 +105,9 @@ Tensorflow GPU backend may crash on occasion.
 	* add a .merge thing
 * AutoTS .result() alias to .initial_results.model_results
 * make a function that captures Template Wizard output and does all the pd.concats of AutoTS
+* clean up subsetting
 * clean up long_to_wide inputs like self.min_allowed_train_percent
+* better document ensembling
 * Get the sphinx (google style) documentation and github pages website up
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
