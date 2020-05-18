@@ -41,9 +41,10 @@ df_long = load_toy_monthly()
 
 from autots import AutoTS
 model = AutoTS(forecast_length=3, frequency='infer',
-               prediction_interval=0.9, ensemble=False,
+               prediction_interval=0.9, ensemble=None,
 			   model_list='superfast',
-               max_generations=5, num_validations=2, validation_method='even')
+               max_generations=5, num_validations=2,
+			   validation_method='even')
 model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id')
 
 # Print the name of the best model

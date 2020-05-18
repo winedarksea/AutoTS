@@ -96,6 +96,7 @@ Tensorflow GPU backend may crash on occasion.
 * figure out how to bring together all the different training templates
 	* renumber all Ensemble to 2 where Horizontal
 * test submission
+* constraint as a transformation parameter?
 * test whether bottom up significantly overestimates on rollup
 * test used_regressor_check
 

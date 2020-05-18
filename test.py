@@ -10,8 +10,8 @@ from autots.datasets import load_toy_weekly
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
-forecast_length = 36
-df_long = load_toy_hourly()
+forecast_length = 3
+df_long = load_toy_daily()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 

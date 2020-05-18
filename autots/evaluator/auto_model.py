@@ -503,6 +503,7 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
     else:
         raise AttributeError(("Model String '{}' not a recognized model type").format(model))
 
+
 def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict, 
                     model_str: str, parameter_dict: dict,
                     frequency: str = 'infer',
@@ -514,7 +515,7 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
                     holiday_country: str = 'US', startTimeStamps = None,
                     random_seed: int = 2020, verbose: int = 0):
     """Feed parameters into modeling pipeline
-    
+
     Args:
         df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
         forecast_length (int): number of periods to forecast
@@ -528,7 +529,7 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
         preord_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.            
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
-        
+
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
     """
