@@ -69,7 +69,7 @@ class TensorflowSTS(ModelObject):
         return model
         
 
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied.
 
         Args:
@@ -104,7 +104,7 @@ class TensorflowSTS(ModelObject):
         return self
 
     def predict(self, forecast_length: int,
-                preord_regressor = [], just_point_forecast = False):
+                future_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -344,7 +344,7 @@ class TFPRegression(ModelObject):
         self.loss = loss  # negloglike, Huber, mae
         self.dist = dist  # normal, poisson, negbinom
 
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -353,19 +353,19 @@ class TFPRegression(ModelObject):
 
         df = self.basic_profile(df)
         if self.regression_type == 'User':
-            if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
+            if ((np.array(future_regressor).shape[0]) != (df.shape[0])):
                 self.regression_type = None
             else:
-                self.preord_regressor_train = preord_regressor
+                self.future_regressor_train = future_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
 
         from autots.models.sklearn import date_part
         X = date_part(df.index, method='expanded')
         if self.regression_type == 'User':
-            # if self.preord_regressor_train.ndim == 1:
-            #     self.preord_regressor_train = np.array(self.preord_regressor_train).reshape(-1, 1)
-            # X = np.concatenate((X.reshape(-1, 1), self.preord_regressor_train), axis=1)
-            X = pd.concat([X, pd.DataFrame(self.preord_regressor_train).reset_index(drop=True)], axis=1)
+            # if self.future_regressor_train.ndim == 1:
+            #     self.future_regressor_train = np.array(self.future_regressor_train).reshape(-1, 1)
+            # X = np.concatenate((X.reshape(-1, 1), self.future_regressor_train), axis=1)
+            X = pd.concat([X, pd.DataFrame(self.future_regressor_train).reset_index(drop=True)], axis=1)
         y = df
         self.model = TFPRegressor(
             verbose=self.verbose, random_seed=self.random_seed,
@@ -375,7 +375,7 @@ class TFPRegression(ModelObject):
             dist=self.dist).fit(X.values, y)
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -393,10 +393,10 @@ class TFPRegression(ModelObject):
         from autots.models.sklearn import date_part
         Xf = date_part(test_index, method='expanded')
         if self.regression_type == 'User':
-            # if preord_regressor.ndim == 1:
-            #     preord_regressor = np.array(preord_regressor).reshape(-1, 1)
-            # Xf = np.concatenate((Xf.reshape(-1, 1), preord_regressor), axis=1)
-            Xf = pd.concat([Xf, pd.DataFrame(preord_regressor).reset_index(drop=True)], axis=1)
+            # if future_regressor.ndim == 1:
+            #     future_regressor = np.array(future_regressor).reshape(-1, 1)
+            # Xf = np.concatenate((Xf.reshape(-1, 1), future_regressor), axis=1)
+            Xf = pd.concat([Xf, pd.DataFrame(future_regressor).reset_index(drop=True)], axis=1)
         forecast, lower_forecast, upper_forecast = self.model.predict(
             Xf.values, conf_int=self.prediction_interval)
         df_forecast = pd.DataFrame(forecast)

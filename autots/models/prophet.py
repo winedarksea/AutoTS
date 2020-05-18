@@ -46,7 +46,7 @@ class FBProphet(ModelObject):
                              random_seed=random_seed, verbose = verbose)
         self.holiday = holiday
         
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied.
         
         Args:
@@ -58,18 +58,18 @@ class FBProphet(ModelObject):
         df = self.basic_profile(df)
         if self.regression_type == 'User':
             """
-            print("the shape of the input is: {}".format(str(((np.array(preord_regressor).shape[0])))))
+            print("the shape of the input is: {}".format(str(((np.array(future_regressor).shape[0])))))
             print("the shape of the training data is: {}".format(str(df.shape[0])))
             """
-            if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
+            if ((np.array(future_regressor).shape[0]) != (df.shape[0])):
                 self.regression_type = None
             else:
-                if preord_regressor.ndim > 1:
+                if future_regressor.ndim > 1:
                     from sklearn.decomposition import PCA
-                    self.dimensionality_reducer = PCA(n_components=1).fit(preord_regressor)
-                    self.regressor_train = self.dimensionality_reducer.transform(preord_regressor)
+                    self.dimensionality_reducer = PCA(n_components=1).fit(future_regressor)
+                    self.regressor_train = self.dimensionality_reducer.transform(future_regressor)
                 else:
-                    self.regressor_train = preord_regressor.copy()
+                    self.regressor_train = future_regressor.copy()
         
         random_two = "n9032380gflljWfu8233koWQop3"
         random_one = "nJIOVxgQ0vZGC7nx_"
@@ -79,7 +79,7 @@ class FBProphet(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [],
+    def predict(self, forecast_length: int, future_regressor = [],
                 just_point_forecast: bool = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
@@ -96,7 +96,7 @@ class FBProphet(ModelObject):
             raise ImportError("Package fbprophet is required")
         predictStartTime = datetime.datetime.now()
         #if self.regression_type != None:
-         #   assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"
+         #   assert len(future_regressor) == forecast_length, "regressor not equal to forecast length"
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         forecast = pd.DataFrame()
         lower_forecast = pd.DataFrame()
@@ -120,11 +120,11 @@ class FBProphet(ModelObject):
             m = m.fit(current_series)
             future = m.make_future_dataframe(periods=forecast_length)
             if self.regression_type == 'User':
-                if preord_regressor.ndim > 1:
-                    a = self.dimensionality_reducer.transform(preord_regressor)
+                if future_regressor.ndim > 1:
+                    a = self.dimensionality_reducer.transform(future_regressor)
                     a = np.append(self.regressor_train, a)
                 else:
-                    a = np.append(self.regressor_train, preord_regressor.values)
+                    a = np.append(self.regressor_train, future_regressor.values)
                 future[self.regressor_name] = a
             fcst = m.predict(future)
             fcst = fcst.tail(forecast_length)  # remove the backcast

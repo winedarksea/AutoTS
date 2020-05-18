@@ -106,7 +106,7 @@
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.ModelPrediction">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">ModelPrediction</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">forecast_length: int</em>, <em class="sig-param">transformation_dict: dict</em>, <em class="sig-param">model_str: str</em>, <em class="sig-param">parameter_dict: dict</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">preord_regressor_train=[]</em>, <em class="sig-param">preord_regressor_forecast=[]</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">startTimeStamps=None</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.ModelPrediction" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">ModelPrediction</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">forecast_length: int</em>, <em class="sig-param">transformation_dict: dict</em>, <em class="sig-param">model_str: str</em>, <em class="sig-param">parameter_dict: dict</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">future_regressor_train=[]</em>, <em class="sig-param">future_regressor_forecast=[]</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">startTimeStamps=None</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.ModelPrediction" title="Permalink to this definition">¶</a></dt>
 <dd><p>Feed parameters into modeling pipeline</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -119,8 +119,8 @@
 <li><p><strong>prediction_interval</strong> (<em>float</em>) – width of errors (note: rarely do the intervals accurately match the % asked for…)</p></li>
 <li><p><strong>no_negatives</strong> (<em>bool</em>) – whether to force all forecasts to be &gt; 0</p></li>
 <li><p><strong>constraint</strong> (<em>float</em>) – when not None, use this value * data st dev above max or below min for constraining forecast values.</p></li>
-<li><p><strong>preord_regressor_train</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching train data</p></li>
-<li><p><strong>preord_regressor_forecast</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching test data</p></li>
+<li><p><strong>future_regressor_train</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching train data</p></li>
+<li><p><strong>future_regressor_forecast</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching test data</p></li>
 <li><p><strong>holiday_country</strong> (<em>str</em>) – passed through to holiday package, used by a few models as 0/1 regressor.</p></li>
 <li><p><strong>startTimeStamps</strong> (<em>pd.Series</em>) – index (series_ids), columns (Datetime of First start of series)</p></li>
 </ul>
@@ -150,7 +150,7 @@
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.PredictWitch">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">PredictWitch</code><span class="sig-paren">(</span><em class="sig-param">template, df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, preord_regressor_train=[], preord_regressor_forecast=[], holiday_country: str = 'US', startTimeStamps=None, random_seed: int = 2020, verbose: int = 0, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble']</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.PredictWitch" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">PredictWitch</code><span class="sig-paren">(</span><em class="sig-param">template, df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=[], future_regressor_forecast=[], holiday_country: str = 'US', startTimeStamps=None, random_seed: int = 2020, verbose: int = 0, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble']</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.PredictWitch" title="Permalink to this definition">¶</a></dt>
 <dd><p>Takes numeric data, returns numeric forecasts.
 Only one model (albeit potentially an ensemble)!</p>
 <p>Well, she turned me into a newt.
@@ -167,8 +167,8 @@ I got better. -Python</p>
 <li><p><strong>prediction_interval</strong> (<em>float</em>) – width of errors (note: rarely do the intervals accurately match the % asked for…)</p></li>
 <li><p><strong>no_negatives</strong> (<em>bool</em>) – whether to force all forecasts to be &gt; 0</p></li>
 <li><p><strong>constraint</strong> (<em>float</em>) – when not None, use this value * data st dev above max or below min for constraining forecast values.</p></li>
-<li><p><strong>preord_regressor_train</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching train data</p></li>
-<li><p><strong>preord_regressor_forecast</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching test data</p></li>
+<li><p><strong>future_regressor_train</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching train data</p></li>
+<li><p><strong>future_regressor_forecast</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching test data</p></li>
 <li><p><strong>holiday_country</strong> (<em>str</em>) – passed through to holiday package, used by a few models as 0/1 regressor.</p></li>
 <li><p><strong>startTimeStamps</strong> (<em>pd.Series</em>) – index (series_ids), columns (Datetime of First start of series)</p></li>
 <li><p><strong>template_cols</strong> (<em>list</em>) – column names of columns used as model template</p></li>
@@ -223,7 +223,7 @@ Returns a template dataframe of randomly generated transformations, models, and 
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.TemplateWizard">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateWizard</code><span class="sig-paren">(</span><em class="sig-param">template, df_train, df_test, weights, model_count: int = 0, ensemble: str = True, forecast_length: int = 14, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, preord_regressor_train=[], preord_regressor_forecast=[], holiday_country: str = 'US', startTimeStamps=None, random_seed: int = 2020, verbose: int = 0, validation_round: int = 0, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble']</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateWizard" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateWizard</code><span class="sig-paren">(</span><em class="sig-param">template, df_train, df_test, weights, model_count: int = 0, ensemble: str = True, forecast_length: int = 14, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=[], future_regressor_forecast=[], holiday_country: str = 'US', startTimeStamps=None, random_seed: int = 2020, verbose: int = 0, validation_round: int = 0, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble']</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateWizard" title="Permalink to this definition">¶</a></dt>
 <dd><p>Take Template, returns Results.</p>
 <p>There are some who call me… Tim. - Python</p>
 <dl class="field-list simple">
@@ -241,8 +241,8 @@ Returns a template dataframe of randomly generated transformations, models, and 
 <li><p><strong>prediction_interval</strong> (<em>float</em>) – width of errors (note: rarely do the intervals accurately match the % asked for…)</p></li>
 <li><p><strong>no_negatives</strong> (<em>bool</em>) – whether to force all forecasts to be &gt; 0</p></li>
 <li><p><strong>constraint</strong> (<em>float</em>) – when not None, use this value * data st dev above max or below min for constraining forecast values.</p></li>
-<li><p><strong>preord_regressor_train</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching train data</p></li>
-<li><p><strong>preord_regressor_forecast</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching test data</p></li>
+<li><p><strong>future_regressor_train</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching train data</p></li>
+<li><p><strong>future_regressor_forecast</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching test data</p></li>
 <li><p><strong>holiday_country</strong> (<em>str</em>) – passed through to holiday package, used by a few models as 0/1 regressor.</p></li>
 <li><p><strong>startTimeStamps</strong> (<em>pd.Series</em>) – index (series_ids), columns (Datetime of First start of series)</p></li>
 <li><p><strong>template_cols</strong> (<em>list</em>) – column names of columns used as model template</p></li>
@@ -364,7 +364,7 @@ Returns a template dataframe of randomly generated transformations, models, and 
 <dl class="attribute">
 <dt id="autots.evaluator.auto_ts.AutoTS.regression_check">
 <code class="sig-name descname">regression_check</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.regression_check" title="Permalink to this definition">¶</a></dt>
-<dd><p>If True, the best_model uses an input ‘User’ preord_regressor</p>
+<dd><p>If True, the best_model uses an input ‘User’ future_regressor</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>bool</p>
@@ -392,7 +392,7 @@ the max number of each model class to include in template</p></li>
 
 <dl class="method">
 <dt id="autots.evaluator.auto_ts.AutoTS.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = None</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">weights: dict = {}</em>, <em class="sig-param">result_file: str = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = None</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">weights: dict = {}</em>, <em class="sig-param">result_file: str = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -401,7 +401,7 @@ the max number of each model class to include in template</p></li>
 <li><p><strong>date_col</strong> (<em>str</em>) – name of datetime column</p></li>
 <li><p><strong>value_col</strong> (<em>str</em>) – name of column containing the data of series.</p></li>
 <li><p><strong>id_col</strong> (<em>str</em>) – name of column identifying different series.</p></li>
-<li><p><strong>preord_regressor</strong> (<em>numpy.Array</em>) – single external regressor matching train.index</p></li>
+<li><p><strong>future_regressor</strong> (<em>numpy.Array</em>) – single external regressor matching train.index</p></li>
 <li><p><strong>weights</strong> (<em>dict</em>) – {‘colname1’: 2, ‘colname2’: 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.</p></li>
 <li><p><strong>result_file</strong> (<em>str</em>) – Location of template/results.csv to be saved at intermediate/final time.</p></li>
 </ul>
@@ -433,13 +433,13 @@ Must be done before the AutoTS object is .fit().</p>
 
 <dl class="method">
 <dt id="autots.evaluator.auto_ts.AutoTS.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 'self'</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">hierarchy=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 'self'</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">hierarchy=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
-<li><p><strong>preord_regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>future_regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>hierarchy</strong> – Not yet implemented</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>

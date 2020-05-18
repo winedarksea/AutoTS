@@ -56,7 +56,7 @@ class AutoTS(object):
         
     Attributes:
         best_model (pandas.DataFrame): DataFrame containing template for the best ranked model
-        regression_check (bool): If True, the best_model uses an input 'User' preord_regressor
+        regression_check (bool): If True, the best_model uses an input 'User' future_regressor
     """
 
     def __init__(self,
@@ -207,7 +207,7 @@ class AutoTS(object):
 
     def fit(self, df,
             date_col: str = 'datetime', value_col: str = 'value',
-            id_col: str = None, preord_regressor=[],
+            id_col: str = None, future_regressor=[],
             weights: dict = {}, result_file: str = None):
         """Train algorithm given data supplied.
 
@@ -216,7 +216,7 @@ class AutoTS(object):
             date_col (str): name of datetime column
             value_col (str): name of column containing the data of series.
             id_col (str): name of column identifying different series.
-            preord_regressor (numpy.Array): single external regressor matching train.index
+            future_regressor (numpy.Array): single external regressor matching train.index
             weights (dict): {'colname1': 2, 'colname2': 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
             result_file (str): Location of template/results.csv to be saved at intermediate/final time.
         """
@@ -345,15 +345,15 @@ class AutoTS(object):
             min_allowed_train_percent=self.min_allowed_train_percent,
             verbose=self.verbose)
         try:
-            preord_regressor = pd.DataFrame(preord_regressor)
-            if not isinstance(preord_regressor.index, pd.DatetimeIndex):
-                preord_regressor.index = df_subset.index
-            self.preord_regressor_train = preord_regressor
-            preord_regressor_train = preord_regressor.reindex(index=df_train.index)
-            preord_regressor_test = preord_regressor.reindex(index=df_test.index)
+            future_regressor = pd.DataFrame(future_regressor)
+            if not isinstance(future_regressor.index, pd.DatetimeIndex):
+                future_regressor.index = df_subset.index
+            self.future_regressor_train = future_regressor
+            future_regressor_train = future_regressor.reindex(index=df_train.index)
+            future_regressor_test = future_regressor.reindex(index=df_test.index)
         except Exception:
-            preord_regressor_train = []
-            preord_regressor_test = []
+            future_regressor_train = []
+            future_regressor_test = []
 
         model_count = 0
 
@@ -376,8 +376,8 @@ class AutoTS(object):
             prediction_interval=prediction_interval,
             no_negatives=no_negatives,
             constraint=self.constraint,
-            preord_regressor_train=preord_regressor_train,
-            preord_regressor_forecast=preord_regressor_test,
+            future_regressor_train=future_regressor_train,
+            future_regressor_forecast=future_regressor_test,
             holiday_country=holiday_country,
             startTimeStamps=self.startTimeStamps,
             template_cols=template_cols,
@@ -423,8 +423,8 @@ class AutoTS(object):
                 prediction_interval=prediction_interval,
                 no_negatives=no_negatives,
                 constraint=self.constraint,
-                preord_regressor_train=preord_regressor_train,
-                preord_regressor_forecast=preord_regressor_test,
+                future_regressor_train=future_regressor_train,
+                future_regressor_forecast=future_regressor_test,
                 holiday_country=holiday_country,
                 startTimeStamps=self.startTimeStamps,
                 template_cols=template_cols,
@@ -459,8 +459,8 @@ class AutoTS(object):
                     no_negatives=no_negatives,
                     constraint=self.constraint,
                     ensemble=ensemble,
-                    preord_regressor_train=preord_regressor_train,
-                    preord_regressor_forecast=preord_regressor_test,
+                    future_regressor_train=future_regressor_train,
+                    future_regressor_forecast=future_regressor_test,
                     holiday_country=holiday_country,
                     startTimeStamps=self.startTimeStamps,
                     template_cols=template_cols,
@@ -567,13 +567,13 @@ class AutoTS(object):
 
                 # slice regressor into current validation slices
                 try:
-                    val_preord_regressor_train = preord_regressor.reindex(
+                    val_future_regressor_train = future_regressor.reindex(
                         index=val_df_train.index)
-                    val_preord_regressor_test = preord_regressor.reindex(
+                    val_future_regressor_test = future_regressor.reindex(
                         index=val_df_test.index)
                 except Exception:
-                    val_preord_regressor_train = []
-                    val_preord_regressor_test = []
+                    val_future_regressor_train = []
+                    val_future_regressor_test = []
 
                 # run validation template on current slice
                 template_result = TemplateWizard(
@@ -587,8 +587,8 @@ class AutoTS(object):
                     no_negatives=no_negatives,
                     constraint=self.constraint,
                     ensemble=ensemble,
-                    preord_regressor_train=val_preord_regressor_train,
-                    preord_regressor_forecast=val_preord_regressor_test,
+                    future_regressor_train=val_future_regressor_train,
+                    future_regressor_forecast=val_future_regressor_test,
                     holiday_country=holiday_country,
                     startTimeStamps=self.startTimeStamps,
                     template_cols=self.template_cols,
@@ -678,8 +678,8 @@ or otherwise increase models available."""
                     prediction_interval=prediction_interval,
                     no_negatives=no_negatives,
                     constraint=self.constraint,
-                    preord_regressor_train=preord_regressor_train,
-                    preord_regressor_forecast=preord_regressor_test,
+                    future_regressor_train=future_regressor_train,
+                    future_regressor_forecast=future_regressor_test,
                     holiday_country=holiday_country,
                     startTimeStamps=self.startTimeStamps,
                     template_cols=template_cols,
@@ -776,13 +776,13 @@ or otherwise increase models available."""
         return out
 
     def predict(self, forecast_length: int = "self",
-                preord_regressor=[], hierarchy=None,
+                future_regressor=[], hierarchy=None,
                 just_point_forecast: bool = False):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
-            preord_regressor (numpy.Array): additional regressor, not used
+            future_regressor (numpy.Array): additional regressor, not used
             hierarchy: Not yet implemented
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
 
@@ -795,11 +795,11 @@ or otherwise increase models available."""
 
         # if the models don't need the regressor, ignore it...
         if not self.used_regressor_check:
-            preord_regressor = []
-            self.preord_regressor_train = []
+            future_regressor = []
+            self.future_regressor_train = []
         else:
-            preord_regressor = pd.DataFrame(preord_regressor)
-            self.preord_regressor_train = self.preord_regressor_train.reindex(
+            future_regressor = pd.DataFrame(future_regressor)
+            self.future_regressor_train = self.future_regressor_train.reindex(
                 index=self.df_wide_numeric.index)
 
         df_forecast = PredictWitch(
@@ -810,8 +810,8 @@ or otherwise increase models available."""
             prediction_interval=self.prediction_interval,
             no_negatives=self.no_negatives,
             constraint=self.constraint,
-            preord_regressor_train=self.preord_regressor_train,
-            preord_regressor_forecast=preord_regressor,
+            future_regressor_train=self.future_regressor_train,
+            future_regressor_forecast=future_regressor,
             holiday_country=self.holiday_country,
             startTimeStamps=self.startTimeStamps,
             random_seed=self.random_seed, verbose=self.verbose,
@@ -970,17 +970,17 @@ def fake_regressor(df_long, forecast_length: int = 14,
     forecast_index = forecast_index[1:]
 
     if dimensions <= 1:
-        preord_regressor_train = pd.Series(np.random.randint(
+        future_regressor_train = pd.Series(np.random.randint(
             0, 100, size=len(df_wide.index)), index=df_wide.index)
-        preord_regressor_forecast = pd.Series(np.random.randint(
+        future_regressor_forecast = pd.Series(np.random.randint(
             0, 100, size=(forecast_length)), index=forecast_index)
     else:
-        preord_regressor_train = pd.DataFrame(np.random.randint(
+        future_regressor_train = pd.DataFrame(np.random.randint(
             0, 100, size=(len(df_wide.index), dimensions)),
             index=df_wide.index)
-        preord_regressor_forecast = pd.DataFrame(np.random.randint(
+        future_regressor_forecast = pd.DataFrame(np.random.randint(
             0, 100, size=(forecast_length, dimensions)), index=forecast_index)
-    return preord_regressor_train, preord_regressor_forecast
+    return future_regressor_train, future_regressor_forecast
 
 
 def error_correlations(all_result, result: str = 'corr'):

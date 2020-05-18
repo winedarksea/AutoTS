@@ -22,7 +22,7 @@ class GLS(ModelObject):
                  random_seed: int = 2020):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              holiday_country = holiday_country, random_seed = random_seed)
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -35,7 +35,7 @@ class GLS(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -104,7 +104,7 @@ class GLM(ModelObject):
         self.family = family
         self.constant = constant
         
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -118,14 +118,14 @@ class GLM(ModelObject):
         else:
             self.verbose = False
         if self.regression_type == 'User':
-            if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
+            if ((np.array(future_regressor).shape[0]) != (df.shape[0])):
                 self.regression_type = None
             else:
-                self.preord_regressor_train = preord_regressor
+                self.future_regressor_train = future_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -149,9 +149,9 @@ class GLM(ModelObject):
             from statsmodels.tools import add_constant
             X = add_constant(X, has_constant='add')
         if self.regression_type == 'User':
-            if self.preord_regressor_train.ndim == 1:
-                self.preord_regressor_train = np.array(self.preord_regressor_train).reshape(-1, 1)
-            X = np.concatenate((X.reshape(-1, 1), self.preord_regressor_train), axis = 1)
+            if self.future_regressor_train.ndim == 1:
+                self.future_regressor_train = np.array(self.future_regressor_train).reshape(-1, 1)
+            X = np.concatenate((X.reshape(-1, 1), self.future_regressor_train), axis = 1)
         forecast = pd.DataFrame()
         self.df_train = self.df_train.replace(0, np.nan)
         fill_vals = self.df_train.abs().min(axis = 0, skipna = True)
@@ -163,9 +163,9 @@ class GLM(ModelObject):
         if self.constant or self.constant == 'True':
             Xf = add_constant(Xf, has_constant='add')
         if self.regression_type == 'User':
-            if preord_regressor.ndim == 1:
-                preord_regressor = np.array(preord_regressor).reshape(-1, 1)
-            Xf = np.concatenate((Xf.reshape(-1, 1), preord_regressor), axis = 1)
+            if future_regressor.ndim == 1:
+                future_regressor = np.array(future_regressor).reshape(-1, 1)
+            Xf = np.concatenate((Xf.reshape(-1, 1), future_regressor), axis = 1)
         for y in self.df_train.columns:
             current_series = self.df_train[y]
             if str(self.family).lower() == 'poisson':
@@ -266,7 +266,7 @@ class ETS(ModelObject):
         else:
             self.seasonal_periods = abs(int(seasonal_periods))
         
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -278,7 +278,7 @@ class ETS(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -389,7 +389,7 @@ class ARIMA(ModelObject):
         self.q = q
         self.order = (p, d, q)
 
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied .
         
         Args:
@@ -401,16 +401,16 @@ class ARIMA(ModelObject):
             self.regressor_train = holiday_flag(df.index, country = self.holiday_country).values
         else:
             if self.regression_type is not None:
-                if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
+                if ((np.array(future_regressor).shape[0]) != (df.shape[0])):
                     self.regression_type = None
                 else:
-                    self.regressor_train = preord_regressor
+                    self.regressor_train = future_regressor
         self.df_train = df
         
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast = False):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
         Args:
@@ -427,9 +427,9 @@ class ARIMA(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
-            preord_regressor = holiday_flag(test_index, country = self.holiday_country).values
+            future_regressor = holiday_flag(test_index, country = self.holiday_country).values
         if self.regression_type != None:
-            assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"
+            assert len(future_regressor) == forecast_length, "regressor not equal to forecast length"
         forecast = pd.DataFrame()
         upper_forecast = pd.DataFrame()
         lower_forecast = pd.DataFrame()
@@ -438,8 +438,8 @@ class ARIMA(ModelObject):
             try:
                 if (self.regression_type in ["User", "Holiday"]):
                     maModel = ARIMA(current_series, order = self.order, freq = self.frequency, exog = self.regressor_train).fit(maxiter = 600)
-                    # maPred = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
-                    maPred, stderr, conf = maModel.forecast(steps=self.forecast_length, alpha = (1 - self.prediction_interval), exog = preord_regressor)
+                    # maPred = maModel.predict(start=test_index[0], end=test_index[-1], exog = future_regressor)
+                    maPred, stderr, conf = maModel.forecast(steps=self.forecast_length, alpha = (1 - self.prediction_interval), exog = future_regressor)
                 else:
                     maModel = ARIMA(current_series, order = self.order, freq = self.frequency).fit(maxiter = 400, disp = self.verbose)
                     # maPred = maModel.predict(start=test_index[0], end=test_index[-1])
@@ -547,7 +547,7 @@ class UnobservedComponents(ModelObject):
         self.stochastic_cycle = stochastic_cycle
         self.stochastic_trend = stochastic_trend
         
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -562,15 +562,15 @@ class UnobservedComponents(ModelObject):
                 df.index, country=self.holiday_country).values
         else:
             if self.regression_type is not None:
-                if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
+                if ((np.array(future_regressor).shape[0]) != (df.shape[0])):
                     self.regression_type = None
                 else:
-                    self.regressor_train = preord_regressor
+                    self.regressor_train = future_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
     def predict(self, forecast_length: int,
-                preord_regressor = [], just_point_forecast: bool = False):
+                future_regressor = [], just_point_forecast: bool = False):
         """Generate forecast data immediately following dates of index supplied to .fit().
         
         Args:
@@ -587,9 +587,9 @@ class UnobservedComponents(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
-            preord_regressor = holiday_flag(test_index, country = self.holiday_country).values
+            future_regressor = holiday_flag(test_index, country = self.holiday_country).values
         if self.regression_type is not None:
-            assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"
+            assert len(future_regressor) == forecast_length, "regressor not equal to forecast length"
         forecast = pd.DataFrame()
         for series in self.df_train.columns:
             current_series = self.df_train[series].copy()
@@ -607,7 +607,7 @@ class UnobservedComponents(ModelObject):
                         ).fit(disp=self.verbose_bool)
                     maPred = maModel.predict(start=test_index[0],
                                              end=test_index[-1],
-                                             exog=preord_regressor)
+                                             exog=future_regressor)
                 else:
                     maModel = UnobservedComponents(
                         current_series, freq=self.frequency,
@@ -731,7 +731,7 @@ class DynamicFactor(ModelObject):
         self.k_factors = k_factors
         self.factor_order = factor_order
 
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied.
         
         Args:
@@ -749,15 +749,15 @@ class DynamicFactor(ModelObject):
             self.regressor_train = holiday_flag(df.index, country = self.holiday_country).values
         else:
             if self.regression_type != None:
-                if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
+                if ((np.array(future_regressor).shape[0]) != (df.shape[0])):
                     self.regression_type = None
                 else:
-                    self.regressor_train = preord_regressor
+                    self.regressor_train = future_regressor
         
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -777,9 +777,9 @@ class DynamicFactor(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
-            preord_regressor = holiday_flag(test_index, country = self.holiday_country).values
+            future_regressor = holiday_flag(test_index, country = self.holiday_country).values
         if self.regression_type is not None:
-            assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"     
+            assert len(future_regressor) == forecast_length, "regressor not equal to forecast length"     
 
         if (self.regression_type in ["User", "Holiday"]):
             maModel = DynamicFactor(self.df_train, freq=self.frequency,
@@ -787,10 +787,10 @@ class DynamicFactor(ModelObject):
                                     k_factors=self.k_factors,
                                     factor_order=self.factor_order
                                     ).fit(disp=self.verbose, maxiter=100)
-            if preord_regressor.values.ndim == 1:
-                exog = preord_regressor.values.reshape(-1, 1)
+            if future_regressor.values.ndim == 1:
+                exog = future_regressor.values.reshape(-1, 1)
             else:
-                exog = preord_regressor.values
+                exog = future_regressor.values
             forecast = maModel.predict(start=test_index[0],
                                        end=test_index[-1],
                                        exog=exog)
@@ -891,7 +891,7 @@ class VECM(ModelObject):
         self.deterministic = deterministic
         self.k_ar_diff = k_ar_diff
         
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied.
 
         Args:
@@ -906,16 +906,16 @@ class VECM(ModelObject):
                 df.index, country=self.holiday_country).values
         else:
             if self.regression_type is not None:
-                if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
+                if ((np.array(future_regressor).shape[0]) != (df.shape[0])):
                     self.regression_type = None
                 else:
-                    self.regressor_train = preord_regressor
+                    self.regressor_train = future_regressor
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
     def predict(self, forecast_length: int,
-                preord_regressor = [], just_point_forecast = False):
+                future_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -932,15 +932,15 @@ class VECM(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
-            preord_regressor = holiday_flag(test_index, country = self.holiday_country).values
+            future_regressor = holiday_flag(test_index, country = self.holiday_country).values
         if self.regression_type is not None:
-            assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"
+            assert len(future_regressor) == forecast_length, "regressor not equal to forecast length"
         
         if (self.regression_type in ["User", "Holiday"]):
             maModel = VECM(self.df_train, freq = self.frequency, exog = self.regressor_train, 
                                            deterministic=self.deterministic, k_ar_diff=self.k_ar_diff).fit()
-            # forecast = maModel.predict(start=test_index[0], end=test_index[-1], exog = preord_regressor)
-            forecast = maModel.predict(steps = len(test_index), exog = preord_regressor)
+            # forecast = maModel.predict(start=test_index[0], end=test_index[-1], exog = future_regressor)
+            forecast = maModel.predict(steps = len(test_index), exog = future_regressor)
         else:
             maModel = VECM(self.df_train, freq=self.frequency,
                            deterministic=self.deterministic,
@@ -1025,7 +1025,7 @@ class VARMAX(ModelObject):
                              verbose=verbose)
         self.order = order
         self.trend = trend
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -1038,7 +1038,7 @@ class VARMAX(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast = False):
         """Generate forecast data immediately following dates of index supplied to .fit().
         
         Args:
@@ -1142,7 +1142,7 @@ class VAR(ModelObject):
         self.maxlags = maxlags
         self.ic = ic
 
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied.
 
         Args:
@@ -1157,16 +1157,16 @@ class VAR(ModelObject):
                 df.index, country=self.holiday_country).values
         else:
             if self.regression_type is not None:
-                if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
+                if ((np.array(future_regressor).shape[0]) != (df.shape[0])):
                     self.regression_type = None
                 else:
-                    self.regressor_train = preord_regressor
+                    self.regressor_train = future_regressor
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
     def predict(self, forecast_length: int,
-                preord_regressor = [], just_point_forecast = False):
+                future_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -1183,9 +1183,9 @@ class VAR(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
-            preord_regressor = holiday_flag(test_index, country=self.holiday_country).values
+            future_regressor = holiday_flag(test_index, country=self.holiday_country).values
         if self.regression_type is not None:
-            assert len(preord_regressor) == forecast_length, "regressor not equal to forecast length"
+            assert len(future_regressor) == forecast_length, "regressor not equal to forecast length"
         if (self.df_train < 0).any(axis=None):
             from autots.tools.transform import PositiveShift
             transformer = PositiveShift(center_one=False).fit(self.df_train)
@@ -1200,7 +1200,7 @@ class VAR(ModelObject):
                           ).fit(maxlags=15, ic='fpe', trend='nc')
             forecast, lower_forecast, upper_forecast = maModel.forecast_interval(
                 steps=len(test_index),
-                exog_future=preord_regressor,
+                exog_future=future_regressor,
                 y=self.df_train.values)
         else:
             maModel = VAR(self.df_train, freq=self.frequency

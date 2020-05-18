@@ -48,16 +48,16 @@ model = AutoTS(forecast_length=forecast_length, frequency='infer',
                drop_most_recent=0, verbose=1)
 
 
-preord_regressor_train, preord_regressor_forecast = fake_regressor(
+future_regressor_train, future_regressor_forecast = fake_regressor(
     df_long, dimensions=1, forecast_length=forecast_length,
     date_col='datetime', value_col='value', id_col='series_id')
-preord_regressor_train2d, preord_regressor_forecast2d = fake_regressor(
+future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
     df_long, dimensions=4, forecast_length=forecast_length,
     date_col='datetime', value_col='value', id_col='series_id')
 
 # model = model.import_results('04222020test.csv')
 model = model.fit(df_long,
-                  preord_regressor=preord_regressor_train2d,
+                  future_regressor=future_regressor_train2d,
                   # weights=weights_hourly,
                   # result_file='04222027test.csv',
                   date_col='datetime', value_col='value', id_col='series_id')
@@ -66,7 +66,7 @@ print(model.best_model['Model'].iloc[0])
 print(model.best_model['ModelParameters'].iloc[0])
 print(model.best_model['TransformationParameters'].iloc[0])
 
-prediction = model.predict(preord_regressor=preord_regressor_forecast2d)
+prediction = model.predict(future_regressor=future_regressor_forecast2d)
 # point forecasts dataframe
 forecasts_df = prediction.forecast
 # accuracy of all tried model results (not including cross validation)

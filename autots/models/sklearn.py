@@ -476,22 +476,22 @@ class RollingRegression(ModelObject):
             x_transformer = VarianceThreshold(threshold=0.0)
         return x_transformer
 
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied.
 
         Args:
             df (pandas.DataFrame): Datetime Indexed
-            preord_regressor (pandas.DataFrame or Series): Datetime Indexed
+            future_regressor (pandas.DataFrame or Series): Datetime Indexed
         """
         df = self.basic_profile(df)
         self.df_train = df
 
         # if external regressor, do some check up
         if self.regression_type is not None:
-            if ((np.array(preord_regressor).shape[0]) != (df.shape[0])):
+            if ((np.array(future_regressor).shape[0]) != (df.shape[0])):
                 self.regression_type = None
             else:
-                self.regressor_train = preord_regressor
+                self.regressor_train = future_regressor
 
         # define X and Y
         self.sktraindata = self.df_train.dropna(how='all', axis=0)
@@ -535,7 +535,7 @@ class RollingRegression(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
         
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast: bool = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast: bool = False):
         """Generate forecast data immediately following dates of index supplied to .fit().
         
         Args:
@@ -550,7 +550,7 @@ class RollingRegression(ModelObject):
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
         if self.regression_type == 'User':
-            complete_regressor = pd.concat([self.regressor_train, preord_regressor], axis = 0)
+            complete_regressor = pd.concat([self.regressor_train, future_regressor], axis = 0)
         
         combined_index = (self.df_train.index.append(index))
         forecast = pd.DataFrame()
@@ -794,7 +794,7 @@ class WindowRegression(ModelObject):
         self.forecast_length = forecast_length
         self.max_windows = abs(int(max_windows))
 
-    def fit(self, df, preord_regressor=[]):
+    def fit(self, df, future_regressor=[]):
         """Train algorithm given data supplied.
 
         Args:
@@ -819,7 +819,7 @@ class WindowRegression(ModelObject):
         return self
 
     def predict(self, forecast_length: int,
-                preord_regressor = [], just_point_forecast: bool = False):
+                future_regressor = [], just_point_forecast: bool = False):
         """Generate forecast data immediately following dates of .fit().
 
         Args:

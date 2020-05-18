@@ -44,7 +44,7 @@ class TSFreshRegressor(ModelObject):
         self.max_timeshift = max_timeshift
         self.feature_selection = feature_selection
 
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -56,11 +56,11 @@ class TSFreshRegressor(ModelObject):
         df = self.basic_profile(df)
 
         self.df_train = df
-        self.regressor_train = preord_regressor
+        self.regressor_train = future_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
     
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast: bool = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast: bool = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:

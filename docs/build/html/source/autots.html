@@ -173,7 +173,7 @@
 <dl class="attribute">
 <dt id="autots.AutoTS.regression_check">
 <code class="sig-name descname">regression_check</code><a class="headerlink" href="#autots.AutoTS.regression_check" title="Permalink to this definition">¶</a></dt>
-<dd><p>If True, the best_model uses an input ‘User’ preord_regressor</p>
+<dd><p>If True, the best_model uses an input ‘User’ future_regressor</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>bool</p>
@@ -201,7 +201,7 @@ the max number of each model class to include in template</p></li>
 
 <dl class="method">
 <dt id="autots.AutoTS.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = None</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">weights: dict = {}</em>, <em class="sig-param">result_file: str = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = None</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">weights: dict = {}</em>, <em class="sig-param">result_file: str = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -210,7 +210,7 @@ the max number of each model class to include in template</p></li>
 <li><p><strong>date_col</strong> (<em>str</em>) – name of datetime column</p></li>
 <li><p><strong>value_col</strong> (<em>str</em>) – name of column containing the data of series.</p></li>
 <li><p><strong>id_col</strong> (<em>str</em>) – name of column identifying different series.</p></li>
-<li><p><strong>preord_regressor</strong> (<em>numpy.Array</em>) – single external regressor matching train.index</p></li>
+<li><p><strong>future_regressor</strong> (<em>numpy.Array</em>) – single external regressor matching train.index</p></li>
 <li><p><strong>weights</strong> (<em>dict</em>) – {‘colname1’: 2, ‘colname2’: 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.</p></li>
 <li><p><strong>result_file</strong> (<em>str</em>) – Location of template/results.csv to be saved at intermediate/final time.</p></li>
 </ul>
@@ -242,13 +242,13 @@ Must be done before the AutoTS object is .fit().</p>
 
 <dl class="method">
 <dt id="autots.AutoTS.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 'self'</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">hierarchy=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 'self'</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">hierarchy=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
-<li><p><strong>preord_regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>future_regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>hierarchy</strong> – Not yet implemented</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>

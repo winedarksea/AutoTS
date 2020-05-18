@@ -510,8 +510,8 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
                     prediction_interval: float = 0.9,
                     no_negatives: bool = False,
                     constraint: float = None,
-                    preord_regressor_train = [],
-                    preord_regressor_forecast = [],
+                    future_regressor_train = [],
+                    future_regressor_forecast = [],
                     holiday_country: str = 'US', startTimeStamps = None,
                     random_seed: int = 2020, verbose: int = 0):
     """Feed parameters into modeling pipeline
@@ -525,8 +525,8 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
         prediction_interval (float): width of errors (note: rarely do the intervals accurately match the % asked for...)
         no_negatives (bool): whether to force all forecasts to be > 0
         constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values.
-        preord_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
-        preord_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
+        future_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
+        future_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.            
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
 
@@ -558,8 +558,8 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
         df_train_transformed = simple_context_slicer(df_train_transformed, method = transformation_dict['context_slicer'], forecast_length = forecast_length)
 
     # make sure regressor has same length. This could be a problem if wrong size regressor is passed.
-    if len(preord_regressor_train) > 0:
-        preord_regressor_train = preord_regressor_train.tail(df_train_transformed.shape[0])
+    if len(future_regressor_train) > 0:
+        future_regressor_train = future_regressor_train.tail(df_train_transformed.shape[0])
 
     transformation_runtime = datetime.datetime.now() - transformationStartTime
     # from autots.evaluator.auto_model import ModelMonster
@@ -570,9 +570,9 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
                          random_seed=random_seed, verbose=verbose,
                          forecast_length=forecast_length)
     model = model.fit(df_train_transformed,
-                      preord_regressor=preord_regressor_train)
+                      future_regressor=future_regressor_train)
     df_forecast = model.predict(forecast_length=forecast_length,
-                                preord_regressor=preord_regressor_forecast)
+                                future_regressor=future_regressor_forecast)
 
     if df_forecast.forecast.isnull().all(axis=0).astype(int).sum() > 0:
         raise ValueError("Model {} returned NaN for one or more series".format(model_str))
@@ -697,8 +697,8 @@ def PredictWitch(template, df_train, forecast_length: int,
                  prediction_interval: float = 0.9,
                  no_negatives: bool = False,
                  constraint: float = None,
-                 preord_regressor_train=[],
-                 preord_regressor_forecast=[],
+                 future_regressor_train=[],
+                 future_regressor_forecast=[],
                  holiday_country: str = 'US', startTimeStamps=None,
                  random_seed: int = 2020, verbose: int = 0,
                  template_cols: list = ['Model', 'ModelParameters',
@@ -721,8 +721,8 @@ def PredictWitch(template, df_train, forecast_length: int,
         prediction_interval (float): width of errors (note: rarely do the intervals accurately match the % asked for...)
         no_negatives (bool): whether to force all forecasts to be > 0
         constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values.
-        preord_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
-        preord_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
+        future_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
+        future_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.            
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
         template_cols (list): column names of columns used as model template
@@ -754,8 +754,8 @@ def PredictWitch(template, df_train, forecast_length: int,
                     prediction_interval=prediction_interval,
                     no_negatives=no_negatives,
                     constraint=constraint,
-                    preord_regressor_train=preord_regressor_train,
-                    preord_regressor_forecast=preord_regressor_forecast,
+                    future_regressor_train=future_regressor_train,
+                    future_regressor_forecast=future_regressor_forecast,
                     holiday_country=holiday_country,
                     startTimeStamps=startTimeStamps,
                     random_seed=random_seed, verbose=verbose,
@@ -788,8 +788,8 @@ def PredictWitch(template, df_train, forecast_length: int,
                 prediction_interval=prediction_interval,
                 no_negatives=no_negatives,
                 constraint=constraint,
-                preord_regressor_train=preord_regressor_train,
-                preord_regressor_forecast=preord_regressor_forecast,
+                future_regressor_train=future_regressor_train,
+                future_regressor_forecast=future_regressor_forecast,
                 holiday_country=holiday_country, random_seed=random_seed,
                 verbose=verbose, startTimeStamps=startTimeStamps)
 
@@ -802,8 +802,8 @@ def TemplateWizard(template, df_train, df_test, weights,
                    prediction_interval: float = 0.9,
                    no_negatives: bool = False,
                    constraint: float = None,
-                   preord_regressor_train=[],
-                   preord_regressor_forecast=[],
+                   future_regressor_train=[],
+                   future_regressor_forecast=[],
                    holiday_country: str = 'US', startTimeStamps=None,
                    random_seed: int = 2020, verbose: int = 0,
                    validation_round: int = 0,
@@ -828,8 +828,8 @@ def TemplateWizard(template, df_train, df_test, weights,
         prediction_interval (float): width of errors (note: rarely do the intervals accurately match the % asked for...)
         no_negatives (bool): whether to force all forecasts to be > 0
         constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values.
-        preord_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
-        preord_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
+        future_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
+        future_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
         template_cols (list): column names of columns used as model template
@@ -863,8 +863,8 @@ def TemplateWizard(template, df_train, df_test, weights,
                 prediction_interval=prediction_interval,
                 no_negatives=no_negatives,
                 constraint=constraint,
-                preord_regressor_train = preord_regressor_train,
-                preord_regressor_forecast = preord_regressor_forecast,
+                future_regressor_train = future_regressor_train,
+                future_regressor_forecast = future_regressor_forecast,
                 holiday_country=holiday_country,
                 startTimeStamps = startTimeStamps,
                 random_seed=random_seed, verbose=verbose,

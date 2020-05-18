@@ -23,7 +23,7 @@ class ZeroesNaive(ModelObject):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              holiday_country = holiday_country,
                              random_seed = random_seed, verbose = verbose)
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -33,7 +33,7 @@ class ZeroesNaive(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -88,7 +88,7 @@ class LastValueNaive(ModelObject):
                  random_seed: int = 2020):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
                              holiday_country = holiday_country, random_seed = random_seed)
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -101,7 +101,7 @@ class LastValueNaive(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -166,7 +166,7 @@ class AverageValueNaive(ModelObject):
                              verbose=verbose)
         self.method = method
 
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -183,7 +183,7 @@ class AverageValueNaive(ModelObject):
         self.lower, self.upper = historic_quantile(df, prediction_interval = self.prediction_interval)
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [],
+    def predict(self, forecast_length: int, future_regressor = [],
                 just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
@@ -262,7 +262,7 @@ class SeasonalNaive(ModelObject):
                 self.lag_2 = 1
         self.method = method
 
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied.
 
         Args:
@@ -305,7 +305,7 @@ class SeasonalNaive(ModelObject):
         return self
 
     def predict(self, forecast_length: int,
-                preord_regressor = [], just_point_forecast: bool = False):
+                future_regressor = [], just_point_forecast: bool = False):
         """Generate forecast data immediately following dates of .fit().
 
         Args:
@@ -414,7 +414,7 @@ class MotifSimulation(ModelObject):
         self.cutoff_minimum = cutoff_minimum
         self.point_method = point_method
         
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied.
         
         Args:
@@ -620,7 +620,7 @@ class MotifSimulation(ModelObject):
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:

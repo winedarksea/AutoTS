@@ -69,7 +69,7 @@ Latest:
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
 VECM does not recognize exog to predict
 ARIMA with User or Holiday ValueError('Can only compare identically-labeled DataFrame objects',)
-Drop Most Recent does not play well logically with added external (preord) regressors.
+Drop Most Recent does not play well logically with added external (future) regressors.
 FastICA 'array must not contain infs or NaNs'
 How do fillna methods handle datasets that have entirely NaN series?
 Horizontal models and NaN in per_series?
@@ -100,7 +100,6 @@ Tensorflow GPU backend may crash on occasion.
 * test whether bottom up significantly overestimates on rollup
 
 # To-Do
-* Rename preord
 * clean up subsetting
 * clean up long_to_wide inputs like na_tolerance
 	* documetentation here is making sphinx unhappy, fix!
@@ -143,7 +142,7 @@ Tensorflow GPU backend may crash on occasion.
 * Simple performance:
 	* replace try/except with if/else in some cases
 * GluonTS
-	* Add support for preord_regressor
+	* Add support for future_regressor
 	* Make sure of rolling regression setup
 	* Modify GluonStart if lots of NaN at start of that series
 	* GPU and CPU ctx

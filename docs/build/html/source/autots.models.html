@@ -56,7 +56,7 @@
 </dl>
 <dl class="method">
 <dt id="autots.models.basics.AverageValueNaive.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.AverageValueNaive.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.AverageValueNaive.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -79,7 +79,7 @@
 
 <dl class="method">
 <dt id="autots.models.basics.AverageValueNaive.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.AverageValueNaive.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.AverageValueNaive.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -114,7 +114,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.basics.LastValueNaive.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.LastValueNaive.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.LastValueNaive.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -137,7 +137,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.basics.LastValueNaive.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.LastValueNaive.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.LastValueNaive.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -176,7 +176,7 @@ Basically a highly-customized KNN</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.basics.MotifSimulation.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.MotifSimulation.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.MotifSimulation.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -199,7 +199,7 @@ Basically a highly-customized KNN</p>
 
 <dl class="method">
 <dt id="autots.models.basics.MotifSimulation.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.MotifSimulation.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.MotifSimulation.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -238,7 +238,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.basics.SeasonalNaive.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SeasonalNaive.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SeasonalNaive.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -261,7 +261,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.basics.SeasonalNaive.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SeasonalNaive.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SeasonalNaive.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of .fit().</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -296,7 +296,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.basics.ZeroesNaive.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ZeroesNaive.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ZeroesNaive.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -319,7 +319,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.basics.ZeroesNaive.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ZeroesNaive.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ZeroesNaive.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -449,7 +449,7 @@ Except it is really the only thing I use that runs mxnet, and it takes a while t
 </dl>
 <dl class="method">
 <dt id="autots.models.gluonts.GluonTS.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.gluonts.GluonTS.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.gluonts.GluonTS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -472,7 +472,7 @@ Except it is really the only thing I use that runs mxnet, and it takes a while t
 
 <dl class="method">
 <dt id="autots.models.gluonts.GluonTS.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.gluonts.GluonTS.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.gluonts.GluonTS.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -516,7 +516,7 @@ shall be 3. 4 thou shall not count, neither count thou 2, excepting that thou th
 </dl>
 <dl class="method">
 <dt id="autots.models.prophet.FBProphet.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.FBProphet.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.FBProphet.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -539,7 +539,7 @@ shall be 3. 4 thou shall not count, neither count thou 2, excepting that thou th
 
 <dl class="method">
 <dt id="autots.models.prophet.FBProphet.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.FBProphet.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.FBProphet.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -583,13 +583,13 @@ I am Arthur, King of the Britons. -Python</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.sklearn.RollingRegression.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.RollingRegression.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.RollingRegression.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
-<li><p><strong>preord_regressor</strong> (<em>pandas.DataFrame</em><em> or </em><em>Series</em>) – Datetime Indexed</p></li>
+<li><p><strong>future_regressor</strong> (<em>pandas.DataFrame</em><em> or </em><em>Series</em>) – Datetime Indexed</p></li>
 </ul>
 </dd>
 </dl>
@@ -609,7 +609,7 @@ I am Arthur, King of the Britons. -Python</p>
 
 <dl class="method">
 <dt id="autots.models.sklearn.RollingRegression.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.RollingRegression.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.RollingRegression.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -647,7 +647,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.sklearn.WindowRegression.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.WindowRegression.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.WindowRegression.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -670,7 +670,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.sklearn.WindowRegression.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.WindowRegression.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.WindowRegression.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of .fit().</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -761,7 +761,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.statsmodels.ARIMA.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ARIMA.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ARIMA.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied .</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -785,7 +785,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.statsmodels.ARIMA.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ARIMA.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ARIMA.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -821,7 +821,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.statsmodels.DynamicFactor.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.DynamicFactor.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.DynamicFactor.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -844,7 +844,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.statsmodels.DynamicFactor.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.DynamicFactor.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.DynamicFactor.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -888,7 +888,7 @@ maPred = maModel.predict()</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.statsmodels.ETS.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ETS.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ETS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -911,7 +911,7 @@ maPred = maModel.predict()</p>
 
 <dl class="method">
 <dt id="autots.models.statsmodels.ETS.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ETS.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ETS.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -947,7 +947,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.statsmodels.GLM.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.GLM.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.GLM.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -970,7 +970,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.statsmodels.GLM.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.GLM.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.GLM.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1005,7 +1005,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.statsmodels.GLS.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.GLS.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.GLS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1028,7 +1028,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.statsmodels.GLS.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.GLS.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.GLS.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1064,7 +1064,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.statsmodels.UnobservedComponents.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.UnobservedComponents.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.UnobservedComponents.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1087,7 +1087,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.statsmodels.UnobservedComponents.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.UnobservedComponents.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.UnobservedComponents.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1123,7 +1123,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.statsmodels.VAR.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VAR.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VAR.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1146,7 +1146,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.statsmodels.VAR.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VAR.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VAR.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1182,7 +1182,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.statsmodels.VARMAX.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VARMAX.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VARMAX.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1205,7 +1205,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.statsmodels.VARMAX.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VARMAX.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VARMAX.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1241,7 +1241,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.statsmodels.VECM.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VECM.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VECM.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1264,7 +1264,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.statsmodels.VECM.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VECM.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VECM.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1303,7 +1303,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.tfp.TFPRegression.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tfp.TFPRegression.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tfp.TFPRegression.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1326,7 +1326,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.tfp.TFPRegression.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tfp.TFPRegression.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tfp.TFPRegression.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1396,7 +1396,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.tfp.TensorflowSTS.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tfp.TensorflowSTS.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tfp.TensorflowSTS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1419,7 +1419,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.tfp.TensorflowSTS.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tfp.TensorflowSTS.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tfp.TensorflowSTS.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1461,7 +1461,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dl>
 <dl class="method">
 <dt id="autots.models.tsfresh.TSFreshRegressor.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">preord_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tsfresh.TSFreshRegressor.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tsfresh.TSFreshRegressor.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1484,7 +1484,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.tsfresh.TSFreshRegressor.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">preord_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tsfresh.TSFreshRegressor.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tsfresh.TSFreshRegressor.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
