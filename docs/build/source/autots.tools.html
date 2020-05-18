@@ -1,0 +1,1259 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>autots.tools package &#8212; AutoTS 0.2.0 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="prev" title="autots.templates package" href="autots.templates.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="autots-tools-package">
+<h1>autots.tools package<a class="headerlink" href="#autots-tools-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-autots.tools.holiday">
+<span id="autots-tools-holiday-module"></span><h2>autots.tools.holiday module<a class="headerlink" href="#module-autots.tools.holiday" title="Permalink to this headline">¶</a></h2>
+<p>Manage holiday features.</p>
+<dl class="function">
+<dt id="autots.tools.holiday.holiday_flag">
+<code class="sig-prename descclassname">autots.tools.holiday.</code><code class="sig-name descname">holiday_flag</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em>, <em class="sig-param">country: str = 'US'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.holiday.holiday_flag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a 0/1 flag for given datetime index.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>DTindex</strong> (<em>panda.DatetimeIndex</em>) – DatetimeIndex of dates to create flags</p></li>
+<li><p><strong>country</strong> (<em>str</em>) – to pass through to python package Holidays</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>pandas.Series() with DatetimeIndex and column ‘HolidayFlag’</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-autots.tools.impute">
+<span id="autots-tools-impute-module"></span><h2>autots.tools.impute module<a class="headerlink" href="#module-autots.tools.impute" title="Permalink to this headline">¶</a></h2>
+<p>Fill NA</p>
+<dl class="function">
+<dt id="autots.tools.impute.FillNA">
+<code class="sig-prename descclassname">autots.tools.impute.</code><code class="sig-name descname">FillNA</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">method: str = 'ffill'</em>, <em class="sig-param">window: int = 10</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.impute.FillNA" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fill NA values using different methods.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>method</strong> (<em>str</em>) – ‘ffill’ - fill most recent non-na value forward until another non-na value is reached
+‘zero’ - fill with zero. Useful for sales and other data where NA does usually mean $0.
+‘mean’ - fill all missing values with the series’ overall average value
+‘median’ - fill all missing values with the series’ overall median value
+‘rolling mean’ - fill with last n (window) values
+‘ffill mean biased’ - simple avg of ffill and mean
+‘fake date’ - shifts forward data over nan, thus values will have incorrect timestamps</p></li>
+<li><p><strong>window</strong> (<em>int</em>) – length of rolling windows for filling na, for rolling methods</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.impute.biased_ffill">
+<code class="sig-prename descclassname">autots.tools.impute.</code><code class="sig-name descname">biased_ffill</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">mean_weight: float = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.impute.biased_ffill" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fill NaN with average of last value and mean.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.impute.fake_date_fill">
+<code class="sig-prename descclassname">autots.tools.impute.</code><code class="sig-name descname">fake_date_fill</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">back_method: str = 'slice'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.impute.fake_date_fill" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a dataframe where na values are removed and values shifted forward.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Thus, values will likely have incorrect timestamps!</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>back_method</strong> (<em>str</em>) – how to deal with tails left by shifting NaN
+- ‘bfill’ -back fill the last value
+- ‘slice’ - drop any rows with any na
+- ‘keepNA’ - keep the lagging na</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.impute.fill_forward">
+<code class="sig-prename descclassname">autots.tools.impute.</code><code class="sig-name descname">fill_forward</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.impute.fill_forward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fill NaN with previous values.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.impute.fill_mean">
+<code class="sig-prename descclassname">autots.tools.impute.</code><code class="sig-name descname">fill_mean</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.impute.fill_mean" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fill NaN with mean.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.impute.fill_median">
+<code class="sig-prename descclassname">autots.tools.impute.</code><code class="sig-name descname">fill_median</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.impute.fill_median" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fill NaN with median.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.impute.fill_zero">
+<code class="sig-prename descclassname">autots.tools.impute.</code><code class="sig-name descname">fill_zero</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.impute.fill_zero" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fill NaN with zero.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.impute.rolling_mean">
+<code class="sig-prename descclassname">autots.tools.impute.</code><code class="sig-name descname">rolling_mean</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">window: int = 10</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.impute.rolling_mean" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fill NaN with mean of last window values.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-autots.tools.probabilistic">
+<span id="autots-tools-probabilistic-module"></span><h2>autots.tools.probabilistic module<a class="headerlink" href="#module-autots.tools.probabilistic" title="Permalink to this headline">¶</a></h2>
+<p>Point to Probabilistic</p>
+<dl class="function">
+<dt id="autots.tools.probabilistic.Point_to_Probability">
+<code class="sig-prename descclassname">autots.tools.probabilistic.</code><code class="sig-name descname">Point_to_Probability</code><span class="sig-paren">(</span><em class="sig-param">train</em>, <em class="sig-param">forecast</em>, <em class="sig-param">prediction_interval=0.9</em>, <em class="sig-param">method: str = 'historic_quantile'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.probabilistic.Point_to_Probability" title="Permalink to this definition">¶</a></dt>
+<dd><p>Data driven placeholder for model error estimation.</p>
+<p>Catlin Point to Probability method (‘a mixture of dark magic and gum disease’)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>train</strong> (<em>pandas.DataFrame</em>) – DataFrame of time series where index is DatetimeIndex</p></li>
+<li><p><strong>forecast</strong> (<em>pandas.DataFrame</em>) – DataFrame of forecast time series
+in which the index is a DatetimeIndex and columns/series aligned with train.
+Forecast must be &gt; 1 in length.</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – confidence or perhaps credible interval</p></li>
+<li><p><strong>method</strong> (<em>str</em>) – spell to cast to create dark magic.
+‘historic_quantile’, ‘inferred_normal’, ‘variable_pct_change’
+gum disease available separately upon request.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>upper_error, lower_error (two pandas.DataFrames for upper and lower bound respectively)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.probabilistic.Variable_Point_to_Probability">
+<code class="sig-prename descclassname">autots.tools.probabilistic.</code><code class="sig-name descname">Variable_Point_to_Probability</code><span class="sig-paren">(</span><em class="sig-param">train</em>, <em class="sig-param">forecast</em>, <em class="sig-param">alpha=0.3</em>, <em class="sig-param">beta=1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.probabilistic.Variable_Point_to_Probability" title="Permalink to this definition">¶</a></dt>
+<dd><p>Data driven placeholder for model error estimation.</p>
+<p>ErrorRange = beta * (En + alpha * En-1 [cum sum of En])
+En = abs(0.5 - QTP) * D
+D = abs(Xn - ((Avg % Change of Train * Xn-1) + Xn-1))
+Xn = Forecast Value
+QTP = Percentile of Score in All Percent Changes of Train
+Score = Percent Change (from Xn-1 to Xn)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>train</strong> (<em>pandas.DataFrame</em>) – DataFrame of time series where index is DatetimeIndex</p></li>
+<li><p><strong>forecast</strong> (<em>pandas.DataFrame</em>) – DataFrame of forecast time series
+in which the index is a DatetimeIndex and columns/series aligned with train.
+Forecast must be &gt; 1 in length.</p></li>
+<li><p><strong>alpha</strong> (<em>float</em>) – parameter which effects the broadening of error range over time
+Usually 0 &lt; alpha &lt; 1 (although it can be larger than 1)</p></li>
+<li><p><strong>beta</strong> (<em>float</em>) – parameter which effects the general width of the error bar
+Usually 0 &lt; beta &lt; 1 (although it can be larger than 1)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>error width for each value of forecast.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>ErrorRange (pandas.DataFrame)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.probabilistic.historic_quantile">
+<code class="sig-prename descclassname">autots.tools.probabilistic.</code><code class="sig-name descname">historic_quantile</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">prediction_interval: float = 0.9</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.probabilistic.historic_quantile" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the difference between the median and the prediction interval range in historic data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df_train</strong> (<em>pd.DataFrame</em>) – a dataframe of training data</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – the desired forecast interval range</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>two 1D arrays</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>lower, upper (np.array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.probabilistic.inferred_normal">
+<code class="sig-prename descclassname">autots.tools.probabilistic.</code><code class="sig-name descname">inferred_normal</code><span class="sig-paren">(</span><em class="sig-param">train</em>, <em class="sig-param">forecast</em>, <em class="sig-param">n: int = 5</em>, <em class="sig-param">prediction_interval: float = 0.9</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.probabilistic.inferred_normal" title="Permalink to this definition">¶</a></dt>
+<dd><p>A corruption of Bayes theorem.
+It will be sensitive to the transformations of the data.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.probabilistic.percentileofscore_appliable">
+<code class="sig-prename descclassname">autots.tools.probabilistic.</code><code class="sig-name descname">percentileofscore_appliable</code><span class="sig-paren">(</span><em class="sig-param">x</em>, <em class="sig-param">a</em>, <em class="sig-param">kind='rank'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.probabilistic.percentileofscore_appliable" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-autots.tools.profile">
+<span id="autots-tools-profile-module"></span><h2>autots.tools.profile module<a class="headerlink" href="#module-autots.tools.profile" title="Permalink to this headline">¶</a></h2>
+<p>Profiling</p>
+<dl class="function">
+<dt id="autots.tools.profile.data_profile">
+<code class="sig-prename descclassname">autots.tools.profile.</code><code class="sig-name descname">data_profile</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.profile.data_profile" title="Permalink to this definition">¶</a></dt>
+<dd><p>Input: a pd DataFrame of columns which are time series, and a datetime index</p>
+<p>Output: a pd DataFrame of column per time series, with rows which are statistics</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-autots.tools.shaping">
+<span id="autots-tools-shaping-module"></span><h2>autots.tools.shaping module<a class="headerlink" href="#module-autots.tools.shaping" title="Permalink to this headline">¶</a></h2>
+<p>Reshape</p>
+<dl class="class">
+<dt id="autots.tools.shaping.NumericTransformer">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">NumericTransformer</code><span class="sig-paren">(</span><em class="sig-param">na_strings: list = ['', ' ', 'NULL', 'NA', 'NaN', 'na', 'nan'], categorical_impute_strategy: str = 'constant', verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.NumericTransformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Test numeric conversion.</p>
+<dl class="method">
+<dt id="autots.tools.shaping.NumericTransformer.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.NumericTransformer.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit categorical to numeric.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.shaping.NumericTransformer.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.NumericTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert numeric back to categorical.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.shaping.NumericTransformer.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.NumericTransformer.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert categorical dataset to numeric.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.shaping.long_to_wide">
+<code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">long_to_wide</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = 'series_id'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">na_tolerance: float = 0.99</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">verbose: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.long_to_wide" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes long data and converts into wide, cleaner data</p>
+<blockquote>
+<div><dl class="field-list">
+<dt class="field-odd">param df</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p>a pandas dataframe having three columns:</p></li>
+</ul>
+</dd>
+<dt class="field-even">type df</dt>
+<dd class="field-even"><p>pandas.DataFrame</p>
+<dl class="field-list simple">
+<dt class="field-odd">param date_col</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p>the name of the column containing dates, preferrably already in pandas datetime format</p></li>
+</ul>
+</dd>
+<dt class="field-even">type date_col</dt>
+<dd class="field-even"><p>str</p>
+</dd>
+<dt class="field-odd">param value_col</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p>the name of the column with the values of the time series (ie sales $)</p></li>
+</ul>
+</dd>
+<dt class="field-even">type value_col</dt>
+<dd class="field-even"><p>str</p>
+</dd>
+<dt class="field-odd">param id_col</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p>name of the id column, unique for each time series</p></li>
+</ul>
+</dd>
+<dt class="field-even">type id_col</dt>
+<dd class="field-even"><p>str</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-odd">param frequency</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p>frequency in string of alias for DateOffset object, normally “1D” -daily, “MS” -month start etc.</p></li>
+</ul>
+<p>currently, aliases are listed somewhere in here: <a class="reference external" href="https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html">https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html</a></p>
+</dd>
+<dt class="field-even">type frequency</dt>
+<dd class="field-even"><p>str</p>
+</dd>
+<dt class="field-odd">param na_tolerance</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p>allow up to this percent of values to be NaN, else drop the entire series</p></li>
+</ul>
+<p>the default of 0.95 means a series can be 95% NaN values and still be included.</p>
+</dd>
+<dt class="field-even">type na_tolerance</dt>
+<dd class="field-even"><p>float</p>
+</dd>
+<dt class="field-odd">param drop_data_older_than_periods</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p>cut off older data because eventually you just get too much</p></li>
+</ul>
+<p>10,000 is meant to be rather high, normally for daily data I’d use only the last couple of years, say 1500 samples</p>
+</dd>
+<dt class="field-even">type drop_data_older_than_periods</dt>
+<dd class="field-even"><p>int</p>
+</dd>
+<dt class="field-odd">param drop_most_recent</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p>if to drop the most recent data point</p></li>
+</ul>
+<p>useful if you pull monthly data before month end, and you don’t want an incomplete month appearing complete</p>
+</dd>
+<dt class="field-even">type drop_most_recent</dt>
+<dd class="field-even"><p>int</p>
+</dd>
+<dt class="field-odd">param aggfunc</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p>passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime</p></li>
+</ul>
+<p>other options include “mean” and other numpy functions</p>
+</dd>
+<dt class="field-even">type aggfunc</dt>
+<dd class="field-even"><p>str</p>
+</dd>
+</dl>
+</div></blockquote>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.shaping.simple_train_test_split">
+<code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">simple_train_test_split</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">forecast_length: int = 10</em>, <em class="sig-param">min_allowed_train_percent: float = 0.3</em>, <em class="sig-param">verbose: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.simple_train_test_split" title="Permalink to this definition">¶</a></dt>
+<dd><p>Uses the last periods of forecast_length as the test set, the rest as train</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – number of future periods to predict</p></li>
+<li><p><strong>min_allowed_train_percent</strong> (<em>float</em>) – <ul>
+<li><p>forecast length cannot be greater than 1 - this</p></li>
+</ul>
+<p>constrains the forecast length from being much larger than than the training data
+note this includes NaNs in current configuration</p>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>train, test  (both pd DataFrames)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.shaping.subset_series">
+<code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">subset_series</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">weights</em>, <em class="sig-param">n: int = 1000</em>, <em class="sig-param">random_state: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.subset_series" title="Permalink to this definition">¶</a></dt>
+<dd><p>Expects a pandas DataFrame in format of output from long_to_wide().
+That is, in the format where the Index is a Date
+and Columns are each a unique time series</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n</strong> (<em>int</em>) – <ul>
+<li><p>number of unique time series to keep</p></li>
+</ul>
+</p></li>
+<li><p><strong>na_tolerance</strong> (<em>float</em>) – <ul>
+<li><p>allow up to this percent of values to be NaN, else drop the entire series</p></li>
+</ul>
+<p>default is 1.0, allow all NaNs, primarily handled instead by long_to_wide</p>
+</p></li>
+<li><p><strong>random_state</strong> (<em>int</em>) – <ul>
+<li><p>random seed</p></li>
+</ul>
+</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-autots.tools.transform">
+<span id="autots-tools-transform-module"></span><h2>autots.tools.transform module<a class="headerlink" href="#module-autots.tools.transform" title="Permalink to this headline">¶</a></h2>
+<p>Preprocessing data methods.</p>
+<dl class="class">
+<dt id="autots.tools.transform.CumSumTransformer">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">CumSumTransformer</code><a class="headerlink" href="#autots.tools.transform.CumSumTransformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Cumulative Sum of Data.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Inverse transformed values returned will also not return as ‘exactly’ equals due to floating point imprecision.
+inverse_transform can only be applied to the original series, or an immediately following forecast</p>
+</div>
+<dl class="method">
+<dt id="autots.tools.transform.CumSumTransformer.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.CumSumTransformer.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.CumSumTransformer.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.CumSumTransformer.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns <em>Magical</em> DataFrame
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.CumSumTransformer.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.CumSumTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns data to original <em>or</em> forecast form</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p></li>
+<li><p><strong>trans_method</strong> (<em>str</em>) – whether to inverse on original data, or on a following sequence
+- ‘original’ return original data to original numbers
+- ‘forecast’ inverse the transform on a dataset immediately following the original</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.CumSumTransformer.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.CumSumTransformer.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns changed data
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.Detrend">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">Detrend</code><a class="headerlink" href="#autots.tools.transform.Detrend" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Remove a linear trend from the data.</p>
+<dl class="method">
+<dt id="autots.tools.transform.Detrend.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Detrend.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits trend for later detrending.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.Detrend.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Detrend.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit and Return Detrended DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.Detrend.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Detrend.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data to original form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.Detrend.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Detrend.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return detrended data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.DifferencedTransformer">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">DifferencedTransformer</code><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Difference from lag n value
+inverse_transform can only be applied to the original series, or an immediately following forecast</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>lag</strong> (<em>int</em>) – number of periods to shift (not implemented, default = 1)</p>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.tools.transform.DifferencedTransformer.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.DifferencedTransformer.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns Magical DataFrame
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.DifferencedTransformer.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns data to original <em>or</em> forecast form</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p></li>
+<li><p><strong>trans_method</strong> (<em>str</em>) – whether to inverse on original data, or on a following sequence
+- ‘original’ return original data to original numbers
+- ‘forecast’ inverse the transform on a dataset immediately following the original</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.DifferencedTransformer.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns differenced data
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.EmptyTransformer">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">EmptyTransformer</code><a class="headerlink" href="#autots.tools.transform.EmptyTransformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="method">
+<dt id="autots.tools.transform.EmptyTransformer.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.EmptyTransformer.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.EmptyTransformer.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.EmptyTransformer.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.EmptyTransformer.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.EmptyTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.EmptyTransformer.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.EmptyTransformer.transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.GeneralTransformer">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">GeneralTransformer</code><span class="sig-paren">(</span><em class="sig-param">outlier_method: str = None</em>, <em class="sig-param">outlier_threshold: float = 3</em>, <em class="sig-param">outlier_position: str = 'first'</em>, <em class="sig-param">fillna: str = 'ffill'</em>, <em class="sig-param">transformation: str = None</em>, <em class="sig-param">second_transformation: str = None</em>, <em class="sig-param">transformation_param: str = None</em>, <em class="sig-param">detrend: str = None</em>, <em class="sig-param">third_transformation: str = None</em>, <em class="sig-param">transformation_param2: str = None</em>, <em class="sig-param">fourth_transformation: str = None</em>, <em class="sig-param">discretization: str = 'center'</em>, <em class="sig-param">n_bins: int = None</em>, <em class="sig-param">random_seed: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Remove outliers, fillNA, then mathematical transformations.</p>
+<p>Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a ‘wide’ (one column per series) shape.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt>inverse_transform will not fully return the original data under some conditions</dt><dd><ul>
+<li><p>outliers removed or clipped will be returned in the clipped or filled na form</p></li>
+<li><p>NAs filled will be returned with the filled value</p></li>
+<li><p>Discretization cannot be inversed</p></li>
+<li><dl class="simple">
+<dt>RollingMean, PctChange, CumSum, and DifferencedTransformer will only return original or an immediately following forecast</dt><dd><ul>
+<li><p>by default ‘forecast’ is expected, ‘original’ can be set in trans_method</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>outlier_method</strong> (<em>str</em>) – <ul>
+<li><p>level of outlier removal, if any, per series</p></li>
+</ul>
+<p>’None’
+‘clip’ - replace outliers with the highest value allowed by threshold
+‘remove’ - remove outliers and replace with np.nan</p>
+</p></li>
+<li><p><strong>outlier_threshold</strong> (<em>float</em>) – number of std deviations from mean to consider an outlier. Default 3.</p></li>
+<li><p><strong>outlier_position</strong> (<em>str</em>) – when to remove outliers
+‘first’ - remove outliers before other transformations
+‘middle’ - remove outliers after first_transformation
+‘last’ - remove outliers after fourth_transformation</p></li>
+<li><p><strong>fillNA</strong> (<em>str</em>) – <ul>
+<li><p>method to fill NA, passed through to FillNA()</p></li>
+</ul>
+<p>’ffill’ - fill most recent non-na value forward until another non-na value is reached
+‘zero’ - fill with zero. Useful for sales and other data where NA does usually mean $0.
+‘mean’ - fill all missing values with the series’ overall average value
+‘median’ - fill all missing values with the series’ overall median value
+‘rolling mean’ - fill with last n (window = 10) values
+‘ffill mean biased’ - simple avg of ffill and mean
+‘fake date’ - shifts forward data over nan, thus values will have incorrect timestamps</p>
+</p></li>
+<li><p><strong>transformation</strong> (<em>str</em>) – <ul>
+<li><p>transformation to apply</p></li>
+</ul>
+<p>’None’
+‘MinMaxScaler’ - Sklearn MinMaxScaler
+‘PowerTransformer’ - Sklearn PowerTransformer
+‘QuantileTransformer’ - Sklearn
+‘MaxAbsScaler’ - Sklearn
+‘StandardScaler’ - Sklearn
+‘RobustScaler’ - Sklearn
+‘PCA, ‘FastICA’ - performs sklearn decomposition and returns n-cols worth of n_components
+‘Detrend’ - fit then remove a linear regression from the data
+‘RollingMean’ - 10 period rolling average, can receive a custom window by transformation_param if used as second_transformation
+‘FixedRollingMean’ - same as RollingMean, but with inverse_transform disabled, so smoothed forecasts are maintained.
+‘RollingMean10’ - 10 period rolling average (smoothing)
+‘RollingMean100thN’ - Rolling mean of periods of len(train)/100 (minimum 2)
+‘DifferencedTransformer’ - makes each value the difference of that value and the previous value
+‘PctChangeTransformer’ - converts to pct_change, not recommended if lots of zeroes in data
+‘SinTrend’ - removes a sin trend (fitted to each column) from the data
+‘CumSumTransformer’ - makes value sum of all previous
+‘PositiveShift’ - makes all values &gt;= 1
+‘Log’ - log transform (uses PositiveShift first as necessary)
+‘IntermittentOccurrence’ - -1, 1 for non median values
+‘SeasonalDifference’ - remove the last lag values from all values
+‘SeasonalDifferenceMean’ - remove the average lag values from all
+‘SeasonalDifference7’ also ‘12’ - non-parameterized version of Seasonal</p>
+</p></li>
+<li><p><strong>second_transformation</strong> (<em>str</em>) – second transformation to apply. Same options as transformation, but with transformation_param passed in if used</p></li>
+<li><p><strong>detrend</strong> (<em>str</em>) – Model and remove a linear component from the data.
+None, ‘Linear’, ‘Poisson’, ‘Tweedie’, ‘Gamma’, ‘RANSAC’, ‘ARD’</p></li>
+<li><p><strong>second_transformation</strong> – second transformation to apply. Same options as transformation, but with transformation_param passed in if used</p></li>
+<li><p><strong>transformation_param</strong> (<em>str</em>) – passed to second_transformation, not used by most transformers.</p></li>
+<li><p><strong>fourth_transformation</strong> (<em>str</em>) – third transformation to apply. Sames options as transformation.</p></li>
+<li><p><strong>discretization</strong> (<em>str</em>) – method of binning to apply
+None - no discretization
+‘center’ - values are rounded to center value of each bin
+‘lower’ - values are rounded to lower range of closest bin
+‘upper’ - values are rounded up to upper edge of closest bin
+‘sklearn-quantile’, ‘sklearn-uniform’, ‘sklearn-kmeans’ - sklearn kbins discretizer</p></li>
+<li><p><strong>n_bins</strong> (<em>int</em>) – number of quantile bins to split data into</p></li>
+<li><p><strong>random_seed</strong> (<em>int</em>) – random state passed through where applicable</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.tools.transform.GeneralTransformer.fill_na">
+<code class="sig-name descname">fill_na</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">window: int = 10</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.fill_na" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
+<li><p><strong>window</strong> (<em>int</em>) – passed through to rolling mean fill technique</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>pandas.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.GeneralTransformer.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply transformations and return transformer object.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.GeneralTransformer.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.GeneralTransformer.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Undo the madness</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
+<li><p><strong>trans_method</strong> (<em>str</em>) – ‘forecast’ or ‘original’ passed through to RollingTransformer, DifferencedTransformer, if used</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.GeneralTransformer.outlier_treatment">
+<code class="sig-name descname">outlier_treatment</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.outlier_treatment" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>pandas.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.GeneralTransformer.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply transformations to convert df.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.IntermittentOccurrence">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">IntermittentOccurrence</code><a class="headerlink" href="#autots.tools.transform.IntermittentOccurrence" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Intermittent inspired binning predicts probability of not median.</p>
+<dl class="method">
+<dt id="autots.tools.transform.IntermittentOccurrence.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.IntermittentOccurrence.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits shift interval.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.IntermittentOccurrence.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.IntermittentOccurrence.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit and Return Detrended DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.IntermittentOccurrence.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.IntermittentOccurrence.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data to original form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.IntermittentOccurrence.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.IntermittentOccurrence.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return detrended data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.PctChangeTransformer">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">PctChangeTransformer</code><a class="headerlink" href="#autots.tools.transform.PctChangeTransformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>% Change of Data.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Because % change doesn’t play well with zeroes, zeroes are replaced by positive of the lowest non-zero value.
+Inverse transformed values returned will also not return as ‘exactly’ equals due to floating point imprecision.
+inverse_transform can only be applied to the original series, or an immediately following forecast</p>
+</div>
+<dl class="method">
+<dt id="autots.tools.transform.PctChangeTransformer.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.PctChangeTransformer.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.PctChangeTransformer.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.PctChangeTransformer.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns <em>Magical</em> DataFrame
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.PctChangeTransformer.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.PctChangeTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns data to original <em>or</em> forecast form</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p></li>
+<li><p><strong>trans_method</strong> (<em>str</em>) – whether to inverse on original data, or on a following sequence
+- ‘original’ return original data to original numbers
+- ‘forecast’ inverse the transform on a dataset immediately following the original</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.PctChangeTransformer.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.PctChangeTransformer.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns changed data
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.PositiveShift">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">PositiveShift</code><span class="sig-paren">(</span><em class="sig-param">log: bool = False</em>, <em class="sig-param">center_one: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.PositiveShift" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Shift each series if necessary to assure all values &gt;= 1.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>log</strong> (<em>bool</em>) – whether to include a log transform.</p></li>
+<li><p><strong>center_one</strong> (<em>bool</em>) – whether to shift to 1 instead of 0.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.tools.transform.PositiveShift.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.PositiveShift.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits shift interval.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.PositiveShift.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.PositiveShift.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit and Return Detrended DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.PositiveShift.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.PositiveShift.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data to original form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.PositiveShift.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.PositiveShift.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return detrended data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.transform.RandomTransform">
+<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a dict of randomly choosen transformation selections.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.RollingMeanTransformer">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RollingMeanTransformer</code><span class="sig-paren">(</span><em class="sig-param">window: int = 10</em>, <em class="sig-param">fixed: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RollingMeanTransformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Attempt at Rolling Mean with built-in inverse_transform for time series
+inverse_transform can only be applied to the original series, or an immediately following forecast
+Does not play well with data with NaNs
+Inverse transformed values returned will also not return as ‘exactly’ equals due to floating point imprecision.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>window</strong> (<em>int</em>) – number of periods to take mean over</p>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.tools.transform.RollingMeanTransformer.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RollingMeanTransformer.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.RollingMeanTransformer.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RollingMeanTransformer.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns Magical DataFrame
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.RollingMeanTransformer.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RollingMeanTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns data to original <em>or</em> forecast form</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p></li>
+<li><p><strong>trans_method</strong> (<em>str</em>) – whether to inverse on original data, or on a following sequence
+- ‘original’ return original data to original numbers
+- ‘forecast’ inverse the transform on a dataset immediately following the original</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.RollingMeanTransformer.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RollingMeanTransformer.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns rolling data
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.SeasonalDifference">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">SeasonalDifference</code><span class="sig-paren">(</span><em class="sig-param">lag_1: int = 7</em>, <em class="sig-param">method: str = 'LastValue'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SeasonalDifference" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Remove seasonal component.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lag_1</strong> (<em>int</em>) – length of seasonal period to remove.</p></li>
+<li><p><strong>method</strong> (<em>str</em>) – ‘LastValue’, ‘Mean’, ‘Median’ to construct seasonality</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.tools.transform.SeasonalDifference.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SeasonalDifference.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.SeasonalDifference.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SeasonalDifference.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns Magical DataFrame
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.SeasonalDifference.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SeasonalDifference.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns data to original <em>or</em> forecast form</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p></li>
+<li><p><strong>trans_method</strong> (<em>str</em>) – whether to inverse on original data, or on a following sequence
+- ‘original’ return original data to original numbers
+- ‘forecast’ inverse the transform on a dataset immediately following the original</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.SeasonalDifference.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SeasonalDifference.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns rolling data
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.SinTrend">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">SinTrend</code><a class="headerlink" href="#autots.tools.transform.SinTrend" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Modelling sin.</p>
+<dl class="method">
+<dt id="autots.tools.transform.SinTrend.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SinTrend.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits trend for later detrending
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.SinTrend.fit_sin">
+<code class="sig-name descname">fit_sin</code><span class="sig-paren">(</span><em class="sig-param">tt</em>, <em class="sig-param">yy</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SinTrend.fit_sin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit sin to the input time sequence, and return fitting parameters “amp”, “omega”, “phase”, “offset”, “freq”, “period” and “fitfunc”</p>
+<p>from user unsym &#64; <a class="reference external" href="https://stackoverflow.com/questions/16716302/how-do-i-fit-a-sine-curve-to-my-data-with-pylab-and-numpy">https://stackoverflow.com/questions/16716302/how-do-i-fit-a-sine-curve-to-my-data-with-pylab-and-numpy</a></p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.SinTrend.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SinTrend.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns Detrended DataFrame
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.SinTrend.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SinTrend.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns data to original form
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.SinTrend.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SinTrend.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns detrended data
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.transform.clip_outliers">
+<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">clip_outliers</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">std_threshold: float = 3</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.clip_outliers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Replace outliers above threshold with that threshold. Axis = 0.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – DataFrame containing numeric data</p></li>
+<li><p><strong>std_threshold</strong> (<em>float</em>) – The number of standard deviations away from mean to count as outlier.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.transform.remove_outliers">
+<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">remove_outliers</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">std_threshold: float = 3</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.remove_outliers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Replace outliers with np.nan.
+<a class="reference external" href="https://stackoverflow.com/questions/23199796/detect-and-exclude-outliers-in-pandas-data-frame">https://stackoverflow.com/questions/23199796/detect-and-exclude-outliers-in-pandas-data-frame</a></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – DataFrame containing numeric data, DatetimeIndex</p></li>
+<li><p><strong>std_threshold</strong> (<em>float</em>) – The number of standard deviations away from mean to count as outlier.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.transform.simple_context_slicer">
+<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">simple_context_slicer</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">method: str = 'None'</em>, <em class="sig-param">forecast_length: int = 30</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.simple_context_slicer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Condensed version of context_slicer with more limited options.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – training data frame to slice</p></li>
+<li><p><strong>method</strong> (<em>str</em>) – <p>Option to slice dataframe
+‘None’ - return unaltered dataframe
+‘HalfMax’ - return half of dataframe
+‘ForecastLength’ - return dataframe equal to length of forecast
+‘2ForecastLength’ - return dataframe equal to twice length of forecast</p>
+<blockquote>
+<div><p>(also takes 4, 6, 8, 10 in addition to 2)</p>
+</div></blockquote>
+</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-autots.tools">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots.tools" title="Permalink to this headline">¶</a></h2>
+<p>basic utilities</p>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../index.html">
+    <img class="logo" src="../_static/autots_logo.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+<p class="blurb">Automated Forecasting</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=winedarksea&repo=autots&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="includeme.html">Readme</a></li>
+<li class="toctree-l1"><a class="reference internal" href="includeme.html#autots">AutoTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="includeme.html#how-to-contribute">How to Contribute:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html">Extended Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html#id1">Extended Tutorial</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">autots</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="autots.html">autots package</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="modules.html">autots</a><ul>
+  <li><a href="autots.html">autots package</a><ul>
+      <li>Previous: <a href="autots.templates.html" title="previous chapter">autots.templates package</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Colin Catlin.
+      
+      |
+      <a href="../_sources/source/autots.tools.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+    <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', 'UA-166997414-1']);
+      _gaq.push(['_setDomainName', 'none']);
+      _gaq.push(['_setAllowLinker', true]);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+
+    </script>
+    
+  </body>
+</html>
