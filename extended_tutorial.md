@@ -16,8 +16,8 @@ AutoTS works in the following way at present:
 
 ### A simple example
 ```
-from autots.datasets import load_toy_monthly # also: _daily _yearly or _hourly
-df_long = load_toy_monthly()
+from autots.datasets import load_monthly # also: _daily _yearly or _hourly
+df_long = load_monthly()
 
 from autots import AutoTS
 model = AutoTS(forecast_length=3, frequency='infer',

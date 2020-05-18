@@ -41,7 +41,7 @@ def load_fred_monthly():
     return df_long
 
 
-def load_toy_monthly():
+def load_monthly():
     """Federal Reserve of St. Louis monthly economic indicators."""
     return load_fred_monthly()
 
@@ -75,7 +75,7 @@ def load_fred_yearly():
     return df_long
 
 
-def load_toy_yearly():
+def load_yearly():
     """Federal Reserve of St. Louis annual economic indicators."""
     return load_fred_yearly()
 
@@ -111,6 +111,6 @@ def load_eia_weekly():
     return df_long
 
 
-def load_toy_weekly():
+def load_weekly():
     """Weekly petroleum industry data from the EIA."""
     return load_eia_weekly()

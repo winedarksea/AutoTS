@@ -4,14 +4,14 @@ import numpy as np
 import pandas as pd
 from autots.datasets import load_daily
 from autots.datasets import load_hourly
-from autots.datasets import load_toy_monthly
-from autots.datasets import load_toy_yearly
-from autots.datasets import load_toy_weekly
+from autots.datasets import load_monthly
+from autots.datasets import load_yearly
+from autots.datasets import load_weekly
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 forecast_length = 3
-df_long = load_daily()
+df_long = load_yearly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 

@@ -36,8 +36,8 @@ Input data is expected to come in a 'long' format with three columns:
 The column name for each of these is passed to .fit(). 
 
 ```
-from autots.datasets import load_toy_monthly # also: _daily _yearly or _hourly
-df_long = load_toy_monthly()
+from autots.datasets import load_monthly # also: _daily _yearly or _hourly
+df_long = load_monthly()
 
 from autots import AutoTS
 model = AutoTS(forecast_length=3, frequency='infer',

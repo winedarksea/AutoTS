@@ -60,8 +60,8 @@
 </ul>
 <div class="section" id="a-simple-example">
 <h3>A simple example<a class="headerlink" href="#a-simple-example" title="Permalink to this headline">¶</a></h3>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="k">from</span> <span class="n">autots</span><span class="p">.</span><span class="n">datasets</span> <span class="n">import</span> <span class="n">load_toy_monthly</span> <span class="o">#</span> <span class="n">also</span><span class="p">:</span> <span class="n">_daily</span> <span class="n">_yearly</span> <span class="k">or</span> <span class="n">_hourly</span>
-<span class="n">df_long</span> <span class="o">=</span> <span class="n">load_toy_monthly</span><span class="p">()</span>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="k">from</span> <span class="n">autots</span><span class="p">.</span><span class="n">datasets</span> <span class="n">import</span> <span class="n">load_monthly</span> <span class="o">#</span> <span class="n">also</span><span class="p">:</span> <span class="n">_daily</span> <span class="n">_yearly</span> <span class="k">or</span> <span class="n">_hourly</span>
+<span class="n">df_long</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">()</span>
 
 <span class="k">from</span> <span class="n">autots</span> <span class="n">import</span> <span class="n">AutoTS</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span><span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>

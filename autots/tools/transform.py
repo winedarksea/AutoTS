@@ -1005,15 +1005,18 @@ class GeneralTransformer(object):
         elif detrend == "Poisson":
             from sklearn.linear_model import PoissonRegressor
             from sklearn.multioutput import MultiOutputRegressor
-            return MultiOutputRegressor(PoissonRegressor(fit_intercept=True))
+            return MultiOutputRegressor(PoissonRegressor(
+                fit_intercept=True, max_iter=200))
         elif detrend == 'Tweedie':
             from sklearn.linear_model import TweedieRegressor
             from sklearn.multioutput import MultiOutputRegressor
-            return MultiOutputRegressor(TweedieRegressor(power=1.5))
+            return MultiOutputRegressor(TweedieRegressor(
+                power=1.5, max_iter=200))
         elif detrend == 'Gamma':
             from sklearn.linear_model import GammaRegressor
             from sklearn.multioutput import MultiOutputRegressor
-            return MultiOutputRegressor(GammaRegressor(fit_intercept=True))
+            return MultiOutputRegressor(GammaRegressor(
+                fit_intercept=True, max_iter=200))
         elif detrend == 'TheilSen':
             from sklearn.linear_model import TheilSenRegressor
             from sklearn.multioutput import MultiOutputRegressor
