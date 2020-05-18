@@ -2,7 +2,7 @@
 
 ![AutoTS Logo](/img/autots_logo.png)
 
-#### Model Selection for Multiple Time Series
+**Model Selection for Multiple Time Series**
 
 Simple package for comparing and predicting with open-source time series implementations.
 
@@ -62,7 +62,7 @@ validation_results = model.validation_results.model_results
 
 Check out [extended_tutorial.md](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md) for a more detailed guide to features!
 
-# How to Contribute:
+## How to Contribute:
 * Give feedback on where you find the documentation confusing
 * Use AutoTS and...
 	* Report errors and request features by adding Issues on GitHub

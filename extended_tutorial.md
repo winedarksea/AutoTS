@@ -1,4 +1,4 @@
-# Extended Tutorial
+## Extended Tutorial
 There are a number of ways to get a more accurate time series model. AutoTS takes care of a few of these:
 1. Pretransforming the data optimally for each model
 2. Trying an assortment of different algorithms
@@ -89,7 +89,6 @@ model = AutoTS(forecast_length=73, frequency='infer',
 model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id', weights=weights_hourly)
 
 prediction = model.predict()
-# point forecasts dataframe
 forecasts_df = prediction.forecast
 ```
 Probabilistic forecasts are *available* for all models, but in many cases are just general estimates in lieu of model estimates, so be careful. 

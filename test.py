@@ -107,7 +107,17 @@ df_wide_numeric = model.df_wide_numeric
 
 df = df_wide_numeric.tail(50).fillna(0).astype(float)
 
+"""
+# pip install sphinx==2.4.4
+# m2r does not yet work on sphinx 3.0
+# pip install m2r
+cd <project dir>
+sphinx-apidoc -f -o docs/source autots
+sphinx-build -b html ./docs ./docs/build
 
+_googleid.txt
+'analytics_id':'UA-NNNNNNNNN-1',
+"""
 """
 https://packaging.python.org/tutorials/packaging-projects/
 
@@ -118,7 +128,6 @@ twine upload dist/*
 
 Merge dev to master on GitHub and create release (include .tar.gz)
 """
-# *args, **kwargs
 
 #%%
 """

@@ -104,6 +104,7 @@ Tensorflow GPU backend may crash on occasion.
 * Rename preord
 * clean up subsetting
 * clean up long_to_wide inputs like na_tolerance
+	* documetentation here is making sphinx unhappy, fix!
 	* upsampling does not work, esp with categorical
 * better document ensembling
 * review metric weighting by series
