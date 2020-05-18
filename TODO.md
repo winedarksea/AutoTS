@@ -89,24 +89,23 @@ Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
 * method to test effectiveness across multiple probabilistic intervals.
+	* [0.005, 0.025, 0.165, 0.25, 0.5, 0.75, 0.835, 0.975, 0.995]
 	* generate base template (based mainly on best point forecast, validated)
 	* run for each new prediction intervals (on just most recent)
 	* capture containment/SPL from each round.
 * figure out how to bring together all the different training templates
 	* renumber all Ensemble to 2 where Horizontal
 * test submission
-* test whether bottum up significantly overestimates on rollup
+* test whether bottom up significantly overestimates on rollup
 * test used_regressor_check
-
 
 # To-Do
 * Rename preord
-* Improve TemplateEvalObject:
-	* add self.used_regressor_check function
 * clean up subsetting
 * clean up long_to_wide inputs like na_tolerance
 	* upsampling does not work, esp with categorical
 * better document ensembling
+* review metric weighting by series
 * Get the sphinx (google style) documentation and github pages website up
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d

@@ -496,56 +496,6 @@ def HorizontalTemplateGenerator(per_series, model_results,
                                             best5_params],
                                            axis=0, ignore_index=True)
         else:
-            """
-            mods = pd.Series()
-            per_series_des = per_series.copy()
-            n_models = 5
-            # choose best per series, remove those series, then choose next best
-            for x in range(n_models):
-                n_dep = 5 if x < 2 else 10
-                n_dep = n_dep if per_series_des.shape[0] > n_dep else per_series_des.shape[0]
-                models_pos = []
-                tr_df = pd.DataFrame()
-                for _ in range(n_dep):
-                    cr_df = pd.DataFrame(per_series_des.idxmin()).transpose()
-                    tr_df = pd.concat([tr_df, cr_df], axis=0)
-                    models_pos.extend(per_series_des.idxmin().tolist())
-                    per_series_des[per_series_des == per_series_des.min()] = np.nan
-                cur_mods = pd.Series(models_pos).value_counts()
-                cur_mods = cur_mods.sort_values(ascending=False).head(1)
-                mods = mods.combine(cur_mods, max, fill_value=0)
-                rm_cols = tr_df[tr_df.isin(mods.index.tolist())]
-                rm_cols = rm_cols.dropna(how='all',axis=1).columns
-                per_series_des = per_series.copy().drop(mods.index, axis=0)
-                per_series_des = per_series_des.drop(rm_cols, axis=1)
-                if per_series_des.shape[1] == 0:
-                    per_series_des = per_series.copy().drop(mods.index, axis=0)
-
-            mods_per_series = per_series.loc[mods.index].idxmin()
-            ensemble_models = {}
-            best5 = model_results[model_results['ID'].isin(mods_per_series.unique().tolist())].drop_duplicates(subset=['Model', 'ModelParameters', 'TransformationParameters'])
-            for index, row in best5.iterrows():
-                temp_dict = {
-                    'Model': row['Model'],
-                    'ModelParameters': row['ModelParameters'],
-                    'TransformationParameters': row['TransformationParameters']
-                    }
-                ensemble_models[row['ID']] = temp_dict
-            nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
-            best5_params = {'Model': 'Ensemble',
-                            'ModelParameters':
-                                json.dumps({'model_name': nomen,
-                                            'model_count': mods_per_series.unique().shape[0],
-                                            'models': ensemble_models,
-                                            'series': mods_per_series.to_dict()
-                                            }),
-                            'TransformationParameters': '{}',
-                            'Ensemble': 2}
-            best5_params = pd.DataFrame(best5_params, index=[0])
-            ensemble_templates = pd.concat([ensemble_templates,
-                                            best5_params],
-                                           axis=0, ignore_index=True)
-            """
             mods = pd.Series()
             per_series_des = per_series.copy()
             n_models = 15
