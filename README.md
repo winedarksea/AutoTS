@@ -60,7 +60,7 @@ validation_results = model.validation_results.model_results
 
 ```
 
-Check out [extended_tutorial.md](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md) for a more detailed guide to features!
+Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/source/tutorial.html) for a more detailed guide to features!
 
 ## How to Contribute:
 * Give feedback on where you find the documentation confusing
