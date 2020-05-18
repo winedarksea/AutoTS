@@ -105,9 +105,9 @@ Here, two methods of cross validation are in place, <code class="docutils litera
 <p>Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in (lovely) Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting.
 Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. This carries information to models such as RollingRegression, VARMAX, and VECM.</p>
 <p>Also seen in use here is the <code class="docutils literal notranslate"><span class="pre">model_list</span></code>.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>from autots.datasets import load_toy_hourly
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>from autots.datasets import load_hourly
 
-df_long = load_toy_hourly()
+df_long = load_hourly()
 
 weights_hourly = {&#39;traffic_volume&#39;: 20} # all other series assumed to be weight of 1
 

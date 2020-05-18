@@ -10,9 +10,9 @@ AutoTS works in the following way at present:
 * An initial train/test split is generated where the test is the most recent data, of forecast_length
 * A random template of models is generated and tested on the initial train/test
 	* Models consist of a pre-transformation step (fill na options, outlier removal options, etc), and algorithm (ie ETS) and model paramters (trend, damped, etc)
-* The top models (selected by a combination of SMAPE, MAE, RMSE) are recombined with random mutations for n_generations
+* The top models (selected by a combination of metrics) are recombined with random mutations for n_generations
 * A handful of the best models from this process go to cross validation, where they are re-assessed on new train/test splits.
-* The best model in validation is selected as best_model and used in the .predict() method to generate forecasts.
+* The best model in validation is selected as best_model and used in the `.predict()` method to generate forecasts.
 
 ### A simple example
 ```
@@ -21,9 +21,10 @@ df_long = load_toy_monthly()
 
 from autots import AutoTS
 model = AutoTS(forecast_length=3, frequency='infer',
-			   ensemble=False, drop_data_older_than_periods=240,
+			   ensemble=None, drop_data_older_than_periods=240,
                max_generations=5, num_validations=2)
-model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id')
+model = model.fit(df_long, date_col='datetime', 
+				  value_col='value', id_col='series_id')
 
 # Print the name of the best model
 print(model)
@@ -31,7 +32,8 @@ print(model)
 
 If your data is already wide (one column for each value), to bring to a long format:
 ```
-df_long = df_wide.melt(id_vars=['datetime_col_name'], var_name='series_id', value_name='value')
+df_long = df_wide.melt(id_vars=['datetime_col_name'],
+					   var_name='series_id', value_name='value')
 ```
 
 #### You can tailor the process in a few ways...
@@ -61,58 +63,67 @@ Here, two methods of cross validation are in place, `'even'` and '`backwards'`.
 
 **Backwards** cross validation works backwards from the most recent data. First the most recent forecast_length samples are taken, then the next most recent forecast_length samples, and so on. This makes it more ideal for smaller or fast-changing datasets. 
 
-Only a subset of models are based from initial validation to cross validation. The number of models is set such as `models_to_validate=10`. If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter. 
+**Seasonal** validation is supplied as `'seasonal n'` ie `'seasonal 364'`. It trains on the most recent data as usual, then valdations are `n` periods back from the datetime of the forecast would be. For example with daily data, forecasting for a month ahead, and `n=364`, the first test might be on May 2020, with validation on June 2019 and June 2018, the final forecast then of June 2020.
+
+Only a subset of models are based from initial validation to cross validation. The number of models is set such as `models_to_validate=10`. If a float in 0 to 1 is provided, it is treated as a % of models to select. If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter. 
 
 ### A more detailed example:
 Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in (lovely) Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting. 
-Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. This carries information to models such as RollingRegression, VARMAX, and VECM. 
+Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. This carries information to models such as `RollingRegression`, `VARMAX`, and `VECM`. 
 
 Also seen in use here is the `model_list`. 
 
 ```
-from autots.datasets import load_toy_hourly
+from autots.datasets import load_hourly
 
-df_long = load_toy_hourly()
+df_long = load_hourly()
 
-weights_hourly = {'traffic_volume': 20} # all other series assumed to be weight of 1
+# all other series assumed to be weight of 1
+weights_hourly = {'traffic_volume': 20}
 
 model_list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
 			  'ETS',  'RollingRegression', 'UnobservedComponents', 'VECM']
 
 from autots import AutoTS
 model = AutoTS(forecast_length=73, frequency='infer',
-               prediction_interval=0.95, ensemble=False,
-               max_generations=5, num_validations=2, validation_method='even',
+               prediction_interval=0.95, ensemble=None,
+               max_generations=5, num_validations=2,
+			   validation_method='even',
                model_list=model_list, models_to_validate=15,
                drop_most_recent=1)
 		
-model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id', weights=weights_hourly)
+model = model.fit(df_long, date_col='datetime',
+				  value_col='value', id_col='series_id',
+				  weights=weights_hourly)
 
 prediction = model.predict()
 forecasts_df = prediction.forecast
 ```
-Probabilistic forecasts are *available* for all models, but in many cases are just general estimates in lieu of model estimates, so be careful. 
+Probabilistic forecasts are *available* for all models, but in many cases are just data-based estimates in lieu of model estimates, so be careful. 
 ```
 upper_forecasts_df = prediction.upper_forecast
 lower_forecasts_df = prediction.lower_forecast
 ```
 
 ### Model Lists
-By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of 'probabilistic', 'multivariate', 'fast', 'superfast', or 'all'.
+By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of `'probabilistic', 'multivariate', 'fast', 'superfast', or 'all'`.
 
-On multivariate series, TSFreshRegressor and VARMAX can be impractically slow.
+On multivariate series, `TSFreshRegressor` and `VARMAX` can be impractically slow.
 
 ## Deployment and Template Import/Export
 Many models can be reverse engineered with relative simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package. 
-There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a .csv or .json file, then on next run only those models will be tried. 
+There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a `.csv` or `.json` file, then on next run only those models will be tried. 
 This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve.
 ```
 # after fitting an AutoTS model
 example_filename = "example_export.csv" # .csv/.json
-model.export_template(example_filename, models='best', n=15, max_per_model_class=3)
+model.export_template(example_filename, models='best',
+					  n=15, max_per_model_class=3)
 
 # on new training
-model = AutoTS(forecast_length=forecast_length, frequency='infer', max_generations=0, num_validations=0, verbose=0)
+model = AutoTS(forecast_length=forecast_length,
+			   frequency='infer', max_generations=0,
+			   num_validations=0, verbose=0)
 model = model.import_template(example_filename, method='only') # method='add on'
 print("Overwrite template is: {}".format(str(model.initial_template)))
 ```
@@ -122,11 +133,14 @@ There are a number of available metrics, all combined together into a 'Score' wh
 Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers. 
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series. 
 ```
-metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1, 'rmse_weighting' : 5, 
+metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
+					'rmse_weighting' : 5, 
 					'containment_weighting' : 1, 'runtime_weighting' : 0,
-					'spl_weighting': 0, 'contour_weighting': 3}
+					'spl_weighting': 1, 'contour_weighting': 0}
 
-model = AutoTS(forecast_length=forecast_length, frequency='infer', metric_weighting=metric_weighting)
+model = AutoTS(forecast_length=forecast_length,
+			   frequency='infer',
+			   metric_weighting=metric_weighting)
 ```		
 It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE. 
 			
@@ -197,21 +211,21 @@ pip install tensorflow-probability
 
 ### Short Training History
 How much data is 'too little' depends on the seasonality and volatility of the data. 
-Minimal training data most greatly impacts the ability to do proper cross validation. Set num_validations=0 in such cases. 
-Since ensembles are based on the test dataset, it would also be wise to set ensemble=False if num_validations=0.
+Minimal training data most greatly impacts the ability to do proper cross validation. Set `num_validations=0` in such cases. 
+Since ensembles are based on the test dataset, it would also be wise to set `ensemble=None` if `num_validations=0`.
 
 ### Too much training data.
 Too much data is already handled to some extent by 'context_slicer' in the transformations, which tests using less training data. 
 That said, large datasets will be slower and more memory intensive, for high frequency data (say hourly) it can often be advisable to roll that up to a higher level (daily, hourly, etc.). 
-Rollup can be accomplished by specifying the frequency = your rollup frequency, and then setting the agg_func='sum' or 'mean' or other appropriate statistic.
+Rollup can be accomplished by specifying the frequency = your rollup frequency, and then setting the `agg_func=np.sum` or 'mean' or other appropriate statistic.
 
 ### Lots of NaN in data
 Various NaN filling techniques are tested in the transformation. Rolling up data to a less-frequent frequency may also help deal with NaNs.
 
 ### Adding regressors and other information
-'Preord' regressor stands for 'Preordained' regressor, to make it clear this is data that will be know with high certainy about the future. 
+'Preord' regressor, to make it clear this is data that will be know with high certainy about the future. 
 Such data about the future is rare, one example might be number of stores that will be (planned to be) open each given day in the future when forecast sales. 
-Only a handful of models support adding regressors, and not all handle multiple regressors (if multiple regressors are fed in, they will be reduced to one for those models). 
+Only a handful of models support adding regressors, and not all handle multiple regressors. 
 The recommended way to provide regressors is as a pd.Series/pd.Dataframe with a DatetimeIndex. 
 
 Don't know the future? Don't worry, the models can handle quite a lot of parallel time series, which is another way to add information. 

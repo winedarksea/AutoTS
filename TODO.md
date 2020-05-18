@@ -98,7 +98,6 @@ Tensorflow GPU backend may crash on occasion.
 * test submission
 * constraint as a transformation parameter?
 * test whether bottom up significantly overestimates on rollup
-* test used_regressor_check
 
 # To-Do
 * Rename preord
@@ -108,7 +107,7 @@ Tensorflow GPU backend may crash on occasion.
 	* upsampling does not work, esp with categorical
 * better document ensembling
 * review metric weighting by series
-* Get the sphinx (google style) documentation and github pages website up
+* FBProphet with PCA parameters
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
 * Bring GeneralTransformer to higher level API.

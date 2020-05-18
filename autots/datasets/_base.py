@@ -3,7 +3,7 @@ from os.path import dirname, join
 import pandas as pd
 
 
-def load_toy_daily():
+def load_daily():
     """4 series of sample daily data from late 2019."""
     module_path = dirname(__file__)
     data_file_name = join(module_path, 'data', 'toy_daily.csv')
@@ -95,7 +95,7 @@ def load_traffic_hourly():
     return df_long
 
 
-def load_toy_hourly():
+def load_hourly():
     """Traffic data from the MN DOT via the UCI data repository."""
     return load_traffic_hourly()
 

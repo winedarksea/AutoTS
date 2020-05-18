@@ -2,8 +2,8 @@
 # pragma pylint: disable=W293,E251,D407,E501
 import numpy as np
 import pandas as pd
-from autots.datasets import load_toy_daily
-from autots.datasets import load_toy_hourly
+from autots.datasets import load_daily
+from autots.datasets import load_hourly
 from autots.datasets import load_toy_monthly
 from autots.datasets import load_toy_yearly
 from autots.datasets import load_toy_weekly
@@ -11,7 +11,7 @@ from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 forecast_length = 3
-df_long = load_toy_daily()
+df_long = load_daily()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -108,17 +108,17 @@ df_wide_numeric = model.df_wide_numeric
 df = df_wide_numeric.tail(50).fillna(0).astype(float)
 
 """
+https://github.com/sphinx-doc/sphinx/issues/3382
 # pip install sphinx==2.4.4
 # m2r does not yet work on sphinx 3.0
 # pip install m2r
 cd <project dir>
 sphinx-apidoc -f -o docs/source autots
-sphinx-build -b html ./docs ./docs/build
 cd ./docs
 make html
 
 _googleid.txt
-'analytics_id':'UA-NNNNNNNNN-1',
+https://winedarksea.github.io/AutoTS/build/index.html
 """
 """
 https://packaging.python.org/tutorials/packaging-projects/

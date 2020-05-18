@@ -1,3 +1,7 @@
+# supporting files
+standalone.py
+functional_environments.md
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

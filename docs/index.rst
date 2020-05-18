@@ -1,4 +1,4 @@
-autots
+AutoTS
 =======
 
 `autots`_ is an automated time series forecasting package for Python.
