@@ -113,7 +113,7 @@ df = df_wide_numeric.tail(50).fillna(0).astype(float)
 # pip install m2r
 cd <project dir>
 sphinx-apidoc -f -o docs/source autots
-sphinx-build -b html ./docs ./docs/build
+sphinx-build -b html ./docs ./docs/_build
 
 _googleid.txt
 'analytics_id':'UA-NNNNNNNNN-1',
