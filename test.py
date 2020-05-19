@@ -10,8 +10,8 @@ from autots.datasets import load_weekly
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
-forecast_length = 3
-df_long = load_yearly()
+forecast_length = 2
+df_long = load_monthly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -38,10 +38,10 @@ metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
 
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9,
-               ensemble='simple,distance,probabilistic-max,horizontal-max',
+               ensemble='simple,distance,probabilistic-max,horizontal-max,hdist',
                constraint=2,
-               max_generations=0, num_validations=2,
-               validation_method='backwards',
+               max_generations=2, num_validations=2,
+               validation_method='seasonal 12',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=0.1,
                max_per_model_class=None,

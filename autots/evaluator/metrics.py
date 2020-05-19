@@ -53,7 +53,10 @@ def smape(actual, forecast):
     References:
         https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error
     """
-    return (np.nansum((abs(forecast - actual) / (abs(forecast) + abs(actual))), axis = 0)* 200) / np.count_nonzero(~np.isnan(actual), axis = 0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        smape = (np.nansum((abs(forecast - actual) / (abs(forecast) + abs(actual))), axis=0) * 200) / np.count_nonzero(~np.isnan(actual), axis=0)
+    return smape
 
 
 def mae(A, F):
@@ -93,19 +96,19 @@ def SPL(A, F, df_train, quantile):
 
 
 def rmse(actual, forecast):
-    """Expects two, 2-D numpy arrays of forecast_length * n series
-    
+    """Expects two, 2-D numpy arrays of forecast_length * n series.
+
     Returns a 1-D array of results in len n series
-    
-    Args: 
+
+    Args:
         actual (numpy.array): known true values
         forecast (numpy.array): predicted values
     """
-    try:
-        mae_result = np.sqrt(np.nanmean(((actual - forecast) ** 2),axis = 0))
-    except Exception:
-        mae_result = np.nan
-    return mae_result
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        rmse_result = np.sqrt(np.nanmean(((actual - forecast) ** 2),
+                                         axis=0))
+    return rmse_result
 
 
 def containment(lower_forecast, upper_forecast, actual):
@@ -124,7 +127,7 @@ def containment(lower_forecast, upper_forecast, actual):
 def contour(A, F):
     """A measure of how well the actual and forecast follow the same pattern of change.
     *Note:* If actual values are unchanging, will match positive changing forecasts.
-    Expects two, 2-D numpy arrays of forecast_length * n series   
+    Expects two, 2-D numpy arrays of forecast_length * n series
     Returns a 1-D array of results in len n series
 
     Args:
@@ -193,8 +196,6 @@ def PredictionEval(PredictionObject, actual,
             SPL(A=actual, F=PredictionObject.lower_forecast,
                 df_train=df_train,
                 quantile=(1-PredictionObject.prediction_interval)),
-            # 'lower_mae': mae(actual, PredictionObject.lower_forecast),
-            # 'upper_mae': mae(actual, PredictionObject.upper_forecast),
             'contour': contour(actual, PredictionObject.forecast)
             }).transpose()
     per_series.columns = actual.columns
@@ -223,8 +224,8 @@ def PredictionEval(PredictionObject, actual,
 
     if str(dist_n).isdigit():
         per_series_d = pd.DataFrame({
-            'rmse1': rmse(actual[:dist_n], PredictionObject.forecast[:dist_n]),
-            'rmse2': rmse(actual[dist_n:], PredictionObject.forecast[dist_n:])
+            'mae1': mae(actual[:dist_n], PredictionObject.forecast[:dist_n]),
+            'mae2': mae(actual[dist_n:], PredictionObject.forecast[dist_n:])
             }).transpose()
         per_series_d.columns = actual.columns
         per_series = pd.concat([per_series, per_series_d], axis=0)

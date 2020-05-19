@@ -613,14 +613,14 @@ or otherwise increase models available."""
         # Construct horizontal style ensembles
         ens_list = ['horizontal', 'probabilistic', 'hdist']
         if any(x in ensemble for x in ens_list):
+            ensemble_templates = pd.DataFrame()
             try:
-                ensemble_templates = pd.DataFrame()
                 if 'horizontal' in ensemble:
                     per_series = self.initial_results.per_series_mae.copy()
-                    temp = per_series.iloc[:, 0].groupby(level=0).count()
+                    temp = per_series.mean(axis=1).groupby(level=0).count()
                     temp = temp[temp >= (num_validations + 1)]
                     per_series = per_series[per_series.index.isin(temp.index)]
-                    per_series.groupby(level=0).mean()
+                    per_series = per_series.groupby(level=0).mean()
                     ens_templates = HorizontalTemplateGenerator(
                         per_series,
                         model_results=self.initial_results.model_results,
@@ -632,16 +632,16 @@ or otherwise increase models available."""
                                                     ens_templates],
                                                    axis=0)
                 if 'hdist' in ensemble:
-                    per_series = self.initial_results.per_series_rmse1.copy()
-                    temp = per_series.iloc[:, 0].groupby(level=0).count()
+                    per_series = self.initial_results.per_series_mae1.copy()
+                    temp = per_series.mean(axis=1).groupby(level=0).count()
                     temp = temp[temp >= (num_validations + 1)]
                     per_series = per_series[per_series.index.isin(temp.index)]
-                    per_series.groupby(level=0).mean()
-                    per_series2 = self.initial_results.per_series_rmse2.copy()
-                    temp = per_series2.iloc[:, 0].groupby(level=0).count()
+                    per_series = per_series.groupby(level=0).mean()
+                    per_series2 = self.initial_results.per_series_mae2.copy()
+                    temp = per_series2.mean(axis=1).groupby(level=0).count()
                     temp = temp[temp >= (num_validations + 1)]
                     per_series2 = per_series2[per_series2.index.isin(temp.index)]
-                    per_series2.groupby(level=0).mean()
+                    per_series2 = per_series2.groupby(level=0).mean()
                     ens_templates = HorizontalTemplateGenerator(
                         per_series,
                         model_results=self.initial_results.model_results,
@@ -652,12 +652,16 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat([ensemble_templates,
                                                     ens_templates],
                                                    axis=0)
+            except Exception as e:
+                if self.verbose >= 0:
+                    print(f"Ensembling Error: {e}")
+            try:
                 if 'probabilistic' in ensemble:
                     per_series = self.initial_results.per_series_spl.copy()
-                    temp = per_series.iloc[:, 0].groupby(level=0).count()
+                    temp = per_series.mean(axis=1).groupby(level=0).count()
                     temp = temp[temp >= (num_validations + 1)]
                     per_series = per_series[per_series.index.isin(temp.index)]
-                    per_series.groupby(level=0).mean()
+                    per_series = per_series.groupby(level=0).mean()
                     ens_templates = HorizontalTemplateGenerator(
                         per_series,
                         model_results=self.initial_results.model_results,
@@ -668,6 +672,10 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat([ensemble_templates,
                                                     ens_templates],
                                                    axis=0)
+            except Exception as e:
+                if self.verbose >= 0:
+                    print(f"Ensembling Error: {e}")
+            try:
                 # test on initial test split to make sure they work
                 template_result = TemplateWizard(
                     ensemble_templates, df_train, df_test,
@@ -702,6 +710,9 @@ or otherwise increase models available."""
                 if self.verbose >= 0:
                     print(f"Ensembling Error: {e}")
                 template_result = TemplateEvalObject()
+            try:
+                template_result.model_results['smape']
+            except KeyError:
                 template_result.model_results['smape'] = 0
             # use the best of these if any ran successfully
             if template_result.model_results['smape'].sum(min_count=0) > 0:

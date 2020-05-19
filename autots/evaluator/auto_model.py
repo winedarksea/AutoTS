@@ -614,16 +614,16 @@ class TemplateEvalObject(object):
                  per_timestamp_smape=pd.DataFrame(),
                  per_series_mae=pd.DataFrame(),
                  per_series_spl=pd.DataFrame(),
-                 per_series_rmse1=pd.DataFrame(),
-                 per_series_rmse2=pd.DataFrame(),
+                 per_series_mae1=pd.DataFrame(),
+                 per_series_mae2=pd.DataFrame(),
                  model_count: int = 0
                  ):
         self.model_results = model_results
         self.model_count = model_count
         self.per_series_mae = per_series_mae
         self.per_series_spl = per_series_spl
-        self.per_series_rmse1 = per_series_rmse1
-        self.per_series_rmse2 = per_series_rmse2
+        self.per_series_mae1 = per_series_mae1
+        self.per_series_mae2 = per_series_mae2
         self.per_timestamp_smape = per_timestamp_smape
 
     def __repr__(self):
@@ -643,14 +643,14 @@ class TemplateEvalObject(object):
             [self.per_series_spl,
              another_eval.per_series_spl],
             axis=0, sort=False)
-        self.per_series_rmse1 = pd.concat(
-            [self.per_series_rmse1,
-             another_eval.per_series_rmse1],
+        self.per_series_mae1 = pd.concat(
+            [self.per_series_mae1,
+             another_eval.per_series_mae1],
             axis=0, sort=False)
-        self.per_series_rmse2 = pd.concat(
-            [self.per_series_rmse2,
-             another_eval.per_series_rmse2],
-                axis=0, sort=False)
+        self.per_series_mae2 = pd.concat(
+            [self.per_series_mae2,
+             another_eval.per_series_mae2],
+            axis=0, sort=False)
         self.per_timestamp_smape = pd.concat(
                 [self.per_timestamp_smape,
                  another_eval.per_timestamp_smape],
@@ -924,17 +924,17 @@ def TemplateWizard(template, df_train, df_test, weights,
                     [template_result.per_timestamp_smape, cur_smape],
                     axis=0)
             if 'hdist' in ensemble:
-                cur_rmse1 = model_error.per_series_metrics.loc['rmse1']
-                cur_rmse2 = model_error.per_series_metrics.loc['rmse2']
-                cur_rmse1 = pd.DataFrame(cur_rmse1).transpose()
-                cur_rmse2 = pd.DataFrame(cur_rmse2).transpose()
-                cur_rmse1.index = [model_id]
-                cur_rmse2.index = [model_id]
-                template_result.per_series_rmse1 = pd.concat(
-                    [template_result.per_series_rmse1, cur_rmse1],
+                cur_mae1 = model_error.per_series_metrics.loc['mae1']
+                cur_mae2 = model_error.per_series_metrics.loc['mae2']
+                cur_mae1 = pd.DataFrame(cur_mae1).transpose()
+                cur_mae2 = pd.DataFrame(cur_mae2).transpose()
+                cur_mae1.index = [model_id]
+                cur_mae2.index = [model_id]
+                template_result.per_series_mae1 = pd.concat(
+                    [template_result.per_series_mae1, cur_mae1],
                     axis=0)
-                template_result.per_series_rmse2 = pd.concat(
-                    [template_result.per_series_rmse2, cur_rmse2],
+                template_result.per_series_mae2 = pd.concat(
+                    [template_result.per_series_mae2, cur_mae2],
                     axis=0)
 
         except Exception as e:

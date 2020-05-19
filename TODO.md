@@ -8,6 +8,7 @@
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
 Latest:
+	Added Github Pages documentation
 	Changed default for `series_id` so it is no longer required if univariate
 	Changed default of `subset` to None.
 	Removed `weighted` parameter, now passing weights to .fit() alone is sufficient.
@@ -15,6 +16,8 @@ Latest:
 	Fixed (or more accurately, reduced) a bug where multiple initial runs were counting as validation runs.
 	Fixed (partially!) bug where validation subsetting was behaving oddly
 	Fixed bug where regressor wasn't being passed to validation.
+	Renamed preord_ to future_ regressor.
+	Renamed sample datasets.
 	Made serious efforts to make the code prettier with pylint, still lots to do, however...
 	Improved genetic recombination so optimal models should be reached more quickly
 	Improved Point to Probabilistic methods:
@@ -96,8 +99,9 @@ Tensorflow GPU backend may crash on occasion.
 * figure out how to bring together all the different training templates
 	* renumber all Ensemble to 2 where Horizontal
 * test submission
-* constraint as a transformation parameter?
+* Linux with no GPU, superfast + GluonTS, WindowRegression
 * test whether bottom up significantly overestimates on rollup
+* examine train/test, specifically test and see why and if NaN
 
 # To-Do
 * clean up subsetting
@@ -214,4 +218,5 @@ Tensorflow GPU backend may crash on occasion.
 	Symbolic aggregate approximation (SAX) and (PAA) (basically these are just binning)
 	Shared discretization (all series get same shared binning)
 	Last Value Centering
+	Constraint as a transformation parameter
 	
