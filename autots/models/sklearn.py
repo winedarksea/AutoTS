@@ -37,7 +37,7 @@ def date_part(DTindex, method: str = 'simple'):
             'weekend': (DTindex.weekday > 4).astype(int),  # weekend/weekday
             'month_end': (DTindex.is_month_end).astype(int),
             'month_start': (DTindex.is_month_start).astype(int),
-            "quareter_end": (DTindex.is_quarter_end).astype(int),
+            "quarter_end": (DTindex.is_quarter_end).astype(int),
             'year_end': (DTindex.is_year_end).astype(int),
             'daysinmonth': DTindex.daysinmonth,
             'epoch': DTindex.astype(int)
@@ -972,4 +972,186 @@ for forecast:
 """
 
 
+class ComponentAnalysis(ModelObject):
+    """Forecasting on principle components.
 
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        model (str): An AutoTS model str
+        model_parameters (dict): parameters to pass to AutoTS model
+        n_components (int): int or 'NthN' number of components to use
+        decomposition (str): decomposition method to use from scikit-learn
+
+    """
+
+    def __init__(self, name: str = "ComponentAnalysis",
+                 frequency: str = 'infer',
+                 prediction_interval: float = 0.9, holiday_country: str = 'US',
+                 random_seed: int = 2020, verbose: int = 0,
+                 n_components: int = 10,
+                 forecast_length: int = 14,
+                 model: str = 'GLS', model_parameters: dict = {},
+                 decomposition: str = 'PCA'):
+        ModelObject.__init__(self, name, frequency, prediction_interval,
+                             holiday_country=holiday_country,
+                             random_seed=random_seed, verbose=verbose)
+        self.model = model
+        self.model_parameters = model_parameters
+        self.decomposition = decomposition
+        self.n_components = n_components
+        self.forecast_length = forecast_length
+
+    def fit(self, df, future_regressor=[]):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        df = self.basic_profile(df)
+        self.df_train = df
+        if 'thN' in str(self.n_components):
+            n_int = int(''.join([x for x in str(self.n_components) if x.isdigit()]))
+            n_int = int(np.floor(df.shape[1] / n_int))
+            n_int = n_int if n_int >= 2 else 2
+        else:
+            n_int = int(''.join([x for x in str(self.n_components) if x.isdigit()]))
+        self.n_int = n_int
+
+        if (self.decomposition == 'TruncatedSVD'):
+            from sklearn.decomposition import TruncatedSVD
+            transformer = TruncatedSVD(n_components=self.n_int,
+                                       random_state=self.random_seed)
+        elif (self.decomposition == 'WhitenedPCA'):
+            from sklearn.decomposition import PCA
+            transformer = PCA(n_components=self.n_int, whiten=True,
+                              random_state=self.random_seed)
+        elif (self.decomposition == 'PCA'):
+            from sklearn.decomposition import PCA
+            transformer = PCA(n_components=self.n_int, whiten=False,
+                              random_state=self.random_seed)
+        elif (self.decomposition == 'KernelPCA'):
+            from sklearn.decomposition import KernelPCA
+            transformer = KernelPCA(n_components=self.n_int, kernel='rbf',
+                                    random_state=self.random_seed,
+                                    fit_inverse_transform=True)
+        elif (self.decomposition == 'FastICA'):
+            from sklearn.decomposition import FastICA
+            transformer = FastICA(n_components=self.n_int, whiten=True,
+                                  random_state=self.random_seed,
+                                  max_iter=500)
+        try:
+            self.transformer = transformer.fit(df)
+        except ValueError:
+            raise ValueError("n_components and decomposition not suitable for this dataset.")
+        X = self.transformer.transform(df)
+        X = pd.DataFrame(X)
+        X.index = df.index
+        from autots.evaluator.auto_model import ModelMonster
+        try:
+            self.modelobj = ModelMonster(
+                self.model, parameters=self.model_parameters,
+                frequency=self.frequency,
+                prediction_interval=self.prediction_interval,
+                holiday_country=self.holiday_country,
+                random_seed=self.random_seed, verbose=self.verbose,
+                forecast_length=self.forecast_length).fit(
+                    X, future_regressor=future_regressor)
+        except Exception as e:
+            raise ValueError(f"Model {str(self.model)} with error: {repr(e)}")
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(self, forecast_length: int,
+                future_regressor=[], just_point_forecast: bool = False):
+        """Generate forecast data immediately following dates of .fit().
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+
+        XA = self.modelobj.predict(
+            forecast_length=forecast_length,
+            future_regressor=future_regressor)
+        Xf = self.transformer.inverse_transform(np.array(XA.forecast))
+        if not isinstance(Xf, pd.DataFrame):
+            Xf = pd.DataFrame(Xf)
+        Xf.columns = self.column_names
+        Xf.index = self.create_forecast_index(forecast_length=forecast_length)
+        Xf = Xf.astype(float)
+        if just_point_forecast:
+            return Xf
+        else:
+            """
+            upper_forecast = self.transformer.inverse_transform(np.array(XA.upper_forecast))
+            if not isinstance(upper_forecast, pd.DataFrame):
+                upper_forecast = pd.DataFrame(upper_forecast)
+            upper_forecast.columns = self.column_names
+            upper_forecast.index = self.create_forecast_index(forecast_length=forecast_length)
+            
+            lower_forecast = self.transformer.inverse_transform(np.array(XA.lower_forecast))
+            if not isinstance(lower_forecast, pd.DataFrame):
+                lower_forecast = pd.DataFrame(lower_forecast)
+            lower_forecast.columns = self.column_names
+            lower_forecast.index = self.create_forecast_index(forecast_length=forecast_length)
+            """
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.df_train, Xf, method='inferred_normal',
+                prediction_interval=self.prediction_interval)
+            
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=Xf.index,
+                forecast_columns=Xf.columns,
+                lower_forecast=lower_forecast,
+                forecast=Xf,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params())
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning."""
+        n_components_choice = np.random.choice(a=[10, '10thN'],
+                                               size=1, p=[0.6, 0.4]).item()
+        decomposition_choice = np.random.choice(
+            a=['TruncatedSVD', 'WhitenedPCA', 'PCA', 'KernelPCA', 'FastICA'],
+            size=1, p=[0.05, 0.05, 0.5, 0.2, 0.2]).item()
+        model_list = ['LastValueNaive',  'GLS', 'TensorflowSTS',
+                      'GLM', 'ETS', 'FBProphet', 'MotifSimulation',
+                      'RollingRegression', 'WindowRegression',
+                      'UnobservedComponents', 'VECM']
+        model_str = np.random.choice(model_list, size=1,
+                                     p=[0.01, 0.01, 0.01,
+                                        0.01, 0.01, 0.7, 0.01,
+                                        0.02, 0.1, 0.1, 0.02]).item()
+        model_str = np.random.choice(model_list)
+        from autots.evaluator.auto_model import ModelMonster
+        param_dict = ModelMonster(model_str).get_new_params()
+        return {
+            'model': model_str,
+            'model_parameters': param_dict,
+            'decomposition': decomposition_choice,
+            'n_components': n_components_choice
+                }
+
+    def get_params(self):
+        """Return dict of current parameters."""
+        return {
+            'model': self.model,
+            'model_parameters': self.model_parameters,
+            'decomposition': self.decomposition,
+            'n_components': self.n_components
+            }

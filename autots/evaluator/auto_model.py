@@ -500,6 +500,26 @@ def ModelMonster(model: str, parameters: dict = {}, frequency: str = 'infer',
                                   regression_type=parameters['regression_type']
                                   )
         return model
+    if model == 'ComponentAnalysis':
+        from autots.models.sklearn import ComponentAnalysis
+        if parameters == {}:
+            model = ComponentAnalysis(
+                frequency=frequency,
+                prediction_interval=prediction_interval,
+                holiday_country=holiday_country,
+                random_seed=random_seed, verbose=verbose,
+                forecast_length=forecast_length)
+        else:
+            model = ComponentAnalysis(
+                frequency=frequency, prediction_interval=prediction_interval,
+                holiday_country=holiday_country,
+                random_seed=random_seed, verbose=verbose,
+                model=parameters['model'],
+                model_parameters=parameters['model_parameters'],
+                decomposition=parameters['decomposition'],
+                n_components=parameters['n_components'],
+                forecast_length=forecast_length)
+        return model
     else:
         raise AttributeError(("Model String '{}' not a recognized model type").format(model))
 
@@ -961,12 +981,16 @@ def TemplateWizard(template, df_train, df_test, weights,
     return template_result
 
 
-def RandomTemplate(n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
-              'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS',
-              'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']):
-    """"
-    Returns a template dataframe of randomly generated transformations, models, and hyperparameters
-    
+def RandomTemplate(n: int = 10,
+                   model_list: list = ['ZeroesNaive', 'LastValueNaive', 
+                                       'AverageValueNaive', 'GLS', 'GLM',
+                                       'ETS', 'ARIMA', 'FBProphet',
+                                       'RollingRegression', 'GluonTS',
+                                       'UnobservedComponents', 'VARMAX',
+                                       'VECM', 'DynamicFactor']):
+    """
+    Returns a template dataframe of randomly generated transformations, models, and hyperparameters.
+
     Args:
         n (int): number of random models to return
     """
@@ -982,17 +1006,21 @@ def RandomTemplate(n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNai
                 'ModelParameters': json.dumps(param_dict),
                 'TransformationParameters': json.dumps(trans_dict),
                 'Ensemble': 0
-                }, index = [0])
+                }, index=[0])
         template = pd.concat([template, row], axis=0, ignore_index=True)
-        template.drop_duplicates(inplace = True)
+        template.drop_duplicates(inplace=True)
         counter += 1
         if counter > (n * 3):
             break
     return template
 
-def UniqueTemplates(existing_templates, new_possibilities, selection_cols: list = ['Model','ModelParameters','TransformationParameters','Ensemble']):
+
+def UniqueTemplates(existing_templates, new_possibilities,
+                    selection_cols: list = ['Model', 'ModelParameters',
+                                            'TransformationParameters',
+                                            'Ensemble']):
     """
-    Returns unique dataframe rows from new_possiblities not in existing_templates
+    Returns unique dataframe rows from new_possiblities not in existing_templates.
 
     Args:
         selection_cols (list): list of column namess to use to judge uniqueness/match on
@@ -1091,7 +1119,9 @@ def NewGeneticTemplate(model_results, submitted_parameters,
     recombination_approved = ['SeasonalNaive', 'MotifSimulation', "ETS",
                               'DynamicFactor', 'VECM', 'VARMAX', 'GLM',
                               'ARIMA', 'FBProphet', 'GluonTS',
-                              'RollingRegression', 'VAR', 'WindowRegression']
+                              'RollingRegression', 'VAR', 'WindowRegression',
+                              'TensorflowSTS', 'TFPRegression']
+    borrow = ['ComponentAnalysis']
     best = json.loads(sorted_results.iloc[0, :]['TransformationParameters'])
 
     for model_type in sorted_results['Model'].unique():
@@ -1109,6 +1139,32 @@ def NewGeneticTemplate(model_results, submitted_parameters,
         elif model_type in recombination_approved:
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 4
+            trans_dicts = _trans_dicts(current_ops, best=best, n=n)
+            fir = json.loads(current_ops.iloc[0, :]['ModelParameters'])
+            if current_ops.shape[0] > 1:
+                r_id = np.random.randint(1, (current_ops.shape[0]))
+                sec = json.loads(current_ops.iloc[r_id, :]['ModelParameters'])
+            else:
+                sec = ModelMonster(model_type).get_new_params()
+            r = ModelMonster(model_type).get_new_params()
+            r2 = ModelMonster(model_type).get_new_params()
+            arr = [fir, sec, r2, r]
+            model_dicts = list()
+            for _ in range(n):
+                r_sel = np.random.choice(arr, size=2, replace=False)
+                a = r_sel[0]
+                b = r_sel[1]
+                c = dict_recombination(a, b)
+                model_dicts.append(json.dumps(c))
+            new_row = pd.DataFrame({
+                'Model': model_type,
+                'ModelParameters': model_dicts,
+                'TransformationParameters': trans_dicts,
+                'Ensemble': 0
+                }, index=list(range(n)))
+        elif model_type in borrow:
+            current_ops = sorted_results[sorted_results['Model'] == model_type]
+            n = 3
             trans_dicts = _trans_dicts(current_ops, best=best, n=n)
             fir = json.loads(current_ops.iloc[0, :]['ModelParameters'])
             if current_ops.shape[0] > 1:

@@ -10,7 +10,7 @@ from autots.datasets import load_weekly
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
-forecast_length = 2
+forecast_length = 4
 df_long = load_monthly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
@@ -27,7 +27,7 @@ model_list = [
               ]
 model_list = 'superfast'
 # model_list = ['AverageValueNaive', 'LastValueNaive', 'ZeroesNaive']
-# model_list = ['GLM', 'GLS']  # 'TensorflowSTS', 'TFPRegression'
+model_list = ['ComponentAnalysis']  # 'TensorflowSTS', 'TFPRegression'
 
 metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
                     'rmse_weighting': 2, 'containment_weighting': 0,
@@ -38,14 +38,14 @@ metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
 
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9,
-               ensemble='simple,distance,probabilistic-max,horizontal-max,hdist',
+               ensemble='simple,distance,probabilistic-max,horizontal-max',
                constraint=2,
                max_generations=2, num_validations=2,
                validation_method='seasonal 12',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=0.1,
                max_per_model_class=None,
-               drop_most_recent=0, verbose=1)
+               drop_most_recent=0, verbose=0)
 
 
 future_regressor_train, future_regressor_forecast = fake_regressor(
@@ -60,7 +60,8 @@ model = model.fit(df_long,
                   future_regressor=future_regressor_train2d,
                   # weights=weights_hourly,
                   # result_file='04222027test.csv',
-                  date_col='datetime', value_col='value', id_col='series_id')
+                  date_col='datetime', value_col='value',
+                  id_col='series_id')
 
 print(model.best_model['Model'].iloc[0])
 print(model.best_model['ModelParameters'].iloc[0])
@@ -144,3 +145,25 @@ all_results = pd.concat([initial_results[cols], error_results[cols]], axis=0)
 if error_results.shape[0] > 0:
     test_corr = error_correlations(all_results,
                                    result='corr')  # result='poly corr'
+
+"""
+prediction_intervals = [0.99, 0.95, 0.67, 0.5]
+model_list = 'superfast'  # ['FBProphet', 'VAR', 'AverageValueNaive']
+from autots.evaluator.auto_ts import AutoTSIntervals
+intervalModel = AutoTSIntervals().fit(
+    prediction_intervals=prediction_intervals,
+    import_template=None,
+    forecast_length=forecast_length,
+    df_long=df_long, max_generations=2, num_validations=2,
+    validation_method='seasonal 12',
+    models_to_validate=0.2,
+    interval_models_to_validate=50,
+    date_col='datetime', value_col='value',
+    id_col='series_id',
+    model_list=model_list,
+    future_regressor=[],
+    constraint=2, no_negatives=True,
+    remove_leading_zeroes=True, random_seed=2020
+    )  # weights, future_regressor, metrics
+intervalForecasts = intervalModel.predict()
+"""

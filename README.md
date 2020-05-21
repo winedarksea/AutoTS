@@ -36,7 +36,8 @@ Input data is expected to come in a 'long' format with three columns:
 The column name for each of these is passed to .fit(). 
 
 ```
-from autots.datasets import load_monthly # also: _daily _yearly or _hourly
+# also: _hourly, _daily, _weekly, or _yearly
+from autots.datasets import load_monthly 
 df_long = load_monthly()
 
 from autots import AutoTS
@@ -45,7 +46,8 @@ model = AutoTS(forecast_length=3, frequency='infer',
 			   model_list='superfast',
                max_generations=5, num_validations=2,
 			   validation_method='even')
-model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id')
+model = model.fit(df_long, date_col='datetime',
+				  value_col='value', id_col='series_id')
 
 # Print the name of the best model
 print(model)

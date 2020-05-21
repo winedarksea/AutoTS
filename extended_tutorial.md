@@ -9,14 +9,15 @@ AutoTS works in the following way at present:
 * It begins by taking long data and converting it to a wide dataframe with DateTimeIndex
 * An initial train/test split is generated where the test is the most recent data, of forecast_length
 * A random template of models is generated and tested on the initial train/test
-	* Models consist of a pre-transformation step (fill na options, outlier removal options, etc), and algorithm (ie ETS) and model paramters (trend, damped, etc)
+* Models consist of a pre-transformation step (fill na options, outlier removal options, etc), and algorithm (ie ETS) and model paramters (trend, damped, etc)
 * The top models (selected by a combination of metrics) are recombined with random mutations for n_generations
 * A handful of the best models from this process go to cross validation, where they are re-assessed on new train/test splits.
 * The best model in validation is selected as best_model and used in the `.predict()` method to generate forecasts.
 
 ### A simple example
 ```
-from autots.datasets import load_monthly # also: _daily _yearly or _hourly
+# also: _hourly, _daily, _weekly, or _yearly
+from autots.datasets import load_monthly
 df_long = load_monthly()
 
 from autots import AutoTS
@@ -39,14 +40,16 @@ df_long = df_wide.melt(id_vars=['datetime_col_name'],
 #### You can tailor the process in a few ways...
 The simplest thing is to increase the number of generations `max_generations=15`. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.
 
-Another approach that may improve accuracy is to set `ensemble=True`. As this means storing and processing the result of every model, this takes much more time and memory, and *is not recommended with more than a few generations*.
+Another approach that may improve accuracy is to set `ensemble='all'`. As this means storing and processing the result of every model, this takes more time and memory.
 
-A handy parameter for when your data is expected to always be 0 or greater (such as unit sales) is to set `no_negatives=True`. This forces forecasts to be greater than or equal to 0.
+A handy parameter for when your data is expected to always be 0 or greater (such as unit sales) is to set `no_negatives=True`. This forces forecasts to be greater than or equal to 0. 
+A similar function is `constraint=2.0`. What this does is prevent the forecast from leaving historic bounds set by the training data. In this example, the forecasts would not be allowed to go above `max(training data) + 2.0 * st.dev(training data)`, as well as the reverse on the minimum side. A constraint of 0 would constrain forecasts to historical mins and maxes. 
 
 Another convenience function is `drop_most_recent=1` specifing the number of most recent periods to drop. This can be handy with monthly data, where often the most recent month is incomplete. 
-`drop_data_older_than_periods` provides similar functionality but drops the oldest data.
+`drop_data_older_than_periods` provides similar functionality but drops the oldest data to speed up the process on large datasets. 
+`remove_leading_zeroes=True` is useful for data where leading zeroes represent a process which has not yet started.
 
-When working with many time series, it can be helpful to take advantage of `subset=100`. Subset specifies the interger number of time series to test models on, and can be useful with many related time series (1000's of customer's sales). Usually the best model on a 100 related time series is very close to that tested on many thousands (or more) of series. This speeds up the model process in these cases.
+When working with many time series, it can be helpful to take advantage of `subset=100`. Subset specifies the interger number of time series to test models on, and can be useful with many related time series (1000's of customer's sales). Usually the best model on a 100 related time series is very close to that tested on many thousands (or more) of series. This speeds up the model process in these cases, but does not work with `horizontal` ensemble types.
 
 Subset takes advantage of weighting, more highly-weighted series are more likely to be selected. Weighting is used with multiple time series to tell the evaluator which series are most important. Series weights are assumed to all be equal to 1, values need only be passed in when a value other than 1 is desired. 
 Note for weighting, larger weights = more important.
@@ -133,10 +136,13 @@ There are a number of available metrics, all combined together into a 'Score' wh
 Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers. 
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series. 
 ```
-metric_weighting = {'smape_weighting' : 10, 'mae_weighting' : 1,
-					'rmse_weighting' : 5, 
-					'containment_weighting' : 1, 'runtime_weighting' : 0,
-					'spl_weighting': 1, 'contour_weighting': 0}
+metric_weighting = {'smape_weighting' : 10,
+					'mae_weighting' : 1,
+					'rmse_weighting' : 5,
+					'containment_weighting' : 1,
+					'runtime_weighting' : 0,
+					'spl_weighting': 1,
+					'contour_weighting': 0}
 
 model = AutoTS(forecast_length=forecast_length,
 			   frequency='infer',
@@ -144,7 +150,7 @@ model = AutoTS(forecast_length=forecast_length,
 ```		
 It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE. 
 			
-**Warning**: weights are not (yet) well balanced 1 - 1 - 1. As such it is usually best to place your favorite metric an order of magnitude or more above the others. 
+**Warning**: weights are not fully balanced 1 - 1 - 1. As such it is usually best to place your favorite metric an order of magnitude or more above the others. 
 
 `sMAPE` is generally the most versatile across multiple series, but doesn't handle forecasts with lots of zeroes well. 
 

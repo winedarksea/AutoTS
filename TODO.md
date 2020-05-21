@@ -67,6 +67,7 @@ Latest:
 		WindowRegression
 		TensorflowSTS
 		TFPRegression
+		ComponentAnalysis
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -91,17 +92,11 @@ KerasRNN errors due to parameters not working on all dataset
 Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
-* method to test effectiveness across multiple probabilistic intervals.
-	* [0.005, 0.025, 0.165, 0.25, 0.5, 0.75, 0.835, 0.975, 0.995]
-	* generate base template (based mainly on best point forecast, validated)
-	* run for each new prediction intervals (on just most recent)
-	* capture containment/SPL from each round.
 * figure out how to bring together all the different training templates
 	* renumber all Ensemble to 2 where Horizontal
 * test submission
 * Linux with no GPU, superfast + GluonTS, WindowRegression
 * test whether bottom up significantly overestimates on rollup
-* examine train/test, specifically test and see why and if NaN
 
 # To-Do
 * clean up subsetting
@@ -150,6 +145,7 @@ Tensorflow GPU backend may crash on occasion.
 	* Make sure of rolling regression setup
 	* Modify GluonStart if lots of NaN at start of that series
 	* GPU and CPU ctx
+* implement 'borrow' Genetic Recombination for ComponentAnalysis
 * Regressor to TensorflowSTS
 * Relative/Absolute Imports and reduce package reloading messages
 * Allow FillNA to be None

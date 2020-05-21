@@ -44,6 +44,7 @@ class AutoTS(object):
         model_list (list): list of names of model objects to use
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
+            0.99 is forced to 100% validation. 1 evaluates just 1 model.
         max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
         validation_method (str): 'even', 'backwards', or 'seasonal n' where n is an integer of seasonal
             'backwards' is better for recency and for shorter training sets
@@ -145,14 +146,15 @@ class AutoTS(object):
                                'RollingRegression', 'WindowRegression',
                                'GluonTS', 'VAR',
                                'SeasonalNaive', 'UnobservedComponents',
-                               'VECM']
+                               'VECM', 'ComponentAnalysis']
         if model_list == 'probabilistic':
             self.model_list = ['ARIMA', 'GluonTS', 'FBProphet',
                                'AverageValueNaive', 'MotifSimulation',
                                'VARMAX', 'DynamicFactor', 'VAR']
         if model_list == 'multivariate':
             self.model_list = ['VECM', 'DynamicFactor', 'GluonTS', 'VARMAX',
-                               'RollingRegression', 'WindowRegression', 'VAR']
+                               'RollingRegression', 'WindowRegression', 'VAR',
+                               'ComponentAnalysis']
         if model_list == 'all':
             self.model_list = ['ZeroesNaive', 'LastValueNaive',
                                'AverageValueNaive', 'GLS', 'GLM', 'ETS',
@@ -161,7 +163,8 @@ class AutoTS(object):
                                'UnobservedComponents', 'VARMAX', 'VECM',
                                'DynamicFactor', 'TSFreshRegressor',
                                'MotifSimulation', 'WindowRegression', 'VAR',
-                               'TensorflowSTS', 'TFPRegression']
+                               'TensorflowSTS', 'TFPRegression',
+                               'ComponentAnalysis']
 
         # generate template to begin with
         if initial_template.lower() == 'random':
@@ -483,8 +486,10 @@ class AutoTS(object):
 
         # validations if float
         if (self.models_to_validate < 1) and (self.models_to_validate > 0):
+            val_frac = self.models_to_validate
+            val_frac = 1 if val_frac >= 0.99 else val_frac
             temp_len = self.initial_results.model_results.shape[0]
-            self.models_to_validate = self.models_to_validate * temp_len
+            self.models_to_validate = val_frac * temp_len
             self.models_to_validate = int(np.ceil(self.models_to_validate))
         if (self.max_per_model_class is None):
             temp_len = len(self.model_list)
@@ -851,7 +856,8 @@ or otherwise increase models available."""
         """Export top results as a reusable template.
 
         Args:
-            filename (str): 'csv' or 'json' (in filename)
+            filename (str): 'csv' or 'json' (in filename).
+                `None` to return a dataframe and not write a file.
             models (str): 'best' or 'all'
             n (int): if models = 'best', how many n-best to export
             max_per_model_class (int): if models = 'best',
@@ -860,6 +866,7 @@ or otherwise increase models available."""
         """
         if models == 'all':
             export_template = self.initial_results.model_results[self.template_cols]
+            export_template = export_template.drop_duplicates()
         elif models == 'best':
             export_template = self.validation_results.model_results
             export_template = export_template[export_template['Runs'] >= (self.num_validations + 1)]
@@ -881,7 +888,9 @@ or otherwise increase models available."""
         else:
             raise ValueError("`models` must be 'all' or 'best'")
         try:
-            if '.csv' in filename:
+            if filename is None:
+                return export_template
+            elif '.csv' in filename:
                 return export_template.to_csv(filename, index=False)
             elif '.json' in filename:
                 return export_template.to_json(filename, orient='columns')
@@ -959,6 +968,133 @@ or otherwise increase models available."""
         return self
 
 
+class AutoTSIntervals(object):
+    """Autots looped to test multiple prediction intervals."""
+
+    def fit(self, prediction_intervals, import_template, forecast_length,
+            df_long, max_generations, num_validations,
+            validation_method, models_to_validate,
+            interval_models_to_validate,
+            date_col, value_col, id_col=None,
+            model_list='all',
+            metric_weighting: dict = {
+                'smape_weighting': 1,
+                'mae_weighting': 1,
+                'rmse_weighting': 0,
+                'containment_weighting': 0,
+                'runtime_weighting': 0,
+                'spl_weighting': 10,
+                'contour_weighting': 0
+                },
+            weights: dict = {},
+            future_regressor=[],
+            constraint=2, no_negatives=False,
+            remove_leading_zeroes=False, random_seed=2020
+            ):
+        """Train and find best."""
+        overall_results = TemplateEvalObject()
+        per_series_spl = pd.DataFrame()
+        runs = 0
+        for interval in prediction_intervals:
+            if runs != 0:
+                max_generations = 0
+                models_to_validate = 0.99
+            print(f"Current interval is {interval}")
+            current_model = AutoTS(
+                forecast_length=forecast_length,
+                prediction_interval=interval, ensemble="probabilistic-max",
+                max_generations=max_generations, model_list=model_list,
+                constraint=constraint, no_negatives=no_negatives,
+                remove_leading_zeroes=remove_leading_zeroes,
+                metric_weighting=metric_weighting, subset=None,
+                random_seed=random_seed,
+                num_validations=num_validations,
+                validation_method=validation_method,
+                models_to_validate=models_to_validate)
+            if import_template is not None:
+                current_model.import_template(import_template, method='only')
+            current_model = current_model.fit(
+                df_long, future_regressor=future_regressor,
+                weights=weights,
+                date_col=date_col, value_col=value_col,
+                id_col=id_col)
+            current_model.initial_results.model_results['interval'] = interval
+            temp = current_model.initial_results
+            overall_results = overall_results.concat(temp)
+            temp = current_model.initial_results.per_series_spl
+            per_series_spl = pd.concat([per_series_spl, temp], axis=0)
+            if runs == 0:
+                import_template = current_model.export_template(
+                    None, models='best', n=interval_models_to_validate)
+            runs += 1
+        self.validation_results = validation_aggregation(overall_results)
+        self.results = overall_results.model_results
+        # remove models not validated
+        temp = per_series_spl.mean(axis=1).groupby(level=0).count()
+        temp = temp[temp >= ((runs) * (num_validations + 1))]
+        per_series_spl = per_series_spl[per_series_spl.index.isin(temp.index)]
+        per_series_spl = per_series_spl.groupby(level=0).mean()
+        # from autots.models.ensemble import HorizontalTemplateGenerator
+        ens_templates = HorizontalTemplateGenerator(
+            per_series_spl,
+            model_results=overall_results.model_results,
+            forecast_length=forecast_length,
+            ensemble='probabilistic-max',
+            subset_flag=False)
+        self.per_series_spl = per_series_spl
+        self.ens_templates = ens_templates
+        self.prediction_intervals = prediction_intervals
+
+        self.future_regressor_train = future_regressor
+        self.forecast_length = forecast_length
+        self.df_wide_numeric = current_model.df_wide_numeric
+        self.frequency = current_model.frequency
+        self.no_negatives = current_model.no_negatives
+        self.constraint = current_model.constraint
+        self.holiday_country = current_model.holiday_country
+        self.startTimeStamps = current_model.startTimeStamps
+        self.random_seed = current_model.random_seed
+        self.verbose = current_model.verbose
+        self.template_cols = current_model.template_cols
+        self.categorical_transformer = current_model.categorical_transformer
+        return self
+
+    def predict(self, future_regressor=[]):
+        """Generate forecasts after training complete."""
+        if len(future_regressor) > 0:
+            future_regressor = pd.DataFrame(future_regressor)
+            self.future_regressor_train = self.future_regressor_train.reindex(
+                index=self.df_wide_numeric.index)
+        forecast_objects = {}
+
+        for interval in self.prediction_intervals:
+            df_forecast = PredictWitch(
+                self.ens_templates,
+                df_train=self.df_wide_numeric,
+                forecast_length=self.forecast_length,
+                frequency=self.frequency,
+                prediction_interval=interval,
+                no_negatives=self.no_negatives,
+                constraint=self.constraint,
+                future_regressor_train=self.future_regressor_train,
+                future_regressor_forecast=future_regressor,
+                holiday_country=self.holiday_country,
+                startTimeStamps=self.startTimeStamps,
+                random_seed=self.random_seed, verbose=self.verbose,
+                template_cols=self.template_cols)
+
+            trans = self.categorical_transformer
+            df_forecast.forecast = trans.inverse_transform(
+                df_forecast.forecast)
+            df_forecast.lower_forecast = trans.inverse_transform(
+                df_forecast.lower_forecast)
+            df_forecast.upper_forecast = trans.inverse_transform(
+                df_forecast.upper_forecast)
+            forecast_objects[interval] = df_forecast
+        return forecast_objects
+
+
+
 def fake_regressor(df_long, forecast_length: int = 14,
                    date_col: str = 'datetime', value_col: str = 'value',
                    id_col: str = 'series_id',
@@ -968,11 +1104,12 @@ def fake_regressor(df_long, forecast_length: int = 14,
                    dimensions: int = 1):
     """Create a fake regressor of random numbers for testing purposes."""
     from autots.tools.shaping import long_to_wide
-    df_wide = long_to_wide(df_long, date_col=date_col, value_col=value_col,
-                           id_col=id_col, frequency=frequency,
-                           na_tolerance=na_tolerance, aggfunc=aggfunc,
-                           drop_data_older_than_periods=drop_data_older_than_periods,
-                           drop_most_recent=drop_most_recent)
+    df_wide = long_to_wide(
+        df_long, date_col=date_col, value_col=value_col,
+        id_col=id_col, frequency=frequency,
+        na_tolerance=na_tolerance, aggfunc=aggfunc,
+        drop_data_older_than_periods=drop_data_older_than_periods,
+        drop_most_recent=drop_most_recent)
     if frequency == 'infer':
         frequency = pd.infer_freq(df_wide.index, warn=True)
 
