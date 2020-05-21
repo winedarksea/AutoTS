@@ -1059,7 +1059,7 @@ class AutoTSIntervals(object):
         self.categorical_transformer = current_model.categorical_transformer
         return self
 
-    def predict(self, future_regressor=[]):
+    def predict(self, future_regressor=[]) -> dict:
         """Generate forecasts after training complete."""
         if len(future_regressor) > 0:
             future_regressor = pd.DataFrame(future_regressor)
