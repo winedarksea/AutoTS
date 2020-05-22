@@ -105,7 +105,6 @@ Tensorflow GPU backend may crash on occasion.
 	* upsampling does not work, esp with categorical
 * better document ensembling
 * review metric weighting by series
-* FBProphet with PCA parameters
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
 * Bring GeneralTransformer to higher level API.

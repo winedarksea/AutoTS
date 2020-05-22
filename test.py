@@ -27,7 +27,7 @@ model_list = [
               ]
 model_list = 'superfast'
 # model_list = ['AverageValueNaive', 'LastValueNaive', 'ZeroesNaive']
-model_list = ['ComponentAnalysis']  # 'TensorflowSTS', 'TFPRegression'
+# model_list = ['ComponentAnalysis']  # 'TensorflowSTS', 'TFPRegression'
 
 metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
                     'rmse_weighting': 2, 'containment_weighting': 0,

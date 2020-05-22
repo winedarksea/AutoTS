@@ -15,7 +15,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Tutorial" href="tutorial.html" />
-    <link rel="prev" title="autots" href="../index.html" />
+    <link rel="prev" title="AutoTS" href="../index.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   
@@ -71,7 +71,8 @@
 <li><p>Series ID. For a single time series, series_id can be <code class="docutils literal notranslate"><span class="pre">=</span> <span class="pre">None</span></code>.</p></li>
 </ul>
 <p>The column name for each of these is passed to .fit().</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="k">from</span> <span class="n">autots</span><span class="p">.</span><span class="n">datasets</span> <span class="n">import</span> <span class="n">load_monthly</span> <span class="o">#</span> <span class="n">also</span><span class="p">:</span> <span class="n">_daily</span> <span class="n">_yearly</span> <span class="k">or</span> <span class="n">_hourly</span>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">#</span> <span class="n">also</span><span class="p">:</span> <span class="n">_hourly</span><span class="p">,</span> <span class="n">_daily</span><span class="p">,</span> <span class="n">_weekly</span><span class="p">,</span> <span class="k">or</span> <span class="n">_yearly</span>
+<span class="k">from</span> <span class="n">autots</span><span class="p">.</span><span class="n">datasets</span> <span class="n">import</span> <span class="n">load_monthly</span>
 <span class="n">df_long</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">()</span>
 
 <span class="k">from</span> <span class="n">autots</span> <span class="n">import</span> <span class="n">AutoTS</span>
@@ -80,7 +81,8 @@
                <span class="n">model_list</span><span class="o">=</span><span class="s1">&#39;superfast&#39;</span><span class="p">,</span>
                <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
                <span class="n">validation_method</span><span class="o">=</span><span class="s1">&#39;even&#39;</span><span class="p">)</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span> <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span>
+                  <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
 
 <span class="o">#</span> <span class="n">Print</span> <span class="n">the</span> <span class="n">name</span> <span class="k">of</span> <span class="n">the</span> <span class="n">best</span> <span class="n">model</span>
 <span class="n">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
@@ -94,7 +96,7 @@
 <span class="n">validation_results</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">validation_results</span><span class="p">.</span><span class="n">model_results</span>
 </pre></div>
 </div>
-<p>Check out <a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md">extended_tutorial.md</a> for a more detailed guide to features!</p>
+<p>Check out <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/source/tutorial.html">extended_tutorial.md</a> for a more detailed guide to features!</p>
 </div>
 <div class="section" id="how-to-contribute">
 <h2>How to Contribute:<a class="headerlink" href="#how-to-contribute" title="Permalink to this headline">¶</a></h2>
@@ -162,7 +164,7 @@
 <h3>Related Topics</h3>
 <ul>
   <li><a href="../index.html">Documentation overview</a><ul>
-      <li>Previous: <a href="../index.html" title="previous chapter">autots</a></li>
+      <li>Previous: <a href="../index.html" title="previous chapter">AutoTS</a></li>
       <li>Next: <a href="tutorial.html" title="next chapter">Tutorial</a></li>
   </ul></li>
 </ul>
@@ -203,7 +205,7 @@
     <script type="text/javascript">
 
       var _gaq = _gaq || [];
-      _gaq.push(['_setAccount', 'UA-166997414-1']);
+      _gaq.push(['_setAccount', '1669974141']);
       _gaq.push(['_setDomainName', 'none']);
       _gaq.push(['_setAllowLinker', true]);
       _gaq.push(['_trackPageview']);

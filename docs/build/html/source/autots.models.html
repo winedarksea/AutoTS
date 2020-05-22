@@ -57,7 +57,7 @@
 <dl class="method">
 <dt id="autots.models.basics.AverageValueNaive.fit">
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.AverageValueNaive.fit" title="Permalink to this definition">¶</a></dt>
-<dd><p>Train algorithm given data supplied</p>
+<dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
@@ -563,6 +563,68 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <span id="autots-models-sklearn-module"></span><h2>autots.models.sklearn module<a class="headerlink" href="#module-autots.models.sklearn" title="Permalink to this headline">¶</a></h2>
 <p>Sklearn dependent models</p>
 <p>Decision Tree, Elastic Net,  Random Forest, MLPRegressor, KNN, Adaboost</p>
+<dl class="class">
+<dt id="autots.models.sklearn.ComponentAnalysis">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">ComponentAnalysis</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'ComponentAnalysis'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_components: int = 10</em>, <em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">model: str = 'GLS'</em>, <em class="sig-param">model_parameters: dict = {}</em>, <em class="sig-param">decomposition: str = 'PCA'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.ComponentAnalysis" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="autots.evaluator.html#autots.evaluator.auto_model.ModelObject" title="autots.evaluator.auto_model.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.evaluator.auto_model.ModelObject</span></code></a></p>
+<p>Forecasting on principle components.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>model</strong> (<em>str</em>) – An AutoTS model str</p></li>
+<li><p><strong>model_parameters</strong> (<em>dict</em>) – parameters to pass to AutoTS model</p></li>
+<li><p><strong>n_components</strong> (<em>int</em>) – int or ‘NthN’ number of components to use</p></li>
+<li><p><strong>decomposition</strong> (<em>str</em>) – decomposition method to use from scikit-learn</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.sklearn.ComponentAnalysis.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.ComponentAnalysis.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.sklearn.ComponentAnalysis.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.ComponentAnalysis.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.sklearn.ComponentAnalysis.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.ComponentAnalysis.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.sklearn.ComponentAnalysis.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.ComponentAnalysis.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate forecast data immediately following dates of .fit().</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 <dl class="class">
 <dt id="autots.models.sklearn.RollingRegression">
 <em class="property">class </em><code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">RollingRegression</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'RollingRegression'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">regression_model: dict = {'model': 'Adaboost'</em>, <em class="sig-param">'model_params': {'base_estimator': 'DecisionTree'</em>, <em class="sig-param">'learning_rate': 1.0</em>, <em class="sig-param">'loss': 'linear'</em>, <em class="sig-param">'n_estimators': 50}}</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = 7</em>, <em class="sig-param">min_rolling_periods: int = 7</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">additional_lag_periods: int = 7</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">add_date_part: str = None</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">x_transform: str = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.RollingRegression" title="Permalink to this definition">¶</a></dt>
@@ -1602,7 +1664,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
     <script type="text/javascript">
 
       var _gaq = _gaq || [];
-      _gaq.push(['_setAccount', 'UA-166997414-1']);
+      _gaq.push(['_setAccount', '1669974141']);
       _gaq.push(['_setDomainName', 'none']);
       _gaq.push(['_setAllowLinker', true]);
       _gaq.push(['_trackPageview']);

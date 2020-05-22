@@ -146,7 +146,8 @@
 <li><p><strong>drop_data_older_than_periods</strong> (<em>int</em>) – take only the n most recent timestamps</p></li>
 <li><p><strong>model_list</strong> (<em>list</em>) – list of names of model objects to use</p></li>
 <li><p><strong>num_validations</strong> (<em>int</em>) – number of cross validations to perform. 0 for just train/test on final split.</p></li>
-<li><p><strong>models_to_validate</strong> (<em>int</em>) – top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.</p></li>
+<li><p><strong>models_to_validate</strong> (<em>int</em>) – top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
+0.99 is forced to 100% validation. 1 evaluates just 1 model.</p></li>
 <li><p><strong>max_per_model_class</strong> (<em>int</em>) – of the models_to_validate what is the maximum to pass from any one model class/family.</p></li>
 <li><p><strong>validation_method</strong> (<em>str</em>) – ‘even’, ‘backwards’, or ‘seasonal n’ where n is an integer of seasonal
 ‘backwards’ is better for recency and for shorter training sets
@@ -188,7 +189,8 @@
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>filename</strong> (<em>str</em>) – ‘csv’ or ‘json’ (in filename)</p></li>
+<li><p><strong>filename</strong> (<em>str</em>) – ‘csv’ or ‘json’ (in filename).
+<cite>None</cite> to return a dataframe and not write a file.</p></li>
 <li><p><strong>models</strong> (<em>str</em>) – ‘best’ or ‘all’</p></li>
 <li><p><strong>n</strong> (<em>int</em>) – if models = ‘best’, how many n-best to export</p></li>
 <li><p><strong>max_per_model_class</strong> (<em>int</em>) – if models = ‘best’,
@@ -614,7 +616,7 @@ None - no discretization
     <script type="text/javascript">
 
       var _gaq = _gaq || [];
-      _gaq.push(['_setAccount', 'UA-166997414-1']);
+      _gaq.push(['_setAccount', '1669974141']);
       _gaq.push(['_setDomainName', 'none']);
       _gaq.push(['_setAllowLinker', true]);
       _gaq.push(['_trackPageview']);

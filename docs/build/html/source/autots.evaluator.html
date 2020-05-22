@@ -199,8 +199,7 @@ I got better. -Python</p>
 <dl class="function">
 <dt id="autots.evaluator.auto_model.RandomTemplate">
 <code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">RandomTemplate</code><span class="sig-paren">(</span><em class="sig-param">n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS', 'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor']</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.RandomTemplate" title="Permalink to this definition">¶</a></dt>
-<dd><p>”
-Returns a template dataframe of randomly generated transformations, models, and hyperparameters</p>
+<dd><p>Returns a template dataframe of randomly generated transformations, models, and hyperparameters.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><p><strong>n</strong> (<em>int</em>) – number of random models to return</p>
@@ -257,7 +256,7 @@ Returns a template dataframe of randomly generated transformations, models, and 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.UniqueTemplates">
 <code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">UniqueTemplates</code><span class="sig-paren">(</span><em class="sig-param">existing_templates, new_possibilities, selection_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble']</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.UniqueTemplates" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns unique dataframe rows from new_possiblities not in existing_templates</p>
+<dd><p>Returns unique dataframe rows from new_possiblities not in existing_templates.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><p><strong>selection_cols</strong> (<em>list</em>) – list of column namess to use to judge uniqueness/match on</p>
@@ -337,7 +336,8 @@ Returns a template dataframe of randomly generated transformations, models, and 
 <li><p><strong>drop_data_older_than_periods</strong> (<em>int</em>) – take only the n most recent timestamps</p></li>
 <li><p><strong>model_list</strong> (<em>list</em>) – list of names of model objects to use</p></li>
 <li><p><strong>num_validations</strong> (<em>int</em>) – number of cross validations to perform. 0 for just train/test on final split.</p></li>
-<li><p><strong>models_to_validate</strong> (<em>int</em>) – top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.</p></li>
+<li><p><strong>models_to_validate</strong> (<em>int</em>) – top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
+0.99 is forced to 100% validation. 1 evaluates just 1 model.</p></li>
 <li><p><strong>max_per_model_class</strong> (<em>int</em>) – of the models_to_validate what is the maximum to pass from any one model class/family.</p></li>
 <li><p><strong>validation_method</strong> (<em>str</em>) – ‘even’, ‘backwards’, or ‘seasonal n’ where n is an integer of seasonal
 ‘backwards’ is better for recency and for shorter training sets
@@ -379,7 +379,8 @@ Returns a template dataframe of randomly generated transformations, models, and 
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>filename</strong> (<em>str</em>) – ‘csv’ or ‘json’ (in filename)</p></li>
+<li><p><strong>filename</strong> (<em>str</em>) – ‘csv’ or ‘json’ (in filename).
+<cite>None</cite> to return a dataframe and not write a file.</p></li>
 <li><p><strong>models</strong> (<em>str</em>) – ‘best’ or ‘all’</p></li>
 <li><p><strong>n</strong> (<em>int</em>) – if models = ‘best’, how many n-best to export</p></li>
 <li><p><strong>max_per_model_class</strong> (<em>int</em>) – if models = ‘best’,
@@ -455,6 +456,25 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dt id="autots.evaluator.auto_ts.AutoTS.results">
 <code class="sig-name descname">results</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.results" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convenience function to return tested models table.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.evaluator.auto_ts.AutoTSIntervals">
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTSIntervals</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTSIntervals" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Autots looped to test multiple prediction intervals.</p>
+<dl class="method">
+<dt id="autots.evaluator.auto_ts.AutoTSIntervals.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">prediction_intervals</em>, <em class="sig-param">import_template</em>, <em class="sig-param">forecast_length</em>, <em class="sig-param">df_long</em>, <em class="sig-param">max_generations</em>, <em class="sig-param">num_validations</em>, <em class="sig-param">validation_method</em>, <em class="sig-param">models_to_validate</em>, <em class="sig-param">interval_models_to_validate</em>, <em class="sig-param">date_col</em>, <em class="sig-param">value_col</em>, <em class="sig-param">id_col=None</em>, <em class="sig-param">model_list='all'</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 0</em>, <em class="sig-param">'mae_weighting': 1</em>, <em class="sig-param">'rmse_weighting': 0</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 1</em>, <em class="sig-param">'spl_weighting': 10}</em>, <em class="sig-param">weights: dict = {}</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">constraint=2</em>, <em class="sig-param">no_negatives=False</em>, <em class="sig-param">remove_leading_zeroes=False</em>, <em class="sig-param">random_seed=2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTSIntervals.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train and find best.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.evaluator.auto_ts.AutoTSIntervals.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span> &#x2192; dict<a class="headerlink" href="#autots.evaluator.auto_ts.AutoTSIntervals.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate forecasts after training complete.</p>
 </dd></dl>
 
 </dd></dl>
@@ -569,7 +589,7 @@ Returns a 1-D array of results in len n series</p>
 <dl class="function">
 <dt id="autots.evaluator.metrics.rmse">
 <code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">rmse</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">forecast</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.rmse" title="Permalink to this definition">¶</a></dt>
-<dd><p>Expects two, 2-D numpy arrays of forecast_length * n series</p>
+<dd><p>Expects two, 2-D numpy arrays of forecast_length * n series.</p>
 <p>Returns a 1-D array of results in len n series</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -717,7 +737,7 @@ Doesn’t handle negatives well</p>
     <script type="text/javascript">
 
       var _gaq = _gaq || [];
-      _gaq.push(['_setAccount', 'UA-166997414-1']);
+      _gaq.push(['_setAccount', '1669974141']);
       _gaq.push(['_setDomainName', 'none']);
       _gaq.push(['_setAllowLinker', true]);
       _gaq.push(['_trackPageview']);
