@@ -166,4 +166,5 @@ intervalModel = AutoTSIntervals().fit(
     remove_leading_zeroes=True, random_seed=2020
     )  # weights, future_regressor, metrics
 intervalForecasts = intervalModel.predict()
+intervalForecasts[0.95].upper_forecast
 """
