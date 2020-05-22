@@ -99,12 +99,7 @@ Tensorflow GPU backend may crash on occasion.
 * test whether bottom up significantly overestimates on rollup
 
 # To-Do
-* clean up subsetting
-* clean up long_to_wide inputs like na_tolerance
-	* documetentation here is making sphinx unhappy, fix!
-	* upsampling does not work, esp with categorical
 * better document ensembling
-* review metric weighting by series
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
 * Bring GeneralTransformer to higher level API.

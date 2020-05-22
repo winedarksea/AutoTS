@@ -191,7 +191,7 @@ Download Anaconda or Miniconda.
 
 (install Visual Studio if on Windows)
 
-If you have an Nvidia GPU, download NVIDIA CUDA (10.1 is currently supported by all of mxnet, Tensorflow, and Pytorch) and CuDNN. 
+If you have an Nvidia GPU, download NVIDIA CUDA and CuDNN. 
 MKL is included with `anaconda`.
 ```
 conda create -n timeseries python=3.6
@@ -221,7 +221,7 @@ Minimal training data most greatly impacts the ability to do proper cross valida
 Since ensembles are based on the test dataset, it would also be wise to set `ensemble=None` if `num_validations=0`.
 
 ### Too much training data.
-Too much data is already handled to some extent by 'context_slicer' in the transformations, which tests using less training data. 
+Too much data is already handled to some extent by `'context_slicer'` in the transformations, which tests using less training data. 
 That said, large datasets will be slower and more memory intensive, for high frequency data (say hourly) it can often be advisable to roll that up to a higher level (daily, hourly, etc.). 
 Rollup can be accomplished by specifying the frequency = your rollup frequency, and then setting the `agg_func=np.sum` or 'mean' or other appropriate statistic.
 
@@ -236,7 +236,7 @@ The recommended way to provide regressors is as a pd.Series/pd.Dataframe with a 
 
 Don't know the future? Don't worry, the models can handle quite a lot of parallel time series, which is another way to add information. 
 Additional regressors can be passed through as additional time series to forecast as part of df_long. 
-The some models here can utilize the additional information they provide to help improve forecast quality. 
+Some models here can utilize the additional information they provide to help improve forecast quality. 
 To prevent forecast accuracy for considering these additional series too heavily, input series weights that lower or remove their forecast accuracy from consideration.
 
 ### Categorical Data

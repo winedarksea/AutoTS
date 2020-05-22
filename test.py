@@ -11,7 +11,7 @@ from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 forecast_length = 4
-df_long = load_monthly()
+df_long = load_hourly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -41,7 +41,7 @@ model = AutoTS(forecast_length=forecast_length, frequency='infer',
                ensemble='simple,distance,probabilistic-max,horizontal-max',
                constraint=2,
                max_generations=2, num_validations=2,
-               validation_method='seasonal 12',
+               validation_method='even',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=0.1,
                max_per_model_class=None,

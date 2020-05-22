@@ -27,8 +27,9 @@ class AutoTS(object):
     Args:
         forecast_length (int): number of periods over which to evaluate forecast. Can be overriden later in .predict().
         frequency (str): 'infer' or a specific pandas datetime offset. Can be used to force rollup of data (ie daily input, but frequency 'M' will rollup to monthly).
-        aggfunc (str): if data is to be rolled up to a higher frequency (daily -> monthly) or duplicate timestamps are included. Default 'first' removes duplicates, for rollup try 'mean' or np.sum. Beware numeric aggregations like 'mean' will not work with categorical features as cat->num occurs later.
         prediction_interval (float): 0-1, uncertainty range for upper and lower forecasts. Adjust range, but rarely matches actual containment.
+        max_generations (int): number of genetic algorithms generations to run.
+            More runs = longer runtime, generally better accuracy.
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.
         ensemble (str): None, 'simple', 'distance'
@@ -37,7 +38,9 @@ class AutoTS(object):
         random_seed (int): random seed allows (slightly) more consistent results.
         holiday_country (str): passed through to Holidays package for some models.
         subset (int): maximum number of series to evaluate at once. Useful to speed evaluation when many series are input.
-        na_tolerance (float): 0 to 1. Series are dropped if they have more than this percent NaN. 0.95 here would allow data containing upto 95% NaN values.
+        aggfunc (str): if data is to be rolled up to a higher frequency (daily -> monthly) or duplicate timestamps are included. Default 'first' removes duplicates, for rollup try 'mean' or np.sum.
+            Beware numeric aggregations like 'mean' will not work with non-numeric inputs.
+        na_tolerance (float): 0 to 1. Series are dropped if they have more than this percent NaN. 0.95 here would allow series containing up to 95% NaN values.
         metric_weighting (dict): weights to assign to metrics, effecting how the ranking score is generated.
         drop_most_recent (int): option to drop n most recent data points. Useful, say, for monthly sales data where the current (unfinished) month is included.
         drop_data_older_than_periods (int): take only the n most recent timestamps
@@ -48,10 +51,11 @@ class AutoTS(object):
         max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
         validation_method (str): 'even', 'backwards', or 'seasonal n' where n is an integer of seasonal
             'backwards' is better for recency and for shorter training sets
-            'even splits' the data into equally-sized slices best for more consistent data
+            'even' splits the data into equally-sized slices best for more consistent data
             'seasonal n' for example 'seasonal 364' would test all data on each previous year of the forecast_length that would immediately follow the training data.
-        min_allowed_train_percent (float): useful in (unrecommended) cases where forecast_length > training length. Percent of forecast length to allow as min training, else raises error.
-        max_generations (int): umber of genetic algorithms generations to run. More runs = better chance of better accuracy.
+        min_allowed_train_percent (float): percent of forecast length to allow as min training, else raises error.
+            0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
+            Useful in (unrecommended) cases where forecast_length > training length. 
         remove_leading_zeroes (bool): replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn't started yet.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give slightly more output.
         
@@ -63,8 +67,8 @@ class AutoTS(object):
     def __init__(self,
                  forecast_length: int = 14,
                  frequency: str = 'infer',
-                 aggfunc: str = 'first',
                  prediction_interval: float = 0.9,
+                 max_generations: int = 5,
                  no_negatives: bool = False,
                  constraint: float = None,
                  ensemble: str = None,
@@ -73,7 +77,8 @@ class AutoTS(object):
                  random_seed: int = 2020,
                  holiday_country: str = 'US',
                  subset: int = None,
-                 na_tolerance: float = 0.99,
+                 aggfunc: str = 'first',
+                 na_tolerance: float = 1,
                  metric_weighting: dict = {'smape_weighting': 10,
                                            'mae_weighting': 2,
                                            'rmse_weighting': 2,
@@ -90,7 +95,6 @@ class AutoTS(object):
                  max_per_model_class: int = None,
                  validation_method: str = 'even',
                  min_allowed_train_percent: float = 0.5,
-                 max_generations: int = 5,
                  remove_leading_zeroes: bool = False,
                  verbose: int = 1
                  ):
@@ -329,7 +333,10 @@ class AutoTS(object):
 
         # take a subset of the data if working with a large number of series
         if self.subset_flag:
-            df_subset = subset_series(df_wide_numeric, list((weights.get(i)) for i in df_wide_numeric.columns), n=self.subset, random_state=random_seed)
+            df_subset = subset_series(
+                df_wide_numeric,
+                list((weights.get(i)) for i in df_wide_numeric.columns),
+                n=self.subset, random_state=random_seed)
             if self.verbose > 1:
                 print(f'First subset is of: {df_subset.columns}')
         else:
@@ -553,7 +560,10 @@ class AutoTS(object):
 
                 # subset series (if used) and take a new train/test split
                 if self.subset_flag:
-                    df_subset = subset_series(current_slice, list((weights.get(i)) for i in current_slice.columns), n=self.subset, random_state=random_seed)
+                    df_subset = subset_series(
+                        current_slice,
+                        list((weights.get(i)) for i in current_slice.columns),
+                        n=self.subset, random_state=(random_seed + y + 1))
                     if self.verbose > 1:
                         print(f'{y + 1} subset is of: {df_subset.columns}')
                 else:
@@ -1100,7 +1110,7 @@ def fake_regressor(df_long, forecast_length: int = 14,
                    id_col: str = 'series_id',
                    frequency: str = 'infer', aggfunc: str = 'first',
                    drop_most_recent: int = 0, na_tolerance: float = 0.95,
-                   drop_data_older_than_periods: int = 10000,
+                   drop_data_older_than_periods: int = 100000,
                    dimensions: int = 1):
     """Create a fake regressor of random numbers for testing purposes."""
     from autots.tools.shaping import long_to_wide

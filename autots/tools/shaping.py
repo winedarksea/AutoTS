@@ -1,53 +1,34 @@
-"""
-Reshape
-"""
+"""Reshape data."""
 import numpy as np
 import pandas as pd
-# import typing
-# id_col: typing.Optional[str]=None
 
-def long_to_wide(df, date_col: str = 'datetime', value_col: str = 'value', id_col: str = 'series_id', 
-                 frequency: str = "infer", na_tolerance: float = 0.99,
-                 drop_data_older_than_periods: int = 100000, 
-                 drop_most_recent: int = 0, aggfunc: str ='first',
+
+def long_to_wide(df, date_col: str = 'datetime', value_col: str = 'value',
+                 id_col: str = 'series_id',
+                 frequency: str = "infer", na_tolerance: float = 0.999,
+                 drop_data_older_than_periods: int = 100000,
+                 drop_most_recent: int = 0, aggfunc: str = 'first',
                  verbose: int = 1):
     """
-    Takes long data and converts into wide, cleaner data
-    
-    args:
-    ========
-    
-        :param df: - a pandas dataframe having three columns:
-        :type df: pandas.DataFrame
-            
-            :param date_col: - the name of the column containing dates, preferrably already in pandas datetime format
-            :type date_col: str
-            
-            :param value_col: - the name of the column with the values of the time series (ie sales $)
-            :type value_col: str
-            
-            :param id_col: - name of the id column, unique for each time series
-            :type id_col: str
-        
-        :param frequency: - frequency in string of alias for DateOffset object, normally "1D" -daily, "MS" -month start etc.
+    Take long data and convert into wide, cleaner data.
+
+    Args:
+        df (pd.DataFrame) - a pandas dataframe having three columns:
+        date_col (str) - the name of the column containing dates, preferrably already in pandas datetime format
+        value_col (str): - the name of the column with the values of the time series (ie sales $) 
+        id_col (str): - name of the id column, unique for each time series
+
+        frequency (str): - frequency in string of alias for DateOffset object, normally "1D" -daily, "MS" -month start etc.
             currently, aliases are listed somewhere in here: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html
-        :type frequency: str
-        
-        :param na_tolerance: - allow up to this percent of values to be NaN, else drop the entire series
+        na_tolerance (float): - allow up to this percent of values to be NaN, else drop the entire series
             the default of 0.95 means a series can be 95% NaN values and still be included.
-        :type na_tolerance: float
-        
-        :param drop_data_older_than_periods: - cut off older data because eventually you just get too much
+        drop_data_older_than_periods (int): - cut off older data because eventually you just get too much
             10,000 is meant to be rather high, normally for daily data I'd use only the last couple of years, say 1500 samples
-        :type drop_data_older_than_periods: int
-        
-        :param drop_most_recent: - if to drop the most recent data point
+        drop_most_recent (int): - if to drop the most recent data point
             useful if you pull monthly data before month end, and you don't want an incomplete month appearing complete
-        :type drop_most_recent: int
-        
-        :param aggfunc: - passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
-            other options include "mean" and other numpy functions
-        :type aggfunc: str
+        aggfunc (str): - passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
+            other options include "mean" and other numpy functions, beware data *must* already be input as numeric type for these to work.
+            if categorical data is provided, `aggfunc='first'` is recommended
     """
     df_long = df.copy()
 
@@ -57,7 +38,7 @@ def long_to_wide(df, date_col: str = 'datetime', value_col: str = 'value', id_co
                                            infer_datetime_format=True)
     except Exception:
         raise ValueError("Could not convert date to datetime format. Incorrect column name or preformat with pandas to_datetime")
-    
+
     # handle no id_col for if only one time series
     if (id_col in [None, 'None']):
         df_long[id_col] = 'First'
@@ -68,48 +49,53 @@ def long_to_wide(df, date_col: str = 'datetime', value_col: str = 'value', id_co
 
     # pivot to different wide shape
     df_wide = df_long.pivot_table(values=value_col, index=date_col,
-                                  columns=id_col, aggfunc = aggfunc)
+                                  columns=id_col, aggfunc=aggfunc)
     df_wide = df_wide.sort_index(ascending=True)
-    
-    # drop older data, because too much of a good thing...
-    # okay, so technically it may not be periods until after asfreq, but whateva
-    if str(drop_data_older_than_periods).isdigit():
-        df_wide = df_wide.tail(int(drop_data_older_than_periods))
-    
+
     # infer frequency
     if frequency == 'infer':
         frequency = pd.infer_freq(df_wide.index, warn=True)
-        if frequency == None:
-            # hack to get around data which has a few oddities
-            frequency = pd.infer_freq(df_wide.head(10).index, warn=True)
-        if frequency == None:
+        if frequency is None:
             # hack to get around data which has a few oddities
             frequency = pd.infer_freq(df_wide.tail(10).index, warn=True)
+        if frequency is None:
+            # hack to get around data which has a few oddities
+            frequency = pd.infer_freq(df_wide.head(10).index, warn=True)
         if verbose > 0:
             print("Inferred frequency is: {}".format(str(frequency)))
-    if frequency == None and verbose >= 0:
+    if (frequency is None) and (verbose >= 0):
         print("Frequency is 'None'! Input frequency not recognized.")
 
-    # fill missing dates in index with NaN
+    # fill missing dates in index with NaN, resample to freq as necessary
     try:
         df_wide = df_wide.resample(frequency).apply(aggfunc)
     except Exception:
         df_wide = df_wide.asfreq(frequency, fill_value=np.nan)
 
-    # remove series with way too many NaNs - probably those of a different frequency, or brand new
-    na_threshold = int(len(df_wide.index) * (1 - na_tolerance))
-    initial_length = len(df_wide.columns)
-    df_wide = df_wide.dropna(axis=1, thresh=na_threshold)
-    if initial_length != len(df_wide.columns) and verbose >= 0:
-        print("Some columns dropped as having too many NaN (greater than na_tolerance)")
+    # drop older data, because too much of a good thing...
+    if str(drop_data_older_than_periods).isdigit():
+        if int(drop_data_older_than_periods) < df_wide.shape[0]:
+            if verbose >= 0:
+                print("Old data dropped by `drop_data_older_than_periods`.")
+            df_wide = df_wide.tail(int(drop_data_older_than_periods))
+
+    # remove series with way too many NaNs
+    na_tolerance = abs(float(na_tolerance))
+    na_tolerance = 1 if na_tolerance > 1 else na_tolerance
+    if na_tolerance < 1:
+        na_threshold = int(np.floor(df_wide.shape[0] * (1 - na_tolerance)))
+        initial_length = df_wide.shape[1]
+        df_wide = df_wide.dropna(axis=1, thresh=na_threshold)
+        if initial_length != df_wide.shape[1] and verbose >= 0:
+            print("Series dropped having too many NaN (see: `na_tolerance`)")
 
     if (df_wide.shape[1]) < 1:
         raise ValueError("All series filtered! Frequency may be incorrect")
 
     # drop most recent value when desired
-    if drop_most_recent > 0:
+    if (drop_most_recent > 0):
         df_wide.drop(df_wide.tail(drop_most_recent).index, inplace=True)
-    
+
     return pd.DataFrame(df_wide)
 
 
@@ -186,29 +172,27 @@ class NumericTransformer(object):
                    ], axis=1)[self.column_order]
         return df
 
+
 def subset_series(df, weights, n: int = 1000,
                   random_state: int = 2020):
-    """Expects a pandas DataFrame in format of output from long_to_wide().
-    That is, in the format where the Index is a Date
-    and Columns are each a unique time series
+    """Return a sample of time series.
 
     Args:
-        n (int): - number of unique time series to keep
-        na_tolerance (float): - allow up to this percent of values to be NaN, else drop the entire series
-            default is 1.0, allow all NaNs, primarily handled instead by long_to_wide
-        random_state (int): - random seed
+        df (pd.DataFrame): wide df with series as columns and DT index
+        n (int): number of unique time series to keep, or None
+        random_state (int): random seed
     """
-    # remove series with way too many NaNs - probably those of a different frequency, or brand new
-    # na_threshold = int(len(df.index) * (1 - na_tolerance))
-    # df = df.dropna(axis = 1, thresh=na_threshold)
+    if n is None:
+        return df
+    else:
+        n = int(n)
 
-    if isinstance(n, (int, float, complex)) and not isinstance(n, bool):
-        if n > len(df.shape[1]):
-            return df
-        else:
-            df = df.sample(n, axis=1, random_state=random_state,
-                           replace=False, weights=weights)
-            return df
+    if n > df.shape[1]:
+        return df
+    else:
+        df = df.sample(n, axis=1, random_state=random_state,
+                       replace=False, weights=weights)
+        return df
 
 
 def simple_train_test_split(df, forecast_length: int = 10,
