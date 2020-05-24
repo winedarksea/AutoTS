@@ -94,11 +94,10 @@ Tensorflow GPU backend may crash on occasion.
 	* renumber all Ensemble to 2 where Horizontal
 * test submission
 * test whether bottom up significantly overestimates on rollup
-* keyboard interrupt of model only
-* pickle result file with all of result object
 
 # To-Do
 * drop duplicates as function of TemplateEvalObject
+* fake date dataset of many series to improve General Template
 * better document ensembling
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d

@@ -41,7 +41,7 @@ model = AutoTS(forecast_length=forecast_length, frequency='infer',
                ensemble='simple,distance,probabilistic-max,horizontal-max',
                constraint=2,
                max_generations=2, num_validations=2,
-               validation_method='even',
+               validation_method='backwards',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=0.1,
                max_per_model_class=None,
@@ -56,11 +56,11 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
     df_long, dimensions=4, forecast_length=forecast_length,
     date_col='datetime', value_col='value', id_col='series_id')
 
-# model = model.import_results('test.pickle')
+model = model.import_results('test.pickle')
 model = model.fit(df_long,
                   future_regressor=future_regressor_train2d,
                   # weights=weights_hourly,
-                  # result_file='test.pickle',
+                  result_file='test.pickle',
                   date_col='datetime', value_col='value',
                   id_col='series_id')
 

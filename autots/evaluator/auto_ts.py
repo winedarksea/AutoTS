@@ -971,7 +971,11 @@ or otherwise increase models available."""
         Input can be filename with .csv or .pickle.
         or can be a DataFrame of model results or a full TemplateEvalObject
         """
-        if isinstance(filename, pd.DataFrame) or ".csv" in filename:
+        csv_flag = False
+        if isinstance(filename, str):
+            if ".csv" in filename:
+                csv_flag = True
+        if isinstance(filename, pd.DataFrame) or csv_flag:
             if ".csv" not in filename:
                 past_results = filename.copy()
             else:
