@@ -11,7 +11,7 @@ from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 forecast_length = 4
-df_long = load_hourly()
+df_long = load_monthly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -21,7 +21,7 @@ model_list = [
               'ZeroesNaive', 'LastValueNaive', 'AverageValueNaive',
               'GLS', 'GLM', 'SeasonalNaive'
               # 'ETS', 'RollingRegression', 'ARIMA',
-              'FBProphet', 'VAR', 'GluonTS'
+              ,'FBProphet', 'VAR', 'GluonTS'
               # , 'VECM', 'DynamicFactor'
               # ,'VARMAX', 'GluonTS'
               ]
@@ -45,7 +45,8 @@ model = AutoTS(forecast_length=forecast_length, frequency='infer',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=0.1,
                max_per_model_class=None,
-               drop_most_recent=0, verbose=0)
+               model_interrupt=False,
+               drop_most_recent=0, verbose=1)
 
 
 future_regressor_train, future_regressor_forecast = fake_regressor(
@@ -55,11 +56,11 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
     df_long, dimensions=4, forecast_length=forecast_length,
     date_col='datetime', value_col='value', id_col='series_id')
 
-# model = model.import_results('04222020test.csv')
+# model = model.import_results('test.pickle')
 model = model.fit(df_long,
                   future_regressor=future_regressor_train2d,
                   # weights=weights_hourly,
-                  # result_file='04222027test.csv',
+                  # result_file='test.pickle',
                   date_col='datetime', value_col='value',
                   id_col='series_id')
 

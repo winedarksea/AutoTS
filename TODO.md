@@ -76,8 +76,6 @@ ARIMA with User or Holiday ValueError('Can only compare identically-labeled Data
 Drop Most Recent does not play well logically with added external (future) regressors.
 FastICA 'array must not contain infs or NaNs'
 How do fillna methods handle datasets that have entirely NaN series?
-Horizontal models and NaN in per_series?
-Subsetting for validation samples seems to be funky.
 VAR ValueError('Length of passed values is 4, index implies 9',)
 WindowRegression + KerasRNN + 1step + univariate = ValueError('Length mismatch: Expected axis has 54 elements, new values have 9 elements',)
 Is Template Eval Error: ValueError('array must not contain infs or NaNs',) related to Point to Probability HISTORIC QUANTILE?
@@ -95,10 +93,12 @@ Tensorflow GPU backend may crash on occasion.
 * figure out how to bring together all the different training templates
 	* renumber all Ensemble to 2 where Horizontal
 * test submission
-* Linux with no GPU, superfast + GluonTS, WindowRegression
 * test whether bottom up significantly overestimates on rollup
+* keyboard interrupt of model only
+* pickle result file with all of result object
 
 # To-Do
+* drop duplicates as function of TemplateEvalObject
 * better document ensembling
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d

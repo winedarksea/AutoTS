@@ -57,8 +57,11 @@ class AutoTS(object):
             0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
             Useful in (unrecommended) cases where forecast_length > training length. 
         remove_leading_zeroes (bool): replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn't started yet.
+        model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
+            if True, KeyboardInterrupts attempt to only quit current model.
+            if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give slightly more output.
-        
+
     Attributes:
         best_model (pandas.DataFrame): DataFrame containing template for the best ranked model
         regression_check (bool): If True, the best_model uses an input 'User' future_regressor
@@ -96,6 +99,7 @@ class AutoTS(object):
                  validation_method: str = 'even',
                  min_allowed_train_percent: float = 0.5,
                  remove_leading_zeroes: bool = False,
+                 model_interrupt: bool = False,
                  verbose: int = 1
                  ):
         self.forecast_length = int(abs(forecast_length))
@@ -120,6 +124,7 @@ class AutoTS(object):
         self.min_allowed_train_percent = min_allowed_train_percent
         self.max_generations = max_generations
         self.remove_leading_zeroes = remove_leading_zeroes
+        self.model_interrupt = model_interrupt
         self.verbose = int(verbose)
         if self.ensemble == 'all':
             self.ensemble = 'simple,distance'
@@ -225,7 +230,9 @@ class AutoTS(object):
             id_col (str): name of column identifying different series.
             future_regressor (numpy.Array): single external regressor matching train.index
             weights (dict): {'colname1': 2, 'colname2': 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
-            result_file (str): Location of template/results.csv to be saved at intermediate/final time.
+            result_file (str): results saved on each new generation. Does not include validation rounds.
+                ".csv" save model results table.
+                ".pickle" saves full object, including ensemble information.
         """
         self.weights = weights
         self.date_col = date_col
@@ -258,12 +265,9 @@ class AutoTS(object):
 
         # clean up result_file input, if given.
         if result_file is not None:
-            try:
-                if ".csv" not in str(result_file):
-                    print("Result filename must be a valid 'filename.csv'")
-                    result_file = None
-            except Exception:
-                print("Result filename must be a valid 'filename.csv'")
+            formats = ['.csv', '.pickle']
+            if not any(x in result_file for x in formats):
+                print("result_file must be a valid str with .csv or .pickle")
                 result_file = None
 
         # set random seeds for environment
@@ -392,6 +396,7 @@ class AutoTS(object):
             startTimeStamps=self.startTimeStamps,
             template_cols=template_cols,
             random_seed=random_seed,
+            model_interrupt=self.model_interrupt,
             verbose=verbose)
         model_count = template_result.model_count
 
@@ -402,7 +407,7 @@ class AutoTS(object):
             metric_weighting=metric_weighting,
             prediction_interval=prediction_interval)
         if result_file is not None:
-            self.initial_results.model_results.to_csv(result_file, index=False)
+            self.initial_results.save(result_file)
 
         # now run new generations, trying more models based on past successes.
         current_generation = 0
@@ -438,6 +443,7 @@ class AutoTS(object):
                 holiday_country=holiday_country,
                 startTimeStamps=self.startTimeStamps,
                 template_cols=template_cols,
+                model_interrupt=self.model_interrupt,
                 random_seed=random_seed, verbose=verbose
                 )
             model_count = template_result.model_count
@@ -449,8 +455,7 @@ class AutoTS(object):
                 metric_weighting=metric_weighting,
                 prediction_interval=prediction_interval)
             if result_file is not None:
-                self.initial_results.model_results.to_csv(result_file,
-                                                          index=False)
+                self.initial_results.save(result_file)
 
         # try ensembling
         if ensemble not in [None, 'none']:
@@ -474,17 +479,18 @@ class AutoTS(object):
                     holiday_country=holiday_country,
                     startTimeStamps=self.startTimeStamps,
                     template_cols=template_cols,
+                    model_interrupt=self.model_interrupt,
                     random_seed=random_seed, verbose=verbose)
                 model_count = template_result.model_count
                 # capture results from lower-level template run
-                self.initial_results = self.initial_results.concat(template_result)
+                self.initial_results = self.initial_results.concat(
+                    template_result)
                 self.initial_results.model_results['Score'] = generate_score(
                     self.initial_results.model_results,
                     metric_weighting=metric_weighting,
                     prediction_interval=prediction_interval)
                 if result_file is not None:
-                    self.initial_results.model_results.to_csv(result_file,
-                                                              index=False)
+                    self.initial_results.save(result_file)
             except Exception as e:
                 print(f"Ensembling Error: {e}")
 
@@ -607,6 +613,7 @@ class AutoTS(object):
                     holiday_country=holiday_country,
                     startTimeStamps=self.startTimeStamps,
                     template_cols=self.template_cols,
+                    model_interrupt=self.model_interrupt,
                     random_seed=random_seed, verbose=verbose,
                     validation_round=(y + 1))
                 model_count = template_result.model_count
@@ -706,6 +713,7 @@ or otherwise increase models available."""
                     holiday_country=holiday_country,
                     startTimeStamps=self.startTimeStamps,
                     template_cols=template_cols,
+                    model_interrupt=self.model_interrupt,
                     random_seed=random_seed, verbose=verbose)
                 # capture results from lower-level template run
                 template_result.model_results['TotalRuntime'].fillna(
@@ -719,8 +727,7 @@ or otherwise increase models available."""
                     metric_weighting=metric_weighting,
                     prediction_interval=prediction_interval)
                 if result_file is not None:
-                    self.initial_results.model_results.to_csv(result_file,
-                                                              index=False)
+                    self.initial_results.save(result_file)
             except Exception as e:
                 if self.verbose >= 0:
                     print(f"Ensembling Error: {e}")
@@ -959,22 +966,37 @@ or otherwise increase models available."""
         return self
 
     def import_results(self, filename):
-        """Add results from another run on the same data."""
-        if isinstance(filename, pd.DataFrame):
-            past_results = filename.copy()
+        """Add results from another run on the same data.
+
+        Input can be filename with .csv or .pickle.
+        or can be a DataFrame of model results or a full TemplateEvalObject
+        """
+        if isinstance(filename, pd.DataFrame) or ".csv" in filename:
+            if ".csv" not in filename:
+                past_results = filename.copy()
+            else:
+                past_results = pd.read_csv(filename)
+            # remove those that succeeded (ie had no Exception)
+            past_results = past_results[pd.isnull(past_results['Exceptions'])]
+            # remove validation results
+            past_results = past_results[(past_results['ValidationRound']) == 0]
+            past_results['TotalRuntime'] = pd.to_timedelta(
+                past_results['TotalRuntime'])
+            # combine with any existing results
+            self.initial_results.model_results = pd.concat(
+                [past_results, self.initial_results.model_results],
+                axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+            self.initial_results.model_results.drop_duplicates(
+                subset=self.template_cols, keep='first', inplace=True)
         else:
-            past_results = pd.read_csv(filename)
-        # remove those that succeeded (ie had no Exception)
-        past_results = past_results[pd.isnull(past_results['Exceptions'])]
-        # remove validation results
-        past_results = past_results[(past_results['ValidationRound']) == 0]
-        past_results['TotalRuntime'] = pd.to_timedelta(past_results['TotalRuntime'])
-        # combine with any existing results
-        self.initial_results.model_results = pd.concat(
-            [past_results, self.initial_results.model_results],
-            axis=0, ignore_index=True, sort=False).reset_index(drop=True)
-        self.initial_results.model_results.drop_duplicates(
-            subset=self.template_cols, keep='first', inplace=True)
+            if isinstance(filename, TemplateEvalObject):
+                new_obj = filename
+            elif '.pickle' in filename:
+                import pickle
+                new_obj = pickle.load(open(filename, "rb"))
+            else:
+                raise ValueError("import type not recognized.")
+            self.initial_results = self.initial_results.concat(new_obj)
         return self
 
 

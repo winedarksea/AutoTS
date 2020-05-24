@@ -677,6 +677,16 @@ class TemplateEvalObject(object):
                 axis=0, sort=False)
         self.model_count = self.model_count + another_eval.model_count
         return self
+    def save(self, filename):
+        """Save results to a file."""
+        if '.csv' in filename:
+            self.model_results.to_csv(filename, index=False)
+        elif '.pickle' in filename:
+            import pickle
+            with open(filename, "wb") as f:
+                pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+        else:
+            raise ValueError("filename not .csv or .pickle")
 
 
 def unpack_ensemble_models(template,
@@ -827,6 +837,7 @@ def TemplateWizard(template, df_train, df_test, weights,
                    holiday_country: str = 'US', startTimeStamps=None,
                    random_seed: int = 2020, verbose: int = 0,
                    validation_round: int = 0,
+                   model_interrupt: bool = False,
                    template_cols: list = ['Model', 'ModelParameters',
                                           'TransformationParameters',
                                           'Ensemble']):
@@ -852,6 +863,8 @@ def TemplateWizard(template, df_train, df_test, weights,
         future_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
+        validation_round (int): int passed to record current validation.
+        model_interrupt (bool): if True, keyboard interrupts are caught and only break current model eval.
         template_cols (list): column names of columns used as model template
 
     Returns:
@@ -956,7 +969,27 @@ def TemplateWizard(template, df_train, df_test, weights,
                 template_result.per_series_mae2 = pd.concat(
                     [template_result.per_series_mae2, cur_mae2],
                     axis=0)
-
+        except KeyboardInterrupt:
+            if model_interrupt:
+                result = pd.DataFrame({
+                    'ID': create_model_id(model_str,
+                                          parameter_dict,
+                                          transformation_dict),
+                    'Model': model_str,
+                    'ModelParameters': json.dumps(parameter_dict),
+                    'TransformationParameters': json.dumps(transformation_dict),
+                    'Ensemble': ensemble_input,
+                    'TransformationRuntime': datetime.timedelta(0),
+                    'FitRuntime': datetime.timedelta(0),
+                    'PredictRuntime': datetime.timedelta(0),
+                    'TotalRuntime': datetime.timedelta(0),
+                    'Exceptions': "KeyboardInterrupt by user",
+                    'Runs': 1,
+                    'ValidationRound': validation_round
+                    }, index=[0])
+                template_result.model_results = pd.concat([template_result.model_results, result], axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+            else:
+                raise KeyboardInterrupt
         except Exception as e:
             if verbose >= 0:
                 print('Template Eval Error: {} in model {}: {}'.format((repr(e)), template_result.model_count, model_str))
@@ -1139,32 +1172,6 @@ def NewGeneticTemplate(model_results, submitted_parameters,
         elif model_type in recombination_approved:
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 4
-            trans_dicts = _trans_dicts(current_ops, best=best, n=n)
-            fir = json.loads(current_ops.iloc[0, :]['ModelParameters'])
-            if current_ops.shape[0] > 1:
-                r_id = np.random.randint(1, (current_ops.shape[0]))
-                sec = json.loads(current_ops.iloc[r_id, :]['ModelParameters'])
-            else:
-                sec = ModelMonster(model_type).get_new_params()
-            r = ModelMonster(model_type).get_new_params()
-            r2 = ModelMonster(model_type).get_new_params()
-            arr = [fir, sec, r2, r]
-            model_dicts = list()
-            for _ in range(n):
-                r_sel = np.random.choice(arr, size=2, replace=False)
-                a = r_sel[0]
-                b = r_sel[1]
-                c = dict_recombination(a, b)
-                model_dicts.append(json.dumps(c))
-            new_row = pd.DataFrame({
-                'Model': model_type,
-                'ModelParameters': model_dicts,
-                'TransformationParameters': trans_dicts,
-                'Ensemble': 0
-                }, index=list(range(n)))
-        elif model_type in borrow:
-            current_ops = sorted_results[sorted_results['Model'] == model_type]
-            n = 3
             trans_dicts = _trans_dicts(current_ops, best=best, n=n)
             fir = json.loads(current_ops.iloc[0, :]['ModelParameters'])
             if current_ops.shape[0] > 1:

@@ -50,7 +50,8 @@ def Best3Ensemble(ensemble_params, forecasts_list, forecasts,
     return ens_result
 
 
-def DistEnsemble(ensemble_params, forecasts_list, forecasts, lower_forecasts, upper_forecasts, forecasts_runtime, prediction_interval):
+def DistEnsemble(ensemble_params, forecasts_list, forecasts, lower_forecasts,
+                 upper_forecasts, forecasts_runtime, prediction_interval):
     """Generate forecast for distance ensemble."""
     first_model_index = forecasts_list.index(ensemble_params['FirstModel'])
     second_model_index = forecasts_list.index(ensemble_params['SecondModel'])
@@ -131,8 +132,8 @@ def HorizontalEnsemble(ensemble_params, forecasts_list, forecasts,
 
 
 def HDistEnsemble(ensemble_params, forecasts_list, forecasts,
-                       lower_forecasts, upper_forecasts, forecasts_runtime,
-                       prediction_interval):
+                  lower_forecasts, upper_forecasts, forecasts_runtime,
+                  prediction_interval):
     """Generate forecast for per_series per distance ensembling."""
     id_list = list(ensemble_params['models'].keys())
     mod_dic = {x: idx for idx, x in enumerate(forecasts_list) if x in id_list}
@@ -174,7 +175,7 @@ def HDistEnsemble(ensemble_params, forecasts_list, forecasts,
         # lower
         c_fore = lower_forecasts[l_idx][series]
         l_forecast_df2 = pd.concat([l_forecast_df2, c_fore], axis=1)
-        
+
     forecast_df = pd.concat([forecast_df.head(dist_n),
                              forecast_df2.tail(dist_last)], axis=0)
     u_forecast_df = pd.concat([u_forecast_df.head(dist_n),
@@ -202,7 +203,6 @@ def HDistEnsemble(ensemble_params, forecasts_list, forecasts,
     return ens_result
 
 
-
 def EnsembleForecast(ensemble_str, ensemble_params, forecasts_list,
                      forecasts, lower_forecasts, upper_forecasts,
                      forecasts_runtime, prediction_interval):
@@ -226,7 +226,7 @@ def EnsembleForecast(ensemble_str, ensemble_params, forecasts_list,
             ensemble_params, forecasts_list, forecasts, lower_forecasts,
             upper_forecasts, forecasts_runtime, prediction_interval)
         return ens_forecast
-    
+
     if ensemble_params['model_name'].lower().strip() == 'hdist':
         ens_forecast = HDistEnsemble(
             ensemble_params, forecasts_list, forecasts, lower_forecasts,
@@ -434,7 +434,7 @@ def HorizontalTemplateGenerator(per_series, model_results,
                                 forecast_length: int = 14,
                                 ensemble: str = "horizontal",
                                 subset_flag: bool = True,
-                                per_series2 = None
+                                per_series2=None
                                 ):
     """Generate horizontal ensemble templates given a table of results."""
     ensemble_templates = pd.DataFrame()
@@ -514,7 +514,7 @@ def HorizontalTemplateGenerator(per_series, model_results,
                 cur_mods = cur_mods.sort_values(ascending=False).head(1)
                 mods = mods.combine(cur_mods, max, fill_value=0)
                 rm_cols = tr_df[tr_df.isin(mods.index.tolist())]
-                rm_cols = rm_cols.dropna(how='all',axis=1).columns
+                rm_cols = rm_cols.dropna(how='all', axis=1).columns
                 per_series_des = per_series.copy().drop(mods.index, axis=0)
                 per_series_des = per_series_des.drop(rm_cols, axis=1)
                 if per_series_des.shape[1] == 0:
@@ -543,5 +543,5 @@ def HorizontalTemplateGenerator(per_series, model_results,
             best5_params = pd.DataFrame(best5_params, index=[0])
             ensemble_templates = pd.concat([ensemble_templates,
                                             best5_params],
-                                           axis=0, ignore_index=True)            
+                                           axis=0, ignore_index=True)        
     return ensemble_templates
