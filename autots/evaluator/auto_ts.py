@@ -60,7 +60,7 @@ class AutoTS(object):
         model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
-        verbose (int): setting to 0 or lower should reduce most output. Higher numbers give slightly more output.
+        verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
 
     Attributes:
         best_model (pandas.DataFrame): DataFrame containing template for the best ranked model
@@ -863,9 +863,16 @@ or otherwise increase models available."""
         else:
             return df_forecast
 
-    def results(self):
-        """Convenience function to return tested models table."""
-        return self.initial_results.model_results
+    def results(self, result_set: str = 'initial'):
+        """Convenience function to return tested models table.
+
+        Args:
+            result_set (str): 'validation' or 'initial'
+        """
+        if result_set == 'validation':
+            return self.validation_results.model_results
+        else:
+            return self.initial_results.model_results
 
     def export_template(self, filename, models: str = 'best', n: int = 5,
                         max_per_model_class: int = None,

@@ -56,11 +56,11 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
     df_long, dimensions=4, forecast_length=forecast_length,
     date_col='datetime', value_col='value', id_col='series_id')
 
-model = model.import_results('test.pickle')
+# model = model.import_results('test.pickle')
 model = model.fit(df_long,
                   future_regressor=future_regressor_train2d,
                   # weights=weights_hourly,
-                  result_file='test.pickle',
+                  # result_file='test.pickle',
                   date_col='datetime', value_col='value',
                   id_col='series_id')
 
@@ -72,9 +72,9 @@ prediction = model.predict(future_regressor=future_regressor_forecast2d)
 # point forecasts dataframe
 forecasts_df = prediction.forecast
 # accuracy of all tried model results (not including cross validation)
-initial_results = model.initial_results.model_results
+initial_results = model.results()
 # validation results
-validation_results = model.validation_results.model_results
+validation_results = model.results("validation")
 # just errors
 error_results = model.error_templates
 

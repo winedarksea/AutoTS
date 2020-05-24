@@ -218,7 +218,7 @@ Nearly full functionality should be maintained without statsmodels.</p>
 </div>
 <p>Download Anaconda or Miniconda.</p>
 <p>(install Visual Studio if on Windows)</p>
-<p>If you have an Nvidia GPU, download NVIDIA CUDA (10.1 is currently supported by all of mxnet, Tensorflow, and Pytorch) and CuDNN.
+<p>If you have an Nvidia GPU, download NVIDIA CUDA and CuDNN.
 MKL is included with <code class="docutils literal notranslate"><span class="pre">anaconda</span></code>.</p>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">conda</span> <span class="k">create</span> <span class="o">-</span><span class="n">n</span> <span class="n">timeseries</span> <span class="n">python</span><span class="o">=</span><span class="mi">3</span><span class="p">.</span><span class="mi">6</span>
 <span class="n">conda</span> <span class="n">activate</span> <span class="n">timeseries</span>
@@ -250,7 +250,7 @@ Since ensembles are based on the test dataset, it would also be wise to set <cod
 </div>
 <div class="section" id="too-much-training-data">
 <h3>Too much training data.<a class="headerlink" href="#too-much-training-data" title="Permalink to this headline">¶</a></h3>
-<p>Too much data is already handled to some extent by ‘context_slicer’ in the transformations, which tests using less training data.
+<p>Too much data is already handled to some extent by <code class="docutils literal notranslate"><span class="pre">'context_slicer'</span></code> in the transformations, which tests using less training data.
 That said, large datasets will be slower and more memory intensive, for high frequency data (say hourly) it can often be advisable to roll that up to a higher level (daily, hourly, etc.).
 Rollup can be accomplished by specifying the frequency = your rollup frequency, and then setting the <code class="docutils literal notranslate"><span class="pre">agg_func=np.sum</span></code> or ‘mean’ or other appropriate statistic.</p>
 </div>
@@ -266,7 +266,7 @@ Only a handful of models support adding regressors, and not all handle multiple 
 The recommended way to provide regressors is as a pd.Series/pd.Dataframe with a DatetimeIndex.</p>
 <p>Don’t know the future? Don’t worry, the models can handle quite a lot of parallel time series, which is another way to add information.
 Additional regressors can be passed through as additional time series to forecast as part of df_long.
-The some models here can utilize the additional information they provide to help improve forecast quality.
+Some models here can utilize the additional information they provide to help improve forecast quality.
 To prevent forecast accuracy for considering these additional series too heavily, input series weights that lower or remove their forecast accuracy from consideration.</p>
 </div>
 <div class="section" id="categorical-data">

@@ -36,6 +36,7 @@ Input data is expected to come in a 'long' format with three columns:
 The column name for each of these is passed to .fit(). 
 
 ```
+
 # also: _hourly, _daily, _weekly, or _yearly
 from autots.datasets import load_monthly 
 df_long = load_monthly()
@@ -55,10 +56,10 @@ print(model)
 prediction = model.predict()
 # point forecasts dataframe
 forecasts_df = prediction.forecast
-# accuracy of all tried model results (not including cross validation)
-model_results = model.initial_results.model_results
-# and including cross validation
-validation_results = model.validation_results.model_results
+# accuracy of all tried model results
+model_results = model.results()
+# and aggregated from cross validation
+validation_results = model.results("validation")
 
 ```
 

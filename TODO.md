@@ -94,6 +94,7 @@ Tensorflow GPU backend may crash on occasion.
 	* renumber all Ensemble to 2 where Horizontal
 * test submission
 * test whether bottom up significantly overestimates on rollup
+* explore if any negatives in training data
 
 # To-Do
 * drop duplicates as function of TemplateEvalObject

@@ -240,7 +240,7 @@ It will be sensitive to the transformations of the data.</p>
 </div>
 <div class="section" id="module-autots.tools.shaping">
 <span id="autots-tools-shaping-module"></span><h2>autots.tools.shaping module<a class="headerlink" href="#module-autots.tools.shaping" title="Permalink to this headline">¶</a></h2>
-<p>Reshape</p>
+<p>Reshape data.</p>
 <dl class="class">
 <dt id="autots.tools.shaping.NumericTransformer">
 <em class="property">class </em><code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">NumericTransformer</code><span class="sig-paren">(</span><em class="sig-param">na_strings: list = ['', ' ', 'NULL', 'NA', 'NaN', 'na', 'nan'], categorical_impute_strategy: str = 'constant', verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.NumericTransformer" title="Permalink to this definition">¶</a></dt>
@@ -268,91 +268,50 @@ It will be sensitive to the transformations of the data.</p>
 
 <dl class="function">
 <dt id="autots.tools.shaping.long_to_wide">
-<code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">long_to_wide</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = 'series_id'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">na_tolerance: float = 0.99</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">verbose: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.long_to_wide" title="Permalink to this definition">¶</a></dt>
-<dd><p>Takes long data and converts into wide, cleaner data</p>
-<blockquote>
-<div><dl class="field-list">
-<dt class="field-odd">param df</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p>a pandas dataframe having three columns:</p></li>
-</ul>
-</dd>
-<dt class="field-even">type df</dt>
-<dd class="field-even"><p>pandas.DataFrame</p>
+<code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">long_to_wide</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = 'series_id'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">na_tolerance: float = 0.999</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">verbose: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.long_to_wide" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take long data and convert into wide, cleaner data.</p>
 <dl class="field-list simple">
-<dt class="field-odd">param date_col</dt>
+<dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p>the name of the column containing dates, preferrably already in pandas datetime format</p></li>
-</ul>
-</dd>
-<dt class="field-even">type date_col</dt>
-<dd class="field-even"><p>str</p>
-</dd>
-<dt class="field-odd">param value_col</dt>
-<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – </p></li>
+<li><p><strong>date_col</strong> (<em>str</em>) – </p></li>
+<li><p><strong>value_col</strong> (<em>str</em>) – <ul>
 <li><p>the name of the column with the values of the time series (ie sales $)</p></li>
 </ul>
-</dd>
-<dt class="field-even">type value_col</dt>
-<dd class="field-even"><p>str</p>
-</dd>
-<dt class="field-odd">param id_col</dt>
-<dd class="field-odd"><ul class="simple">
+</p></li>
+<li><p><strong>id_col</strong> (<em>str</em>) – <ul>
 <li><p>name of the id column, unique for each time series</p></li>
 </ul>
-</dd>
-<dt class="field-even">type id_col</dt>
-<dd class="field-even"><p>str</p>
-</dd>
-</dl>
-</dd>
-<dt class="field-odd">param frequency</dt>
-<dd class="field-odd"><ul class="simple">
+</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – <ul>
 <li><p>frequency in string of alias for DateOffset object, normally “1D” -daily, “MS” -month start etc.</p></li>
 </ul>
 <p>currently, aliases are listed somewhere in here: <a class="reference external" href="https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html">https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html</a></p>
-</dd>
-<dt class="field-even">type frequency</dt>
-<dd class="field-even"><p>str</p>
-</dd>
-<dt class="field-odd">param na_tolerance</dt>
-<dd class="field-odd"><ul class="simple">
+</p></li>
+<li><p><strong>na_tolerance</strong> (<em>float</em>) – <ul>
 <li><p>allow up to this percent of values to be NaN, else drop the entire series</p></li>
 </ul>
 <p>the default of 0.95 means a series can be 95% NaN values and still be included.</p>
-</dd>
-<dt class="field-even">type na_tolerance</dt>
-<dd class="field-even"><p>float</p>
-</dd>
-<dt class="field-odd">param drop_data_older_than_periods</dt>
-<dd class="field-odd"><ul class="simple">
+</p></li>
+<li><p><strong>drop_data_older_than_periods</strong> (<em>int</em>) – <ul>
 <li><p>cut off older data because eventually you just get too much</p></li>
 </ul>
 <p>10,000 is meant to be rather high, normally for daily data I’d use only the last couple of years, say 1500 samples</p>
-</dd>
-<dt class="field-even">type drop_data_older_than_periods</dt>
-<dd class="field-even"><p>int</p>
-</dd>
-<dt class="field-odd">param drop_most_recent</dt>
-<dd class="field-odd"><ul class="simple">
+</p></li>
+<li><p><strong>drop_most_recent</strong> (<em>int</em>) – <ul>
 <li><p>if to drop the most recent data point</p></li>
 </ul>
 <p>useful if you pull monthly data before month end, and you don’t want an incomplete month appearing complete</p>
-</dd>
-<dt class="field-even">type drop_most_recent</dt>
-<dd class="field-even"><p>int</p>
-</dd>
-<dt class="field-odd">param aggfunc</dt>
-<dd class="field-odd"><ul class="simple">
+</p></li>
+<li><p><strong>aggfunc</strong> (<em>str</em>) – <ul>
 <li><p>passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime</p></li>
 </ul>
-<p>other options include “mean” and other numpy functions</p>
-</dd>
-<dt class="field-even">type aggfunc</dt>
-<dd class="field-even"><p>str</p>
+<p>other options include “mean” and other numpy functions, beware data <em>must</em> already be input as numeric type for these to work.
+if categorical data is provided, <cite>aggfunc=’first’</cite> is recommended</p>
+</p></li>
+</ul>
 </dd>
 </dl>
-</div></blockquote>
 </dd></dl>
 
 <dl class="function">
@@ -380,25 +339,13 @@ note this includes NaNs in current configuration</p>
 <dl class="function">
 <dt id="autots.tools.shaping.subset_series">
 <code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">subset_series</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">weights</em>, <em class="sig-param">n: int = 1000</em>, <em class="sig-param">random_state: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.subset_series" title="Permalink to this definition">¶</a></dt>
-<dd><p>Expects a pandas DataFrame in format of output from long_to_wide().
-That is, in the format where the Index is a Date
-and Columns are each a unique time series</p>
+<dd><p>Return a sample of time series.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>n</strong> (<em>int</em>) – <ul>
-<li><p>number of unique time series to keep</p></li>
-</ul>
-</p></li>
-<li><p><strong>na_tolerance</strong> (<em>float</em>) – <ul>
-<li><p>allow up to this percent of values to be NaN, else drop the entire series</p></li>
-</ul>
-<p>default is 1.0, allow all NaNs, primarily handled instead by long_to_wide</p>
-</p></li>
-<li><p><strong>random_state</strong> (<em>int</em>) – <ul>
-<li><p>random seed</p></li>
-</ul>
-</p></li>
+<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – wide df with series as columns and DT index</p></li>
+<li><p><strong>n</strong> (<em>int</em>) – number of unique time series to keep, or None</p></li>
+<li><p><strong>random_state</strong> (<em>int</em>) – random seed</p></li>
 </ul>
 </dd>
 </dl>

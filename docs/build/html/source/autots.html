@@ -122,7 +122,7 @@
 
 <dl class="class">
 <dt id="autots.AutoTS">
-<em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = None</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">figures: bool = False</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">na_tolerance: float = 0.99</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 0</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 1}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.05</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'even'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">max_generations: int = 5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">verbose: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 5</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = None</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">figures: bool = False</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 0</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 1}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.05</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'even'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Automate time series modeling using a genetic algorithm.</p>
 <dl class="field-list simple">
@@ -130,8 +130,9 @@
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – number of periods over which to evaluate forecast. Can be overriden later in .predict().</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – ‘infer’ or a specific pandas datetime offset. Can be used to force rollup of data (ie daily input, but frequency ‘M’ will rollup to monthly).</p></li>
-<li><p><strong>aggfunc</strong> (<em>str</em>) – if data is to be rolled up to a higher frequency (daily -&gt; monthly) or duplicate timestamps are included. Default ‘first’ removes duplicates, for rollup try ‘mean’ or np.sum. Beware numeric aggregations like ‘mean’ will not work with categorical features as cat-&gt;num occurs later.</p></li>
 <li><p><strong>prediction_interval</strong> (<em>float</em>) – 0-1, uncertainty range for upper and lower forecasts. Adjust range, but rarely matches actual containment.</p></li>
+<li><p><strong>max_generations</strong> (<em>int</em>) – number of genetic algorithms generations to run.
+More runs = longer runtime, generally better accuracy.</p></li>
 <li><p><strong>no_negatives</strong> (<em>bool</em>) – if True, all negative predictions are rounded up to 0.</p></li>
 <li><p><strong>constraint</strong> (<em>float</em>) – when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.</p></li>
 <li><p><strong>ensemble</strong> (<em>str</em>) – None, ‘simple’, ‘distance’</p></li>
@@ -140,7 +141,9 @@
 <li><p><strong>random_seed</strong> (<em>int</em>) – random seed allows (slightly) more consistent results.</p></li>
 <li><p><strong>holiday_country</strong> (<em>str</em>) – passed through to Holidays package for some models.</p></li>
 <li><p><strong>subset</strong> (<em>int</em>) – maximum number of series to evaluate at once. Useful to speed evaluation when many series are input.</p></li>
-<li><p><strong>na_tolerance</strong> (<em>float</em>) – 0 to 1. Series are dropped if they have more than this percent NaN. 0.95 here would allow data containing upto 95% NaN values.</p></li>
+<li><p><strong>aggfunc</strong> (<em>str</em>) – if data is to be rolled up to a higher frequency (daily -&gt; monthly) or duplicate timestamps are included. Default ‘first’ removes duplicates, for rollup try ‘mean’ or np.sum.
+Beware numeric aggregations like ‘mean’ will not work with non-numeric inputs.</p></li>
+<li><p><strong>na_tolerance</strong> (<em>float</em>) – 0 to 1. Series are dropped if they have more than this percent NaN. 0.95 here would allow series containing up to 95% NaN values.</p></li>
 <li><p><strong>metric_weighting</strong> (<em>dict</em>) – weights to assign to metrics, effecting how the ranking score is generated.</p></li>
 <li><p><strong>drop_most_recent</strong> (<em>int</em>) – option to drop n most recent data points. Useful, say, for monthly sales data where the current (unfinished) month is included.</p></li>
 <li><p><strong>drop_data_older_than_periods</strong> (<em>int</em>) – take only the n most recent timestamps</p></li>
@@ -151,12 +154,16 @@
 <li><p><strong>max_per_model_class</strong> (<em>int</em>) – of the models_to_validate what is the maximum to pass from any one model class/family.</p></li>
 <li><p><strong>validation_method</strong> (<em>str</em>) – ‘even’, ‘backwards’, or ‘seasonal n’ where n is an integer of seasonal
 ‘backwards’ is better for recency and for shorter training sets
-‘even splits’ the data into equally-sized slices best for more consistent data
+‘even’ splits the data into equally-sized slices best for more consistent data
 ‘seasonal n’ for example ‘seasonal 364’ would test all data on each previous year of the forecast_length that would immediately follow the training data.</p></li>
-<li><p><strong>min_allowed_train_percent</strong> (<em>float</em>) – useful in (unrecommended) cases where forecast_length &gt; training length. Percent of forecast length to allow as min training, else raises error.</p></li>
-<li><p><strong>max_generations</strong> (<em>int</em>) – umber of genetic algorithms generations to run. More runs = better chance of better accuracy.</p></li>
+<li><p><strong>min_allowed_train_percent</strong> (<em>float</em>) – percent of forecast length to allow as min training, else raises error.
+0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
+Useful in (unrecommended) cases where forecast_length &gt; training length.</p></li>
 <li><p><strong>remove_leading_zeroes</strong> (<em>bool</em>) – replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn’t started yet.</p></li>
-<li><p><strong>verbose</strong> (<em>int</em>) – setting to 0 or lower should reduce most output. Higher numbers give slightly more output.</p></li>
+<li><p><strong>model_interrupt</strong> (<em>bool</em>) – if False, KeyboardInterrupts quit entire program.
+if True, KeyboardInterrupts attempt to only quit current model.
+if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite>result_file</cite> in the event of accidental complete termination.</p></li>
+<li><p><strong>verbose</strong> (<em>int</em>) – setting to 0 or lower should reduce most output. Higher numbers give more output.</p></li>
 </ul>
 </dd>
 </dl>
@@ -214,7 +221,9 @@ the max number of each model class to include in template</p></li>
 <li><p><strong>id_col</strong> (<em>str</em>) – name of column identifying different series.</p></li>
 <li><p><strong>future_regressor</strong> (<em>numpy.Array</em>) – single external regressor matching train.index</p></li>
 <li><p><strong>weights</strong> (<em>dict</em>) – {‘colname1’: 2, ‘colname2’: 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.</p></li>
-<li><p><strong>result_file</strong> (<em>str</em>) – Location of template/results.csv to be saved at intermediate/final time.</p></li>
+<li><p><strong>result_file</strong> (<em>str</em>) – results saved on each new generation. Does not include validation rounds.
+“.csv” save model results table.
+“.pickle” saves full object, including ensemble information.</p></li>
 </ul>
 </dd>
 </dl>
@@ -224,6 +233,8 @@ the max number of each model class to include in template</p></li>
 <dt id="autots.AutoTS.import_results">
 <code class="sig-name descname">import_results</code><span class="sig-paren">(</span><em class="sig-param">filename</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.import_results" title="Permalink to this definition">¶</a></dt>
 <dd><p>Add results from another run on the same data.</p>
+<p>Input can be filename with .csv or .pickle.
+or can be a DataFrame of model results or a full TemplateEvalObject</p>
 </dd></dl>
 
 <dl class="method">
@@ -264,8 +275,13 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.AutoTS.results">
-<code class="sig-name descname">results</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.results" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">results</code><span class="sig-paren">(</span><em class="sig-param">result_set: str = 'initial'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.results" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convenience function to return tested models table.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>result_set</strong> (<em>str</em>) – ‘validation’ or ‘initial’</p>
+</dd>
+</dl>
 </dd></dl>
 
 </dd></dl>
@@ -436,91 +452,50 @@ None - no discretization
 
 <dl class="function">
 <dt id="autots.long_to_wide">
-<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">long_to_wide</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = 'series_id'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">na_tolerance: float = 0.99</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">verbose: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.long_to_wide" title="Permalink to this definition">¶</a></dt>
-<dd><p>Takes long data and converts into wide, cleaner data</p>
-<blockquote>
-<div><dl class="field-list">
-<dt class="field-odd">param df</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p>a pandas dataframe having three columns:</p></li>
-</ul>
-</dd>
-<dt class="field-even">type df</dt>
-<dd class="field-even"><p>pandas.DataFrame</p>
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">long_to_wide</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = 'series_id'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">na_tolerance: float = 0.999</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">verbose: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.long_to_wide" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take long data and convert into wide, cleaner data.</p>
 <dl class="field-list simple">
-<dt class="field-odd">param date_col</dt>
+<dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p>the name of the column containing dates, preferrably already in pandas datetime format</p></li>
-</ul>
-</dd>
-<dt class="field-even">type date_col</dt>
-<dd class="field-even"><p>str</p>
-</dd>
-<dt class="field-odd">param value_col</dt>
-<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – </p></li>
+<li><p><strong>date_col</strong> (<em>str</em>) – </p></li>
+<li><p><strong>value_col</strong> (<em>str</em>) – <ul>
 <li><p>the name of the column with the values of the time series (ie sales $)</p></li>
 </ul>
-</dd>
-<dt class="field-even">type value_col</dt>
-<dd class="field-even"><p>str</p>
-</dd>
-<dt class="field-odd">param id_col</dt>
-<dd class="field-odd"><ul class="simple">
+</p></li>
+<li><p><strong>id_col</strong> (<em>str</em>) – <ul>
 <li><p>name of the id column, unique for each time series</p></li>
 </ul>
-</dd>
-<dt class="field-even">type id_col</dt>
-<dd class="field-even"><p>str</p>
-</dd>
-</dl>
-</dd>
-<dt class="field-odd">param frequency</dt>
-<dd class="field-odd"><ul class="simple">
+</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – <ul>
 <li><p>frequency in string of alias for DateOffset object, normally “1D” -daily, “MS” -month start etc.</p></li>
 </ul>
 <p>currently, aliases are listed somewhere in here: <a class="reference external" href="https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html">https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html</a></p>
-</dd>
-<dt class="field-even">type frequency</dt>
-<dd class="field-even"><p>str</p>
-</dd>
-<dt class="field-odd">param na_tolerance</dt>
-<dd class="field-odd"><ul class="simple">
+</p></li>
+<li><p><strong>na_tolerance</strong> (<em>float</em>) – <ul>
 <li><p>allow up to this percent of values to be NaN, else drop the entire series</p></li>
 </ul>
 <p>the default of 0.95 means a series can be 95% NaN values and still be included.</p>
-</dd>
-<dt class="field-even">type na_tolerance</dt>
-<dd class="field-even"><p>float</p>
-</dd>
-<dt class="field-odd">param drop_data_older_than_periods</dt>
-<dd class="field-odd"><ul class="simple">
+</p></li>
+<li><p><strong>drop_data_older_than_periods</strong> (<em>int</em>) – <ul>
 <li><p>cut off older data because eventually you just get too much</p></li>
 </ul>
 <p>10,000 is meant to be rather high, normally for daily data I’d use only the last couple of years, say 1500 samples</p>
-</dd>
-<dt class="field-even">type drop_data_older_than_periods</dt>
-<dd class="field-even"><p>int</p>
-</dd>
-<dt class="field-odd">param drop_most_recent</dt>
-<dd class="field-odd"><ul class="simple">
+</p></li>
+<li><p><strong>drop_most_recent</strong> (<em>int</em>) – <ul>
 <li><p>if to drop the most recent data point</p></li>
 </ul>
 <p>useful if you pull monthly data before month end, and you don’t want an incomplete month appearing complete</p>
-</dd>
-<dt class="field-even">type drop_most_recent</dt>
-<dd class="field-even"><p>int</p>
-</dd>
-<dt class="field-odd">param aggfunc</dt>
-<dd class="field-odd"><ul class="simple">
+</p></li>
+<li><p><strong>aggfunc</strong> (<em>str</em>) – <ul>
 <li><p>passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime</p></li>
 </ul>
-<p>other options include “mean” and other numpy functions</p>
-</dd>
-<dt class="field-even">type aggfunc</dt>
-<dd class="field-even"><p>str</p>
+<p>other options include “mean” and other numpy functions, beware data <em>must</em> already be input as numeric type for these to work.
+if categorical data is provided, <cite>aggfunc=’first’</cite> is recommended</p>
+</p></li>
+</ul>
 </dd>
 </dl>
-</div></blockquote>
 </dd></dl>
 
 </div>

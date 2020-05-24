@@ -90,10 +90,10 @@
 <span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">predict</span><span class="p">()</span>
 <span class="o">#</span> <span class="n">point</span> <span class="n">forecasts</span> <span class="n">dataframe</span>
 <span class="n">forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="p">.</span><span class="n">forecast</span>
-<span class="o">#</span> <span class="n">accuracy</span> <span class="k">of</span> <span class="k">all</span> <span class="n">tried</span> <span class="n">model</span> <span class="n">results</span> <span class="p">(</span><span class="k">not</span> <span class="k">including</span> <span class="k">cross</span> <span class="n">validation</span><span class="p">)</span>
-<span class="n">model_results</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">initial_results</span><span class="p">.</span><span class="n">model_results</span>
-<span class="o">#</span> <span class="k">and</span> <span class="k">including</span> <span class="k">cross</span> <span class="n">validation</span>
-<span class="n">validation_results</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">validation_results</span><span class="p">.</span><span class="n">model_results</span>
+<span class="o">#</span> <span class="n">accuracy</span> <span class="k">of</span> <span class="k">all</span> <span class="n">tried</span> <span class="n">model</span> <span class="n">results</span>
+<span class="n">model_results</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">results</span><span class="p">()</span>
+<span class="o">#</span> <span class="k">and</span> <span class="n">aggregated</span> <span class="k">from</span> <span class="k">cross</span> <span class="n">validation</span>
+<span class="n">validation_results</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">results</span><span class="p">(</span><span class="ss">&quot;validation&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Check out <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/source/tutorial.html">extended_tutorial.md</a> for a more detailed guide to features!</p>
