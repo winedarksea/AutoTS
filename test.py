@@ -10,7 +10,7 @@ from autots.datasets import load_weekly
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
-forecast_length = 4
+forecast_length = 12
 df_long = load_monthly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
@@ -75,8 +75,6 @@ forecasts_df = prediction.forecast
 initial_results = model.results()
 # validation results
 validation_results = model.results("validation")
-# just errors
-error_results = model.error_templates
 
 """
 Import/Export
@@ -137,14 +135,11 @@ Merge dev to master on GitHub and create release (include .tar.gz)
 """
 Help correlate errors with parameters
 """
+# test = initial_results[initial_results['TransformationParameters'].str.contains('IntermittentOccurrence')]
 cols = ['Model', 'ModelParameters',
         'TransformationParameters', 'Exceptions']
-all_results = pd.concat([initial_results[cols], error_results[cols]], axis=0)
-
-# test = initial_results[ initial_results['TransformationParameters'].str.contains('IntermittentOccurrence')]
-
-if error_results.shape[0] > 0:
-    test_corr = error_correlations(all_results,
+if initial_results['Exceptions'].sum() > 0:
+    test_corr = error_correlations(initial_results[cols],
                                    result='corr')  # result='poly corr'
 
 """

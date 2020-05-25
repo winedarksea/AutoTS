@@ -558,7 +558,10 @@ class AutoTS(object):
                     current_slice = df_wide_numeric.head(validation_size * (y+1) + forecast_length)
                 elif 'seasonal' in self.validation_method:
                     val_per = ((y+1) * self.seasonal_val_periods)
-                    val_per = (val_per - forecast_length)
+                    if self.seasonal_val_periods < forecast_length:
+                        pass
+                    else:
+                        val_per = (val_per - forecast_length)
                     val_per = df_wide_numeric.shape[0] - val_per
                     current_slice = df_wide_numeric.head(val_per)
                 else:
@@ -770,11 +773,6 @@ or otherwise increase models available."""
                 self.ensemble_check = int((self.best_model['Ensemble'].iloc[0]) > 0)
             except IndexError:
                 raise ValueError(error_msg_template)
-
-        # store errors in separate dataframe
-        val_errors = self.initial_results.model_results[
-            ~self.initial_results.model_results['Exceptions'].isna()]
-        self.error_templates = val_errors[template_cols + ['Exceptions']]
 
         # set flags to check if regressors or ensemble used in final model.
         param_dict = json.loads(self.best_model.iloc[0]['ModelParameters'])

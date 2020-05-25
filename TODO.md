@@ -82,7 +82,6 @@ Is Template Eval Error: ValueError('array must not contain infs or NaNs',) relat
 'Fake Date' doesn't work on entirely NaN series - ValueError('Found array with 0 sample(s) (shape=(0, 1)) while a minimum of 1 is required.',)
 
 
-
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
 GluonTS not accepting quite a lot of frequencies
@@ -95,6 +94,8 @@ Tensorflow GPU backend may crash on occasion.
 * test submission
 * test whether bottom up significantly overestimates on rollup
 * explore if any negatives in training data
+* piecewise regression
+	https://stackoverflow.com/questions/29382903/how-to-apply-piecewise-linear-fit-in-python
 
 # To-Do
 * drop duplicates as function of TemplateEvalObject
