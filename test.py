@@ -11,7 +11,7 @@ from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 forecast_length = 12
-df_long = load_monthly()
+df_long = load_weekly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -27,7 +27,7 @@ model_list = [
               ]
 model_list = 'superfast'
 # model_list = ['AverageValueNaive', 'LastValueNaive', 'ZeroesNaive']
-# model_list = ['ComponentAnalysis']  # 'TensorflowSTS', 'TFPRegression'
+# model_list = ['RollingRegression', 'LastValueNaive']
 
 metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
                     'rmse_weighting': 2, 'containment_weighting': 0,
@@ -40,12 +40,12 @@ model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9,
                ensemble='simple,distance,probabilistic-max,horizontal-max',
                constraint=2,
-               max_generations=2, num_validations=2,
+               max_generations=15, num_validations=2,
                validation_method='backwards',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=0.1,
                max_per_model_class=None,
-               model_interrupt=False,
+               model_interrupt=True,
                drop_most_recent=0, verbose=1)
 
 
@@ -60,7 +60,7 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
 model = model.fit(df_long,
                   future_regressor=future_regressor_train2d,
                   # weights=weights_hourly,
-                  # result_file='test.pickle',
+                  result_file='test.pickle',
                   date_col='datetime', value_col='value',
                   id_col='series_id')
 
@@ -135,10 +135,10 @@ Merge dev to master on GitHub and create release (include .tar.gz)
 """
 Help correlate errors with parameters
 """
-# test = initial_results[initial_results['TransformationParameters'].str.contains('IntermittentOccurrence')]
+test = initial_results[initial_results['TransformationParameters'].str.contains('DatepartRegression')]
 cols = ['Model', 'ModelParameters',
         'TransformationParameters', 'Exceptions']
-if initial_results['Exceptions'].sum() > 0:
+if (~initial_results['Exceptions'].isna()).sum() > 0:
     test_corr = error_correlations(initial_results[cols],
                                    result='corr')  # result='poly corr'
 

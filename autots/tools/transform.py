@@ -151,6 +151,60 @@ class Detrend(object):
         return df
 
 
+class StatsmodelsFilter(object):
+    """Irreversible filters."""
+
+    def __init__(self, method: str = 'bkfilter'):
+        self.method = method
+
+    def fit(self, df):
+        """Fits filter.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self
+
+    def fit_transform(self, df):
+        """Fit and Return Detrended DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+    def transform(self, df):
+        """Return detrended data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        try:
+            df = df.astype(float)
+        except Exception:
+            raise ValueError("Data Cannot Be Converted to Numeric Float")
+
+        if self.method == 'bkfilter':
+            from statsmodels.tsa.filters import bk_filter
+            cycles = bk_filter.bkfilter(df, K=1)
+            cycles.columns = df.columns
+            df = (df - cycles).fillna(method='ffill').fillna(method='bfill')
+        elif self.method == 'cffilter':
+            from statsmodels.tsa.filters import cf_filter
+            cycle, trend = cf_filter.cffilter(df)
+            cycle.columns = df.columns
+            df = df - cycle
+        return df
+
+    def inverse_transform(self, df):
+        """Return data to original form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
 class SinTrend(object):
     """Modelling sin."""
 
@@ -263,10 +317,12 @@ class PositiveShift(object):
         center_one (bool): whether to shift to 1 instead of 0.
     """
 
-    def __init__(self, log: bool = False, center_one: bool = True):
+    def __init__(self, log: bool = False, center_one: bool = True,
+                 squared = False):
         self.name = 'PositiveShift'
         self.log = log
         self.center_one = center_one
+        self.squared = squared
 
     def fit(self, df):
         """Fits shift interval.
@@ -298,6 +354,8 @@ class PositiveShift(object):
             df (pandas.DataFrame): input dataframe
         """
         df = df + self.shift_amount
+        if self.squared:
+            df = df ** 2
         if self.log:
             df_log = pd.DataFrame(np.log(df))
             return df_log
@@ -312,7 +370,8 @@ class PositiveShift(object):
         """
         if self.log:
             df = pd.DataFrame(np.exp(df))
-        
+        if self.squared:
+            df = df ** 0.5
         df = df - self.shift_amount
         return df
 
@@ -535,14 +594,14 @@ class SeasonalDifference(object):
         """
         self.fit(df)
         return self.transform(df)
-    
+
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Returns data to original *or* forecast form
 
         Args:
             df (pandas.DataFrame): input dataframe
             trans_method (str): whether to inverse on original data, or on a following sequence
-                - 'original' return original data to original numbers 
+                - 'original' return original data to original numbers
                 - 'forecast' inverse the transform on a dataset immediately following the original
         """
         tile_len = len(self.tile_values_lag_1.index)
@@ -558,34 +617,116 @@ class SeasonalDifference(object):
         return df + sdf
 
 
+class DatepartRegression(object):
+    """Remove a regression on datepart from the data."""
+
+    def __init__(self, regression_model: dict =
+                 {"model": 'DecisionTree',
+                  "model_params": {"max_depth": 5,
+                                   "min_samples_split": 2}}):
+        self.name = 'DatepartRegression'
+        self.regression_model = regression_model
+
+    def fit(self, df):
+        """Fits trend for later detrending.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        try:
+            df = df.astype(float)
+        except Exception:
+            raise ValueError("Data Cannot Be Converted to Numeric Float")
+
+        y = df.values
+        from autots.models.sklearn import date_part
+        X = date_part(df.index, method='expanded')
+        from autots.models.sklearn import retrieve_regressor
+        self.model = retrieve_regressor(
+            regression_model=self.regression_model,
+            verbose=0, verbose_bool=False, random_seed=2020)
+        self.model = self.model.fit(X, y)
+        self.shape = df.shape
+        return self
+
+    def fit_transform(self, df):
+        """Fit and Return Detrended DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+    def transform(self, df):
+        """Return detrended data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        try:
+            df = df.astype(float)
+        except Exception:
+            raise ValueError("Data Cannot Be Converted to Numeric Float")
+        from autots.models.sklearn import date_part
+        X = date_part(df.index, method='expanded')
+        y = pd.DataFrame(self.model.predict(X))
+        y.columns = df.columns
+        y.index = df.index
+        df = df - y
+        return df
+
+    def inverse_transform(self, df):
+        """Return data to original form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        try:
+            df = df.astype(float)
+        except Exception:
+            raise ValueError("Data Cannot Be Converted to Numeric Float")
+        from autots.models.sklearn import date_part
+        X = date_part(df.index, method='expanded')
+        y = pd.DataFrame(self.model.predict(X))
+        y.columns = df.columns
+        y.index = df.index
+        df = df + y
+        return df
+
+
 class DifferencedTransformer(object):
-    """Difference from lag n value
+    """Difference from lag n value.
     inverse_transform can only be applied to the original series, or an immediately following forecast
-    
+
     Args:
         lag (int): number of periods to shift (not implemented, default = 1)
     """
+
     def __init__(self):
         self.lag = 1
         self.beta = 1
-        
+
     def fit(self, df):
-        """Fits
+        """Fit.
         Args:
             df (pandas.DataFrame): input dataframe
         """
         self.last_values = df.tail(self.lag)
         self.first_values = df.head(self.lag)
-        return self        
+        return self
+
     def transform(self, df):
-        """Returns differenced data
+        """Return differenced data.
+
         Args:
             df (pandas.DataFrame): input dataframe
         """
         # df = df_wide_numeric.tail(60).head(50)
         # df_forecast = (df_wide_numeric - df_wide_numeric.shift(1)).tail(10)
-        df = (df - df.shift(self.lag)).fillna(method = 'bfill')
+        df = (df - df.shift(self.lag)).fillna(method='bfill')
         return df
+
     def fit_transform(self, df):
         """Fits and Returns Magical DataFrame
         Args:
@@ -593,14 +734,14 @@ class DifferencedTransformer(object):
         """
         self.fit(df)
         return self.transform(df)
-    
+
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Returns data to original *or* forecast form
-        
+
         Args:
             df (pandas.DataFrame): input dataframe
             trans_method (str): whether to inverse on original data, or on a following sequence
-                - 'original' return original data to original numbers 
+                - 'original' return original data to original numbers
                 - 'forecast' inverse the transform on a dataset immediately following the original
         """
         lag = self.lag
@@ -610,56 +751,60 @@ class DifferencedTransformer(object):
             return df.cumsum()
         else:
             df_len = df.shape[0]
-            df = pd.concat([self.last_values, df], axis = 0)
+            df = pd.concat([self.last_values, df], axis=0)
             return df.cumsum().tail(df_len)
+
 
 class PctChangeTransformer(object):
     """% Change of Data.
-    
+
     Warning:
         Because % change doesn't play well with zeroes, zeroes are replaced by positive of the lowest non-zero value.
         Inverse transformed values returned will also not return as 'exactly' equals due to floating point imprecision.
         inverse_transform can only be applied to the original series, or an immediately following forecast
-
     """
+
     def __init__(self):
         self.name = 'PctChangeTransformer'
-    
+
     def fit(self, df):
         """Fits.
-        
+
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        temp = df.replace([0], np.nan).fillna((df[df != 0]).abs().min(axis = 0)).fillna(0.1)
+        temp = df.replace([0], np.nan).fillna(
+            (df[df != 0]).abs().min(axis=0)).fillna(0.1)
         self.last_values = temp.tail(1)
         self.first_values = temp.head(1)
         return self
+
     def transform(self, df):
         """Returns changed data
         Args:
             df (pandas.DataFrame): input dataframe
         """
         df = df.replace([0], np.nan)
-        df = df.fillna((df[df != 0]).abs().min(axis = 0)).fillna(0.1)
+        df = df.fillna((df[df != 0]).abs().min(axis=0)).fillna(0.1)
         df = df.pct_change(periods=1, fill_method='ffill').fillna(0)
         df = df.replace([np.inf, -np.inf], 0)
         return df
+
     def fit_transform(self, df):
-        """Fits and Returns *Magical* DataFrame
+        """Fit and Return *Magical* DataFrame.
         Args:
             df (pandas.DataFrame): input dataframe
         """
         self.fit(df)
         return self.transform(df)
-    
+
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Returns data to original *or* forecast form
-        
+
         Args:
             df (pandas.DataFrame): input dataframe
             trans_method (str): whether to inverse on original data, or on a following sequence
-                - 'original' return original data to original numbers 
+                - 'original' return original data to original numbers
                 - 'forecast' inverse the transform on a dataset immediately following the original
         """
         df = (df + 1).replace([0], np.nan)
@@ -667,36 +812,41 @@ class PctChangeTransformer(object):
 
         # add last values, group by lag, cumprod
         if trans_method == 'original':
-            df = pd.concat([self.first_values, df.tail(df.shape[0] - 1)], axis = 0)
+            df = pd.concat([self.first_values,
+                            df.tail(df.shape[0] - 1)], axis=0)
             return df.cumprod()
         else:
             df_len = df.shape[0]
-            df = pd.concat([self.last_values, df], axis = 0)
+            df = pd.concat([self.last_values, df], axis=0)
             return df.cumprod().tail(df_len)
+
 
 class CumSumTransformer(object):
     """Cumulative Sum of Data.
-    
+
     Warning:
         Inverse transformed values returned will also not return as 'exactly' equals due to floating point imprecision.
         inverse_transform can only be applied to the original series, or an immediately following forecast
     """
+
     def fit(self, df):
         """Fits.
-        
+
         Args:
             df (pandas.DataFrame): input dataframe
         """
         self.last_values = df.tail(1)
         self.first_values = df.head(1)
         return self
+
     def transform(self, df):
         """Returns changed data
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        df = df.cumsum(skipna = True)
+        df = df.cumsum(skipna=True)
         return df
+
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame
         Args:
@@ -704,33 +854,38 @@ class CumSumTransformer(object):
         """
         self.fit(df)
         return self.transform(df)
-    
+
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Returns data to original *or* forecast form
-        
+
         Args:
             df (pandas.DataFrame): input dataframe
             trans_method (str): whether to inverse on original data, or on a following sequence
-                - 'original' return original data to original numbers 
+                - 'original' return original data to original numbers
                 - 'forecast' inverse the transform on a dataset immediately following the original
         """
 
         if trans_method == 'original':
-            df = pd.concat([self.first_values, (df - df.shift(1)).tail(df.shape[0] - 1)], axis = 0)
+            df = pd.concat([self.first_values,
+                            (df - df.shift(1)).tail(df.shape[0] - 1)], axis=0)
             return df
         else:
             df_len = df.shape[0]
-            df = pd.concat([self.last_values, df], axis = 0)
+            df = pd.concat([self.last_values, df], axis=0)
             df = df - df.shift(1)
             return df.tail(df_len)
+
 
 class EmptyTransformer(object):
     def fit(self, df):
         return self
+
     def transform(self, df):
         return df
+
     def inverse_transform(self, df):
         return df
+
     def fit_transform(self, df):
         return df
 
@@ -742,12 +897,26 @@ trans_dict = {'None': EmptyTransformer(),
               'DifferencedTransformer': DifferencedTransformer(),
               'PctChangeTransformer': PctChangeTransformer(),
               'SinTrend': SinTrend(),
-              'PositiveShift': PositiveShift(),
+              'PositiveShift': PositiveShift(squared=True),
               'Log': PositiveShift(log=True),
               'IntermittentOccurrence': IntermittentOccurrence(),
               'CumSumTransformer': CumSumTransformer(),
-              'SeasonalDifference7': SeasonalDifference(lag_1=7, method='LastValue'),
-              'SeasonalDifference12': SeasonalDifference(lag_1=12, method='Mean')
+              'SeasonalDifference7': SeasonalDifference(lag_1=7,
+                                                        method='LastValue'),
+              'SeasonalDifference12': SeasonalDifference(lag_1=12,
+                                                         method='Mean'),
+              'bkfilter': StatsmodelsFilter(method='bkfilter'),
+              'cffilter': StatsmodelsFilter(method='cffilter'),
+              'DatepartRegression': DatepartRegression(
+                  regression_model={"model": 'DecisionTree',
+                                    "model_params": {"max_depth": 5,
+                                                     "min_samples_split": 2}}),
+              'DatepartRegressionElasticNet': DatepartRegression(
+                  regression_model={"model": 'ElasticNet',
+                                    "model_params": {}}),
+              'DatepartRegressionRandForest': DatepartRegression(
+                  regression_model={"model": 'RandomForest',
+                                    "model_params": {}})
               }
 
 
@@ -1335,21 +1504,27 @@ def RandomTransform():
                         'DifferencedTransformer', 'SinTrend', 'PctChangeTransformer',
                         'CumSumTransformer', 'PositiveShift', 'Log',
                         'IntermittentOccurrence',
-                        'SeasonalDifference7', 'SeasonalDifference12']
-    first_transformer_prob = [0.25, 0.05, 0.2, 0.05,
+                        'SeasonalDifference7', 'SeasonalDifference12',
+                        'cffilter', 'bkfilter', 'DatepartRegression',
+                        'DatepartRegressionElasticNet']
+    first_transformer_prob = [0.25, 0.05, 0.15, 0.05,
                               0.05, 0.04, 0.05, 0.01,
                               0.01, 0.01, 0.03, 0.02,
                               0.1, 0.01, 0.04,
                               0.02, 0.02, 0.01,
                               0.01,
-                              0.01, 0.01]
-    fourth_transformer_prob = [0.2, 0.05, 0.1, 0.05,
+                              0.01, 0.01,
+                              0.01, 0.01, 0.02,
+                              0.01]
+    fourth_transformer_prob = [0.2, 0.05, 0.05, 0.05,
                                0.05, 0.1, 0.05, 0.05,
-                               0.05, 0.05, 0.03, 0.02,
-                               0.07, 0.01, 0.04,
+                               0.05, 0.05, 0.02, 0.02,
+                               0.1, 0.01, 0.03,
                                0.02, 0.02, 0.01,
                                0.01,
-                               0.01, 0.01]
+                               0.01, 0.01,
+                               0.01, 0.01, 0.01,
+                               0.01]
     outlier_method_choice = np.random.choice(a=[None, 'clip', 'remove'],
                                              size=1, p=[0.5, 0.3, 0.2]).item()
     if outlier_method_choice is not None:

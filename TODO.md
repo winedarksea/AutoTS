@@ -14,10 +14,12 @@ Latest:
 	Removed `weighted` parameter, now passing weights to .fit() alone is sufficient.
 	Fixed a bug where 'One or more series is 90% or more NaN' was printing when it shouldn't
 	Fixed (or more accurately, reduced) a bug where multiple initial runs were counting as validation runs.
-	Fixed (partially!) bug where validation subsetting was behaving oddly
+	Fixed bug where validation subsetting was behaving oddly
 	Fixed bug where regressor wasn't being passed to validation.
 	Renamed preord_ to future_ regressor.
 	Renamed sample datasets.
+	Allowed export of result_file as .pickle along with more complete object.
+	Added model_interrupt parameter to allow for manually skipping models when enabled.
 	Made serious efforts to make the code prettier with pylint, still lots to do, however...
 	Improved genetic recombination so optimal models should be reached more quickly
 	Improved Point to Probabilistic methods:
@@ -43,6 +45,8 @@ Latest:
 		Log
 		IntermittentOccurrence
 		SeasonalDetrend
+		bkfilter and cffilter
+		DatepartRegression
 	Entirely changed the general transformer to add ~~three~~ four levels of transformation.
 	Allowed context_slicer to receive direct integer inputs
 	Added new 'Detrend' options to allow more sklearn linear models.
@@ -94,8 +98,6 @@ Tensorflow GPU backend may crash on occasion.
 * test submission
 * test whether bottom up significantly overestimates on rollup
 * explore if any negatives in training data
-* piecewise regression
-	https://stackoverflow.com/questions/29382903/how-to-apply-piecewise-linear-fit-in-python
 
 # To-Do
 * drop duplicates as function of TemplateEvalObject
@@ -189,6 +191,7 @@ Tensorflow GPU backend may crash on occasion.
 
 #### New models:
 	Croston, SBA, TSB, ADIDA, iMAPA
+	Local Linear/Piecewise Regression Model
 	Simulations
 	Ta-lib
 	Pyflux
