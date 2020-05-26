@@ -623,9 +623,11 @@ class DatepartRegression(object):
     def __init__(self, regression_model: dict =
                  {"model": 'DecisionTree',
                   "model_params": {"max_depth": 5,
-                                   "min_samples_split": 2}}):
+                                   "min_samples_split": 2}},
+                 datepart_method: str = 'expanded'):
         self.name = 'DatepartRegression'
         self.regression_model = regression_model
+        self.datepart_method = datepart_method
 
     def fit(self, df):
         """Fits trend for later detrending.
@@ -640,7 +642,7 @@ class DatepartRegression(object):
 
         y = df.values
         from autots.models.sklearn import date_part
-        X = date_part(df.index, method='expanded')
+        X = date_part(df.index, method=self.datepart_method)
         from autots.models.sklearn import retrieve_regressor
         self.model = retrieve_regressor(
             regression_model=self.regression_model,
@@ -669,7 +671,7 @@ class DatepartRegression(object):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
         from autots.models.sklearn import date_part
-        X = date_part(df.index, method='expanded')
+        X = date_part(df.index, method=self.datepart_method)
         y = pd.DataFrame(self.model.predict(X))
         y.columns = df.columns
         y.index = df.index
@@ -687,7 +689,7 @@ class DatepartRegression(object):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
         from autots.models.sklearn import date_part
-        X = date_part(df.index, method='expanded')
+        X = date_part(df.index, method=self.datepart_method)
         y = pd.DataFrame(self.model.predict(X))
         y.columns = df.columns
         y.index = df.index
@@ -911,6 +913,11 @@ trans_dict = {'None': EmptyTransformer(),
                   regression_model={"model": 'DecisionTree',
                                     "model_params": {"max_depth": 5,
                                                      "min_samples_split": 2}}),
+              'DatepartRegressionLtd': DatepartRegression(
+                  regression_model={"model": 'DecisionTree',
+                                    "model_params": {"max_depth": 4,
+                                                     "min_samples_split": 2}},
+                  datepart_method='recurring'),
               'DatepartRegressionElasticNet': DatepartRegression(
                   regression_model={"model": 'ElasticNet',
                                     "model_params": {}}),
@@ -922,9 +929,9 @@ trans_dict = {'None': EmptyTransformer(),
 
 class GeneralTransformer(object):
     """Remove outliers, fillNA, then mathematical transformations.
-    
+
     Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a 'wide' (one column per series) shape.
-    
+
     Warning:
         - inverse_transform will not fully return the original data under some conditions
             * outliers removed or clipped will be returned in the clipped or filled na form
@@ -933,14 +940,14 @@ class GeneralTransformer(object):
             * RollingMean, PctChange, CumSum, and DifferencedTransformer will only return original or an immediately following forecast
                 - by default 'forecast' is expected, 'original' can be set in trans_method
     
-    Args:       
+    Args:
         outlier_method (str): - level of outlier removal, if any, per series
             'None'
             'clip' - replace outliers with the highest value allowed by threshold
             'remove' - remove outliers and replace with np.nan
-        
+
         outlier_threshold (float): number of std deviations from mean to consider an outlier. Default 3.
-        
+
         outlier_position (str): when to remove outliers
             'first' - remove outliers before other transformations
             'middle' - remove outliers after first_transformation
@@ -954,7 +961,7 @@ class GeneralTransformer(object):
             'rolling mean' - fill with last n (window = 10) values
             'ffill mean biased' - simple avg of ffill and mean
             'fake date' - shifts forward data over nan, thus values will have incorrect timestamps
-        
+
         transformation (str): - transformation to apply
             'None'
             'MinMaxScaler' - Sklearn MinMaxScaler
@@ -1498,33 +1505,31 @@ class GeneralTransformer(object):
 
 def RandomTransform():
     """Return a dict of randomly choosen transformation selections."""
-    transformer_list = [None, 'MinMaxScaler', 'PowerTransformer', 'QuantileTransformer',
-                        'MaxAbsScaler', 'StandardScaler', 'RobustScaler', 'PCA',
-                        'FastICA', 'Detrend', 'RollingMean10', 'RollingMean100thN',
-                        'DifferencedTransformer', 'SinTrend', 'PctChangeTransformer',
-                        'CumSumTransformer', 'PositiveShift', 'Log',
-                        'IntermittentOccurrence',
-                        'SeasonalDifference7', 'SeasonalDifference12',
-                        'cffilter', 'bkfilter', 'DatepartRegression',
-                        'DatepartRegressionElasticNet']
-    first_transformer_prob = [0.25, 0.05, 0.15, 0.05,
+    transformer_list = [
+        None, 'MinMaxScaler', 'PowerTransformer', 'QuantileTransformer',
+        'MaxAbsScaler', 'StandardScaler', 'RobustScaler', 'PCA',
+        'FastICA', 'Detrend', 'RollingMean10', 'RollingMean100thN',
+        'DifferencedTransformer', 'SinTrend', 'PctChangeTransformer',
+        'CumSumTransformer', 'PositiveShift', 'Log', 'IntermittentOccurrence',
+        'SeasonalDifference7', 'SeasonalDifference12',
+        'cffilter', 'bkfilter', 'DatepartRegression',
+        'DatepartRegressionElasticNet', 'DatepartRegressionLtd']
+    first_transformer_prob = [0.25, 0.05, 0.14, 0.05,
                               0.05, 0.04, 0.05, 0.01,
                               0.01, 0.01, 0.03, 0.02,
                               0.1, 0.01, 0.04,
-                              0.02, 0.02, 0.01,
-                              0.01,
+                              0.02, 0.02, 0.01, 0.01,
                               0.01, 0.01,
                               0.01, 0.01, 0.02,
-                              0.01]
+                              0.01, 0.01]
     fourth_transformer_prob = [0.2, 0.05, 0.05, 0.05,
                                0.05, 0.1, 0.05, 0.05,
-                               0.05, 0.05, 0.02, 0.02,
+                               0.05, 0.04, 0.02, 0.02,
                                0.1, 0.01, 0.03,
-                               0.02, 0.02, 0.01,
-                               0.01,
+                               0.02, 0.02, 0.01, 0.01,
                                0.01, 0.01,
                                0.01, 0.01, 0.01,
-                               0.01]
+                               0.01, 0.01]
     outlier_method_choice = np.random.choice(a=[None, 'clip', 'remove'],
                                              size=1, p=[0.5, 0.3, 0.2]).item()
     if outlier_method_choice is not None:

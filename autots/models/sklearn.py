@@ -12,39 +12,54 @@ from autots.tools.probabilistic import Point_to_Probability
 
 def date_part(DTindex, method: str = 'simple'):
     """Create date part columns from pd.DatetimeIndex.
-    
+
     Args:
         DTindex (pd.DatetimeIndex): datetime index to provide dates
-        method (str): expanded' or 'simple' providing more or less columns
-        
+        method (str): expanded, recurring, or simple
+            simple - just day, year, month, weekday
+            expanded - all available futures
+            recurring - all features that should commonly repeat without aging
+
     Returns:
         pd.Dataframe with DTindex
     """
-    date_part_df = pd.DataFrame({
-        'year': DTindex.year,
-        'month': DTindex.month,
-        'day': DTindex.day,
-        'weekday': DTindex.weekday
-    })
-    if method == 'expanded':
-        date_part_df2 = pd.DataFrame({
+    if method == 'recurring':
+        date_part_df = pd.DataFrame({
+            'month': DTindex.month,
+            'day': DTindex.day,
+            'weekday': DTindex.weekday,
+            'weekend': (DTindex.weekday > 4).astype(int),
             'hour': DTindex.hour,
-            'week': DTindex.week,
             'quarter': DTindex.quarter,
-            'dayofyear': DTindex.dayofyear,
             'midyear': ((DTindex.dayofyear > 74) &
                         (DTindex.dayofyear < 258)).astype(int),  # 2 season
-            'weekend': (DTindex.weekday > 4).astype(int),  # weekend/weekday
-            'month_end': (DTindex.is_month_end).astype(int),
-            'month_start': (DTindex.is_month_start).astype(int),
-            "quarter_end": (DTindex.is_quarter_end).astype(int),
-            'year_end': (DTindex.is_year_end).astype(int),
-            'daysinmonth': DTindex.daysinmonth,
-            'epoch': DTindex.astype(int)
         })
-        date_part_df = pd.concat([date_part_df, date_part_df2], axis=1)
-
+    else:
+        date_part_df = pd.DataFrame({
+            'year': DTindex.year,
+            'month': DTindex.month,
+            'day': DTindex.day,
+            'weekday': DTindex.weekday
+        })
+        if method == 'expanded':
+            date_part_df2 = pd.DataFrame({
+                'hour': DTindex.hour,
+                'week': DTindex.week,
+                'quarter': DTindex.quarter,
+                'dayofyear': DTindex.dayofyear,
+                'midyear': ((DTindex.dayofyear > 74) &
+                            (DTindex.dayofyear < 258)).astype(int),  # 2 season
+                'weekend': (DTindex.weekday > 4).astype(int),
+                'month_end': (DTindex.is_month_end).astype(int),
+                'month_start': (DTindex.is_month_start).astype(int),
+                "quarter_end": (DTindex.is_quarter_end).astype(int),
+                'year_end': (DTindex.is_year_end).astype(int),
+                'daysinmonth': DTindex.daysinmonth,
+                'epoch': DTindex.astype(int)
+            })
+            date_part_df = pd.concat([date_part_df, date_part_df2], axis=1)
     return date_part_df
+
 
 def rolling_x_regressor(df, mean_rolling_periods: int = 30,
                         macd_periods: int = None,
@@ -638,9 +653,9 @@ class RollingRegression(ModelObject):
         rolling_autocorr_periods_choice = np.random.choice(
             a=[None, 2, 7, 12, 30], size=1,
             p=[0.8, 0.05, 0.05, 0.05, 0.05]).item()
-        add_date_part_choice = np.random.choice(a=[None, 'simple', 'expanded'],
-                                                size=1,
-                                                p=[0.6, 0.2, 0.2]).item()
+        add_date_part_choice = np.random.choice(
+            a=[None, 'simple', 'expanded', 'recurring'],
+            size=1, p=[0.6, 0.1, 0.2, 0.1]).item()
         holiday_choice = np.random.choice(a=[True, False], size=1,
                                           p=[0.2, 0.8]).item()
         polynomial_degree_choice = np.random.choice(a=[None, 2], size=1,

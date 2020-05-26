@@ -528,6 +528,7 @@ class AutoTS(object):
 
         # construct validation template
         validation_template = self.initial_results.model_results[self.initial_results.model_results['Exceptions'].isna()]
+        validation_template = validation_template[validation_template['Ensemble'] <= 1]
         validation_template = validation_template.drop_duplicates(
             subset=template_cols, keep='first')
         validation_template = validation_template.sort_values(
@@ -536,8 +537,6 @@ class AutoTS(object):
             validation_template = validation_template.sort_values('Score', ascending=True, na_position='last').groupby('Model').head(self.max_per_model_class).reset_index(drop=True)
         validation_template = validation_template.sort_values('Score', ascending=True, na_position='last').head(self.models_to_validate)
         validation_template = validation_template[self.template_cols]
-        if not ensemble:
-            validation_template = validation_template[validation_template['Ensemble'] == 0]
 
         # run validations
         if num_validations > 0:
@@ -808,7 +807,8 @@ or otherwise increase models available."""
 
     def predict(self, forecast_length: int = "self",
                 future_regressor=[], hierarchy=None,
-                just_point_forecast: bool = False):
+                just_point_forecast: bool = False,
+                verbose: int = 'self'):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
         Args:
@@ -821,6 +821,7 @@ or otherwise increase models available."""
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
+        verbose = self.verbose if verbose == 'self' else verbose
         if forecast_length == 'self':
             forecast_length = self.forecast_length
 
@@ -845,7 +846,7 @@ or otherwise increase models available."""
             future_regressor_forecast=future_regressor,
             holiday_country=self.holiday_country,
             startTimeStamps=self.startTimeStamps,
-            random_seed=self.random_seed, verbose=self.verbose,
+            random_seed=self.random_seed, verbose=verbose,
             template_cols=self.template_cols)
 
         trans = self.categorical_transformer
@@ -1100,13 +1101,15 @@ class AutoTSIntervals(object):
         self.categorical_transformer = current_model.categorical_transformer
         return self
 
-    def predict(self, future_regressor=[]) -> dict:
+    def predict(self, future_regressor=[],
+                verbose: int = 'self') -> dict:
         """Generate forecasts after training complete."""
         if len(future_regressor) > 0:
             future_regressor = pd.DataFrame(future_regressor)
             self.future_regressor_train = self.future_regressor_train.reindex(
                 index=self.df_wide_numeric.index)
         forecast_objects = {}
+        verbose = self.verbose if verbose == 'self' else verbose
 
         for interval in self.prediction_intervals:
             df_forecast = PredictWitch(
@@ -1121,7 +1124,7 @@ class AutoTSIntervals(object):
                 future_regressor_forecast=future_regressor,
                 holiday_country=self.holiday_country,
                 startTimeStamps=self.startTimeStamps,
-                random_seed=self.random_seed, verbose=self.verbose,
+                random_seed=self.random_seed, verbose=verbose,
                 template_cols=self.template_cols)
 
             trans = self.categorical_transformer

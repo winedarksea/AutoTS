@@ -103,8 +103,10 @@ Tensorflow GPU backend may crash on occasion.
 * drop duplicates as function of TemplateEvalObject
 * fake date dataset of many series to improve General Template
 * better document ensembling
+* optimize randomtransform probabilities
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
+* best per series to validation template even if poor on score overall
 * Bring GeneralTransformer to higher level API.
 	* wide_to_long and long_to_wide in higher-level API
 * Option to use full traceback in errors in table
@@ -142,6 +144,7 @@ Tensorflow GPU backend may crash on occasion.
 	* Make sure of rolling regression setup
 	* Modify GluonStart if lots of NaN at start of that series
 	* GPU and CPU ctx
+* motif simulation, remove all those for loops
 * implement 'borrow' Genetic Recombination for ComponentAnalysis
 * Regressor to TensorflowSTS
 * Relative/Absolute Imports and reduce package reloading messages

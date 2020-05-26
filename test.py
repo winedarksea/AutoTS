@@ -68,7 +68,8 @@ print(model.best_model['Model'].iloc[0])
 print(model.best_model['ModelParameters'].iloc[0])
 print(model.best_model['TransformationParameters'].iloc[0])
 
-prediction = model.predict(future_regressor=future_regressor_forecast2d)
+prediction = model.predict(future_regressor=future_regressor_forecast2d,
+                           verbose=0)
 # point forecasts dataframe
 forecasts_df = prediction.forecast
 # accuracy of all tried model results (not including cross validation)
