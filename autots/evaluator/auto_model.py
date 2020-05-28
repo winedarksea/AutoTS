@@ -697,7 +697,7 @@ def unpack_ensemble_models(template,
                            recursive: bool = False):
     """Take ensemble models from template and add as new rows."""
     ensemble_template = pd.DataFrame()
-    template['Ensemble'] = np.where(template['Model'] == 'Ensemble',
+    template['Ensemble'] = np.where(((template['Model'] == 'Ensemble') & (template['Ensemble'] < 1)),
                                     1, template['Ensemble'])
     for index, value in template[template['Ensemble'] != 0]['ModelParameters'].iteritems():
         model_dict = json.loads(value)['models']
