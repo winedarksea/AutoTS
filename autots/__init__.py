@@ -13,7 +13,7 @@ from autots.evaluator.auto_ts import AutoTS
 from autots.tools.transform import GeneralTransformer
 from autots.tools.shaping import long_to_wide
 
-__version__ = '0.2.0a3'
+__version__ = '0.2.0a4'
 
 
 __all__ = ['load_daily','load_monthly', 'load_yearly', 'load_hourly', 'load_weekly',

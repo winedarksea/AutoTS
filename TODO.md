@@ -97,8 +97,7 @@ Tensorflow GPU backend may crash on occasion.
 	* renumber all Ensemble to 2 where Horizontal
 * test submission
 * test whether bottom up significantly overestimates on rollup
-* Out of stock items
-* state_store_dept_product_interval
+	* store level hierarchial
 
 # To-Do
 * drop duplicates as function of TemplateEvalObject

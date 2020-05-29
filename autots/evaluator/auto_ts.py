@@ -1030,6 +1030,7 @@ class AutoTSIntervals(object):
                 },
             weights: dict = {},
             future_regressor=[],
+            model_interrupt: bool = False,
             constraint=2, no_negatives=False,
             remove_leading_zeroes=False, random_seed=2020
             ):
@@ -1052,6 +1053,7 @@ class AutoTSIntervals(object):
                 random_seed=random_seed,
                 num_validations=num_validations,
                 validation_method=validation_method,
+                model_interrupt=model_interrupt,
                 models_to_validate=models_to_validate)
             if import_template is not None:
                 current_model.import_template(import_template, method='only')
