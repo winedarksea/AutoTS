@@ -93,8 +93,6 @@ KerasRNN errors due to parameters not working on all dataset
 Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
-* figure out how to bring together all the different training templates
-	* renumber all Ensemble to 2 where Horizontal
 * test submission
 * test whether bottom up significantly overestimates on rollup
 	* store level hierarchial
@@ -103,6 +101,7 @@ Tensorflow GPU backend may crash on occasion.
 * drop duplicates as function of TemplateEvalObject
 * fake date dataset of many series to improve General Template
 * better document ensembling
+* 'fast' option for RandomTransformations generator
 * optimize randomtransform probabilities
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d

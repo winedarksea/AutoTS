@@ -411,6 +411,57 @@ inverse_transform can only be applied to the original series, or an immediately 
 </dd></dl>
 
 <dl class="class">
+<dt id="autots.tools.transform.DatepartRegression">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">DatepartRegression</code><span class="sig-paren">(</span><em class="sig-param">regression_model: dict = {'model': 'DecisionTree'</em>, <em class="sig-param">'model_params': {'max_depth': 5</em>, <em class="sig-param">'min_samples_split': 2}}</em>, <em class="sig-param">datepart_method: str = 'expanded'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegression" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Remove a regression on datepart from the data.</p>
+<dl class="method">
+<dt id="autots.tools.transform.DatepartRegression.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegression.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits trend for later detrending.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.DatepartRegression.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegression.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit and Return Detrended DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.DatepartRegression.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegression.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data to original form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.DatepartRegression.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegression.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return detrended data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
 <dt id="autots.tools.transform.Detrend">
 <em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">Detrend</code><a class="headerlink" href="#autots.tools.transform.Detrend" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
@@ -465,7 +516,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 <dt id="autots.tools.transform.DifferencedTransformer">
 <em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">DifferencedTransformer</code><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>Difference from lag n value
+<p>Difference from lag n value.
 inverse_transform can only be applied to the original series, or an immediately following forecast</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -475,7 +526,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 <dl class="method">
 <dt id="autots.tools.transform.DifferencedTransformer.fit">
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer.fit" title="Permalink to this definition">¶</a></dt>
-<dd><p>Fits
+<dd><p>Fit.
 :param df: input dataframe
 :type df: pandas.DataFrame</p>
 </dd></dl>
@@ -507,9 +558,12 @@ inverse_transform can only be applied to the original series, or an immediately 
 <dl class="method">
 <dt id="autots.tools.transform.DifferencedTransformer.transform">
 <code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DifferencedTransformer.transform" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns differenced data
-:param df: input dataframe
-:type df: pandas.DataFrame</p>
+<dd><p>Return differenced data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
 </dd></dl>
 
 </dd></dl>
@@ -780,7 +834,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 <dl class="method">
 <dt id="autots.tools.transform.PctChangeTransformer.fit_transform">
 <code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.PctChangeTransformer.fit_transform" title="Permalink to this definition">¶</a></dt>
-<dd><p>Fits and Returns <em>Magical</em> DataFrame
+<dd><p>Fit and Return <em>Magical</em> DataFrame.
 :param df: input dataframe
 :type df: pandas.DataFrame</p>
 </dd></dl>
@@ -813,7 +867,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="class">
 <dt id="autots.tools.transform.PositiveShift">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">PositiveShift</code><span class="sig-paren">(</span><em class="sig-param">log: bool = False</em>, <em class="sig-param">center_one: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.PositiveShift" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">PositiveShift</code><span class="sig-paren">(</span><em class="sig-param">log: bool = False</em>, <em class="sig-param">center_one: bool = True</em>, <em class="sig-param">squared=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.PositiveShift" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Shift each series if necessary to assure all values &gt;= 1.</p>
 <dl class="field-list simple">
@@ -1034,6 +1088,57 @@ Inverse transformed values returned will also not return as ‘exactly’ equals
 <dd><p>Returns detrended data
 :param df: input dataframe
 :type df: pandas.DataFrame</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.StatsmodelsFilter">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">StatsmodelsFilter</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'bkfilter'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.StatsmodelsFilter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Irreversible filters.</p>
+<dl class="method">
+<dt id="autots.tools.transform.StatsmodelsFilter.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.StatsmodelsFilter.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits filter.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.StatsmodelsFilter.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.StatsmodelsFilter.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit and Return Detrended DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.StatsmodelsFilter.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.StatsmodelsFilter.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data to original form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.StatsmodelsFilter.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.StatsmodelsFilter.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return detrended data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
 </dd></dl>
 
 </dd></dl>

@@ -759,7 +759,10 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>DTindex</strong> (<em>pd.DatetimeIndex</em>) – datetime index to provide dates</p></li>
-<li><p><strong>method</strong> (<em>str</em>) – expanded’ or ‘simple’ providing more or less columns</p></li>
+<li><p><strong>method</strong> (<em>str</em>) – expanded, recurring, or simple
+simple - just day, year, month, weekday
+expanded - all available futures
+recurring - all features that should commonly repeat without aging</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
