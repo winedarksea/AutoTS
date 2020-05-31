@@ -114,6 +114,7 @@ https://github.com/sphinx-doc/sphinx/issues/3382
 # m2r does not yet work on sphinx 3.0
 # pip install m2r
 cd <project dir>
+# delete docs/source (not tutorial or includeme)
 sphinx-apidoc -f -o docs/source autots
 cd ./docs
 make html

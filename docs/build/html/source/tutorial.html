@@ -260,7 +260,7 @@ Rollup can be accomplished by specifying the frequency = your rollup frequency, 
 </div>
 <div class="section" id="adding-regressors-and-other-information">
 <h3>Adding regressors and other information<a class="headerlink" href="#adding-regressors-and-other-information" title="Permalink to this headline">¶</a></h3>
-<p>‘Preord’ regressor, to make it clear this is data that will be know with high certainy about the future.
+<p><code class="docutils literal notranslate"><span class="pre">future_</span></code> regressor, to make it clear this is data that will be know with high certainy about the future.
 Such data about the future is rare, one example might be number of stores that will be (planned to be) open each given day in the future when forecast sales.
 Only a handful of models support adding regressors, and not all handle multiple regressors.
 The recommended way to provide regressors is as a pd.Series/pd.Dataframe with a DatetimeIndex.</p>
@@ -403,7 +403,7 @@ Some models will support a more limited range of frequencies.</p>
       &copy;2020, Colin Catlin.
       
       |
-      <a href="../_sources/source/tutorial.md.txt"
+      <a href="../_sources/source/tutorial.rst.txt"
           rel="nofollow">Page source</a>
     </div>
 

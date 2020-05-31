@@ -229,7 +229,7 @@ Rollup can be accomplished by specifying the frequency = your rollup frequency, 
 Various NaN filling techniques are tested in the transformation. Rolling up data to a less-frequent frequency may also help deal with NaNs.
 
 ### Adding regressors and other information
-'Preord' regressor, to make it clear this is data that will be know with high certainy about the future. 
+`future_` regressor, to make it clear this is data that will be know with high certainy about the future. 
 Such data about the future is rare, one example might be number of stores that will be (planned to be) open each given day in the future when forecast sales. 
 Only a handful of models support adding regressors, and not all handle multiple regressors. 
 The recommended way to provide regressors is as a pd.Series/pd.Dataframe with a DatetimeIndex. 
