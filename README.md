@@ -63,7 +63,7 @@ validation_results = model.results("validation")
 
 ```
 
-Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/source/tutorial.html) for a more detailed guide to features!
+Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html) for a more detailed guide to features!
 
 ## How to Contribute:
 * Give feedback on where you find the documentation confusing
