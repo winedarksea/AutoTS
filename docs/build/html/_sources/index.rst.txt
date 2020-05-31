@@ -1,0 +1,42 @@
+AutoTS
+=======
+
+`autots`_ is an automated time series forecasting package for Python.
+
+Features:
+
+- Twenty available model classes, with tens of thousands of possible hyperparameter configurations
+- Finds optimal time series models by genetic programming
+- Handles univariate and multivariate/parallel time series
+
+Installation
+------------
+
+.. code:: sh
+
+   pip install autots
+
+
+Requirements: Python 3.5+, numpy, pandas, and scikit-learn.
+
+Getting Started
+===================
+.. toctree::
+   :maxdepth: 2
+
+   source/includeme
+   source/tutorial
+   
+Modules API
+===================
+.. toctree::
+   :maxdepth: 2
+
+   source/modules
+
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`

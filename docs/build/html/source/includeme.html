@@ -1,0 +1,222 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Intro &#8212; AutoTS 0.2.0 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Tutorial" href="tutorial.html" />
+    <link rel="prev" title="AutoTS" href="../index.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="intro">
+<h1>Intro<a class="headerlink" href="#intro" title="Permalink to this headline">¶</a></h1>
+</div>
+<div class="section" id="autots">
+<h1>AutoTS<a class="headerlink" href="#autots" title="Permalink to this headline">¶</a></h1>
+<a class="reference external image-reference" href="/img/autots_logo.png"><img alt="AutoTS Logo" src="img/autots_logo.png" /></a>
+<p><strong>Model Selection for Multiple Time Series</strong></p>
+<p>Simple package for comparing and predicting with open-source time series implementations.</p>
+<p>For other time series needs, check out the list <a class="reference external" href="https://github.com/MaxBenChrist/awesome_time_series_in_python">here</a>.</p>
+<div class="section" id="features">
+<h2>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><p>Twenty available model classes, with tens of thousands of possible hyperparameter configurations</p></li>
+<li><p>Finds optimal time series models by genetic programming</p></li>
+<li><p>Handles univariate and multivariate/parallel time series</p></li>
+<li><p>Point and probabilistic forecasts</p></li>
+<li><p>Ability to handle messy data by learning optimal NaN imputation and outlier removal</p></li>
+<li><p>Ability to add external known-in-advance regressor</p></li>
+<li><p>Allows automatic ensembling of best models</p></li>
+<li><p>Multiple cross validation options</p></li>
+<li><p>Subsetting and weighting to improve search on many multivariate series</p></li>
+<li><p>Option to use one or a combination of metrics for model selection</p></li>
+<li><p>Ability to upsample data to a custom frequency</p></li>
+<li><p>Import and export of templates allowing greater user customization</p></li>
+</ul>
+</div>
+<div class="section" id="basic-use">
+<h2>Basic Use<a class="headerlink" href="#basic-use" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">autots</span>
+</pre></div>
+</div>
+<p>This includes dependencies for basic models, but additonal packages are required for some models and methods.</p>
+<p>Input data is expected to come in a ‘long’ format with three columns:</p>
+<ul class="simple">
+<li><p>Date (ideally already in pd.DateTime format)</p></li>
+<li><p>Value</p></li>
+<li><p>Series ID. For a single time series, series_id can be <code class="docutils literal notranslate"><span class="pre">=</span> <span class="pre">None</span></code>.</p></li>
+</ul>
+<p>The column name for each of these is passed to .fit().</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">#</span> <span class="n">also</span><span class="p">:</span> <span class="n">_hourly</span><span class="p">,</span> <span class="n">_daily</span><span class="p">,</span> <span class="n">_weekly</span><span class="p">,</span> <span class="k">or</span> <span class="n">_yearly</span>
+<span class="k">from</span> <span class="n">autots</span><span class="p">.</span><span class="n">datasets</span> <span class="n">import</span> <span class="n">load_monthly</span>
+<span class="n">df_long</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">()</span>
+
+<span class="k">from</span> <span class="n">autots</span> <span class="n">import</span> <span class="n">AutoTS</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span><span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
+               <span class="n">prediction_interval</span><span class="o">=</span><span class="mi">0</span><span class="p">.</span><span class="mi">9</span><span class="p">,</span> <span class="n">ensemble</span><span class="o">=</span><span class="k">None</span><span class="p">,</span>
+               <span class="n">model_list</span><span class="o">=</span><span class="s1">&#39;superfast&#39;</span><span class="p">,</span>
+               <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+               <span class="n">validation_method</span><span class="o">=</span><span class="s1">&#39;even&#39;</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span>
+                  <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
+
+<span class="o">#</span> <span class="n">Print</span> <span class="n">the</span> <span class="n">name</span> <span class="k">of</span> <span class="n">the</span> <span class="n">best</span> <span class="n">model</span>
+<span class="n">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+
+<span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">predict</span><span class="p">()</span>
+<span class="o">#</span> <span class="n">point</span> <span class="n">forecasts</span> <span class="n">dataframe</span>
+<span class="n">forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="p">.</span><span class="n">forecast</span>
+<span class="o">#</span> <span class="n">accuracy</span> <span class="k">of</span> <span class="k">all</span> <span class="n">tried</span> <span class="n">model</span> <span class="n">results</span>
+<span class="n">model_results</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">results</span><span class="p">()</span>
+<span class="o">#</span> <span class="k">and</span> <span class="n">aggregated</span> <span class="k">from</span> <span class="k">cross</span> <span class="n">validation</span>
+<span class="n">validation_results</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">results</span><span class="p">(</span><span class="ss">&quot;validation&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Check out <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/source/tutorial.html">extended_tutorial.md</a> for a more detailed guide to features!</p>
+</div>
+<div class="section" id="how-to-contribute">
+<h2>How to Contribute:<a class="headerlink" href="#how-to-contribute" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><p>Give feedback on where you find the documentation confusing</p></li>
+<li><p>Use AutoTS and…</p>
+<ul>
+<li><p>Report errors and request features by adding Issues on GitHub</p></li>
+<li><p>Posting the top model templates for your data (to help improve the starting templates)</p></li>
+<li><p>Feel free to recommend different search grid parameters for your favorite models</p></li>
+</ul>
+</li>
+<li><p>And, of course, contributing to the codebase directly on GitHub!</p></li>
+</ul>
+<p><em>Also known as Project CATS (Catlin’s Automated Time Series) hence the logo.</em></p>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../index.html">
+    <img class="logo" src="../_static/autots_logo.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+<p class="blurb">Automated Forecasting</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=winedarksea&repo=autots&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Intro</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#autots">AutoTS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#features">Features</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#basic-use">Basic Use</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#how-to-contribute">How to Contribute:</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="modules.html">autots</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="../index.html" title="previous chapter">AutoTS</a></li>
+      <li>Next: <a href="tutorial.html" title="next chapter">Tutorial</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Colin Catlin.
+      
+      |
+      <a href="../_sources/source/includeme.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+    <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', '1669974141']);
+      _gaq.push(['_setDomainName', 'none']);
+      _gaq.push(['_setAllowLinker', true]);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+
+    </script>
+    
+  </body>
+</html>

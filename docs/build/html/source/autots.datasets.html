@@ -1,0 +1,203 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>autots.datasets package &#8212; AutoTS 0.2.0 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="autots.evaluator package" href="autots.evaluator.html" />
+    <link rel="prev" title="autots package" href="autots.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="autots-datasets-package">
+<h1>autots.datasets package<a class="headerlink" href="#autots-datasets-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-autots.datasets.fred">
+<span id="autots-datasets-fred-module"></span><h2>autots.datasets.fred module<a class="headerlink" href="#module-autots.datasets.fred" title="Permalink to this headline">¶</a></h2>
+<p>FRED (Federal Reserve Economic Data) Data Import</p>
+<p>requires API key from FRED
+and pip install fredapi</p>
+<dl class="function">
+<dt id="autots.datasets.fred.get_fred_data">
+<code class="sig-prename descclassname">autots.datasets.fred.</code><code class="sig-name descname">get_fred_data</code><span class="sig-paren">(</span><em class="sig-param">fredkey: str</em>, <em class="sig-param">SeriesNameDict: dict = {'SeriesID': 'SeriesName'}</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.fred.get_fred_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Imports Data from Federal Reserve</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>- an API key from FRED</strong> (<em>fredkey</em>) – </p></li>
+<li><p><strong>pairs of FRED Series IDs and Series Names</strong> (<em>SeriesNameDict</em><em>,</em>) – Series id must match Fred IDs, but name can be anything
+if default is use, several default samples are returned</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-autots.datasets">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots.datasets" title="Permalink to this headline">¶</a></h2>
+<p>Tools for Importing Sample Data</p>
+<dl class="function">
+<dt id="autots.datasets.load_daily">
+<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_daily</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_daily" title="Permalink to this definition">¶</a></dt>
+<dd><p>4 series of sample daily data from late 2019.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.datasets.load_monthly">
+<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_monthly</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_monthly" title="Permalink to this definition">¶</a></dt>
+<dd><p>Federal Reserve of St. Louis monthly economic indicators.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.datasets.load_yearly">
+<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_yearly</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_yearly" title="Permalink to this definition">¶</a></dt>
+<dd><p>Federal Reserve of St. Louis annual economic indicators.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.datasets.load_hourly">
+<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_hourly</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_hourly" title="Permalink to this definition">¶</a></dt>
+<dd><p>Traffic data from the MN DOT via the UCI data repository.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.datasets.load_weekly">
+<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_weekly</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_weekly" title="Permalink to this definition">¶</a></dt>
+<dd><p>Weekly petroleum industry data from the EIA.</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../index.html">
+    <img class="logo" src="../_static/autots_logo.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+<p class="blurb">Automated Forecasting</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=winedarksea&repo=autots&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="includeme.html">Intro</a></li>
+<li class="toctree-l1"><a class="reference internal" href="includeme.html#autots">AutoTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">autots</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="autots.html">autots package</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="modules.html">autots</a><ul>
+  <li><a href="autots.html">autots package</a><ul>
+      <li>Previous: <a href="autots.html" title="previous chapter">autots package</a></li>
+      <li>Next: <a href="autots.evaluator.html" title="next chapter">autots.evaluator package</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Colin Catlin.
+      
+      |
+      <a href="../_sources/source/autots.datasets.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+    <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', '1669974141']);
+      _gaq.push(['_setDomainName', 'none']);
+      _gaq.push(['_setAllowLinker', true]);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+
+    </script>
+    
+  </body>
+</html>
