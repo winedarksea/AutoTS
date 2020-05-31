@@ -1,0 +1,430 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tutorial &#8212; AutoTS 0.2.0 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="autots" href="modules.html" />
+    <link rel="prev" title="Intro" href="includeme.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="tutorial">
+<h1>Tutorial<a class="headerlink" href="#tutorial" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="extended-tutorial">
+<h2>Extended Tutorial<a class="headerlink" href="#extended-tutorial" title="Permalink to this headline">¶</a></h2>
+<p>There are a number of ways to get a more accurate time series model. AutoTS takes care of a few of these:</p>
+<ol class="arabic simple">
+<li><p>Pretransforming the data optimally for each model</p></li>
+<li><p>Trying an assortment of different algorithms</p></li>
+<li><p>Trying an assortment of hyperparameters for each algorithm</p></li>
+</ol>
+</div>
+<div class="section" id="underlying-process">
+<h2>Underlying Process<a class="headerlink" href="#underlying-process" title="Permalink to this headline">¶</a></h2>
+<p>AutoTS works in the following way at present:</p>
+<ul class="simple">
+<li><p>It begins by taking long data and converting it to a wide dataframe with DateTimeIndex</p></li>
+<li><p>An initial train/test split is generated where the test is the most recent data, of forecast_length</p></li>
+<li><p>A random template of models is generated and tested on the initial train/test</p></li>
+<li><p>Models consist of a pre-transformation step (fill na options, outlier removal options, etc), and algorithm (ie ETS) and model paramters (trend, damped, etc)</p></li>
+<li><p>The top models (selected by a combination of metrics) are recombined with random mutations for n_generations</p></li>
+<li><p>A handful of the best models from this process go to cross validation, where they are re-assessed on new train/test splits.</p></li>
+<li><p>The best model in validation is selected as best_model and used in the <code class="docutils literal notranslate"><span class="pre">.predict()</span></code> method to generate forecasts.</p></li>
+</ul>
+<div class="section" id="a-simple-example">
+<h3>A simple example<a class="headerlink" href="#a-simple-example" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">#</span> <span class="n">also</span><span class="p">:</span> <span class="n">_hourly</span><span class="p">,</span> <span class="n">_daily</span><span class="p">,</span> <span class="n">_weekly</span><span class="p">,</span> <span class="k">or</span> <span class="n">_yearly</span>
+<span class="k">from</span> <span class="n">autots</span><span class="p">.</span><span class="n">datasets</span> <span class="n">import</span> <span class="n">load_monthly</span>
+<span class="n">df_long</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">()</span>
+
+<span class="k">from</span> <span class="n">autots</span> <span class="n">import</span> <span class="n">AutoTS</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span><span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
+               <span class="n">ensemble</span><span class="o">=</span><span class="k">None</span><span class="p">,</span> <span class="n">drop_data_older_than_periods</span><span class="o">=</span><span class="mi">240</span><span class="p">,</span>
+               <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span>
+                  <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
+
+<span class="o">#</span> <span class="n">Print</span> <span class="n">the</span> <span class="n">name</span> <span class="k">of</span> <span class="n">the</span> <span class="n">best</span> <span class="n">model</span>
+<span class="n">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>If your data is already wide (one column for each value), to bring to a long format:</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">df_long</span> <span class="o">=</span> <span class="n">df_wide</span><span class="p">.</span><span class="n">melt</span><span class="p">(</span><span class="n">id_vars</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;datetime_col_name&#39;</span><span class="p">],</span>
+                       <span class="n">var_name</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">,</span> <span class="n">value_name</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="section" id="you-can-tailor-the-process-in-a-few-ways">
+<h4>You can tailor the process in a few ways…<a class="headerlink" href="#you-can-tailor-the-process-in-a-few-ways" title="Permalink to this headline">¶</a></h4>
+<p>The simplest thing is to increase the number of generations <code class="docutils literal notranslate"><span class="pre">max_generations=15</span></code>. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.</p>
+<p>Another approach that may improve accuracy is to set <code class="docutils literal notranslate"><span class="pre">ensemble='all'</span></code>. As this means storing and processing the result of every model, this takes more time and memory.</p>
+<p>A handy parameter for when your data is expected to always be 0 or greater (such as unit sales) is to set <code class="docutils literal notranslate"><span class="pre">no_negatives=True</span></code>. This forces forecasts to be greater than or equal to 0.
+A similar function is <code class="docutils literal notranslate"><span class="pre">constraint=2.0</span></code>. What this does is prevent the forecast from leaving historic bounds set by the training data. In this example, the forecasts would not be allowed to go above <code class="docutils literal notranslate"><span class="pre">max(training</span> <span class="pre">data)</span> <span class="pre">+</span> <span class="pre">2.0</span> <span class="pre">*</span> <span class="pre">st.dev(training</span> <span class="pre">data)</span></code>, as well as the reverse on the minimum side. A constraint of 0 would constrain forecasts to historical mins and maxes.</p>
+<p>Another convenience function is <code class="docutils literal notranslate"><span class="pre">drop_most_recent=1</span></code> specifing the number of most recent periods to drop. This can be handy with monthly data, where often the most recent month is incomplete.
+<code class="docutils literal notranslate"><span class="pre">drop_data_older_than_periods</span></code> provides similar functionality but drops the oldest data to speed up the process on large datasets.
+<code class="docutils literal notranslate"><span class="pre">remove_leading_zeroes=True</span></code> is useful for data where leading zeroes represent a process which has not yet started.</p>
+<p>When working with many time series, it can be helpful to take advantage of <code class="docutils literal notranslate"><span class="pre">subset=100</span></code>. Subset specifies the interger number of time series to test models on, and can be useful with many related time series (1000’s of customer’s sales). Usually the best model on a 100 related time series is very close to that tested on many thousands (or more) of series. This speeds up the model process in these cases, but does not work with <code class="docutils literal notranslate"><span class="pre">horizontal</span></code> ensemble types.</p>
+<p>Subset takes advantage of weighting, more highly-weighted series are more likely to be selected. Weighting is used with multiple time series to tell the evaluator which series are most important. Series weights are assumed to all be equal to 1, values need only be passed in when a value other than 1 is desired.
+Note for weighting, larger weights = more important.</p>
+</div>
+</div>
+<div class="section" id="validation-and-cross-validation">
+<h3>Validation and Cross Validation<a class="headerlink" href="#validation-and-cross-validation" title="Permalink to this headline">¶</a></h3>
+<p>Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future.
+With very small datasets, there may be not be enough data for cross validation, in which case <code class="docutils literal notranslate"><span class="pre">num_validations</span></code> may be set to 0. This can also speed up quick tests.</p>
+<p>Cross validation helps assure that the optimal model is stable over the dynamics of a time series.
+Cross validation can be tricky in time series data due to the necessity of preventing data leakage from future data points.
+Here, two methods of cross validation are in place, <code class="docutils literal notranslate"><span class="pre">'even'</span></code> and ‘<code class="docutils literal notranslate"><span class="pre">backwards'</span></code>.</p>
+<p><strong>Even</strong> cross validation slices the data into equal chunks. For example, <code class="docutils literal notranslate"><span class="pre">num_validations=3</span></code> would split the data into equal, progressive thirds (less the original validation sample). The final validation results would then include four pieces, the results on the three cross validation samples as well as the original validation sample.</p>
+<p><strong>Backwards</strong> cross validation works backwards from the most recent data. First the most recent forecast_length samples are taken, then the next most recent forecast_length samples, and so on. This makes it more ideal for smaller or fast-changing datasets.</p>
+<p><strong>Seasonal</strong> validation is supplied as <code class="docutils literal notranslate"><span class="pre">'seasonal</span> <span class="pre">n'</span></code> ie <code class="docutils literal notranslate"><span class="pre">'seasonal</span> <span class="pre">364'</span></code>. It trains on the most recent data as usual, then valdations are <code class="docutils literal notranslate"><span class="pre">n</span></code> periods back from the datetime of the forecast would be. For example with daily data, forecasting for a month ahead, and <code class="docutils literal notranslate"><span class="pre">n=364</span></code>, the first test might be on May 2020, with validation on June 2019 and June 2018, the final forecast then of June 2020.</p>
+<p>Only a subset of models are based from initial validation to cross validation. The number of models is set such as <code class="docutils literal notranslate"><span class="pre">models_to_validate=10</span></code>. If a float in 0 to 1 is provided, it is treated as a % of models to select. If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter.</p>
+</div>
+<div class="section" id="a-more-detailed-example">
+<h3>A more detailed example:<a class="headerlink" href="#a-more-detailed-example" title="Permalink to this headline">¶</a></h3>
+<p>Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in (lovely) Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting.
+Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. This carries information to models such as <code class="docutils literal notranslate"><span class="pre">RollingRegression</span></code>, <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code>, and <code class="docutils literal notranslate"><span class="pre">VECM</span></code>.</p>
+<p>Also seen in use here is the <code class="docutils literal notranslate"><span class="pre">model_list</span></code>.</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>from autots.datasets import load_hourly
+
+df_long = load_hourly()
+
+# all other series assumed to be weight of 1
+weights_hourly = {&#39;traffic_volume&#39;: 20}
+
+model_list = [&#39;ZeroesNaive&#39;, &#39;LastValueNaive&#39;, &#39;MedValueNaive&#39;, &#39;GLS&#39;,
+              &#39;ETS&#39;,  &#39;RollingRegression&#39;, &#39;UnobservedComponents&#39;, &#39;VECM&#39;]
+
+from autots import AutoTS
+model = AutoTS(forecast_length=73, frequency=&#39;infer&#39;,
+               prediction_interval=0.95, ensemble=None,
+               max_generations=5, num_validations=2,
+               validation_method=&#39;even&#39;,
+               model_list=model_list, models_to_validate=15,
+               drop_most_recent=1)
+
+model = model.fit(df_long, date_col=&#39;datetime&#39;,
+                  value_col=&#39;value&#39;, id_col=&#39;series_id&#39;,
+                  weights=weights_hourly)
+
+prediction = model.predict()
+forecasts_df = prediction.forecast
+</pre></div>
+</div>
+<p>Probabilistic forecasts are <em>available</em> for all models, but in many cases are just data-based estimates in lieu of model estimates, so be careful.</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">upper_forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="p">.</span><span class="n">upper_forecast</span>
+<span class="n">lower_forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="p">.</span><span class="n">lower_forecast</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="model-lists">
+<h3>Model Lists<a class="headerlink" href="#model-lists" title="Permalink to this headline">¶</a></h3>
+<p>By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of <code class="docutils literal notranslate"><span class="pre">'probabilistic',</span> <span class="pre">'multivariate',</span> <span class="pre">'fast',</span> <span class="pre">'superfast',</span> <span class="pre">or</span> <span class="pre">'all'</span></code>.</p>
+<p>On multivariate series, <code class="docutils literal notranslate"><span class="pre">TSFreshRegressor</span></code> and <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code> can be impractically slow.</p>
+</div>
+</div>
+<div class="section" id="deployment-and-template-import-export">
+<h2>Deployment and Template Import/Export<a class="headerlink" href="#deployment-and-template-import-export" title="Permalink to this headline">¶</a></h2>
+<p>Many models can be reverse engineered with relative simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package.
+There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a <code class="docutils literal notranslate"><span class="pre">.csv</span></code> or <code class="docutils literal notranslate"><span class="pre">.json</span></code> file, then on next run only those models will be tried.
+This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve.</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">#</span> <span class="k">after</span> <span class="n">fitting</span> <span class="n">an</span> <span class="n">AutoTS</span> <span class="n">model</span>
+<span class="n">example_filename</span> <span class="o">=</span> <span class="ss">&quot;example_export.csv&quot;</span> <span class="o">#</span> <span class="p">.</span><span class="n">csv</span><span class="o">/</span><span class="p">.</span><span class="n">json</span>
+<span class="n">model</span><span class="p">.</span><span class="n">export_template</span><span class="p">(</span><span class="n">example_filename</span><span class="p">,</span> <span class="n">models</span><span class="o">=</span><span class="s1">&#39;best&#39;</span><span class="p">,</span>
+                      <span class="n">n</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">max_per_model_class</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+<span class="o">#</span> <span class="k">on</span> <span class="k">new</span> <span class="n">training</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span><span class="n">forecast_length</span><span class="o">=</span><span class="n">forecast_length</span><span class="p">,</span>
+               <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span> <span class="n">max_generations</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+               <span class="n">num_validations</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="k">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">import_template</span><span class="p">(</span><span class="n">example_filename</span><span class="p">,</span> <span class="k">method</span><span class="o">=</span><span class="s1">&#39;only&#39;</span><span class="p">)</span> <span class="o">#</span> <span class="k">method</span><span class="o">=</span><span class="s1">&#39;add on&#39;</span>
+<span class="n">print</span><span class="p">(</span><span class="ss">&quot;Overwrite template is: {}&quot;</span><span class="p">.</span><span class="n">format</span><span class="p">(</span><span class="n">str</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">initial_template</span><span class="p">)))</span>
+</pre></div>
+</div>
+<div class="section" id="metrics">
+<h3>Metrics<a class="headerlink" href="#metrics" title="Permalink to this headline">¶</a></h3>
+<p>There are a number of available metrics, all combined together into a ‘Score’ which evaluates the best model. The ‘Score’ that compares models can easily be adjusted by passing through custom metric weights dictionary.
+Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers.
+This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series.</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>metric_weighting = {&#39;smape_weighting&#39; : 10,
+                    &#39;mae_weighting&#39; : 1,
+                    &#39;rmse_weighting&#39; : 5,
+                    &#39;containment_weighting&#39; : 1,
+                    &#39;runtime_weighting&#39; : 0,
+                    &#39;spl_weighting&#39;: 1,
+                    &#39;contour_weighting&#39;: 0}
+
+model = AutoTS(forecast_length=forecast_length,
+               frequency=&#39;infer&#39;,
+               metric_weighting=metric_weighting)
+</pre></div>
+</div>
+<p>It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE.</p>
+<p><strong>Warning</strong>: weights are not fully balanced 1 - 1 - 1. As such it is usually best to place your favorite metric an order of magnitude or more above the others.</p>
+<p><code class="docutils literal notranslate"><span class="pre">sMAPE</span></code> is generally the most versatile across multiple series, but doesn’t handle forecasts with lots of zeroes well.</p>
+<p><code class="docutils literal notranslate"><span class="pre">SPL</span></code> is <em>Scaled Pinball Loss</em> used for assessing upper/lower quantile forecast accuracies.</p>
+<p><code class="docutils literal notranslate"><span class="pre">Containment</span></code> measures the percent of test data that falls between the upper and lower forecasts.</p>
+<p><code class="docutils literal notranslate"><span class="pre">Contour</span></code> is another unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but <em>not</em> the magnitude of that difference. Does not work with forecast_length=1.</p>
+</div>
+</div>
+<div class="section" id="installation-and-dependency-versioning">
+<h2>Installation and Dependency Versioning<a class="headerlink" href="#installation-and-dependency-versioning" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">autots</span></code></p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">Python</span> <span class="o">&gt;=</span> <span class="mi">3</span><span class="p">.</span><span class="mi">5</span>
+<span class="n">numpy</span>
+<span class="n">pandas</span>
+<span class="n">sklearn</span>     <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">.</span><span class="mi">20</span><span class="p">.</span><span class="mi">0</span> <span class="p">(</span><span class="n">ColumnTransformer</span><span class="p">)</span>
+            <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">.</span><span class="mi">23</span><span class="p">.</span><span class="mi">0</span> <span class="p">(</span><span class="n">PoissonReg</span><span class="p">)</span>
+<span class="n">statsmodels</span>
+</pre></div>
+</div>
+<p>Of these, numpy and pandas are critical.
+Some limited functionality should exist without scikit-learn.
+Nearly full functionality should be maintained without statsmodels.</p>
+<p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">autots['additional']</span></code></p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">holidays</span>
+<span class="n">fbprophet</span>
+<span class="n">fredapi</span>
+<span class="n">tsfresh</span>
+<span class="n">mxnet</span> <span class="p">(</span><span class="n">mxnet</span><span class="o">-</span><span class="n">mkl</span><span class="p">,</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu91</span><span class="p">,</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu101mkl</span><span class="p">,</span> <span class="n">etc</span><span class="p">.)</span>
+<span class="n">gluonts</span>
+<span class="n">tensorflow</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span> <span class="p">(</span><span class="n">tensorflow</span><span class="o">-</span><span class="n">mkl</span><span class="p">)</span>
+<span class="n">tensorflow</span><span class="o">-</span><span class="n">probability</span>
+<span class="n">xgboost</span>
+</pre></div>
+</div>
+<p>Download Anaconda or Miniconda.</p>
+<p>(install Visual Studio if on Windows)</p>
+<p>If you have an Nvidia GPU, download NVIDIA CUDA and CuDNN.
+MKL is included with <code class="docutils literal notranslate"><span class="pre">anaconda</span></code>.</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">conda</span> <span class="k">create</span> <span class="o">-</span><span class="n">n</span> <span class="n">timeseries</span> <span class="n">python</span><span class="o">=</span><span class="mi">3</span><span class="p">.</span><span class="mi">6</span>
+<span class="n">conda</span> <span class="n">activate</span> <span class="n">timeseries</span>
+
+<span class="o">#</span> <span class="k">for</span> <span class="n">simplicity</span><span class="p">:</span>
+<span class="n">conda</span> <span class="n">install</span> <span class="n">anaconda</span>
+<span class="o">#</span> <span class="n">elsewise</span><span class="p">:</span>
+<span class="n">conda</span> <span class="n">install</span> <span class="n">numpy</span> <span class="n">scipy</span>
+<span class="n">conda</span> <span class="n">install</span> <span class="o">-</span><span class="k">c</span> <span class="n">conda</span><span class="o">-</span><span class="n">forge</span> <span class="n">scikit</span><span class="o">-</span><span class="n">learn</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">statsmodels</span>
+
+<span class="o">#</span> <span class="n">use</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu101mkl</span> <span class="k">or</span> <span class="k">similar</span> <span class="k">if</span> <span class="n">applicable</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">mxnet</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">gluonts</span>
+<span class="n">conda</span> <span class="k">update</span> <span class="n">anaconda</span>
+<span class="n">conda</span> <span class="n">install</span> <span class="o">-</span><span class="k">c</span> <span class="n">conda</span><span class="o">-</span><span class="n">forge</span> <span class="n">fbprophet</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">tensorflow</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">tensorflow</span><span class="o">-</span><span class="n">probability</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="caveats-and-advice">
+<h2>Caveats and Advice<a class="headerlink" href="#caveats-and-advice" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="short-training-history">
+<h3>Short Training History<a class="headerlink" href="#short-training-history" title="Permalink to this headline">¶</a></h3>
+<p>How much data is ‘too little’ depends on the seasonality and volatility of the data.
+Minimal training data most greatly impacts the ability to do proper cross validation. Set <code class="docutils literal notranslate"><span class="pre">num_validations=0</span></code> in such cases.
+Since ensembles are based on the test dataset, it would also be wise to set <code class="docutils literal notranslate"><span class="pre">ensemble=None</span></code> if <code class="docutils literal notranslate"><span class="pre">num_validations=0</span></code>.</p>
+</div>
+<div class="section" id="too-much-training-data">
+<h3>Too much training data.<a class="headerlink" href="#too-much-training-data" title="Permalink to this headline">¶</a></h3>
+<p>Too much data is already handled to some extent by <code class="docutils literal notranslate"><span class="pre">'context_slicer'</span></code> in the transformations, which tests using less training data.
+That said, large datasets will be slower and more memory intensive, for high frequency data (say hourly) it can often be advisable to roll that up to a higher level (daily, hourly, etc.).
+Rollup can be accomplished by specifying the frequency = your rollup frequency, and then setting the <code class="docutils literal notranslate"><span class="pre">agg_func=np.sum</span></code> or ‘mean’ or other appropriate statistic.</p>
+</div>
+<div class="section" id="lots-of-nan-in-data">
+<h3>Lots of NaN in data<a class="headerlink" href="#lots-of-nan-in-data" title="Permalink to this headline">¶</a></h3>
+<p>Various NaN filling techniques are tested in the transformation. Rolling up data to a less-frequent frequency may also help deal with NaNs.</p>
+</div>
+<div class="section" id="adding-regressors-and-other-information">
+<h3>Adding regressors and other information<a class="headerlink" href="#adding-regressors-and-other-information" title="Permalink to this headline">¶</a></h3>
+<p>‘Preord’ regressor, to make it clear this is data that will be know with high certainy about the future.
+Such data about the future is rare, one example might be number of stores that will be (planned to be) open each given day in the future when forecast sales.
+Only a handful of models support adding regressors, and not all handle multiple regressors.
+The recommended way to provide regressors is as a pd.Series/pd.Dataframe with a DatetimeIndex.</p>
+<p>Don’t know the future? Don’t worry, the models can handle quite a lot of parallel time series, which is another way to add information.
+Additional regressors can be passed through as additional time series to forecast as part of df_long.
+Some models here can utilize the additional information they provide to help improve forecast quality.
+To prevent forecast accuracy for considering these additional series too heavily, input series weights that lower or remove their forecast accuracy from consideration.</p>
+</div>
+<div class="section" id="categorical-data">
+<h3>Categorical Data<a class="headerlink" href="#categorical-data" title="Permalink to this headline">¶</a></h3>
+<p>Categorical data is handled, but it is handled crudely. For example, optimization metrics do not currently include any categorical accuracy metrics.
+For categorical data that has a meaningful order (ie ‘low’, ‘medium’, ‘high’) it is best for the user to encode that data before passing it in,
+thus properly capturing the relative sequence (ie ‘low’=1, ‘medium’=2, ‘high’=3).</p>
+</div>
+<div class="section" id="custom-and-unusual-frequencies">
+<h3>Custom and Unusual Frequencies<a class="headerlink" href="#custom-and-unusual-frequencies" title="Permalink to this headline">¶</a></h3>
+<p>Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: <a class="reference external" href="https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects">https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects</a>
+Some models will support a more limited range of frequencies.</p>
+<div class="section" id="tested-frequencies">
+<h4>Tested Frequencies<a class="headerlink" href="#tested-frequencies" title="Permalink to this headline">¶</a></h4>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Frequency</p></th>
+<th class="head"><p>Offset Str</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Hourly</p></td>
+<td><p>‘H’</p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>Daily</p></td>
+<td><p>‘D’</p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>Monthly 01</p></td>
+<td><p>‘MS’</p></td>
+<td><p>First day of month</p></td>
+</tr>
+<tr class="row-odd"><td><p>Annual</p></td>
+<td><p>‘A’/’AS’</p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>Weekly</p></td>
+<td><p>‘W’</p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../index.html">
+    <img class="logo" src="../_static/autots_logo.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+<p class="blurb">Automated Forecasting</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=winedarksea&repo=autots&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="includeme.html">Intro</a></li>
+<li class="toctree-l1"><a class="reference internal" href="includeme.html#autots">AutoTS</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Tutorial</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#extended-tutorial">Extended Tutorial</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#underlying-process">Underlying Process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#deployment-and-template-import-export">Deployment and Template Import/Export</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#installation-and-dependency-versioning">Installation and Dependency Versioning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#caveats-and-advice">Caveats and Advice</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="modules.html">autots</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="includeme.html" title="previous chapter">Intro</a></li>
+      <li>Next: <a href="modules.html" title="next chapter">autots</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Colin Catlin.
+      
+      |
+      <a href="../_sources/source/tutorial.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+    <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', '1669974141']);
+      _gaq.push(['_setDomainName', 'none']);
+      _gaq.push(['_setAllowLinker', true]);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+
+    </script>
+    
+  </body>
+</html>

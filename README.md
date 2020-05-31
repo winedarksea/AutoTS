@@ -2,14 +2,14 @@
 
 ![AutoTS Logo](/img/autots_logo.png)
 
-#### Model Selection for Multiple Time Series
+**Model Selection for Multiple Time Series**
 
 Simple package for comparing and predicting with open-source time series implementations.
 
 For other time series needs, check out the list [here](https://github.com/MaxBenChrist/awesome_time_series_in_python).
 
 ## Features
-* Fourteen available model classes, with thousands of possible hyperparameter configurations
+* Twenty available model classes, with tens of thousands of possible hyperparameter configurations
 * Finds optimal time series models by genetic programming
 * Handles univariate and multivariate/parallel time series
 * Point and probabilistic forecasts
@@ -18,7 +18,7 @@ For other time series needs, check out the list [here](https://github.com/MaxBen
 * Allows automatic ensembling of best models
 * Multiple cross validation options
 * Subsetting and weighting to improve search on many multivariate series
-* Option to use one or a combination of SMAPE, RMSE, MAE, and Runtime for model selection
+* Option to use one or a combination of metrics for model selection
 * Ability to upsample data to a custom frequency
 * Import and export of templates allowing greater user customization
 
@@ -36,15 +36,19 @@ Input data is expected to come in a 'long' format with three columns:
 The column name for each of these is passed to .fit(). 
 
 ```
-from autots.datasets import load_toy_monthly # also: _daily _yearly or _hourly
-df_long = load_toy_monthly()
+
+# also: _hourly, _daily, _weekly, or _yearly
+from autots.datasets import load_monthly 
+df_long = load_monthly()
 
 from autots import AutoTS
-model = AutoTS(forecast_length = 3, frequency = 'infer',
-               prediction_interval = 0.9, ensemble = False, weighted = False,
-			   drop_data_older_than_periods = 240,
-               max_generations = 5, num_validations = 2, validation_method = 'even')
-model = model.fit(df_long, date_col = 'datetime', value_col = 'value', id_col = 'series_id')
+model = AutoTS(forecast_length=3, frequency='infer',
+               prediction_interval=0.9, ensemble=None,
+			   model_list='superfast',
+               max_generations=5, num_validations=2,
+			   validation_method='even')
+model = model.fit(df_long, date_col='datetime',
+				  value_col='value', id_col='series_id')
 
 # Print the name of the best model
 print(model)
@@ -52,16 +56,16 @@ print(model)
 prediction = model.predict()
 # point forecasts dataframe
 forecasts_df = prediction.forecast
-# accuracy of all tried model results (not including cross validation)
-model_results = model.initial_results.model_results
-# and including cross validation
-validation_results = model.validation_results.model_results
+# accuracy of all tried model results
+model_results = model.results()
+# and aggregated from cross validation
+validation_results = model.results("validation")
 
 ```
 
-Check out [extended_tutorial.md](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md) for a more detailed guide to features!
+Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/source/tutorial.html) for a more detailed guide to features!
 
-# How to Contribute:
+## How to Contribute:
 * Give feedback on where you find the documentation confusing
 * Use AutoTS and...
 	* Report errors and request features by adding Issues on GitHub

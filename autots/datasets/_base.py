@@ -1,23 +1,23 @@
+"""Loading example datasets."""
 from os.path import dirname, join
-import numpy as np
 import pandas as pd
 
-def load_toy_daily():
-    """
-    4 series of sample daily data from late 2019
-    Testing some basic missing and categorical features.
-    """
+
+def load_daily():
+    """4 series of sample daily data from late 2019."""
     module_path = dirname(__file__)
     data_file_name = join(module_path, 'data', 'toy_daily.csv')
-    
+
     df_long = pd.read_csv(data_file_name)
-    df_long['datetime'] = pd.to_datetime(df_long['datetime'], infer_datetime_format = True)
+    df_long['datetime'] = pd.to_datetime(df_long['datetime'],
+                                         infer_datetime_format=True)
 
     return df_long
 
+
 def load_fred_monthly():
     """
-    Federal Reserve of St. Louis
+    Federal Reserve of St. Louis.
     from autots.datasets.fred import get_fred_data
     SeriesNameDict = {'GS10':'10-Year Treasury Constant Maturity Rate', 
                               'MCOILWTICO':'Crude Oil West Texas Intermediate Cushing Oklahoma', 
@@ -33,21 +33,22 @@ def load_fred_monthly():
     """
     module_path = dirname(__file__)
     data_file_name = join(module_path, 'data', 'fred_monthly.zip')
-    
-    df_long = pd.read_csv(data_file_name, compression = 'zip')
-    df_long['datetime'] = pd.to_datetime(df_long['datetime'], infer_datetime_format = True)
+
+    df_long = pd.read_csv(data_file_name, compression='zip')
+    df_long['datetime'] = pd.to_datetime(df_long['datetime'],
+                                         infer_datetime_format=True)
 
     return df_long
 
-def load_toy_monthly():
-    """
-    Federal Reserve of St. Louis
-    """
+
+def load_monthly():
+    """Federal Reserve of St. Louis monthly economic indicators."""
     return load_fred_monthly()
+
 
 def load_fred_yearly():
     """
-    Federal Reserve of St. Louis
+    Federal Reserve of St. Louis.
     from autots.datasets.fred import get_fred_data
     SSeriesNameDict = {'GDPA':"Gross Domestic Product",
                   'ACOILWTICO':'Crude Oil West Texas Intermediate Cushing Oklahoma', 
@@ -66,17 +67,18 @@ def load_fred_yearly():
     """
     module_path = dirname(__file__)
     data_file_name = join(module_path, 'data', 'fred_yearly.csv')
-    
+
     df_long = pd.read_csv(data_file_name)
-    df_long['datetime'] = pd.to_datetime(df_long['datetime'], infer_datetime_format = True)
+    df_long['datetime'] = pd.to_datetime(df_long['datetime'],
+                                         infer_datetime_format=True)
 
     return df_long
 
-def load_toy_yearly():
-    """
-    Federal Reserve of St. Louis
-    """
+
+def load_yearly():
+    """Federal Reserve of St. Louis annual economic indicators."""
     return load_fred_yearly()
+
 
 def load_traffic_hourly():
     """
@@ -85,33 +87,30 @@ def load_traffic_hourly():
     """
     module_path = dirname(__file__)
     data_file_name = join(module_path, 'data', 'traffic_hourly.zip')
-    
-    df_long = pd.read_csv(data_file_name, compression = 'zip')
-    df_long['datetime'] = pd.to_datetime(df_long['datetime'], infer_datetime_format = True)
+
+    df_long = pd.read_csv(data_file_name, compression='zip')
+    df_long['datetime'] = pd.to_datetime(df_long['datetime'],
+                                         infer_datetime_format=True)
 
     return df_long
 
-def load_toy_hourly():
-    """
-    From the MN DOT via the UCI data repository. 
-    Yes, Minnesota is the best state of the Union.
-    """
+
+def load_hourly():
+    """Traffic data from the MN DOT via the UCI data repository."""
     return load_traffic_hourly()
 
+
 def load_eia_weekly():
-    """
-    Data from the EIA on Weekly Petroleum data. (Soon may we no longer need it!)
-    """
+    """Weekly petroleum industry data from the EIA."""
     module_path = dirname(__file__)
     data_file_name = join(module_path, 'data', 'eia_weekly.zip')
-    
-    df_long = pd.read_csv(data_file_name, compression = 'zip')
-    df_long['datetime'] = pd.to_datetime(df_long['datetime'], infer_datetime_format = True)
-    
+
+    df_long = pd.read_csv(data_file_name, compression='zip')
+    df_long['datetime'] = pd.to_datetime(df_long['datetime'],
+                                         infer_datetime_format=True)
     return df_long
 
-def load_toy_weekly():
-    """
-    Data from the EIA on Weekly Petroleum data. (Soon may we no longer need it!)
-    """
-    return load_eia_weekly() 
+
+def load_weekly():
+    """Weekly petroleum industry data from the EIA."""
+    return load_eia_weekly()

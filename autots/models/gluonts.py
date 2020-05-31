@@ -7,8 +7,7 @@ Except it is really the only thing I use that runs mxnet, and it takes a while t
 import datetime
 import numpy as np
 import pandas as pd
-from autots.evaluator.auto_model import ModelObject
-from autots.evaluator.auto_model import PredictionObject
+from autots.evaluator.auto_model import ModelObject, PredictionObject
 
 try:
     from gluonts.dataset.common import ListDataset
@@ -34,34 +33,40 @@ class GluonTS(ModelObject):
         gluon_model (str): Model Structure to Use - ['DeepAR', 'NPTS', 'DeepState', 'WaveNet','DeepFactor', 'Transformer','SFF', 'MQCNN']
         epochs (int): Number of neural network training epochs. Higher generally results in better, then over fit.
         learning_rate (float): Neural net training parameter
-        context_length (str): 'full' or '2ForecastLength'
+        context_length (str): int window, '2ForecastLength', or 'nForecastLength'
         forecast_length (int): Length to forecast. Unlike in other methods, this must be provided *before* fitting model
         
     """
     def __init__(self, name: str = "GluonTS", frequency: str = 'infer', 
-                 prediction_interval: float = 0.9, 
+                 prediction_interval: float = 0.9,
                  regression_type: str = None, holiday_country: str = 'US',
                  random_seed: int = 2020, verbose: int = 0,
                  gluon_model: str = 'DeepAR', epochs: int = 20,
-                 learning_rate: float = 0.001, context_length: str = '2ForecastLength',
+                 learning_rate: float = 0.001,
+                 context_length = 10,
                  forecast_length: int = 14
                  ):
         ModelObject.__init__(self, name, frequency, prediction_interval, 
-                             regression_type = regression_type, 
-                             holiday_country = holiday_country, random_seed = random_seed,
-                             verbose = verbose)
+                             regression_type=regression_type, 
+                             holiday_country=holiday_country,
+                             random_seed=random_seed,
+                             verbose=verbose)
         self.gluon_model = gluon_model
-        self.epochs = epochs
-        self.learning_rate = learning_rate
+        if self.gluon_model == 'NPTS':
+            self.epochs = 20
+            self.learning_rate = 0.001
+        else:
+            self.epochs = epochs
+            self.learning_rate = learning_rate
         self.context_length = context_length
         self.forecast_length = forecast_length
         
         
-    def fit(self, df, preord_regressor = []):
-        """Train algorithm given data supplied 
+    def fit(self, df, future_regressor = []):
+        """Train algorithm given data supplied.
         
         Args:
-            df (pandas.DataFrame): Datetime Indexed 
+            df (pandas.DataFrame): Datetime Indexed
         """
         df = self.basic_profile(df)
         
@@ -70,15 +75,22 @@ class GluonTS(ModelObject):
             mxnet_seed(self.random_seed)
         except Exception:
             pass
-        
+
         gluon_train = df.transpose()
         self.train_index = gluon_train.index
-        
+
         gluon_freq = str(self.frequency).split('-')[0]
-        
-        # Context Length is deal with in Transformations, this takes that, or a fraction of that
-        if (str(self.context_length).lower() == 'full'):
-            self.gluon_context_length = len(df.index)
+        if gluon_freq in ["MS", "1MS"]:
+            gluon_freq = "M"
+
+        if int(self.verbose) > 1:
+            print(f"Gluon Frequency is {gluon_freq}")
+
+        if str(self.context_length).replace('.', '').isdigit():
+            self.gluon_context_length = int(float(self.context_length))
+        elif 'forecastlength' in str(self.context_length).lower():
+            len_int = int([x for x in str(self.context_length) if x.isdigit()][0])
+            self.gluon_context_length = int(len_int * self.forecast_length)
         else:
             self.gluon_context_length = 2 * self.forecast_length
             self.context_length = '2ForecastLength'
@@ -90,7 +102,7 @@ class GluonTS(ModelObject):
                              }
         self.test_ds = ListDataset([{FieldName.TARGET: target, 
                                  FieldName.START: start
-                                 } 
+                                 }
                                 for (target, start) in zip(
                                         gluon_train.values, 
                                         ts_metadata['gluon_start']
@@ -105,15 +117,13 @@ class GluonTS(ModelObject):
                                         ,trainer=Trainer(epochs=self.epochs,
                                                          learning_rate=self.learning_rate)
                                         )
-        if self.gluon_model == 'NPTS':
+        elif self.gluon_model == 'NPTS':
             from gluonts.model.npts import NPTSEstimator
             estimator = NPTSEstimator(freq=ts_metadata['freq'],
                                       context_length=ts_metadata['context_length'],
                                       prediction_length=ts_metadata['forecast_length'])
-            self.epochs = 20
-            self.learning_rate == 0.001
         
-        if self.gluon_model == 'MQCNN':
+        elif self.gluon_model == 'MQCNN':
             from gluonts.model.seq2seq import MQCNNEstimator
             estimator = MQCNNEstimator(freq=ts_metadata['freq'],
                                         context_length=ts_metadata['context_length'],
@@ -122,7 +132,7 @@ class GluonTS(ModelObject):
                                                          learning_rate=self.learning_rate)
                                         )
         
-        if self.gluon_model == 'SFF':
+        elif self.gluon_model == 'SFF':
             from gluonts.model.simple_feedforward import SimpleFeedForwardEstimator
             estimator = SimpleFeedForwardEstimator(
                 prediction_length=ts_metadata['forecast_length'],
@@ -133,7 +143,7 @@ class GluonTS(ModelObject):
                                 hybridize=False, num_batches_per_epoch=100
                                ))
         
-        if self.gluon_model == 'Transformer':
+        elif self.gluon_model == 'Transformer':
             from gluonts.model.transformer import TransformerEstimator
             estimator = TransformerEstimator(
                 prediction_length=ts_metadata['forecast_length'],
@@ -142,7 +152,7 @@ class GluonTS(ModelObject):
                 trainer=Trainer(epochs=self.epochs,
                                 learning_rate=self.learning_rate))
         
-        if self.gluon_model == 'DeepState':
+        elif self.gluon_model == 'DeepState':
                     from gluonts.model.deepstate import DeepStateEstimator
                     estimator = DeepStateEstimator(
                         prediction_length=ts_metadata['forecast_length'],
@@ -153,7 +163,7 @@ class GluonTS(ModelObject):
                         trainer=Trainer(ctx='cpu', epochs=self.epochs,
                                         learning_rate=self.learning_rate))
         
-        if self.gluon_model == 'DeepFactor':
+        elif self.gluon_model == 'DeepFactor':
                 from gluonts.model.deep_factor import DeepFactorEstimator
                 estimator = DeepFactorEstimator(freq=ts_metadata['freq'],
                                 context_length=ts_metadata['context_length'],
@@ -162,7 +172,7 @@ class GluonTS(ModelObject):
                                                  learning_rate=self.learning_rate)
                                 )
         
-        if self.gluon_model == 'WaveNet':
+        elif self.gluon_model == 'WaveNet':
             # Usually needs more epochs/training iterations than other models do
             from gluonts.model.wavenet import WaveNetEstimator
             estimator = WaveNetEstimator(freq=ts_metadata['freq'],
@@ -170,13 +180,15 @@ class GluonTS(ModelObject):
                                         ,trainer=Trainer(epochs=self.epochs,
                                                  learning_rate=self.learning_rate)
                                         )
+        else:
+            raise ValueError("'gluon_model' not recognized.")
         
         self.GluonPredictor = estimator.train(self.test_ds)
         self.ts_metadata = ts_metadata
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -218,40 +230,48 @@ class GluonTS(ModelObject):
             upper_forecast = all_forecast.pivot_table(values='UpperForecast', index='ForecastDate', columns='series_id')
             upper_forecast = upper_forecast[self.column_names]
             predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(model_name = self.name,
+            prediction = PredictionObject(model_name=self.name,
                                           forecast_length=forecast_length,
-                                          forecast_index = test_index,
-                                          forecast_columns = forecast.columns,
+                                          forecast_index=test_index,
+                                          forecast_columns=forecast.columns,
                                           lower_forecast=lower_forecast,
-                                          forecast=forecast, 
+                                          forecast=forecast,
                                           upper_forecast=upper_forecast,
                                           prediction_interval=self.prediction_interval,
                                           predict_runtime=predict_runtime,
-                                          fit_runtime = self.fit_runtime,
-                                          model_parameters = self.get_params())
-            
+                                          fit_runtime=self.fit_runtime,
+                                          model_parameters=self.get_params())
             return prediction
-    
+
     def get_new_params(self, method: str = 'random'):
-        """Returns dict of new parameters for parameter tuning
-        """
-        gluon_model_choice = np.random.choice(a=['DeepAR', 'NPTS', 'DeepState', 'WaveNet','DeepFactor', 'Transformer','SFF', 'MQCNN'], size = 1, p = [0.2, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1]).item()
-        epochs_choice = np.random.choice(a=[20, 40, 80, 150], size = 1, p = [0.58, 0.35, 0.05, 0.02]).item()
-        learning_rate_choice = np.random.choice(a=[0.01, 0.001, 0.0001], size = 1, p = [0.3, 0.6, 0.1]).item()
-        context_length_choice = np.random.choice(a=['full','2ForecastLength'], size = 1, p = [0.9, 0.1]).item()
+        """Return dict of new parameters for parameter tuning."""
+        gluon_model_choice = np.random.choice(
+            a=['DeepAR', 'NPTS', 'DeepState', 'WaveNet',
+               'DeepFactor', 'Transformer', 'SFF', 'MQCNN'], size=1,
+            p=[0.2, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1]).item()
+        if gluon_model_choice == 'NPTS':
+            epochs_choice = 20
+            learning_rate_choice = 0.001
+        else:
+            epochs_choice = np.random.choice(a=[20, 40, 80, 150], size=1,
+                                             p=[0.58, 0.35, 0.05, 0.02]).item()
+            learning_rate_choice = np.random.choice(
+                    a=[0.01, 0.001, 0.0001], size=1, p=[0.3, 0.6, 0.1]).item()
+        context_length_choice = np.random.choice(
+            a=[5, 10, 30, '1ForecastLength', '2ForecastLength'], size=1,
+            p=[0.2, 0.3, 0.1, 0.1, 0.3]).item()
         return {
                 'gluon_model': gluon_model_choice,
                 'epochs': epochs_choice,
                 'learning_rate': learning_rate_choice,
                 'context_length': context_length_choice
                 }
-    
+
     def get_params(self):
-        """Return dict of current parameters
-        """
+        """Return dict of current parameters."""
         parameter_dict = {
-                'gluon_model':self.gluon_model,
-                'epochs':self.epochs,
+                'gluon_model': self.gluon_model,
+                'epochs': self.epochs,
                 'learning_rate': self.learning_rate,
                 'context_length': self.context_length
                 }

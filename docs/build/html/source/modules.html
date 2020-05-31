@@ -1,0 +1,197 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>autots &#8212; AutoTS 0.2.0 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="autots package" href="autots.html" />
+    <link rel="prev" title="Tutorial" href="tutorial.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="autots">
+<h1>autots<a class="headerlink" href="#autots" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="autots.html">autots package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="autots.html#subpackages">Subpackages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.datasets.html">autots.datasets package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.datasets.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.datasets.html#module-autots.datasets.fred">autots.datasets.fred module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.datasets.html#module-autots.datasets">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html">autots.evaluator package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.html#module-autots.evaluator.auto_model">autots.evaluator.auto_model module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.html#module-autots.evaluator.auto_ts">autots.evaluator.auto_ts module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.html#module-autots.evaluator.metrics">autots.evaluator.metrics module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.evaluator.html#module-autots.evaluator">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.models.html">autots.models package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.basics">autots.models.basics module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.dnn">autots.models.dnn module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.ensemble">autots.models.ensemble module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.gluonts">autots.models.gluonts module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.prophet">autots.models.prophet module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.sklearn">autots.models.sklearn module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.statsmodels">autots.models.statsmodels module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.tfp">autots.models.tfp module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models.tsfresh">autots.models.tsfresh module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#module-autots.models">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.templates.html">autots.templates package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.templates.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.templates.html#module-autots.templates.general">autots.templates.general module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.templates.html#module-autots.templates">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="autots.tools.html">autots.tools package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.holiday">autots.tools.holiday module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.impute">autots.tools.impute module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.probabilistic">autots.tools.probabilistic module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.profile">autots.tools.profile module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.shaping">autots.tools.shaping module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools.transform">autots.tools.transform module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.tools.html#module-autots.tools">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="autots.html#module-autots">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../index.html">
+    <img class="logo" src="../_static/autots_logo.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+<p class="blurb">Automated Forecasting</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=winedarksea&repo=autots&type=watch&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="includeme.html">Intro</a></li>
+<li class="toctree-l1"><a class="reference internal" href="includeme.html#autots">AutoTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">autots</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="autots.html">autots package</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="tutorial.html" title="previous chapter">Tutorial</a></li>
+      <li>Next: <a href="autots.html" title="next chapter">autots package</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Colin Catlin.
+      
+      |
+      <a href="../_sources/source/modules.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+    <script type="text/javascript">
+
+      var _gaq = _gaq || [];
+      _gaq.push(['_setAccount', '1669974141']);
+      _gaq.push(['_setDomainName', 'none']);
+      _gaq.push(['_setAllowLinker', true]);
+      _gaq.push(['_trackPageview']);
+
+      (function() {
+        var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+        ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+      })();
+
+    </script>
+    
+  </body>
+</html>

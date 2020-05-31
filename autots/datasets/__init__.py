@@ -1,10 +1,10 @@
 """
 Tools for Importing Sample Data
 """
-from autots.datasets._base import load_toy_daily
-from autots.datasets._base import load_toy_monthly
-from autots.datasets._base import load_toy_yearly
-from autots.datasets._base import load_toy_hourly
-from autots.datasets._base import load_toy_weekly
+from autots.datasets._base import load_daily
+from autots.datasets._base import load_monthly
+from autots.datasets._base import load_yearly
+from autots.datasets._base import load_hourly
+from autots.datasets._base import load_weekly
 
-__all__ = ['load_toy_daily', 'load_toy_monthly', 'load_toy_yearly', 'load_toy_hourly', 'load_toy_weekly']
+__all__ = ['load_daily', 'load_monthly', 'load_yearly', 'load_hourly', 'load_weekly']

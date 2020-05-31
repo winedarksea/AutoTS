@@ -44,7 +44,7 @@ class TSFreshRegressor(ModelObject):
         self.max_timeshift = max_timeshift
         self.feature_selection = feature_selection
 
-    def fit(self, df, preord_regressor = []):
+    def fit(self, df, future_regressor = []):
         """Train algorithm given data supplied 
         
         Args:
@@ -56,11 +56,11 @@ class TSFreshRegressor(ModelObject):
         df = self.basic_profile(df)
 
         self.df_train = df
-        self.regressor_train = preord_regressor
+        self.regressor_train = future_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
     
-    def predict(self, forecast_length: int, preord_regressor = [], just_point_forecast: bool = False):
+    def predict(self, forecast_length: int, future_regressor = [], just_point_forecast: bool = False):
         """Generates forecast data immediately following dates of index supplied to .fit()
         
         Args:
@@ -77,11 +77,11 @@ class TSFreshRegressor(ModelObject):
         # num_subsamples = 10
         predictStartTime = datetime.datetime.now()
         
-        from tsfresh import extract_features
+        # from tsfresh import extract_features
         from tsfresh.utilities.dataframe_functions import make_forecasting_frame
         # from sklearn.ensemble import AdaBoostRegressor
         from tsfresh.utilities.dataframe_functions import impute as tsfresh_impute
-        from tsfresh.feature_extraction import EfficientFCParameters, MinimalFCParameters
+        # from tsfresh.feature_extraction import EfficientFCParameters, MinimalFCParameters
 
         
         max_timeshift = 10
@@ -238,7 +238,7 @@ class TSFreshRegressor(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning
         """
-        max_timeshift_choice = np.random.choice(a = [5, 10, 20], size = 1, p = [0.01, 0.98,0.01]).item()
+        max_timeshift_choice = np.random.choice(a = [5, 10, 20], size = 1, p = [0.05, 0.9,0.05]).item()
         regression_model_choice = np.random.choice(a = ['RandomForest','ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost'], size = 1, p = [0.02, 0.01, 0.01, 0.05, 0.01, 0.9]).item()
         feature_selection_choice = None
         parameter_dict = {
