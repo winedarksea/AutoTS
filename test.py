@@ -40,7 +40,7 @@ model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9,
                ensemble='simple,distance,probabilistic-max,horizontal-max',
                constraint=2,
-               max_generations=15, num_validations=2,
+               max_generations=1, num_validations=2,
                validation_method='backwards',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=0.1,
@@ -114,7 +114,7 @@ https://github.com/sphinx-doc/sphinx/issues/3382
 # m2r does not yet work on sphinx 3.0
 # pip install m2r
 cd <project dir>
-# delete docs/source (not tutorial or includeme)
+# delete docs/source and /build (not tutorial or includeme)
 sphinx-apidoc -f -o docs/source autots
 cd ./docs
 make html

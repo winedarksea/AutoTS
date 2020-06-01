@@ -61,13 +61,9 @@ html_static_path = ['_static']
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
 
-with open("_googleid.txt","r") as f:
-	gid = f.readline().strip()
-
-
 html_theme_options = {
     "show_powered_by": False,
-	'analytics_id':gid,
+	'analytics_id': 'UA-166997414-1',
 	'logo': 'autots_logo.png',
 	'description': 'Automated Forecasting',
     "github_user": "winedarksea",
