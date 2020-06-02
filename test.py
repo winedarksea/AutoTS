@@ -27,7 +27,7 @@ model_list = [
               ]
 model_list = 'superfast'
 # model_list = ['AverageValueNaive', 'LastValueNaive', 'ZeroesNaive']
-# model_list = ['RollingRegression', 'LastValueNaive']
+model_list = ['MotifSimulation', 'SeasonalNaive']
 
 metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
                     'rmse_weighting': 2, 'containment_weighting': 0,
@@ -40,7 +40,7 @@ model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9,
                ensemble='simple,distance,probabilistic-max,horizontal-max',
                constraint=2,
-               max_generations=1, num_validations=2,
+               max_generations=15, num_validations=2,
                validation_method='backwards',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=0.1,

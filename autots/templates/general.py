@@ -67,11 +67,11 @@ general_template_dict = {
   'Ensemble': 0},
  16: {'Model': 'GLM',
   'ModelParameters': '{"family": "Gaussian", "constant": true, "regression_type": null}',
-  'TransformationParameters': '{"outlier_method": "remove", "outlier_threshold": 4, "outlier_position": "first;last", "fillna": "zero", "transformation": "DifferencedTransformer", "second_transformation": null, "transformation_param": null, "detrend": "Linear", "third_transformation": "SeasonalDifferenceMean", "transformation_param2": "28", "third_transformation": "IntermittentOccurrence", "discretization": null, "n_bins": null, "context_slicer": null}',
+  'TransformationParameters': '{"outlier_method": "remove", "outlier_threshold": 4, "outlier_position": "first;last", "fillna": "zero", "transformation": "DifferencedTransformer", "second_transformation": null, "transformation_param": null, "detrend": "Linear", "third_transformation": "SeasonalDifferenceMean", "transformation_param2": "28", "fourth_transformation": "IntermittentOccurrence", "discretization": null, "n_bins": null, "context_slicer": null}',
   'Ensemble': 0}, 
  17: {'Model': 'MotifSimulation',
   'ModelParameters': '{"phrase_len": "20", "comparison": "pct_change_sign", "shared": false, "distance_metric": "hamming", "max_motifs": 0.2, "recency_weighting": 0.0,"cutoff_threshold": 0.9, "cutoff_minimum": 50, "point_method": "median"}',
-  'TransformationParameters': '{"outlier_method": null, "outlier_threshold": null, "outlier_position": "first", "fillna": "ffill", "transformation": "StandardScaler", "second_transformation": null, "transformation_param": null, "detrend": null, "third_transformation": "RollingMean", "transformation_param2": "10", "third_transformation": null, "discretization": null, "n_bins": null, "context_slicer": null}',
+  'TransformationParameters': '{"outlier_method": null, "outlier_threshold": null, "outlier_position": "first", "fillna": "ffill", "transformation": "StandardScaler", "second_transformation": null, "transformation_param": null, "detrend": null, "third_transformation": "RollingMean", "transformation_param2": "10", "fourth_transformation": null, "discretization": null, "n_bins": null, "context_slicer": null}',
   'Ensemble': 0},
  18: {'Model': 'GLS',
   'ModelParameters': '{"family": "Gaussian", "constant": true, "regression_type": null}',
@@ -79,11 +79,11 @@ general_template_dict = {
   'Ensemble': 0},
  19: {'Model': 'TensorflowSTS',
   'ModelParameters': '{"fit_method": "hmc", "num_steps": 200, "ar_order": 7, "seasonal_periods": 7, "trend": "semilocal"}',
-  'TransformationParameters': '{"outlier_method": "clip", "outlier_threshold": 3, "outlier_position": "first;middle", "fillna": "mean", "transformation": "PowerTransformer", "second_transformation": null, "transformation_param": null, "detrend": null, "third_transformation": "FixedRollingMean", "transformation_param2": "100thN", "third_transformation": "RobustScaler", "discretization": null, "n_bins": null, "context_slicer": null}',
+  'TransformationParameters': '{"outlier_method": "clip", "outlier_threshold": 3, "outlier_position": "first;middle", "fillna": "mean", "transformation": "PowerTransformer", "second_transformation": null, "transformation_param": null, "detrend": null, "third_transformation": "FixedRollingMean", "transformation_param2": "100thN", "fourth_transformation": "RobustScaler", "discretization": null, "n_bins": null, "context_slicer": null}',
   'Ensemble': 0},
  20: {'Model': 'TensorflowSTS',
   'ModelParameters': '{"fit_method": "variational", "num_steps": 50, "ar_order": 1, "seasonal_periods": 364, "trend": "local"}',
-  'TransformationParameters': '{"outlier_method": "clip", "outlier_threshold": 3, "outlier_position": "first", "fillna": "ffill", "transformation": null, "second_transformation": null, "transformation_param": null, "detrend": "Linear", "third_transformation": "FixedRollingMean", "transformation_param2": "14", "third_transformation": "SinTrend", "discretization": "sklearn-uniform", "n_bins": 5, "context_slicer": null}',
+  'TransformationParameters': '{"outlier_method": "clip", "outlier_threshold": 3, "outlier_position": "first", "fillna": "ffill", "transformation": null, "second_transformation": null, "transformation_param": null, "detrend": "Linear", "third_transformation": "FixedRollingMean", "transformation_param2": "14", "fourth_transformation": "SinTrend", "discretization": "sklearn-uniform", "n_bins": 5, "context_slicer": null}',
   'Ensemble': 0}
  }
 

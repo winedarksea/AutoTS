@@ -693,7 +693,7 @@ class MotifSimulation(ModelObject):
             a=[5, 10, 20, '10thN', '100thN', '1000thN', '20thN'],
             p=[0.4, 0.1, 0.3, 0.01, 0.1, 0.08, 0.01], size=1).item()
         shared_choice = np.random.choice(
-            a=[True, False], size=1, p=[0.1, 0.9]).item()
+            a=[True, False], size=1, p=[0.05, 0.95]).item()
         distance_metric_choice = np.random.choice(
             a=['other', 'hamming', 'cityblock', 'cosine',
                'euclidean', 'l1', 'l2', 'manhattan'], size=1).item()
@@ -711,9 +711,10 @@ class MotifSimulation(ModelObject):
             a=[0, 0.5, 0.1, 0.01, -0.1], size=1,
             p=[0.4, 0.1, 0.3, 0.1, 0.1]).item()
         cutoff_threshold_choice = np.random.choice(
-            a=[0.7, 0.9, 0.99, 1.5], size=1, p=[0.1, 0.2, 0.4, 0.3]).item()
+            a=[0.7, 0.9, 0.99, 1.5], size=1, p=[0.1, 0.1, 0.4, 0.4]).item()
         cutoff_minimum_choice = np.random.choice(
-            a=[5, 10, 20, 50, 100], size=1, p=[0.1, 0.1, 0.2, 0.3, 0.3]).item()
+            a=[5, 10, 20, 50, 100, 200], size=1,
+            p=[0.1, 0.1, 0.1, 0.3, 0.3, 0.1]).item()
         point_method_choice = np.random.choice(
             a=['median', 'sample', 'mean', 'sign_biased_mean'], size=1,
             p=[0.5, 0.1, 0.2, 0.2]).item()

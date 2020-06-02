@@ -1604,7 +1604,7 @@ def RandomTransform():
     discretization_choice = np.random.choice(
         a=[None, 'center', 'lower', 'upper', 'sklearn-quantile',
            'sklearn-uniform', 'sklearn-kmeans'], size=1,
-        p=[0.7, 0.1, 0.05, 0.05, 0.04, 0.03, 0.03]).item()
+        p=[0.7, 0.1, 0.08, 0.05, 0.0395, 0.03, 0.0005]).item()
     if discretization_choice is not None:
         n_bins_choice = np.random.choice(a=[5, 10, 25, 50], size=1,
                                          p=[0.1, 0.3, 0.5, 0.1]).item()
