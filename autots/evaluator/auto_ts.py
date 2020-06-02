@@ -1013,11 +1013,14 @@ or otherwise increase models available."""
 class AutoTSIntervals(object):
     """Autots looped to test multiple prediction intervals."""
 
-    def fit(self, prediction_intervals, import_template, forecast_length,
+    def fit(self, prediction_intervals, 
+            forecast_length,
             df_long, max_generations, num_validations,
             validation_method, models_to_validate,
             interval_models_to_validate,
             date_col, value_col, id_col=None,
+            import_template=None,
+            import_method='only',
             model_list='all',
             metric_weighting: dict = {
                 'smape_weighting': 1,
@@ -1056,7 +1059,8 @@ class AutoTSIntervals(object):
                 model_interrupt=model_interrupt,
                 models_to_validate=models_to_validate)
             if import_template is not None:
-                current_model.import_template(import_template, method='only')
+                current_model.import_template(import_template,
+                                              method=import_method)
             current_model = current_model.fit(
                 df_long, future_regressor=future_regressor,
                 weights=weights,

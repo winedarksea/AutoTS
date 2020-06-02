@@ -194,6 +194,7 @@ Nearly full functionality should be maintained without statsmodels.
 	gluonts
 	tensorflow >= 2.0.0
 	tensorflow-probability
+	lightgbm
 	xgboost
 
 #### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
