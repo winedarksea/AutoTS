@@ -391,8 +391,15 @@ class MotifSimulation(ModelObject):
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
         
+        phrase_len (int): length of motif vectors to compare as samples
+        comparison (str): method to process data before comparison, 'magnitude' is original data
+        shared (bool): whether to compare motifs across all series together, or separately
         distance_metric (str): passed through to sklearn pairwise_distances
         max_motifs (float): number of motifs to compare per series. If less 1, used as % of length training data
+        recency_weighting (float): amount to the value of more recent data.
+        cutoff_threshold (float): lowest value of distance metric to allow into forecast
+        cutoff_minimum (int): minimum number of motif vectors to include in forecast.
+        point_method (str): summarization method to choose forecast on, 'sample', 'mean', 'sign_biased_mean', 'median'
     """
 
     def __init__(self, name: str = "MotifSimulation", frequency: str = 'infer',
@@ -480,7 +487,7 @@ class MotifSimulation(ModelObject):
         prediction_interval = float(self.prediction_interval)
         na_threshold = 0.1
         point_method = self.point_method
-        
+
         # transform the data into different views (contour = percent_change)
         if 'pct_change' in comparison:
             if comparison in ['magnitude_pct_change', 'magnitude_pct_change_sign']:
@@ -492,7 +499,7 @@ class MotifSimulation(ModelObject):
             df = df.replace([np.inf, -np.inf], 0)
         else:
             self.comparison = 'magnitude'
-        
+
         if 'pct_change_sign' in comparison:
             last_motif = df.where(df >= 0, -1).where(df <= 0, 1).tail(phrase_n)
         else:
@@ -516,7 +523,9 @@ class MotifSimulation(ModelObject):
         # compare the motif vectors to the most recent vector of the series
         from sklearn.metrics.pairwise import pairwise_distances
         if shared:
-            comparative = pd.DataFrame(pairwise_distances(motif_vecs, last_motif.transpose(), metric = distance_metric))
+            comparative = pd.DataFrame(
+                pairwise_distances(motif_vecs, last_motif.transpose(),
+                                   metric=distance_metric))
             comparative.index = motif_vecs.index
             comparative.columns = last_motif.columns
         if not shared:
@@ -525,17 +534,19 @@ class MotifSimulation(ModelObject):
             for column in last_motif.columns:
                 x = motif_vecs[motif_vecs.index.get_level_values(0) == column]
                 y = last_motif[column].values.reshape(1, -1)
-                current_comparative = pd.DataFrame(pairwise_distances(x, y, metric = distance_metric))
+                current_comparative = pd.DataFrame(
+                    pairwise_distances(x, y, metric=distance_metric))
                 current_comparative.index = x.index
                 current_comparative.columns = [column]
-                comparative = pd.concat([comparative, current_comparative], axis=0, sort = True)
+                comparative = pd.concat([comparative, current_comparative],
+                                        axis=0, sort=True)
             comparative = comparative.groupby(level=[0, 1]).sum(min_count=0)
 
         # comparative is a df of motifs (in index) with their value to each series (per column)
         if recency_weighting != 0:
             rec_weights = np.repeat(((comparative.index.get_level_values(1))/df.shape[0]).values.reshape(-1,1) * recency_weighting, len(comparative.columns), axis=1)
             comparative = comparative.add(rec_weights, fill_value=0)
-        
+
         # make this faster
         upper_forecasts = pd.DataFrame()
         forecasts = pd.DataFrame()
@@ -572,7 +583,8 @@ class MotifSimulation(ModelObject):
                     pos_forecasts = pos_forecasts[pos_forecasts.columns[~(axis_means > 0)]]
                 current_forecast = pos_forecasts.mean(axis=1)
             elif point_method == 'sample':
-                current_forecast = pos_forecasts.sample(n = 1, axis=1, weights = vals.values)
+                current_forecast = pos_forecasts.sample(n=1, axis=1,
+                                                        weights=vals.values)
             else:
                 point_method = 'median'
                 current_forecast = pos_forecasts.median(axis=1)
@@ -582,12 +594,19 @@ class MotifSimulation(ModelObject):
 
             if point_method == 'sample':
                 n_samples = int(np.ceil(pos_forecasts.shape[1]/2))
-                current_forecast = pos_forecasts.sample(n = n_samples, axis=1, weights = vals.values).dropna(thresh = thresh, axis=0).quantile(q = [(1 - (prediction_interval* 1.1)), (prediction_interval * 1.1)], axis=1).transpose()
+                current_forecast = pos_forecasts.sample(
+                    n=n_samples, axis=1, weights=vals.values
+                    ).dropna(thresh=thresh, axis=0).quantile(
+                        q=[(1 - (prediction_interval* 1.1)),
+                           (prediction_interval * 1.1)], axis=1).transpose()
             else:
-                current_forecast = pos_forecasts.dropna(thresh = thresh, axis=0).quantile(q = [(1 - prediction_interval), prediction_interval], axis=1).transpose()
+                current_forecast = pos_forecasts.dropna(
+                    thresh=thresh, axis=0).quantile(
+                        q=[(1 - prediction_interval), prediction_interval],
+                        axis=1).transpose()
             # current_forecast.columns = [col, col]
-            lower_forecasts = pd.concat([lower_forecasts, current_forecast.iloc[:,0]], axis=1, sort=False)
-            upper_forecasts = pd.concat([upper_forecasts, current_forecast.iloc[:,1]], axis=1, sort=False)
+            lower_forecasts = pd.concat([lower_forecasts, current_forecast.iloc[:, 0]], axis=1, sort=False)
+            upper_forecasts = pd.concat([upper_forecasts, current_forecast.iloc[:, 1]], axis=1, sort=False)
         forecasts.columns = comparative.columns
         lower_forecasts.columns = comparative.columns
         upper_forecasts.columns = comparative.columns
@@ -688,7 +707,8 @@ class MotifSimulation(ModelObject):
         comparison_choice = np.random.choice(
             a=['pct_change', 'pct_change_sign',
                'magnitude_pct_change_sign',
-               'magnitude', 'magnitude_pct_change'], size=1).item()
+               'magnitude', 'magnitude_pct_change'], size=1,
+            p=[0.2, 0.1, 0.4, 0.2, 0.1]).item()
         phrase_len_choice = np.random.choice(
             a=[5, 10, 20, '10thN', '100thN', '1000thN', '20thN'],
             p=[0.4, 0.1, 0.3, 0.01, 0.1, 0.08, 0.01], size=1).item()
@@ -696,7 +716,9 @@ class MotifSimulation(ModelObject):
             a=[True, False], size=1, p=[0.05, 0.95]).item()
         distance_metric_choice = np.random.choice(
             a=['other', 'hamming', 'cityblock', 'cosine',
-               'euclidean', 'l1', 'l2', 'manhattan'], size=1).item()
+               'euclidean', 'l1', 'l2', 'manhattan'], size=1,
+            p=[0.2, 0.05, 0.1, 0.1,
+               0.1, 0.2, 0.24, 0.01]).item()
         if distance_metric_choice == 'other':
             distance_metric_choice = np.random.choice(
                 a=['braycurtis', 'canberra', 'chebyshev', 'correlation',
@@ -708,16 +730,16 @@ class MotifSimulation(ModelObject):
             a=[20, 50, 0.05, 0.2, 0.5], size=1,
             p=[0.4, 0.1, 0.3, 0.19, 0.01]).item())
         recency_weighting_choice = np.random.choice(
-            a=[0, 0.5, 0.1, 0.01, -0.1], size=1,
-            p=[0.4, 0.1, 0.3, 0.1, 0.1]).item()
+            a=[0, 0.5, 0.1, 0.01, -0.01, 0.001], size=1,
+            p=[0.5, 0.02, 0.05, 0.35, 0.05, 0.03]).item()
         cutoff_threshold_choice = np.random.choice(
             a=[0.7, 0.9, 0.99, 1.5], size=1, p=[0.1, 0.1, 0.4, 0.4]).item()
         cutoff_minimum_choice = np.random.choice(
             a=[5, 10, 20, 50, 100, 200], size=1,
-            p=[0.1, 0.1, 0.1, 0.3, 0.3, 0.1]).item()
+            p=[0.05, 0.05, 0.2, 0.2, 0.4, 0.1]).item()
         point_method_choice = np.random.choice(
             a=['median', 'sample', 'mean', 'sign_biased_mean'], size=1,
-            p=[0.5, 0.1, 0.2, 0.2]).item()
+            p=[0.5, 0.1, 0.3, 0.1]).item()
 
         return {
                 'phrase_len': phrase_len_choice,

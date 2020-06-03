@@ -555,6 +555,10 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     """
     transformationStartTime = datetime.datetime.now()
     from autots.tools.transform import GeneralTransformer
+    try:
+        coerce_integer = transformation_dict['coerce_integer']
+    except Exception:
+        coerce_integer = False
     transformer_object = GeneralTransformer(
         outlier_method=transformation_dict['outlier_method'],
         outlier_threshold=transformation_dict['outlier_threshold'],
@@ -568,7 +572,8 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
         transformation_param2=transformation_dict['transformation_param2'],
         fourth_transformation=transformation_dict['fourth_transformation'],
         discretization=transformation_dict['discretization'],
-        n_bins=transformation_dict['n_bins']
+        n_bins=transformation_dict['n_bins'],
+        coerce_integer=coerce_integer
                                             ).fit(df_train)
     df_train_transformed = transformer_object.transform(df_train)
 
@@ -1234,20 +1239,18 @@ def validation_aggregation(validation_results):
     groupby_cols = ['ID', 'Model', 'ModelParameters',
                     'TransformationParameters', 'Ensemble']
     col_aggs = {'Runs': 'sum',
-                # 'TransformationRuntime': 'mean',
-                # 'FitRuntime': 'mean',
-                # 'PredictRuntime': 'mean',
                 'smape': 'mean',
                 'mae': 'mean',
                 'rmse': 'mean',
                 'containment': 'mean',
                 'spl': 'mean',
-                # 'lower_mae': 'mean',
-                # 'upper_mae': 'mean',
                 'contour': 'mean',
                 'smape_weighted': 'mean',
                 'mae_weighted': 'mean',
                 'rmse_weighted': 'mean',
+                'containment_weighted': 'mean',
+                'contour_weighted': 'mean',
+                'spl_weighted': 'mean',
                 'containment_weighted': 'mean',
                 'TotalRuntimeSeconds': 'mean',
                 'Score': 'mean'
@@ -1291,8 +1294,22 @@ def generate_score(model_results, metric_weighting: dict = {},
         contour_weighting = metric_weighting['contour_weighting']
     except KeyError:
         contour_weighting = 0
+    # handle various runtime information records
+    if 'TotalRuntimeSeconds' in model_results.columns:
+        if 'TotalRuntime' in model_results.columns:
+            model_results['TotalRuntimeSeconds'] = np.where(
+                model_results['TotalRuntimeSeconds'].isna(), 
+                model_results['TotalRuntime'].dt.seconds,
+                model_results['TotalRuntimeSeconds'])
+        else:
+            model_results['TotalRuntimeSeconds'] = np.where(
+                model_results['TotalRuntimeSeconds'].isna(), 
+                model_results['TotalRuntimeSeconds'].max(),
+                model_results['TotalRuntimeSeconds'])
+    else:
+        model_results['TotalRuntimeSeconds'] = model_results['TotalRuntime'].dt.seconds
+    # generate minimizing scores, where smaller = better accuracy
     try:
-        # smaller better
         model_results = model_results.replace([np.inf, -np.inf], np.nan)
         # model_results = model_results.fillna(value=model_results.max(axis=0))
         smape_score = model_results['smape_weighted']/(model_results['smape_weighted'].min(skipna=True) + 1)  # smaller better
@@ -1303,7 +1320,7 @@ def generate_score(model_results, metric_weighting: dict = {},
         mae_scaler = 1 if mae_scaler == 0 else mae_scaler
         mae_score = model_results['mae_weighted']/mae_scaler
         containment_score = (abs(prediction_interval - model_results['containment'])) + 1  # from 1 to 2, smaller better
-        runtime = model_results['TotalRuntime'].dt.seconds + 120
+        runtime = model_results['TotalRuntimeSeconds'] + 120
         runtime_score = runtime/(runtime.min(skipna=True))  # smaller better
         spl_score = model_results['spl_weighted']/(model_results['spl_weighted'].min(skipna=True) + 1)  # smaller better
         contour_score = (1/(model_results['contour_weighted'])).replace(

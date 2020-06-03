@@ -16,6 +16,7 @@ df_long = load_weekly()
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
 weights_hourly = {'traffic_volume': 10}
+weights_weekly = {'Weekly Minnesota Midgrade Conventional Retail Gasoline Prices  (Dollars per Gallon)': 20}
 
 model_list = [
               'ZeroesNaive', 'LastValueNaive', 'AverageValueNaive',
@@ -27,7 +28,7 @@ model_list = [
               ]
 model_list = 'superfast'
 # model_list = ['AverageValueNaive', 'LastValueNaive', 'ZeroesNaive']
-model_list = ['WindowRegression', 'SeasonalNaive']
+# model_list = ['WindowRegression', 'SeasonalNaive']
 
 metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
                     'rmse_weighting': 2, 'containment_weighting': 0,
@@ -59,7 +60,7 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
 # model = model.import_results('test.pickle')
 model = model.fit(df_long,
                   future_regressor=future_regressor_train2d,
-                  # weights=weights_hourly,
+                  weights=weights_weekly,
                   result_file='test.pickle',
                   date_col='datetime', value_col='value',
                   id_col='series_id')

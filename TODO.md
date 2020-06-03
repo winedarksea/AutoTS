@@ -7,6 +7,11 @@
 * New models need only be sometimes applicable
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
+# Latest:
+* added 'coerce_integer' to GeneralTransformer
+* tuned MotifSimulation and GeneralTransformer inputs
+* improved Scoring, Aggregation and export_template
+
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
 VECM does not recognize exog to predict

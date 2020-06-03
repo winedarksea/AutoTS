@@ -897,10 +897,15 @@ or otherwise increase models available."""
             if any(x in self.ensemble for x in ens_list):
                 temp = self.initial_results.model_results
                 temp = temp[temp['Ensemble'] >= 2]
+                temp = temp[temp['Exceptions'].isna()]
                 export_template = export_template.merge(
                     temp, how='outer',
                     on=export_template.columns.intersection(
                         temp.columns).to_list())
+                export_template['Score'] = generate_score(
+                    export_template,
+                    metric_weighting=self.metric_weighting,
+                    prediction_interval=self.prediction_interval)
             if str(max_per_model_class).isdigit():
                 export_template = export_template.sort_values(
                     'Score', ascending=True
