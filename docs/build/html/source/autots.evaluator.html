@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.evaluator package &#8212; AutoTS 0.2.0 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 0.2.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -209,7 +209,7 @@ I got better. -Python</p>
 
 <dl class="class">
 <dt id="autots.evaluator.auto_model.TemplateEvalObject">
-<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateEvalObject</code><span class="sig-paren">(</span><em class="sig-param">model_results=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_timestamp_smape=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_mae=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_spl=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_mae1=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_mae2=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">model_count: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateEvalObject" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateEvalObject</code><span class="sig-paren">(</span><em class="sig-param">model_results=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_timestamp_smape=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_mae=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_spl=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_rmse1=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_rmse2=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">model_count: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateEvalObject" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Object to contain all your failures!.</p>
 <dl class="method">
@@ -488,10 +488,21 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dt id="autots.evaluator.auto_ts.AutoTSIntervals">
 <em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTSIntervals</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTSIntervals" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>Autots looped to test multiple prediction intervals.</p>
+<p>Autots looped to test multiple prediction intervals. Experimental.</p>
+<p>Runs max_generations on first prediction interval, then validates on remainder.
+Most args are passed through to AutoTS().</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>interval_models_to_validate</strong> (<em>int</em>) – number of models to validate on each prediction interval.</p></li>
+<li><p><strong>import_results</strong> (<em>str</em>) – results from run on same data to load, <cite>filename.pickle</cite>.
+Currently result_file and import only save/load initial run, no validations.</p></li>
+</ul>
+</dd>
+</dl>
 <dl class="method">
 <dt id="autots.evaluator.auto_ts.AutoTSIntervals.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">prediction_intervals</em>, <em class="sig-param">import_template</em>, <em class="sig-param">forecast_length</em>, <em class="sig-param">df_long</em>, <em class="sig-param">max_generations</em>, <em class="sig-param">num_validations</em>, <em class="sig-param">validation_method</em>, <em class="sig-param">models_to_validate</em>, <em class="sig-param">interval_models_to_validate</em>, <em class="sig-param">date_col</em>, <em class="sig-param">value_col</em>, <em class="sig-param">id_col=None</em>, <em class="sig-param">model_list='all'</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 0</em>, <em class="sig-param">'mae_weighting': 1</em>, <em class="sig-param">'rmse_weighting': 0</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 1</em>, <em class="sig-param">'spl_weighting': 10}</em>, <em class="sig-param">weights: dict = {}</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">constraint=2</em>, <em class="sig-param">no_negatives=False</em>, <em class="sig-param">remove_leading_zeroes=False</em>, <em class="sig-param">random_seed=2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTSIntervals.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">prediction_intervals</em>, <em class="sig-param">forecast_length</em>, <em class="sig-param">df_long</em>, <em class="sig-param">max_generations</em>, <em class="sig-param">num_validations</em>, <em class="sig-param">validation_method</em>, <em class="sig-param">models_to_validate</em>, <em class="sig-param">interval_models_to_validate</em>, <em class="sig-param">date_col</em>, <em class="sig-param">value_col</em>, <em class="sig-param">id_col=None</em>, <em class="sig-param">import_template=None</em>, <em class="sig-param">import_method='only'</em>, <em class="sig-param">import_results=None</em>, <em class="sig-param">result_file=None</em>, <em class="sig-param">model_list='all'</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 0</em>, <em class="sig-param">'mae_weighting': 0</em>, <em class="sig-param">'rmse_weighting': 1</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 1</em>, <em class="sig-param">'spl_weighting': 10}</em>, <em class="sig-param">weights: dict = {}</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">constraint=2</em>, <em class="sig-param">no_negatives=False</em>, <em class="sig-param">remove_leading_zeroes=False</em>, <em class="sig-param">random_seed=2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTSIntervals.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train and find best.</p>
 </dd></dl>
 
@@ -644,24 +655,6 @@ Also doesn’t like zeroes in either forecast or actual - results in poor error 
 <p><a class="reference external" href="https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error">https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error</a></p>
 </dd></dl>
 
-<dl class="function">
-<dt id="autots.evaluator.metrics.smape_old">
-<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">smape_old</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">forecast</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.smape_old" title="Permalink to this definition">¶</a></dt>
-<dd><p>Expects two, 2-D numpy arrays of forecast_length * n series
-Doesn’t handle negatives well</p>
-<p>Returns a 1-D array of results in len n series</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>actual</strong> (<em>numpy.array</em>) – known true values</p></li>
-<li><p><strong>forecast</strong> (<em>numpy.array</em>) – predicted values</p></li>
-</ul>
-</dd>
-</dl>
-<p class="rubric">References</p>
-<p><a class="reference external" href="https://www.kaggle.com/c/web-traffic-time-series-forecasting/discussion/37232">https://www.kaggle.com/c/web-traffic-time-series-forecasting/discussion/37232</a></p>
-</dd></dl>
-
 </div>
 <div class="section" id="module-autots.evaluator">
 <span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots.evaluator" title="Permalink to this headline">¶</a></h2>
@@ -701,8 +694,8 @@ Doesn’t handle negatives well</p>
 
 <h3>Navigation</h3>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="includeme.html">Intro</a></li>
-<li class="toctree-l1"><a class="reference internal" href="includeme.html#autots">AutoTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="intro.html">Intro</a></li>
+<li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
 </ul>
 <ul class="current">
@@ -761,7 +754,7 @@ Doesn’t handle negatives well</p>
     <script type="text/javascript">
 
       var _gaq = _gaq || [];
-      _gaq.push(['_setAccount', '1669974141']);
+      _gaq.push(['_setAccount', 'UA-166997414-1']);
       _gaq.push(['_setDomainName', 'none']);
       _gaq.push(['_setAllowLinker', true]);
       _gaq.push(['_trackPageview']);

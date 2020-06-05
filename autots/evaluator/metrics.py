@@ -5,40 +5,6 @@ import numpy as np
 import pandas as pd
 
 
-def smape_old(actual, forecast):
-    """Expects two, 2-D numpy arrays of forecast_length * n series
-    Doesn't handle negatives well
-
-    Returns a 1-D array of results in len n series
-
-    Args:
-        actual (numpy.array): known true values
-        forecast (numpy.array): predicted values
-
-    References:
-        https://www.kaggle.com/c/web-traffic-time-series-forecasting/discussion/37232
-    """
-
-    out_array = np.zeros(actual.shape[1])
-    for r in range(actual.shape[1]):
-        y_true = actual[:, r]
-        y_pred = forecast[:, r]
-        y_pred = y_pred[~np.isnan(y_true)]
-        y_true = y_true[~np.isnan(y_true)]
-
-        out = 0
-        for i in range(y_true.shape[0]):
-            a = y_true[i]
-            b = math.fabs(y_pred[i])
-            c = a+b
-            if c == 0:
-                continue
-            out += math.fabs(a - b) / c
-        out *= (200.0 / y_true.shape[0])
-        out_array[r] = out
-    return out_array
-
-
 def smape(actual, forecast):
     """Expect two, 2-D numpy arrays of forecast_length * n series.
     Allows NaN in actuals, and corresponding NaN in forecast, but not unmatched NaN in forecast
@@ -86,12 +52,13 @@ def pinball_loss(A, F, quantile):
 
 def SPL(A, F, df_train, quantile):
     """Scaled pinball loss."""
-    scaler = df_train.tail(1000).diff().abs().mean(axis=0)
+    # scaler = df_train.tail(1000).diff().abs().mean(axis=0)
+    scaler = np.abs(np.diff(df_train[-1000:], axis=0)).mean(axis=0)
     # need to handle zeroes to prevent div 0 errors.
     # this will tend to make that series irrelevant to the overall evaluation
     fill_val = scaler.max()
     fill_val = fill_val if fill_val > 0 else 1
-    scaler = scaler.replace(0, np.nan).fillna(fill_val)
+    scaler[scaler == 0] = fill_val
     return pinball_loss(A=A, F=F, quantile=quantile) / scaler
 
 
@@ -178,25 +145,24 @@ def PredictionEval(PredictionObject, actual,
         per_timestamp (bool): whether to calculate and return per timestamp direction errors
         dist_n (int): if not None, calculates two part rmse on head(n) and tail(remainder) of forecast.
     """
-    # if not bool(series_weights):
-    #     series_weights = {x: 1 for x in actual.columns}
+    A = np.array(actual)
+    F = np.array(PredictionObject.forecast)
+    lower_forecast = np.array(PredictionObject.lower_forecast)
+    upper_forecast = np.array(PredictionObject.upper_forecast)
+    df_train=np.array(df_train)
 
     errors = EvalObject(model_name=PredictionObject.model_name)
 
     per_series = pd.DataFrame({
-            'smape': smape(actual, PredictionObject.forecast),
-            'mae': mae(actual, PredictionObject.forecast),
-            'rmse': rmse(actual, PredictionObject.forecast),
-            'containment': containment(PredictionObject.lower_forecast,
-                                       PredictionObject.upper_forecast,
-                                       actual),
-            'spl': SPL(A=actual, F=PredictionObject.upper_forecast,
-                       df_train=df_train,
+            'smape': smape(A, F),
+            'mae': mae(A, F),
+            'rmse': rmse(A, F),
+            'containment': containment(lower_forecast, upper_forecast, A),
+            'spl': SPL(A=A, F=upper_forecast, df_train=df_train,
                        quantile=PredictionObject.prediction_interval) +
-            SPL(A=actual, F=PredictionObject.lower_forecast,
-                df_train=df_train,
+            SPL(A=A, F=lower_forecast, df_train=df_train,
                 quantile=(1-PredictionObject.prediction_interval)),
-            'contour': contour(actual, PredictionObject.forecast)
+            'contour': contour(A, F)
             }).transpose()
     per_series.columns = actual.columns
 
@@ -224,8 +190,8 @@ def PredictionEval(PredictionObject, actual,
 
     if str(dist_n).isdigit():
         per_series_d = pd.DataFrame({
-            'mae1': mae(actual[:dist_n], PredictionObject.forecast[:dist_n]),
-            'mae2': mae(actual[dist_n:], PredictionObject.forecast[dist_n:])
+            'rmse1': rmse(A[:dist_n], F[:dist_n]),
+            'rmse2': rmse(A[dist_n:], F[dist_n:])
             }).transpose()
         per_series_d.columns = actual.columns
         per_series = pd.concat([per_series, per_series_d], axis=0)

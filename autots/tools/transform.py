@@ -939,7 +939,7 @@ class GeneralTransformer(object):
             * Discretization cannot be inversed
             * RollingMean, PctChange, CumSum, and DifferencedTransformer will only return original or an immediately following forecast
                 - by default 'forecast' is expected, 'original' can be set in trans_method
-    
+
     Args:
         outlier_method (str): - level of outlier removal, if any, per series
             'None'
@@ -1007,6 +1007,8 @@ class GeneralTransformer(object):
 
         n_bins (int): number of quantile bins to split data into
 
+        coerce_integer (bool): whether to force inverse_transform into integers
+
         random_seed (int): random state passed through where applicable
     """
 
@@ -1022,6 +1024,7 @@ class GeneralTransformer(object):
                  transformation_param2: str = None,
                  fourth_transformation: str = None,
                  discretization: str = 'center', n_bins: int = None,
+                 coerce_integer: bool = False,
                  random_seed: int = 2020):
 
         self.outlier_method = outlier_method
@@ -1037,30 +1040,31 @@ class GeneralTransformer(object):
         self.fourth_transformation = fourth_transformation
         self.discretization = discretization
         self.n_bins = n_bins
+        self.coerce_integer = coerce_integer
         self.random_seed = random_seed
 
     def outlier_treatment(self, df):
         """
         Args:
-            df (pandas.DataFrame): Datetime Indexed 
-        
+            df (pandas.DataFrame): Datetime Indexed
+
         Returns:
             pandas.DataFrame
         """
         outlier_method = self.outlier_method
-        
+
         if (outlier_method in [None, 'None']):
             return df
         elif (outlier_method == 'clip'):
-            df = clip_outliers(df, std_threshold = self.outlier_threshold)
+            df = clip_outliers(df, std_threshold=self.outlier_threshold)
             return df
         elif (outlier_method == 'remove'):
-            df = remove_outliers(df, std_threshold = self.outlier_threshold)
+            df = remove_outliers(df, std_threshold=self.outlier_threshold)
             return df
         else:
             self.outlier_method = None
             return df
-    
+
     def fill_na(self, df, window: int = 10):
         """
         Args:
@@ -1500,6 +1504,9 @@ class GeneralTransformer(object):
 
         # since inf just causes trouble.
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
+        
+        if self.coerce_integer:
+            df = df.round(decimals=0).astype(int)
         return df
 
 
@@ -1514,19 +1521,19 @@ def RandomTransform():
         'SeasonalDifference7', 'SeasonalDifference12',
         'cffilter', 'bkfilter', 'DatepartRegression',
         'DatepartRegressionElasticNet', 'DatepartRegressionLtd']
-    first_transformer_prob = [0.25, 0.05, 0.14, 0.05,
+    first_transformer_prob = [0.26, 0.05, 0.15, 0.1,
                               0.05, 0.04, 0.05, 0.01,
-                              0.01, 0.01, 0.03, 0.02,
-                              0.1, 0.01, 0.04,
+                              0.01, 0.01, 0.01, 0.01,
+                              0.1, 0.01, 0.01,
                               0.02, 0.02, 0.01, 0.01,
                               0.01, 0.01,
-                              0.01, 0.01, 0.02,
+                              0.01, 0.01, 0.01,
                               0.01, 0.01]
-    fourth_transformer_prob = [0.2, 0.05, 0.05, 0.05,
-                               0.05, 0.1, 0.05, 0.05,
-                               0.05, 0.04, 0.02, 0.02,
-                               0.1, 0.01, 0.03,
-                               0.02, 0.02, 0.01, 0.01,
+    fourth_transformer_prob = [0.3, 0.05, 0.05, 0.05,
+                               0.05, 0.1, 0.05, 0.03,
+                               0.01, 0.04, 0.02, 0.02,
+                               0.1, 0.01, 0.01,
+                               0.01, 0.01, 0.01, 0.01,
                                0.01, 0.01,
                                0.01, 0.01, 0.01,
                                0.01, 0.01]
@@ -1556,7 +1563,7 @@ def RandomTransform():
     detrend_choice = np.random.choice(
         a=[None, 'Linear', 'Poisson', 'Tweedie',
            'Gamma', 'RANSAC', 'ARD'], size=1,
-        p=[0.6, 0.3, 0.02, 0.02, 0.02, 0.0399, 0.0001]).item()
+        p=[0.85, 0.1, 0.01, 0.01, 0.01, 0.0199, 0.0001]).item()
 
     second_transformation_choice = np.random.choice(
         a=[None, 'RollingMean', 'FixedRollingMean', 'SeasonalDifference',
@@ -1604,12 +1611,15 @@ def RandomTransform():
     discretization_choice = np.random.choice(
         a=[None, 'center', 'lower', 'upper', 'sklearn-quantile',
            'sklearn-uniform', 'sklearn-kmeans'], size=1,
-        p=[0.7, 0.1, 0.05, 0.05, 0.04, 0.03, 0.03]).item()
+        p=[0.7, 0.1, 0.08, 0.05, 0.0395, 0.03, 0.0005]).item()
     if discretization_choice is not None:
         n_bins_choice = np.random.choice(a=[5, 10, 25, 50], size=1,
                                          p=[0.1, 0.3, 0.5, 0.1]).item()
     else:
         n_bins_choice = None
+    coerce_integer_choice = np.random.choice(
+        a=[True, False], size=1,
+        p=[0.02, 0.98]).item()
     context_choice = np.random.choice(
         a=[None, 'HalfMax', '2ForecastLength', '6ForecastLength',
            10, 50, '12ForecastLength'], size=1,
@@ -1628,6 +1638,7 @@ def RandomTransform():
             'fourth_transformation': fourth_transformation_choice,
             'discretization': discretization_choice,
             'n_bins': n_bins_choice,
+            'coerce_integer': coerce_integer_choice,
             'context_slicer': context_choice
             }
     return param_dict

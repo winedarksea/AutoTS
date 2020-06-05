@@ -196,6 +196,19 @@ def retrieve_regressor(regression_model: dict =
             verbose=int(verbose_bool), random_state=random_seed
             ))
         return regr
+    elif regression_model['model'] == 'LightGBM':
+        from sklearn.multioutput import MultiOutputRegressor
+        from lightgbm import LGBMRegressor
+        regr = MultiOutputRegressor(LGBMRegressor(
+            objective=regression_model["model_params"]['objective'],
+            learning_rate=regression_model["model_params"]['learning_rate'],
+            boosting_type=regression_model["model_params"]['boosting_type'],
+            num_leaves=regression_model["model_params"]['num_leaves'],
+            max_depth=regression_model["model_params"]['max_depth'],
+            n_estimators=regression_model["model_params"]['n_estimators'],
+            verbose=int(verbose_bool), random_state=random_seed
+            ))
+        return regr
     elif regression_model['model'] == 'Adaboost':
         from sklearn.multioutput import MultiOutputRegressor
         from sklearn.ensemble import AdaBoostRegressor
@@ -262,16 +275,16 @@ def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                                               'MLP', 'DecisionTree', 'KNN',
                                               'Adaboost', 'SVM', 'BayesianRidge',
                                               'xgboost', 'KerasRNN',
-                                              'HistGradientBoost'],
+                                              'HistGradientBoost', 'LightGBM'],
                               model_probs: list = [0.05, 0.05,
-                                                  0.12, 0.2, 0.12,
-                                                  0.2, 0.025, 0.035,
-                                                  0.05, 0.1,
-                                                  0.05]):
+                                                  0.14, 0.25, 0.1,
+                                                  0.14, 0.02, 0.08,
+                                                  0.01, 0.05,
+                                                  0.01, 0.1]):
     """Generate new parameters for input to regressor."""
     model = np.random.choice(a=models, size=1, p=model_probs).item()
-    # model = 'HistGradientBoost'
-    if model in ['xgboost', 'Adaboost', 'DecisionTree',
+    model = 'LightGBM'
+    if model in ['xgboost', 'Adaboost', 'DecisionTree', 'LightGBM',
                  'MLP', 'KNN', 'KerasRNN', 'HistGradientBoost']:
         if model == 'Adaboost':
             param_dict = {"model": 'Adaboost',
@@ -392,6 +405,29 @@ def generate_regressor_params(models: list = ['RandomForest','ElasticNet',
                               "learning_rate": np.random.choice(
                                   a=[1, 0.1, 0.01],
                                   p=[0.3, 0.4, 0.3], size=1).item()
+                              }}
+        elif model == 'LightGBM':
+            param_dict = {"model": 'LightGBM',
+                          "model_params": {
+                              "objective": np.random.choice(
+                                  a=['regression', 'gamma', 'huber',
+                                     'regression_l1'],
+                                  p=[0.4, 0.3, 0.1, 0.2], size=1).item(),
+                              "learning_rate": np.random.choice(
+                                  a=[0.001, 0.1, 0.01],
+                                  p=[0.1, 0.6, 0.3], size=1).item(),
+                              "num_leaves": np.random.choice(
+                                  a=[31, 127, 70],
+                                  p=[0.6, 0.1, 0.3], size=1).item(),
+                              "max_depth": np.random.choice(
+                                  a=[-1, 5, 10],
+                                  p=[0.6, 0.1, 0.3], size=1).item(),
+                              "boosting_type": np.random.choice(
+                                  a=['gbdt', 'rf', 'dart', 'goss'],
+                                  p=[0.5, 0.2, 0.1, 0.2], size=1).item(),
+                              "n_estimators": np.random.choice(
+                                  a=[100, 250, 50, 500],
+                                  p=[0.6, 0.099, 0.3, 0.0010], size=1).item()
                               }}
         else:
             min_samples = np.random.choice([1, 2, 0.05],

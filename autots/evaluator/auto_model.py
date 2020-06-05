@@ -555,6 +555,10 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     """
     transformationStartTime = datetime.datetime.now()
     from autots.tools.transform import GeneralTransformer
+    try:
+        coerce_integer = transformation_dict['coerce_integer']
+    except Exception:
+        coerce_integer = False
     transformer_object = GeneralTransformer(
         outlier_method=transformation_dict['outlier_method'],
         outlier_threshold=transformation_dict['outlier_threshold'],
@@ -568,7 +572,8 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
         transformation_param2=transformation_dict['transformation_param2'],
         fourth_transformation=transformation_dict['fourth_transformation'],
         discretization=transformation_dict['discretization'],
-        n_bins=transformation_dict['n_bins']
+        n_bins=transformation_dict['n_bins'],
+        coerce_integer=coerce_integer
                                             ).fit(df_train)
     df_train_transformed = transformer_object.transform(df_train)
 
@@ -634,16 +639,16 @@ class TemplateEvalObject(object):
                  per_timestamp_smape=pd.DataFrame(),
                  per_series_mae=pd.DataFrame(),
                  per_series_spl=pd.DataFrame(),
-                 per_series_mae1=pd.DataFrame(),
-                 per_series_mae2=pd.DataFrame(),
+                 per_series_rmse1=pd.DataFrame(),
+                 per_series_rmse2=pd.DataFrame(),
                  model_count: int = 0
                  ):
         self.model_results = model_results
         self.model_count = model_count
         self.per_series_mae = per_series_mae
         self.per_series_spl = per_series_spl
-        self.per_series_mae1 = per_series_mae1
-        self.per_series_mae2 = per_series_mae2
+        self.per_series_rmse1 = per_series_rmse1
+        self.per_series_rmse2 = per_series_rmse2
         self.per_timestamp_smape = per_timestamp_smape
 
     def __repr__(self):
@@ -663,13 +668,13 @@ class TemplateEvalObject(object):
             [self.per_series_spl,
              another_eval.per_series_spl],
             axis=0, sort=False)
-        self.per_series_mae1 = pd.concat(
-            [self.per_series_mae1,
-             another_eval.per_series_mae1],
+        self.per_series_rmse1 = pd.concat(
+            [self.per_series_rmse1,
+             another_eval.per_series_rmse1],
             axis=0, sort=False)
-        self.per_series_mae2 = pd.concat(
-            [self.per_series_mae2,
-             another_eval.per_series_mae2],
+        self.per_series_rmse2 = pd.concat(
+            [self.per_series_rmse2,
+             another_eval.per_series_rmse2],
             axis=0, sort=False)
         self.per_timestamp_smape = pd.concat(
                 [self.per_timestamp_smape,
@@ -957,17 +962,17 @@ def TemplateWizard(template, df_train, df_test, weights,
                     [template_result.per_timestamp_smape, cur_smape],
                     axis=0)
             if 'hdist' in ensemble:
-                cur_mae1 = model_error.per_series_metrics.loc['mae1']
-                cur_mae2 = model_error.per_series_metrics.loc['mae2']
-                cur_mae1 = pd.DataFrame(cur_mae1).transpose()
-                cur_mae2 = pd.DataFrame(cur_mae2).transpose()
-                cur_mae1.index = [model_id]
-                cur_mae2.index = [model_id]
-                template_result.per_series_mae1 = pd.concat(
-                    [template_result.per_series_mae1, cur_mae1],
+                cur_rmse1 = model_error.per_series_metrics.loc['rmse1']
+                cur_rmse2 = model_error.per_series_metrics.loc['rmse2']
+                cur_rmse1 = pd.DataFrame(cur_rmse1).transpose()
+                cur_rmse2 = pd.DataFrame(cur_rmse2).transpose()
+                cur_rmse1.index = [model_id]
+                cur_rmse2.index = [model_id]
+                template_result.per_series_rmse1 = pd.concat(
+                    [template_result.per_series_rmse1, cur_rmse1],
                     axis=0)
-                template_result.per_series_mae2 = pd.concat(
-                    [template_result.per_series_mae2, cur_mae2],
+                template_result.per_series_rmse2 = pd.concat(
+                    [template_result.per_series_rmse2, cur_rmse2],
                     axis=0)
         except KeyboardInterrupt:
             if model_interrupt:
@@ -1102,8 +1107,11 @@ def trans_dict_recomb(dict_array):
 
 def _trans_dicts(current_ops, best = None, n: int = 5):
     fir = json.loads(current_ops.iloc[0, :]['TransformationParameters'])
-    if current_ops.shape[0] > 1:
-        r_id = np.random.randint(1, (current_ops.shape[0]))
+    cur_len = current_ops.shape[0]
+    if cur_len > 1:
+        # select randomly from best of data, doesn't handle lengths < 2
+        top_r = np.floor((cur_len / 5) + 2)
+        r_id = np.random.randint(1, top_r)
         sec = json.loads(current_ops.iloc[r_id, :]['TransformationParameters'])
     else:
         sec = RandomTransform()
@@ -1173,16 +1181,22 @@ def NewGeneticTemplate(model_results, submitted_parameters,
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 4
             trans_dicts = _trans_dicts(current_ops, best=best, n=n)
+            # select the best model of this type
             fir = json.loads(current_ops.iloc[0, :]['ModelParameters'])
-            if current_ops.shape[0] > 1:
-                r_id = np.random.randint(1, (current_ops.shape[0]))
+            cur_len = current_ops.shape[0]
+            if cur_len > 1:
+                # select randomly from best of data, doesn't handle lengths < 2
+                top_r = np.floor((cur_len / 5) + 2)
+                r_id = np.random.randint(1, top_r)
                 sec = json.loads(current_ops.iloc[r_id, :]['ModelParameters'])
             else:
                 sec = ModelMonster(model_type).get_new_params()
+            # generate new random parameters ('mutations')
             r = ModelMonster(model_type).get_new_params()
             r2 = ModelMonster(model_type).get_new_params()
             arr = [fir, sec, r2, r]
             model_dicts = list()
+            # recombine best and random to create new generation
             for _ in range(n):
                 r_sel = np.random.choice(arr, size=2, replace=False)
                 a = r_sel[0]
@@ -1234,20 +1248,18 @@ def validation_aggregation(validation_results):
     groupby_cols = ['ID', 'Model', 'ModelParameters',
                     'TransformationParameters', 'Ensemble']
     col_aggs = {'Runs': 'sum',
-                # 'TransformationRuntime': 'mean',
-                # 'FitRuntime': 'mean',
-                # 'PredictRuntime': 'mean',
                 'smape': 'mean',
                 'mae': 'mean',
                 'rmse': 'mean',
                 'containment': 'mean',
                 'spl': 'mean',
-                # 'lower_mae': 'mean',
-                # 'upper_mae': 'mean',
                 'contour': 'mean',
                 'smape_weighted': 'mean',
                 'mae_weighted': 'mean',
                 'rmse_weighted': 'mean',
+                'containment_weighted': 'mean',
+                'contour_weighted': 'mean',
+                'spl_weighted': 'mean',
                 'containment_weighted': 'mean',
                 'TotalRuntimeSeconds': 'mean',
                 'Score': 'mean'
@@ -1291,8 +1303,22 @@ def generate_score(model_results, metric_weighting: dict = {},
         contour_weighting = metric_weighting['contour_weighting']
     except KeyError:
         contour_weighting = 0
+    # handle various runtime information records
+    if 'TotalRuntimeSeconds' in model_results.columns:
+        if 'TotalRuntime' in model_results.columns:
+            model_results['TotalRuntimeSeconds'] = np.where(
+                model_results['TotalRuntimeSeconds'].isna(), 
+                model_results['TotalRuntime'].dt.seconds,
+                model_results['TotalRuntimeSeconds'])
+        else:
+            model_results['TotalRuntimeSeconds'] = np.where(
+                model_results['TotalRuntimeSeconds'].isna(), 
+                model_results['TotalRuntimeSeconds'].max(),
+                model_results['TotalRuntimeSeconds'])
+    else:
+        model_results['TotalRuntimeSeconds'] = model_results['TotalRuntime'].dt.seconds
+    # generate minimizing scores, where smaller = better accuracy
     try:
-        # smaller better
         model_results = model_results.replace([np.inf, -np.inf], np.nan)
         # model_results = model_results.fillna(value=model_results.max(axis=0))
         smape_score = model_results['smape_weighted']/(model_results['smape_weighted'].min(skipna=True) + 1)  # smaller better
@@ -1303,7 +1329,7 @@ def generate_score(model_results, metric_weighting: dict = {},
         mae_scaler = 1 if mae_scaler == 0 else mae_scaler
         mae_score = model_results['mae_weighted']/mae_scaler
         containment_score = (abs(prediction_interval - model_results['containment'])) + 1  # from 1 to 2, smaller better
-        runtime = model_results['TotalRuntime'].dt.seconds + 120
+        runtime = model_results['TotalRuntimeSeconds'] + 120
         runtime_score = runtime/(runtime.min(skipna=True))  # smaller better
         spl_score = model_results['spl_weighted']/(model_results['spl_weighted'].min(skipna=True) + 1)  # smaller better
         contour_score = (1/(model_results['contour_weighted'])).replace(

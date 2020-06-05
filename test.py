@@ -16,6 +16,7 @@ df_long = load_weekly()
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
 weights_hourly = {'traffic_volume': 10}
+weights_weekly = {'Weekly Minnesota Midgrade Conventional Retail Gasoline Prices  (Dollars per Gallon)': 20}
 
 model_list = [
               'ZeroesNaive', 'LastValueNaive', 'AverageValueNaive',
@@ -27,7 +28,7 @@ model_list = [
               ]
 model_list = 'superfast'
 # model_list = ['AverageValueNaive', 'LastValueNaive', 'ZeroesNaive']
-# model_list = ['RollingRegression', 'LastValueNaive']
+# model_list = ['WindowRegression', 'SeasonalNaive']
 
 metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
                     'rmse_weighting': 2, 'containment_weighting': 0,
@@ -40,7 +41,7 @@ model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9,
                ensemble='simple,distance,probabilistic-max,horizontal-max',
                constraint=2,
-               max_generations=15, num_validations=2,
+               max_generations=1, num_validations=2,
                validation_method='backwards',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=0.1,
@@ -59,7 +60,7 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
 # model = model.import_results('test.pickle')
 model = model.fit(df_long,
                   future_regressor=future_regressor_train2d,
-                  # weights=weights_hourly,
+                  weights=weights_weekly,
                   result_file='test.pickle',
                   date_col='datetime', value_col='value',
                   id_col='series_id')
@@ -114,12 +115,11 @@ https://github.com/sphinx-doc/sphinx/issues/3382
 # m2r does not yet work on sphinx 3.0
 # pip install m2r
 cd <project dir>
-# delete docs/source (not tutorial or includeme)
+# delete docs/source and /build (not tutorial or intro.rst)
 sphinx-apidoc -f -o docs/source autots
 cd ./docs
 make html
 
-_googleid.txt
 https://winedarksea.github.io/AutoTS/build/index.html
 """
 """
@@ -145,14 +145,16 @@ if (~initial_results['Exceptions'].isna()).sum() > 0:
                                    result='corr')  # result='poly corr'
 
 """
-prediction_intervals = [0.99, 0.95, 0.67, 0.5]
+prediction_intervals = [0.99, 0.67]
 model_list = 'superfast'  # ['FBProphet', 'VAR', 'AverageValueNaive']
 from autots.evaluator.auto_ts import AutoTSIntervals
 intervalModel = AutoTSIntervals().fit(
     prediction_intervals=prediction_intervals,
     import_template=None,
     forecast_length=forecast_length,
-    df_long=df_long, max_generations=2, num_validations=2,
+    df_long=df_long, max_generations=1, num_validations=2,
+    import_results='test.pickle',
+    result_file='testProb.pickle',
     validation_method='seasonal 12',
     models_to_validate=0.2,
     interval_models_to_validate=50,
@@ -164,5 +166,5 @@ intervalModel = AutoTSIntervals().fit(
     remove_leading_zeroes=True, random_seed=2020
     )  # weights, future_regressor, metrics
 intervalForecasts = intervalModel.predict()
-intervalForecasts[0.95].upper_forecast
+intervalForecasts[0.99].upper_forecast
 """

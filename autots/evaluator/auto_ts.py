@@ -656,12 +656,12 @@ or otherwise increase models available."""
                                                     ens_templates],
                                                    axis=0)
                 if 'hdist' in ensemble:
-                    per_series = self.initial_results.per_series_mae1.copy()
+                    per_series = self.initial_results.per_series_rmse1.copy()
                     temp = per_series.mean(axis=1).groupby(level=0).count()
                     temp = temp[temp >= (num_validations + 1)]
                     per_series = per_series[per_series.index.isin(temp.index)]
                     per_series = per_series.groupby(level=0).mean()
-                    per_series2 = self.initial_results.per_series_mae2.copy()
+                    per_series2 = self.initial_results.per_series_rmse2.copy()
                     temp = per_series2.mean(axis=1).groupby(level=0).count()
                     temp = temp[temp >= (num_validations + 1)]
                     per_series2 = per_series2[per_series2.index.isin(temp.index)]
@@ -897,10 +897,15 @@ or otherwise increase models available."""
             if any(x in self.ensemble for x in ens_list):
                 temp = self.initial_results.model_results
                 temp = temp[temp['Ensemble'] >= 2]
+                temp = temp[temp['Exceptions'].isna()]
                 export_template = export_template.merge(
                     temp, how='outer',
                     on=export_template.columns.intersection(
                         temp.columns).to_list())
+                export_template['Score'] = generate_score(
+                    export_template,
+                    metric_weighting=self.metric_weighting,
+                    prediction_interval=self.prediction_interval)
             if str(max_per_model_class).isdigit():
                 export_template = export_template.sort_values(
                     'Score', ascending=True
@@ -1011,18 +1016,32 @@ or otherwise increase models available."""
 
 
 class AutoTSIntervals(object):
-    """Autots looped to test multiple prediction intervals."""
+    """Autots looped to test multiple prediction intervals. Experimental.
+    
+    Runs max_generations on first prediction interval, then validates on remainder.
+    Most args are passed through to AutoTS().
 
-    def fit(self, prediction_intervals, import_template, forecast_length,
+    Args:
+        interval_models_to_validate (int): number of models to validate on each prediction interval.
+        import_results (str): results from run on same data to load, `filename.pickle`.
+            Currently result_file and import only save/load initial run, no validations.
+    """
+
+    def fit(self, prediction_intervals, 
+            forecast_length,
             df_long, max_generations, num_validations,
             validation_method, models_to_validate,
             interval_models_to_validate,
             date_col, value_col, id_col=None,
+            import_template=None,
+            import_method='only',
+            import_results=None,
+            result_file=None,
             model_list='all',
             metric_weighting: dict = {
                 'smape_weighting': 1,
-                'mae_weighting': 1,
-                'rmse_weighting': 0,
+                'mae_weighting': 0,
+                'rmse_weighting': 1,
                 'containment_weighting': 0,
                 'runtime_weighting': 0,
                 'spl_weighting': 10,
@@ -1056,10 +1075,14 @@ class AutoTSIntervals(object):
                 model_interrupt=model_interrupt,
                 models_to_validate=models_to_validate)
             if import_template is not None:
-                current_model.import_template(import_template, method='only')
+                current_model = current_model.import_template(
+                    import_template, method=import_method)
+            if import_results is not None:
+                current_model = current_model.import_results(import_results)
             current_model = current_model.fit(
                 df_long, future_regressor=future_regressor,
                 weights=weights,
+                result_file=result_file,
                 date_col=date_col, value_col=value_col,
                 id_col=id_col)
             current_model.initial_results.model_results['interval'] = interval
@@ -1068,6 +1091,8 @@ class AutoTSIntervals(object):
             temp = current_model.initial_results.per_series_spl
             per_series_spl = pd.concat([per_series_spl, temp], axis=0)
             if runs == 0:
+                result_file = None
+                import_results = None
                 import_template = current_model.export_template(
                     None, models='best', n=interval_models_to_validate)
             runs += 1

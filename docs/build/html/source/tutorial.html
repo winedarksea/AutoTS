@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Tutorial &#8212; AutoTS 0.2.0 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.2.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -15,7 +15,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="autots" href="modules.html" />
-    <link rel="prev" title="Intro" href="includeme.html" />
+    <link rel="prev" title="Intro" href="intro.html" />
    
   <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
   
@@ -82,7 +82,7 @@
 <p>The simplest thing is to increase the number of generations <code class="docutils literal notranslate"><span class="pre">max_generations=15</span></code>. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.</p>
 <p>Another approach that may improve accuracy is to set <code class="docutils literal notranslate"><span class="pre">ensemble='all'</span></code>. As this means storing and processing the result of every model, this takes more time and memory.</p>
 <p>A handy parameter for when your data is expected to always be 0 or greater (such as unit sales) is to set <code class="docutils literal notranslate"><span class="pre">no_negatives=True</span></code>. This forces forecasts to be greater than or equal to 0.
-A similar function is <code class="docutils literal notranslate"><span class="pre">constraint=2.0</span></code>. What this does is prevent the forecast from leaving historic bounds set by the training data. In this example, the forecasts would not be allowed to go above <code class="docutils literal notranslate"><span class="pre">max(training</span> <span class="pre">data)</span> <span class="pre">+</span> <span class="pre">2.0</span> <span class="pre">*</span> <span class="pre">st.dev(training</span> <span class="pre">data)</span></code>, as well as the reverse on the minimum side. A constraint of 0 would constrain forecasts to historical mins and maxes.</p>
+A similar function is <code class="docutils literal notranslate"><span class="pre">constraint=2.0</span></code>. What this does is prevent the forecast from leaving historic bounds set by the training data. In this example, the forecasts would not be allowed to go above <code class="docutils literal notranslate"><span class="pre">max(training</span> <span class="pre">data)</span> <span class="pre">+</span> <span class="pre">2.0</span> <span class="pre">*</span> <span class="pre">st.dev(training</span> <span class="pre">data)</span></code>, as well as the reverse on the minimum side. A constraint of <code class="docutils literal notranslate"><span class="pre">0</span></code> would constrain forecasts to historical mins and maxes.</p>
 <p>Another convenience function is <code class="docutils literal notranslate"><span class="pre">drop_most_recent=1</span></code> specifing the number of most recent periods to drop. This can be handy with monthly data, where often the most recent month is incomplete.
 <code class="docutils literal notranslate"><span class="pre">drop_data_older_than_periods</span></code> provides similar functionality but drops the oldest data to speed up the process on large datasets.
 <code class="docutils literal notranslate"><span class="pre">remove_leading_zeroes=True</span></code> is useful for data where leading zeroes represent a process which has not yet started.</p>
@@ -143,7 +143,16 @@ forecasts_df = prediction.forecast
 <div class="section" id="model-lists">
 <h3>Model Lists<a class="headerlink" href="#model-lists" title="Permalink to this headline">¶</a></h3>
 <p>By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of <code class="docutils literal notranslate"><span class="pre">'probabilistic',</span> <span class="pre">'multivariate',</span> <span class="pre">'fast',</span> <span class="pre">'superfast',</span> <span class="pre">or</span> <span class="pre">'all'</span></code>.</p>
-<p>On multivariate series, <code class="docutils literal notranslate"><span class="pre">TSFreshRegressor</span></code> and <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code> can be impractically slow.</p>
+<p>As of <code class="docutils literal notranslate"><span class="pre">0.2.0</span></code> the following models are included:</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="s1">&#39;ZeroesNaive&#39;</span><span class="p">,</span> <span class="s1">&#39;LastValueNaive&#39;</span><span class="p">,</span> <span class="s1">&#39;AverageValueNaive&#39;</span><span class="p">,</span> <span class="s1">&#39;GLS&#39;</span><span class="p">,</span>
+<span class="s1">&#39;GLM&#39;</span><span class="p">,</span> <span class="s1">&#39;ETS&#39;</span><span class="p">,</span> <span class="s1">&#39;ARIMA&#39;</span><span class="p">,</span> <span class="s1">&#39;FBProphet&#39;</span><span class="p">,</span> <span class="s1">&#39;RollingRegression&#39;</span><span class="p">,</span>
+<span class="s1">&#39;GluonTS&#39;</span><span class="p">,</span> <span class="s1">&#39;SeasonalNaive&#39;</span><span class="p">,</span> <span class="s1">&#39;UnobservedComponents&#39;</span><span class="p">,</span> <span class="s1">&#39;VARMAX&#39;</span><span class="p">,</span>
+<span class="s1">&#39;VECM&#39;</span><span class="p">,</span> <span class="s1">&#39;DynamicFactor&#39;</span><span class="p">,</span> <span class="s1">&#39;TSFreshRegressor&#39;</span><span class="p">,</span> <span class="s1">&#39;MotifSimulation&#39;</span><span class="p">,</span>
+<span class="s1">&#39;WindowRegression&#39;</span><span class="p">,</span> <span class="s1">&#39;VAR&#39;</span><span class="p">,</span> <span class="s1">&#39;TensorflowSTS&#39;</span><span class="p">,</span> <span class="s1">&#39;TFPRegression&#39;</span><span class="p">,</span>
+<span class="s1">&#39;ComponentAnalysis&#39;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>On large multivariate series, <code class="docutils literal notranslate"><span class="pre">TSFreshRegressor</span></code>, <code class="docutils literal notranslate"><span class="pre">DynamicFactor</span></code> and <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code> can be impractically slow.</p>
 </div>
 </div>
 <div class="section" id="deployment-and-template-import-export">
@@ -211,8 +220,9 @@ Nearly full functionality should be maintained without statsmodels.</p>
 <span class="n">tsfresh</span>
 <span class="n">mxnet</span> <span class="p">(</span><span class="n">mxnet</span><span class="o">-</span><span class="n">mkl</span><span class="p">,</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu91</span><span class="p">,</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu101mkl</span><span class="p">,</span> <span class="n">etc</span><span class="p">.)</span>
 <span class="n">gluonts</span>
-<span class="n">tensorflow</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span> <span class="p">(</span><span class="n">tensorflow</span><span class="o">-</span><span class="n">mkl</span><span class="p">)</span>
+<span class="n">tensorflow</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span>
 <span class="n">tensorflow</span><span class="o">-</span><span class="n">probability</span>
+<span class="n">lightgbm</span>
 <span class="n">xgboost</span>
 </pre></div>
 </div>
@@ -230,7 +240,6 @@ MKL is included with <code class="docutils literal notranslate"><span class="pre
 <span class="n">conda</span> <span class="n">install</span> <span class="o">-</span><span class="k">c</span> <span class="n">conda</span><span class="o">-</span><span class="n">forge</span> <span class="n">scikit</span><span class="o">-</span><span class="n">learn</span>
 <span class="n">pip</span> <span class="n">install</span> <span class="n">statsmodels</span>
 
-<span class="o">#</span> <span class="n">use</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu101mkl</span> <span class="k">or</span> <span class="k">similar</span> <span class="k">if</span> <span class="n">applicable</span>
 <span class="n">pip</span> <span class="n">install</span> <span class="n">mxnet</span>
 <span class="n">pip</span> <span class="n">install</span> <span class="n">gluonts</span>
 <span class="n">conda</span> <span class="k">update</span> <span class="n">anaconda</span>
@@ -353,8 +362,8 @@ Some models will support a more limited range of frequencies.</p>
 
 <h3>Navigation</h3>
 <ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="includeme.html">Intro</a></li>
-<li class="toctree-l1"><a class="reference internal" href="includeme.html#autots">AutoTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="intro.html">Intro</a></li>
+<li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Tutorial</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#extended-tutorial">Extended Tutorial</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#underlying-process">Underlying Process</a></li>
@@ -372,7 +381,7 @@ Some models will support a more limited range of frequencies.</p>
 <h3>Related Topics</h3>
 <ul>
   <li><a href="../index.html">Documentation overview</a><ul>
-      <li>Previous: <a href="includeme.html" title="previous chapter">Intro</a></li>
+      <li>Previous: <a href="intro.html" title="previous chapter">Intro</a></li>
       <li>Next: <a href="modules.html" title="next chapter">autots</a></li>
   </ul></li>
 </ul>
@@ -413,7 +422,7 @@ Some models will support a more limited range of frequencies.</p>
     <script type="text/javascript">
 
       var _gaq = _gaq || [];
-      _gaq.push(['_setAccount', '1669974141']);
+      _gaq.push(['_setAccount', 'UA-166997414-1']);
       _gaq.push(['_setDomainName', 'none']);
       _gaq.push(['_setAllowLinker', true]);
       _gaq.push(['_trackPageview']);

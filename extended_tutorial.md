@@ -43,7 +43,7 @@ The simplest thing is to increase the number of generations `max_generations=15`
 Another approach that may improve accuracy is to set `ensemble='all'`. As this means storing and processing the result of every model, this takes more time and memory.
 
 A handy parameter for when your data is expected to always be 0 or greater (such as unit sales) is to set `no_negatives=True`. This forces forecasts to be greater than or equal to 0. 
-A similar function is `constraint=2.0`. What this does is prevent the forecast from leaving historic bounds set by the training data. In this example, the forecasts would not be allowed to go above `max(training data) + 2.0 * st.dev(training data)`, as well as the reverse on the minimum side. A constraint of 0 would constrain forecasts to historical mins and maxes. 
+A similar function is `constraint=2.0`. What this does is prevent the forecast from leaving historic bounds set by the training data. In this example, the forecasts would not be allowed to go above `max(training data) + 2.0 * st.dev(training data)`, as well as the reverse on the minimum side. A constraint of `0` would constrain forecasts to historical mins and maxes. 
 
 Another convenience function is `drop_most_recent=1` specifing the number of most recent periods to drop. This can be handy with monthly data, where often the most recent month is incomplete. 
 `drop_data_older_than_periods` provides similar functionality but drops the oldest data to speed up the process on large datasets. 
@@ -111,7 +111,17 @@ lower_forecasts_df = prediction.lower_forecast
 ### Model Lists
 By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of `'probabilistic', 'multivariate', 'fast', 'superfast', or 'all'`.
 
-On multivariate series, `TSFreshRegressor` and `VARMAX` can be impractically slow.
+As of `0.2.0` the following models are included:
+```
+['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
+'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
+'GluonTS', 'SeasonalNaive', 'UnobservedComponents', 'VARMAX',
+'VECM', 'DynamicFactor', 'TSFreshRegressor', 'MotifSimulation',
+'WindowRegression', 'VAR', 'TensorflowSTS', 'TFPRegression', 
+'ComponentAnalysis']
+```
+
+On large multivariate series, `TSFreshRegressor`, `DynamicFactor` and `VARMAX` can be impractically slow.
 
 ## Deployment and Template Import/Export
 Many models can be reverse engineered with relative simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package. 
@@ -162,7 +172,7 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 
 ## Installation and Dependency Versioning
 `pip install autots`
-#### Requirements:
+### Requirements:
 	Python >= 3.5
 	numpy
 	pandas
@@ -175,18 +185,19 @@ Some limited functionality should exist without scikit-learn.
 Nearly full functionality should be maintained without statsmodels. 
 
 `pip install autots['additional']`
-#### Optional Requirements
+### Optional Requirements
 	holidays
 	fbprophet
 	fredapi
 	tsfresh
 	mxnet (mxnet-mkl, mxnet-cu91, mxnet-cu101mkl, etc.)
 	gluonts
-	tensorflow >= 2.0.0 (tensorflow-mkl)
+	tensorflow >= 2.0.0
 	tensorflow-probability
+	lightgbm
 	xgboost
 
-#### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
+### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
 Download Anaconda or Miniconda.
 
 (install Visual Studio if on Windows)
@@ -204,7 +215,6 @@ conda install numpy scipy
 conda install -c conda-forge scikit-learn
 pip install statsmodels
 
-# use pip install mxnet-cu101mkl or similar if applicable
 pip install mxnet
 pip install gluonts
 conda update anaconda

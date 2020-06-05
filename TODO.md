@@ -7,71 +7,10 @@
 * New models need only be sometimes applicable
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
-Latest:
-	Added Github Pages documentation
-	Changed default for `series_id` so it is no longer required if univariate
-	Changed default of `subset` to None.
-	Removed `weighted` parameter, now passing weights to .fit() alone is sufficient.
-	Fixed a bug where 'One or more series is 90% or more NaN' was printing when it shouldn't
-	Fixed (or more accurately, reduced) a bug where multiple initial runs were counting as validation runs.
-	Fixed bug where validation subsetting was behaving oddly
-	Fixed bug where regressor wasn't being passed to validation.
-	Renamed preord_ to future_ regressor.
-	Renamed sample datasets.
-	Allowed export of result_file as .pickle along with more complete object.
-	Added model_interrupt parameter to allow for manually skipping models when enabled.
-	Made serious efforts to make the code prettier with pylint, still lots to do, however...
-	Improved genetic recombination so optimal models should be reached more quickly
-	Improved Point to Probabilistic methods:
-		'historic_quantile' more stable quantile-based error ranges
-		'inferred normal' Bayesian-inspired method
-	Metrics:
-		Added Scaled Pinball Loss (SPL)
-		Removed upper/lower MAE
-	Improved ensembling with new parameter options
-		Recursive ensembling (ensemble of ensembles) now enabled
-	Validation:
-		Added 'seasonal' validation method
-	Categorical transformer improved, now tolerant to leaving bounds.
-	Added remove_leading_zeroes option for convenience.
-
-	Added a number of new Transformer options
-		Multiple new Sklearn-sourced transformers (QuantileTransformer, etc)
-		SinTrend
-		DifferencedDetrend
-		CumSumTransformer
-		PctChangeTransformer
-		PositiveShift Transformer
-		Log
-		IntermittentOccurrence
-		SeasonalDetrend
-		bkfilter and cffilter
-		DatepartRegression
-	Entirely changed the general transformer to add ~~three~~ four levels of transformation.
-	Allowed context_slicer to receive direct integer inputs
-	Added new 'Detrend' options to allow more sklearn linear models.
-
-	GLM
-		Error where it apparently won't tolerate any zeroes was compensated for.
-		Speed improvement.
-	RollingRegression
-		Added SVM model
-		Added option to tune some model parameters to sklearn
-		Added new feature construction parameters
-		Added RNNs with Keras
-	GluonTS:
-		fixed the use of context_length, added more options to that param
-	Dynamic Factor added uncertainty from Statsmodels Statespace
-	VARMAX added uncertainty from Statsmodels Statespace
-
-	New models:
-		SeasonalNaive model
-		VAR from Statsmodels (faster than VARMAX statespace)
-		MotifSimulation
-		WindowRegression
-		TensorflowSTS
-		TFPRegression
-		ComponentAnalysis
+# Latest:
+* added 'coerce_integer' to GeneralTransformer
+* tuned MotifSimulation and GeneralTransformer inputs
+* minor improvements to Scoring, Aggregation, Recombination, and export_template
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -96,12 +35,15 @@ Tensorflow GPU backend may crash on occasion.
 * test submission
 * test whether bottom up significantly overestimates on rollup
 	* store level hierarchial
+* Profile slow parts of AutoTS on 1,000 series
+	* remove slow transformers unless parameter
+	* 'fast' option for RandomTransformations generator
 
 # To-Do
 * drop duplicates as function of TemplateEvalObject
+* speed up MotifSimulation
 * fake date dataset of many series to improve General Template
 * better document ensembling
-* 'fast' option for RandomTransformations generator
 * optimize randomtransform probabilities
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
@@ -124,6 +66,7 @@ Tensorflow GPU backend may crash on occasion.
 * get_forecast for Statsmodels Statespace models to include confidence interval where possible
 	* migrate arima_model to arima.model
 	* uncomp with uncertainty intervals
+* GUI overlay for editing/creating templates, and even for running (Flask)
 * Window regression
 	* transfer learning
 * RollingRegression
@@ -215,4 +158,8 @@ Tensorflow GPU backend may crash on occasion.
 	Shared discretization (all series get same shared binning)
 	Last Value Centering
 	Constraint as a transformation parameter
-	
+
+### New Model Checklist:
+	* Add to ModelMonster
+	* Add to AutoTS 'all' list
+	* all to recombination_approved if so
