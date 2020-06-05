@@ -146,14 +146,16 @@ if (~initial_results['Exceptions'].isna()).sum() > 0:
                                    result='corr')  # result='poly corr'
 
 """
-prediction_intervals = [0.99, 0.95, 0.67, 0.5]
+prediction_intervals = [0.99, 0.67]
 model_list = 'superfast'  # ['FBProphet', 'VAR', 'AverageValueNaive']
 from autots.evaluator.auto_ts import AutoTSIntervals
 intervalModel = AutoTSIntervals().fit(
     prediction_intervals=prediction_intervals,
     import_template=None,
     forecast_length=forecast_length,
-    df_long=df_long, max_generations=2, num_validations=2,
+    df_long=df_long, max_generations=1, num_validations=2,
+    import_results='test.pickle',
+    result_file='testProb.pickle',
     validation_method='seasonal 12',
     models_to_validate=0.2,
     interval_models_to_validate=50,
@@ -165,5 +167,5 @@ intervalModel = AutoTSIntervals().fit(
     remove_leading_zeroes=True, random_seed=2020
     )  # weights, future_regressor, metrics
 intervalForecasts = intervalModel.predict()
-intervalForecasts[0.95].upper_forecast
+intervalForecasts[0.99].upper_forecast
 """

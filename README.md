@@ -1,7 +1,5 @@
 # AutoTS
 
-![AutoTS Logo](/img/autots_logo.png)
-
 <img src="/img/autots_logo.png" width="400" height="184" title="AutoTS Logo">
 
 **Model Selection for Multiple Time Series**

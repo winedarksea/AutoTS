@@ -10,7 +10,7 @@
 # Latest:
 * added 'coerce_integer' to GeneralTransformer
 * tuned MotifSimulation and GeneralTransformer inputs
-* improved Scoring, Aggregation, Recombination, and export_template
+* minor improvements to Scoring, Aggregation, Recombination, and export_template
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
