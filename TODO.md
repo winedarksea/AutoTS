@@ -10,7 +10,7 @@
 # Latest:
 * added 'coerce_integer' to GeneralTransformer
 * tuned MotifSimulation and GeneralTransformer inputs
-* improved Scoring, Aggregation and export_template
+* improved Scoring, Aggregation, Recombination, and export_template
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -66,6 +66,7 @@ Tensorflow GPU backend may crash on occasion.
 * get_forecast for Statsmodels Statespace models to include confidence interval where possible
 	* migrate arima_model to arima.model
 	* uncomp with uncertainty intervals
+* GUI overlay for editing/creating templates, and even for running (Flask)
 * Window regression
 	* transfer learning
 * RollingRegression
@@ -157,4 +158,8 @@ Tensorflow GPU backend may crash on occasion.
 	Shared discretization (all series get same shared binning)
 	Last Value Centering
 	Constraint as a transformation parameter
-	
+
+### New Model Checklist:
+	* Add to ModelMonster
+	* Add to AutoTS 'all' list
+	* all to recombination_approved if so

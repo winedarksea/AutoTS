@@ -656,12 +656,12 @@ or otherwise increase models available."""
                                                     ens_templates],
                                                    axis=0)
                 if 'hdist' in ensemble:
-                    per_series = self.initial_results.per_series_mae1.copy()
+                    per_series = self.initial_results.per_series_rmse1.copy()
                     temp = per_series.mean(axis=1).groupby(level=0).count()
                     temp = temp[temp >= (num_validations + 1)]
                     per_series = per_series[per_series.index.isin(temp.index)]
                     per_series = per_series.groupby(level=0).mean()
-                    per_series2 = self.initial_results.per_series_mae2.copy()
+                    per_series2 = self.initial_results.per_series_rmse2.copy()
                     temp = per_series2.mean(axis=1).groupby(level=0).count()
                     temp = temp[temp >= (num_validations + 1)]
                     per_series2 = per_series2[per_series2.index.isin(temp.index)]

@@ -190,8 +190,8 @@ def PredictionEval(PredictionObject, actual,
 
     if str(dist_n).isdigit():
         per_series_d = pd.DataFrame({
-            'mae1': mae(A[:dist_n], F[:dist_n]),
-            'mae2': mae(A[dist_n:], F[dist_n:])
+            'rmse1': rmse(A[:dist_n], F[:dist_n]),
+            'rmse2': rmse(A[dist_n:], F[dist_n:])
             }).transpose()
         per_series_d.columns = actual.columns
         per_series = pd.concat([per_series, per_series_d], axis=0)
