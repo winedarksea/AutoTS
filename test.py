@@ -115,12 +115,11 @@ https://github.com/sphinx-doc/sphinx/issues/3382
 # m2r does not yet work on sphinx 3.0
 # pip install m2r
 cd <project dir>
-# delete docs/source and /build (not tutorial or includeme)
+# delete docs/source and /build (not tutorial or intro.rst)
 sphinx-apidoc -f -o docs/source autots
 cd ./docs
 make html
 
-_googleid.txt
 https://winedarksea.github.io/AutoTS/build/index.html
 """
 """

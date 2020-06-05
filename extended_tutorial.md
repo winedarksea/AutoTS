@@ -172,7 +172,7 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 
 ## Installation and Dependency Versioning
 `pip install autots`
-#### Requirements:
+### Requirements:
 	Python >= 3.5
 	numpy
 	pandas
@@ -185,7 +185,7 @@ Some limited functionality should exist without scikit-learn.
 Nearly full functionality should be maintained without statsmodels. 
 
 `pip install autots['additional']`
-#### Optional Requirements
+### Optional Requirements
 	holidays
 	fbprophet
 	fredapi
@@ -197,7 +197,7 @@ Nearly full functionality should be maintained without statsmodels.
 	lightgbm
 	xgboost
 
-#### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
+### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
 Download Anaconda or Miniconda.
 
 (install Visual Studio if on Windows)

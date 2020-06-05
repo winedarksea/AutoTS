@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.models package &#8212; AutoTS 0.2.0 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.2.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -169,8 +169,15 @@ Basically a highly-customized KNN</p>
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
 <li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>phrase_len</strong> (<em>int</em>) – length of motif vectors to compare as samples</p></li>
+<li><p><strong>comparison</strong> (<em>str</em>) – method to process data before comparison, ‘magnitude’ is original data</p></li>
+<li><p><strong>shared</strong> (<em>bool</em>) – whether to compare motifs across all series together, or separately</p></li>
 <li><p><strong>distance_metric</strong> (<em>str</em>) – passed through to sklearn pairwise_distances</p></li>
 <li><p><strong>max_motifs</strong> (<em>float</em>) – number of motifs to compare per series. If less 1, used as % of length training data</p></li>
+<li><p><strong>recency_weighting</strong> (<em>float</em>) – amount to the value of more recent data.</p></li>
+<li><p><strong>cutoff_threshold</strong> (<em>float</em>) – lowest value of distance metric to allow into forecast</p></li>
+<li><p><strong>cutoff_minimum</strong> (<em>int</em>) – minimum number of motif vectors to include in forecast.</p></li>
+<li><p><strong>point_method</strong> (<em>str</em>) – summarization method to choose forecast on, ‘sample’, ‘mean’, ‘sign_biased_mean’, ‘median’</p></li>
 </ul>
 </dd>
 </dl>
@@ -773,7 +780,7 @@ recurring - all features that should commonly repeat without aging</p></li>
 
 <dl class="function">
 <dt id="autots.models.sklearn.generate_regressor_params">
-<code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">generate_regressor_params</code><span class="sig-paren">(</span><em class="sig-param">models: list = ['RandomForest', 'ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost', 'SVM', 'BayesianRidge', 'xgboost', 'KerasRNN', 'HistGradientBoost'], model_probs: list = [0.05, 0.05, 0.12, 0.2, 0.12, 0.2, 0.025, 0.035, 0.05, 0.1, 0.05]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.generate_regressor_params" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">generate_regressor_params</code><span class="sig-paren">(</span><em class="sig-param">models: list = ['RandomForest', 'ElasticNet', 'MLP', 'DecisionTree', 'KNN', 'Adaboost', 'SVM', 'BayesianRidge', 'xgboost', 'KerasRNN', 'HistGradientBoost', 'LightGBM'], model_probs: list = [0.05, 0.05, 0.14, 0.25, 0.1, 0.14, 0.02, 0.08, 0.01, 0.05, 0.01, 0.1]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.generate_regressor_params" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate new parameters for input to regressor.</p>
 </dd></dl>
 
@@ -1607,8 +1614,8 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <h3>Navigation</h3>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="includeme.html">Intro</a></li>
-<li class="toctree-l1"><a class="reference internal" href="includeme.html#autots">AutoTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="intro.html">Intro</a></li>
+<li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
 </ul>
 <ul class="current">
@@ -1667,7 +1674,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
     <script type="text/javascript">
 
       var _gaq = _gaq || [];
-      _gaq.push(['_setAccount', '1669974141']);
+      _gaq.push(['_setAccount', 'UA-166997414-1']);
       _gaq.push(['_setDomainName', 'none']);
       _gaq.push(['_setAllowLinker', true]);
       _gaq.push(['_trackPageview']);

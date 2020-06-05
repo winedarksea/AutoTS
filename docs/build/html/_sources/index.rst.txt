@@ -24,7 +24,7 @@ Getting Started
 .. toctree::
    :maxdepth: 2
 
-   source/includeme
+   source/intro
    source/tutorial
    
 Modules API
