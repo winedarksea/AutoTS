@@ -38,6 +38,8 @@ Tensorflow GPU backend may crash on occasion.
 * Profile slow parts of AutoTS on 1,000 series
 	* remove slow transformers unless parameter
 	* 'fast' option for RandomTransformations generator
+* 'Grouping' reconcilliation
+* Make sure min per_series gets into validation if doing horizontal
 
 # To-Do
 * drop duplicates as function of TemplateEvalObject
@@ -53,7 +55,12 @@ Tensorflow GPU backend may crash on occasion.
 * Option to use full traceback in errors in table
 * Hierarchial
 	* every level must be included in forecasting data
-	* 'bottom-up' and 'mid' levels
+	* provide grouping as dict like weights
+		* calculate weights for groups based on series weights
+		* per_series metrics
+		* subsetting
+	* 'mid' level
+	* ensembles will not be reconcilled
 	* one level. User would have to specify all as based on lowest-level keys if wanted sum-up.
 * Better point to probabilistic (uncertainty of naive last-value forecast) 
 	* linear reg of abs error of samples - simulations
@@ -66,7 +73,7 @@ Tensorflow GPU backend may crash on occasion.
 * get_forecast for Statsmodels Statespace models to include confidence interval where possible
 	* migrate arima_model to arima.model
 	* uncomp with uncertainty intervals
-* GUI overlay for editing/creating templates, and even for running (Flask)
+* GUI overlay for editing/creating templates, and for running (Flask)
 * Window regression
 	* transfer learning
 * RollingRegression
@@ -90,14 +97,12 @@ Tensorflow GPU backend may crash on occasion.
 * implement 'borrow' Genetic Recombination for ComponentAnalysis
 * Regressor to TensorflowSTS
 * Relative/Absolute Imports and reduce package reloading messages
-* Allow FillNA to be None
 * Replace OrdinalEncoder with non-external code
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
 * Speed improvements, Profiling
 * Parallelization, and Distributed options (Dask) for general greater speed
 * Improve usability on rarer frequenices (ie monthly data where some series start on 1st, others on 15th, etc.)
 * Figures: Add option to output figures of train/test + forecast, other performance figures
-* If all input are Int, convert floats back to int
 * Replace most 'print' with logging.
 * Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
 * Development tools:
