@@ -907,6 +907,8 @@ trans_dict = {'None': EmptyTransformer(),
                                                         method='LastValue'),
               'SeasonalDifference12': SeasonalDifference(lag_1=12,
                                                          method='Mean'),
+              'SeasonalDifference28': SeasonalDifference(lag_1=28,
+                                                         method='Mean'),
               'bkfilter': StatsmodelsFilter(method='bkfilter'),
               'cffilter': StatsmodelsFilter(method='cffilter'),
               'DatepartRegression': DatepartRegression(
@@ -985,7 +987,7 @@ class GeneralTransformer(object):
             'IntermittentOccurrence' - -1, 1 for non median values
             'SeasonalDifference' - remove the last lag values from all values
             'SeasonalDifferenceMean' - remove the average lag values from all
-            'SeasonalDifference7' also '12' - non-parameterized version of Seasonal
+            'SeasonalDifference7','12','28' - non-parameterized version of Seasonal
 
         second_transformation (str): second transformation to apply. Same options as transformation, but with transformation_param passed in if used
 
@@ -1345,6 +1347,7 @@ class GeneralTransformer(object):
         return self
 
     def fit_transform(self, df):
+        """Directly fit and apply transformations to convert df."""
         return self._fit(df)
 
     def transform(self, df):
@@ -1432,11 +1435,11 @@ class GeneralTransformer(object):
         return df
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
-        """Undo the madness
+        """Undo the madness.
 
         Args:
             df (pandas.DataFrame): Datetime Indexed
-            trans_method (str): 'forecast' or 'original' passed through to RollingTransformer, DifferencedTransformer, if used
+            trans_method (str): 'forecast' or 'original' passed through
         """
         self.df_index = df.index
         self.df_colnames = df.columns
@@ -1444,7 +1447,8 @@ class GeneralTransformer(object):
                          'RollingMean10thN', 'RollingMean10', 'RollingMean',
                          'PctChangeTransformer', 'CumSumTransformer',
                          'SeasonalDifference', 'SeasonalDifferenceMean',
-                         'SeasonalDifference7', 'SeasonalDifference12']
+                         'SeasonalDifference7', 'SeasonalDifference12',
+                         'SeasonalDifference28']
 
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
 
@@ -1518,23 +1522,23 @@ def RandomTransform():
         'FastICA', 'Detrend', 'RollingMean10', 'RollingMean100thN',
         'DifferencedTransformer', 'SinTrend', 'PctChangeTransformer',
         'CumSumTransformer', 'PositiveShift', 'Log', 'IntermittentOccurrence',
-        'SeasonalDifference7', 'SeasonalDifference12',
+        'SeasonalDifference7', 'SeasonalDifference12', 'SeasonalDifference28',
         'cffilter', 'bkfilter', 'DatepartRegression',
         'DatepartRegressionElasticNet', 'DatepartRegressionLtd']
-    first_transformer_prob = [0.26, 0.05, 0.15, 0.1,
+    first_transformer_prob = [0.25, 0.05, 0.15, 0.1,
                               0.05, 0.04, 0.05, 0.01,
                               0.01, 0.01, 0.01, 0.01,
                               0.1, 0.01, 0.01,
                               0.02, 0.02, 0.01, 0.01,
-                              0.01, 0.01,
+                              0.01, 0.01, 0.01,
                               0.01, 0.01, 0.01,
                               0.01, 0.01]
     fourth_transformer_prob = [0.3, 0.05, 0.05, 0.05,
-                               0.05, 0.1, 0.05, 0.03,
+                               0.05, 0.1, 0.05, 0.02,
                                0.01, 0.04, 0.02, 0.02,
                                0.1, 0.01, 0.01,
                                0.01, 0.01, 0.01, 0.01,
-                               0.01, 0.01,
+                               0.01, 0.01, 0.01,
                                0.01, 0.01, 0.01,
                                0.01, 0.01]
     outlier_method_choice = np.random.choice(a=[None, 'clip', 'remove'],

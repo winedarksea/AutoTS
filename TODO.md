@@ -40,6 +40,11 @@ Tensorflow GPU backend may crash on occasion.
 	* 'fast' option for RandomTransformations generator
 * 'Grouping' reconcilliation
 * Make sure min per_series gets into validation if doing horizontal
+* Post
+	* no negatives
+	* constraint
+	* hierarchial
+	* coerce integer
 
 # To-Do
 * drop duplicates as function of TemplateEvalObject
