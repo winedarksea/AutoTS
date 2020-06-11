@@ -1027,6 +1027,8 @@ class GeneralTransformer(object):
                  fourth_transformation: str = None,
                  discretization: str = 'center', n_bins: int = None,
                  coerce_integer: bool = False,
+                 grouping: str = None,
+                 reconciliation: str = None,
                  random_seed: int = 2020):
 
         self.outlier_method = outlier_method
@@ -1043,6 +1045,8 @@ class GeneralTransformer(object):
         self.discretization = discretization
         self.n_bins = n_bins
         self.coerce_integer = coerce_integer
+        self.grouping = grouping
+        self.reconciliation = reconciliation
         self.random_seed = random_seed
 
     def outlier_treatment(self, df):
@@ -1215,6 +1219,15 @@ class GeneralTransformer(object):
             return LinearRegression()
 
     def _fit(self, df):
+        if self.grouping is not None:
+            hier_ids = None
+            from autots.tools.hierarchial import hierarchial
+            # 'dbscan', 'kmeans', 'tile', 'user'
+            self.hier = hierarchial(
+                n_groups=3, grouping_method=self.grouping,
+                hier_ids=hier_ids, reconciliation=self.reconciliation).fit(df)
+            df = self.hier.transform(df)
+
         # clean up outliers
         if 'first' in str(self.outlier_position):
             df = self.outlier_treatment(df)
@@ -1353,6 +1366,8 @@ class GeneralTransformer(object):
     def transform(self, df):
         """Apply transformations to convert df."""
         df = df.copy()
+        if self.grouping is not None:
+            df = self.hier.transform(df)
 
         # clean up outliers
         if 'first' in str(self.outlier_position):
@@ -1508,7 +1523,10 @@ class GeneralTransformer(object):
 
         # since inf just causes trouble.
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
-        
+
+        if self.grouping is not None:
+            df = self.heir.reconcile(df)
+
         if self.coerce_integer:
             df = df.round(decimals=0).astype(int)
         return df
