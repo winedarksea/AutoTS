@@ -10,8 +10,8 @@ from autots.datasets import load_weekly
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
-forecast_length = 12
-df_long = load_weekly()
+forecast_length = 3
+df_long = load_monthly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -60,7 +60,7 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
 # model = model.import_results('test.pickle')
 model = model.fit(df_long,
                   future_regressor=future_regressor_train2d,
-                  weights=weights_weekly,
+                  # weights=weights_weekly,
                   result_file='test.pickle',
                   date_col='datetime', value_col='value',
                   id_col='series_id')
