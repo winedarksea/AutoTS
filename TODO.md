@@ -32,18 +32,17 @@ KerasRNN errors due to parameters not working on all dataset
 Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
-* test submission
 * test whether bottom up significantly overestimates on rollup
 	* store level hierarchial
 * Profile slow parts of AutoTS on 1,000 series
 	* remove slow transformers unless parameter
 	* 'fast' option for RandomTransformations generator
-* 'Grouping' reconcilliation
 * Post
 	* no negatives
 	* constraint - TO TEMPLATE
 	* hierarchial
 	* coerce integer - TO HIGHER
+
 
 # To-Do
 * drop duplicates as function of TemplateEvalObject

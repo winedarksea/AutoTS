@@ -10,13 +10,25 @@ from autots.datasets import load_weekly
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
-forecast_length = 3
+forecast_length = 4
 df_long = load_monthly()
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
 weights_hourly = {'traffic_volume': 10}
+weights_monthly = {'GS10': 5}
 weights_weekly = {'Weekly Minnesota Midgrade Conventional Retail Gasoline Prices  (Dollars per Gallon)': 20}
+grouping_monthly = {
+    'CSUSHPISA': 'A',
+    'EMVOVERALLEMV': 'A',
+    'EXCAUS': 'exchange rates',
+    'EXCHUS': 'exchange rates',
+    'EXUSEU': 'exchange rates',
+    'MCOILWTICO': 'C',
+    'T10YIEM': 'C',
+    'wrong': 'C',
+    'USEPUINDXM': 'C'
+    }
 
 model_list = [
               'ZeroesNaive', 'LastValueNaive', 'AverageValueNaive',
@@ -41,7 +53,7 @@ model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9,
                ensemble='simple,distance,probabilistic-max,horizontal-max',
                constraint=2,
-               max_generations=1, num_validations=2,
+               max_generations=10, num_validations=2,
                validation_method='backwards',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=0.1,
@@ -61,6 +73,7 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
 model = model.fit(df_long,
                   future_regressor=future_regressor_train2d,
                   # weights=weights_weekly,
+                  grouping_ids=grouping_monthly,
                   result_file='test.pickle',
                   date_col='datetime', value_col='value',
                   id_col='series_id')
@@ -137,7 +150,7 @@ Merge dev to master on GitHub and create release (include .tar.gz)
 """
 Help correlate errors with parameters
 """
-test = initial_results[initial_results['TransformationParameters'].str.contains('DatepartRegression')]
+# test = initial_results[initial_results['TransformationParameters'].str.contains('kmeans')]
 cols = ['Model', 'ModelParameters',
         'TransformationParameters', 'Exceptions']
 if (~initial_results['Exceptions'].isna()).sum() > 0:

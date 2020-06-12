@@ -221,7 +221,8 @@ class AutoTS(object):
     def fit(self, df,
             date_col: str = 'datetime', value_col: str = 'value',
             id_col: str = None, future_regressor=[],
-            weights: dict = {}, result_file: str = None):
+            weights: dict = {}, result_file: str = None,
+            grouping_ids=None):
         """Train algorithm given data supplied.
 
         Args:
@@ -234,11 +235,13 @@ class AutoTS(object):
             result_file (str): results saved on each new generation. Does not include validation rounds.
                 ".csv" save model results table.
                 ".pickle" saves full object, including ensemble information.
+            grouping_ids (dict): currently a one-level dict containing series_id:group_id mapping.
         """
         self.weights = weights
         self.date_col = date_col
         self.value_col = value_col
         self.id_col = id_col
+        self.grouping_ids = grouping_ids
 
         # convert class variables to local variables (makes testing easier)
         forecast_length = self.forecast_length
@@ -398,6 +401,7 @@ class AutoTS(object):
             template_cols=template_cols,
             random_seed=random_seed,
             model_interrupt=self.model_interrupt,
+            grouping_ids=self.grouping_ids,
             verbose=verbose)
         model_count = template_result.model_count
 
@@ -445,6 +449,7 @@ class AutoTS(object):
                 startTimeStamps=self.startTimeStamps,
                 template_cols=template_cols,
                 model_interrupt=self.model_interrupt,
+                grouping_ids=self.grouping_ids,
                 random_seed=random_seed, verbose=verbose
                 )
             model_count = template_result.model_count
@@ -481,6 +486,7 @@ class AutoTS(object):
                     startTimeStamps=self.startTimeStamps,
                     template_cols=template_cols,
                     model_interrupt=self.model_interrupt,
+                    grouping_ids=self.grouping_ids,
                     random_seed=random_seed, verbose=verbose)
                 model_count = template_result.model_count
                 # capture results from lower-level template run
@@ -632,6 +638,7 @@ class AutoTS(object):
                     startTimeStamps=self.startTimeStamps,
                     template_cols=self.template_cols,
                     model_interrupt=self.model_interrupt,
+                    grouping_ids=self.grouping_ids,
                     random_seed=random_seed, verbose=verbose,
                     validation_round=(y + 1))
                 model_count = template_result.model_count
@@ -732,6 +739,7 @@ or otherwise increase models available."""
                     startTimeStamps=self.startTimeStamps,
                     template_cols=template_cols,
                     model_interrupt=self.model_interrupt,
+                    grouping_ids=self.grouping_ids,
                     random_seed=random_seed, verbose=verbose)
                 # capture results from lower-level template run
                 template_result.model_results['TotalRuntime'].fillna(
@@ -862,6 +870,7 @@ or otherwise increase models available."""
             future_regressor_forecast=future_regressor,
             holiday_country=self.holiday_country,
             startTimeStamps=self.startTimeStamps,
+            grouping_ids=self.grouping_ids,
             random_seed=self.random_seed, verbose=verbose,
             template_cols=self.template_cols)
 
@@ -1167,6 +1176,7 @@ class AutoTSIntervals(object):
                 future_regressor_forecast=future_regressor,
                 holiday_country=self.holiday_country,
                 startTimeStamps=self.startTimeStamps,
+                grouping_ids=self.grouping_ids,
                 random_seed=self.random_seed, verbose=verbose,
                 template_cols=self.template_cols)
 

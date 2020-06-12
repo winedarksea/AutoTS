@@ -1029,6 +1029,8 @@ class GeneralTransformer(object):
                  coerce_integer: bool = False,
                  grouping: str = None,
                  reconciliation: str = None,
+                 grouping_ids = None,
+                 constraint = None,
                  random_seed: int = 2020):
 
         self.outlier_method = outlier_method
@@ -1047,6 +1049,7 @@ class GeneralTransformer(object):
         self.coerce_integer = coerce_integer
         self.grouping = grouping
         self.reconciliation = reconciliation
+        self.grouping_ids = grouping_ids
         self.random_seed = random_seed
 
     def outlier_treatment(self, df):
@@ -1220,12 +1223,15 @@ class GeneralTransformer(object):
 
     def _fit(self, df):
         if self.grouping is not None:
-            hier_ids = None
             from autots.tools.hierarchial import hierarchial
-            # 'dbscan', 'kmeans', 'tile', 'user'
+            if 'kmeans' in self.grouping:
+                n_groups = int(''.join([s for s in str(self.grouping) if s.isdigit()]))
+            else:
+                n_groups = 3
             self.hier = hierarchial(
                 n_groups=3, grouping_method=self.grouping,
-                hier_ids=hier_ids, reconciliation=self.reconciliation).fit(df)
+                grouping_ids=self.grouping_ids,
+                reconciliation=self.reconciliation).fit(df)
             df = self.hier.transform(df)
 
         # clean up outliers
@@ -1525,7 +1531,7 @@ class GeneralTransformer(object):
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
 
         if self.grouping is not None:
-            df = self.heir.reconcile(df)
+            df = self.hier.reconcile(df)
 
         if self.coerce_integer:
             df = df.round(decimals=0).astype(int)
@@ -1639,6 +1645,15 @@ def RandomTransform():
                                          p=[0.1, 0.3, 0.5, 0.1]).item()
     else:
         n_bins_choice = None
+
+    grouping_choice = np.random.choice(
+        a=[None,'dbscan', 'kmeans3', 'kmeans10', 'tile', 'user'],
+        p=[0.65, 0.03, 0.0025, 0.0025, 0.0025, 0.3125], size=1).item()
+    if grouping_choice is not None:
+        reconciliation_choice = np.random.choice([None, 'mean'])
+    else:
+        reconciliation_choice = None
+
     coerce_integer_choice = np.random.choice(
         a=[True, False], size=1,
         p=[0.02, 0.98]).item()
@@ -1660,6 +1675,8 @@ def RandomTransform():
             'fourth_transformation': fourth_transformation_choice,
             'discretization': discretization_choice,
             'n_bins': n_bins_choice,
+            'grouping': grouping_choice,
+            'reconciliation': reconciliation_choice,
             'coerce_integer': coerce_integer_choice,
             'context_slicer': context_choice
             }
