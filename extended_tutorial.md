@@ -31,6 +31,11 @@ model = model.fit(df_long, date_col='datetime',
 print(model)
 ```
 
+#### Import of data
+There are two shapes of accepted import data, both already as a pandas `DataFrame`. 
+The first is *long* data, like that out of an aggregated sales table containing three columns identified to `.fit()` as `date_col, value_col, and id_col`. 
+Alternatively, the data may be in a *wide* format where the index is a `pandas.DatetimeIndex`, and each column is a distinct data series. 
+
 If your data is already wide (one column for each value), to bring to a long format:
 ```
 df_long = df_wide.melt(id_vars=['datetime_col_name'],

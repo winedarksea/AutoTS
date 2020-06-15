@@ -35,7 +35,7 @@ Tensorflow GPU backend may crash on occasion.
 	* 'fast' option for RandomTransformations generator
 * constraint - TO TEMPLATE
 * coerce integer - TO HIGHER
-
+* test running on wide input data
 
 # To-Do
 * drop duplicates as function of TemplateEvalObject

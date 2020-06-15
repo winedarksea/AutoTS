@@ -217,14 +217,14 @@ class AutoTS(object):
                 return "Initiated AutoTS object"
 
     def fit(self, df,
-            date_col: str = 'datetime', value_col: str = 'value',
+            date_col: str = None, value_col: str = None,
             id_col: str = None, future_regressor=[],
             weights: dict = {}, result_file: str = None,
             grouping_ids=None):
         """Train algorithm given data supplied.
 
         Args:
-            df (pandas.DataFrame): Datetime Indexed
+            df (pandas.DataFrame): Datetime Indexed dataframe of series, or dataframe of three columns as below.
             date_col (str): name of datetime column
             value_col (str): name of column containing the data of series.
             id_col (str): name of column identifying different series.
@@ -278,17 +278,21 @@ class AutoTS(object):
         np.random.seed(random_seed)
 
         # convert data to wide format
-        df_wide = long_to_wide(
-            df, date_col=self.date_col,
-            value_col=self.value_col,
-            id_col=self.id_col,
-            frequency=self.frequency,
-            na_tolerance=self.na_tolerance,
-            drop_data_older_than_periods=self.drop_data_older_than_periods,
-            aggfunc=self.aggfunc,
-            drop_most_recent=self.drop_most_recent,
-            verbose=self.verbose
-            )
+        if date_col is None and value_col is None:
+            df_wide = pd.DataFrame(df)
+            assert type(df.index) is pd.DatetimeIndex, "df index is not pd.DatetimeIndex"
+        else:
+            df_wide = long_to_wide(
+                df, date_col=self.date_col,
+                value_col=self.value_col,
+                id_col=self.id_col,
+                frequency=self.frequency,
+                na_tolerance=self.na_tolerance,
+                drop_data_older_than_periods=self.drop_data_older_than_periods,
+                aggfunc=self.aggfunc,
+                drop_most_recent=self.drop_most_recent,
+                verbose=self.verbose
+                )
 
         # clean up series weighting input
         if not weighted:
