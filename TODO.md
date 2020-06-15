@@ -43,6 +43,7 @@ Tensorflow GPU backend may crash on occasion.
 * fake date dataset of many series to improve General Template
 * better document ensembling
 * optimize randomtransform probabilities
+* more thorough test.py script
 * Add to template: Gluon, Motif, WindowRegression
 * ml model to generalize horizontal ensembles to many series after only trained on subset
 	* all be 'horizontal-max' and then have subset make smaller if desired
