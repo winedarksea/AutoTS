@@ -128,7 +128,7 @@ class AutoTS(object):
         self.model_interrupt = model_interrupt
         self.verbose = int(verbose)
         if self.ensemble == 'all':
-            self.ensemble = 'simple,distance'
+            self.ensemble = 'simple,distance,horizontal,probabilistic'
 
         if self.forecast_length == 1:
             if metric_weighting['contour_weighting'] > 0:
@@ -144,9 +144,8 @@ class AutoTS(object):
                                'AverageValueNaive', 'GLS', 'SeasonalNaive',
                                'GLM', 'ETS', 'ARIMA', 'FBProphet',
                                'RollingRegression', 'GluonTS',
-                               'UnobservedComponents', 'VARMAX',
-                               'VECM', 'DynamicFactor', 'MotifSimulation',
-                               'WindowRegression']
+                               'UnobservedComponents', 'VAR',
+                               'VECM', 'WindowRegression']
         if model_list == 'superfast':
             self.model_list = ['ZeroesNaive', 'LastValueNaive',
                                'AverageValueNaive', 'GLS', 'SeasonalNaive']
@@ -154,8 +153,7 @@ class AutoTS(object):
             self.model_list = ['ZeroesNaive', 'LastValueNaive',
                                'AverageValueNaive', 'GLS', 'GLM', 'ETS',
                                'RollingRegression', 'WindowRegression',
-                               'GluonTS', 'VAR',
-                               'SeasonalNaive', 'UnobservedComponents',
+                               'GluonTS', 'VAR', 'SeasonalNaive',
                                'VECM', 'ComponentAnalysis']
         if model_list == 'probabilistic':
             self.model_list = ['ARIMA', 'GluonTS', 'FBProphet',
@@ -830,6 +828,7 @@ or otherwise increase models available."""
         return out
 
     def predict(self, forecast_length: int = "self",
+                prediction_interval: float = 'self',
                 future_regressor=[], hierarchy=None,
                 just_point_forecast: bool = False,
                 verbose: int = 'self'):
@@ -848,6 +847,8 @@ or otherwise increase models available."""
         verbose = self.verbose if verbose == 'self' else verbose
         if forecast_length == 'self':
             forecast_length = self.forecast_length
+        if prediction_interval == 'self':
+            prediction_interval = self.prediction_interval
 
         # if the models don't need the regressor, ignore it...
         if not self.used_regressor_check:
@@ -863,7 +864,7 @@ or otherwise increase models available."""
             df_train=self.df_wide_numeric,
             forecast_length=forecast_length,
             frequency=self.frequency,
-            prediction_interval=self.prediction_interval,
+            prediction_interval=prediction_interval,
             no_negatives=self.no_negatives,
             constraint=self.constraint,
             future_regressor_train=self.future_regressor_train,

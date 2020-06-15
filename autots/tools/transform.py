@@ -1648,7 +1648,7 @@ def RandomTransform():
 
     grouping_choice = np.random.choice(
         a=[None, 'dbscan', 'kmeans3', 'kmeans10', 'tile', 'user'],
-        p=[0.65, 0.13, 0.0025, 0.0025, 0.0025, 0.2125], size=1).item()
+        p=[0.75, 0.13, 0.0025, 0.0025, 0.0025, 0.1125], size=1).item()
     if grouping_choice is not None:
         reconciliation_choice = np.random.choice([None, 'mean'])
     else:
