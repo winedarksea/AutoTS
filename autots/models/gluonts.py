@@ -22,7 +22,7 @@ else:
     _has_gluonts = True
 
 class GluonTS(ModelObject):
-    """VARMAX from Statsmodels
+    """GluonTS based on mxnet.
     
     Args:
         name (str): String to identify class

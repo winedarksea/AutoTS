@@ -22,7 +22,7 @@ df_long = load_monthly()
 
 from autots import AutoTS
 model = AutoTS(forecast_length=3, frequency='infer',
-			   ensemble=None, drop_data_older_than_periods=240,
+			   ensemble='simple', drop_data_older_than_periods=240,
                max_generations=5, num_validations=2)
 model = model.fit(df_long, date_col='datetime', 
 				  value_col='value', id_col='series_id')
@@ -32,9 +32,10 @@ print(model)
 ```
 
 #### Import of data
-There are two shapes of accepted import data, both already as a pandas `DataFrame`. 
-The first is *long* data, like that out of an aggregated sales table containing three columns identified to `.fit()` as `date_col, value_col, and id_col`. 
-Alternatively, the data may be in a *wide* format where the index is a `pandas.DatetimeIndex`, and each column is a distinct data series. 
+There are two shapes of pandas `DataFrame` which are accepted. 
+The first is *long* data, like that out of an aggregated sales-transaction table containing three columns identified to `.fit()` as `date_col {pd.Datetime}, value_col {the numeric or categorical data of interest}, and id_col {id string, if multiple series are provided}`. 
+Alternatively, the data may be in a *wide* format where the index is a `pandas.DatetimeIndex`, and each column is a distinct data series.  
+Some `AutoTS` parameters are only applicable if *long* style data is provided. 
 
 If your data is already wide (one column for each value), to bring to a long format:
 ```
@@ -43,9 +44,9 @@ df_long = df_wide.melt(id_vars=['datetime_col_name'],
 ```
 
 #### You can tailor the process in a few ways...
-The simplest thing is to increase the number of generations `max_generations=15`. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.
+The simplest way to improve accuracy is to increase the number of generations `max_generations=15`. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.
 
-Another approach that may improve accuracy is to set `ensemble='all'`. As this means storing more details of every model, this takes more time and memory.
+Another approach that may improve accuracy is to set `ensemble='all'`. Ensemble parameter expects a single string, and can for example be `'simple,dist'`, or `'horizontal'`. As this means storing more details of every model, this takes more time and memory.
 
 A handy parameter for when your data is expected to always be 0 or greater (such as unit sales) is to set `no_negatives=True`. This forces forecasts to be greater than or equal to 0. 
 A similar function is `constraint=2.0`. What this does is prevent the forecast from leaving historic bounds set by the training data. In this example, the forecasts would not be allowed to go above `max(training data) + 2.0 * st.dev(training data)`, as well as the reverse on the minimum side. A constraint of `0` would constrain forecasts to historical mins and maxes. 
@@ -94,7 +95,7 @@ model_list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
 
 from autots import AutoTS
 model = AutoTS(forecast_length=73, frequency='infer',
-               prediction_interval=0.95, ensemble=None,
+               prediction_interval=0.95, ensemble='simple',
                max_generations=5, num_validations=2,
 			   validation_method='even',
                model_list=model_list, models_to_validate=15,

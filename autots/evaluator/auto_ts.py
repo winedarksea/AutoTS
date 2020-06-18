@@ -6,7 +6,6 @@ import json
 
 from autots.tools.shaping import long_to_wide
 import random
-from autots.tools.profile import data_profile
 from autots.tools.shaping import subset_series
 from autots.tools.shaping import simple_train_test_split
 from autots.evaluator.auto_model import TemplateEvalObject
@@ -34,7 +33,6 @@ class AutoTS(object):
         constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.
         ensemble (str): None, 'simple', 'distance'
         initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
-        figures (bool): Not yet implemented
         random_seed (int): random seed allows (slightly) more consistent results.
         holiday_country (str): passed through to Holidays package for some models.
         subset (int): maximum number of series to evaluate at once. Useful to speed evaluation when many series are input.
@@ -75,9 +73,8 @@ class AutoTS(object):
                  max_generations: int = 5,
                  no_negatives: bool = False,
                  constraint: float = None,
-                 ensemble: str = None,
+                 ensemble: str = 'simple',
                  initial_template: str = 'General+Random',
-                 figures: bool = False,
                  random_seed: int = 2020,
                  holiday_country: str = 'US',
                  subset: int = None,
@@ -95,7 +92,7 @@ class AutoTS(object):
                  drop_data_older_than_periods: int = 100000,
                  model_list: str = 'default',
                  num_validations: int = 2,
-                 models_to_validate: float = 0.05,
+                 models_to_validate: float = 0.15,
                  max_per_model_class: int = None,
                  validation_method: str = 'even',
                  min_allowed_train_percent: float = 0.5,
@@ -128,7 +125,7 @@ class AutoTS(object):
         self.model_interrupt = model_interrupt
         self.verbose = int(verbose)
         if self.ensemble == 'all':
-            self.ensemble = 'simple,distance,horizontal,probabilistic'
+            self.ensemble = 'simple,distance,horizontal-max,probabilistic-max'
 
         if self.forecast_length == 1:
             if metric_weighting['contour_weighting'] > 0:
@@ -175,20 +172,22 @@ class AutoTS(object):
                                'ComponentAnalysis']
 
         # generate template to begin with
-        if initial_template.lower() == 'random':
-            self.initial_template = RandomTemplate(50,
-                                                   model_list=self.model_list)
-        elif initial_template.lower() == 'general':
+        initial_template = str(initial_template).lower()
+        if initial_template == 'random':
+            self.initial_template = RandomTemplate(
+                50, model_list=self.model_list)
+        elif initial_template == 'general':
             from autots.templates.general import general_template
             self.initial_template = general_template
-        elif initial_template.lower() == 'general+random':
+        elif initial_template == 'general+random':
             from autots.templates.general import general_template
             random_template = RandomTemplate(40, model_list=self.model_list)
-            self.initial_template = pd.concat([general_template,
-                                               random_template],
-                                              axis=0).drop_duplicates()
+            self.initial_template = pd.concat(
+                [general_template, random_template], axis=0).drop_duplicates()
+        elif isinstance(initial_template, pd.DataFrame):
+            self.initial_template = initial_template
         else:
-            print("Input initial_template either unrecognized or not yet implemented. Using Random.")
+            print("Input initial_template unrecognized. Using Random.")
             self.initial_template = RandomTemplate(50)
 
         # remove models not in given model list

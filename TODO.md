@@ -9,6 +9,7 @@
 
 # Latest:
 * `grouping` reconciliation to GeneralTransformer
+* allow wide-style data as input
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -35,23 +36,32 @@ Tensorflow GPU backend may crash on occasion.
 	* 'fast' option for RandomTransformations generator
 * constraint - TO TEMPLATE
 * coerce integer - TO HIGHER
-* test running on wide input data
+
+* ml model to generalize horizontal ensembles to many series after only trained on subset
+	* all be 'horizontal-max' and then have subset make smaller if desired
+	* have subsetting sample for diversity, not just random in this case
+	* handle failure of one of the models to predict
+TemplateWizard catches errors right now
+Need to handle errors for ensemble lower level's but not for standalone modelsd
+Dicts instead of list of DFs
+Create model_id even if forecast fails
+Best3 to work on model failure
+	Make best 3 work on any given length of ensembles (more than 3, down to 1)
+	Rename from Best3
+	Add 'model_count' to parameters
+Horizontal to work on model failure
+	Use same process as to generalize to untested models
+Dist to fail on model failure
+HDist to fail on model failure
 
 # To-Do
 * drop duplicates as function of TemplateEvalObject
 * speed up MotifSimulation
 * fake date dataset of many series to improve General Template
-* better document ensembling
 * optimize randomtransform probabilities
-* more thorough test.py script
+* improve test.py script for actual testing of many features
 * Add to template: Gluon, Motif, WindowRegression
-* ml model to generalize horizontal ensembles to many series after only trained on subset
-	* all be 'horizontal-max' and then have subset make smaller if desired
-	* have subsetting sample for diversity, not just random in this case
-	* handle failure of one of the models to predict
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
-* Bring GeneralTransformer to higher level API.
-	* wide_to_long and long_to_wide in higher-level API
 * Option to use full traceback in errors in table
 * Better point to probabilistic (uncertainty of naive last-value forecast) 
 	* linear reg of abs error of samples - simulations
