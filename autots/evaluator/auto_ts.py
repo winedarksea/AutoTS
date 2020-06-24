@@ -1077,6 +1077,7 @@ class AutoTSIntervals(object):
                 'contour_weighting': 0
                 },
             weights: dict = {},
+            grouping_ids=None,
             future_regressor=[],
             model_interrupt: bool = False,
             constraint=2, no_negatives=False,
@@ -1100,6 +1101,7 @@ class AutoTSIntervals(object):
                 metric_weighting=metric_weighting, subset=None,
                 random_seed=random_seed,
                 num_validations=num_validations,
+                grouping_ids=grouping_ids,
                 validation_method=validation_method,
                 model_interrupt=model_interrupt,
                 models_to_validate=models_to_validate)

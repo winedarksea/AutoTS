@@ -248,7 +248,7 @@ class GluonTS(ModelObject):
         gluon_model_choice = np.random.choice(
             a=['DeepAR', 'NPTS', 'DeepState', 'WaveNet',
                'DeepFactor', 'Transformer', 'SFF', 'MQCNN'], size=1,
-            p=[0.2, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1]).item()
+            p=[0.2, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1]).item()
         if gluon_model_choice == 'NPTS':
             epochs_choice = 20
             learning_rate_choice = 0.001

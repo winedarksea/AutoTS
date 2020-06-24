@@ -36,7 +36,7 @@ Tensorflow GPU backend may crash on occasion.
 	* 'fast' option for RandomTransformations generator
 * constraint - TO TEMPLATE
 * coerce integer - TO HIGHER
-
+* Iterative Imputer SKLEARN
 * ml model to generalize horizontal ensembles to many series after only trained on subset
 	* all be 'horizontal-max' and then have subset make smaller if desired
 	* have subsetting sample for diversity, not just random in this case
