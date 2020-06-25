@@ -908,9 +908,9 @@ def TemplateWizard(template, df_train, df_test, weights,
             template_result.model_count += 1
             if verbose > 0:
                 if verbose > 1:
-                    print("Model Number: {} with model {} with params {} and transformations {}".format(str(template_result.model_count), model_str, json.dumps(parameter_dict),json.dumps(transformation_dict)))
+                    print("Model Number: {} with model {} in Validation {} with params {} and transformations {}".format(str(template_result.model_count), model_str, str(validation_round), json.dumps(parameter_dict),json.dumps(transformation_dict)))
                 else:
-                    print("Model Number: {} with model {}".format(str(template_result.model_count), model_str))
+                    print("Model Number: {} with model {} in Validation {} ".format(str(template_result.model_count), model_str, str(validation_round)))
             df_forecast = PredictWitch(
                 current_template, df_train=df_train,
                 forecast_length=forecast_length, frequency=frequency,
