@@ -1101,7 +1101,6 @@ class AutoTSIntervals(object):
                 metric_weighting=metric_weighting, subset=None,
                 random_seed=random_seed,
                 num_validations=num_validations,
-                grouping_ids=grouping_ids,
                 validation_method=validation_method,
                 model_interrupt=model_interrupt,
                 models_to_validate=models_to_validate)
@@ -1113,6 +1112,7 @@ class AutoTSIntervals(object):
             current_model = current_model.fit(
                 df_long, future_regressor=future_regressor,
                 weights=weights,
+                grouping_ids=grouping_ids,
                 result_file=result_file,
                 date_col=date_col, value_col=value_col,
                 id_col=id_col)
