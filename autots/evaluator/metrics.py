@@ -43,9 +43,9 @@ def mae(A, F):
 
 def pinball_loss(A, F, quantile):
     """Bigger is bad-er."""
-    pl = np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
+        pl = np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A))
         result = np.nanmean(pl, axis=0)
     return result
 
@@ -87,7 +87,9 @@ def containment(lower_forecast, upper_forecast, actual):
         actual (numpy.array): known true values
         forecast (numpy.array): predicted values
     """
-    result = np.count_nonzero((upper_forecast >= actual) & (lower_forecast <= actual), axis=0)/actual.shape[0]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        result = np.count_nonzero((upper_forecast >= actual) & (lower_forecast <= actual), axis=0)/actual.shape[0]
     return result
 
 

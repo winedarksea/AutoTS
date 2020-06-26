@@ -118,6 +118,21 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         df = fake_date_fill(df, back_method='slice')
         return df
 
+    if method == 'IterativeImputer':
+        cols = df.columns
+        indx = df.index
+        try:
+            from sklearn.experimental import enable_iterative_imputer  # noqa
+        except Exception:
+            pass
+        from sklearn.impute import IterativeImputer
+        df = IterativeImputer(random_state=0,max_iter=100).fit_transform(df)
+        if not isinstance(df, pd.DataFrame):
+            df = pd.DataFrame(df)
+            df.index = indx
+            df.columns = cols
+        return df
+
     if method is None:
         return df
 

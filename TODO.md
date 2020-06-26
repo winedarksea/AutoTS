@@ -41,6 +41,8 @@ Tensorflow GPU backend may crash on occasion.
 	* all be 'horizontal-max' and then have subset make smaller if desired
 	* have subsetting sample for diversity, not just random in this case
 	* handle failure of one of the models to predict
+* horizontal ensemble using prior selection of only one per class, and maybe also for speed
+	* cleanse similar models out first
 TemplateWizard catches errors right now
 Need to handle errors for ensemble lower level's but not for standalone modelsd
 Dicts instead of list of DFs

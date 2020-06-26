@@ -1581,10 +1581,10 @@ def RandomTransform():
         outlier_threshold_choice = None
         outlier_position_choice = None
 
-    na_choice = np.random.choice(a=['ffill', 'fake date', 'rolling mean',
-                                    'mean', 'zero',
-                                    'ffill mean biased', 'median'],
-                                 size=1, p=[0.2, 0.2, 0.2,
+    na_choice = np.random.choice(
+        a=['ffill', 'fake date', 'rolling mean', 'IterativeImputer',
+           'mean', 'zero', 'ffill mean biased', 'median'],
+                                 size=1, p=[0.2, 0.2, 0.1999, 0.0001,
                                             0.1, 0.1, 0.1, 0.1]).item()
     transformation_choice = np.random.choice(a=transformer_list, size=1,
                                              p=first_transformer_prob).item()
