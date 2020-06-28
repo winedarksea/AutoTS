@@ -82,6 +82,9 @@ print(model.best_model['Model'].iloc[0])
 print(model.best_model['ModelParameters'].iloc[0])
 print(model.best_model['TransformationParameters'].iloc[0])
 
+prediction_ints = model.predict(future_regressor=future_regressor_forecast2d,
+                                prediction_interval=[0.99, 0.5],
+                                verbose=0)
 prediction = model.predict(future_regressor=future_regressor_forecast2d,
                            verbose=0)
 # point forecasts dataframe

@@ -149,8 +149,8 @@ class AutoTS(object):
         if model_list == 'fast':
             self.model_list = ['ZeroesNaive', 'LastValueNaive',
                                'AverageValueNaive', 'GLS', 'GLM', 'ETS',
-                               'RollingRegression', 'WindowRegression',
-                               'GluonTS', 'VAR', 'SeasonalNaive',
+                               'WindowRegression', 'GluonTS',
+                               'VAR', 'SeasonalNaive',
                                'VECM', 'ComponentAnalysis']
         if model_list == 'probabilistic':
             self.model_list = ['ARIMA', 'GluonTS', 'FBProphet',
@@ -839,6 +839,9 @@ or otherwise increase models available."""
 
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
+            prediction_interval (float): interval of upper/lower forecasts.
+                defaults to 'self' ie the interval specified in __init__()
+                if prediction_interval is a list, then returns a dict of forecast objects.
             future_regressor (numpy.Array): additional regressor, not used
             hierarchy: Not yet implemented
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
@@ -862,34 +865,61 @@ or otherwise increase models available."""
             self.future_regressor_train = self.future_regressor_train.reindex(
                 index=self.df_wide_numeric.index)
 
-        df_forecast = PredictWitch(
-            self.best_model,
-            df_train=self.df_wide_numeric,
-            forecast_length=forecast_length,
-            frequency=self.frequency,
-            prediction_interval=prediction_interval,
-            no_negatives=self.no_negatives,
-            constraint=self.constraint,
-            future_regressor_train=self.future_regressor_train,
-            future_regressor_forecast=future_regressor,
-            holiday_country=self.holiday_country,
-            startTimeStamps=self.startTimeStamps,
-            grouping_ids=self.grouping_ids,
-            random_seed=self.random_seed, verbose=verbose,
-            template_cols=self.template_cols)
-
-        trans = self.categorical_transformer
-        df_forecast.forecast = trans.inverse_transform(
-            df_forecast.forecast)
-        df_forecast.lower_forecast = trans.inverse_transform(
-            df_forecast.lower_forecast)
-        df_forecast.upper_forecast = trans.inverse_transform(
-            df_forecast.upper_forecast)
-
-        if just_point_forecast:
-            return df_forecast.forecast
+        # allow multiple prediction intervals
+        if isinstance(prediction_interval, list):
+            forecast_objects = {}
+            for interval in prediction_interval:
+                df_forecast = PredictWitch(
+                    self.best_model,
+                    df_train=self.df_wide_numeric,
+                    forecast_length=forecast_length,
+                    frequency=self.frequency,
+                    prediction_interval=interval,
+                    no_negatives=self.no_negatives,
+                    constraint=self.constraint,
+                    future_regressor_train=self.future_regressor_train,
+                    future_regressor_forecast=future_regressor,
+                    holiday_country=self.holiday_country,
+                    startTimeStamps=self.startTimeStamps,
+                    grouping_ids=self.grouping_ids,
+                    random_seed=self.random_seed, verbose=verbose,
+                    template_cols=self.template_cols)
+                trans = self.categorical_transformer
+                df_forecast.forecast = trans.inverse_transform(
+                    df_forecast.forecast)
+                df_forecast.lower_forecast = trans.inverse_transform(
+                    df_forecast.lower_forecast)
+                df_forecast.upper_forecast = trans.inverse_transform(
+                    df_forecast.upper_forecast)
+                forecast_objects[interval] = df_forecast
+            return forecast_objects
         else:
-            return df_forecast
+            df_forecast = PredictWitch(
+                self.best_model,
+                df_train=self.df_wide_numeric,
+                forecast_length=forecast_length,
+                frequency=self.frequency,
+                prediction_interval=prediction_interval,
+                no_negatives=self.no_negatives,
+                constraint=self.constraint,
+                future_regressor_train=self.future_regressor_train,
+                future_regressor_forecast=future_regressor,
+                holiday_country=self.holiday_country,
+                startTimeStamps=self.startTimeStamps,
+                grouping_ids=self.grouping_ids,
+                random_seed=self.random_seed, verbose=verbose,
+                template_cols=self.template_cols)
+            trans = self.categorical_transformer
+            df_forecast.forecast = trans.inverse_transform(
+                df_forecast.forecast)
+            df_forecast.lower_forecast = trans.inverse_transform(
+                df_forecast.lower_forecast)
+            df_forecast.upper_forecast = trans.inverse_transform(
+                df_forecast.upper_forecast)
+            if just_point_forecast:
+                return df_forecast.forecast
+            else:
+                return df_forecast
 
     def results(self, result_set: str = 'initial'):
         """Convenience function to return tested models table.
@@ -1195,7 +1225,6 @@ class AutoTSIntervals(object):
                 df_forecast.upper_forecast)
             forecast_objects[interval] = df_forecast
         return forecast_objects
-
 
 
 def fake_regressor(df_long, forecast_length: int = 14,
