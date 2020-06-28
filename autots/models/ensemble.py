@@ -1,3 +1,4 @@
+"""Tools for generating and forecasting with ensembles of models."""
 import datetime
 import numpy as np
 import pandas as pd
@@ -9,7 +10,7 @@ from autots.evaluator.auto_model import create_model_id
 def Best3Ensemble(ensemble_params, forecasts_list, forecasts,
                   lower_forecasts, upper_forecasts, forecasts_runtime,
                   prediction_interval):
-    """Generate forecast for ensemble of 3 models."""
+    """Generate mean forecast for ensemble of models."""
     id_list = list(ensemble_params['models'].keys())
     model_indexes = [idx for idx, x in enumerate(forecasts_list) if x in id_list]
 
@@ -140,7 +141,6 @@ def HDistEnsemble(ensemble_params, forecasts_list, forecasts,
     forecast_length = forecasts[0].shape[0]
     dist_n = int(np.ceil(ensemble_params['dis_frac'] * forecast_length))
     dist_last = forecast_length - dist_n
-
 
     forecast_df, u_forecast_df, l_forecast_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     for series, mod_id in ensemble_params['series1'].items():
@@ -543,5 +543,5 @@ def HorizontalTemplateGenerator(per_series, model_results,
             best5_params = pd.DataFrame(best5_params, index=[0])
             ensemble_templates = pd.concat([ensemble_templates,
                                             best5_params],
-                                           axis=0, ignore_index=True)        
+                                           axis=0, ignore_index=True)  
     return ensemble_templates

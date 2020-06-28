@@ -907,6 +907,8 @@ trans_dict = {'None': EmptyTransformer(),
                                                         method='LastValue'),
               'SeasonalDifference12': SeasonalDifference(lag_1=12,
                                                          method='Mean'),
+              'SeasonalDifference28': SeasonalDifference(lag_1=28,
+                                                         method='Mean'),
               'bkfilter': StatsmodelsFilter(method='bkfilter'),
               'cffilter': StatsmodelsFilter(method='cffilter'),
               'DatepartRegression': DatepartRegression(
@@ -985,7 +987,7 @@ class GeneralTransformer(object):
             'IntermittentOccurrence' - -1, 1 for non median values
             'SeasonalDifference' - remove the last lag values from all values
             'SeasonalDifferenceMean' - remove the average lag values from all
-            'SeasonalDifference7' also '12' - non-parameterized version of Seasonal
+            'SeasonalDifference7','12','28' - non-parameterized version of Seasonal
 
         second_transformation (str): second transformation to apply. Same options as transformation, but with transformation_param passed in if used
 
@@ -1025,6 +1027,10 @@ class GeneralTransformer(object):
                  fourth_transformation: str = None,
                  discretization: str = 'center', n_bins: int = None,
                  coerce_integer: bool = False,
+                 grouping: str = None,
+                 reconciliation: str = None,
+                 grouping_ids = None,
+                 constraint = None,
                  random_seed: int = 2020):
 
         self.outlier_method = outlier_method
@@ -1041,6 +1047,9 @@ class GeneralTransformer(object):
         self.discretization = discretization
         self.n_bins = n_bins
         self.coerce_integer = coerce_integer
+        self.grouping = grouping
+        self.reconciliation = reconciliation
+        self.grouping_ids = grouping_ids
         self.random_seed = random_seed
 
     def outlier_treatment(self, df):
@@ -1213,6 +1222,18 @@ class GeneralTransformer(object):
             return LinearRegression()
 
     def _fit(self, df):
+        if self.grouping is not None:
+            from autots.tools.hierarchial import hierarchial
+            if 'kmeans' in self.grouping:
+                n_groups = int(''.join([s for s in str(self.grouping) if s.isdigit()]))
+            else:
+                n_groups = 3
+            self.hier = hierarchial(
+                n_groups=3, grouping_method=self.grouping,
+                grouping_ids=self.grouping_ids,
+                reconciliation=self.reconciliation).fit(df)
+            df = self.hier.transform(df)
+
         # clean up outliers
         if 'first' in str(self.outlier_position):
             df = self.outlier_treatment(df)
@@ -1345,11 +1366,14 @@ class GeneralTransformer(object):
         return self
 
     def fit_transform(self, df):
+        """Directly fit and apply transformations to convert df."""
         return self._fit(df)
 
     def transform(self, df):
         """Apply transformations to convert df."""
         df = df.copy()
+        if self.grouping is not None:
+            df = self.hier.transform(df)
 
         # clean up outliers
         if 'first' in str(self.outlier_position):
@@ -1432,11 +1456,11 @@ class GeneralTransformer(object):
         return df
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
-        """Undo the madness
+        """Undo the madness.
 
         Args:
             df (pandas.DataFrame): Datetime Indexed
-            trans_method (str): 'forecast' or 'original' passed through to RollingTransformer, DifferencedTransformer, if used
+            trans_method (str): 'forecast' or 'original' passed through
         """
         self.df_index = df.index
         self.df_colnames = df.columns
@@ -1444,7 +1468,8 @@ class GeneralTransformer(object):
                          'RollingMean10thN', 'RollingMean10', 'RollingMean',
                          'PctChangeTransformer', 'CumSumTransformer',
                          'SeasonalDifference', 'SeasonalDifferenceMean',
-                         'SeasonalDifference7', 'SeasonalDifference12']
+                         'SeasonalDifference7', 'SeasonalDifference12',
+                         'SeasonalDifference28']
 
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
 
@@ -1504,7 +1529,10 @@ class GeneralTransformer(object):
 
         # since inf just causes trouble.
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
-        
+
+        if self.grouping is not None:
+            df = self.hier.reconcile(df)
+
         if self.coerce_integer:
             df = df.round(decimals=0).astype(int)
         return df
@@ -1518,23 +1546,23 @@ def RandomTransform():
         'FastICA', 'Detrend', 'RollingMean10', 'RollingMean100thN',
         'DifferencedTransformer', 'SinTrend', 'PctChangeTransformer',
         'CumSumTransformer', 'PositiveShift', 'Log', 'IntermittentOccurrence',
-        'SeasonalDifference7', 'SeasonalDifference12',
+        'SeasonalDifference7', 'SeasonalDifference12', 'SeasonalDifference28',
         'cffilter', 'bkfilter', 'DatepartRegression',
         'DatepartRegressionElasticNet', 'DatepartRegressionLtd']
-    first_transformer_prob = [0.26, 0.05, 0.15, 0.1,
+    first_transformer_prob = [0.25, 0.05, 0.15, 0.1,
                               0.05, 0.04, 0.05, 0.01,
                               0.01, 0.01, 0.01, 0.01,
                               0.1, 0.01, 0.01,
                               0.02, 0.02, 0.01, 0.01,
-                              0.01, 0.01,
+                              0.01, 0.01, 0.01,
                               0.01, 0.01, 0.01,
                               0.01, 0.01]
     fourth_transformer_prob = [0.3, 0.05, 0.05, 0.05,
-                               0.05, 0.1, 0.05, 0.03,
+                               0.05, 0.1, 0.05, 0.02,
                                0.01, 0.04, 0.02, 0.02,
                                0.1, 0.01, 0.01,
                                0.01, 0.01, 0.01, 0.01,
-                               0.01, 0.01,
+                               0.01, 0.01, 0.01,
                                0.01, 0.01, 0.01,
                                0.01, 0.01]
     outlier_method_choice = np.random.choice(a=[None, 'clip', 'remove'],
@@ -1553,10 +1581,10 @@ def RandomTransform():
         outlier_threshold_choice = None
         outlier_position_choice = None
 
-    na_choice = np.random.choice(a=['ffill', 'fake date', 'rolling mean',
-                                    'mean', 'zero',
-                                    'ffill mean biased', 'median'],
-                                 size=1, p=[0.2, 0.2, 0.2,
+    na_choice = np.random.choice(
+        a=['ffill', 'fake date', 'rolling mean', 'IterativeImputer',
+           'mean', 'zero', 'ffill mean biased', 'median'],
+                                 size=1, p=[0.2, 0.2, 0.1999, 0.0001,
                                             0.1, 0.1, 0.1, 0.1]).item()
     transformation_choice = np.random.choice(a=transformer_list, size=1,
                                              p=first_transformer_prob).item()
@@ -1617,6 +1645,15 @@ def RandomTransform():
                                          p=[0.1, 0.3, 0.5, 0.1]).item()
     else:
         n_bins_choice = None
+
+    grouping_choice = np.random.choice(
+        a=[None, 'dbscan', 'kmeans3', 'kmeans10', 'tile', 'user'],
+        p=[0.75, 0.13, 0.0025, 0.0025, 0.0025, 0.1125], size=1).item()
+    if grouping_choice is not None:
+        reconciliation_choice = np.random.choice([None, 'mean'])
+    else:
+        reconciliation_choice = None
+
     coerce_integer_choice = np.random.choice(
         a=[True, False], size=1,
         p=[0.02, 0.98]).item()
@@ -1638,6 +1675,8 @@ def RandomTransform():
             'fourth_transformation': fourth_transformation_choice,
             'discretization': discretization_choice,
             'n_bins': n_bins_choice,
+            'grouping': grouping_choice,
+            'reconciliation': reconciliation_choice,
             'coerce_integer': coerce_integer_choice,
             'context_slicer': context_choice
             }

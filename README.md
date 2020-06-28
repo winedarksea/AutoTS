@@ -19,7 +19,6 @@ For other time series needs, check out the list [here](https://github.com/MaxBen
 * Multiple cross validation options
 * Subsetting and weighting to improve search on many multivariate series
 * Option to use one or a combination of metrics for model selection
-* Ability to upsample data to a custom frequency
 * Import and export of templates allowing greater user customization
 
 ## Basic Use
@@ -43,14 +42,14 @@ df_long = load_monthly()
 
 from autots import AutoTS
 model = AutoTS(forecast_length=3, frequency='infer',
-               prediction_interval=0.9, ensemble=None,
+               prediction_interval=0.9, ensemble='all',
 			   model_list='superfast',
                max_generations=5, num_validations=2,
 			   validation_method='even')
 model = model.fit(df_long, date_col='datetime',
 				  value_col='value', id_col='series_id')
 
-# Print the name of the best model
+# Print the details of the best model
 print(model)
 
 prediction = model.predict()

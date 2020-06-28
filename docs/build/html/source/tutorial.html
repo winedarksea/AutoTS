@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Tutorial &#8212; AutoTS 0.2.1 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.2.2 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -63,7 +63,7 @@
 
 <span class="k">from</span> <span class="n">autots</span> <span class="n">import</span> <span class="n">AutoTS</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span><span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
-               <span class="n">ensemble</span><span class="o">=</span><span class="k">None</span><span class="p">,</span> <span class="n">drop_data_older_than_periods</span><span class="o">=</span><span class="mi">240</span><span class="p">,</span>
+               <span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;simple&#39;</span><span class="p">,</span> <span class="n">drop_data_older_than_periods</span><span class="o">=</span><span class="mi">240</span><span class="p">,</span>
                <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span>
                   <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
@@ -72,15 +72,22 @@
 <span class="n">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
 </pre></div>
 </div>
+<div class="section" id="import-of-data">
+<h4>Import of data<a class="headerlink" href="#import-of-data" title="Permalink to this headline">¶</a></h4>
+<p>There are two shapes/styles of pandas <code class="docutils literal notranslate"><span class="pre">DataFrame</span></code> which are accepted.
+The first is <em>long</em> data, like that out of an aggregated sales-transaction table containing three columns identified to <code class="docutils literal notranslate"><span class="pre">.fit()</span></code> as <code class="docutils literal notranslate"><span class="pre">date_col</span> <span class="pre">{pd.Datetime},</span> <span class="pre">value_col</span> <span class="pre">{the</span> <span class="pre">numeric</span> <span class="pre">or</span> <span class="pre">categorical</span> <span class="pre">data</span> <span class="pre">of</span> <span class="pre">interest},</span> <span class="pre">and</span> <span class="pre">id_col</span> <span class="pre">{id</span> <span class="pre">string,</span> <span class="pre">if</span> <span class="pre">multiple</span> <span class="pre">series</span> <span class="pre">are</span> <span class="pre">provided}</span></code>.
+Alternatively, the data may be in a <em>wide</em> format where the index is a <code class="docutils literal notranslate"><span class="pre">pandas.DatetimeIndex</span></code>, and each column is a distinct data series.<span class="raw-html-m2r"><br></span>
+Some <code class="docutils literal notranslate"><span class="pre">AutoTS</span></code> parameters are only applicable if <em>long</em> style data is provided, which is the recommended input shape.</p>
 <p>If your data is already wide (one column for each value), to bring to a long format:</p>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">df_long</span> <span class="o">=</span> <span class="n">df_wide</span><span class="p">.</span><span class="n">melt</span><span class="p">(</span><span class="n">id_vars</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;datetime_col_name&#39;</span><span class="p">],</span>
                        <span class="n">var_name</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">,</span> <span class="n">value_name</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
+</div>
 <div class="section" id="you-can-tailor-the-process-in-a-few-ways">
 <h4>You can tailor the process in a few ways…<a class="headerlink" href="#you-can-tailor-the-process-in-a-few-ways" title="Permalink to this headline">¶</a></h4>
-<p>The simplest thing is to increase the number of generations <code class="docutils literal notranslate"><span class="pre">max_generations=15</span></code>. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.</p>
-<p>Another approach that may improve accuracy is to set <code class="docutils literal notranslate"><span class="pre">ensemble='all'</span></code>. As this means storing and processing the result of every model, this takes more time and memory.</p>
+<p>The simplest way to improve accuracy is to increase the number of generations <code class="docutils literal notranslate"><span class="pre">max_generations=15</span></code>. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.</p>
+<p>Another approach that may improve accuracy is to set <code class="docutils literal notranslate"><span class="pre">ensemble='all'</span></code>. Ensemble parameter expects a single string, and can for example be <code class="docutils literal notranslate"><span class="pre">'simple,dist'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'horizontal'</span></code>. As this means storing more details of every model, this takes more time and memory.</p>
 <p>A handy parameter for when your data is expected to always be 0 or greater (such as unit sales) is to set <code class="docutils literal notranslate"><span class="pre">no_negatives=True</span></code>. This forces forecasts to be greater than or equal to 0.
 A similar function is <code class="docutils literal notranslate"><span class="pre">constraint=2.0</span></code>. What this does is prevent the forecast from leaving historic bounds set by the training data. In this example, the forecasts would not be allowed to go above <code class="docutils literal notranslate"><span class="pre">max(training</span> <span class="pre">data)</span> <span class="pre">+</span> <span class="pre">2.0</span> <span class="pre">*</span> <span class="pre">st.dev(training</span> <span class="pre">data)</span></code>, as well as the reverse on the minimum side. A constraint of <code class="docutils literal notranslate"><span class="pre">0</span></code> would constrain forecasts to historical mins and maxes.</p>
 <p>Another convenience function is <code class="docutils literal notranslate"><span class="pre">drop_most_recent=1</span></code> specifing the number of most recent periods to drop. This can be handy with monthly data, where often the most recent month is incomplete.
@@ -120,7 +127,7 @@ model_list = [&#39;ZeroesNaive&#39;, &#39;LastValueNaive&#39;, &#39;MedValueNaiv
 
 from autots import AutoTS
 model = AutoTS(forecast_length=73, frequency=&#39;infer&#39;,
-               prediction_interval=0.95, ensemble=None,
+               prediction_interval=0.95, ensemble=&#39;simple&#39;,
                max_generations=5, num_validations=2,
                validation_method=&#39;even&#39;,
                model_list=model_list, models_to_validate=15,
@@ -202,6 +209,8 @@ model = AutoTS(forecast_length=forecast_length,
 <div class="section" id="installation-and-dependency-versioning">
 <h2>Installation and Dependency Versioning<a class="headerlink" href="#installation-and-dependency-versioning" title="Permalink to this headline">¶</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">autots</span></code></p>
+<div class="section" id="requirements">
+<h3>Requirements:<a class="headerlink" href="#requirements" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">Python</span> <span class="o">&gt;=</span> <span class="mi">3</span><span class="p">.</span><span class="mi">5</span>
 <span class="n">numpy</span>
 <span class="n">pandas</span>
@@ -214,6 +223,9 @@ model = AutoTS(forecast_length=forecast_length,
 Some limited functionality should exist without scikit-learn.
 Nearly full functionality should be maintained without statsmodels.</p>
 <p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">autots['additional']</span></code></p>
+</div>
+<div class="section" id="optional-requirements">
+<h3>Optional Requirements<a class="headerlink" href="#optional-requirements" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">holidays</span>
 <span class="n">fbprophet</span>
 <span class="n">fredapi</span>
@@ -226,6 +238,9 @@ Nearly full functionality should be maintained without statsmodels.</p>
 <span class="n">xgboost</span>
 </pre></div>
 </div>
+</div>
+<div class="section" id="hardware-acceleration-with-intel-cpu-and-nvidia-gpu-for-ubuntu-windows">
+<h3>Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows<a class="headerlink" href="#hardware-acceleration-with-intel-cpu-and-nvidia-gpu-for-ubuntu-windows" title="Permalink to this headline">¶</a></h3>
 <p>Download Anaconda or Miniconda.</p>
 <p>(install Visual Studio if on Windows)</p>
 <p>If you have an Nvidia GPU, download NVIDIA CUDA and CuDNN.
@@ -247,6 +262,7 @@ MKL is included with <code class="docutils literal notranslate"><span class="pre
 <span class="n">pip</span> <span class="n">install</span> <span class="n">tensorflow</span>
 <span class="n">pip</span> <span class="n">install</span> <span class="n">tensorflow</span><span class="o">-</span><span class="n">probability</span>
 </pre></div>
+</div>
 </div>
 </div>
 <div class="section" id="caveats-and-advice">

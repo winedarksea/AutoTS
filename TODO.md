@@ -8,9 +8,10 @@
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
 # Latest:
-* added 'coerce_integer' to GeneralTransformer
-* tuned MotifSimulation and GeneralTransformer inputs
-* minor improvements to Scoring, Aggregation, Recombination, and export_template
+* `grouping`/hierarchial reconciliation to GeneralTransformer
+* allow wide-style data as input
+* iterative imputer
+* allow a list of intervals to prediction_intervals in .predict()
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -32,29 +33,39 @@ KerasRNN errors due to parameters not working on all dataset
 Tensorflow GPU backend may crash on occasion.
 
 ## General Tasks
-* test submission
-* test whether bottom up significantly overestimates on rollup
-	* store level hierarchial
 * Profile slow parts of AutoTS on 1,000 series
 	* remove slow transformers unless parameter
 	* 'fast' option for RandomTransformations generator
+* constraint - TO TEMPLATE
+* coerce integer - TO HIGHER
+* ml model to generalize horizontal ensembles to many series after only trained on subset
+	* all be 'horizontal-max' and then have subset make smaller if desired
+	* have subsetting sample for diversity, not just random in this case
+	* handle failure of one of the models to predict
+* horizontal ensemble using prior selection of only one per class, and maybe also for speed
+	* cleanse similar models out first
+TemplateWizard catches errors right now
+Need to handle errors for ensemble lower level's but not for standalone modelsd
+Dicts instead of list of DFs
+Create model_id even if forecast fails
+Best3 to work on model failure
+	Make best 3 work on any given length of ensembles (more than 3, down to 1)
+	Rename from Best3
+	Add 'model_count' to parameters
+Horizontal to work on model failure
+	Use same process as to generalize to untested models
+Dist to fail on model failure
+HDist to fail on model failure
 
 # To-Do
 * drop duplicates as function of TemplateEvalObject
 * speed up MotifSimulation
 * fake date dataset of many series to improve General Template
-* better document ensembling
 * optimize randomtransform probabilities
+* improve test.py script for actual testing of many features
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
-* best per series to validation template even if poor on score overall
-* Bring GeneralTransformer to higher level API.
-	* wide_to_long and long_to_wide in higher-level API
 * Option to use full traceback in errors in table
-* Hierarchial
-	* every level must be included in forecasting data
-	* 'bottom-up' and 'mid' levels
-	* one level. User would have to specify all as based on lowest-level keys if wanted sum-up.
 * Better point to probabilistic (uncertainty of naive last-value forecast) 
 	* linear reg of abs error of samples - simulations
 	* Data, pct change, find window with % max change pos, and neg then avg. Bound is first point + that percent, roll from that first point and adjust if points cross, variant where all series share knowledge
@@ -66,7 +77,7 @@ Tensorflow GPU backend may crash on occasion.
 * get_forecast for Statsmodels Statespace models to include confidence interval where possible
 	* migrate arima_model to arima.model
 	* uncomp with uncertainty intervals
-* GUI overlay for editing/creating templates, and even for running (Flask)
+* GUI overlay for editing/creating templates, and for running (Flask)
 * Window regression
 	* transfer learning
 * RollingRegression
@@ -76,9 +87,6 @@ Tensorflow GPU backend may crash on occasion.
 		* https://link.springer.com/article/10.1007/s10618-019-00647-x/tables/1
 	* Probabilistic:
 		https://scikit-learn.org/stable/auto_examples/ensemble/plot_gradient_boosting_quantile.html
-	* other sequence models
-	* Categorical classifier, ComplementNB
-	* PCA or similar -> Univariate Series (Unobserved Components)
 * Simple performance:
 	* replace try/except with if/else in some cases
 * GluonTS
@@ -86,18 +94,15 @@ Tensorflow GPU backend may crash on occasion.
 	* Make sure of rolling regression setup
 	* Modify GluonStart if lots of NaN at start of that series
 	* GPU and CPU ctx
-* motif simulation, remove all those for loops
 * implement 'borrow' Genetic Recombination for ComponentAnalysis
 * Regressor to TensorflowSTS
 * Relative/Absolute Imports and reduce package reloading messages
-* Allow FillNA to be None
 * Replace OrdinalEncoder with non-external code
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
 * Speed improvements, Profiling
-* Parallelization, and Distributed options (Dask) for general greater speed
+* Multiprocessing or Distributed options (Dask) for general greater speed
 * Improve usability on rarer frequenices (ie monthly data where some series start on 1st, others on 15th, etc.)
 * Figures: Add option to output figures of train/test + forecast, other performance figures
-* If all input are Int, convert floats back to int
 * Replace most 'print' with logging.
 * Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
 * Development tools:
@@ -124,7 +129,7 @@ Tensorflow GPU backend may crash on occasion.
 	* potentially a method = 'deep' to get_new_params used after n generations
 	* no unlock, but simply very low-probability deep options in get_new_params
 * Exempt or reduce slow models from unnecessary runs, particularly with different transformations
-* Numba and Cython acceleration (metrics might be easy to start with)
+* Numba and Cython acceleration
 * GPU - xgboost, GluontTS
 
 #### New datasets:
@@ -157,6 +162,7 @@ Tensorflow GPU backend may crash on occasion.
 	Symbolic aggregate approximation (SAX) and (PAA) (basically these are just binning)
 	Shared discretization (all series get same shared binning)
 	Last Value Centering
+	More sophisticated fillna methods
 	Constraint as a transformation parameter
 
 ### New Model Checklist:

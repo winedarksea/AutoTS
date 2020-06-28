@@ -533,6 +533,7 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
                     future_regressor_train = [],
                     future_regressor_forecast = [],
                     holiday_country: str = 'US', startTimeStamps = None,
+                    grouping_ids=None,
                     random_seed: int = 2020, verbose: int = 0):
     """Feed parameters into modeling pipeline
 
@@ -557,8 +558,16 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
     from autots.tools.transform import GeneralTransformer
     try:
         coerce_integer = transformation_dict['coerce_integer']
+        grouping = transformation_dict['grouping']
+        if grouping == 'user' and grouping_ids is None:
+            grouping = 'kmeans5'
+            transformation_dict['grouping'] = 'kmeans5'
+        reconciliation = transformation_dict['reconciliation']
     except Exception:
         coerce_integer = False
+        grouping = None
+        grouping_ids = None
+        reconciliation = None
     transformer_object = GeneralTransformer(
         outlier_method=transformation_dict['outlier_method'],
         outlier_threshold=transformation_dict['outlier_threshold'],
@@ -573,6 +582,9 @@ def ModelPrediction(df_train, forecast_length: int, transformation_dict: dict,
         fourth_transformation=transformation_dict['fourth_transformation'],
         discretization=transformation_dict['discretization'],
         n_bins=transformation_dict['n_bins'],
+        grouping=grouping,
+        grouping_ids=grouping_ids,
+        reconciliation=reconciliation,
         coerce_integer=coerce_integer
                                             ).fit(df_train)
     df_train_transformed = transformer_object.transform(df_train)
@@ -735,6 +747,7 @@ def PredictWitch(template, df_train, forecast_length: int,
                  future_regressor_train=[],
                  future_regressor_forecast=[],
                  holiday_country: str = 'US', startTimeStamps=None,
+                 grouping_ids=None,
                  random_seed: int = 2020, verbose: int = 0,
                  template_cols: list = ['Model', 'ModelParameters',
                                         'TransformationParameters',
@@ -793,6 +806,7 @@ def PredictWitch(template, df_train, forecast_length: int,
                     future_regressor_forecast=future_regressor_forecast,
                     holiday_country=holiday_country,
                     startTimeStamps=startTimeStamps,
+                    grouping_ids=grouping_ids,
                     random_seed=random_seed, verbose=verbose,
                     template_cols=template_cols)
                 model_id = create_model_id(df_forecast.model_name, df_forecast.model_parameters, df_forecast.transformation_parameters)
@@ -825,6 +839,7 @@ def PredictWitch(template, df_train, forecast_length: int,
                 constraint=constraint,
                 future_regressor_train=future_regressor_train,
                 future_regressor_forecast=future_regressor_forecast,
+                grouping_ids=grouping_ids,
                 holiday_country=holiday_country, random_seed=random_seed,
                 verbose=verbose, startTimeStamps=startTimeStamps)
 
@@ -843,6 +858,7 @@ def TemplateWizard(template, df_train, df_test, weights,
                    random_seed: int = 2020, verbose: int = 0,
                    validation_round: int = 0,
                    model_interrupt: bool = False,
+                   grouping_ids=None,
                    template_cols: list = ['Model', 'ModelParameters',
                                           'TransformationParameters',
                                           'Ensemble']):
@@ -892,21 +908,22 @@ def TemplateWizard(template, df_train, df_test, weights,
             template_result.model_count += 1
             if verbose > 0:
                 if verbose > 1:
-                    print("Model Number: {} with model {} with params {} and transformations {}".format(str(template_result.model_count), model_str, json.dumps(parameter_dict),json.dumps(transformation_dict)))
+                    print("Model Number: {} with model {} in Validation {} with params {} and transformations {}".format(str(template_result.model_count), model_str, str(validation_round), json.dumps(parameter_dict),json.dumps(transformation_dict)))
                 else:
-                    print("Model Number: {} with model {}".format(str(template_result.model_count), model_str))
+                    print("Model Number: {} with model {} in Validation {} ".format(str(template_result.model_count), model_str, str(validation_round)))
             df_forecast = PredictWitch(
-                current_template, df_train = df_train,
+                current_template, df_train=df_train,
                 forecast_length=forecast_length, frequency=frequency,
                 prediction_interval=prediction_interval,
                 no_negatives=no_negatives,
                 constraint=constraint,
-                future_regressor_train = future_regressor_train,
-                future_regressor_forecast = future_regressor_forecast,
+                future_regressor_train=future_regressor_train,
+                future_regressor_forecast=future_regressor_forecast,
                 holiday_country=holiday_country,
-                startTimeStamps = startTimeStamps,
+                startTimeStamps=startTimeStamps,
+                grouping_ids=grouping_ids,
                 random_seed=random_seed, verbose=verbose,
-                template_cols = template_cols)
+                template_cols=template_cols)
 
             per_ts = True if 'distance' in ensemble else False
             if 'hdist' in ensemble:
@@ -1102,6 +1119,11 @@ def trans_dict_recomb(dict_array):
     disc_keys = ['discretization', 'n_bins']
     current_dict = np.random.choice([a, b], size=1).item()
     c = {**c, **{k: current_dict[k] for k in disc_keys}}
+    
+    disc_keys = ['grouping', 'reconciliation']
+    current_dict = np.random.choice([a, b], size=1).item()
+    if all([x in current_dict.keys() for x in disc_keys]):
+        c = {**c, **{k: current_dict[k] for k in disc_keys}}
     return c
 
 
