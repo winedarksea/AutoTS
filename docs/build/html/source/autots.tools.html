@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.tools package &#8212; AutoTS 0.2.1 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.2.2 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -36,6 +36,43 @@
 <div class="section" id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
 </div>
+<div class="section" id="module-autots.tools.hierarchial">
+<span id="autots-tools-hierarchial-module"></span><h2>autots.tools.hierarchial module<a class="headerlink" href="#module-autots.tools.hierarchial" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="autots.tools.hierarchial.hierarchial">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.hierarchial.</code><code class="sig-name descname">hierarchial</code><span class="sig-paren">(</span><em class="sig-param">grouping_method: str = 'tile'</em>, <em class="sig-param">n_groups: int = 5</em>, <em class="sig-param">reconciliation: str = 'mean'</em>, <em class="sig-param">grouping_ids: dict = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.hierarchial.hierarchial" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Create hierarchial series, then reconcile.</p>
+<p>Currently only performs one-level groupings.
+:param grouping_method: method to create groups. ‘User’ requires hier_id input of groupings.
+:type grouping_method: str
+:param n_groups: number of groups, if above is not ‘User’
+:type n_groups: int
+:param reconciliation: None, or ‘mean’ method to combine top and bottom forecasts.
+:type reconciliation: str
+:param grouping_ids: dict of series_id: group_id to use if grouping is ‘User’
+:type grouping_ids: dict</p>
+<dl class="method">
+<dt id="autots.tools.hierarchial.hierarchial.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.hierarchial.hierarchial.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Construct and save object info.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.hierarchial.hierarchial.reconcile">
+<code class="sig-name descname">reconcile</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.hierarchial.hierarchial.reconcile" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply to forecasted data containing bottom and top levels.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.hierarchial.hierarchial.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.hierarchial.hierarchial.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply hierarchy to existing data with bottom levels only.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
 <div class="section" id="module-autots.tools.holiday">
 <span id="autots-tools-holiday-module"></span><h2>autots.tools.holiday module<a class="headerlink" href="#module-autots.tools.holiday" title="Permalink to this headline">¶</a></h2>
 <p>Manage holiday features.</p>
@@ -59,7 +96,7 @@
 </div>
 <div class="section" id="module-autots.tools.impute">
 <span id="autots-tools-impute-module"></span><h2>autots.tools.impute module<a class="headerlink" href="#module-autots.tools.impute" title="Permalink to this headline">¶</a></h2>
-<p>Fill NA</p>
+<p>Fill NA.</p>
 <dl class="function">
 <dt id="autots.tools.impute.FillNA">
 <code class="sig-prename descclassname">autots.tools.impute.</code><code class="sig-name descname">FillNA</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">method: str = 'ffill'</em>, <em class="sig-param">window: int = 10</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.impute.FillNA" title="Permalink to this definition">¶</a></dt>
@@ -596,7 +633,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="class">
 <dt id="autots.tools.transform.GeneralTransformer">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">GeneralTransformer</code><span class="sig-paren">(</span><em class="sig-param">outlier_method: str = None</em>, <em class="sig-param">outlier_threshold: float = 3</em>, <em class="sig-param">outlier_position: str = 'first'</em>, <em class="sig-param">fillna: str = 'ffill'</em>, <em class="sig-param">transformation: str = None</em>, <em class="sig-param">second_transformation: str = None</em>, <em class="sig-param">transformation_param: str = None</em>, <em class="sig-param">detrend: str = None</em>, <em class="sig-param">third_transformation: str = None</em>, <em class="sig-param">transformation_param2: str = None</em>, <em class="sig-param">fourth_transformation: str = None</em>, <em class="sig-param">discretization: str = 'center'</em>, <em class="sig-param">n_bins: int = None</em>, <em class="sig-param">coerce_integer: bool = False</em>, <em class="sig-param">random_seed: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">GeneralTransformer</code><span class="sig-paren">(</span><em class="sig-param">outlier_method: str = None</em>, <em class="sig-param">outlier_threshold: float = 3</em>, <em class="sig-param">outlier_position: str = 'first'</em>, <em class="sig-param">fillna: str = 'ffill'</em>, <em class="sig-param">transformation: str = None</em>, <em class="sig-param">second_transformation: str = None</em>, <em class="sig-param">transformation_param: str = None</em>, <em class="sig-param">detrend: str = None</em>, <em class="sig-param">third_transformation: str = None</em>, <em class="sig-param">transformation_param2: str = None</em>, <em class="sig-param">fourth_transformation: str = None</em>, <em class="sig-param">discretization: str = 'center'</em>, <em class="sig-param">n_bins: int = None</em>, <em class="sig-param">coerce_integer: bool = False</em>, <em class="sig-param">grouping: str = None</em>, <em class="sig-param">reconciliation: str = None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">constraint=None</em>, <em class="sig-param">random_seed: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Remove outliers, fillNA, then mathematical transformations.</p>
 <p>Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a ‘wide’ (one column per series) shape.</p>
@@ -672,7 +709,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 ‘IntermittentOccurrence’ - -1, 1 for non median values
 ‘SeasonalDifference’ - remove the last lag values from all values
 ‘SeasonalDifferenceMean’ - remove the average lag values from all
-‘SeasonalDifference7’ also ‘12’ - non-parameterized version of Seasonal</p>
+‘SeasonalDifference7’,’12’,’28’ - non-parameterized version of Seasonal</p>
 </p></li>
 <li><p><strong>second_transformation</strong> (<em>str</em>) – second transformation to apply. Same options as transformation, but with transformation_param passed in if used</p></li>
 <li><p><strong>detrend</strong> (<em>str</em>) – Model and remove a linear component from the data.
@@ -722,17 +759,18 @@ None - no discretization
 <dl class="method">
 <dt id="autots.tools.transform.GeneralTransformer.fit_transform">
 <code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.fit_transform" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Directly fit and apply transformations to convert df.</p>
+</dd></dl>
 
 <dl class="method">
 <dt id="autots.tools.transform.GeneralTransformer.inverse_transform">
 <code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
-<dd><p>Undo the madness</p>
+<dd><p>Undo the madness.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
-<li><p><strong>trans_method</strong> (<em>str</em>) – ‘forecast’ or ‘original’ passed through to RollingTransformer, DifferencedTransformer, if used</p></li>
+<li><p><strong>trans_method</strong> (<em>str</em>) – ‘forecast’ or ‘original’ passed through</p></li>
 </ul>
 </dd>
 </dl>

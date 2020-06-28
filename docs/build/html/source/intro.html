@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Intro &#8212; AutoTS 0.2.1 documentation</title>
+    <title>Intro &#8212; AutoTS 0.2.2 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -54,7 +54,6 @@
 <li><p>Multiple cross validation options</p></li>
 <li><p>Subsetting and weighting to improve search on many multivariate series</p></li>
 <li><p>Option to use one or a combination of metrics for model selection</p></li>
-<li><p>Ability to upsample data to a custom frequency</p></li>
 <li><p>Import and export of templates allowing greater user customization</p></li>
 </ul>
 </div>
@@ -77,14 +76,14 @@
 
 <span class="k">from</span> <span class="n">autots</span> <span class="n">import</span> <span class="n">AutoTS</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span><span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
-               <span class="n">prediction_interval</span><span class="o">=</span><span class="mi">0</span><span class="p">.</span><span class="mi">9</span><span class="p">,</span> <span class="n">ensemble</span><span class="o">=</span><span class="k">None</span><span class="p">,</span>
+               <span class="n">prediction_interval</span><span class="o">=</span><span class="mi">0</span><span class="p">.</span><span class="mi">9</span><span class="p">,</span> <span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;all&#39;</span><span class="p">,</span>
                <span class="n">model_list</span><span class="o">=</span><span class="s1">&#39;superfast&#39;</span><span class="p">,</span>
                <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
                <span class="n">validation_method</span><span class="o">=</span><span class="s1">&#39;even&#39;</span><span class="p">)</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span>
                   <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
 
-<span class="o">#</span> <span class="n">Print</span> <span class="n">the</span> <span class="n">name</span> <span class="k">of</span> <span class="n">the</span> <span class="n">best</span> <span class="n">model</span>
+<span class="o">#</span> <span class="n">Print</span> <span class="n">the</span> <span class="n">details</span> <span class="k">of</span> <span class="n">the</span> <span class="n">best</span> <span class="n">model</span>
 <span class="n">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
 
 <span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">predict</span><span class="p">()</span>

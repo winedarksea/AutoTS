@@ -8,8 +8,10 @@
 * Fault tolerance: it is perfectly acceptable for model parameters to fail on some datasets, the higher level API will pass over and use others.
 
 # Latest:
-* `grouping` reconciliation to GeneralTransformer
+* `grouping`/hierarchial reconciliation to GeneralTransformer
 * allow wide-style data as input
+* iterative imputer
+* allow a list of intervals to prediction_intervals in .predict()
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -36,7 +38,6 @@ Tensorflow GPU backend may crash on occasion.
 	* 'fast' option for RandomTransformations generator
 * constraint - TO TEMPLATE
 * coerce integer - TO HIGHER
-* Iterative Imputer SKLEARN
 * ml model to generalize horizontal ensembles to many series after only trained on subset
 	* all be 'horizontal-max' and then have subset make smaller if desired
 	* have subsetting sample for diversity, not just random in this case

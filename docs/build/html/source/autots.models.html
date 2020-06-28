@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.models package &#8212; AutoTS 0.2.1 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.2.2 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -386,10 +386,11 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </div>
 <div class="section" id="module-autots.models.ensemble">
 <span id="autots-models-ensemble-module"></span><h2>autots.models.ensemble module<a class="headerlink" href="#module-autots.models.ensemble" title="Permalink to this headline">¶</a></h2>
+<p>Tools for generating and forecasting with ensembles of models.</p>
 <dl class="function">
 <dt id="autots.models.ensemble.Best3Ensemble">
 <code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">Best3Ensemble</code><span class="sig-paren">(</span><em class="sig-param">ensemble_params</em>, <em class="sig-param">forecasts_list</em>, <em class="sig-param">forecasts</em>, <em class="sig-param">lower_forecasts</em>, <em class="sig-param">upper_forecasts</em>, <em class="sig-param">forecasts_runtime</em>, <em class="sig-param">prediction_interval</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.Best3Ensemble" title="Permalink to this definition">¶</a></dt>
-<dd><p>Generate forecast for ensemble of 3 models.</p>
+<dd><p>Generate mean forecast for ensemble of models.</p>
 </dd></dl>
 
 <dl class="function">
@@ -438,7 +439,7 @@ Except it is really the only thing I use that runs mxnet, and it takes a while t
 <dt id="autots.models.gluonts.GluonTS">
 <em class="property">class </em><code class="sig-prename descclassname">autots.models.gluonts.</code><code class="sig-name descname">GluonTS</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'GluonTS'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">gluon_model: str = 'DeepAR'</em>, <em class="sig-param">epochs: int = 20</em>, <em class="sig-param">learning_rate: float = 0.001</em>, <em class="sig-param">context_length=10</em>, <em class="sig-param">forecast_length: int = 14</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.gluonts.GluonTS" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="autots.evaluator.html#autots.evaluator.auto_model.ModelObject" title="autots.evaluator.auto_model.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.evaluator.auto_model.ModelObject</span></code></a></p>
-<p>VARMAX from Statsmodels</p>
+<p>GluonTS based on mxnet.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">

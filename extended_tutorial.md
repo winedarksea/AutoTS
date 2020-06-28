@@ -32,10 +32,10 @@ print(model)
 ```
 
 #### Import of data
-There are two shapes of pandas `DataFrame` which are accepted. 
+There are two shapes/styles of pandas `DataFrame` which are accepted. 
 The first is *long* data, like that out of an aggregated sales-transaction table containing three columns identified to `.fit()` as `date_col {pd.Datetime}, value_col {the numeric or categorical data of interest}, and id_col {id string, if multiple series are provided}`. 
 Alternatively, the data may be in a *wide* format where the index is a `pandas.DatetimeIndex`, and each column is a distinct data series.  
-Some `AutoTS` parameters are only applicable if *long* style data is provided. 
+Some `AutoTS` parameters are only applicable if *long* style data is provided, which is the recommended input shape. 
 
 If your data is already wide (one column for each value), to bring to a long format:
 ```

@@ -4,6 +4,14 @@ autots.tools package
 Submodules
 ----------
 
+autots.tools.hierarchial module
+-------------------------------
+
+.. automodule:: autots.tools.hierarchial
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.holiday module
 ---------------------------
 
