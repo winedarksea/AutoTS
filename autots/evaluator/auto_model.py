@@ -796,6 +796,9 @@ def PredictWitch(template, df_train, forecast_length: int,
                                                   keep_ensemble=False)
             for index, row in ens_template.iterrows():
                 # recursive recursion!
+                if verbose > 2:
+                    total_ens = ens_template.shape[0]
+                    print("Ensemble component {} of {} ".format(model_str, str(index), str(total_ens)))
                 df_forecast = PredictWitch(
                     row, df_train=df_train,
                     forecast_length=forecast_length, frequency=frequency,

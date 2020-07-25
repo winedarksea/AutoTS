@@ -125,7 +125,7 @@ class AutoTS(object):
         self.model_interrupt = model_interrupt
         self.verbose = int(verbose)
         if self.ensemble == 'all':
-            self.ensemble = 'simple,distance,horizontal-max,probabilistic-max'
+            self.ensemble = 'simple,distance,horizontal-max,probabilistic'
 
         if self.forecast_length == 1:
             if metric_weighting['contour_weighting'] > 0:
