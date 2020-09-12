@@ -73,7 +73,7 @@ class AutoTS(object):
                  max_generations: int = 5,
                  no_negatives: bool = False,
                  constraint: float = None,
-                 ensemble: str = 'simple',
+                 ensemble: str = 'auto',
                  initial_template: str = 'General+Random',
                  random_seed: int = 2020,
                  holiday_country: str = 'US',
@@ -126,6 +126,11 @@ class AutoTS(object):
         self.verbose = int(verbose)
         if self.ensemble == 'all':
             self.ensemble = 'simple,distance,horizontal-max,probabilistic'
+        elif self.ensemble == 'auto':
+            if model_list in ['fast', 'default', 'all', 'multivariate']:
+                self.ensemble = 'simple,distance,horizontal-max'
+            else:
+                self.ensemble = 'simple'
 
         if self.forecast_length == 1:
             if metric_weighting['contour_weighting'] > 0:

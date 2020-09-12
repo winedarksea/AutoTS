@@ -41,9 +41,9 @@ class ModelObject(object):
     """Generic class for holding forecasting models.
     
     Models should all have methods:
-        .fit(df) (taking a DataFrame with DatetimeIndex and n columns of n timeseries)
-        .predict(forecast_length = int, regressor)
-        .get_new_params(method)
+        .fit(df, future_regressor = []) (taking a DataFrame with DatetimeIndex and n columns of n timeseries)
+        .predict(forecast_length = int, future_regressor = [], just_point_forecast = False)
+        .get_new_params() - return a dictionary of weighted random selected parameters
     
     Args:
         name (str): Model Name
@@ -135,6 +135,13 @@ class PredictionObject(object):
             return "Prediction object: \nReturn .forecast, \n .upper_forecast, \n .lower_forecast \n .model_parameters \n .transformation_parameters"
         else:
             return "Empty prediction object."
+
+    def __bool__(self):
+        """bool version of class."""
+        if isinstance(self.forecast, pd.DataFrame):
+            return True
+        else:
+            return False
 
     def total_runtime(self):
         """Combine runtimes."""
