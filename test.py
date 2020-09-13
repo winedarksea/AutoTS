@@ -126,6 +126,9 @@ df_wide_numeric = model.df_wide_numeric
 df = df_wide_numeric.tail(50).fillna(0).astype(float)
 
 """
+cd <project dir>
+black ./autots -l 88 -S
+
 https://github.com/sphinx-doc/sphinx/issues/3382
 # pip install sphinx==2.4.4
 # m2r does not yet work on sphinx 3.0

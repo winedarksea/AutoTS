@@ -13,10 +13,13 @@ class hierarchial(object):
         grouping_ids (dict): dict of series_id: group_id to use if grouping is 'User'
     """
 
-    def __init__(self, grouping_method: str = 'tile',
-                 n_groups: int = 5, reconciliation: str = 'mean',
-                 grouping_ids: dict = None
-                 ):
+    def __init__(
+        self,
+        grouping_method: str = 'tile',
+        n_groups: int = 5,
+        reconciliation: str = 'mean',
+        grouping_ids: dict = None,
+    ):
         self.grouping_method = str(grouping_method).lower()
         self.n_groups = n_groups
         self.reconciliation = reconciliation
@@ -34,14 +37,20 @@ class hierarchial(object):
             if self.grouping_method == 'dbscan':
                 X = df.mean().values.reshape(-1, 1)
                 from sklearn.cluster import DBSCAN
+
                 clustering = DBSCAN(eps=0.5, min_samples=2).fit(X)
                 grouping_ids = clustering.labels_
             elif self.grouping_method == 'tile':
-                grouping_ids = np.tile(np.arange(self.n_groups), int(np.ceil(num_hier)))[:df.shape[1]]
+                grouping_ids = np.tile(
+                    np.arange(self.n_groups), int(np.ceil(num_hier))
+                )[: df.shape[1]]
             elif self.grouping_method == 'alternating':
-                grouping_ids = np.repeat(np.arange(self.n_groups), int(np.ceil(num_hier)))[:df.shape[1]]
+                grouping_ids = np.repeat(
+                    np.arange(self.n_groups), int(np.ceil(num_hier))
+                )[: df.shape[1]]
             elif self.grouping_method == 'kmeans':
                 from sklearn.cluster import KMeans
+
                 X = df.mean().values.reshape(-1, 1)
                 kmeans = KMeans(n_clusters=self.n_groups, random_state=0).fit(X)
                 grouping_ids = kmeans.labels_
@@ -92,12 +101,22 @@ class hierarchial(object):
             return df[self.bottom_ids]
         elif self.reconciliation == 'mean':
             fore = df
-            fracs = pd.DataFrame(np.repeat(self.divisors['fraction'].values.reshape(1, -1), fore.shape[0], axis=0))
+            fracs = pd.DataFrame(
+                np.repeat(
+                    self.divisors['fraction'].values.reshape(1, -1),
+                    fore.shape[0],
+                    axis=0,
+                )
+            )
             fracs.index = fore.index
-            fracs.columns = pd.MultiIndex.from_frame(self.divisors.reset_index()[['index', 'group']])
+            fracs.columns = pd.MultiIndex.from_frame(
+                self.divisors.reset_index()[['index', 'group']]
+            )
 
             top_level = fore[self.top_ids]
-            bottom_up = fore[self.bottom_ids].abs().groupby(self.grouping_ids, axis=1).sum()
+            bottom_up = (
+                fore[self.bottom_ids].abs().groupby(self.grouping_ids, axis=1).sum()
+            )
 
             diff = (top_level - bottom_up) / 2
 

@@ -9,8 +9,9 @@ def load_daily():
     data_file_name = join(module_path, 'data', 'toy_daily.csv')
 
     df_long = pd.read_csv(data_file_name)
-    df_long['datetime'] = pd.to_datetime(df_long['datetime'],
-                                         infer_datetime_format=True)
+    df_long['datetime'] = pd.to_datetime(
+        df_long['datetime'], infer_datetime_format=True
+    )
 
     return df_long
 
@@ -19,9 +20,9 @@ def load_fred_monthly():
     """
     Federal Reserve of St. Louis.
     from autots.datasets.fred import get_fred_data
-    SeriesNameDict = {'GS10':'10-Year Treasury Constant Maturity Rate', 
-                              'MCOILWTICO':'Crude Oil West Texas Intermediate Cushing Oklahoma', 
-                              'CSUSHPISA': ' U.S. National Home Price Index', 
+    SeriesNameDict = {'GS10':'10-Year Treasury Constant Maturity Rate',
+                              'MCOILWTICO':'Crude Oil West Texas Intermediate Cushing Oklahoma',
+                              'CSUSHPISA': ' U.S. National Home Price Index',
                               'EXUSEU': 'US Euro Foreign Exchange Rate',
                               'EXCHUS': 'China US Foreign Exchange Rate',
                               'EXCAUS' : 'Canadian to US Dollar Exchange Rate Daily',
@@ -35,8 +36,9 @@ def load_fred_monthly():
     data_file_name = join(module_path, 'data', 'fred_monthly.zip')
 
     df_long = pd.read_csv(data_file_name, compression='zip')
-    df_long['datetime'] = pd.to_datetime(df_long['datetime'],
-                                         infer_datetime_format=True)
+    df_long['datetime'] = pd.to_datetime(
+        df_long['datetime'], infer_datetime_format=True
+    )
 
     return df_long
 
@@ -51,7 +53,7 @@ def load_fred_yearly():
     Federal Reserve of St. Louis.
     from autots.datasets.fred import get_fred_data
     SSeriesNameDict = {'GDPA':"Gross Domestic Product",
-                  'ACOILWTICO':'Crude Oil West Texas Intermediate Cushing Oklahoma', 
+                  'ACOILWTICO':'Crude Oil West Texas Intermediate Cushing Oklahoma',
                   'AEXUSEU': 'US Euro Foreign Exchange Rate',
                   'AEXCHUS': 'China US Foreign Exchange Rate',
                   'AEXCAUS' : 'Canadian to US Dollar Exchange Rate Daily',
@@ -69,8 +71,9 @@ def load_fred_yearly():
     data_file_name = join(module_path, 'data', 'fred_yearly.csv')
 
     df_long = pd.read_csv(data_file_name)
-    df_long['datetime'] = pd.to_datetime(df_long['datetime'],
-                                         infer_datetime_format=True)
+    df_long['datetime'] = pd.to_datetime(
+        df_long['datetime'], infer_datetime_format=True
+    )
 
     return df_long
 
@@ -82,15 +85,16 @@ def load_yearly():
 
 def load_traffic_hourly():
     """
-    From the MN DOT via the UCI data repository. 
+    From the MN DOT via the UCI data repository.
     Yes, Minnesota is the best state of the Union.
     """
     module_path = dirname(__file__)
     data_file_name = join(module_path, 'data', 'traffic_hourly.zip')
 
     df_long = pd.read_csv(data_file_name, compression='zip')
-    df_long['datetime'] = pd.to_datetime(df_long['datetime'],
-                                         infer_datetime_format=True)
+    df_long['datetime'] = pd.to_datetime(
+        df_long['datetime'], infer_datetime_format=True
+    )
 
     return df_long
 
@@ -106,8 +110,9 @@ def load_eia_weekly():
     data_file_name = join(module_path, 'data', 'eia_weekly.zip')
 
     df_long = pd.read_csv(data_file_name, compression='zip')
-    df_long['datetime'] = pd.to_datetime(df_long['datetime'],
-                                         infer_datetime_format=True)
+    df_long['datetime'] = pd.to_datetime(
+        df_long['datetime'], infer_datetime_format=True
+    )
     return df_long
 
 
