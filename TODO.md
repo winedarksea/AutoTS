@@ -61,6 +61,7 @@ Tensorflow GPU backend may crash on occasion.
 	* handle failure of a lower level model on some series (but not for dist variants)
 	* remove 'horizontal' sanity check run, takes too longer
 	* allow multiprocessing for each model of horizontal
+		* allow multiprocessing to models, pass through num_process + **kwargs
 * User friendly:
 	* clean up lower level
 	* make passing in own models easy
