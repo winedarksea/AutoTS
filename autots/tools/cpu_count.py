@@ -1,10 +1,13 @@
+"""CPU counter for multiprocesing."""
+
+
 def cpu_count():
     """Find available CPU count, running on both Windows/Linux.
 
     Attempts to be very conservative:
         * Remove Intel Hyperthreading logical cores
         * Find max cores allowed to the process, if less than machine has total
-    
+
     Runs best with psutil installed, but will function without
     """
     import os

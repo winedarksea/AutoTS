@@ -162,6 +162,7 @@ def retrieve_regressor(
     verbose: int = 0,
     verbose_bool: bool = False,
     random_seed: int = 2020,
+    n_jobs: int = 1,
 ):
     """Convert a model param dict to model object for regression frameworks."""
     if regression_model['model'] == 'ElasticNet':
@@ -215,8 +216,7 @@ def retrieve_regressor(
             KNeighborsRegressor(
                 n_neighbors=regression_model["model_params"]['n_neighbors'],
                 weights=regression_model["model_params"]['weights'],
-            )
-        )
+            ), n_jobs=n_jobs)
         return regr
     elif regression_model['model'] == 'HistGradientBoost':
         from sklearn.multioutput import MultiOutputRegressor
@@ -246,6 +246,7 @@ def retrieve_regressor(
                 n_estimators=regression_model["model_params"]['n_estimators'],
                 verbose=int(verbose_bool),
                 random_state=random_seed,
+                n_jobs=n_jobs,
             )
         )
         return regr
@@ -264,8 +265,7 @@ def retrieve_regressor(
                     loss=regression_model["model_params"]['loss'],
                     learning_rate=regression_model["model_params"]['learning_rate'],
                     random_state=random_seed,
-                )
-            )
+                ), n_jobs=n_jobs)
             return regr
         elif regression_model["model_params"]['base_estimator'] == 'LinReg':
             from sklearn.linear_model import LinearRegression
@@ -278,8 +278,7 @@ def retrieve_regressor(
                     loss=regression_model["model_params"]['loss'],
                     learning_rate=regression_model["model_params"]['learning_rate'],
                     random_state=random_seed,
-                )
-            )
+                ), n_jobs=n_jobs)
             return regr
         else:
             regr = MultiOutputRegressor(
@@ -288,8 +287,7 @@ def retrieve_regressor(
                     loss=regression_model["model_params"]['loss'],
                     learning_rate=regression_model["model_params"]['learning_rate'],
                     random_state=random_seed,
-                )
-            )
+                ), n_jobs=n_jobs)
             return regr
     elif regression_model['model'] == 'xgboost':
         import xgboost as xgb
@@ -303,29 +301,27 @@ def retrieve_regressor(
                 max_depth=regression_model["model_params"]['max_depth'],
                 subsample=regression_model["model_params"]['subsample'],
                 verbosity=verbose,
-            )
-        )
+            ), n_jobs=n_jobs)
         return regr
     elif regression_model['model'] == 'SVM':
         from sklearn.multioutput import MultiOutputRegressor
         from sklearn.svm import SVR
 
         regr = MultiOutputRegressor(
-            SVR(kernel='rbf', gamma='scale', verbose=verbose_bool)
+            SVR(kernel='rbf', gamma='scale', verbose=verbose_bool, n_jobs=n_jobs)
         )
         return regr
     elif regression_model['model'] == 'BayesianRidge':
         from sklearn.multioutput import MultiOutputRegressor
         from sklearn.linear_model import BayesianRidge
 
-        regr = MultiOutputRegressor(BayesianRidge())
+        regr = MultiOutputRegressor(BayesianRidge(), n_jobs=n_jobs)
         return regr
     else:
         regression_model['model'] = 'RandomForest'
         from sklearn.ensemble import RandomForestRegressor
-
         regr = RandomForestRegressor(
-            random_state=random_seed, n_estimators=1000, verbose=verbose
+            random_state=random_seed, n_estimators=1000, verbose=verbose, n_jobs=n_jobs
         )
         return regr
 
@@ -362,7 +358,6 @@ def generate_regressor_params(
 ):
     """Generate new parameters for input to regressor."""
     model = np.random.choice(a=models, size=1, p=model_probs).item()
-    model = 'LightGBM'
     if model in [
         'xgboost',
         'Adaboost',
@@ -612,6 +607,8 @@ class RollingRegression(ModelObject):
         add_date_part: str = None,
         polynomial_degree: int = None,
         x_transform: str = None,
+        n_jobs: int = 1,
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -622,6 +619,7 @@ class RollingRegression(ModelObject):
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
+            n_jobs=n_jobs,
         )
         self.regression_model = regression_model
         self.holiday = holiday
@@ -721,6 +719,7 @@ class RollingRegression(ModelObject):
             verbose=self.verbose,
             verbose_bool=self.verbose_bool,
             random_seed=self.random_seed,
+            n_jobs=self.n_jobs,
         )
         self.regr = self.regr.fit(X, Y)
 
@@ -1023,6 +1022,8 @@ class WindowRegression(ModelObject):
         shuffle: bool = True,
         forecast_length: int = 1,
         max_windows: int = 5000,
+        n_jobs: int = 1,
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -1032,6 +1033,7 @@ class WindowRegression(ModelObject):
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
+            n_jobs=n_jobs,
         )
         self.window_size = abs(int(window_size))
         self.regression_model = regression_model
@@ -1065,6 +1067,7 @@ class WindowRegression(ModelObject):
             verbose=self.verbose,
             verbose_bool=self.verbose_bool,
             random_seed=self.random_seed,
+            n_jobs=self.n_jobs,
         )
         self.regr = self.regr.fit(X, Y)
         self.last_window = df.tail(self.window_size)

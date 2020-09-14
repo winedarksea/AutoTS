@@ -202,6 +202,7 @@ Nearly full functionality should be maintained without statsmodels.
 	tensorflow-probability
 	lightgbm
 	xgboost
+	psutil
 
 ### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
 Download Anaconda or Miniconda.

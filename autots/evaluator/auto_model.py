@@ -121,6 +121,7 @@ class ModelObject(object):
         name (str): Model Name
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
+        n_jobs (int): used by some models that parallelize to multiple cores
     """
 
     def __init__(
@@ -133,6 +134,7 @@ class ModelObject(object):
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
+        n_jobs: int = -1,
     ):
         self.name = name
         self.frequency = frequency
@@ -143,6 +145,7 @@ class ModelObject(object):
         self.random_seed = random_seed
         self.verbose = verbose
         self.verbose_bool = True if self.verbose > 1 else False
+        self.n_jobs = n_jobs
 
     def __repr__(self):
         """Print."""

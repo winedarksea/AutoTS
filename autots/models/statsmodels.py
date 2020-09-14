@@ -24,6 +24,7 @@ class GLS(ModelObject):
         prediction_interval: float = 0.9,
         holiday_country: str = 'US',
         random_seed: int = 2020,
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -124,6 +125,7 @@ class GLM(ModelObject):
         family='Gaussian',
         constant: bool = False,
         verbose: int = 1,
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -336,6 +338,7 @@ class ETS(ModelObject):
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -492,6 +495,7 @@ class ARIMA(ModelObject):
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -691,6 +695,7 @@ class UnobservedComponents(ModelObject):
         stochastic_cycle: bool = False,
         stochastic_trend: bool = False,
         stochastic_level: bool = False,
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -919,6 +924,7 @@ class DynamicFactor(ModelObject):
         verbose: int = 0,
         k_factors: int = 1,
         factor_order: int = 0,
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -1107,6 +1113,7 @@ class VECM(ModelObject):
         verbose: int = 0,
         deterministic: str = 'nc',
         k_ar_diff: int = 1,
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -1278,6 +1285,7 @@ class VARMAX(ModelObject):
         verbose: int = 0,
         order: tuple = (1, 0),
         trend: str = 'c',
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -1403,6 +1411,7 @@ class VAR(ModelObject):
         verbose: int = 0,
         maxlags: int = 15,
         ic: str = 'fpe',
+        **kwargs
     ):
         ModelObject.__init__(
             self,

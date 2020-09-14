@@ -26,6 +26,7 @@ class ZeroesNaive(ModelObject):
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -113,6 +114,7 @@ class LastValueNaive(ModelObject):
         prediction_interval: float = 0.9,
         holiday_country: str = 'US',
         random_seed: int = 2020,
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -208,6 +210,7 @@ class AverageValueNaive(ModelObject):
         random_seed: int = 2020,
         verbose: int = 0,
         method: str = 'Median',
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -320,6 +323,7 @@ class SeasonalNaive(ModelObject):
         lag_1: int = 7,
         lag_2: int = None,
         method: str = 'LastValue',
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -506,6 +510,7 @@ class MotifSimulation(ModelObject):
         cutoff_minimum: int = 20,
         point_method: str = 'median',
         verbose: int = 1,
+        **kwargs
     ):
         ModelObject.__init__(
             self,
