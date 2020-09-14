@@ -59,6 +59,8 @@ Tensorflow GPU backend may crash on occasion.
 	* don't run univariate models on all series, only on needed series
 	* generalizable from run on only a subset
 	* handle failure of a lower level model on some series (but not for dist variants)
+	* remove 'horizontal' sanity check run, takes too longer
+	* allow multiprocessing for each model of horizontal
 * User friendly:
 	* clean up lower level
 	* make passing in own models easy
