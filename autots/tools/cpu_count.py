@@ -8,7 +8,7 @@ def cpu_count():
         * Remove Intel Hyperthreading logical cores
         * Find max cores allowed to the process, if less than machine has total
 
-    Runs best with psutil installed, but will function without
+    Runs best with psutil installed, fallsback to mkl, then os core count/2
     """
     import os
     # your basic cpu count, includes logical cores and all of machine
@@ -32,8 +32,11 @@ def cpu_count():
         import psutil
         ps_cores = psutil.cpu_count(logical=False)
     except Exception:
-        # without psutil, must assume hyperthreading to be conservative here
-        ps_cores = int(num_cores / 2)
+        try:
+            import mkl
+            ps_cores = int(mkl.get_max_threads())
+        except Exception:
+            ps_cores = int(num_cores / 2)
 
     core_list = [num_cores, available_cores, ps_cores]
     core_list = [x for x in core_list if x > 0]
