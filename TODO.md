@@ -52,7 +52,6 @@ Tensorflow GPU backend may crash on occasion.
 
 ## To-Do
 * Remove SP500 from AutoTS
-* Python Black
 * Migrate to-do to GitHub issues and project board
 	* GitHub badges in Readme, GitHub Actions flake8
 * Horizontal improvements
@@ -87,6 +86,7 @@ Tensorflow GPU backend may crash on occasion.
 	* Add 'model_count' to parameters
 
 * check models from M5 competition results
+* minmaxscaler as scoring for weighted Score generation
 * drop duplicates as function of TemplateEvalObject
 * optimize randomtransform probabilities
 * improve test.py script for actual testing of many features

@@ -319,6 +319,10 @@ class AutoTS(object):
         self.value_col = value_col
         self.id_col = id_col
         self.grouping_ids = grouping_ids
+        
+        # import mkl
+        # so this actually works it seems, on all sub process models
+        # mkl.set_num_threads_local(8)
 
         # convert class variables to local variables (makes testing easier)
         forecast_length = self.forecast_length
