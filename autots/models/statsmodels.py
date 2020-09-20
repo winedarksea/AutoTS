@@ -338,6 +338,7 @@ class ETS(ModelObject):
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
+        n_jobs: int = None,
         **kwargs
     ):
         ModelObject.__init__(
@@ -348,6 +349,7 @@ class ETS(ModelObject):
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
+            n_jobs=n_jobs,
         )
         self.damped = damped
         self.trend = trend
@@ -385,24 +387,52 @@ class ETS(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         from statsmodels.tsa.holtwinters import ExponentialSmoothing
-
         test_index = self.create_forecast_index(forecast_length=forecast_length)
-        forecast = pd.DataFrame()
-        for series in self.df_train.columns:
-            current_series = self.df_train[series].copy()
+        parallel = True
+        args = {'damped': self.damped,
+                'trend': self.trend,
+                'seasonal': self.seasonal,
+                'seasonal_periods': self.seasonal_periods,
+                'freq': self.frequency,
+                'forecast_length': forecast_length,
+                }
+
+        def forecast_by_column(df, args, col):
+            """Run one series of ETS and return prediction."""
+            current_series = df[col]
+            series_name = current_series.name
             esModel = ExponentialSmoothing(
                 current_series,
-                damped=self.damped,
-                trend=self.trend,
-                seasonal=self.seasonal,
-                seasonal_periods=self.seasonal_periods,
-                freq=self.frequency,
+                damped=args['damped'],
+                trend=args['trend'],
+                seasonal=args['seasonal'],
+                seasonal_periods=args['seasonal_periods'],
+                # initialization_method='heuristic',  # estimated
+                freq=args['freq'],
             ).fit()
-            esPred = esModel.predict(start=test_index[0], end=test_index[-1])
-            forecast = pd.concat([forecast, esPred], axis=1)
-        forecast.columns = self.column_names
-        if forecast.isnull().all(axis=0).astype(int).sum() > 0:
-            print("One or more series have failed to optimize with ETS model")
+            srt = current_series.shape[0]
+            esPred = esModel.predict(start=srt, end=srt + args['forecast_length'] - 1)
+            esPred = pd.Series(esPred)
+            esPred.name = series_name
+            return esPred
+        cols = self.df_train.columns.tolist()
+        if self.n_jobs in [0, 1] or len(cols) < 4:
+            parallel = False
+        try:
+            from joblib import Parallel, delayed
+        except Exception:
+            parallel = False
+        # joblib multiprocessing to loop through series
+        if parallel:
+            df_list = Parallel(n_jobs=self.n_jobs)(
+                delayed(forecast_by_column, check_pickle=False)(self.df_train, args, col) for (col) in cols
+            )
+            forecast = pd.concat(df_list, axis=1)
+        else:
+            df_list = []
+            for col in cols:
+                df_list.append(forecast_by_column(self.df_train, args, col))
+            forecast = pd.concat(df_list, axis=1)
         if just_point_forecast:
             return forecast
         else:
