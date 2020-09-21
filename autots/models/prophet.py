@@ -129,7 +129,6 @@ class FBProphet(ModelObject):
             current_series = self.df_train.copy()
             current_series['y'] = current_series[series]
             current_series['ds'] = current_series.index
-            print("FBProphet Initial Set")
             if self.regression_type == 'User':
                 current_series[self.regressor_name] = self.regressor_train
 
