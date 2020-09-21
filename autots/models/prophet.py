@@ -88,6 +88,7 @@ class FBProphet(ModelObject):
                 else:
                     self.regressor_train = future_regressor.copy()
 
+        # this is a hack to utilize regressors with a name unlikely to exist
         random_two = "n9032380gflljWfu8233koWQop3"
         random_one = "nJIOVxgQ0vZGC7nx_"
         self.regressor_name = random_one if random_one not in df.columns else random_two
@@ -124,14 +125,14 @@ class FBProphet(ModelObject):
         upper_forecast = pd.DataFrame()
         if self.verbose <= 0:
             logging.getLogger('fbprophet').setLevel(logging.WARNING)
+        if self.regression_type == 'User':
+                self.df_train[self.regressor_name] = self.regressor_train
 
         for series in self.df_train.columns:
             current_series = self.df_train.copy()
             current_series['y'] = current_series[series]
             current_series['ds'] = current_series.index
-            if self.regression_type == 'User':
-                current_series[self.regressor_name] = self.regressor_train
-
+            
             m = Prophet(interval_width=self.prediction_interval)
             if self.holiday:
                 m.add_country_holidays(country_name=self.holiday_country)

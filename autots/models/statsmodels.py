@@ -125,6 +125,7 @@ class GLM(ModelObject):
         family='Gaussian',
         constant: bool = False,
         verbose: int = 1,
+        n_jobs: int = None,
         **kwargs
     ):
         ModelObject.__init__(
@@ -136,6 +137,7 @@ class GLM(ModelObject):
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
+            n_jobs=n_jobs,
         )
         self.family = family
         self.constant = constant
@@ -196,7 +198,7 @@ class GLM(ModelObject):
                     self.future_regressor_train
                 ).reshape(-1, 1)
             X = np.concatenate((X.reshape(-1, 1), self.future_regressor_train), axis=1)
-        forecast = pd.DataFrame()
+
         self.df_train = self.df_train.replace(0, np.nan)
         fill_vals = self.df_train.abs().min(axis=0, skipna=True)
         self.df_train = self.df_train.fillna(fill_vals).fillna(0.1)
@@ -210,6 +212,8 @@ class GLM(ModelObject):
             if future_regressor.ndim == 1:
                 future_regressor = np.array(future_regressor).reshape(-1, 1)
             Xf = np.concatenate((Xf.reshape(-1, 1), future_regressor), axis=1)
+        """
+        forecast = pd.DataFrame()
         for y in self.df_train.columns:
             current_series = self.df_train[y]
             if str(self.family).lower() == 'poisson':
@@ -249,7 +253,83 @@ class GLM(ModelObject):
             forecast = pd.concat([forecast, pd.Series(current_forecast)], axis=1)
         df_forecast = pd.DataFrame(forecast)
         df_forecast.columns = self.column_names
+        
+        # handle weird pickling errors for multiprocessing
+        try:
+            from joblib import wrap_non_picklable_objects
+        except Exception:
+            def wrap_non_picklable_objects(ob):
+                return ob
+            parallel = False
+        """
+        parallel = True
+        cols = self.df_train.columns.tolist()
+        df = self.df_train
+        args = {'family': self.family,
+                'verbose': self.verbose,
+                }
+        if self.verbose:
+            pool_verbose = 1
+
+        # @wrap_non_picklable_objects
+        def forecast_by_column(df, X, Xf, args, col):
+            """Run one series of ETS and return prediction."""
+            current_series = df[col]
+            series_name = current_series.name
+            family = args['family']
+            verbose = args['verbose']
+            if str(family).lower() == 'poisson':
+                from statsmodels.genmod.families.family import Poisson
+                model = GLM(
+                    current_series.values, X, family=Poisson(), missing='drop'
+                ).fit(disp=verbose)
+            elif str(family).lower() == 'binomial':
+                from statsmodels.genmod.families.family import Binomial
+                model = GLM(
+                    current_series.values, X, family=Binomial(), missing='drop'
+                ).fit(disp=verbose)
+            elif str(family).lower() == 'negativebinomial':
+                from statsmodels.genmod.families.family import NegativeBinomial
+                model = GLM(
+                    current_series.values, X, family=NegativeBinomial(), missing='drop'
+                ).fit(disp=verbose)
+            elif str(family).lower() == 'tweedie':
+                from statsmodels.genmod.families.family import Tweedie
+                model = GLM(
+                    current_series.values, X, family=Tweedie(), missing='drop'
+                ).fit(disp=verbose)
+            elif str(family).lower() == 'gamma':
+                from statsmodels.genmod.families.family import Gamma
+                model = GLM(
+                    current_series.values, X, family=Gamma(), missing='drop'
+                ).fit(disp=verbose)
+            else:
+                family = 'Gaussian'
+                model = GLM(current_series.values, X, missing='drop').fit(disp=verbose)
+            Pred = model.predict((Xf))
+            Pred = pd.Series(Pred)
+            Pred.name = series_name
+            return Pred
+        if self.n_jobs in [0, 1] or len(cols) < 4:
+            parallel = False
+        else:
+            try:
+                from joblib import Parallel, delayed
+            except Exception:
+                parallel = False
+        # joblib multiprocessing to loop through series
+        if parallel:
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose)(
+                delayed(forecast_by_column)(df=df, X=X, Xf=Xf, args=args, col=col) for col in cols
+            )
+            df_forecast = pd.concat(df_list, axis=1)
+        else:
+            df_list = []
+            for col in cols:
+                df_list.append(forecast_by_column(df, X, Xf, args, col))
+            df_forecast = pd.concat(df_list, axis=1)
         df_forecast.index = test_index
+
         if just_point_forecast:
             return df_forecast
         else:
@@ -418,10 +498,11 @@ class ETS(ModelObject):
         cols = self.df_train.columns.tolist()
         if self.n_jobs in [0, 1] or len(cols) < 4:
             parallel = False
-        try:
-            from joblib import Parallel, delayed
-        except Exception:
-            parallel = False
+        else:
+            try:
+                from joblib import Parallel, delayed
+            except Exception:
+                parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
