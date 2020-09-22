@@ -4,6 +4,14 @@ autots.tools package
 Submodules
 ----------
 
+autots.tools.cpu\_count module
+------------------------------
+
+.. automodule:: autots.tools.cpu_count
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.hierarchial module
 -------------------------------
 

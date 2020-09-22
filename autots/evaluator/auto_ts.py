@@ -63,6 +63,7 @@ class AutoTS(object):
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
+        n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case).
 
     Attributes:
         best_model (pandas.DataFrame): DataFrame containing template for the best ranked model

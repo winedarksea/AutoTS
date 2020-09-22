@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.evaluator package &#8212; AutoTS 0.2.2 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 0.2.3 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -42,7 +42,7 @@
 <p>Mid-level helper functions for AutoTS.</p>
 <dl class="function">
 <dt id="autots.evaluator.auto_model.ModelMonster">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">ModelMonster</code><span class="sig-paren">(</span><em class="sig-param">model: str</em>, <em class="sig-param">parameters: dict = {}</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">startTimeStamps=None</em>, <em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.ModelMonster" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">ModelMonster</code><span class="sig-paren">(</span><em class="sig-param">model: str</em>, <em class="sig-param">parameters: dict = {}</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">startTimeStamps=None</em>, <em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.ModelMonster" title="Permalink to this definition">¶</a></dt>
 <dd><p>Directs strings and parameters to appropriate model objects.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -56,13 +56,13 @@
 
 <dl class="class">
 <dt id="autots.evaluator.auto_model.ModelObject">
-<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">ModelObject</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'Uninitiated Model Name'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">fit_runtime=datetime.timedelta(0)</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.ModelObject" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">ModelObject</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'Uninitiated Model Name'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">fit_runtime=datetime.timedelta(0)</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = -1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.ModelObject" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Generic class for holding forecasting models.</p>
 <dl class="simple">
-<dt>Models should all have methods:</dt><dd><p>.fit(df) (taking a DataFrame with DatetimeIndex and n columns of n timeseries)
-.predict(forecast_length = int, regressor)
-.get_new_params(method)</p>
+<dt>Models should all have methods:</dt><dd><p>.fit(df, future_regressor = []) (taking a DataFrame with DatetimeIndex and n columns of n timeseries)
+.predict(forecast_length = int, future_regressor = [], just_point_forecast = False)
+.get_new_params() - return a dictionary of weighted random selected parameters</p>
 </dd>
 </dl>
 <dl class="field-list simple">
@@ -71,6 +71,7 @@
 <li><p><strong>name</strong> (<em>str</em>) – Model Name</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
 <li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em>) – used by some models that parallelize to multiple cores</p></li>
 </ul>
 </dd>
 </dl>
@@ -106,7 +107,7 @@
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.ModelPrediction">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">ModelPrediction</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">forecast_length: int</em>, <em class="sig-param">transformation_dict: dict</em>, <em class="sig-param">model_str: str</em>, <em class="sig-param">parameter_dict: dict</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">future_regressor_train=[]</em>, <em class="sig-param">future_regressor_forecast=[]</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">startTimeStamps=None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.ModelPrediction" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">ModelPrediction</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">forecast_length: int</em>, <em class="sig-param">transformation_dict: dict</em>, <em class="sig-param">model_str: str</em>, <em class="sig-param">parameter_dict: dict</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">future_regressor_train=[]</em>, <em class="sig-param">future_regressor_forecast=[]</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">startTimeStamps=None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.ModelPrediction" title="Permalink to this definition">¶</a></dt>
 <dd><p>Feed parameters into modeling pipeline</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -123,6 +124,7 @@
 <li><p><strong>future_regressor_forecast</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching test data</p></li>
 <li><p><strong>holiday_country</strong> (<em>str</em>) – passed through to holiday package, used by a few models as 0/1 regressor.</p></li>
 <li><p><strong>startTimeStamps</strong> (<em>pd.Series</em>) – index (series_ids), columns (Datetime of First start of series)</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em>) – number of processes</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -150,9 +152,9 @@
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.PredictWitch">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">PredictWitch</code><span class="sig-paren">(</span><em class="sig-param">template, df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=[], future_regressor_forecast=[], holiday_country: str = 'US', startTimeStamps=None, grouping_ids=None, random_seed: int = 2020, verbose: int = 0, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble']</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.PredictWitch" title="Permalink to this definition">¶</a></dt>
-<dd><p>Takes numeric data, returns numeric forecasts.
-Only one model (albeit potentially an ensemble)!</p>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">PredictWitch</code><span class="sig-paren">(</span><em class="sig-param">template, df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=[], future_regressor_forecast=[], holiday_country: str = 'US', startTimeStamps=None, grouping_ids=None, random_seed: int = 2020, verbose: int = 0, n_jobs: int = None, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble']</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.PredictWitch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes numeric data, returns numeric forecasts.</p>
+<p>Only one model (albeit potentially an ensemble)!</p>
 <p>Well, she turned me into a newt.
 A newt?
 I got better. -Python</p>
@@ -228,7 +230,7 @@ I got better. -Python</p>
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.TemplateWizard">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateWizard</code><span class="sig-paren">(</span><em class="sig-param">template, df_train, df_test, weights, model_count: int = 0, ensemble: str = True, forecast_length: int = 14, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=[], future_regressor_forecast=[], holiday_country: str = 'US', startTimeStamps=None, random_seed: int = 2020, verbose: int = 0, validation_round: int = 0, model_interrupt: bool = False, grouping_ids=None, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble']</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateWizard" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateWizard</code><span class="sig-paren">(</span><em class="sig-param">template, df_train, df_test, weights, model_count: int = 0, ensemble: str = True, forecast_length: int = 14, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=[], future_regressor_forecast=[], holiday_country: str = 'US', startTimeStamps=None, random_seed: int = 2020, verbose: int = 0, n_jobs: int = None, validation_round: int = 0, model_interrupt: bool = False, grouping_ids=None, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble']</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateWizard" title="Permalink to this definition">¶</a></dt>
 <dd><p>Take Template, returns Results.</p>
 <p>There are some who call me… Tim. - Python</p>
 <dl class="field-list simple">
@@ -320,7 +322,7 @@ I got better. -Python</p>
 <p>Higher-level backbone of auto time series modeling.</p>
 <dl class="class">
 <dt id="autots.evaluator.auto_ts.AutoTS">
-<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 5</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'simple'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 0</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 1}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'even'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 5</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 0</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 1}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'even'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Automate time series modeling using a genetic algorithm.</p>
 <dl class="field-list simple">

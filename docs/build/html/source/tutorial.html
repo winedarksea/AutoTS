@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Tutorial &#8212; AutoTS 0.2.2 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.2.3 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -164,9 +164,10 @@ forecasts_df = prediction.forecast
 </div>
 <div class="section" id="deployment-and-template-import-export">
 <h2>Deployment and Template Import/Export<a class="headerlink" href="#deployment-and-template-import-export" title="Permalink to this headline">¶</a></h2>
-<p>Many models can be reverse engineered with relative simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package.
+<p>Many models can be reverse engineered with (relative) simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package.
 There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a <code class="docutils literal notranslate"><span class="pre">.csv</span></code> or <code class="docutils literal notranslate"><span class="pre">.json</span></code> file, then on next run only those models will be tried.
-This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve.</p>
+This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve.
+One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.</p>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">#</span> <span class="k">after</span> <span class="n">fitting</span> <span class="n">an</span> <span class="n">AutoTS</span> <span class="n">model</span>
 <span class="n">example_filename</span> <span class="o">=</span> <span class="ss">&quot;example_export.csv&quot;</span> <span class="o">#</span> <span class="p">.</span><span class="n">csv</span><span class="o">/</span><span class="p">.</span><span class="n">json</span>
 <span class="n">model</span><span class="p">.</span><span class="n">export_template</span><span class="p">(</span><span class="n">example_filename</span><span class="p">,</span> <span class="n">models</span><span class="o">=</span><span class="s1">&#39;best&#39;</span><span class="p">,</span>
@@ -200,10 +201,10 @@ model = AutoTS(forecast_length=forecast_length,
 </div>
 <p>It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE.</p>
 <p><strong>Warning</strong>: weights are not fully balanced 1 - 1 - 1. As such it is usually best to place your favorite metric an order of magnitude or more above the others.</p>
-<p><code class="docutils literal notranslate"><span class="pre">sMAPE</span></code> is generally the most versatile across multiple series, but doesn’t handle forecasts with lots of zeroes well.</p>
-<p><code class="docutils literal notranslate"><span class="pre">SPL</span></code> is <em>Scaled Pinball Loss</em> used for assessing upper/lower quantile forecast accuracies.</p>
-<p><code class="docutils literal notranslate"><span class="pre">Containment</span></code> measures the percent of test data that falls between the upper and lower forecasts.</p>
-<p><code class="docutils literal notranslate"><span class="pre">Contour</span></code> is another unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but <em>not</em> the magnitude of that difference. Does not work with forecast_length=1.</p>
+<p><code class="docutils literal notranslate"><span class="pre">sMAPE</span></code> is generally the most versatile metric across multiple series, but doesn’t handle forecasts with lots of zeroes well.</p>
+<p><code class="docutils literal notranslate"><span class="pre">SPL</span></code> is <em>Scaled Pinball Loss</em> and is the optimal metric for assessing upper/lower quantile forecast accuracies.</p>
+<p><code class="docutils literal notranslate"><span class="pre">Containment</span></code> measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL.</p>
+<p><code class="docutils literal notranslate"><span class="pre">Contour</span></code> is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but <em>not</em> the magnitude of that difference. Does not work with forecast_length=1.</p>
 </div>
 </div>
 <div class="section" id="installation-and-dependency-versioning">
@@ -220,32 +221,41 @@ model = AutoTS(forecast_length=forecast_length,
 </pre></div>
 </div>
 <p>Of these, numpy and pandas are critical.
-Some limited functionality should exist without scikit-learn.
-Nearly full functionality should be maintained without statsmodels.</p>
+Limited functionality should exist without scikit-learn.
+Full functionality should be maintained without statsmodels, albeit with fewer available models.</p>
 <p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">autots['additional']</span></code></p>
 </div>
 <div class="section" id="optional-requirements">
 <h3>Optional Requirements<a class="headerlink" href="#optional-requirements" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">holidays</span>
 <span class="n">fbprophet</span>
-<span class="n">fredapi</span>
-<span class="n">tsfresh</span>
+<span class="n">gluonts</span> <span class="p">(</span><span class="n">requires</span> <span class="n">mxnet</span><span class="p">)</span>
 <span class="n">mxnet</span> <span class="p">(</span><span class="n">mxnet</span><span class="o">-</span><span class="n">mkl</span><span class="p">,</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu91</span><span class="p">,</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu101mkl</span><span class="p">,</span> <span class="n">etc</span><span class="p">.)</span>
-<span class="n">gluonts</span>
 <span class="n">tensorflow</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span>
-<span class="n">tensorflow</span><span class="o">-</span><span class="n">probability</span>
 <span class="n">lightgbm</span>
 <span class="n">xgboost</span>
+<span class="n">psutil</span>
 </pre></div>
+</div>
+<div class="section" id="experimental-dev-requirements">
+<h4>Experimental &amp; Dev Requirements<a class="headerlink" href="#experimental-dev-requirements" title="Permalink to this headline">¶</a></h4>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">tensorflow</span><span class="o">-</span><span class="n">probability</span>
+<span class="n">fredapi</span>
+<span class="n">tsfresh</span>
+</pre></div>
+</div>
 </div>
 </div>
 <div class="section" id="hardware-acceleration-with-intel-cpu-and-nvidia-gpu-for-ubuntu-windows">
 <h3>Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows<a class="headerlink" href="#hardware-acceleration-with-intel-cpu-and-nvidia-gpu-for-ubuntu-windows" title="Permalink to this headline">¶</a></h3>
 <p>Download Anaconda or Miniconda.</p>
-<p>(install Visual Studio if on Windows)</p>
+<p>(install Visual Studio if on Windows for C compilers)</p>
 <p>If you have an Nvidia GPU, download NVIDIA CUDA and CuDNN.
-MKL is included with <code class="docutils literal notranslate"><span class="pre">anaconda</span></code>.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">conda</span> <span class="k">create</span> <span class="o">-</span><span class="n">n</span> <span class="n">timeseries</span> <span class="n">python</span><span class="o">=</span><span class="mi">3</span><span class="p">.</span><span class="mi">6</span>
+Intel MKL is included with <code class="docutils literal notranslate"><span class="pre">anaconda</span></code> and offers significant performance gain for Intel CPUs.
+You can check if your system is using mkl with <code class="docutils literal notranslate"><span class="pre">numpy.show_config()</span></code>.
+If you are on an AMD CPU, you do <strong>not</strong> want to be using MKL, OpenBLAS is better.
+On Linux ARM-based systems, apt-get/yum (rather than pip) installs of numpy/pandas <em>may</em> install faster compilations.</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">conda</span> <span class="k">create</span> <span class="o">-</span><span class="n">n</span> <span class="n">timeseries</span> <span class="n">python</span><span class="o">=</span><span class="mi">3</span><span class="p">.</span><span class="mi">8</span>
 <span class="n">conda</span> <span class="n">activate</span> <span class="n">timeseries</span>
 
 <span class="o">#</span> <span class="k">for</span> <span class="n">simplicity</span><span class="p">:</span>
@@ -255,6 +265,7 @@ MKL is included with <code class="docutils literal notranslate"><span class="pre
 <span class="n">conda</span> <span class="n">install</span> <span class="o">-</span><span class="k">c</span> <span class="n">conda</span><span class="o">-</span><span class="n">forge</span> <span class="n">scikit</span><span class="o">-</span><span class="n">learn</span>
 <span class="n">pip</span> <span class="n">install</span> <span class="n">statsmodels</span>
 
+<span class="o">#</span> <span class="k">check</span> <span class="n">the</span> <span class="n">mxnet</span> <span class="n">documentation</span> <span class="k">for</span> <span class="n">various</span> <span class="n">flavors</span> <span class="k">of</span> <span class="n">mxnet</span> <span class="n">available</span>
 <span class="n">pip</span> <span class="n">install</span> <span class="n">mxnet</span>
 <span class="n">pip</span> <span class="n">install</span> <span class="n">gluonts</span>
 <span class="n">conda</span> <span class="k">update</span> <span class="n">anaconda</span>

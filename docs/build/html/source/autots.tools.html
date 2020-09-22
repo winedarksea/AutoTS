@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.tools package &#8212; AutoTS 0.2.2 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.2.3 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -35,6 +35,24 @@
 <h1>autots.tools package<a class="headerlink" href="#autots-tools-package" title="Permalink to this headline">¶</a></h1>
 <div class="section" id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-autots.tools.cpu_count">
+<span id="autots-tools-cpu-count-module"></span><h2>autots.tools.cpu_count module<a class="headerlink" href="#module-autots.tools.cpu_count" title="Permalink to this headline">¶</a></h2>
+<p>CPU counter for multiprocesing.</p>
+<dl class="function">
+<dt id="autots.tools.cpu_count.cpu_count">
+<code class="sig-prename descclassname">autots.tools.cpu_count.</code><code class="sig-name descname">cpu_count</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.cpu_count.cpu_count" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find available CPU count, running on both Windows/Linux.</p>
+<dl class="simple">
+<dt>Attempts to be very conservative:</dt><dd><ul class="simple">
+<li><p>Remove Intel Hyperthreading logical cores</p></li>
+<li><p>Find max cores allowed to the process, if less than machine has total</p></li>
+</ul>
+</dd>
+</dl>
+<p>Runs best with psutil installed, fallsback to mkl, then os core count/2</p>
+</dd></dl>
+
 </div>
 <div class="section" id="module-autots.tools.hierarchial">
 <span id="autots-tools-hierarchial-module"></span><h2>autots.tools.hierarchial module<a class="headerlink" href="#module-autots.tools.hierarchial" title="Permalink to this headline">¶</a></h2>
@@ -1236,7 +1254,7 @@ Inverse transformed values returned will also not return as ‘exactly’ equals
 </div>
 <div class="section" id="module-autots.tools">
 <span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots.tools" title="Permalink to this headline">¶</a></h2>
-<p>basic utilities</p>
+<p>Basic utilities.</p>
 </div>
 </div>
 
