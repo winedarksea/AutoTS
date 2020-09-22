@@ -607,7 +607,7 @@ class RollingRegression(ModelObject):
         add_date_part: str = None,
         polynomial_degree: int = None,
         x_transform: str = None,
-        n_jobs: int = 1,
+        n_jobs: int = -1,
         **kwargs
     ):
         ModelObject.__init__(
@@ -1022,7 +1022,7 @@ class WindowRegression(ModelObject):
         shuffle: bool = True,
         forecast_length: int = 1,
         max_windows: int = 5000,
-        n_jobs: int = 1,
+        n_jobs: int = -1,
         **kwargs
     ):
         ModelObject.__init__(
@@ -1050,6 +1050,7 @@ class WindowRegression(ModelObject):
         Args:
             df (pandas.DataFrame): Datetime Indexed
         """
+        print(f"N_jobs is {self.n_jobs}")
         df = self.basic_profile(df)
         self.df_train = df
         X, Y = window_maker(
@@ -1271,6 +1272,7 @@ class ComponentAnalysis(ModelObject):
         model: str = 'GLS',
         model_parameters: dict = {},
         decomposition: str = 'PCA',
+        n_jobs: int = -1,
     ):
         ModelObject.__init__(
             self,
@@ -1280,6 +1282,7 @@ class ComponentAnalysis(ModelObject):
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
+            n_jobs=n_jobs,
         )
         self.model = model
         self.model_parameters = model_parameters
@@ -1359,6 +1362,7 @@ class ComponentAnalysis(ModelObject):
                 holiday_country=self.holiday_country,
                 random_seed=self.random_seed,
                 verbose=self.verbose,
+                n_jobs=self.n_jobs,
                 forecast_length=self.forecast_length,
             ).fit(X, future_regressor=future_regressor)
         except Exception as e:

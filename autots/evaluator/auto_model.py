@@ -246,6 +246,7 @@ def ModelMonster(
     forecast_length: int = 14,
     random_seed: int = 2020,
     verbose: int = 0,
+    n_jobs: int = None,
 ):
     """Directs strings and parameters to appropriate model objects.
 
@@ -311,6 +312,7 @@ def ModelMonster(
                 holiday_country=holiday_country,
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
             )
         else:
             model = GLM(
@@ -319,6 +321,7 @@ def ModelMonster(
                 holiday_country=holiday_country,
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
                 family=parameters['family'],
                 constant=parameters['constant'],
                 regression_type=parameters['regression_type'],
@@ -334,6 +337,7 @@ def ModelMonster(
                 prediction_interval=prediction_interval,
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
             )
         else:
             model = ETS(
@@ -345,6 +349,7 @@ def ModelMonster(
                 seasonal_periods=parameters['seasonal_periods'],
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
             )
         return model
 
@@ -383,6 +388,7 @@ def ModelMonster(
                 holiday_country=holiday_country,
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
             )
         else:
             model = FBProphet(
@@ -393,6 +399,7 @@ def ModelMonster(
                 regression_type=parameters['regression_type'],
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
             )
         return model
 
@@ -406,6 +413,7 @@ def ModelMonster(
                 holiday_country=holiday_country,
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
             )
         else:
             model = RollingRegression(
@@ -429,6 +437,7 @@ def ModelMonster(
                 abs_energy=parameters['abs_energy'],
                 add_date_part=parameters['add_date_part'],
                 polynomial_degree=parameters['polynomial_degree'],
+                n_jobs=n_jobs,
             )
         return model
 
@@ -647,6 +656,7 @@ def ModelMonster(
                 random_seed=random_seed,
                 verbose=verbose,
                 forecast_length=forecast_length,
+                n_jobs=n_jobs,
             )
         else:
             model = WindowRegression(
@@ -663,6 +673,7 @@ def ModelMonster(
                 shuffle=parameters['shuffle'],
                 max_windows=parameters['max_windows'],
                 forecast_length=forecast_length,
+                n_jobs=n_jobs,
             )
         return model
     if model == 'TensorflowSTS':
@@ -766,6 +777,7 @@ def ModelPrediction(
     grouping_ids=None,
     random_seed: int = 2020,
     verbose: int = 0,
+    n_jobs: int = None,
 ):
     """Feed parameters into modeling pipeline
 
@@ -782,6 +794,7 @@ def ModelPrediction(
         future_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
+        n_jobs (int): number of processes
 
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
@@ -849,6 +862,7 @@ def ModelPrediction(
         random_seed=random_seed,
         verbose=verbose,
         forecast_length=forecast_length,
+        n_jobs=n_jobs,
     )
     model = model.fit(df_train_transformed, future_regressor=future_regressor_train)
     df_forecast = model.predict(
@@ -1027,6 +1041,7 @@ def PredictWitch(
     grouping_ids=None,
     random_seed: int = 2020,
     verbose: int = 0,
+    n_jobs: int = None,
     template_cols: list = [
         'Model',
         'ModelParameters',
@@ -1034,8 +1049,8 @@ def PredictWitch(
         'Ensemble',
     ],
 ):
-    """
-    Takes numeric data, returns numeric forecasts.
+    """Takes numeric data, returns numeric forecasts.
+
     Only one model (albeit potentially an ensemble)!
 
     Well, she turned me into a newt.
@@ -1102,6 +1117,7 @@ def PredictWitch(
                     grouping_ids=grouping_ids,
                     random_seed=random_seed,
                     verbose=verbose,
+                    n_jobs=n_jobs,
                     template_cols=template_cols,
                 )
                 model_id = create_model_id(
@@ -1154,6 +1170,7 @@ def PredictWitch(
                 random_seed=random_seed,
                 verbose=verbose,
                 startTimeStamps=startTimeStamps,
+                n_jobs=n_jobs,
             )
 
             return df_forecast
@@ -1177,6 +1194,7 @@ def TemplateWizard(
     startTimeStamps=None,
     random_seed: int = 2020,
     verbose: int = 0,
+    n_jobs: int = None,
     validation_round: int = 0,
     model_interrupt: bool = False,
     grouping_ids=None,
@@ -1265,6 +1283,7 @@ def TemplateWizard(
                 grouping_ids=grouping_ids,
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
                 template_cols=template_cols,
             )
 

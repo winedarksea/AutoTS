@@ -104,6 +104,7 @@ class AutoTS(object):
         remove_leading_zeroes: bool = False,
         model_interrupt: bool = False,
         verbose: int = 1,
+        n_jobs: int = None,
     ):
         self.forecast_length = int(abs(forecast_length))
         self.frequency = frequency
@@ -129,6 +130,7 @@ class AutoTS(object):
         self.remove_leading_zeroes = remove_leading_zeroes
         self.model_interrupt = model_interrupt
         self.verbose = int(verbose)
+        self.n_jobs = n_jobs
         if self.ensemble == 'all':
             self.ensemble = 'simple,distance,horizontal-max,probabilistic'
         elif self.ensemble == 'auto':
@@ -507,6 +509,7 @@ class AutoTS(object):
             model_interrupt=self.model_interrupt,
             grouping_ids=self.grouping_ids,
             verbose=verbose,
+            n_jobs=self.n_jobs,
         )
         model_count = template_result.model_count
 
@@ -566,6 +569,7 @@ class AutoTS(object):
                 grouping_ids=self.grouping_ids,
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=self.n_jobs,
             )
             model_count = template_result.model_count
 
@@ -608,6 +612,7 @@ class AutoTS(object):
                     grouping_ids=self.grouping_ids,
                     random_seed=random_seed,
                     verbose=verbose,
+                    n_jobs=self.n_jobs,
                 )
                 model_count = template_result.model_count
                 # capture results from lower-level template run
@@ -803,6 +808,7 @@ class AutoTS(object):
                     grouping_ids=self.grouping_ids,
                     random_seed=random_seed,
                     verbose=verbose,
+                    n_jobs=self.n_jobs,
                     validation_round=(y + 1),
                 )
                 model_count = template_result.model_count
@@ -915,6 +921,7 @@ or otherwise increase models available."""
                     grouping_ids=self.grouping_ids,
                     random_seed=random_seed,
                     verbose=verbose,
+                    n_jobs=self.n_jobs,
                 )
                 # capture results from lower-level template run
                 template_result.model_results['TotalRuntime'].fillna(

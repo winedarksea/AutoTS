@@ -45,6 +45,7 @@ class FBProphet(ModelObject):
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
+        n_jobs: int = None,
     ):
         ModelObject.__init__(
             self,
@@ -55,6 +56,7 @@ class FBProphet(ModelObject):
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
+            n_jobs=n_jobs,
         )
         self.holiday = holiday
 
@@ -68,6 +70,8 @@ class FBProphet(ModelObject):
             raise ImportError("Package fbprophet is required")
 
         df = self.basic_profile(df)
+        self.regressor_train = None
+        self.dimensionality_reducer = None
         if self.regression_type == 'User':
             """
             print("the shape of the input is: {}".format(str(((np.array(future_regressor).shape[0])))))
@@ -128,11 +132,11 @@ class FBProphet(ModelObject):
         if self.regression_type == 'User':
                 self.df_train[self.regressor_name] = self.regressor_train
 
+        """
         for series in self.df_train.columns:
             current_series = self.df_train.copy()
             current_series['y'] = current_series[series]
             current_series['ds'] = current_series.index
-            
             m = Prophet(interval_width=self.prediction_interval)
             if self.holiday:
                 m.add_country_holidays(country_name=self.holiday_country)
@@ -158,6 +162,68 @@ class FBProphet(ModelObject):
         lower_forecast.index = test_index
         upper_forecast.columns = self.column_names
         upper_forecast.index = test_index
+        """
+
+        def seek_the_oracle(df, args, series):
+            current_series = df
+            current_series['y'] = current_series[series]
+            current_series['ds'] = current_series.index
+            m = Prophet(interval_width=args['prediction_interval'])
+            if args['holiday']:
+                m.add_country_holidays(country_name=args['holiday_country'])
+            if args['regression_type'] == 'User':
+                m.add_regressor(args['regressor_name'])
+            m = m.fit(current_series)
+            future = m.make_future_dataframe(periods=forecast_length)
+            if args['regression_type'] == 'User':
+                if future_regressor.ndim > 1:
+                    a = args['dimensionality_reducer'].transform(future_regressor)
+                    a = np.append(args['regressor_train'], a)
+                else:
+                    a = np.append(args['regressor_train'], future_regressor.values)
+                future[args['regressor_name']] = a
+            fcst = m.predict(future)
+            fcst = fcst.tail(forecast_length)  # remove the backcast
+            forecast = fcst['yhat']
+            forecast.name = series
+            lower_forecast = fcst['yhat_lower']
+            lower_forecast.name = series
+            upper_forecast = fcst['yhat_upper']
+            upper_forecast.name = series
+            return((forecast, lower_forecast, upper_forecast))
+
+        args = {
+            'holiday': self.holiday,
+            'holiday_country': self.holiday_country,
+            'regression_type': self.regression_type,
+            'regressor_name': self.regressor_name,
+            'regressor_train': self.regressor_train,
+            'dimensionality_reducer': self.dimensionality_reducer,
+            'prediction_interval': self.prediction_interval,
+            }
+        parallel = True
+        cols = self.df_train.columns.tolist()
+        if self.n_jobs in [0, 1] or len(cols) < 4:
+            parallel = False
+        else:
+            try:
+                from joblib import Parallel, delayed
+            except Exception:
+                parallel = False
+        # joblib multiprocessing to loop through series
+        if parallel:
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(self.verbose-1))(
+                delayed(seek_the_oracle)(df=self.df_train, args=args, series=col) for col in cols
+            )
+            complete = list(map(list, zip(*df_list)))
+        else:
+            df_list = []
+            for col in cols:
+                df_list.append(seek_the_oracle(self.df_train, args, col))
+            complete = list(map(list, zip(*df_list)))
+        forecast = pd.concat(complete[0], axis=1)
+        lower_forecast = pd.concat(complete[1], axis=1)
+        upper_forecast = pd.concat(complete[2], axis=1)
 
         if just_point_forecast:
             return forecast

@@ -28,7 +28,7 @@ VAR ValueError('Length of passed values is 4, index implies 9',)
 WindowRegression + KerasRNN + 1step + univariate = ValueError('Length mismatch: Expected axis has 54 elements, new values have 9 elements',)
 Is Template Eval Error: ValueError('array must not contain infs or NaNs',) related to Point to Probability HISTORIC QUANTILE?
 'Fake Date' doesn't work on entirely NaN series - ValueError('Found array with 0 sample(s) (shape=(0, 1)) while a minimum of 1 is required.',)
-
+ValueError: percentiles should all be in the interval [0, 1]. Try [-0.00089  0.01089] instead. .sample in Motif Simulation line 729 point_method == 'sample'
 
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
@@ -70,6 +70,7 @@ Tensorflow GPU backend may crash on occasion.
 	* Make Distributable/Multiprocessing
 	* Fast window regression only
 	* Fast MotifSimulation
+		* could memoization of pairwise comparisons be possible? (joblib)
 * Improve templates
 	* 'fake date' dataset with high diversity of series to train on
 

@@ -270,6 +270,8 @@ class GLM(ModelObject):
                 }
         if self.verbose:
             pool_verbose = 1
+        else:
+            pool_verbose = 0
 
         # @wrap_non_picklable_objects
         def forecast_by_column(df, X, Xf, args, col):
