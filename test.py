@@ -1,5 +1,5 @@
 """Informal testing script."""
-# pragma pylint: disable=W293,E251,D407,E501
+import timeit
 import numpy as np
 import pandas as pd
 from autots.datasets import load_daily
@@ -9,9 +9,13 @@ from autots.datasets import load_yearly
 from autots.datasets import load_weekly
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
+# raise ValueError("aaargh!")
 
-forecast_length = 4
-df_long = load_monthly()
+example_filename = "example_export2.csv"  # .csv/.json
+forecast_length = 3
+df_long = load_daily()
+n_jobs = 2
+generations = 2
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -31,16 +35,24 @@ grouping_monthly = {
     }
 
 model_list = [
-              'ZeroesNaive', 'LastValueNaive', 'AverageValueNaive',
-              'GLS', 'GLM', 'SeasonalNaive'
-              # 'ETS', 'RollingRegression', 'ARIMA',
-              ,'FBProphet', 'VAR', 'GluonTS'
-              # , 'VECM', 'DynamicFactor'
-              # ,'VARMAX', 'GluonTS'
-              ]
-model_list = 'superfast'
-# model_list = ['AverageValueNaive', 'LastValueNaive', 'ZeroesNaive']
-# model_list = ['WindowRegression', 'SeasonalNaive']
+                'ZeroesNaive',
+                'LastValueNaive',
+                'AverageValueNaive',
+                'GLS',
+                'SeasonalNaive',
+                'GLM',
+                'ETS',
+                'FBProphet',
+                'RollingRegression',
+                'GluonTS',
+                'UnobservedComponents',
+                'VAR',
+                'VECM',
+                'WindowRegression',
+            ]
+# model_list = 'default'
+# model_list = ['AverageValueNaive', 'LastValueNaive', 'GLM']
+model_list = ['MotifSimulation', 'ETS', 'GLM', 'FBProphet']
 
 metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
                     'rmse_weighting': 2, 'containment_weighting': 0,
@@ -51,14 +63,15 @@ metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
 
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9,
-               ensemble='simple,distance,probabilistic-max,horizontal-max',
+               ensemble=None,
                constraint=2,
-               max_generations=1, num_validations=2,
+               max_generations=generations, num_validations=2,
                validation_method='backwards',
                model_list=model_list, initial_template='General+Random',
                metric_weighting=metric_weighting, models_to_validate=0.1,
                max_per_model_class=None,
                model_interrupt=True,
+               n_jobs=n_jobs,
                drop_most_recent=0, verbose=1)
 
 
@@ -70,6 +83,9 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
     date_col='datetime', value_col='value', id_col='series_id')
 
 # model = model.import_results('test.pickle')
+# model = model.import_template(example_filename, method='only')
+
+start_time_for = timeit.default_timer()
 model = model.fit(df_long,
                   future_regressor=future_regressor_train2d,
                   # weights=weights_weekly,
@@ -77,6 +93,37 @@ model = model.fit(df_long,
                   result_file='test.pickle',
                   date_col='datetime', value_col='value',
                   id_col='series_id')
+elapsed_for = timeit.default_timer() - start_time_for
+
+"""
+del(model)
+model = AutoTS(forecast_length=forecast_length, frequency='infer',
+               prediction_interval=0.9,
+               ensemble=None,
+               constraint=2,
+               max_generations=generations, num_validations=2,
+               validation_method='backwards',
+               model_list=model_list, initial_template='General+Random',
+               metric_weighting=metric_weighting, models_to_validate=0.1,
+               max_per_model_class=None,
+               model_interrupt=True,
+               n_jobs=None,
+               drop_most_recent=0, verbose=1)
+# model = model.import_template(example_filename, method='only')
+import time
+time.sleep(30)
+import joblib
+with joblib.parallel_backend("loky", n_jobs=n_jobs):
+    start_time_cxt = timeit.default_timer()
+    model = model.fit(df_long,
+                      future_regressor=future_regressor_train2d,
+                      grouping_ids=grouping_monthly,
+                      result_file='test.pickle',
+                      date_col='datetime', value_col='value',
+                      id_col='series_id')
+    elapsed_cxt = timeit.default_timer() - start_time_cxt
+print(f"With Context {elapsed_cxt}\nWithout Context {elapsed_for}")
+"""
 
 print(model.best_model['Model'].iloc[0])
 print(model.best_model['ModelParameters'].iloc[0])
@@ -97,12 +144,11 @@ validation_results = model.results("validation")
 """
 Import/Export
 
-example_filename = "example_export.csv" #.csv/.json
 model.export_template(example_filename, models='best',
                       n=15, max_per_model_class=3)
 
 del(model)
-model = model.import_template(example_filename, method='add on')
+model = model.import_template(example_filename, method='only')
 print("Overwrite template is: {}".format(str(model.initial_template)))
 """
 
@@ -126,6 +172,9 @@ df_wide_numeric = model.df_wide_numeric
 df = df_wide_numeric.tail(50).fillna(0).astype(float)
 
 """
+cd <project dir>
+black ./autots -l 88 -S
+
 https://github.com/sphinx-doc/sphinx/issues/3382
 # pip install sphinx==2.4.4
 # m2r does not yet work on sphinx 3.0
@@ -151,15 +200,15 @@ Merge dev to master on GitHub and create release (include .tar.gz)
 
 #%%
 """
-Help correlate errors with parameters
-"""
+# Help correlate errors with parameters
+
 # test = initial_results[initial_results['TransformationParameters'].str.contains('kmeans')]
 cols = ['Model', 'ModelParameters',
         'TransformationParameters', 'Exceptions']
 if (~initial_results['Exceptions'].isna()).sum() > 0:
     test_corr = error_correlations(initial_results[cols],
                                    result='corr')  # result='poly corr'
-
+"""
 """
 prediction_intervals = [0.99, 0.67]
 model_list = 'superfast'  # ['FBProphet', 'VAR', 'AverageValueNaive']

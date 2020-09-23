@@ -14,7 +14,10 @@ from autots.evaluator.auto_model import RandomTemplate
 from autots.evaluator.auto_model import TemplateWizard
 from autots.evaluator.auto_model import unpack_ensemble_models
 from autots.evaluator.auto_model import generate_score
-from autots.models.ensemble import EnsembleTemplateGenerator, HorizontalTemplateGenerator
+from autots.models.ensemble import (
+    EnsembleTemplateGenerator,
+    HorizontalTemplateGenerator,
+)
 from autots.evaluator.auto_model import PredictWitch
 from autots.tools.shaping import NumericTransformer
 from autots.evaluator.auto_model import validation_aggregation
@@ -54,52 +57,56 @@ class AutoTS(object):
             'seasonal n' for example 'seasonal 364' would test all data on each previous year of the forecast_length that would immediately follow the training data.
         min_allowed_train_percent (float): percent of forecast length to allow as min training, else raises error.
             0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
-            Useful in (unrecommended) cases where forecast_length > training length. 
+            Useful in (unrecommended) cases where forecast_length > training length.
         remove_leading_zeroes (bool): replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn't started yet.
         model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
+        n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case).
 
     Attributes:
         best_model (pandas.DataFrame): DataFrame containing template for the best ranked model
         regression_check (bool): If True, the best_model uses an input 'User' future_regressor
     """
 
-    def __init__(self,
-                 forecast_length: int = 14,
-                 frequency: str = 'infer',
-                 prediction_interval: float = 0.9,
-                 max_generations: int = 5,
-                 no_negatives: bool = False,
-                 constraint: float = None,
-                 ensemble: str = 'simple',
-                 initial_template: str = 'General+Random',
-                 random_seed: int = 2020,
-                 holiday_country: str = 'US',
-                 subset: int = None,
-                 aggfunc: str = 'first',
-                 na_tolerance: float = 1,
-                 metric_weighting: dict = {'smape_weighting': 10,
-                                           'mae_weighting': 2,
-                                           'rmse_weighting': 2,
-                                           'containment_weighting': 0,
-                                           'runtime_weighting': 0,
-                                           'spl_weighting': 1,
-                                           'contour_weighting': 0
-                                           },
-                 drop_most_recent: int = 0,
-                 drop_data_older_than_periods: int = 100000,
-                 model_list: str = 'default',
-                 num_validations: int = 2,
-                 models_to_validate: float = 0.15,
-                 max_per_model_class: int = None,
-                 validation_method: str = 'even',
-                 min_allowed_train_percent: float = 0.5,
-                 remove_leading_zeroes: bool = False,
-                 model_interrupt: bool = False,
-                 verbose: int = 1
-                 ):
+    def __init__(
+        self,
+        forecast_length: int = 14,
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        max_generations: int = 5,
+        no_negatives: bool = False,
+        constraint: float = None,
+        ensemble: str = 'auto',
+        initial_template: str = 'General+Random',
+        random_seed: int = 2020,
+        holiday_country: str = 'US',
+        subset: int = None,
+        aggfunc: str = 'first',
+        na_tolerance: float = 1,
+        metric_weighting: dict = {
+            'smape_weighting': 10,
+            'mae_weighting': 2,
+            'rmse_weighting': 2,
+            'containment_weighting': 0,
+            'runtime_weighting': 0,
+            'spl_weighting': 1,
+            'contour_weighting': 0,
+        },
+        drop_most_recent: int = 0,
+        drop_data_older_than_periods: int = 100000,
+        model_list: str = 'default',
+        num_validations: int = 2,
+        models_to_validate: float = 0.15,
+        max_per_model_class: int = None,
+        validation_method: str = 'even',
+        min_allowed_train_percent: float = 0.5,
+        remove_leading_zeroes: bool = False,
+        model_interrupt: bool = False,
+        verbose: int = 1,
+        n_jobs: int = None,
+    ):
         self.forecast_length = int(abs(forecast_length))
         self.frequency = frequency
         self.aggfunc = aggfunc
@@ -124,8 +131,14 @@ class AutoTS(object):
         self.remove_leading_zeroes = remove_leading_zeroes
         self.model_interrupt = model_interrupt
         self.verbose = int(verbose)
+        self.n_jobs = n_jobs
         if self.ensemble == 'all':
-            self.ensemble = 'simple,distance,horizontal-max,probabilistic-max'
+            self.ensemble = 'simple,distance,horizontal-max,probabilistic'
+        elif self.ensemble == 'auto':
+            if model_list in ['fast', 'default', 'all', 'multivariate']:
+                self.ensemble = 'simple,distance,horizontal-max'
+            else:
+                self.ensemble = 'simple'
 
         if self.forecast_length == 1:
             if metric_weighting['contour_weighting'] > 0:
@@ -137,53 +150,109 @@ class AutoTS(object):
 
         # convert shortcuts of model lists to actual lists of models
         if model_list == 'default':
-            self.model_list = ['ZeroesNaive', 'LastValueNaive',
-                               'AverageValueNaive', 'GLS', 'SeasonalNaive',
-                               'GLM', 'ETS', 'ARIMA', 'FBProphet',
-                               'RollingRegression', 'GluonTS',
-                               'UnobservedComponents', 'VAR',
-                               'VECM', 'WindowRegression']
+            self.model_list = [
+                'ZeroesNaive',
+                'LastValueNaive',
+                'AverageValueNaive',
+                'GLS',
+                'SeasonalNaive',
+                'GLM',
+                'ETS',
+                'ARIMA',
+                'FBProphet',
+                'RollingRegression',
+                'GluonTS',
+                'UnobservedComponents',
+                'VAR',
+                'VECM',
+                'WindowRegression',
+            ]
         if model_list == 'superfast':
-            self.model_list = ['ZeroesNaive', 'LastValueNaive',
-                               'AverageValueNaive', 'GLS', 'SeasonalNaive']
+            self.model_list = [
+                'ZeroesNaive',
+                'LastValueNaive',
+                'AverageValueNaive',
+                'GLS',
+                'SeasonalNaive',
+            ]
         if model_list == 'fast':
-            self.model_list = ['ZeroesNaive', 'LastValueNaive',
-                               'AverageValueNaive', 'GLS', 'GLM', 'ETS',
-                               'WindowRegression', 'GluonTS',
-                               'VAR', 'SeasonalNaive',
-                               'VECM', 'ComponentAnalysis']
+            self.model_list = [
+                'ZeroesNaive',
+                'LastValueNaive',
+                'AverageValueNaive',
+                'GLS',
+                'GLM',
+                'ETS',
+                'WindowRegression',
+                'GluonTS',
+                'VAR',
+                'SeasonalNaive',
+                'VECM',
+                'ComponentAnalysis',
+            ]
         if model_list == 'probabilistic':
-            self.model_list = ['ARIMA', 'GluonTS', 'FBProphet',
-                               'AverageValueNaive', 'MotifSimulation',
-                               'VARMAX', 'DynamicFactor', 'VAR']
+            self.model_list = [
+                'ARIMA',
+                'GluonTS',
+                'FBProphet',
+                'AverageValueNaive',
+                'MotifSimulation',
+                'VARMAX',
+                'DynamicFactor',
+                'VAR',
+            ]
         if model_list == 'multivariate':
-            self.model_list = ['VECM', 'DynamicFactor', 'GluonTS', 'VARMAX',
-                               'RollingRegression', 'WindowRegression', 'VAR',
-                               'ComponentAnalysis']
+            self.model_list = [
+                'VECM',
+                'DynamicFactor',
+                'GluonTS',
+                'VARMAX',
+                'RollingRegression',
+                'WindowRegression',
+                'VAR',
+                'ComponentAnalysis',
+            ]
         if model_list == 'all':
-            self.model_list = ['ZeroesNaive', 'LastValueNaive',
-                               'AverageValueNaive', 'GLS', 'GLM', 'ETS',
-                               'ARIMA', 'FBProphet', 'RollingRegression',
-                               'GluonTS', 'SeasonalNaive',
-                               'UnobservedComponents', 'VARMAX', 'VECM',
-                               'DynamicFactor', 'TSFreshRegressor',
-                               'MotifSimulation', 'WindowRegression', 'VAR',
-                               'TensorflowSTS', 'TFPRegression',
-                               'ComponentAnalysis']
+            self.model_list = [
+                'ZeroesNaive',
+                'LastValueNaive',
+                'AverageValueNaive',
+                'GLS',
+                'GLM',
+                'ETS',
+                'ARIMA',
+                'FBProphet',
+                'RollingRegression',
+                'GluonTS',
+                'SeasonalNaive',
+                'UnobservedComponents',
+                'VARMAX',
+                'VECM',
+                'DynamicFactor',
+                'TSFreshRegressor',
+                'MotifSimulation',
+                'WindowRegression',
+                'VAR',
+                'TensorflowSTS',
+                'TFPRegression',
+                'ComponentAnalysis',
+            ]
 
         # generate template to begin with
         initial_template = str(initial_template).lower()
         if initial_template == 'random':
-            self.initial_template = RandomTemplate(
-                50, model_list=self.model_list)
+            self.initial_template = RandomTemplate(50, model_list=self.model_list)
         elif initial_template == 'general':
             from autots.templates.general import general_template
+
             self.initial_template = general_template
         elif initial_template == 'general+random':
             from autots.templates.general import general_template
+
             random_template = RandomTemplate(40, model_list=self.model_list)
             self.initial_template = pd.concat(
-                [general_template, random_template], axis=0).drop_duplicates()
+                [general_template, random_template], axis=0
+            ).drop_duplicates()
         elif isinstance(initial_template, pd.DataFrame):
             self.initial_template = initial_template
         else:
@@ -191,15 +260,23 @@ class AutoTS(object):
             self.initial_template = RandomTemplate(50)
 
         # remove models not in given model list
-        self.initial_template = self.initial_template[self.initial_template['Model'].isin(self.model_list)]
+        self.initial_template = self.initial_template[
+            self.initial_template['Model'].isin(self.model_list)
+        ]
         if self.initial_template.shape[0] == 0:
-            raise ValueError("No models in template! Adjust initial_template or model_list")
+            raise ValueError(
+                "No models in template! Adjust initial_template or model_list"
+            )
 
         self.best_model = pd.DataFrame()
         self.regressor_used = False
         # do not add 'ID' to the below unless you want to refactor things.
-        self.template_cols = ['Model', 'ModelParameters',
-                              'TransformationParameters', 'Ensemble']
+        self.template_cols = [
+            'Model',
+            'ModelParameters',
+            'TransformationParameters',
+            'Ensemble',
+        ]
         self.initial_results = TemplateEvalObject()
 
         if verbose > 2:
@@ -215,11 +292,17 @@ class AutoTS(object):
             except Exception:
                 return "Initiated AutoTS object"
 
-    def fit(self, df,
-            date_col: str = None, value_col: str = None,
-            id_col: str = None, future_regressor=[],
-            weights: dict = {}, result_file: str = None,
-            grouping_ids=None):
+    def fit(
+        self,
+        df,
+        date_col: str = None,
+        value_col: str = None,
+        id_col: str = None,
+        future_regressor=[],
+        weights: dict = {},
+        result_file: str = None,
+        grouping_ids=None,
+    ):
         """Train algorithm given data supplied.
 
         Args:
@@ -240,6 +323,10 @@ class AutoTS(object):
         self.id_col = id_col
         self.grouping_ids = grouping_ids
 
+        # import mkl
+        # so this actually works it seems, on all sub process models
+        # mkl.set_num_threads_local(8)
+
         # convert class variables to local variables (makes testing easier)
         forecast_length = self.forecast_length
         # flag if weights are given
@@ -247,7 +334,7 @@ class AutoTS(object):
             weighted = True
         else:
             weighted = False
-        self.weighted = weighted   
+        self.weighted = weighted
         frequency = self.frequency
         prediction_interval = self.prediction_interval
         no_negatives = self.no_negatives
@@ -262,6 +349,7 @@ class AutoTS(object):
         # shut off warnings if running silently
         if verbose <= 0:
             import warnings
+
             warnings.filterwarnings("ignore")
 
         # clean up result_file input, if given.
@@ -279,10 +367,13 @@ class AutoTS(object):
         # convert data to wide format
         if date_col is None and value_col is None:
             df_wide = pd.DataFrame(df)
-            assert type(df.index) is pd.DatetimeIndex, "df index is not pd.DatetimeIndex"
+            assert (
+                type(df.index) is pd.DatetimeIndex
+            ), "df index is not pd.DatetimeIndex"
         else:
             df_wide = long_to_wide(
-                df, date_col=self.date_col,
+                df,
+                date_col=self.date_col,
                 value_col=self.value_col,
                 id_col=self.id_col,
                 frequency=self.frequency,
@@ -290,8 +381,8 @@ class AutoTS(object):
                 drop_data_older_than_periods=self.drop_data_older_than_periods,
                 aggfunc=self.aggfunc,
                 drop_most_recent=self.drop_most_recent,
-                verbose=self.verbose
-                )
+                verbose=self.verbose,
+            )
 
         # clean up series weighting input
         if not weighted:
@@ -308,13 +399,19 @@ class AutoTS(object):
                     print(f"{key_count} series_id not in weights. Inferring 1.")
                 else:
                     print("All series_id present in weighting.")
-            weights = {col: (weights[col] if col in weights else 1) for col in df_wide.columns}
+            weights = {
+                col: (weights[col] if col in weights else 1) for col in df_wide.columns
+            }
             # handle non-numeric inputs
-            weights = {key: (abs(float(weights[key])) if str(weights[key]).isdigit() else 1) for key in weights}
+            weights = {
+                key: (abs(float(weights[key])) if str(weights[key]).isdigit() else 1)
+                for key in weights
+            }
 
         # handle categorical data if present
-        self.categorical_transformer = NumericTransformer(
-            verbose=self.verbose).fit(df_wide)
+        self.categorical_transformer = NumericTransformer(verbose=self.verbose).fit(
+            df_wide
+        )
         df_wide_numeric = self.categorical_transformer.transform(df_wide)
 
         # replace any zeroes that occur prior to all non-zero values
@@ -324,8 +421,7 @@ class AutoTS(object):
             temp = temp.abs().cumsum(axis=0).replace(0, np.nan)
             temp = df_wide_numeric[~temp.isna()]
             temp = temp.head(df_wide_numeric.shape[0] - 1)
-            df_wide_numeric = pd.concat([temp, df_wide_numeric.tail(1)],
-                                        axis=0)
+            df_wide_numeric = pd.concat([temp, df_wide_numeric.tail(1)], axis=0)
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
@@ -345,7 +441,9 @@ class AutoTS(object):
             df_subset = subset_series(
                 df_wide_numeric,
                 list((weights.get(i)) for i in df_wide_numeric.columns),
-                n=self.subset, random_state=random_seed)
+                n=self.subset,
+                random_state=random_seed,
+            )
             if self.verbose > 1:
                 print(f'First subset is of: {df_subset.columns}')
         else:
@@ -362,7 +460,8 @@ class AutoTS(object):
             df_subset,
             forecast_length=forecast_length,
             min_allowed_train_percent=self.min_allowed_train_percent,
-            verbose=self.verbose)
+            verbose=self.verbose,
+        )
         try:
             future_regressor = pd.DataFrame(future_regressor)
             if not isinstance(future_regressor.index, pd.DatetimeIndex):
@@ -378,16 +477,23 @@ class AutoTS(object):
 
         # unpack ensemble models so sub models appear at highest level
         self.initial_template = unpack_ensemble_models(
-            self.initial_template, self.template_cols,
-            keep_ensemble=True, recursive=True)
+            self.initial_template,
+            self.template_cols,
+            keep_ensemble=True,
+            recursive=True,
+        )
         # remove horizontal ensembles from initial_template
         if 'Ensemble' in self.initial_template['Model'].tolist():
-            self.initial_template = self.initial_template[self.initial_template['Ensemble'] <= 1]
+            self.initial_template = self.initial_template[
+                self.initial_template['Ensemble'] <= 1
+            ]
         # run the initial template
         submitted_parameters = self.initial_template.copy()
         template_result = TemplateWizard(
-            self.initial_template, df_train,
-            df_test, weights=current_weights,
+            self.initial_template,
+            df_train,
+            df_test,
+            weights=current_weights,
             model_count=model_count,
             ensemble=ensemble,
             forecast_length=forecast_length,
@@ -403,7 +509,9 @@ class AutoTS(object):
             random_seed=random_seed,
             model_interrupt=self.model_interrupt,
             grouping_ids=self.grouping_ids,
-            verbose=verbose)
+            verbose=verbose,
+            n_jobs=self.n_jobs,
+        )
         model_count = template_result.model_count
 
         # capture the data from the lower level results
@@ -411,7 +519,8 @@ class AutoTS(object):
         self.initial_results.model_results['Score'] = generate_score(
             self.initial_results.model_results,
             metric_weighting=metric_weighting,
-            prediction_interval=prediction_interval)
+            prediction_interval=prediction_interval,
+        )
         if result_file is not None:
             self.initial_results.save(result_file)
 
@@ -426,16 +535,24 @@ class AutoTS(object):
             new_template = NewGeneticTemplate(
                 self.initial_results.model_results,
                 submitted_parameters=submitted_parameters,
-                sort_column="Score", sort_ascending=True,
-                max_results=top_n, max_per_model_class=5,
-                top_n=top_n, template_cols=template_cols
-                )
+                sort_column="Score",
+                sort_ascending=True,
+                max_results=top_n,
+                max_per_model_class=5,
+                top_n=top_n,
+                template_cols=template_cols,
+            )
             submitted_parameters = pd.concat(
                 [submitted_parameters, new_template],
-                axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+                axis=0,
+                ignore_index=True,
+                sort=False,
+            ).reset_index(drop=True)
 
             template_result = TemplateWizard(
-                new_template, df_train, df_test,
+                new_template,
+                df_train,
+                df_test,
                 weights=current_weights,
                 model_count=model_count,
                 ensemble=ensemble,
@@ -451,8 +568,10 @@ class AutoTS(object):
                 template_cols=template_cols,
                 model_interrupt=self.model_interrupt,
                 grouping_ids=self.grouping_ids,
-                random_seed=random_seed, verbose=verbose
-                )
+                random_seed=random_seed,
+                verbose=verbose,
+                n_jobs=self.n_jobs,
+            )
             model_count = template_result.model_count
 
             # capture results from lower-level template run
@@ -460,7 +579,8 @@ class AutoTS(object):
             self.initial_results.model_results['Score'] = generate_score(
                 self.initial_results.model_results,
                 metric_weighting=metric_weighting,
-                prediction_interval=prediction_interval)
+                prediction_interval=prediction_interval,
+            )
             if result_file is not None:
                 self.initial_results.save(result_file)
 
@@ -468,11 +588,14 @@ class AutoTS(object):
         if ensemble not in [None, 'none']:
             try:
                 ensemble_templates = EnsembleTemplateGenerator(
-                    self.initial_results, forecast_length=forecast_length,
-                    ensemble=ensemble
-                    )
+                    self.initial_results,
+                    forecast_length=forecast_length,
+                    ensemble=ensemble,
+                )
                 template_result = TemplateWizard(
-                    ensemble_templates, df_train, df_test,
+                    ensemble_templates,
+                    df_train,
+                    df_test,
                     weights=current_weights,
                     model_count=model_count,
                     forecast_length=forecast_length,
@@ -488,22 +611,29 @@ class AutoTS(object):
                     template_cols=template_cols,
                     model_interrupt=self.model_interrupt,
                     grouping_ids=self.grouping_ids,
-                    random_seed=random_seed, verbose=verbose)
+                    random_seed=random_seed,
+                    verbose=verbose,
+                    n_jobs=self.n_jobs,
+                )
                 model_count = template_result.model_count
                 # capture results from lower-level template run
-                self.initial_results = self.initial_results.concat(
-                    template_result)
+                self.initial_results = self.initial_results.concat(template_result)
                 self.initial_results.model_results['Score'] = generate_score(
                     self.initial_results.model_results,
                     metric_weighting=metric_weighting,
-                    prediction_interval=prediction_interval)
+                    prediction_interval=prediction_interval,
+                )
                 if result_file is not None:
                     self.initial_results.save(result_file)
             except Exception as e:
                 print(f"Ensembling Error: {e}")
 
         # drop any duplicates in results
-        self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(subset=(['ID'] + self.template_cols))
+        self.initial_results.model_results = (
+            self.initial_results.model_results.drop_duplicates(
+                subset=(['ID'] + self.template_cols)
+            )
+        )
 
         # validations if float
         if (self.models_to_validate < 1) and (self.models_to_validate > 0):
@@ -512,17 +642,17 @@ class AutoTS(object):
             temp_len = self.initial_results.model_results.shape[0]
             self.models_to_validate = val_frac * temp_len
             self.models_to_validate = int(np.ceil(self.models_to_validate))
-        if (self.max_per_model_class is None):
+        if self.max_per_model_class is None:
             temp_len = len(self.model_list)
             self.max_per_model_class = (self.models_to_validate / temp_len) + 1
             self.max_per_model_class = int(np.ceil(self.max_per_model_class))
 
         # check how many validations are possible given the length of the data.
         if 'seasonal' in self.validation_method:
-            temp = (df_wide_numeric.shape[0] + self.forecast_length)
-            max_possible = temp/self.seasonal_val_periods
+            temp = df_wide_numeric.shape[0] + self.forecast_length
+            max_possible = temp / self.seasonal_val_periods
         else:
-            max_possible = (df_wide_numeric.shape[0])/forecast_length
+            max_possible = (df_wide_numeric.shape[0]) / forecast_length
         if (max_possible - np.floor(max_possible)) > self.min_allowed_train_percent:
             max_possible = int(max_possible)
         else:
@@ -531,34 +661,58 @@ class AutoTS(object):
             num_validations = max_possible - 1
             if num_validations < 0:
                 num_validations = 0
-            print("Too many training validations for length of data provided, decreasing num_validations to {}".format(num_validations))
+            print(
+                "Too many training validations for length of data provided, decreasing num_validations to {}".format(
+                    num_validations
+                )
+            )
         self.num_validations = num_validations
 
         # construct validation template
-        validation_template = self.initial_results.model_results[self.initial_results.model_results['Exceptions'].isna()]
+        validation_template = self.initial_results.model_results[
+            self.initial_results.model_results['Exceptions'].isna()
+        ]
         validation_template = validation_template[validation_template['Ensemble'] <= 1]
         validation_template = validation_template.drop_duplicates(
-            subset=template_cols, keep='first')
+            subset=template_cols, keep='first'
+        )
         validation_template = validation_template.sort_values(
-            by="Score", ascending=True, na_position='last')
+            by="Score", ascending=True, na_position='last'
+        )
         if str(self.max_per_model_class).isdigit():
-            validation_template = validation_template.sort_values('Score', ascending=True, na_position='last').groupby('Model').head(self.max_per_model_class).reset_index(drop=True)
-        validation_template = validation_template.sort_values('Score', ascending=True, na_position='last').head(self.models_to_validate)
+            validation_template = (
+                validation_template.sort_values(
+                    'Score', ascending=True, na_position='last'
+                )
+                .groupby('Model')
+                .head(self.max_per_model_class)
+                .reset_index(drop=True)
+            )
+        validation_template = validation_template.sort_values(
+            'Score', ascending=True, na_position='last'
+        ).head(self.models_to_validate)
         # add on best per_series models (which may not be in the top scoring)
         ensy = ['horizontal', 'probabilistic']
-        if any(x in ensemble for x in ensy) and not self.subset_flag and self.models_to_validate > 30:
+        if (
+            any(x in ensemble for x in ensy)
+            and not self.subset_flag
+            and self.models_to_validate > 30
+        ):
             model_results = self.initial_results.model_results
             mods = pd.DataFrame()
             if 'horizontal' in ensemble:
-                mods = pd.concat(
-                    [mods, self.initial_results.per_series_mae.idxmin()])
+                mods = pd.concat([mods, self.initial_results.per_series_mae.idxmin()])
             if 'probabilistic' in ensemble:
-                mods = pd.concat(
-                    [mods, self.initial_results.per_series_spl.idxmin()])
-            per_series_val = model_results[model_results['ID'].isin(mods.iloc[:,0].unique().tolist())]
-            validation_template = pd.concat([validation_template, per_series_val], axis=0)
+                mods = pd.concat([mods, self.initial_results.per_series_spl.idxmin()])
+            per_series_val = model_results[
+                model_results['ID'].isin(mods.iloc[:, 0].unique().tolist())
+            ]
+            validation_template = pd.concat(
+                [validation_template, per_series_val], axis=0
+            )
             validation_template = validation_template.drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters'])
+                subset=['Model', 'ModelParameters', 'TransformationParameters']
+            )
         validation_template = validation_template[self.template_cols]
 
         # run validations
@@ -571,30 +725,38 @@ class AutoTS(object):
                 val_list = ['backwards', 'back', 'backward']
                 if self.validation_method in val_list:
                     # gradually remove the end
-                    current_slice = df_wide_numeric.head(df_wide_numeric.shape[0] - (y+1) * forecast_length)
+                    current_slice = df_wide_numeric.head(
+                        df_wide_numeric.shape[0] - (y + 1) * forecast_length
+                    )
                 elif self.validation_method == 'even':
                     # /num_validations biases it towards the last segment
-                    validation_size = (len(df_wide_numeric.index) - forecast_length)
-                    validation_size = validation_size/(num_validations + 1)
+                    validation_size = len(df_wide_numeric.index) - forecast_length
+                    validation_size = validation_size / (num_validations + 1)
                     validation_size = int(np.floor(validation_size))
-                    current_slice = df_wide_numeric.head(validation_size * (y+1) + forecast_length)
+                    current_slice = df_wide_numeric.head(
+                        validation_size * (y + 1) + forecast_length
+                    )
                 elif 'seasonal' in self.validation_method:
-                    val_per = ((y+1) * self.seasonal_val_periods)
+                    val_per = (y + 1) * self.seasonal_val_periods
                     if self.seasonal_val_periods < forecast_length:
                         pass
                     else:
-                        val_per = (val_per - forecast_length)
+                        val_per = val_per - forecast_length
                     val_per = df_wide_numeric.shape[0] - val_per
                     current_slice = df_wide_numeric.head(val_per)
                 else:
-                    raise ValueError("Validation Method not recognized try 'even', 'backwards'")
+                    raise ValueError(
+                        "Validation Method not recognized try 'even', 'backwards'"
+                    )
 
                 # subset series (if used) and take a new train/test split
                 if self.subset_flag:
                     df_subset = subset_series(
                         current_slice,
                         list((weights.get(i)) for i in current_slice.columns),
-                        n=self.subset, random_state=(random_seed + y + 1))
+                        n=self.subset,
+                        random_state=(random_seed + y + 1),
+                    )
                     if self.verbose > 1:
                         print(f'{y + 1} subset is of: {df_subset.columns}')
                 else:
@@ -605,25 +767,30 @@ class AutoTS(object):
                     current_weights = {x: weights[x] for x in df_subset.columns}
 
                 val_df_train, val_df_test = simple_train_test_split(
-                    df_subset, forecast_length=forecast_length,
+                    df_subset,
+                    forecast_length=forecast_length,
                     min_allowed_train_percent=self.min_allowed_train_percent,
-                    verbose=self.verbose)
+                    verbose=self.verbose,
+                )
                 if self.verbose >= 2:
                     print(f'Validation index is {val_df_train.index}')
 
                 # slice regressor into current validation slices
                 try:
                     val_future_regressor_train = future_regressor.reindex(
-                        index=val_df_train.index)
+                        index=val_df_train.index
+                    )
                     val_future_regressor_test = future_regressor.reindex(
-                        index=val_df_test.index)
+                        index=val_df_test.index
+                    )
                 except Exception:
                     val_future_regressor_train = []
                     val_future_regressor_test = []
 
                 # run validation template on current slice
                 template_result = TemplateWizard(
-                    validation_template, df_train=val_df_train,
+                    validation_template,
+                    df_train=val_df_train,
                     df_test=val_df_test,
                     weights=current_weights,
                     model_count=model_count,
@@ -640,20 +807,23 @@ class AutoTS(object):
                     template_cols=self.template_cols,
                     model_interrupt=self.model_interrupt,
                     grouping_ids=self.grouping_ids,
-                    random_seed=random_seed, verbose=verbose,
-                    validation_round=(y + 1))
+                    random_seed=random_seed,
+                    verbose=verbose,
+                    n_jobs=self.n_jobs,
+                    validation_round=(y + 1),
+                )
                 model_count = template_result.model_count
                 # gather results of template run
                 self.initial_results = self.initial_results.concat(template_result)
                 self.initial_results.model_results['Score'] = generate_score(
                     self.initial_results.model_results,
                     metric_weighting=metric_weighting,
-                    prediction_interval=prediction_interval)
+                    prediction_interval=prediction_interval,
+                )
 
         self.validation_results = copy.copy(self.initial_results)
         # aggregate validation results
-        self.validation_results = validation_aggregation(
-            self.validation_results)
+        self.validation_results = validation_aggregation(self.validation_results)
         error_msg_template = """No models available from validation.
 Try increasing models_to_validate, max_per_model_class
 or otherwise increase models available."""
@@ -673,12 +843,14 @@ or otherwise increase models available."""
                         per_series,
                         model_results=self.initial_results.model_results,
                         forecast_length=forecast_length,
-                        ensemble=ensemble.replace(
-                            'probabilistic', ' ').replace('hdist', ' '),
-                        subset_flag=self.subset_flag)
-                    ensemble_templates = pd.concat([ensemble_templates,
-                                                    ens_templates],
-                                                   axis=0)
+                        ensemble=ensemble.replace('probabilistic', ' ').replace(
+                            'hdist', ' '
+                        ),
+                        subset_flag=self.subset_flag,
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
                 if 'hdist' in ensemble:
                     per_series = self.initial_results.per_series_rmse1.copy()
                     temp = per_series.mean(axis=1).groupby(level=0).count()
@@ -694,12 +866,15 @@ or otherwise increase models available."""
                         per_series,
                         model_results=self.initial_results.model_results,
                         forecast_length=forecast_length,
-                        ensemble=ensemble.replace(
-                            'horizontal', ' ').replace('probabilistic', ' '),
-                        subset_flag=self.subset_flag, per_series2=per_series2)
-                    ensemble_templates = pd.concat([ensemble_templates,
-                                                    ens_templates],
-                                                   axis=0)
+                        ensemble=ensemble.replace('horizontal', ' ').replace(
+                            'probabilistic', ' '
+                        ),
+                        subset_flag=self.subset_flag,
+                        per_series2=per_series2,
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
             except Exception as e:
                 if self.verbose >= 0:
                     print(f"Ensembling Error: {e}")
@@ -714,19 +889,23 @@ or otherwise increase models available."""
                         per_series,
                         model_results=self.initial_results.model_results,
                         forecast_length=forecast_length,
-                        ensemble=ensemble.replace(
-                            'horizontal', ' ').replace('hdist', ' '),
-                        subset_flag=self.subset_flag)
-                    ensemble_templates = pd.concat([ensemble_templates,
-                                                    ens_templates],
-                                                   axis=0)
+                        ensemble=ensemble.replace('horizontal', ' ').replace(
+                            'hdist', ' '
+                        ),
+                        subset_flag=self.subset_flag,
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
             except Exception as e:
                 if self.verbose >= 0:
                     print(f"Ensembling Error: {e}")
             try:
                 # test on initial test split to make sure they work
                 template_result = TemplateWizard(
-                    ensemble_templates, df_train, df_test,
+                    ensemble_templates,
+                    df_train,
+                    df_test,
                     weights=current_weights,
                     model_count=0,
                     forecast_length=forecast_length,
@@ -741,18 +920,25 @@ or otherwise increase models available."""
                     template_cols=template_cols,
                     model_interrupt=self.model_interrupt,
                     grouping_ids=self.grouping_ids,
-                    random_seed=random_seed, verbose=verbose)
+                    random_seed=random_seed,
+                    verbose=verbose,
+                    n_jobs=self.n_jobs,
+                )
                 # capture results from lower-level template run
                 template_result.model_results['TotalRuntime'].fillna(
-                    pd.Timedelta(seconds=60), inplace=True)
+                    pd.Timedelta(seconds=60), inplace=True
+                )
                 self.initial_results.model_results = pd.concat(
-                    [self.initial_results.model_results,
-                     template_result.model_results],
-                    axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+                    [self.initial_results.model_results, template_result.model_results],
+                    axis=0,
+                    ignore_index=True,
+                    sort=False,
+                ).reset_index(drop=True)
                 self.initial_results.model_results['Score'] = generate_score(
                     self.initial_results.model_results,
                     metric_weighting=metric_weighting,
-                    prediction_interval=prediction_interval)
+                    prediction_interval=prediction_interval,
+                )
                 if result_file is not None:
                     self.initial_results.save(result_file)
             except Exception as e:
@@ -768,32 +954,44 @@ or otherwise increase models available."""
                 template_result.model_results['Score'] = generate_score(
                     template_result.model_results,
                     metric_weighting=metric_weighting,
-                    prediction_interval=prediction_interval)
+                    prediction_interval=prediction_interval,
+                )
                 self.best_model = template_result.model_results.sort_values(
-                        by="Score", ascending=True, na_position='last'
-                        ).head(1)[template_cols]
+                    by="Score", ascending=True, na_position='last'
+                ).head(1)[template_cols]
                 self.ensemble_check = 1
             # else use the best of the previous
             else:
                 if self.verbose >= 0:
                     print("Horizontal ensemble failed. Using best non-horizontal.")
-                eligible_models = self.validation_results.model_results[self.validation_results.model_results['Runs'] >= (num_validations + 1)]
+                eligible_models = self.validation_results.model_results[
+                    self.validation_results.model_results['Runs']
+                    >= (num_validations + 1)
+                ]
                 try:
-                    self.best_model = eligible_models.sort_values(
-                        by="Score", ascending=True, na_position='last'
-                        ).drop_duplicates(subset=self.template_cols
-                                          ).head(1)[template_cols]
+                    self.best_model = (
+                        eligible_models.sort_values(
+                            by="Score", ascending=True, na_position='last'
+                        )
+                        .drop_duplicates(subset=self.template_cols)
+                        .head(1)[template_cols]
+                    )
                     self.ensemble_check = int((self.best_model['Ensemble'].iloc[0]) > 0)
                 except IndexError:
                     raise ValueError(error_msg_template)
         else:
             # choose best model
-            eligible_models = self.validation_results.model_results[self.validation_results.model_results['Runs'] >= (num_validations + 1)]
+            eligible_models = self.validation_results.model_results[
+                self.validation_results.model_results['Runs'] >= (num_validations + 1)
+            ]
             try:
-                self.best_model = eligible_models.sort_values(
-                    by="Score", ascending=True, na_position='last'
-                    ).drop_duplicates(subset=self.template_cols
-                                      ).head(1)[template_cols]
+                self.best_model = (
+                    eligible_models.sort_values(
+                        by="Score", ascending=True, na_position='last'
+                    )
+                    .drop_duplicates(subset=self.template_cols)
+                    .head(1)[template_cols]
+                )
                 self.ensemble_check = int((self.best_model['Ensemble'].iloc[0]) > 0)
             except IndexError:
                 raise ValueError(error_msg_template)
@@ -830,11 +1028,15 @@ or otherwise increase models available."""
                     return out
         return out
 
-    def predict(self, forecast_length: int = "self",
-                prediction_interval: float = 'self',
-                future_regressor=[], hierarchy=None,
-                just_point_forecast: bool = False,
-                verbose: int = 'self'):
+    def predict(
+        self,
+        forecast_length: int = "self",
+        prediction_interval: float = 'self',
+        future_regressor=[],
+        hierarchy=None,
+        just_point_forecast: bool = False,
+        verbose: int = 'self',
+    ):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
         Args:
@@ -863,7 +1065,8 @@ or otherwise increase models available."""
         else:
             future_regressor = pd.DataFrame(future_regressor)
             self.future_regressor_train = self.future_regressor_train.reindex(
-                index=self.df_wide_numeric.index)
+                index=self.df_wide_numeric.index
+            )
 
         # allow multiple prediction intervals
         if isinstance(prediction_interval, list):
@@ -882,15 +1085,18 @@ or otherwise increase models available."""
                     holiday_country=self.holiday_country,
                     startTimeStamps=self.startTimeStamps,
                     grouping_ids=self.grouping_ids,
-                    random_seed=self.random_seed, verbose=verbose,
-                    template_cols=self.template_cols)
+                    random_seed=self.random_seed,
+                    verbose=verbose,
+                    template_cols=self.template_cols,
+                )
                 trans = self.categorical_transformer
-                df_forecast.forecast = trans.inverse_transform(
-                    df_forecast.forecast)
+                df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
                 df_forecast.lower_forecast = trans.inverse_transform(
-                    df_forecast.lower_forecast)
+                    df_forecast.lower_forecast
+                )
                 df_forecast.upper_forecast = trans.inverse_transform(
-                    df_forecast.upper_forecast)
+                    df_forecast.upper_forecast
+                )
                 forecast_objects[interval] = df_forecast
             return forecast_objects
         else:
@@ -907,15 +1113,18 @@ or otherwise increase models available."""
                 holiday_country=self.holiday_country,
                 startTimeStamps=self.startTimeStamps,
                 grouping_ids=self.grouping_ids,
-                random_seed=self.random_seed, verbose=verbose,
-                template_cols=self.template_cols)
+                random_seed=self.random_seed,
+                verbose=verbose,
+                template_cols=self.template_cols,
+            )
             trans = self.categorical_transformer
-            df_forecast.forecast = trans.inverse_transform(
-                df_forecast.forecast)
+            df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
             df_forecast.lower_forecast = trans.inverse_transform(
-                df_forecast.lower_forecast)
+                df_forecast.lower_forecast
+            )
             df_forecast.upper_forecast = trans.inverse_transform(
-                df_forecast.upper_forecast)
+                df_forecast.upper_forecast
+            )
             if just_point_forecast:
                 return df_forecast.forecast
             else:
@@ -932,9 +1141,14 @@ or otherwise increase models available."""
         else:
             return self.initial_results.model_results
 
-    def export_template(self, filename, models: str = 'best', n: int = 5,
-                        max_per_model_class: int = None,
-                        include_results: bool = False):
+    def export_template(
+        self,
+        filename,
+        models: str = 'best',
+        n: int = 5,
+        max_per_model_class: int = None,
+        include_results: bool = False,
+    ):
         """Export top results as a reusable template.
 
         Args:
@@ -951,24 +1165,31 @@ or otherwise increase models available."""
             export_template = export_template.drop_duplicates()
         elif models == 'best':
             export_template = self.validation_results.model_results
-            export_template = export_template[export_template['Runs'] >= (self.num_validations + 1)]
+            export_template = export_template[
+                export_template['Runs'] >= (self.num_validations + 1)
+            ]
             ens_list = ['horizontal', 'probabilistic', 'hdist']
             if any(x in self.ensemble for x in ens_list):
                 temp = self.initial_results.model_results
                 temp = temp[temp['Ensemble'] >= 2]
                 temp = temp[temp['Exceptions'].isna()]
                 export_template = export_template.merge(
-                    temp, how='outer',
-                    on=export_template.columns.intersection(
-                        temp.columns).to_list())
+                    temp,
+                    how='outer',
+                    on=export_template.columns.intersection(temp.columns).to_list(),
+                )
                 export_template['Score'] = generate_score(
                     export_template,
                     metric_weighting=self.metric_weighting,
-                    prediction_interval=self.prediction_interval)
+                    prediction_interval=self.prediction_interval,
+                )
             if str(max_per_model_class).isdigit():
-                export_template = export_template.sort_values(
-                    'Score', ascending=True
-                    ).groupby('Model').head(max_per_model_class).reset_index()
+                export_template = (
+                    export_template.sort_values('Score', ascending=True)
+                    .groupby('Model')
+                    .head(max_per_model_class)
+                    .reset_index()
+                )
             export_template = export_template.nsmallest(n, columns=['Score'])
             if not include_results:
                 export_template = export_template[self.template_cols]
@@ -984,10 +1205,13 @@ or otherwise increase models available."""
             else:
                 raise ValueError("file must be .csv or .json")
         except PermissionError:
-            raise PermissionError("Permission Error: directory or existing file is locked for editing.")
+            raise PermissionError(
+                "Permission Error: directory or existing file is locked for editing."
+            )
 
-    def import_template(self, filename: str, method: str = "Add On",
-                        enforce_model_list: bool = True):
+    def import_template(
+        self, filename: str, method: str = "Add On", enforce_model_list: bool = True
+    ):
         """Import a previously exported template of model parameters.
         Must be done before the AutoTS object is .fit().
 
@@ -1008,26 +1232,36 @@ or otherwise increase models available."""
         try:
             import_template = import_template[self.template_cols]
         except Exception:
-            print("Column names {} were not recognized as matching template columns: {}".format(str(import_template.columns), str(self.template_cols)))
+            print(
+                "Column names {} were not recognized as matching template columns: {}".format(
+                    str(import_template.columns), str(self.template_cols)
+                )
+            )
 
         import_template = unpack_ensemble_models(
-            import_template, self.template_cols,
-            keep_ensemble=True, recursive=True)
+            import_template, self.template_cols, keep_ensemble=True, recursive=True
+        )
 
         if enforce_model_list:
             # remove models not in given model list
             mod_list = self.model_list + ['Ensemble']
             import_template = import_template[import_template['Model'].isin(mod_list)]
             if import_template.shape[0] == 0:
-                raise ValueError("Len 0. Model_list does not match models in template! Try enforce_model_list=False.")
+                raise ValueError(
+                    "Len 0. Model_list does not match models in template! Try enforce_model_list=False."
+                )
 
         if method.lower() in ['add on', 'addon']:
             self.initial_template = self.initial_template.merge(
-                import_template, how='outer',
+                import_template,
+                how='outer',
                 on=self.initial_template.columns.intersection(
-                    import_template.columns).to_list())
+                    import_template.columns
+                ).to_list(),
+            )
             self.initial_template = self.initial_template.drop_duplicates(
-                subset=self.template_cols)
+                subset=self.template_cols
+            )
         elif method.lower() in ['only', 'user only']:
             self.initial_template = import_template
         else:
@@ -1054,19 +1288,23 @@ or otherwise increase models available."""
             past_results = past_results[pd.isnull(past_results['Exceptions'])]
             # remove validation results
             past_results = past_results[(past_results['ValidationRound']) == 0]
-            past_results['TotalRuntime'] = pd.to_timedelta(
-                past_results['TotalRuntime'])
+            past_results['TotalRuntime'] = pd.to_timedelta(past_results['TotalRuntime'])
             # combine with any existing results
             self.initial_results.model_results = pd.concat(
                 [past_results, self.initial_results.model_results],
-                axis=0, ignore_index=True, sort=False).reset_index(drop=True)
+                axis=0,
+                ignore_index=True,
+                sort=False,
+            ).reset_index(drop=True)
             self.initial_results.model_results.drop_duplicates(
-                subset=self.template_cols, keep='first', inplace=True)
+                subset=self.template_cols, keep='first', inplace=True
+            )
         else:
             if isinstance(filename, TemplateEvalObject):
                 new_obj = filename
             elif '.pickle' in filename:
                 import pickle
+
                 new_obj = pickle.load(open(filename, "rb"))
             else:
                 raise ValueError("import type not recognized.")
@@ -1076,7 +1314,7 @@ or otherwise increase models available."""
 
 class AutoTSIntervals(object):
     """Autots looped to test multiple prediction intervals. Experimental.
-    
+
     Runs max_generations on first prediction interval, then validates on remainder.
     Most args are passed through to AutoTS().
 
@@ -1086,33 +1324,42 @@ class AutoTSIntervals(object):
             Currently result_file and import only save/load initial run, no validations.
     """
 
-    def fit(self, prediction_intervals, 
-            forecast_length,
-            df_long, max_generations, num_validations,
-            validation_method, models_to_validate,
-            interval_models_to_validate,
-            date_col, value_col, id_col=None,
-            import_template=None,
-            import_method='only',
-            import_results=None,
-            result_file=None,
-            model_list='all',
-            metric_weighting: dict = {
-                'smape_weighting': 1,
-                'mae_weighting': 0,
-                'rmse_weighting': 1,
-                'containment_weighting': 0,
-                'runtime_weighting': 0,
-                'spl_weighting': 10,
-                'contour_weighting': 0
-                },
-            weights: dict = {},
-            grouping_ids=None,
-            future_regressor=[],
-            model_interrupt: bool = False,
-            constraint=2, no_negatives=False,
-            remove_leading_zeroes=False, random_seed=2020
-            ):
+    def fit(
+        self,
+        prediction_intervals,
+        forecast_length,
+        df_long,
+        max_generations,
+        num_validations,
+        validation_method,
+        models_to_validate,
+        interval_models_to_validate,
+        date_col,
+        value_col,
+        id_col=None,
+        import_template=None,
+        import_method='only',
+        import_results=None,
+        result_file=None,
+        model_list='all',
+        metric_weighting: dict = {
+            'smape_weighting': 1,
+            'mae_weighting': 0,
+            'rmse_weighting': 1,
+            'containment_weighting': 0,
+            'runtime_weighting': 0,
+            'spl_weighting': 10,
+            'contour_weighting': 0,
+        },
+        weights: dict = {},
+        grouping_ids=None,
+        future_regressor=[],
+        model_interrupt: bool = False,
+        constraint=2,
+        no_negatives=False,
+        remove_leading_zeroes=False,
+        random_seed=2020,
+    ):
         """Train and find best."""
         overall_results = TemplateEvalObject()
         per_series_spl = pd.DataFrame()
@@ -1124,28 +1371,37 @@ class AutoTSIntervals(object):
             print(f"Current interval is {interval}")
             current_model = AutoTS(
                 forecast_length=forecast_length,
-                prediction_interval=interval, ensemble="probabilistic-max",
-                max_generations=max_generations, model_list=model_list,
-                constraint=constraint, no_negatives=no_negatives,
+                prediction_interval=interval,
+                ensemble="probabilistic-max",
+                max_generations=max_generations,
+                model_list=model_list,
+                constraint=constraint,
+                no_negatives=no_negatives,
                 remove_leading_zeroes=remove_leading_zeroes,
-                metric_weighting=metric_weighting, subset=None,
+                metric_weighting=metric_weighting,
+                subset=None,
                 random_seed=random_seed,
                 num_validations=num_validations,
                 validation_method=validation_method,
                 model_interrupt=model_interrupt,
-                models_to_validate=models_to_validate)
+                models_to_validate=models_to_validate,
+            )
             if import_template is not None:
                 current_model = current_model.import_template(
-                    import_template, method=import_method)
+                    import_template, method=import_method
+                )
             if import_results is not None:
                 current_model = current_model.import_results(import_results)
             current_model = current_model.fit(
-                df_long, future_regressor=future_regressor,
+                df_long,
+                future_regressor=future_regressor,
                 weights=weights,
                 grouping_ids=grouping_ids,
                 result_file=result_file,
-                date_col=date_col, value_col=value_col,
-                id_col=id_col)
+                date_col=date_col,
+                value_col=value_col,
+                id_col=id_col,
+            )
             current_model.initial_results.model_results['interval'] = interval
             temp = current_model.initial_results
             overall_results = overall_results.concat(temp)
@@ -1155,7 +1411,8 @@ class AutoTSIntervals(object):
                 result_file = None
                 import_results = None
                 import_template = current_model.export_template(
-                    None, models='best', n=interval_models_to_validate)
+                    None, models='best', n=interval_models_to_validate
+                )
             runs += 1
         self.validation_results = validation_aggregation(overall_results)
         self.results = overall_results.model_results
@@ -1170,7 +1427,8 @@ class AutoTSIntervals(object):
             model_results=overall_results.model_results,
             forecast_length=forecast_length,
             ensemble='probabilistic-max',
-            subset_flag=False)
+            subset_flag=False,
+        )
         self.per_series_spl = per_series_spl
         self.ens_templates = ens_templates
         self.prediction_intervals = prediction_intervals
@@ -1189,13 +1447,13 @@ class AutoTSIntervals(object):
         self.categorical_transformer = current_model.categorical_transformer
         return self
 
-    def predict(self, future_regressor=[],
-                verbose: int = 'self') -> dict:
+    def predict(self, future_regressor=[], verbose: int = 'self') -> dict:
         """Generate forecasts after training complete."""
         if len(future_regressor) > 0:
             future_regressor = pd.DataFrame(future_regressor)
             self.future_regressor_train = self.future_regressor_train.reindex(
-                index=self.df_wide_numeric.index)
+                index=self.df_wide_numeric.index
+            )
         forecast_objects = {}
         verbose = self.verbose if verbose == 'self' else verbose
 
@@ -1213,53 +1471,74 @@ class AutoTSIntervals(object):
                 holiday_country=self.holiday_country,
                 startTimeStamps=self.startTimeStamps,
                 grouping_ids=self.grouping_ids,
-                random_seed=self.random_seed, verbose=verbose,
-                template_cols=self.template_cols)
+                random_seed=self.random_seed,
+                verbose=verbose,
+                template_cols=self.template_cols,
+            )
 
             trans = self.categorical_transformer
-            df_forecast.forecast = trans.inverse_transform(
-                df_forecast.forecast)
+            df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
             df_forecast.lower_forecast = trans.inverse_transform(
-                df_forecast.lower_forecast)
+                df_forecast.lower_forecast
+            )
             df_forecast.upper_forecast = trans.inverse_transform(
-                df_forecast.upper_forecast)
+                df_forecast.upper_forecast
+            )
             forecast_objects[interval] = df_forecast
         return forecast_objects
 
 
-def fake_regressor(df_long, forecast_length: int = 14,
-                   date_col: str = 'datetime', value_col: str = 'value',
-                   id_col: str = 'series_id',
-                   frequency: str = 'infer', aggfunc: str = 'first',
-                   drop_most_recent: int = 0, na_tolerance: float = 0.95,
-                   drop_data_older_than_periods: int = 100000,
-                   dimensions: int = 1):
+def fake_regressor(
+    df_long,
+    forecast_length: int = 14,
+    date_col: str = 'datetime',
+    value_col: str = 'value',
+    id_col: str = 'series_id',
+    frequency: str = 'infer',
+    aggfunc: str = 'first',
+    drop_most_recent: int = 0,
+    na_tolerance: float = 0.95,
+    drop_data_older_than_periods: int = 100000,
+    dimensions: int = 1,
+):
     """Create a fake regressor of random numbers for testing purposes."""
     from autots.tools.shaping import long_to_wide
+
     df_wide = long_to_wide(
-        df_long, date_col=date_col, value_col=value_col,
-        id_col=id_col, frequency=frequency,
-        na_tolerance=na_tolerance, aggfunc=aggfunc,
+        df_long,
+        date_col=date_col,
+        value_col=value_col,
+        id_col=id_col,
+        frequency=frequency,
+        na_tolerance=na_tolerance,
+        aggfunc=aggfunc,
         drop_data_older_than_periods=drop_data_older_than_periods,
-        drop_most_recent=drop_most_recent)
+        drop_most_recent=drop_most_recent,
+    )
     if frequency == 'infer':
         frequency = pd.infer_freq(df_wide.index, warn=True)
 
-    forecast_index = pd.date_range(freq=frequency, start=df_wide.index[-1],
-                                   periods=forecast_length + 1)
+    forecast_index = pd.date_range(
+        freq=frequency, start=df_wide.index[-1], periods=forecast_length + 1
+    )
     forecast_index = forecast_index[1:]
 
     if dimensions <= 1:
-        future_regressor_train = pd.Series(np.random.randint(
-            0, 100, size=len(df_wide.index)), index=df_wide.index)
-        future_regressor_forecast = pd.Series(np.random.randint(
-            0, 100, size=(forecast_length)), index=forecast_index)
+        future_regressor_train = pd.Series(
+            np.random.randint(0, 100, size=len(df_wide.index)), index=df_wide.index
+        )
+        future_regressor_forecast = pd.Series(
+            np.random.randint(0, 100, size=(forecast_length)), index=forecast_index
+        )
     else:
-        future_regressor_train = pd.DataFrame(np.random.randint(
-            0, 100, size=(len(df_wide.index), dimensions)),
-            index=df_wide.index)
-        future_regressor_forecast = pd.DataFrame(np.random.randint(
-            0, 100, size=(forecast_length, dimensions)), index=forecast_index)
+        future_regressor_train = pd.DataFrame(
+            np.random.randint(0, 100, size=(len(df_wide.index), dimensions)),
+            index=df_wide.index,
+        )
+        future_regressor_forecast = pd.DataFrame(
+            np.random.randint(0, 100, size=(forecast_length, dimensions)),
+            index=forecast_index,
+        )
     return future_regressor_train, future_regressor_forecast
 
 
@@ -1289,8 +1568,9 @@ def error_correlations(all_result, result: str = 'corr'):
     trans_df = trans_df.astype(str).replace('nan', 'NaNZ')
     trans_transformer = OneHotEncoder(sparse=False).fit(trans_df)
     trans_df = pd.DataFrame(trans_transformer.transform(trans_df))
-    trans_cols = np.array([x1 + x2 for x1, x2 in zip(
-        trans_cols1, trans_transformer.categories_)])
+    trans_cols = np.array(
+        [x1 + x2 for x1, x2 in zip(trans_cols1, trans_transformer.categories_)]
+    )
     trans_cols = [item for sublist in trans_cols for item in sublist]
     trans_df.columns = trans_cols
 
@@ -1303,28 +1583,35 @@ def error_correlations(all_result, result: str = 'corr'):
     model_df = model_df.astype(str).replace('nan', 'NaNZ')
     model_transformer = OneHotEncoder(sparse=False).fit(model_df)
     model_df = pd.DataFrame(model_transformer.transform(model_df))
-    model_cols = np.array([x1 + x2 for x1, x2 in zip(
-        model_cols1, model_transformer.categories_)])
+    model_cols = np.array(
+        [x1 + x2 for x1, x2 in zip(model_cols1, model_transformer.categories_)]
+    )
     model_cols = [item for sublist in model_cols for item in sublist]
     model_df.columns = model_cols
 
     modelstr_df = all_results['Model']
     modelstr_transformer = OneHotEncoder(sparse=False).fit(
-        modelstr_df.values.reshape(-1, 1))
-    modelstr_df = pd.DataFrame(modelstr_transformer.transform(
-        modelstr_df.values.reshape(-1, 1)))
+        modelstr_df.values.reshape(-1, 1)
+    )
+    modelstr_df = pd.DataFrame(
+        modelstr_transformer.transform(modelstr_df.values.reshape(-1, 1))
+    )
     modelstr_df.columns = modelstr_transformer.categories_[0]
 
     except_df = all_results['Exceptions'].copy()
     except_df = except_df.where(except_df.duplicated(), 'UniqueError')
     except_transformer = OneHotEncoder(sparse=False).fit(
-        except_df.values.reshape(-1, 1))
-    except_df = pd.DataFrame(except_transformer.transform(
-        except_df.values.reshape(-1, 1)))
+        except_df.values.reshape(-1, 1)
+    )
+    except_df = pd.DataFrame(
+        except_transformer.transform(except_df.values.reshape(-1, 1))
+    )
     except_df.columns = except_transformer.categories_[0]
 
-    test = pd.concat([except_df, all_results[['ExceptionFlag']],
-                      modelstr_df, model_df, trans_df], axis=1)
+    test = pd.concat(
+        [except_df, all_results[['ExceptionFlag']], modelstr_df, model_df, trans_df],
+        axis=1,
+    )
     # test_cols = [column for column in test.columns if 'NaNZ' not in column]
     # test = test[test_cols]
     """
@@ -1352,6 +1639,7 @@ def error_correlations(all_result, result: str = 'corr'):
         return test_corr
     if result == 'poly corr':
         from sklearn.preprocessing import PolynomialFeatures
+
         poly = PolynomialFeatures(interaction_only=True, include_bias=False)
         poly = poly.fit(test)
         col_names = poly.get_feature_names(input_features=test.columns)

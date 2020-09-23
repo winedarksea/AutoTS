@@ -1,6 +1,7 @@
 """Neural Nets."""
 import numpy as np
 import pandas as pd
+
 try:
     import tensorflow as tf
 except Exception:  # except ImportError
@@ -29,12 +30,18 @@ class KerasRNN(object):
         random_seed (int): passed to tf.random.set_seed()
     """
 
-    def __init__(self, rnn_type: str = 'LSTM',
-                 kernel_initializer: str = 'lecun_uniform',
-                 hidden_layer_sizes: tuple = (32, 32, 32),
-                 optimizer: str = 'adam', loss: str = 'huber',
-                 epochs: int = 50, batch_size: int = 32,
-                 verbose: int = 1, random_seed: int = 2020):
+    def __init__(
+        self,
+        rnn_type: str = 'LSTM',
+        kernel_initializer: str = 'lecun_uniform',
+        hidden_layer_sizes: tuple = (32, 32, 32),
+        optimizer: str = 'adam',
+        loss: str = 'huber',
+        epochs: int = 50,
+        batch_size: int = 32,
+        verbose: int = 1,
+        random_seed: int = 2020,
+    ):
         self.name = 'KerasRNN'
         verbose = 0 if verbose < 0 else verbose
         verbose = 2 if verbose > 2 else verbose
@@ -51,7 +58,9 @@ class KerasRNN(object):
     def fit(self, X, Y):
         """Train the model on dataframes of X and Y."""
         if not _has_tf:
-            raise ImportError("Tensorflow not available, install with pip install tensorflow.")
+            raise ImportError(
+                "Tensorflow not available, install with pip install tensorflow."
+            )
         tf.keras.backend.clear_session()
         tf.random.set_seed(self.random_seed)
         train_X = pd.DataFrame(X).values
@@ -60,54 +69,71 @@ class KerasRNN(object):
         OUTPUT_SHAPE = Y.shape[1]
         if len(self.hidden_layer_sizes) == 3:
             if self.rnn_type == 'GRU':
-                simple_lstm_model = tf.keras.models.Sequential([
-                    tf.keras.layers.Conv1D(
-                        filters=self.hidden_layer_sizes[0],
-                        kernel_size=3, activation='relu',
-                        strides=1, padding='causal',
-                        kernel_initializer=self.kernel_initializer,
-                        input_shape=INPUT_SHAPE),
-                    tf.keras.layers.GRU(self.hidden_layer_sizes[1],
-                                        return_sequences=True),
-                    tf.keras.layers.Dropout(0.2),
-                    tf.keras.layers.GRU(self.hidden_layer_sizes[2]),
-                    tf.keras.layers.Dense(OUTPUT_SHAPE)
-                ])
+                simple_lstm_model = tf.keras.models.Sequential(
+                    [
+                        tf.keras.layers.Conv1D(
+                            filters=self.hidden_layer_sizes[0],
+                            kernel_size=3,
+                            activation='relu',
+                            strides=1,
+                            padding='causal',
+                            kernel_initializer=self.kernel_initializer,
+                            input_shape=INPUT_SHAPE,
+                        ),
+                        tf.keras.layers.GRU(
+                            self.hidden_layer_sizes[1], return_sequences=True
+                        ),
+                        tf.keras.layers.Dropout(0.2),
+                        tf.keras.layers.GRU(self.hidden_layer_sizes[2]),
+                        tf.keras.layers.Dense(OUTPUT_SHAPE),
+                    ]
+                )
             else:
-                simple_lstm_model = tf.keras.models.Sequential([
-                    tf.keras.layers.LSTM(
-                        self.hidden_layer_sizes[0],
-                        kernel_initializer=self.kernel_initializer,
-                        input_shape=INPUT_SHAPE,
-                        return_sequences=True),
-                    tf.keras.layers.Dropout(0.2),
-                    tf.keras.layers.LSTM(self.hidden_layer_sizes[1],
-                                         return_sequences=True),
-                    tf.keras.layers.Dropout(0.2),
-                    tf.keras.layers.LSTM(self.hidden_layer_sizes[2]),
-                    tf.keras.layers.Dense(OUTPUT_SHAPE)
-                ])
-        if len(self.hidden_layer_sizes) == 1:
-            if self.rnn_type == 'GRU':
-                simple_lstm_model = tf.keras.models.Sequential([
-                    tf.keras.layers.GRU(
-                        self.hidden_layer_sizes[0],
-                        kernel_initializer=self.kernel_initializer,
-                        input_shape=INPUT_SHAPE),
-                    tf.keras.layers.Dense(10, activation='relu'),
-                    tf.keras.layers.Dense(OUTPUT_SHAPE)
-                ])
-            else:
-                simple_lstm_model = tf.keras.models.Sequential([
-                    tf.keras.layers.Bidirectional(
+                simple_lstm_model = tf.keras.models.Sequential(
+                    [
                         tf.keras.layers.LSTM(
                             self.hidden_layer_sizes[0],
                             kernel_initializer=self.kernel_initializer,
-                            input_shape=INPUT_SHAPE)),
-                    tf.keras.layers.Dense(32, activation='relu'),
-                    tf.keras.layers.Dense(OUTPUT_SHAPE),
-                    tf.keras.layers.Lambda(lambda x: x * 100.0)
-                ])
+                            input_shape=INPUT_SHAPE,
+                            return_sequences=True,
+                        ),
+                        tf.keras.layers.Dropout(0.2),
+                        tf.keras.layers.LSTM(
+                            self.hidden_layer_sizes[1], return_sequences=True
+                        ),
+                        tf.keras.layers.Dropout(0.2),
+                        tf.keras.layers.LSTM(self.hidden_layer_sizes[2]),
+                        tf.keras.layers.Dense(OUTPUT_SHAPE),
+                    ]
+                )
+        if len(self.hidden_layer_sizes) == 1:
+            if self.rnn_type == 'GRU':
+                simple_lstm_model = tf.keras.models.Sequential(
+                    [
+                        tf.keras.layers.GRU(
+                            self.hidden_layer_sizes[0],
+                            kernel_initializer=self.kernel_initializer,
+                            input_shape=INPUT_SHAPE,
+                        ),
+                        tf.keras.layers.Dense(10, activation='relu'),
+                        tf.keras.layers.Dense(OUTPUT_SHAPE),
+                    ]
+                )
+            else:
+                simple_lstm_model = tf.keras.models.Sequential(
+                    [
+                        tf.keras.layers.Bidirectional(
+                            tf.keras.layers.LSTM(
+                                self.hidden_layer_sizes[0],
+                                kernel_initializer=self.kernel_initializer,
+                                input_shape=INPUT_SHAPE,
+                            )
+                        ),
+                        tf.keras.layers.Dense(32, activation='relu'),
+                        tf.keras.layers.Dense(OUTPUT_SHAPE),
+                        tf.keras.layers.Lambda(lambda x: x * 100.0),
+                    ]
+                )
 
         if self.loss == 'Huber':
             loss = tf.keras.losses.Huber()
@@ -115,9 +141,13 @@ class KerasRNN(object):
             loss = self.loss
         simple_lstm_model.compile(optimizer=self.optimizer, loss=loss)
 
-        simple_lstm_model.fit(x=train_X, y=Y, epochs=self.epochs,
-                              batch_size=self.batch_size,
-                              verbose=self.verbose)
+        simple_lstm_model.fit(
+            x=train_X,
+            y=Y,
+            epochs=self.epochs,
+            batch_size=self.batch_size,
+            verbose=self.verbose,
+        )
         self.model = simple_lstm_model
         return self
 

@@ -30,8 +30,9 @@ def fill_median(df):
 
 def rolling_mean(df, window: int = 10):
     """Fill NaN with mean of last window values."""
-    df = df.fillna(df.rolling(
-        window=window, min_periods=1).mean()).fillna(df.mean().to_dict())
+    df = df.fillna(df.rolling(window=window, min_periods=1).mean()).fillna(
+        df.mean().to_dict()
+    )
     return df
 
 
@@ -39,7 +40,7 @@ def biased_ffill(df, mean_weight: float = 1):
     """Fill NaN with average of last value and mean."""
     df_mean = fill_mean(df)
     df_ffill = fill_forward(df)
-    df = ((df_mean * mean_weight) + df_ffill)/(1 + mean_weight)
+    df = ((df_mean * mean_weight) + df_ffill) / (1 + mean_weight)
     return df
 
 
@@ -126,7 +127,8 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         except Exception:
             pass
         from sklearn.impute import IterativeImputer
-        df = IterativeImputer(random_state=0,max_iter=100).fit_transform(df)
+
+        df = IterativeImputer(random_state=0, max_iter=100).fit_transform(df)
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df)
             df.index = indx

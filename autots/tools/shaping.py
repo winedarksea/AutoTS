@@ -3,19 +3,25 @@ import numpy as np
 import pandas as pd
 
 
-def long_to_wide(df, date_col: str = 'datetime', value_col: str = 'value',
-                 id_col: str = 'series_id',
-                 frequency: str = "infer", na_tolerance: float = 0.999,
-                 drop_data_older_than_periods: int = 100000,
-                 drop_most_recent: int = 0, aggfunc: str = 'first',
-                 verbose: int = 1):
+def long_to_wide(
+    df,
+    date_col: str = 'datetime',
+    value_col: str = 'value',
+    id_col: str = 'series_id',
+    frequency: str = "infer",
+    na_tolerance: float = 0.999,
+    drop_data_older_than_periods: int = 100000,
+    drop_most_recent: int = 0,
+    aggfunc: str = 'first',
+    verbose: int = 1,
+):
     """
     Take long data and convert into wide, cleaner data.
 
     Args:
         df (pd.DataFrame) - a pandas dataframe having three columns:
         date_col (str) - the name of the column containing dates, preferrably already in pandas datetime format
-        value_col (str): - the name of the column with the values of the time series (ie sales $) 
+        value_col (str): - the name of the column with the values of the time series (ie sales $)
         id_col (str): - name of the id column, unique for each time series
 
         frequency (str): - frequency in string of alias for DateOffset object, normally "1D" -daily, "MS" -month start etc.
@@ -34,13 +40,16 @@ def long_to_wide(df, date_col: str = 'datetime', value_col: str = 'value',
 
     # Attempt to convert to datetime format if not already
     try:
-        df_long[date_col] = pd.to_datetime(df_long[date_col],
-                                           infer_datetime_format=True)
+        df_long[date_col] = pd.to_datetime(
+            df_long[date_col], infer_datetime_format=True
+        )
     except Exception:
-        raise ValueError("Could not convert date to datetime format. Incorrect column name or preformat with pandas to_datetime")
+        raise ValueError(
+            "Could not convert date to datetime format. Incorrect column name or preformat with pandas to_datetime"
+        )
 
     # handle no id_col for if only one time series
-    if (id_col in [None, 'None']):
+    if id_col in [None, 'None']:
         df_long[id_col] = 'First'
         df_long.drop_duplicates(subset=date_col, keep='first', inplace=True)
 
@@ -48,8 +57,9 @@ def long_to_wide(df, date_col: str = 'datetime', value_col: str = 'value',
     df_long = df_long[[date_col, id_col, value_col]]
 
     # pivot to different wide shape
-    df_wide = df_long.pivot_table(values=value_col, index=date_col,
-                                  columns=id_col, aggfunc=aggfunc)
+    df_wide = df_long.pivot_table(
+        values=value_col, index=date_col, columns=id_col, aggfunc=aggfunc
+    )
     df_wide = df_wide.sort_index(ascending=True)
 
     # infer frequency
@@ -93,7 +103,7 @@ def long_to_wide(df, date_col: str = 'datetime', value_col: str = 'value',
         raise ValueError("All series filtered! Frequency may be incorrect")
 
     # drop most recent value when desired
-    if (drop_most_recent > 0):
+    if drop_most_recent > 0:
         df_wide.drop(df_wide.tail(drop_most_recent).index, inplace=True)
 
     return pd.DataFrame(df_wide)
@@ -102,10 +112,12 @@ def long_to_wide(df, date_col: str = 'datetime', value_col: str = 'value',
 class NumericTransformer(object):
     """Test numeric conversion."""
 
-    def __init__(self,
-                 na_strings: list = ['', ' ', 'NULL', 'NA', 'NaN', 'na', 'nan'],
-                 categorical_impute_strategy: str = 'constant',
-                 verbose: int = 0):
+    def __init__(
+        self,
+        na_strings: list = ['', ' ', 'NULL', 'NA', 'NaN', 'na', 'nan'],
+        categorical_impute_strategy: str = 'constant',
+        verbose: int = 0,
+    ):
         self.na_strings = na_strings
         self.categorical_impute_strategy = categorical_impute_strategy
         self.verbose = verbose
@@ -122,13 +134,16 @@ class NumericTransformer(object):
         # record which columns are which dtypes
         self.column_order = df.columns
         # df_datatypes = df.dtypes
-        self.numeric_features = (df.select_dtypes(include=[np.number]).columns.tolist())
-        self.categorical_features = list(set(df.columns.tolist()) - set(self.numeric_features))
+        self.numeric_features = df.select_dtypes(include=[np.number]).columns.tolist()
+        self.categorical_features = list(
+            set(df.columns.tolist()) - set(self.numeric_features)
+        )
 
         if len(self.categorical_features) > 0:
             self.categorical_flag = True
         if self.categorical_flag:
             from sklearn.preprocessing import OrdinalEncoder
+
             df_enc = (df[self.categorical_features]).fillna(method='ffill')
             df_enc = df_enc.fillna(method='bfill').fillna('missing_value')
             self.cat_transformer = OrdinalEncoder()
@@ -150,31 +165,44 @@ class NumericTransformer(object):
             df_enc = (df[self.categorical_features]).fillna(method='ffill')
             df_enc = df_enc.fillna(method='bfill').fillna('missing_value')
             df_enc = self.cat_transformer.transform(df_enc) + 1
-            df = pd.concat([
-                pd.DataFrame(df[self.numeric_features],
-                             columns=self.numeric_features),
-                pd.DataFrame(df_enc, columns=self.categorical_features,
-                             index=df.index)
-                   ], axis=1)[self.column_order]
+            df = pd.concat(
+                [
+                    pd.DataFrame(
+                        df[self.numeric_features], columns=self.numeric_features
+                    ),
+                    pd.DataFrame(
+                        df_enc, columns=self.categorical_features, index=df.index
+                    ),
+                ],
+                axis=1,
+            )[self.column_order]
         return df.astype(float)
 
     def inverse_transform(self, df):
         """Convert numeric back to categorical."""
         if self.categorical_flag:
-            df_enc = df[self.categorical_features].clip(
-                upper=self.cat_max, lower=self.cat_min, axis=1) - 1
+            df_enc = (
+                df[self.categorical_features].clip(
+                    upper=self.cat_max, lower=self.cat_min, axis=1
+                )
+                - 1
+            )
             df_enc = self.cat_transformer.inverse_transform(df_enc)
-            df = pd.concat([
-                pd.DataFrame(df[self.numeric_features],
-                             columns=self.numeric_features),
-                pd.DataFrame(df_enc, columns=self.categorical_features,
-                             index=df.index)
-                   ], axis=1)[self.column_order]
+            df = pd.concat(
+                [
+                    pd.DataFrame(
+                        df[self.numeric_features], columns=self.numeric_features
+                    ),
+                    pd.DataFrame(
+                        df_enc, columns=self.categorical_features, index=df.index
+                    ),
+                ],
+                axis=1,
+            )[self.column_order]
         return df
 
 
-def subset_series(df, weights, n: int = 1000,
-                  random_state: int = 2020):
+def subset_series(df, weights, n: int = 1000, random_state: int = 2020):
     """Return a sample of time series.
 
     Args:
@@ -190,37 +218,45 @@ def subset_series(df, weights, n: int = 1000,
     if n > df.shape[1]:
         return df
     else:
-        df = df.sample(n, axis=1, random_state=random_state,
-                       replace=False, weights=weights)
+        df = df.sample(
+            n, axis=1, random_state=random_state, replace=False, weights=weights
+        )
         return df
 
 
-def simple_train_test_split(df, forecast_length: int = 10,
-                            min_allowed_train_percent: float = 0.3,
-                            verbose: int = 1):
+def simple_train_test_split(
+    df,
+    forecast_length: int = 10,
+    min_allowed_train_percent: float = 0.3,
+    verbose: int = 1,
+):
     """
     Uses the last periods of forecast_length as the test set, the rest as train
-    
+
     Args:
         forecast_length (int): number of future periods to predict
-        
+
         min_allowed_train_percent (float): - forecast length cannot be greater than 1 - this
             constrains the forecast length from being much larger than than the training data
             note this includes NaNs in current configuration
-    
-    Returns: 
+
+    Returns:
         train, test  (both pd DataFrames)
     """
     assert forecast_length > 0, "forecast_length must be greater than 0"
-    
-    if (forecast_length * min_allowed_train_percent) > int((df.shape[0]) - forecast_length):
-        raise ValueError("forecast_length is too large, not enough training data, alter min_allowed_train_percent to override, or reduce validation number, if applicable")
+
+    if (forecast_length * min_allowed_train_percent) > int(
+        (df.shape[0]) - forecast_length
+    ):
+        raise ValueError(
+            "forecast_length is too large, not enough training data, alter min_allowed_train_percent to override, or reduce validation number, if applicable"
+        )
 
     train = df.head((df.shape[0]) - forecast_length)
     test = df.tail(forecast_length)
 
-    if (verbose > 0) and ((train.isnull().sum(axis=0)/train.shape[0]).max() > 0.9):
+    if (verbose > 0) and ((train.isnull().sum(axis=0) / train.shape[0]).max() > 0.9):
         print("One or more series is 90% or more NaN in this train split")
-    if (verbose >= 0) and ((test.isnull().sum(axis=0)/test.shape[0]).max() > 0.9):
+    if (verbose >= 0) and ((test.isnull().sum(axis=0) / test.shape[0]).max() > 0.9):
         print("One or more series is 90% or more NaN in this test split")
     return train, test

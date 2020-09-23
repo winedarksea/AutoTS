@@ -1,4 +1,6 @@
 # AutoTS
+[![PyPI download month](https://img.shields.io/pypi/dm/autots.svg)](https://pypi.python.org/pypi/autots/)
+[![PyPI version fury.io](https://badge.fury.io/py/autots.svg)](https://pypi.python.org/pypi/autots/)
 
 <img src="/img/autots_logo.png" width="400" height="184" title="AutoTS Logo">
 

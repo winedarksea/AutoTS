@@ -130,9 +130,10 @@ As of `0.2.0` the following models are included:
 On large multivariate series, `TSFreshRegressor`, `DynamicFactor` and `VARMAX` can be impractically slow.
 
 ## Deployment and Template Import/Export
-Many models can be reverse engineered with relative simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package. 
+Many models can be reverse engineered with (relative) simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package. 
 There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a `.csv` or `.json` file, then on next run only those models will be tried. 
-This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve.
+This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve. 
+One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.
 ```
 # after fitting an AutoTS model
 example_filename = "example_export.csv" # .csv/.json
@@ -168,13 +169,13 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 			
 **Warning**: weights are not fully balanced 1 - 1 - 1. As such it is usually best to place your favorite metric an order of magnitude or more above the others. 
 
-`sMAPE` is generally the most versatile across multiple series, but doesn't handle forecasts with lots of zeroes well. 
+`sMAPE` is generally the most versatile metric across multiple series, but doesn't handle forecasts with lots of zeroes well. 
 
-`SPL` is *Scaled Pinball Loss* used for assessing upper/lower quantile forecast accuracies.
+`SPL` is *Scaled Pinball Loss* and is the optimal metric for assessing upper/lower quantile forecast accuracies.
 
-`Containment` measures the percent of test data that falls between the upper and lower forecasts.
+`Containment` measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL.
 
-`Contour` is another unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. Does not work with forecast_length=1.
+`Contour` is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. Does not work with forecast_length=1.
 
 ## Installation and Dependency Versioning
 `pip install autots`
@@ -187,31 +188,37 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 	statsmodels
 
 Of these, numpy and pandas are critical. 
-Some limited functionality should exist without scikit-learn. 
-Nearly full functionality should be maintained without statsmodels. 
+Limited functionality should exist without scikit-learn. 
+Full functionality should be maintained without statsmodels, albeit with fewer available models. 
 
 `pip install autots['additional']`
 ### Optional Requirements
 	holidays
 	fbprophet
-	fredapi
-	tsfresh
+	gluonts (requires mxnet)
 	mxnet (mxnet-mkl, mxnet-cu91, mxnet-cu101mkl, etc.)
-	gluonts
 	tensorflow >= 2.0.0
-	tensorflow-probability
 	lightgbm
 	xgboost
+	psutil
+
+#### Experimental & Dev Requirements
+	tensorflow-probability
+	fredapi
+	tsfresh
 
 ### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
 Download Anaconda or Miniconda.
 
-(install Visual Studio if on Windows)
+(install Visual Studio if on Windows for C compilers)
 
 If you have an Nvidia GPU, download NVIDIA CUDA and CuDNN. 
-MKL is included with `anaconda`.
+Intel MKL is included with `anaconda` and offers significant performance gain for Intel CPUs.
+You can check if your system is using mkl with `numpy.show_config()`. 
+If you are on an AMD CPU, you do **not** want to be using MKL, OpenBLAS is better. 
+On Linux ARM-based systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster compilations.  
 ```
-conda create -n timeseries python=3.6
+conda create -n timeseries python=3.8
 conda activate timeseries
 
 # for simplicity: 
@@ -221,6 +228,7 @@ conda install numpy scipy
 conda install -c conda-forge scikit-learn
 pip install statsmodels
 
+# check the mxnet documentation for various flavors of mxnet available
 pip install mxnet
 pip install gluonts
 conda update anaconda

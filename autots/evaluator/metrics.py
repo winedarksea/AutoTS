@@ -9,19 +9,22 @@ def smape(actual, forecast):
     """Expect two, 2-D numpy arrays of forecast_length * n series.
     Allows NaN in actuals, and corresponding NaN in forecast, but not unmatched NaN in forecast
     Also doesn't like zeroes in either forecast or actual - results in poor error value even if forecast is accurate
-    
+
     Returns a 1-D array of results in len n series
-    
-    Args: 
+
+    Args:
         actual (numpy.array): known true values
         forecast (numpy.array): predicted values
-        
+
     References:
         https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error
     """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
-        smape = (np.nansum((abs(forecast - actual) / (abs(forecast) + abs(actual))), axis=0) * 200) / np.count_nonzero(~np.isnan(actual), axis=0)
+        smape = (
+            np.nansum((abs(forecast - actual) / (abs(forecast) + abs(actual))), axis=0)
+            * 200
+        ) / np.count_nonzero(~np.isnan(actual), axis=0)
     return smape
 
 
@@ -73,8 +76,7 @@ def rmse(actual, forecast):
     """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
-        rmse_result = np.sqrt(np.nanmean(((actual - forecast) ** 2),
-                                         axis=0))
+        rmse_result = np.sqrt(np.nanmean(((actual - forecast) ** 2), axis=0))
     return rmse_result
 
 
@@ -89,7 +91,12 @@ def containment(lower_forecast, upper_forecast, actual):
     """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
-        result = np.count_nonzero((upper_forecast >= actual) & (lower_forecast <= actual), axis=0)/actual.shape[0]
+        result = (
+            np.count_nonzero(
+                (upper_forecast >= actual) & (lower_forecast <= actual), axis=0
+            )
+            / actual.shape[0]
+        )
     return result
 
 
@@ -113,7 +120,7 @@ def contour(A, F):
             # but exceedingly rare in real world
             X = X >= 0
             Y = Y > 0
-            contour_result = np.sum(X == Y, axis=0)/X.shape[0]
+            contour_result = np.sum(X == Y, axis=0) / X.shape[0]
         except Exception:
             contour_result = np.nan
     return contour_result
@@ -122,10 +129,14 @@ def contour(A, F):
 class EvalObject(object):
     """Object to contain all your failures!."""
 
-    def __init__(self, model_name: str = 'Uninitiated',
-                 per_series_metrics=np.nan,
-                 per_timestamp=np.nan,
-                 avg_metrics=np.nan, avg_metrics_weighted=np.nan):
+    def __init__(
+        self,
+        model_name: str = 'Uninitiated',
+        per_series_metrics=np.nan,
+        per_timestamp=np.nan,
+        avg_metrics=np.nan,
+        avg_metrics_weighted=np.nan,
+    ):
         self.model_name = model_name
         self.per_series_metrics = per_series_metrics
         self.per_timestamp = per_timestamp
@@ -133,11 +144,14 @@ class EvalObject(object):
         self.avg_metrics_weighted = avg_metrics_weighted
 
 
-def PredictionEval(PredictionObject, actual,
-                   series_weights: dict = {},
-                   df_train=np.nan,
-                   per_timestamp_errors: bool = False,
-                   dist_n: int = None):
+def PredictionEval(
+    PredictionObject,
+    actual,
+    series_weights: dict = {},
+    df_train=np.nan,
+    per_timestamp_errors: bool = False,
+    dist_n: int = None,
+):
     """Evalute prediction against test actual.
 
     Args:
@@ -151,33 +165,43 @@ def PredictionEval(PredictionObject, actual,
     F = np.array(PredictionObject.forecast)
     lower_forecast = np.array(PredictionObject.lower_forecast)
     upper_forecast = np.array(PredictionObject.upper_forecast)
-    df_train=np.array(df_train)
+    df_train = np.array(df_train)
 
     errors = EvalObject(model_name=PredictionObject.model_name)
 
-    per_series = pd.DataFrame({
+    per_series = pd.DataFrame(
+        {
             'smape': smape(A, F),
             'mae': mae(A, F),
             'rmse': rmse(A, F),
             'containment': containment(lower_forecast, upper_forecast, A),
-            'spl': SPL(A=A, F=upper_forecast, df_train=df_train,
-                       quantile=PredictionObject.prediction_interval) +
-            SPL(A=A, F=lower_forecast, df_train=df_train,
-                quantile=(1-PredictionObject.prediction_interval)),
-            'contour': contour(A, F)
-            }).transpose()
+            'spl': SPL(
+                A=A,
+                F=upper_forecast,
+                df_train=df_train,
+                quantile=PredictionObject.prediction_interval,
+            )
+            + SPL(
+                A=A,
+                F=lower_forecast,
+                df_train=df_train,
+                quantile=(1 - PredictionObject.prediction_interval),
+            ),
+            'contour': contour(A, F),
+        }
+    ).transpose()
     per_series.columns = actual.columns
 
     if per_timestamp_errors:
-        smape_df = (abs(PredictionObject.forecast - actual
-                        ) / (abs(PredictionObject.forecast) + abs(actual)))
+        smape_df = abs(PredictionObject.forecast - actual) / (
+            abs(PredictionObject.forecast) + abs(actual)
+        )
         weight_mean = np.mean(list(series_weights.values()))
         wsmape_df = (smape_df * series_weights) / weight_mean
-        smape_cons = (np.nansum(wsmape_df, axis=1) * 200
-                      ) / np.count_nonzero(~np.isnan(actual), axis=1)
-        per_timestamp = pd.DataFrame({
-            'weighted_smape': smape_cons
-             }).transpose()
+        smape_cons = (np.nansum(wsmape_df, axis=1) * 200) / np.count_nonzero(
+            ~np.isnan(actual), axis=1
+        )
+        per_timestamp = pd.DataFrame({'weighted_smape': smape_cons}).transpose()
         errors.per_timestamp = per_timestamp
     """
     'mae': np.nanmean(abs(actual - PredictionObject.forecast), axis=1),
@@ -187,14 +211,17 @@ def PredictionEval(PredictionObject, actual,
     # this weighting won't work well if entire metrics are NaN
     # but results should still be comparable
     errors.avg_metrics_weighted = (per_series * series_weights).sum(
-        axis=1, skipna=True) / sum(series_weights.values())
+        axis=1, skipna=True
+    ) / sum(series_weights.values())
     errors.avg_metrics = per_series.mean(axis=1)
 
     if str(dist_n).isdigit():
-        per_series_d = pd.DataFrame({
-            'rmse1': rmse(A[:dist_n], F[:dist_n]),
-            'rmse2': rmse(A[dist_n:], F[dist_n:])
-            }).transpose()
+        per_series_d = pd.DataFrame(
+            {
+                'rmse1': rmse(A[:dist_n], F[:dist_n]),
+                'rmse2': rmse(A[dist_n:], F[dist_n:]),
+            }
+        ).transpose()
         per_series_d.columns = actual.columns
         per_series = pd.concat([per_series, per_series_d], axis=0)
     errors.per_series_metrics = per_series
