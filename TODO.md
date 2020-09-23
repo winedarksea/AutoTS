@@ -15,7 +15,10 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* None
+* Added n_jobs parameters to pass through to joblib (although a joblib context manager is perhaps the best way)
+* Added joblib multiprocessing to ETS, GLM, and FBProphet
+* Fixed future warnings with pandas.DatetimeIndex.week and changes to statsmodels ETS
+* standardized source code formatting
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -52,6 +55,7 @@ Tensorflow GPU backend may crash on occasion.
 
 ## To-Do
 * Remove SP500 from AutoTS
+* ARIMA deprecation in Statsmodels
 * Migrate to-do to GitHub issues and project board
 	* GitHub badges in Readme, GitHub Actions flake8
 * Horizontal improvements
@@ -67,7 +71,6 @@ Tensorflow GPU backend may crash on occasion.
 		* clean up base model object
 * Make preprocessing templates more flexible...
 * Speed:
-	* Make Distributable/Multiprocessing
 	* Fast window regression only
 	* Fast MotifSimulation
 		* could memoization of pairwise comparisons be possible? (joblib)

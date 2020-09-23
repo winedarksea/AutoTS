@@ -130,7 +130,7 @@ class FBProphet(ModelObject):
         if self.verbose <= 0:
             logging.getLogger('fbprophet').setLevel(logging.WARNING)
         if self.regression_type == 'User':
-                self.df_train[self.regressor_name] = self.regressor_train
+            self.df_train[self.regressor_name] = self.regressor_train
 
         """
         for series in self.df_train.columns:
@@ -190,7 +190,7 @@ class FBProphet(ModelObject):
             lower_forecast.name = series
             upper_forecast = fcst['yhat_upper']
             upper_forecast.name = series
-            return((forecast, lower_forecast, upper_forecast))
+            return (forecast, lower_forecast, upper_forecast)
 
         args = {
             'holiday': self.holiday,
@@ -200,7 +200,7 @@ class FBProphet(ModelObject):
             'regressor_train': self.regressor_train,
             'dimensionality_reducer': self.dimensionality_reducer,
             'prediction_interval': self.prediction_interval,
-            }
+        }
         parallel = True
         cols = self.df_train.columns.tolist()
         if self.n_jobs in [0, 1] or len(cols) < 4:
@@ -212,8 +212,9 @@ class FBProphet(ModelObject):
                 parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(self.verbose-1))(
-                delayed(seek_the_oracle)(df=self.df_train, args=args, series=col) for col in cols
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(self.verbose - 1))(
+                delayed(seek_the_oracle)(df=self.df_train, args=args, series=col)
+                for col in cols
             )
             complete = list(map(list, zip(*df_list)))
         else:

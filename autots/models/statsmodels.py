@@ -265,9 +265,10 @@ class GLM(ModelObject):
         parallel = True
         cols = self.df_train.columns.tolist()
         df = self.df_train
-        args = {'family': self.family,
-                'verbose': self.verbose,
-                }
+        args = {
+            'family': self.family,
+            'verbose': self.verbose,
+        }
         if self.verbose:
             pool_verbose = 1
         else:
@@ -282,26 +283,31 @@ class GLM(ModelObject):
             verbose = args['verbose']
             if str(family).lower() == 'poisson':
                 from statsmodels.genmod.families.family import Poisson
+
                 model = GLM(
                     current_series.values, X, family=Poisson(), missing='drop'
                 ).fit(disp=verbose)
             elif str(family).lower() == 'binomial':
                 from statsmodels.genmod.families.family import Binomial
+
                 model = GLM(
                     current_series.values, X, family=Binomial(), missing='drop'
                 ).fit(disp=verbose)
             elif str(family).lower() == 'negativebinomial':
                 from statsmodels.genmod.families.family import NegativeBinomial
+
                 model = GLM(
                     current_series.values, X, family=NegativeBinomial(), missing='drop'
                 ).fit(disp=verbose)
             elif str(family).lower() == 'tweedie':
                 from statsmodels.genmod.families.family import Tweedie
+
                 model = GLM(
                     current_series.values, X, family=Tweedie(), missing='drop'
                 ).fit(disp=verbose)
             elif str(family).lower() == 'gamma':
                 from statsmodels.genmod.families.family import Gamma
+
                 model = GLM(
                     current_series.values, X, family=Gamma(), missing='drop'
                 ).fit(disp=verbose)
@@ -312,6 +318,7 @@ class GLM(ModelObject):
             Pred = pd.Series(Pred)
             Pred.name = series_name
             return Pred
+
         if self.n_jobs in [0, 1] or len(cols) < 4:
             parallel = False
         else:
@@ -322,7 +329,8 @@ class GLM(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose)(
-                delayed(forecast_by_column)(df=df, X=X, Xf=Xf, args=args, col=col) for col in cols
+                delayed(forecast_by_column)(df=df, X=X, Xf=Xf, args=args, col=col)
+                for col in cols
             )
             df_forecast = pd.concat(df_list, axis=1)
         else:
@@ -469,34 +477,49 @@ class ETS(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         from statsmodels.tsa.holtwinters import ExponentialSmoothing
+
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         parallel = True
-        args = {'damped': self.damped,
-                'trend': self.trend,
-                'seasonal': self.seasonal,
-                'seasonal_periods': self.seasonal_periods,
-                'freq': self.frequency,
-                'forecast_length': forecast_length,
-                }
+        args = {
+            'damped': self.damped,
+            'trend': self.trend,
+            'seasonal': self.seasonal,
+            'seasonal_periods': self.seasonal_periods,
+            'freq': self.frequency,
+            'forecast_length': forecast_length,
+        }
 
         def forecast_by_column(df, args, col):
             """Run one series of ETS and return prediction."""
             current_series = df[col]
             series_name = current_series.name
-            esModel = ExponentialSmoothing(
-                current_series,
-                damped=args['damped'],
-                trend=args['trend'],
-                seasonal=args['seasonal'],
-                seasonal_periods=args['seasonal_periods'],
-                # initialization_method='heuristic',  # estimated
-                freq=args['freq'],
-            ).fit()
+            # handle statsmodels 0.13 method changes
+            try:
+                esModel = ExponentialSmoothing(
+                    current_series,
+                    damped_trend=args['damped'],
+                    trend=args['trend'],
+                    seasonal=args['seasonal'],
+                    seasonal_periods=args['seasonal_periods'],
+                    initialization_method=None,
+                    freq=args['freq'],
+                ).fit()
+            except Exception:
+                esModel = ExponentialSmoothing(
+                    current_series,
+                    damped=args['damped'],
+                    trend=args['trend'],
+                    seasonal=args['seasonal'],
+                    seasonal_periods=args['seasonal_periods'],
+                    # initialization_method='heuristic',  # estimated
+                    freq=args['freq'],
+                ).fit()
             srt = current_series.shape[0]
             esPred = esModel.predict(start=srt, end=srt + args['forecast_length'] - 1)
             esPred = pd.Series(esPred)
             esPred.name = series_name
             return esPred
+
         cols = self.df_train.columns.tolist()
         if self.n_jobs in [0, 1] or len(cols) < 4:
             parallel = False
@@ -508,7 +531,10 @@ class ETS(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(forecast_by_column, check_pickle=False)(self.df_train, args, col) for (col) in cols
+                delayed(forecast_by_column, check_pickle=False)(
+                    self.df_train, args, col
+                )
+                for (col) in cols
             )
             forecast = pd.concat(df_list, axis=1)
         else:

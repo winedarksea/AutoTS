@@ -11,6 +11,7 @@ def cpu_count():
     Runs best with psutil installed, fallsback to mkl, then os core count/2
     """
     import os
+
     # your basic cpu count, includes logical cores and all of machine
     num_cores = os.cpu_count()
     if num_cores is None:
@@ -19,6 +20,7 @@ def cpu_count():
     # includes logical cores, and counts only cores available to task
     try:
         import psutil
+
         available_cores = len(psutil.Process().cpu_affinity())
     except Exception:
         # this only works on UNIX I believe
@@ -30,10 +32,12 @@ def cpu_count():
     # only physical cores, includes all available to machine
     try:
         import psutil
+
         ps_cores = psutil.cpu_count(logical=False)
     except Exception:
         try:
             import mkl
+
             ps_cores = int(mkl.get_max_threads())
         except Exception:
             ps_cores = int(num_cores / 2)

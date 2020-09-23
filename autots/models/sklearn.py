@@ -49,10 +49,14 @@ def date_part(DTindex, method: str = 'simple'):
             }
         )
         if method == 'expanded':
+            try:
+                weekyear = pd.Int64Index(DTindex.isocalendar().week)
+            except Exception:
+                weekyear = DTindex.week
             date_part_df2 = pd.DataFrame(
                 {
                     'hour': DTindex.hour,
-                    'week': DTindex.week,
+                    'week': weekyear,
                     'quarter': DTindex.quarter,
                     'dayofyear': DTindex.dayofyear,
                     'midyear': (
@@ -216,7 +220,9 @@ def retrieve_regressor(
             KNeighborsRegressor(
                 n_neighbors=regression_model["model_params"]['n_neighbors'],
                 weights=regression_model["model_params"]['weights'],
-            ), n_jobs=n_jobs)
+            ),
+            n_jobs=n_jobs,
+        )
         return regr
     elif regression_model['model'] == 'HistGradientBoost':
         from sklearn.multioutput import MultiOutputRegressor
@@ -265,7 +271,9 @@ def retrieve_regressor(
                     loss=regression_model["model_params"]['loss'],
                     learning_rate=regression_model["model_params"]['learning_rate'],
                     random_state=random_seed,
-                ), n_jobs=n_jobs)
+                ),
+                n_jobs=n_jobs,
+            )
             return regr
         elif regression_model["model_params"]['base_estimator'] == 'LinReg':
             from sklearn.linear_model import LinearRegression
@@ -278,7 +286,9 @@ def retrieve_regressor(
                     loss=regression_model["model_params"]['loss'],
                     learning_rate=regression_model["model_params"]['learning_rate'],
                     random_state=random_seed,
-                ), n_jobs=n_jobs)
+                ),
+                n_jobs=n_jobs,
+            )
             return regr
         else:
             regr = MultiOutputRegressor(
@@ -287,7 +297,9 @@ def retrieve_regressor(
                     loss=regression_model["model_params"]['loss'],
                     learning_rate=regression_model["model_params"]['learning_rate'],
                     random_state=random_seed,
-                ), n_jobs=n_jobs)
+                ),
+                n_jobs=n_jobs,
+            )
             return regr
     elif regression_model['model'] == 'xgboost':
         import xgboost as xgb
@@ -301,7 +313,9 @@ def retrieve_regressor(
                 max_depth=regression_model["model_params"]['max_depth'],
                 subsample=regression_model["model_params"]['subsample'],
                 verbosity=verbose,
-            ), n_jobs=n_jobs)
+            ),
+            n_jobs=n_jobs,
+        )
         return regr
     elif regression_model['model'] == 'SVM':
         from sklearn.multioutput import MultiOutputRegressor
@@ -320,6 +334,7 @@ def retrieve_regressor(
     else:
         regression_model['model'] = 'RandomForest'
         from sklearn.ensemble import RandomForestRegressor
+
         regr = RandomForestRegressor(
             random_state=random_seed, n_estimators=1000, verbose=verbose, n_jobs=n_jobs
         )
@@ -608,7 +623,7 @@ class RollingRegression(ModelObject):
         polynomial_degree: int = None,
         x_transform: str = None,
         n_jobs: int = -1,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1023,7 +1038,7 @@ class WindowRegression(ModelObject):
         forecast_length: int = 1,
         max_windows: int = 5000,
         n_jobs: int = -1,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,

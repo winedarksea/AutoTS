@@ -215,10 +215,10 @@ class SinTrend(object):
         self.name = 'SinTrend'
 
     def fit_sin(self, tt, yy):
-        '''Fit sin to the input time sequence, and return fitting parameters "amp", "omega", "phase", "offset", "freq", "period" and "fitfunc"
+        """Fit sin to the input time sequence, and return fitting parameters "amp", "omega", "phase", "offset", "freq", "period" and "fitfunc"
 
         from user unsym @ https://stackoverflow.com/questions/16716302/how-do-i-fit-a-sine-curve-to-my-data-with-pylab-and-numpy
-        '''
+        """
         import scipy.optimize
 
         tt = np.array(tt)

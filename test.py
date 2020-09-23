@@ -12,9 +12,9 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 # raise ValueError("aaargh!")
 
 example_filename = "example_export2.csv"  # .csv/.json
-forecast_length = 4
-df_long = load_monthly()
-n_jobs = 5
+forecast_length = 3
+df_long = load_daily()
+n_jobs = 2
 generations = 2
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
@@ -51,7 +51,7 @@ model_list = [
                 'WindowRegression',
             ]
 # model_list = 'default'
-# model_list = ['AverageValueNaive', 'LastValueNaive', 'ZeroesNaive']
+# model_list = ['AverageValueNaive', 'LastValueNaive', 'GLM']
 model_list = ['MotifSimulation', 'ETS', 'GLM', 'FBProphet']
 
 metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
@@ -83,7 +83,7 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
     date_col='datetime', value_col='value', id_col='series_id')
 
 # model = model.import_results('test.pickle')
-model = model.import_template(example_filename, method='only')
+# model = model.import_template(example_filename, method='only')
 
 start_time_for = timeit.default_timer()
 model = model.fit(df_long,
@@ -95,7 +95,7 @@ model = model.fit(df_long,
                   id_col='series_id')
 elapsed_for = timeit.default_timer() - start_time_for
 
-
+"""
 del(model)
 model = AutoTS(forecast_length=forecast_length, frequency='infer',
                prediction_interval=0.9,
@@ -109,7 +109,7 @@ model = AutoTS(forecast_length=forecast_length, frequency='infer',
                model_interrupt=True,
                n_jobs=None,
                drop_most_recent=0, verbose=1)
-model = model.import_template(example_filename, method='only')
+# model = model.import_template(example_filename, method='only')
 import time
 time.sleep(30)
 import joblib
@@ -123,7 +123,7 @@ with joblib.parallel_backend("loky", n_jobs=n_jobs):
                       id_col='series_id')
     elapsed_cxt = timeit.default_timer() - start_time_cxt
 print(f"With Context {elapsed_cxt}\nWithout Context {elapsed_for}")
-
+"""
 
 print(model.best_model['Model'].iloc[0])
 print(model.best_model['ModelParameters'].iloc[0])
