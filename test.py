@@ -13,9 +13,9 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 example_filename = "example_export2.csv"  # .csv/.json
 forecast_length = 3
-df_long = load_daily()
-n_jobs = 2
-generations = 2
+df_long = load_monthly()
+n_jobs = 6
+generations = 0
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -52,7 +52,7 @@ model_list = [
             ]
 # model_list = 'default'
 # model_list = ['AverageValueNaive', 'LastValueNaive', 'GLM']
-model_list = ['MotifSimulation', 'ETS', 'GLM', 'FBProphet']
+model_list = ['ARIMA']
 
 metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
                     'rmse_weighting': 2, 'containment_weighting': 0,
@@ -172,6 +172,9 @@ df_wide_numeric = model.df_wide_numeric
 df = df_wide_numeric.tail(50).fillna(0).astype(float)
 
 """
+PACKAGE RELEASE
+# update version in setup.py, /docs/conf.py, /autots/_init__.py
+
 cd <project dir>
 black ./autots -l 88 -S
 

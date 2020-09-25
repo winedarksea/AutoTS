@@ -13,7 +13,7 @@ from autots.evaluator.auto_ts import AutoTS
 from autots.tools.transform import GeneralTransformer
 from autots.tools.shaping import long_to_wide
 
-__version__ = '0.2.3'
+__version__ = '0.2.4'
 
 
 __all__ = [

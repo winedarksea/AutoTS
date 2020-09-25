@@ -5,7 +5,7 @@ required = [
 ]
 
 extras = {
-    'additional' : ["holidays>=0.9",'fbprophet>=0.4.*', 'fredapi', 'mxnet>=1.4.1', 'gluonts', 'tensorflow', 'xgboost', 'lightgbm', 'psutil']
+    'additional' : ["holidays>=0.9",'fbprophet>=0.4.*', 'fredapi', 'mxnet>=1.4.1', 'gluonts', 'tensorflow', 'xgboost', 'lightgbm', 'psutil', 'joblib']
 }
 
 with open("README.md", "r") as fh:
@@ -13,7 +13,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="AutoTS",
-    version="0.2.3",
+    version="0.2.4",
     author="Colin Catlin",
     author_email="colin.catlin@syllepsis.live",
     description="Automated Time Series Forecasting",
