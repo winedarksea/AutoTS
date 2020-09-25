@@ -14,8 +14,8 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 example_filename = "example_export2.csv"  # .csv/.json
 forecast_length = 3
 df_long = load_monthly()
-n_jobs = 6
-generations = 0
+n_jobs = 8
+generations = 4
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -52,7 +52,7 @@ model_list = [
             ]
 # model_list = 'default'
 # model_list = ['AverageValueNaive', 'LastValueNaive', 'GLM']
-model_list = ['ARIMA']
+model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
                     'rmse_weighting': 2, 'containment_weighting': 0,
