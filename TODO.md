@@ -53,7 +53,6 @@ Tensorflow GPU backend may crash on occasion.
 
 
 ## To-Do
-* Remove SP500 from AutoTS
 * Migrate to-do to GitHub issues and project board
 	* GitHub badges in Readme, GitHub Actions flake8
 * Horizontal improvements
