@@ -14,8 +14,8 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 example_filename = "example_export2.csv"  # .csv/.json
 forecast_length = 3
 df_long = load_monthly()
-n_jobs = 8
-generations = 4
+n_jobs = 2
+generations = 2
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
@@ -50,9 +50,9 @@ model_list = [
                 'VECM',
                 'WindowRegression',
             ]
-# model_list = 'default'
+model_list = 'superfast'
 # model_list = ['AverageValueNaive', 'LastValueNaive', 'GLM']
-model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
+# model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
                     'rmse_weighting': 2, 'containment_weighting': 0,
@@ -90,7 +90,7 @@ model = model.fit(df_long,
                   future_regressor=future_regressor_train2d,
                   # weights=weights_weekly,
                   grouping_ids=grouping_monthly,
-                  result_file='test.pickle',
+                  # result_file='test.pickle',
                   date_col='datetime', value_col='value',
                   id_col='series_id')
 elapsed_for = timeit.default_timer() - start_time_for
@@ -118,7 +118,7 @@ with joblib.parallel_backend("loky", n_jobs=n_jobs):
     model = model.fit(df_long,
                       future_regressor=future_regressor_train2d,
                       grouping_ids=grouping_monthly,
-                      result_file='test.pickle',
+                      # result_file='test.pickle',
                       date_col='datetime', value_col='value',
                       id_col='series_id')
     elapsed_cxt = timeit.default_timer() - start_time_cxt
