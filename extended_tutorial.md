@@ -285,7 +285,7 @@ Some models will support a more limited range of frequencies.
 #### Models
 
 | Model                   | Dependencies | Optional Dependencies   | Probabilistic | Multiprocessing | GPU   | Experimental |
-| :-------------          | :----------: | :---------------------: | :-----------  | :-------------- | :---- | -----------: |
+| :-------------          | :----------: | :---------------------: | :-----------  | :-------------- | :---- | :----------: |
 |  ZeroesNaive            |              |                         |               |                 |       |              |
 |  LastValueNaive         |              |                         |               |                 |       |              |
 |  AverageValueNaive      |              |                         |    True       |                 |       |              |
