@@ -273,6 +273,7 @@ Data must be coercible to a regular frequency. It is recommended the frequency b
 Some models will support a more limited range of frequencies. 
 
 #### Tested Frequencies
+
 | Frequency      | Offset Str   | Notes                                        |
 | :------------- | :----------: | --------------------------------------------:|
 |  Hourly        |     'H'      |                                              |
@@ -283,9 +284,8 @@ Some models will support a more limited range of frequencies.
 
 #### Models
 
-
 | Model                   | Dependencies | Optional Dependencies   | Probabilistic | Multiprocessing | GPU   | Experimental |
-| :-------------          | :----------: | :---------------------: | :-----------_ | :-------------_ | :---  | -----------: |
+| :-------------          | :----------: | :---------------------: | :-----------  | :-------------- | :---- | -----------: |
 |  ZeroesNaive            |              |                         |               |                 |       |              |
 |  LastValueNaive         |              |                         |               |                 |       |              |
 |  AverageValueNaive      |              |                         |    True       |                 |       |              |
@@ -300,8 +300,6 @@ Some models will support a more limited range of frequencies.
 |  VECM                   | statsmodels  |                         |               |                 |       |              |
 |  VAR                    | statsmodels  |                         |    True       |                 |       |              |
 |  FBProphet              | fbprophet    |                         |    True       |     joblib      |       |              |
-
-
 |  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   |              |
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |
