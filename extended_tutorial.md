@@ -280,3 +280,30 @@ Some models will support a more limited range of frequencies.
 |  Monthly 01    |     'MS'     |  First day of month                          |
 |  Annual        |   'A'/'AS'   | 											   |
 |  Weekly        |     'W'      | 											   |
+
+#### Models
+
+| Model                   | Dependencies | Optional Dependencies   | Probabilistic | Multiprocessing | GPU   | Experimental |
+| :-------------          | :----------: | :---------------------: | :-----------_ | :-------------_ | :---: | :----------: |
+|  ZeroesNaive            |              |                         |               |                 |       |              |
+|  LastValueNaive         |              |                         |               |                 |       |              |
+|  AverageValueNaive      |              |                         |    True       |                 |       |              |
+|  SeasonalNaive          |              |                         |               |                 |       |              |
+|  GLS                    | statsmodels  |                         |               |                 |       |              |
+|  GLM                    | statsmodels  |                         |               |     joblib      |       |              |
+|  ETS                    | statsmodels  |                         |               |     joblib      |       |              |
+|  UnobservedComponents   | statsmodels  |                         |               |                 |       |              |
+|  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |
+|  VARMAX                 | statsmodels  |                         |    True       |                 |       |              |
+|  DynamicFactor          | statsmodels  |                         |    True       |                 |       |              |
+|  VECM                   | statsmodels  |                         |               |                 |       |              |
+|  VAR                    | statsmodels  |                         |    True       |                 |       |              |
+|  FBProphet              | fbprophet    |                         |    True       |     joblib      |       |              |
+|  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   |              |
+|  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |
+|  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |
+|  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |                 |       | True         |
+|  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         |
+|  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         |
+|  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         |
+|  TSFreshRegressor       | tsfresh, sklearn |                     |               |                 |       | True         |

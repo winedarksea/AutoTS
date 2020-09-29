@@ -195,3 +195,4 @@ Tensorflow GPU backend may crash on occasion.
 	* Add to ModelMonster
 	* Add to AutoTS 'all' list
 	* all to recombination_approved if so
+	* add to model table in tutorial
