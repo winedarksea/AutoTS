@@ -282,9 +282,8 @@ Some models will support a more limited range of frequencies.
 |  Weekly        |     'W'      | 											   |
 
 #### Models
-
 | Model                   | Dependencies | Optional Dependencies   | Probabilistic | Multiprocessing | GPU   | Experimental |
-| :-------------          | :----------: | :---------------------: | :-----------_ | :-------------_ | :---: | :----------: |
+| :-------------          | :----------: | :---------------------: | :-----------_ | :-------------_ | :---: | -----------: |
 |  ZeroesNaive            |              |                         |               |                 |       |              |
 |  LastValueNaive         |              |                         |               |                 |       |              |
 |  AverageValueNaive      |              |                         |    True       |                 |       |              |
