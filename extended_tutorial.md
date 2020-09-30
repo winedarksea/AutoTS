@@ -282,7 +282,7 @@ Some models will support a more limited range of frequencies.
 |  Annual        |   'A'/'AS'   | 											   |
 |  Weekly        |     'W'      | 											   |
 
-#### Models
+## Models
 
 | Model                   | Dependencies | Optional Dependencies   | Probabilistic | Multiprocessing | GPU   | Experimental |
 | :-------------          | :----------: | :---------------------: | :-----------  | :-------------- | :---- | :----------: |

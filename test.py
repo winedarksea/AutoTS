@@ -16,8 +16,8 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 example_filename = "example_export2.csv"  # .csv/.json
 forecast_length = 3
-df_long = load_daily()
-n_jobs = 3
+df_long = load_hourly()
+n_jobs = 'auto'
 generations = 2
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
@@ -55,7 +55,7 @@ model_list = [
     'VECM',
     'WindowRegression',
 ]
-model_list = 'default'
+model_list = 'superfast'
 # model_list = ['AverageValueNaive', 'LastValueNaive', 'GLM']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
