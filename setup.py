@@ -1,11 +1,25 @@
 import setuptools
 
 required = [
-    "numpy>=1.14.6", "pandas>=0.25.*", "statsmodels>=0.10.*", "scikit-learn>=0.20.*"
+    "numpy>=1.14.6",
+    "pandas>=0.25.*",
+    "statsmodels>=0.10.*",
+    "scikit-learn>=0.20.*",
 ]
 
 extras = {
-    'additional' : ["holidays>=0.9",'fbprophet>=0.4.*', 'fredapi', 'mxnet>=1.4.1', 'gluonts', 'tensorflow', 'xgboost', 'lightgbm', 'psutil', 'joblib']
+    'additional': [
+        "holidays>=0.9",
+        'fbprophet>=0.4.*',
+        'fredapi',
+        'mxnet>=1.4.1',
+        'gluonts',
+        'tensorflow',
+        'xgboost',
+        'lightgbm',
+        'psutil',
+        'joblib',
+    ]
 }
 
 with open("README.md", "r") as fh:
@@ -23,8 +37,8 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     license="MIT",
     include_package_data=True,
-    install_requires = required,
-    extras_require = extras,
+    install_requires=required,
+    extras_require=extras,
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

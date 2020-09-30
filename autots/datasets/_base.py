@@ -5,9 +5,9 @@ import pandas as pd
 
 def load_daily(long: bool = True):
     """2020 Covid, Air Pollution, and Economic Data.
-    
+
     Sources: Covid Tracking Project, EPA, and FRED
-    
+
     Args:
         long (bool): if True, return data in long format. Otherwise return wide
     """
@@ -19,7 +19,8 @@ def load_daily(long: bool = True):
         return df_wide
     else:
         df_long = df_wide.reset_index(drop=False).melt(
-            id_vars=['datetime'], var_name='series_id', value_name='value')
+            id_vars=['datetime'], var_name='series_id', value_name='value'
+        )
         return df_long
 
 
@@ -98,12 +99,15 @@ def load_traffic_hourly(long: bool = True):
     module_path = dirname(__file__)
     data_file_name = join(module_path, 'data', 'traffic_hourly.zip')
 
-    df_wide = pd.read_csv(data_file_name, index_col=0, parse_dates=True, compression='zip')
+    df_wide = pd.read_csv(
+        data_file_name, index_col=0, parse_dates=True, compression='zip'
+    )
     if not long:
         return df_wide
     else:
         df_long = df_wide.reset_index(drop=False).melt(
-            id_vars=['datetime'], var_name='series_id', value_name='value')
+            id_vars=['datetime'], var_name='series_id', value_name='value'
+        )
         return df_long
 
     return df_long

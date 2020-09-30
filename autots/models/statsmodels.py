@@ -701,14 +701,12 @@ class ARIMA(ModelObject):
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
 
-            future_regressor = holiday_flag(
-                test_index, country=self.holiday_country
-            )
+            future_regressor = holiday_flag(test_index, country=self.holiday_country)
         if self.regression_type != None:
             assert (
                 len(future_regressor) == forecast_length
             ), "regressor not equal to forecast length"
-        if (self.regression_type in ["User", "Holiday"]):
+        if self.regression_type in ["User", "Holiday"]:
             if future_regressor.values.ndim == 1:
                 exog = pd.DataFrame(future_regressor).values.reshape(-1, 1)
             else:
@@ -771,17 +769,27 @@ class ARIMA(ModelObject):
                         current_series, order=args['order'], freq=args['frequency']
                     ).fit(maxiter=400, disp=args['verbose'])
                 if args['regression_type'] in ["User", "Holiday"]:
-                    outer_forecasts = maModel.get_forecast(steps=args['forecast_length'], exog=args['exog'])
+                    outer_forecasts = maModel.get_forecast(
+                        steps=args['forecast_length'], exog=args['exog']
+                    )
                 else:
-                    outer_forecasts = maModel.get_forecast(steps=args['forecast_length'])
+                    outer_forecasts = maModel.get_forecast(
+                        steps=args['forecast_length']
+                    )
                 outer_forecasts_df = outer_forecasts.conf_int(alpha=args['alpha'])
                 cforecast = outer_forecasts.summary_frame()['mean']
                 clower_forecast = outer_forecasts_df.iloc[:, 0]
                 cupper_forecast = outer_forecasts_df.iloc[:, 1]
             except Exception:
-                cforecast = pd.Series(np.zeros((args['forecast_length'],)), index=args['test_index'])
-                clower_forecast = pd.Series(np.zeros((args['forecast_length'],)), index=args['test_index'])
-                cupper_forecast = pd.Series(np.zeros((args['forecast_length'],)), index=args['test_index'])
+                cforecast = pd.Series(
+                    np.zeros((args['forecast_length'],)), index=args['test_index']
+                )
+                clower_forecast = pd.Series(
+                    np.zeros((args['forecast_length'],)), index=args['test_index']
+                )
+                cupper_forecast = pd.Series(
+                    np.zeros((args['forecast_length'],)), index=args['test_index']
+                )
             cforecast.name = current_series.name
             clower_forecast.name = current_series.name
             cupper_forecast.name = current_series.name
@@ -823,8 +831,6 @@ class ARIMA(ModelObject):
         forecast = pd.concat(complete[0], axis=1)
         lower_forecast = pd.concat(complete[1], axis=1)
         upper_forecast = pd.concat(complete[2], axis=1)
-
-
 
         if just_point_forecast:
             return forecast

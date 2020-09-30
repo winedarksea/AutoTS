@@ -376,7 +376,7 @@ def ModelMonster(
                 regression_type=parameters['regression_type'],
                 random_seed=random_seed,
                 verbose=verbose,
-                n_jobs=n_jobs
+                n_jobs=n_jobs,
             )
         return model
 

@@ -150,6 +150,7 @@ class AutoTS(object):
 
         if self.n_jobs == 'auto':
             from autots.tools import cpu_count
+
             self.n_jobs = cpu_count()
 
         # convert shortcuts of model lists to actual lists of models

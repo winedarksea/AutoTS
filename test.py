@@ -2,26 +2,31 @@
 import timeit
 import numpy as np
 import pandas as pd
-from autots.datasets import load_daily
-from autots.datasets import load_hourly
-from autots.datasets import load_monthly
-from autots.datasets import load_yearly
-from autots.datasets import load_weekly
+from autots.datasets import (
+    load_daily,
+    load_hourly,
+    load_monthly,
+    load_yearly,
+    load_weekly,
+)
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
+
 # raise ValueError("aaargh!")
 
 example_filename = "example_export2.csv"  # .csv/.json
 forecast_length = 3
-df_long = load_monthly()
-n_jobs = 2
+df_long = load_daily()
+n_jobs = 3
 generations = 2
 
 # df_long = df_long[df_long['series_id'] == 'GS10']
 
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
-weights_weekly = {'Weekly Minnesota Midgrade Conventional Retail Gasoline Prices  (Dollars per Gallon)': 20}
+weights_weekly = {
+    'Weekly Minnesota Midgrade Conventional Retail Gasoline Prices  (Dollars per Gallon)': 20
+}
 grouping_monthly = {
     'CSUSHPISA': 'A',
     'EMVOVERALLEMV': 'A',
@@ -31,68 +36,92 @@ grouping_monthly = {
     'MCOILWTICO': 'C',
     'T10YIEM': 'C',
     'wrong': 'C',
-    'USEPUINDXM': 'C'
-    }
+    'USEPUINDXM': 'C',
+}
 
 model_list = [
-                'ZeroesNaive',
-                'LastValueNaive',
-                'AverageValueNaive',
-                'GLS',
-                'SeasonalNaive',
-                'GLM',
-                'ETS',
-                'FBProphet',
-                'RollingRegression',
-                'GluonTS',
-                'UnobservedComponents',
-                'VAR',
-                'VECM',
-                'WindowRegression',
-            ]
-model_list = 'superfast'
+    'ZeroesNaive',
+    'LastValueNaive',
+    'AverageValueNaive',
+    'GLS',
+    'SeasonalNaive',
+    'GLM',
+    'ETS',
+    'FBProphet',
+    'RollingRegression',
+    'GluonTS',
+    'UnobservedComponents',
+    'VAR',
+    'VECM',
+    'WindowRegression',
+]
+model_list = 'default'
 # model_list = ['AverageValueNaive', 'LastValueNaive', 'GLM']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
-metric_weighting = {'smape_weighting': 2, 'mae_weighting': 1,
-                    'rmse_weighting': 2, 'containment_weighting': 0,
-                    'runtime_weighting': 0, 'spl_weighting': 1,
-                    'contour_weighting': 0
-                    }
+metric_weighting = {
+    'smape_weighting': 2,
+    'mae_weighting': 1,
+    'rmse_weighting': 2,
+    'containment_weighting': 0,
+    'runtime_weighting': 0,
+    'spl_weighting': 1,
+    'contour_weighting': 0,
+}
 
 
-model = AutoTS(forecast_length=forecast_length, frequency='infer',
-               prediction_interval=0.9,
-               ensemble=None,
-               constraint=2,
-               max_generations=generations, num_validations=2,
-               validation_method='backwards',
-               model_list=model_list, initial_template='General+Random',
-               metric_weighting=metric_weighting, models_to_validate=0.1,
-               max_per_model_class=None,
-               model_interrupt=True,
-               n_jobs=n_jobs,
-               drop_most_recent=0, verbose=1)
+model = AutoTS(
+    forecast_length=forecast_length,
+    frequency='infer',
+    prediction_interval=0.9,
+    ensemble=None,
+    constraint=2,
+    max_generations=generations,
+    num_validations=2,
+    validation_method='backwards',
+    model_list=model_list,
+    initial_template='General+Random',
+    metric_weighting=metric_weighting,
+    models_to_validate=0.1,
+    max_per_model_class=None,
+    model_interrupt=True,
+    n_jobs=n_jobs,
+    drop_most_recent=0,
+    verbose=1,
+)
 
 
 future_regressor_train, future_regressor_forecast = fake_regressor(
-    df_long, dimensions=1, forecast_length=forecast_length,
-    date_col='datetime', value_col='value', id_col='series_id')
+    df_long,
+    dimensions=1,
+    forecast_length=forecast_length,
+    date_col='datetime',
+    value_col='value',
+    id_col='series_id',
+)
 future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
-    df_long, dimensions=4, forecast_length=forecast_length,
-    date_col='datetime', value_col='value', id_col='series_id')
+    df_long,
+    dimensions=4,
+    forecast_length=forecast_length,
+    date_col='datetime',
+    value_col='value',
+    id_col='series_id',
+)
 
 # model = model.import_results('test.pickle')
 # model = model.import_template(example_filename, method='only')
 
 start_time_for = timeit.default_timer()
-model = model.fit(df_long,
-                  future_regressor=future_regressor_train2d,
-                  # weights=weights_weekly,
-                  grouping_ids=grouping_monthly,
-                  # result_file='test.pickle',
-                  date_col='datetime', value_col='value',
-                  id_col='series_id')
+model = model.fit(
+    df_long,
+    future_regressor=future_regressor_train2d,
+    # weights=weights_weekly,
+    grouping_ids=grouping_monthly,
+    # result_file='test.pickle',
+    date_col='datetime',
+    value_col='value',
+    id_col='series_id',
+)
 elapsed_for = timeit.default_timer() - start_time_for
 
 """
@@ -129,11 +158,12 @@ print(model.best_model['Model'].iloc[0])
 print(model.best_model['ModelParameters'].iloc[0])
 print(model.best_model['TransformationParameters'].iloc[0])
 
-prediction_ints = model.predict(future_regressor=future_regressor_forecast2d,
-                                prediction_interval=[0.99, 0.5],
-                                verbose=0)
-prediction = model.predict(future_regressor=future_regressor_forecast2d,
-                           verbose=0)
+prediction_ints = model.predict(
+    future_regressor=future_regressor_forecast2d,
+    prediction_interval=[0.99, 0.5],
+    verbose=0,
+)
+prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=0)
 # point forecasts dataframe
 forecasts_df = prediction.forecast
 # accuracy of all tried model results (not including cross validation)
