@@ -27,16 +27,14 @@ pip install autots
 ```
 This includes dependencies for basic models, but additonal packages are required for some models and methods.
 
-Input data is expected to come in either a 'long' or a 'wide' format. 
+Input data is expected to come in either a *long* or a *wide* format:
 
-The *wide* format is a pandas.DataFrame with a pandas.DatetimeIndex and each column a distinct series. 
-
-A *long* format has three columns: 
-* Date (ideally already in pd.DateTime format)
-* Value
-* Series ID. For a single time series, series_id can be `= None`. 
-
-The column name for each of these is passed to .fit() as `date_col`, `id_col`, and `value_col`. 
+- The *wide* format is a pandas.DataFrame with a pandas.DatetimeIndex and each column a distinct series. 
+- The *long* format has three columns: 
+  - Date (ideally already in pd.DateTime format)
+  - Series ID. For a single time series, series_id can be `= None`.
+  - Value
+- For *long* data, the column name for each of these is passed to .fit() as `date_col`, `id_col`, and `value_col`. No parameters are needed for *wide* data.
 
 ```
 
