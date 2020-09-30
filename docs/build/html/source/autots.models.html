@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.models package &#8212; AutoTS 0.2.3 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.2.4 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -816,9 +816,9 @@ recurring - all features that should commonly repeat without aging</p></li>
 <p>Statsmodels based forecasting models.</p>
 <dl class="class">
 <dt id="autots.models.statsmodels.ARIMA">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.statsmodels.</code><code class="sig-name descname">ARIMA</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'ARIMA'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">p: int = 0</em>, <em class="sig-param">d: int = 1</em>, <em class="sig-param">q: int = 0</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ARIMA" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.statsmodels.</code><code class="sig-name descname">ARIMA</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'ARIMA'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">p: int = 0</em>, <em class="sig-param">d: int = 1</em>, <em class="sig-param">q: int = 0</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ARIMA" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="autots.evaluator.html#autots.evaluator.auto_model.ModelObject" title="autots.evaluator.auto_model.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.evaluator.auto_model.ModelObject</span></code></a></p>
-<p>ARIMA from Statsmodels</p>
+<p>ARIMA from Statsmodels.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -829,6 +829,7 @@ recurring - all features that should commonly repeat without aging</p></li>
 <li><p><strong>d</strong> (<em>int</em>) – is the number of differences needed for stationarity</p></li>
 <li><p><strong>q</strong> (<em>int</em>) – is the number of lagged forecast errors in the prediction.</p></li>
 <li><p><strong>regression_type</strong> (<em>str</em>) – type of regression (None, ‘User’, or ‘Holiday’)</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em>) – passed to joblib for multiprocessing. Set to none for context manager.</p></li>
 </ul>
 </dd>
 </dl>

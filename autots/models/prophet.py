@@ -212,7 +212,8 @@ class FBProphet(ModelObject):
                 parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
-            df_list = Parallel(n_jobs=self.n_jobs, verbose=(self.verbose - 1))(
+            verbs = 0 if self.verbose < 1 else self.verbose - 1
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
                 delayed(seek_the_oracle)(df=self.df_train, args=args, series=col)
                 for col in cols
             )

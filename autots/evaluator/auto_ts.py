@@ -63,7 +63,7 @@ class AutoTS(object):
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
-        n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case).
+        n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also 'auto'.
 
     Attributes:
         best_model (pandas.DataFrame): DataFrame containing template for the best ranked model
@@ -147,6 +147,11 @@ class AutoTS(object):
         if 'seasonal' in self.validation_method:
             val_list = [x for x in str(self.validation_method) if x.isdigit()]
             self.seasonal_val_periods = int(''.join(val_list))
+
+        if self.n_jobs == 'auto':
+            from autots.tools import cpu_count
+
+            self.n_jobs = cpu_count()
 
         # convert shortcuts of model lists to actual lists of models
         if model_list == 'default':

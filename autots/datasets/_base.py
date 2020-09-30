@@ -3,17 +3,25 @@ from os.path import dirname, join
 import pandas as pd
 
 
-def load_daily():
-    """4 series of sample daily data from late 2019."""
+def load_daily(long: bool = True):
+    """2020 Covid, Air Pollution, and Economic Data.
+
+    Sources: Covid Tracking Project, EPA, and FRED
+
+    Args:
+        long (bool): if True, return data in long format. Otherwise return wide
+    """
     module_path = dirname(__file__)
-    data_file_name = join(module_path, 'data', 'toy_daily.csv')
+    data_file_name = join(module_path, 'data', 'covid_daily.zip')
 
-    df_long = pd.read_csv(data_file_name)
-    df_long['datetime'] = pd.to_datetime(
-        df_long['datetime'], infer_datetime_format=True
-    )
-
-    return df_long
+    df_wide = pd.read_csv(data_file_name, index_col=0, parse_dates=True)
+    if not long:
+        return df_wide
+    else:
+        df_long = df_wide.reset_index(drop=False).melt(
+            id_vars=['datetime'], var_name='series_id', value_name='value'
+        )
+        return df_long
 
 
 def load_fred_monthly():
@@ -68,7 +76,7 @@ def load_fred_yearly():
     monthly_data = get_fred_data(fredkey = 'XXXXXXXXX', SeriesNameDict = SeriesNameDict)
     """
     module_path = dirname(__file__)
-    data_file_name = join(module_path, 'data', 'fred_yearly.csv')
+    data_file_name = join(module_path, 'data', 'fred_yearly.zip')
 
     df_long = pd.read_csv(data_file_name)
     df_long['datetime'] = pd.to_datetime(
@@ -83,7 +91,7 @@ def load_yearly():
     return load_fred_yearly()
 
 
-def load_traffic_hourly():
+def load_traffic_hourly(long: bool = True):
     """
     From the MN DOT via the UCI data repository.
     Yes, Minnesota is the best state of the Union.
@@ -91,17 +99,23 @@ def load_traffic_hourly():
     module_path = dirname(__file__)
     data_file_name = join(module_path, 'data', 'traffic_hourly.zip')
 
-    df_long = pd.read_csv(data_file_name, compression='zip')
-    df_long['datetime'] = pd.to_datetime(
-        df_long['datetime'], infer_datetime_format=True
+    df_wide = pd.read_csv(
+        data_file_name, index_col=0, parse_dates=True, compression='zip'
     )
+    if not long:
+        return df_wide
+    else:
+        df_long = df_wide.reset_index(drop=False).melt(
+            id_vars=['datetime'], var_name='series_id', value_name='value'
+        )
+        return df_long
 
     return df_long
 
 
-def load_hourly():
+def load_hourly(long: bool = True):
     """Traffic data from the MN DOT via the UCI data repository."""
-    return load_traffic_hourly()
+    return load_traffic_hourly(long=long)
 
 
 def load_eia_weekly():

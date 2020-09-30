@@ -363,6 +363,7 @@ def ModelMonster(
                 holiday_country=holiday_country,
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
             )
         else:
             model = ARIMA(
@@ -375,6 +376,7 @@ def ModelMonster(
                 regression_type=parameters['regression_type'],
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
             )
         return model
 

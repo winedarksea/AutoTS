@@ -15,10 +15,9 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* Added n_jobs parameters to pass through to joblib (although a joblib context manager is perhaps the best way)
-* Added joblib multiprocessing to ETS, GLM, and FBProphet
-* Fixed future warnings with pandas.DatetimeIndex.week and changes to statsmodels ETS
-* standardized source code formatting
+* ARIMA to ARIMAX (for Statsmodels v0.13)
+* ARIMA parallelization
+* update of daily sample data, reduced space used by yearly and hourly
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -54,8 +53,6 @@ Tensorflow GPU backend may crash on occasion.
 
 
 ## To-Do
-* Remove SP500 from AutoTS
-* ARIMA deprecation in Statsmodels
 * Migrate to-do to GitHub issues and project board
 	* GitHub badges in Readme, GitHub Actions flake8
 * Horizontal improvements
@@ -198,3 +195,4 @@ Tensorflow GPU backend may crash on occasion.
 	* Add to ModelMonster
 	* Add to AutoTS 'all' list
 	* all to recombination_approved if so
+	* add to model table in tutorial
