@@ -4,23 +4,28 @@ import pandas as pd
 import copy
 import json
 
-from autots.tools.shaping import long_to_wide
-import random
-from autots.tools.shaping import subset_series
-from autots.tools.shaping import simple_train_test_split
-from autots.evaluator.auto_model import TemplateEvalObject
-from autots.evaluator.auto_model import NewGeneticTemplate
-from autots.evaluator.auto_model import RandomTemplate
-from autots.evaluator.auto_model import TemplateWizard
-from autots.evaluator.auto_model import unpack_ensemble_models
-from autots.evaluator.auto_model import generate_score
+from autots.tools.shaping import (
+    long_to_wide,
+    df_cleanup,
+    subset_series,
+    simple_train_test_split,
+    NumericTransformer,
+)
+from autots.evaluator.auto_model import (
+    TemplateEvalObject,
+    NewGeneticTemplate,
+    RandomTemplate,
+    TemplateWizard,
+    unpack_ensemble_models,
+    generate_score,
+    PredictWitch,
+    validation_aggregation,
+)
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
     HorizontalTemplateGenerator,
 )
-from autots.evaluator.auto_model import PredictWitch
-from autots.tools.shaping import NumericTransformer
-from autots.evaluator.auto_model import validation_aggregation
+import random
 
 
 class AutoTS(object):
@@ -381,13 +386,18 @@ class AutoTS(object):
                 date_col=self.date_col,
                 value_col=self.value_col,
                 id_col=self.id_col,
-                frequency=self.frequency,
-                na_tolerance=self.na_tolerance,
-                drop_data_older_than_periods=self.drop_data_older_than_periods,
                 aggfunc=self.aggfunc,
-                drop_most_recent=self.drop_most_recent,
-                verbose=self.verbose,
             )
+
+        df_wide = df_cleanup(
+            df_wide,
+            frequency=self.frequency,
+            na_tolerance=self.na_tolerance,
+            drop_data_older_than_periods=self.drop_data_older_than_periods,
+            aggfunc=self.aggfunc,
+            drop_most_recent=self.drop_most_recent,
+            verbose=self.verbose,
+        )
 
         # clean up series weighting input
         if not weighted:

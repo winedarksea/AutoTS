@@ -15,9 +15,7 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* ARIMA to ARIMAX (for Statsmodels v0.13)
-* ARIMA parallelization
-* update of daily sample data, reduced space used by yearly and hourly
+* fix error where wide data import skipped cleaning steps
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -85,6 +83,7 @@ Tensorflow GPU backend may crash on occasion.
 	* Rename from Best3 to BestN
 	* Dicts instead of list of DFs
 	* Add 'model_count' to parameters
+* allow best_model to be specified and entirely bypass the .fit() stage.
 
 * check models from M5 competition results
 * minmaxscaler as scoring for weighted Score generation

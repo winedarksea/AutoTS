@@ -51,9 +51,22 @@ def load_fred_monthly():
     return df_long
 
 
-def load_monthly():
+def load_monthly(long: bool = True):
     """Federal Reserve of St. Louis monthly economic indicators."""
-    return load_fred_monthly()
+    if long:
+        return load_fred_monthly()
+    else:
+        from autots.tools.shaping import long_to_wide
+
+        df_long = load_fred_monthly()
+        df_wide = long_to_wide(
+            df_long,
+            date_col='datetime',
+            value_col='value',
+            id_col='series_id',
+            aggfunc='first',
+        )
+        return df_wide
 
 
 def load_fred_yearly():
@@ -86,9 +99,22 @@ def load_fred_yearly():
     return df_long
 
 
-def load_yearly():
+def load_yearly(long: bool = True):
     """Federal Reserve of St. Louis annual economic indicators."""
-    return load_fred_yearly()
+    if long:
+        return load_fred_yearly()
+    else:
+        from autots.tools.shaping import long_to_wide
+
+        df_long = load_fred_yearly()
+        df_wide = long_to_wide(
+            df_long,
+            date_col='datetime',
+            value_col='value',
+            id_col='series_id',
+            aggfunc='first',
+        )
+        return df_wide
 
 
 def load_traffic_hourly(long: bool = True):
@@ -130,6 +156,19 @@ def load_eia_weekly():
     return df_long
 
 
-def load_weekly():
+def load_weekly(long: bool = True):
     """Weekly petroleum industry data from the EIA."""
-    return load_eia_weekly()
+    if long:
+        return load_eia_weekly()
+    else:
+        from autots.tools.shaping import long_to_wide
+
+        df_long = load_eia_weekly()
+        df_wide = long_to_wide(
+            df_long,
+            date_col='datetime',
+            value_col='value',
+            id_col='series_id',
+            aggfunc='first',
+        )
+        return df_wide

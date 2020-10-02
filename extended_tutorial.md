@@ -85,29 +85,43 @@ Also seen in use here is the `model_list`.
 ```
 from autots.datasets import load_hourly
 
-df_long = load_hourly()
+df_wide = load_hourly(long=False)
 
-# all other series assumed to be weight of 1
+# here we care most about traffic volume, all other series assumed to be weight of 1
 weights_hourly = {'traffic_volume': 20}
 
-model_list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
-			  'ETS',  'RollingRegression', 'UnobservedComponents', 'VECM']
+model_list = [
+    'LastValueNaive',
+    'GLS',
+    'ETS',
+    'AverageValueNaive',
+]
 
 from autots import AutoTS
-model = AutoTS(forecast_length=73, frequency='infer',
-               prediction_interval=0.95, ensemble='simple',
-               max_generations=5, num_validations=2,
-			   validation_method='even',
-               model_list=model_list, models_to_validate=15,
-               drop_most_recent=1)
-		
-model = model.fit(df_long, date_col='datetime',
-				  value_col='value', id_col='series_id',
-				  weights=weights_hourly)
+
+model = AutoTS(
+    forecast_length=49,
+    frequency='infer',
+    prediction_interval=0.95,
+    ensemble='simple',
+    max_generations=5,
+    num_validations=2,
+    validation_method='seasonal 168',
+    model_list=model_list,
+    models_to_validate=15,
+    drop_most_recent=1,
+)
+
+model = model.fit(
+    df_wide,
+    weights=weights_hourly,
+)
 
 prediction = model.predict()
 forecasts_df = prediction.forecast
+# model.best_model.to_string()
 ```
+
 Probabilistic forecasts are *available* for all models, but in many cases are just data-based estimates in lieu of model estimates, so be careful. 
 ```
 upper_forecasts_df = prediction.upper_forecast
