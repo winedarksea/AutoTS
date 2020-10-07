@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import json
 from autots.evaluator.auto_model import PredictionObject
-from autots.evaluator.auto_model import create_model_id
 
 
 def Best3Ensemble(

@@ -1101,7 +1101,7 @@ def PredictWitch(
                     total_ens = ens_template.shape[0]
                     print(
                         "Ensemble component {} of {} ".format(
-                            model_str, str(index), str(total_ens)
+                            str(index), str(total_ens)
                         )
                     )
                 df_forecast = PredictWitch(
@@ -1632,7 +1632,7 @@ def NewGeneticTemplate(
         'TensorflowSTS',
         'TFPRegression',
     ]
-    borrow = ['ComponentAnalysis']
+    # borrow = ['ComponentAnalysis']
     best = json.loads(sorted_results.iloc[0, :]['TransformationParameters'])
 
     for model_type in sorted_results['Model'].unique():

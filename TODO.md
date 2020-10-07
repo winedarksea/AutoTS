@@ -57,8 +57,11 @@ Tensorflow GPU backend may crash on occasion.
 * Horizontal improvements
 	* don't run univariate models on all series, only on needed series
 	* generalizable from run on only a subset
+		* need to start capturing per_series_mae if subset
 	* handle failure of a lower level model on some series (but not for dist variants)
-	* remove 'horizontal' sanity check run, takes too longer
+		* catch errors in PredictWitch
+	* remove 'horizontal' sanity check run, takes too long (only if metric weights are x)
+	* add 'horizontal-runtime'
 	* allow multiprocessing for each model of horizontal
 		* allow multiprocessing to models, pass through num_process + **kwargs
 * User friendly:
