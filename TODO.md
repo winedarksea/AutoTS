@@ -15,8 +15,7 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* fix error where wide data import skipped cleaning steps
-* long=True/False for all example data
+* fix verbose > 2 error in auto_model
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
