@@ -83,227 +83,208 @@
 <p>There are two shapes/styles of <code class="docutils literal notranslate"><span class="pre">pandas.DataFrame</span></code> which are accepted.
 The first is <em>long</em> data, like that out of an aggregated sales-transaction table containing three columns identified to <code class="docutils literal notranslate"><span class="pre">.fit()</span></code> as <code class="docutils literal notranslate"><span class="pre">date_col</span> <span class="pre">{pd.Datetime},</span> <span class="pre">value_col</span> <span class="pre">{the</span> <span class="pre">numeric</span> <span class="pre">or</span> <span class="pre">categorical</span> <span class="pre">data</span> <span class="pre">of</span> <span class="pre">interest},</span> <span class="pre">and</span> <span class="pre">id_col</span> <span class="pre">{id</span> <span class="pre">string,</span> <span class="pre">if</span> <span class="pre">multiple</span> <span class="pre">series</span> <span class="pre">are</span> <span class="pre">provided}</span></code>.
 Alternatively, the data may be in a <em>wide</em> format where the index is a <code class="docutils literal notranslate"><span class="pre">pandas.DatetimeIndex</span></code>, and each column is a distinct data series.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">####</span> <span class="n">You</span> <span class="n">can</span> <span class="n">tailor</span> <span class="n">the</span> <span class="n">process</span> <span class="k">in</span> <span class="n">a</span> <span class="n">few</span> <span class="n">ways</span><span class="p">...</span>
-<span class="n">The</span> <span class="n">simplest</span> <span class="n">way</span> <span class="k">to</span> <span class="n">improve</span> <span class="n">accuracy</span> <span class="k">is</span> <span class="k">to</span> <span class="n">increase</span> <span class="n">the</span> <span class="nb">number</span> <span class="k">of</span> <span class="n">generations</span> <span class="o">`</span><span class="n">max_generations</span><span class="o">=</span><span class="mi">15</span><span class="o">`</span><span class="p">.</span> <span class="k">Each</span> <span class="n">generation</span> <span class="n">tries</span> <span class="k">new</span> <span class="n">models</span><span class="p">,</span> <span class="n">taking</span> <span class="n">additional</span> <span class="n">time</span> <span class="n">but</span> <span class="n">improving</span> <span class="n">the</span> <span class="n">accuracy</span><span class="p">.</span> <span class="n">The</span> <span class="n">nature</span> <span class="k">of</span> <span class="n">genetic</span> <span class="n">algorithms</span><span class="p">,</span> <span class="n">however</span><span class="p">,</span> <span class="n">means</span> <span class="n">there</span> <span class="k">is</span> <span class="k">no</span> <span class="n">consistent</span> <span class="n">improvement</span> <span class="k">for</span> <span class="k">each</span> <span class="n">generation</span><span class="p">,</span> <span class="k">and</span> <span class="k">large</span> <span class="nb">number</span> <span class="k">of</span> <span class="n">generations</span> <span class="n">will</span> <span class="n">often</span> <span class="k">only</span> <span class="k">result</span> <span class="k">in</span> <span class="n">minimal</span> <span class="n">performance</span> <span class="n">gains</span><span class="p">.</span>
+</div>
+<div class="section" id="you-can-tailor-the-process-in-a-few-ways">
+<h4>You can tailor the process in a few ways…<a class="headerlink" href="#you-can-tailor-the-process-in-a-few-ways" title="Permalink to this headline">¶</a></h4>
+<p>The simplest way to improve accuracy is to increase the number of generations <code class="docutils literal notranslate"><span class="pre">max_generations=15</span></code>. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.</p>
+<p>Another approach that may improve accuracy is to set <code class="docutils literal notranslate"><span class="pre">ensemble='all'</span></code>. Ensemble parameter expects a single string, and can for example be <code class="docutils literal notranslate"><span class="pre">'simple,dist'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'horizontal'</span></code>. As this means storing more details of every model, this takes more time and memory.</p>
+<p>A handy parameter for when your data is expected to always be 0 or greater (such as unit sales) is to set <code class="docutils literal notranslate"><span class="pre">no_negatives=True</span></code>. This forces forecasts to be greater than or equal to 0.
+A similar function is <code class="docutils literal notranslate"><span class="pre">constraint=2.0</span></code>. What this does is prevent the forecast from leaving historic bounds set by the training data. In this example, the forecasts would not be allowed to go above <code class="docutils literal notranslate"><span class="pre">max(training</span> <span class="pre">data)</span> <span class="pre">+</span> <span class="pre">2.0</span> <span class="pre">*</span> <span class="pre">st.dev(training</span> <span class="pre">data)</span></code>, as well as the reverse on the minimum side. A constraint of <code class="docutils literal notranslate"><span class="pre">0</span></code> would constrain forecasts to historical mins and maxes.</p>
+<p>Another convenience function is <code class="docutils literal notranslate"><span class="pre">drop_most_recent=1</span></code> specifing the number of most recent periods to drop. This can be handy with monthly data, where often the most recent month is incomplete.
+<code class="docutils literal notranslate"><span class="pre">drop_data_older_than_periods</span></code> provides similar functionality but drops the oldest data to speed up the process on large datasets.
+<code class="docutils literal notranslate"><span class="pre">remove_leading_zeroes=True</span></code> is useful for data where leading zeroes represent a process which has not yet started.</p>
+<p>When working with many time series, it can be helpful to take advantage of <code class="docutils literal notranslate"><span class="pre">subset=100</span></code>. Subset specifies the interger number of time series to test models on, and can be useful with many related time series (1000’s of customer’s sales). Usually the best model on a 100 related time series is very close to that tested on many thousands (or more) of series. This speeds up the model process in these cases, but does not work with <code class="docutils literal notranslate"><span class="pre">horizontal</span></code> ensemble types.</p>
+<p>Subset takes advantage of weighting, more highly-weighted series are more likely to be selected. Weighting is used with multiple time series to tell the evaluator which series are most important. Series weights are assumed to all be equal to 1, values need only be passed in when a value other than 1 is desired.
+Note for weighting, larger weights = more important.</p>
+</div>
+</div>
+<div class="section" id="validation-and-cross-validation">
+<h3>Validation and Cross Validation<a class="headerlink" href="#validation-and-cross-validation" title="Permalink to this headline">¶</a></h3>
+<p>Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future.
+With very small datasets, there may be not be enough data for cross validation, in which case <code class="docutils literal notranslate"><span class="pre">num_validations</span></code> may be set to 0. This can also speed up quick tests.</p>
+<p>Cross validation helps assure that the optimal model is stable over the dynamics of a time series.
+Cross validation can be tricky in time series data due to the necessity of preventing data leakage from future data points.
+Here, two methods of cross validation are in place, <code class="docutils literal notranslate"><span class="pre">'even'</span></code> and ‘<code class="docutils literal notranslate"><span class="pre">backwards'</span></code>.</p>
+<p><strong>Even</strong> cross validation slices the data into equal chunks. For example, <code class="docutils literal notranslate"><span class="pre">num_validations=3</span></code> would split the data into equal, progressive thirds (less the original validation sample). The final validation results would then include four pieces, the results on the three cross validation samples as well as the original validation sample.</p>
+<p><strong>Backwards</strong> cross validation works backwards from the most recent data. First the most recent forecast_length samples are taken, then the next most recent forecast_length samples, and so on. This makes it more ideal for smaller or fast-changing datasets.</p>
+<p><strong>Seasonal</strong> validation is supplied as <code class="docutils literal notranslate"><span class="pre">'seasonal</span> <span class="pre">n'</span></code> ie <code class="docutils literal notranslate"><span class="pre">'seasonal</span> <span class="pre">364'</span></code>. It trains on the most recent data as usual, then valdations are <code class="docutils literal notranslate"><span class="pre">n</span></code> periods back from the datetime of the forecast would be. For example with daily data, forecasting for a month ahead, and <code class="docutils literal notranslate"><span class="pre">n=364</span></code>, the first test might be on May 2020, with validation on June 2019 and June 2018, the final forecast then of June 2020.</p>
+<p>Only a subset of models are based from initial validation to cross validation. The number of models is set such as <code class="docutils literal notranslate"><span class="pre">models_to_validate=10</span></code>. If a float in 0 to 1 is provided, it is treated as a % of models to select. If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter.</p>
+</div>
+<div class="section" id="a-more-detailed-example">
+<h3>A more detailed example:<a class="headerlink" href="#a-more-detailed-example" title="Permalink to this headline">¶</a></h3>
+<p>Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting.
+Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. These additional series carry information to models such as <code class="docutils literal notranslate"><span class="pre">RollingRegression</span></code>, <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code>, and <code class="docutils literal notranslate"><span class="pre">VECM</span></code>.</p>
+<p>Also seen in use here is the <code class="docutils literal notranslate"><span class="pre">model_list</span></code>.</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>from autots import AutoTS
+from autots.datasets import load_hourly
 
-<span class="n">Another</span> <span class="n">approach</span> <span class="n">that</span> <span class="n">may</span> <span class="n">improve</span> <span class="n">accuracy</span> <span class="k">is</span> <span class="k">to</span> <span class="k">set</span> <span class="o">`</span><span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;all&#39;</span><span class="o">`</span><span class="p">.</span> <span class="n">Ensemble</span> <span class="k">parameter</span> <span class="n">expects</span> <span class="n">a</span> <span class="n">single</span> <span class="n">string</span><span class="p">,</span> <span class="k">and</span> <span class="n">can</span> <span class="k">for</span> <span class="n">example</span> <span class="n">be</span> <span class="o">`</span><span class="s1">&#39;simple,dist&#39;</span><span class="o">`</span><span class="p">,</span> <span class="k">or</span> <span class="o">`</span><span class="s1">&#39;horizontal&#39;</span><span class="o">`</span><span class="p">.</span> <span class="k">As</span> <span class="n">this</span> <span class="n">means</span> <span class="n">storing</span> <span class="k">more</span> <span class="n">details</span> <span class="k">of</span> <span class="k">every</span> <span class="n">model</span><span class="p">,</span> <span class="n">this</span> <span class="n">takes</span> <span class="k">more</span> <span class="n">time</span> <span class="k">and</span> <span class="n">memory</span><span class="p">.</span>
+df_wide = load_hourly(long=False)
 
-<span class="n">A</span> <span class="n">handy</span> <span class="k">parameter</span> <span class="k">for</span> <span class="k">when</span> <span class="n">your</span> <span class="k">data</span> <span class="k">is</span> <span class="n">expected</span> <span class="k">to</span> <span class="n">always</span> <span class="n">be</span> <span class="mi">0</span> <span class="k">or</span> <span class="n">greater</span> <span class="p">(</span><span class="n">such</span> <span class="k">as</span> <span class="n">unit</span> <span class="n">sales</span><span class="p">)</span> <span class="k">is</span> <span class="k">to</span> <span class="k">set</span> <span class="o">`</span><span class="n">no_negatives</span><span class="o">=</span><span class="k">True</span><span class="o">`</span><span class="p">.</span> <span class="n">This</span> <span class="n">forces</span> <span class="n">forecasts</span> <span class="k">to</span> <span class="n">be</span> <span class="n">greater</span> <span class="k">than</span> <span class="k">or</span> <span class="n">equal</span> <span class="k">to</span> <span class="mi">0</span><span class="p">.</span>
-<span class="n">A</span> <span class="k">similar</span> <span class="k">function</span> <span class="k">is</span> <span class="o">`</span><span class="k">constraint</span><span class="o">=</span><span class="mi">2</span><span class="p">.</span><span class="mi">0</span><span class="o">`</span><span class="p">.</span> <span class="n">What</span> <span class="n">this</span> <span class="n">does</span> <span class="k">is</span> <span class="n">prevent</span> <span class="n">the</span> <span class="n">forecast</span> <span class="k">from</span> <span class="n">leaving</span> <span class="n">historic</span> <span class="n">bounds</span> <span class="k">set</span> <span class="k">by</span> <span class="n">the</span> <span class="n">training</span> <span class="k">data</span><span class="p">.</span> <span class="k">In</span> <span class="n">this</span> <span class="n">example</span><span class="p">,</span> <span class="n">the</span> <span class="n">forecasts</span> <span class="n">would</span> <span class="k">not</span> <span class="n">be</span> <span class="n">allowed</span> <span class="k">to</span> <span class="k">go</span> <span class="n">above</span> <span class="o">`</span><span class="k">max</span><span class="p">(</span><span class="n">training</span> <span class="k">data</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span><span class="p">.</span><span class="mi">0</span> <span class="o">*</span> <span class="n">st</span><span class="p">.</span><span class="n">dev</span><span class="p">(</span><span class="n">training</span> <span class="k">data</span><span class="p">)</span><span class="o">`</span><span class="p">,</span> <span class="k">as</span> <span class="n">well</span> <span class="k">as</span> <span class="n">the</span> <span class="n">reverse</span> <span class="k">on</span> <span class="n">the</span> <span class="n">minimum</span> <span class="n">side</span><span class="p">.</span> <span class="n">A</span> <span class="k">constraint</span> <span class="k">of</span> <span class="o">`</span><span class="mi">0</span><span class="o">`</span> <span class="n">would</span> <span class="n">constrain</span> <span class="n">forecasts</span> <span class="k">to</span> <span class="n">historical</span> <span class="n">mins</span> <span class="k">and</span> <span class="n">maxes</span><span class="p">.</span>
+# here we care most about traffic volume, all other series assumed to be weight of 1
+weights_hourly = {&#39;traffic_volume&#39;: 20}
 
-<span class="n">Another</span> <span class="n">convenience</span> <span class="k">function</span> <span class="k">is</span> <span class="o">`</span><span class="n">drop_most_recent</span><span class="o">=</span><span class="mi">1</span><span class="o">`</span> <span class="n">specifing</span> <span class="n">the</span> <span class="nb">number</span> <span class="k">of</span> <span class="n">most</span> <span class="n">recent</span> <span class="n">periods</span> <span class="k">to</span> <span class="k">drop</span><span class="p">.</span> <span class="n">This</span> <span class="n">can</span> <span class="n">be</span> <span class="n">handy</span> <span class="k">with</span> <span class="n">monthly</span> <span class="k">data</span><span class="p">,</span> <span class="k">where</span> <span class="n">often</span> <span class="n">the</span> <span class="n">most</span> <span class="n">recent</span> <span class="k">month</span> <span class="k">is</span> <span class="n">incomplete</span><span class="p">.</span>
-<span class="o">`</span><span class="n">drop_data_older_than_periods</span><span class="o">`</span> <span class="n">provides</span> <span class="k">similar</span> <span class="n">functionality</span> <span class="n">but</span> <span class="n">drops</span> <span class="n">the</span> <span class="n">oldest</span> <span class="k">data</span> <span class="k">to</span> <span class="n">speed</span> <span class="n">up</span> <span class="n">the</span> <span class="n">process</span> <span class="k">on</span> <span class="k">large</span> <span class="n">datasets</span><span class="p">.</span>
-<span class="o">`</span><span class="n">remove_leading_zeroes</span><span class="o">=</span><span class="k">True</span><span class="o">`</span> <span class="k">is</span> <span class="n">useful</span> <span class="k">for</span> <span class="k">data</span> <span class="k">where</span> <span class="k">leading</span> <span class="n">zeroes</span> <span class="n">represent</span> <span class="n">a</span> <span class="n">process</span> <span class="n">which</span> <span class="n">has</span> <span class="k">not</span> <span class="n">yet</span> <span class="n">started</span><span class="p">.</span>
+model_list = [
+    &#39;LastValueNaive&#39;,
+    &#39;GLS&#39;,
+    &#39;ETS&#39;,
+    &#39;AverageValueNaive&#39;,
+]
 
-<span class="k">When</span> <span class="n">working</span> <span class="k">with</span> <span class="n">many</span> <span class="n">time</span> <span class="n">series</span><span class="p">,</span> <span class="n">it</span> <span class="n">can</span> <span class="n">be</span> <span class="n">helpful</span> <span class="k">to</span> <span class="n">take</span> <span class="n">advantage</span> <span class="k">of</span> <span class="o">`</span><span class="n">subset</span><span class="o">=</span><span class="mi">100</span><span class="o">`</span><span class="p">.</span> <span class="n">Subset</span> <span class="n">specifies</span> <span class="n">the</span> <span class="n">interger</span> <span class="nb">number</span> <span class="k">of</span> <span class="n">time</span> <span class="n">series</span> <span class="k">to</span> <span class="n">test</span> <span class="n">models</span> <span class="k">on</span><span class="p">,</span> <span class="k">and</span> <span class="n">can</span> <span class="n">be</span> <span class="n">useful</span> <span class="k">with</span> <span class="n">many</span> <span class="n">related</span> <span class="n">time</span> <span class="n">series</span> <span class="p">(</span><span class="mi">1000</span><span class="s1">&#39;s of customer&#39;</span><span class="n">s</span> <span class="n">sales</span><span class="p">).</span> <span class="n">Usually</span> <span class="n">the</span> <span class="n">best</span> <span class="n">model</span> <span class="k">on</span> <span class="n">a</span> <span class="mi">100</span> <span class="n">related</span> <span class="n">time</span> <span class="n">series</span> <span class="k">is</span> <span class="n">very</span> <span class="k">close</span> <span class="k">to</span> <span class="n">that</span> <span class="n">tested</span> <span class="k">on</span> <span class="n">many</span> <span class="n">thousands</span> <span class="p">(</span><span class="k">or</span> <span class="k">more</span><span class="p">)</span> <span class="k">of</span> <span class="n">series</span><span class="p">.</span> <span class="n">This</span> <span class="n">speeds</span> <span class="n">up</span> <span class="n">the</span> <span class="n">model</span> <span class="n">process</span> <span class="k">in</span> <span class="n">these</span> <span class="n">cases</span><span class="p">,</span> <span class="n">but</span> <span class="n">does</span> <span class="k">not</span> <span class="k">work</span> <span class="k">with</span> <span class="o">`</span><span class="n">horizontal</span><span class="o">`</span> <span class="n">ensemble</span> <span class="n">types</span><span class="p">.</span>
+model = AutoTS(
+    forecast_length=49,
+    frequency=&#39;infer&#39;,
+    prediction_interval=0.95,
+    ensemble=&#39;simple&#39;,
+    max_generations=5,
+    num_validations=2,
+    validation_method=&#39;seasonal 168&#39;,
+    model_list=model_list,
+    models_to_validate=15,
+    drop_most_recent=1,
+    n_jobs=&#39;auto&#39;,
+)
 
-<span class="n">Subset</span> <span class="n">takes</span> <span class="n">advantage</span> <span class="k">of</span> <span class="n">weighting</span><span class="p">,</span> <span class="k">more</span> <span class="n">highly</span><span class="o">-</span><span class="n">weighted</span> <span class="n">series</span> <span class="k">are</span> <span class="k">more</span> <span class="n">likely</span> <span class="k">to</span> <span class="n">be</span> <span class="n">selected</span><span class="p">.</span> <span class="n">Weighting</span> <span class="k">is</span> <span class="n">used</span> <span class="k">with</span> <span class="n">multiple</span> <span class="n">time</span> <span class="n">series</span> <span class="k">to</span> <span class="n">tell</span> <span class="n">the</span> <span class="n">evaluator</span> <span class="n">which</span> <span class="n">series</span> <span class="k">are</span> <span class="n">most</span> <span class="n">important</span><span class="p">.</span> <span class="n">Series</span> <span class="n">weights</span> <span class="k">are</span> <span class="n">assumed</span> <span class="k">to</span> <span class="k">all</span> <span class="n">be</span> <span class="n">equal</span> <span class="k">to</span> <span class="mi">1</span><span class="p">,</span> <span class="k">values</span> <span class="n">need</span> <span class="k">only</span> <span class="n">be</span> <span class="n">passed</span> <span class="k">in</span> <span class="k">when</span> <span class="n">a</span> <span class="n">value</span> <span class="n">other</span> <span class="k">than</span> <span class="mi">1</span> <span class="k">is</span> <span class="n">desired</span><span class="p">.</span>
-<span class="n">Note</span> <span class="k">for</span> <span class="n">weighting</span><span class="p">,</span> <span class="n">larger</span> <span class="n">weights</span> <span class="o">=</span> <span class="k">more</span> <span class="n">important</span><span class="p">.</span>
+model = model.fit(
+    df_wide,
+    weights=weights_hourly,
+)
 
-<span class="o">###</span> <span class="n">Validation</span> <span class="k">and</span> <span class="k">Cross</span> <span class="n">Validation</span>
-<span class="n">Firstly</span><span class="p">,</span> <span class="k">all</span> <span class="n">models</span> <span class="k">are</span> <span class="k">initially</span> <span class="n">validated</span> <span class="k">on</span> <span class="n">the</span> <span class="n">most</span> <span class="n">recent</span> <span class="n">piece</span> <span class="k">of</span> <span class="k">data</span><span class="p">.</span> <span class="n">This</span> <span class="k">is</span> <span class="n">done</span> <span class="n">because</span> <span class="n">the</span> <span class="n">most</span> <span class="n">recent</span> <span class="k">data</span> <span class="n">will</span> <span class="n">generally</span> <span class="n">most</span> <span class="n">closely</span> <span class="n">resemble</span> <span class="n">the</span> <span class="n">forecast</span> <span class="n">future</span><span class="p">.</span>
-<span class="k">With</span> <span class="n">very</span> <span class="n">small</span> <span class="n">datasets</span><span class="p">,</span> <span class="n">there</span> <span class="n">may</span> <span class="n">be</span> <span class="k">not</span> <span class="n">be</span> <span class="n">enough</span> <span class="k">data</span> <span class="k">for</span> <span class="k">cross</span> <span class="n">validation</span><span class="p">,</span> <span class="k">in</span> <span class="n">which</span> <span class="k">case</span> <span class="o">`</span><span class="n">num_validations</span><span class="o">`</span> <span class="n">may</span> <span class="n">be</span> <span class="k">set</span> <span class="k">to</span> <span class="mi">0</span><span class="p">.</span> <span class="n">This</span> <span class="n">can</span> <span class="n">also</span> <span class="n">speed</span> <span class="n">up</span> <span class="n">quick</span> <span class="n">tests</span><span class="p">.</span>
-
-<span class="k">Cross</span> <span class="n">validation</span> <span class="n">helps</span> <span class="n">assure</span> <span class="n">that</span> <span class="n">the</span> <span class="n">optimal</span> <span class="n">model</span> <span class="k">is</span> <span class="k">stable</span> <span class="n">over</span> <span class="n">the</span> <span class="n">dynamics</span> <span class="k">of</span> <span class="n">a</span> <span class="n">time</span> <span class="n">series</span><span class="p">.</span>
-<span class="k">Cross</span> <span class="n">validation</span> <span class="n">can</span> <span class="n">be</span> <span class="n">tricky</span> <span class="k">in</span> <span class="n">time</span> <span class="n">series</span> <span class="k">data</span> <span class="n">due</span> <span class="k">to</span> <span class="n">the</span> <span class="n">necessity</span> <span class="k">of</span> <span class="n">preventing</span> <span class="k">data</span> <span class="n">leakage</span> <span class="k">from</span> <span class="n">future</span> <span class="k">data</span> <span class="n">points</span><span class="p">.</span>
-<span class="n">Here</span><span class="p">,</span> <span class="n">two</span> <span class="n">methods</span> <span class="k">of</span> <span class="k">cross</span> <span class="n">validation</span> <span class="k">are</span> <span class="k">in</span> <span class="n">place</span><span class="p">,</span> <span class="o">`</span><span class="s1">&#39;even&#39;</span><span class="o">`</span> <span class="k">and</span> <span class="s1">&#39;`backwards&#39;</span><span class="o">`</span><span class="p">.</span>
-
-<span class="o">**</span><span class="n">Even</span><span class="o">**</span> <span class="k">cross</span> <span class="n">validation</span> <span class="n">slices</span> <span class="n">the</span> <span class="k">data</span> <span class="k">into</span> <span class="n">equal</span> <span class="n">chunks</span><span class="p">.</span> <span class="k">For</span> <span class="n">example</span><span class="p">,</span> <span class="o">`</span><span class="n">num_validations</span><span class="o">=</span><span class="mi">3</span><span class="o">`</span> <span class="n">would</span> <span class="n">split</span> <span class="n">the</span> <span class="k">data</span> <span class="k">into</span> <span class="n">equal</span><span class="p">,</span> <span class="n">progressive</span> <span class="n">thirds</span> <span class="p">(</span><span class="k">less</span> <span class="n">the</span> <span class="n">original</span> <span class="n">validation</span> <span class="n">sample</span><span class="p">).</span> <span class="n">The</span> <span class="k">final</span> <span class="n">validation</span> <span class="n">results</span> <span class="n">would</span> <span class="k">then</span> <span class="n">include</span> <span class="n">four</span> <span class="n">pieces</span><span class="p">,</span> <span class="n">the</span> <span class="n">results</span> <span class="k">on</span> <span class="n">the</span> <span class="n">three</span> <span class="k">cross</span> <span class="n">validation</span> <span class="n">samples</span> <span class="k">as</span> <span class="n">well</span> <span class="k">as</span> <span class="n">the</span> <span class="n">original</span> <span class="n">validation</span> <span class="n">sample</span><span class="p">.</span>
-
-<span class="o">**</span><span class="n">Backwards</span><span class="o">**</span> <span class="k">cross</span> <span class="n">validation</span> <span class="n">works</span> <span class="n">backwards</span> <span class="k">from</span> <span class="n">the</span> <span class="n">most</span> <span class="n">recent</span> <span class="k">data</span><span class="p">.</span> <span class="k">First</span> <span class="n">the</span> <span class="n">most</span> <span class="n">recent</span> <span class="n">forecast_length</span> <span class="n">samples</span> <span class="k">are</span> <span class="n">taken</span><span class="p">,</span> <span class="k">then</span> <span class="n">the</span> <span class="k">next</span> <span class="n">most</span> <span class="n">recent</span> <span class="n">forecast_length</span> <span class="n">samples</span><span class="p">,</span> <span class="k">and</span> <span class="n">so</span> <span class="k">on</span><span class="p">.</span> <span class="n">This</span> <span class="n">makes</span> <span class="n">it</span> <span class="k">more</span> <span class="n">ideal</span> <span class="k">for</span> <span class="n">smaller</span> <span class="k">or</span> <span class="n">fast</span><span class="o">-</span><span class="n">changing</span> <span class="n">datasets</span><span class="p">.</span>
-
-<span class="o">**</span><span class="n">Seasonal</span><span class="o">**</span> <span class="n">validation</span> <span class="k">is</span> <span class="n">supplied</span> <span class="k">as</span> <span class="o">`</span><span class="s1">&#39;seasonal n&#39;</span><span class="o">`</span> <span class="n">ie</span> <span class="o">`</span><span class="s1">&#39;seasonal 364&#39;</span><span class="o">`</span><span class="p">.</span> <span class="n">It</span> <span class="n">trains</span> <span class="k">on</span> <span class="n">the</span> <span class="n">most</span> <span class="n">recent</span> <span class="k">data</span> <span class="k">as</span> <span class="n">usual</span><span class="p">,</span> <span class="k">then</span> <span class="n">valdations</span> <span class="k">are</span> <span class="o">`</span><span class="n">n</span><span class="o">`</span> <span class="n">periods</span> <span class="n">back</span> <span class="k">from</span> <span class="n">the</span> <span class="n">datetime</span> <span class="k">of</span> <span class="n">the</span> <span class="n">forecast</span> <span class="n">would</span> <span class="n">be</span><span class="p">.</span> <span class="k">For</span> <span class="n">example</span> <span class="k">with</span> <span class="n">daily</span> <span class="k">data</span><span class="p">,</span> <span class="n">forecasting</span> <span class="k">for</span> <span class="n">a</span> <span class="k">month</span> <span class="n">ahead</span><span class="p">,</span> <span class="k">and</span> <span class="o">`</span><span class="n">n</span><span class="o">=</span><span class="mi">364</span><span class="o">`</span><span class="p">,</span> <span class="n">the</span> <span class="k">first</span> <span class="n">test</span> <span class="n">might</span> <span class="n">be</span> <span class="k">on</span> <span class="n">May</span> <span class="mi">2020</span><span class="p">,</span> <span class="k">with</span> <span class="n">validation</span> <span class="k">on</span> <span class="n">June</span> <span class="mi">2019</span> <span class="k">and</span> <span class="n">June</span> <span class="mi">2018</span><span class="p">,</span> <span class="n">the</span> <span class="k">final</span> <span class="n">forecast</span> <span class="k">then</span> <span class="k">of</span> <span class="n">June</span> <span class="mi">2020</span><span class="p">.</span>
-
-<span class="k">Only</span> <span class="n">a</span> <span class="n">subset</span> <span class="k">of</span> <span class="n">models</span> <span class="k">are</span> <span class="n">based</span> <span class="k">from</span> <span class="n">initial</span> <span class="n">validation</span> <span class="k">to</span> <span class="k">cross</span> <span class="n">validation</span><span class="p">.</span> <span class="n">The</span> <span class="nb">number</span> <span class="k">of</span> <span class="n">models</span> <span class="k">is</span> <span class="k">set</span> <span class="n">such</span> <span class="k">as</span> <span class="o">`</span><span class="n">models_to_validate</span><span class="o">=</span><span class="mi">10</span><span class="o">`</span><span class="p">.</span> <span class="k">If</span> <span class="n">a</span> <span class="nb">float</span> <span class="k">in</span> <span class="mi">0</span> <span class="k">to</span> <span class="mi">1</span> <span class="k">is</span> <span class="n">provided</span><span class="p">,</span> <span class="n">it</span> <span class="k">is</span> <span class="n">treated</span> <span class="k">as</span> <span class="n">a</span> <span class="o">%</span> <span class="k">of</span> <span class="n">models</span> <span class="k">to</span> <span class="k">select</span><span class="p">.</span> <span class="k">If</span> <span class="n">you</span> <span class="n">suspect</span> <span class="n">your</span> <span class="n">most</span> <span class="n">recent</span> <span class="k">data</span> <span class="k">is</span> <span class="k">not</span> <span class="n">fairly</span> <span class="n">representative</span> <span class="k">of</span> <span class="n">the</span> <span class="n">whole</span><span class="p">,</span> <span class="n">it</span> <span class="n">would</span> <span class="n">be</span> <span class="n">a</span> <span class="n">good</span> <span class="n">idea</span> <span class="k">to</span> <span class="n">increase</span> <span class="n">this</span> <span class="k">parameter</span><span class="p">.</span>
-
-<span class="o">###</span> <span class="n">A</span> <span class="k">more</span> <span class="n">detailed</span> <span class="n">example</span><span class="p">:</span>
-<span class="n">Here</span><span class="p">,</span> <span class="n">we</span> <span class="k">are</span> <span class="n">forecasting</span> <span class="n">the</span> <span class="n">traffice</span> <span class="n">along</span> <span class="n">Interstate</span> <span class="mi">94</span> <span class="k">between</span> <span class="n">Minneapolis</span> <span class="k">and</span> <span class="n">St</span> <span class="n">Paul</span> <span class="k">in</span> <span class="n">Minnesota</span><span class="p">.</span> <span class="n">This</span> <span class="k">is</span> <span class="n">a</span> <span class="n">great</span> <span class="n">dataset</span> <span class="k">to</span> <span class="n">demonstrate</span> <span class="n">a</span> <span class="n">recommended</span> <span class="n">way</span> <span class="k">of</span> <span class="k">including</span> <span class="k">external</span> <span class="n">variables</span> <span class="o">-</span> <span class="k">by</span> <span class="k">including</span> <span class="n">them</span> <span class="k">as</span> <span class="n">time</span> <span class="n">series</span> <span class="k">with</span> <span class="n">a</span> <span class="k">lower</span> <span class="n">weighting</span><span class="p">.</span>
-<span class="n">Here</span> <span class="n">weather</span> <span class="k">data</span> <span class="k">is</span> <span class="n">included</span> <span class="o">-</span> <span class="n">winter</span> <span class="k">and</span> <span class="n">road</span> <span class="n">construction</span> <span class="n">being</span> <span class="n">the</span> <span class="n">major</span> <span class="n">influencers</span> <span class="k">for</span> <span class="n">traffic</span> <span class="k">and</span> <span class="n">will</span> <span class="n">be</span> <span class="n">forecast</span> <span class="n">alongside</span> <span class="n">the</span> <span class="n">traffic</span> <span class="n">volume</span><span class="p">.</span> <span class="n">These</span> <span class="n">additional</span> <span class="n">series</span> <span class="n">carry</span> <span class="n">information</span> <span class="k">to</span> <span class="n">models</span> <span class="n">such</span> <span class="k">as</span> <span class="o">`</span><span class="n">RollingRegression</span><span class="o">`</span><span class="p">,</span> <span class="o">`</span><span class="n">VARMAX</span><span class="o">`</span><span class="p">,</span> <span class="k">and</span> <span class="o">`</span><span class="n">VECM</span><span class="o">`</span><span class="p">.</span>
-
-<span class="n">Also</span> <span class="n">seen</span> <span class="k">in</span> <span class="n">use</span> <span class="n">here</span> <span class="k">is</span> <span class="n">the</span> <span class="o">`</span><span class="n">model_list</span><span class="o">`</span><span class="p">.</span>
+prediction = model.predict()
+forecasts_df = prediction.forecast
+# model.best_model.to_string()
 </pre></div>
 </div>
-<p>from autots import AutoTS
-from autots.datasets import load_hourly</p>
-<p>df_wide = load_hourly(long=False)</p>
-</div>
-</div>
-</div>
-</div>
-<div class="section" id="here-we-care-most-about-traffic-volume-all-other-series-assumed-to-be-weight-of-1">
-<h1>here we care most about traffic volume, all other series assumed to be weight of 1<a class="headerlink" href="#here-we-care-most-about-traffic-volume-all-other-series-assumed-to-be-weight-of-1" title="Permalink to this headline">¶</a></h1>
-<p>weights_hourly = {‘traffic_volume’: 20}</p>
-<dl class="simple">
-<dt>model_list = [</dt><dd><p>‘LastValueNaive’,
-‘GLS’,
-‘ETS’,
-‘AverageValueNaive’,</p>
-</dd>
-</dl>
-<p>]</p>
-<dl class="simple">
-<dt>model = AutoTS(</dt><dd><p>forecast_length=49,
-frequency=’infer’,
-prediction_interval=0.95,
-ensemble=’simple’,
-max_generations=5,
-num_validations=2,
-validation_method=’seasonal 168’,
-model_list=model_list,
-models_to_validate=15,
-drop_most_recent=1,
-n_jobs=’auto’,</p>
-</dd>
-</dl>
-<p>)</p>
-<dl class="simple">
-<dt>model = model.fit(</dt><dd><p>df_wide,
-weights=weights_hourly,</p>
-</dd>
-</dl>
-<p>)</p>
-<p>prediction = model.predict()
-forecasts_df = prediction.forecast</p>
-</div>
-<div class="section" id="model-best-model-to-string">
-<h1>model.best_model.to_string()<a class="headerlink" href="#model-best-model-to-string" title="Permalink to this headline">¶</a></h1>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">Probabilistic</span> <span class="n">forecasts</span> <span class="k">are</span> <span class="o">*</span><span class="n">available</span><span class="o">*</span> <span class="k">for</span> <span class="k">all</span> <span class="n">models</span><span class="p">,</span> <span class="n">but</span> <span class="k">in</span> <span class="n">many</span> <span class="n">cases</span> <span class="k">are</span> <span class="n">just</span> <span class="k">data</span><span class="o">-</span><span class="n">based</span> <span class="n">estimates</span> <span class="k">in</span> <span class="n">lieu</span> <span class="k">of</span> <span class="n">model</span> <span class="n">estimates</span><span class="p">,</span> <span class="n">so</span> <span class="n">be</span> <span class="n">careful</span><span class="p">.</span>
-</pre></div>
-</div>
-<p>upper_forecasts_df = prediction.upper_forecast
-lower_forecasts_df = prediction.lower_forecast</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">###</span> <span class="n">Model</span> <span class="n">Lists</span>
-<span class="k">By</span> <span class="k">default</span><span class="p">,</span> <span class="n">most</span> <span class="n">available</span> <span class="n">models</span> <span class="k">are</span> <span class="n">tried</span><span class="p">.</span> <span class="k">For</span> <span class="n">a</span> <span class="k">more</span> <span class="n">limited</span> <span class="n">subset</span> <span class="k">of</span> <span class="n">models</span><span class="p">,</span> <span class="n">a</span> <span class="n">custom</span> <span class="n">list</span> <span class="n">can</span> <span class="n">be</span> <span class="n">passed</span> <span class="k">in</span><span class="p">,</span> <span class="k">or</span> <span class="k">more</span> <span class="n">simply</span><span class="p">,</span> <span class="n">a</span> <span class="n">string</span><span class="p">,</span> <span class="n">one</span> <span class="k">of</span> <span class="o">`</span><span class="s1">&#39;probabilistic&#39;</span><span class="p">,</span> <span class="s1">&#39;multivariate&#39;</span><span class="p">,</span> <span class="s1">&#39;fast&#39;</span><span class="p">,</span> <span class="s1">&#39;superfast&#39;</span><span class="p">,</span> <span class="k">or</span> <span class="s1">&#39;all&#39;</span><span class="o">`</span><span class="p">.</span>
-
-<span class="n">A</span> <span class="k">table</span> <span class="k">of</span> <span class="k">all</span> <span class="n">available</span> <span class="n">models</span> <span class="k">is</span> <span class="n">available</span> <span class="n">further</span> <span class="n">below</span><span class="p">.</span>
-
-<span class="k">On</span> <span class="k">large</span> <span class="n">multivariate</span> <span class="n">series</span><span class="p">,</span> <span class="o">`</span><span class="n">TSFreshRegressor</span><span class="o">`</span><span class="p">,</span> <span class="o">`</span><span class="n">DynamicFactor</span><span class="o">`</span> <span class="k">and</span> <span class="o">`</span><span class="n">VARMAX</span><span class="o">`</span> <span class="n">can</span> <span class="n">be</span> <span class="n">impractically</span> <span class="n">slow</span><span class="p">.</span>
-
-<span class="o">##</span> <span class="n">Deployment</span> <span class="k">and</span> <span class="k">Template</span> <span class="n">Import</span><span class="o">/</span><span class="n">Export</span>
-<span class="n">Many</span> <span class="n">models</span> <span class="n">can</span> <span class="n">be</span> <span class="n">reverse</span> <span class="n">engineered</span> <span class="k">with</span> <span class="p">(</span><span class="k">relative</span><span class="p">)</span> <span class="n">simplicity</span> <span class="n">outside</span> <span class="k">of</span> <span class="n">AutoTS</span> <span class="k">by</span> <span class="k">placing</span> <span class="n">the</span> <span class="n">choosen</span> <span class="k">parameters</span> <span class="k">into</span> <span class="n">Statsmodels</span> <span class="k">or</span> <span class="n">other</span> <span class="n">underlying</span> <span class="n">package</span><span class="p">.</span>
-<span class="n">There</span> <span class="k">are</span> <span class="k">some</span> <span class="n">advantages</span> <span class="k">to</span> <span class="n">deploying</span> <span class="n">within</span> <span class="n">AutoTS</span> <span class="k">using</span> <span class="n">a</span> <span class="n">reduced</span> <span class="n">starting</span> <span class="k">template</span><span class="p">.</span> <span class="n">Following</span> <span class="n">the</span> <span class="n">model</span> <span class="n">training</span><span class="p">,</span> <span class="n">the</span> <span class="n">top</span> <span class="n">models</span> <span class="n">can</span> <span class="n">be</span> <span class="n">exported</span> <span class="k">to</span> <span class="n">a</span> <span class="o">`</span><span class="p">.</span><span class="n">csv</span><span class="o">`</span> <span class="k">or</span> <span class="o">`</span><span class="p">.</span><span class="n">json</span><span class="o">`</span> <span class="n">file</span><span class="p">,</span> <span class="k">then</span> <span class="k">on</span> <span class="k">next</span> <span class="n">run</span> <span class="k">only</span> <span class="n">those</span> <span class="n">models</span> <span class="n">will</span> <span class="n">be</span> <span class="n">tried</span><span class="p">.</span>
-<span class="n">This</span> <span class="n">allows</span> <span class="k">for</span> <span class="n">improved</span> <span class="n">fault</span> <span class="n">tolerance</span> <span class="p">(</span><span class="k">by</span> <span class="n">relying</span> <span class="k">not</span> <span class="k">on</span> <span class="n">one</span><span class="p">,</span> <span class="n">but</span> <span class="n">several</span> <span class="n">possible</span> <span class="n">models</span> <span class="k">and</span> <span class="n">underlying</span> <span class="n">packages</span><span class="p">),</span> <span class="k">and</span> <span class="k">some</span> <span class="n">flexibility</span> <span class="k">in</span> <span class="n">switching</span> <span class="n">models</span> <span class="k">as</span> <span class="n">the</span> <span class="n">time</span> <span class="n">series</span> <span class="n">evolve</span><span class="p">.</span>
-<span class="n">One</span> <span class="n">thing</span> <span class="k">to</span> <span class="n">note</span> <span class="k">is</span> <span class="n">that</span><span class="p">,</span> <span class="k">as</span> <span class="n">AutoTS</span> <span class="k">is</span> <span class="n">still</span> <span class="k">under</span> <span class="n">development</span><span class="p">,</span> <span class="k">template</span> <span class="n">formats</span> <span class="k">are</span> <span class="n">likely</span> <span class="k">to</span> <span class="n">change</span> <span class="k">and</span> <span class="n">be</span> <span class="n">incompatible</span> <span class="k">with</span> <span class="n">future</span> <span class="n">package</span> <span class="n">versions</span><span class="p">.</span>
+<p>Probabilistic forecasts are <em>available</em> for all models, but in many cases are just data-based estimates in lieu of model estimates, so be careful.</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">upper_forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="p">.</span><span class="n">upper_forecast</span>
+<span class="n">lower_forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="p">.</span><span class="n">lower_forecast</span>
 </pre></div>
 </div>
 </div>
-<div class="section" id="after-fitting-an-autots-model">
-<h1>after fitting an AutoTS model<a class="headerlink" href="#after-fitting-an-autots-model" title="Permalink to this headline">¶</a></h1>
-<p>example_filename = “example_export.csv”  # .csv/.json
-model.export_template(example_filename, models=’best’,</p>
-<blockquote>
-<div><p>n=15, max_per_model_class=3)</p>
-</div></blockquote>
+<div class="section" id="model-lists">
+<h3>Model Lists<a class="headerlink" href="#model-lists" title="Permalink to this headline">¶</a></h3>
+<p>By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of <code class="docutils literal notranslate"><span class="pre">'probabilistic',</span> <span class="pre">'multivariate',</span> <span class="pre">'fast',</span> <span class="pre">'superfast',</span> <span class="pre">or</span> <span class="pre">'all'</span></code>.</p>
+<p>A table of all available models is available further below.</p>
+<p>On large multivariate series, <code class="docutils literal notranslate"><span class="pre">TSFreshRegressor</span></code>, <code class="docutils literal notranslate"><span class="pre">DynamicFactor</span></code> and <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code> can be impractically slow.</p>
 </div>
-<div class="section" id="on-new-training">
-<h1>on new training<a class="headerlink" href="#on-new-training" title="Permalink to this headline">¶</a></h1>
-<dl class="simple">
-<dt>model = AutoTS(forecast_length=forecast_length,</dt><dd><p>frequency=’infer’, max_generations=0,
-num_validations=0, verbose=0)</p>
-</dd>
-</dl>
-<p>model = model.import_template(example_filename, method=’only’) # method=’add on’
-print(“Overwrite template is: {}”.format(str(model.initial_template)))</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">###</span> <span class="n">Metrics</span>
-<span class="n">There</span> <span class="k">are</span> <span class="n">a</span> <span class="nb">number</span> <span class="k">of</span> <span class="n">available</span> <span class="n">metrics</span><span class="p">,</span> <span class="k">all</span> <span class="n">combined</span> <span class="n">together</span> <span class="k">into</span> <span class="n">a</span> <span class="s1">&#39;Score&#39;</span> <span class="n">which</span> <span class="n">evaluates</span> <span class="n">the</span> <span class="n">best</span> <span class="n">model</span><span class="p">.</span> <span class="n">The</span> <span class="s1">&#39;Score&#39;</span> <span class="n">that</span> <span class="n">compares</span> <span class="n">models</span> <span class="n">can</span> <span class="n">easily</span> <span class="n">be</span> <span class="n">adjusted</span> <span class="k">by</span> <span class="n">passing</span> <span class="n">through</span> <span class="n">custom</span> <span class="n">metric</span> <span class="n">weights</span> <span class="k">dictionary</span><span class="p">.</span>
-<span class="n">Higher</span> <span class="n">weighting</span> <span class="n">increases</span> <span class="n">the</span> <span class="n">importance</span> <span class="k">of</span> <span class="n">that</span> <span class="n">metric</span><span class="p">,</span> <span class="n">while</span> <span class="mi">0</span> <span class="n">removes</span> <span class="n">that</span> <span class="n">metric</span> <span class="k">from</span> <span class="n">consideration</span><span class="p">.</span> <span class="n">Weights</span> <span class="n">should</span> <span class="n">be</span> <span class="mi">0</span> <span class="k">or</span> <span class="n">positive</span> <span class="n">numbers</span><span class="p">,</span> <span class="k">and</span> <span class="n">can</span> <span class="n">be</span> <span class="n">floats</span> <span class="k">as</span> <span class="n">well</span> <span class="k">as</span> <span class="n">integers</span><span class="p">.</span>
-<span class="n">This</span> <span class="n">weighting</span> <span class="k">is</span> <span class="k">not</span> <span class="k">to</span> <span class="n">be</span> <span class="n">confused</span> <span class="k">with</span> <span class="n">series</span> <span class="n">weighting</span><span class="p">,</span> <span class="n">which</span> <span class="n">effects</span> <span class="n">how</span> <span class="n">equally</span> <span class="k">any</span> <span class="n">one</span> <span class="n">metric</span> <span class="k">is</span> <span class="n">applied</span> <span class="k">to</span> <span class="k">all</span> <span class="n">the</span> <span class="n">series</span><span class="p">.</span>
+</div>
+<div class="section" id="deployment-and-template-import-export">
+<h2>Deployment and Template Import/Export<a class="headerlink" href="#deployment-and-template-import-export" title="Permalink to this headline">¶</a></h2>
+<p>Many models can be reverse engineered with (relative) simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package.
+There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a <code class="docutils literal notranslate"><span class="pre">.csv</span></code> or <code class="docutils literal notranslate"><span class="pre">.json</span></code> file, then on next run only those models will be tried.
+This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve.
+One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">#</span> <span class="k">after</span> <span class="n">fitting</span> <span class="n">an</span> <span class="n">AutoTS</span> <span class="n">model</span>
+<span class="n">example_filename</span> <span class="o">=</span> <span class="ss">&quot;example_export.csv&quot;</span>  <span class="o">#</span> <span class="p">.</span><span class="n">csv</span><span class="o">/</span><span class="p">.</span><span class="n">json</span>
+<span class="n">model</span><span class="p">.</span><span class="n">export_template</span><span class="p">(</span><span class="n">example_filename</span><span class="p">,</span> <span class="n">models</span><span class="o">=</span><span class="s1">&#39;best&#39;</span><span class="p">,</span>
+                      <span class="n">n</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">max_per_model_class</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+<span class="o">#</span> <span class="k">on</span> <span class="k">new</span> <span class="n">training</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span><span class="n">forecast_length</span><span class="o">=</span><span class="n">forecast_length</span><span class="p">,</span>
+               <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span> <span class="n">max_generations</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+               <span class="n">num_validations</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="k">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">import_template</span><span class="p">(</span><span class="n">example_filename</span><span class="p">,</span> <span class="k">method</span><span class="o">=</span><span class="s1">&#39;only&#39;</span><span class="p">)</span> <span class="o">#</span> <span class="k">method</span><span class="o">=</span><span class="s1">&#39;add on&#39;</span>
+<span class="n">print</span><span class="p">(</span><span class="ss">&quot;Overwrite template is: {}&quot;</span><span class="p">.</span><span class="n">format</span><span class="p">(</span><span class="n">str</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">initial_template</span><span class="p">)))</span>
 </pre></div>
 </div>
-<dl class="simple">
-<dt>metric_weighting = {</dt><dd><p>‘smape_weighting’ : 10,
-‘mae_weighting’ : 1,
-‘rmse_weighting’ : 5,
-‘containment_weighting’ : 1,
-‘runtime_weighting’ : 0,
-‘spl_weighting’: 1,
-‘contour_weighting’: 0,</p>
-</dd>
-</dl>
-<p>}</p>
-<dl class="simple">
-<dt>model = AutoTS(</dt><dd><p>forecast_length=forecast_length,
-frequency=’infer’,
-metric_weighting=metric_weighting,</p>
-</dd>
-</dl>
-<p>)</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE.
+<div class="section" id="metrics">
+<h3>Metrics<a class="headerlink" href="#metrics" title="Permalink to this headline">¶</a></h3>
+<p>There are a number of available metrics, all combined together into a ‘Score’ which evaluates the best model. The ‘Score’ that compares models can easily be adjusted by passing through custom metric weights dictionary.
+Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers.
+This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series.</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>metric_weighting = {
+    &#39;smape_weighting&#39; : 10,
+    &#39;mae_weighting&#39; : 1,
+    &#39;rmse_weighting&#39; : 5,
+    &#39;containment_weighting&#39; : 1,
+    &#39;runtime_weighting&#39; : 0,
+    &#39;spl_weighting&#39;: 1,
+    &#39;contour_weighting&#39;: 0,
+}
 
-**Warning**: weights are not fully balanced 1 - 1 - 1. As such it is usually best to place your favorite metric an order of magnitude or more above the others.
-
-`sMAPE` is generally the most versatile metric across multiple series, but doesn&#39;t handle forecasts with lots of zeroes well.
-
-`SPL` is *Scaled Pinball Loss* and is the optimal metric for assessing upper/lower quantile forecast accuracies.
-
-`Containment` measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL.
-
-`Contour` is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. Does not work with forecast_length=1.
-
-## Installation and Dependency Versioning
-`pip install autots`
-### Requirements:
-    Python &gt;= 3.5
-    numpy
-    pandas
-    sklearn     &gt;= 0.20.0 (ColumnTransformer)
-                &gt;= 0.23.0 (PoissonReg)
-    statsmodels
-
-Of these, numpy and pandas are critical.
+model = AutoTS(
+    forecast_length=forecast_length,
+    frequency=&#39;infer&#39;,
+    metric_weighting=metric_weighting,
+)
+</pre></div>
+</div>
+<p>It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE.</p>
+<p><strong>Warning</strong>: weights are not fully balanced 1 - 1 - 1. As such it is usually best to place your favorite metric an order of magnitude or more above the others.</p>
+<p><code class="docutils literal notranslate"><span class="pre">sMAPE</span></code> is generally the most versatile metric across multiple series, but doesn’t handle forecasts with lots of zeroes well.</p>
+<p><code class="docutils literal notranslate"><span class="pre">SPL</span></code> is <em>Scaled Pinball Loss</em> and is the optimal metric for assessing upper/lower quantile forecast accuracies.</p>
+<p><code class="docutils literal notranslate"><span class="pre">Containment</span></code> measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL.</p>
+<p><code class="docutils literal notranslate"><span class="pre">Contour</span></code> is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but <em>not</em> the magnitude of that difference. Does not work with forecast_length=1.</p>
+</div>
+</div>
+<div class="section" id="installation-and-dependency-versioning">
+<h2>Installation and Dependency Versioning<a class="headerlink" href="#installation-and-dependency-versioning" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">autots</span></code></p>
+<div class="section" id="requirements">
+<h3>Requirements:<a class="headerlink" href="#requirements" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">Python</span> <span class="o">&gt;=</span> <span class="mi">3</span><span class="p">.</span><span class="mi">5</span>
+<span class="n">numpy</span>
+<span class="n">pandas</span>
+<span class="n">sklearn</span>     <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">.</span><span class="mi">20</span><span class="p">.</span><span class="mi">0</span> <span class="p">(</span><span class="n">ColumnTransformer</span><span class="p">)</span>
+            <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">.</span><span class="mi">23</span><span class="p">.</span><span class="mi">0</span> <span class="p">(</span><span class="n">PoissonReg</span><span class="p">)</span>
+<span class="n">statsmodels</span>
+</pre></div>
+</div>
+<p>Of these, numpy and pandas are critical.
 Limited functionality should exist without scikit-learn.
-Full functionality should be maintained without statsmodels, albeit with fewer available models.
-
-`pip install autots[&#39;additional&#39;]`
-### Optional Requirements
-    holidays
-    fbprophet
-    gluonts (requires mxnet)
-    mxnet (mxnet-mkl, mxnet-cu91, mxnet-cu101mkl, etc.)
-    tensorflow &gt;= 2.0.0
-    lightgbm
-    xgboost
-    psutil
-
-#### Experimental &amp; Dev Requirements
-    tensorflow-probability
-    fredapi
-    tsfresh
-
-### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
-Download Anaconda or Miniconda.
-
-(install Visual Studio if on Windows for C compilers)
-
-If you have an Nvidia GPU, download NVIDIA CUDA and CuDNN.
-Intel MKL is included with `anaconda` and offers significant performance gain for Intel CPUs.
-You can check if your system is using mkl with `numpy.show_config()`.
-If you are on an AMD CPU, you do **not** want to be using MKL, OpenBLAS is better.
-On Linux ARM-based systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster compilations.
+Full functionality should be maintained without statsmodels, albeit with fewer available models.</p>
+<p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">autots['additional']</span></code></p>
+</div>
+<div class="section" id="optional-requirements">
+<h3>Optional Requirements<a class="headerlink" href="#optional-requirements" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">holidays</span>
+<span class="n">fbprophet</span>
+<span class="n">gluonts</span> <span class="p">(</span><span class="n">requires</span> <span class="n">mxnet</span><span class="p">)</span>
+<span class="n">mxnet</span> <span class="p">(</span><span class="n">mxnet</span><span class="o">-</span><span class="n">mkl</span><span class="p">,</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu91</span><span class="p">,</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu101mkl</span><span class="p">,</span> <span class="n">etc</span><span class="p">.)</span>
+<span class="n">tensorflow</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span>
+<span class="n">lightgbm</span>
+<span class="n">xgboost</span>
+<span class="n">psutil</span>
 </pre></div>
 </div>
-<p>conda create -n timeseries python=3.8
-conda activate timeseries</p>
+<div class="section" id="experimental-dev-requirements">
+<h4>Experimental &amp; Dev Requirements<a class="headerlink" href="#experimental-dev-requirements" title="Permalink to this headline">¶</a></h4>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">tensorflow</span><span class="o">-</span><span class="n">probability</span>
+<span class="n">fredapi</span>
+<span class="n">tsfresh</span>
+</pre></div>
 </div>
-<div class="section" id="for-simplicity">
-<h1>for simplicity:<a class="headerlink" href="#for-simplicity" title="Permalink to this headline">¶</a></h1>
-<p>conda install anaconda</p>
 </div>
-<div class="section" id="elsewise">
-<h1>elsewise:<a class="headerlink" href="#elsewise" title="Permalink to this headline">¶</a></h1>
-<p>conda install numpy scipy
-conda install -c conda-forge scikit-learn
-pip install statsmodels</p>
 </div>
-<div class="section" id="check-the-mxnet-documentation-for-various-flavors-of-mxnet-available">
-<h1>check the mxnet documentation for various flavors of mxnet available<a class="headerlink" href="#check-the-mxnet-documentation-for-various-flavors-of-mxnet-available" title="Permalink to this headline">¶</a></h1>
-<p>pip install mxnet
-pip install gluonts
-conda update anaconda
-conda install -c conda-forge fbprophet
-pip install tensorflow
-pip install tensorflow-probability
-<a href="#id1"><span class="problematic" id="id2">``</span></a><a href="#id3"><span class="problematic" id="id4">`</span></a></p>
+<div class="section" id="hardware-acceleration-with-intel-cpu-and-nvidia-gpu-for-ubuntu-windows">
+<h3>Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows<a class="headerlink" href="#hardware-acceleration-with-intel-cpu-and-nvidia-gpu-for-ubuntu-windows" title="Permalink to this headline">¶</a></h3>
+<p>Download Anaconda or Miniconda.</p>
+<p>(install Visual Studio if on Windows for C compilers)</p>
+<p>If you have an Nvidia GPU, download NVIDIA CUDA and CuDNN.
+Intel MKL is included with <code class="docutils literal notranslate"><span class="pre">anaconda</span></code> and offers significant performance gain for Intel CPUs.
+You can check if your system is using mkl with <code class="docutils literal notranslate"><span class="pre">numpy.show_config()</span></code>.
+If you are on an AMD CPU, you do <strong>not</strong> want to be using MKL, OpenBLAS is better.
+On Linux ARM-based systems, apt-get/yum (rather than pip) installs of numpy/pandas <em>may</em> install faster compilations.</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">conda</span> <span class="k">create</span> <span class="o">-</span><span class="n">n</span> <span class="n">timeseries</span> <span class="n">python</span><span class="o">=</span><span class="mi">3</span><span class="p">.</span><span class="mi">8</span>
+<span class="n">conda</span> <span class="n">activate</span> <span class="n">timeseries</span>
+
+<span class="o">#</span> <span class="k">for</span> <span class="n">simplicity</span><span class="p">:</span>
+<span class="n">conda</span> <span class="n">install</span> <span class="n">anaconda</span>
+<span class="o">#</span> <span class="n">elsewise</span><span class="p">:</span>
+<span class="n">conda</span> <span class="n">install</span> <span class="n">numpy</span> <span class="n">scipy</span>
+<span class="n">conda</span> <span class="n">install</span> <span class="o">-</span><span class="k">c</span> <span class="n">conda</span><span class="o">-</span><span class="n">forge</span> <span class="n">scikit</span><span class="o">-</span><span class="n">learn</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">statsmodels</span>
+
+<span class="o">#</span> <span class="k">check</span> <span class="n">the</span> <span class="n">mxnet</span> <span class="n">documentation</span> <span class="k">for</span> <span class="n">various</span> <span class="n">flavors</span> <span class="k">of</span> <span class="n">mxnet</span> <span class="n">available</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">mxnet</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">gluonts</span>
+<span class="n">conda</span> <span class="k">update</span> <span class="n">anaconda</span>
+<span class="n">conda</span> <span class="n">install</span> <span class="o">-</span><span class="k">c</span> <span class="n">conda</span><span class="o">-</span><span class="n">forge</span> <span class="n">fbprophet</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">tensorflow</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">tensorflow</span><span class="o">-</span><span class="n">probability</span>
+</pre></div>
+</div>
+</div>
+</div>
 <div class="section" id="caveats-and-advice">
 <h2>Caveats and Advice<a class="headerlink" href="#caveats-and-advice" title="Permalink to this headline">¶</a></h2>
 <div class="section" id="short-training-history">
@@ -613,15 +594,8 @@ Some models will support a more limited range of frequencies.</p>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Tutorial</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#extended-tutorial">Extended Tutorial</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#underlying-process">Underlying Process</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="#here-we-care-most-about-traffic-volume-all-other-series-assumed-to-be-weight-of-1">here we care most about traffic volume, all other series assumed to be weight of 1</a></li>
-<li class="toctree-l1"><a class="reference internal" href="#model-best-model-to-string">model.best_model.to_string()</a></li>
-<li class="toctree-l1"><a class="reference internal" href="#after-fitting-an-autots-model">after fitting an AutoTS model</a></li>
-<li class="toctree-l1"><a class="reference internal" href="#on-new-training">on new training</a></li>
-<li class="toctree-l1"><a class="reference internal" href="#for-simplicity">for simplicity:</a></li>
-<li class="toctree-l1"><a class="reference internal" href="#elsewise">elsewise:</a></li>
-<li class="toctree-l1"><a class="reference internal" href="#check-the-mxnet-documentation-for-various-flavors-of-mxnet-available">check the mxnet documentation for various flavors of mxnet available</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#deployment-and-template-import-export">Deployment and Template Import/Export</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#installation-and-dependency-versioning">Installation and Dependency Versioning</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#caveats-and-advice">Caveats and Advice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#models">Models</a></li>
 </ul>
