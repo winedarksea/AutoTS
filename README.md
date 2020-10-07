@@ -21,17 +21,17 @@ For other time series needs, check out the list [here](https://github.com/MaxBen
 * Option to use one or a combination of metrics for model selection
 * Import and export of templates allowing greater user customization
 
-## Basic Use
+## Installation
 ```
 pip install autots
 ```
 This includes dependencies for basic models, but additonal packages are required for some models and methods.
 
-Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html) for a more detailed guide to features!
+## Basic Use
 
 Input data is expected to come in either a *long* or a *wide* format:
 
-- The *wide* format is a pandas.DataFrame with a pandas.DatetimeIndex and each column a distinct series. 
+- The *wide* format is a `pandas.DataFrame` with a `pandas.DatetimeIndex` and each column a distinct series. 
 - The *long* format has three columns: 
   - Date (ideally already in pd.DateTime format)
   - Series ID. For a single time series, series_id can be `= None`.
@@ -69,6 +69,8 @@ model_results = model.results()
 # and aggregated from cross validation
 validation_results = model.results("validation")
 ```
+
+Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html) for a more detailed guide to features!
 
 ## How to Contribute:
 * Give feedback on where you find the documentation confusing

@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.tools package &#8212; AutoTS 0.2.4 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.2.5 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -322,8 +322,33 @@ It will be sensitive to the transformations of the data.</p>
 </dd></dl>
 
 <dl class="function">
+<dt id="autots.tools.shaping.df_cleanup">
+<code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">df_cleanup</code><span class="sig-paren">(</span><em class="sig-param">df_wide</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">na_tolerance: float = 0.999</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">verbose: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.df_cleanup" title="Permalink to this definition">¶</a></dt>
+<dd><p>Pass cleaning functions through to dataframe.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df_wide</strong> (<em>pd.DataFrame</em>) – input dataframe to clean.</p></li>
+<li><p><strong>frequency</strong> (<em>str</em><em>, </em><em>optional</em>) – frequency in string of alias for DateOffset object, normally “1D” -daily, “MS” -month start etc. Currently, aliases are listed somewhere in here: <a class="reference external" href="https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html">https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html</a>. Defaults to “infer”.</p></li>
+<li><p><strong>na_tolerance</strong> (<em>float</em><em>, </em><em>optional</em>) – allow up to this percent of values to be NaN, else drop the entire series. The default of 0.95 means a series can be 95% NaN values and still be included. Defaults to 0.999.</p></li>
+<li><p><strong>drop_data_older_than_periods</strong> (<em>int</em><em>, </em><em>optional</em>) – cut off older data because eventually you just get too much. Defaults to 100000.</p></li>
+<li><p><strong>drop_most_recent</strong> (<em>int</em><em>, </em><em>optional</em>) – number of most recent data points to remove. Useful if you pull monthly data before month end, and you don’t want an incomplete month appearing complete. Defaults to 0.</p></li>
+<li><p><strong>aggfunc</strong> (<em>str</em><em>, </em><em>optional</em>) – passed to pd.pivot_table, determines how to aggregate duplicates for upsampling. Other options include “mean” and other numpy functions, beware data <em>must</em> already be input as numeric type for these to work. If categorical data is provided, <cite>aggfunc=’first’</cite> is recommended. Defaults to ‘first’.</p></li>
+<li><p><strong>verbose</strong> (<em>int</em><em>, </em><em>optional</em>) – 0 for silence, higher values for more noise. Defaults to 1.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>original dataframe, now possibly shorter.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
 <dt id="autots.tools.shaping.long_to_wide">
-<code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">long_to_wide</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = 'series_id'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">na_tolerance: float = 0.999</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">verbose: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.long_to_wide" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">long_to_wide</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = 'series_id'</em>, <em class="sig-param">aggfunc: str = 'first'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.long_to_wide" title="Permalink to this definition">¶</a></dt>
 <dd><p>Take long data and convert into wide, cleaner data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -337,26 +362,6 @@ It will be sensitive to the transformations of the data.</p>
 <li><p><strong>id_col</strong> (<em>str</em>) – <ul>
 <li><p>name of the id column, unique for each time series</p></li>
 </ul>
-</p></li>
-<li><p><strong>frequency</strong> (<em>str</em>) – <ul>
-<li><p>frequency in string of alias for DateOffset object, normally “1D” -daily, “MS” -month start etc.</p></li>
-</ul>
-<p>currently, aliases are listed somewhere in here: <a class="reference external" href="https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html">https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html</a></p>
-</p></li>
-<li><p><strong>na_tolerance</strong> (<em>float</em>) – <ul>
-<li><p>allow up to this percent of values to be NaN, else drop the entire series</p></li>
-</ul>
-<p>the default of 0.95 means a series can be 95% NaN values and still be included.</p>
-</p></li>
-<li><p><strong>drop_data_older_than_periods</strong> (<em>int</em>) – <ul>
-<li><p>cut off older data because eventually you just get too much</p></li>
-</ul>
-<p>10,000 is meant to be rather high, normally for daily data I’d use only the last couple of years, say 1500 samples</p>
-</p></li>
-<li><p><strong>drop_most_recent</strong> (<em>int</em>) – <ul>
-<li><p>if to drop the most recent data point</p></li>
-</ul>
-<p>useful if you pull monthly data before month end, and you don’t want an incomplete month appearing complete</p>
 </p></li>
 <li><p><strong>aggfunc</strong> (<em>str</em>) – <ul>
 <li><p>passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime</p></li>
@@ -1293,6 +1298,13 @@ Inverse transformed values returned will also not return as ‘exactly’ equals
 <li class="toctree-l1"><a class="reference internal" href="intro.html">Intro</a></li>
 <li class="toctree-l1"><a class="reference internal" href="intro.html#autots">AutoTS</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html#here-we-care-most-about-traffic-volume-all-other-series-assumed-to-be-weight-of-1">here we care most about traffic volume, all other series assumed to be weight of 1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html#model-best-model-to-string">model.best_model.to_string()</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html#after-fitting-an-autots-model">after fitting an AutoTS model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html#on-new-training">on new training</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html#for-simplicity">for simplicity:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html#elsewise">elsewise:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html#check-the-mxnet-documentation-for-various-flavors-of-mxnet-available">check the mxnet documentation for various flavors of mxnet available</a></li>
 </ul>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="modules.html">autots</a><ul class="current">

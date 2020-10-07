@@ -1168,7 +1168,7 @@ or otherwise increase models available."""
         """
         initial_results = self.results(result_set=result_set)
         n = initial_results.shape[0]
-        x = (n - initial_results['Exceptions'].isna().sum())/n
+        x = (n - initial_results['Exceptions'].isna().sum()) / n
         return x
 
     def export_template(
