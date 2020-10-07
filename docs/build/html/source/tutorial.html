@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Tutorial &#8212; AutoTS 0.2.4 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.2.5 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -59,14 +59,20 @@
 <h3>A simple example<a class="headerlink" href="#a-simple-example" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">#</span> <span class="n">also</span><span class="p">:</span> <span class="n">_hourly</span><span class="p">,</span> <span class="n">_daily</span><span class="p">,</span> <span class="n">_weekly</span><span class="p">,</span> <span class="k">or</span> <span class="n">_yearly</span>
 <span class="k">from</span> <span class="n">autots</span><span class="p">.</span><span class="n">datasets</span> <span class="n">import</span> <span class="n">load_monthly</span>
+
 <span class="n">df_long</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">()</span>
 
 <span class="k">from</span> <span class="n">autots</span> <span class="n">import</span> <span class="n">AutoTS</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span><span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
-               <span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;simple&#39;</span><span class="p">,</span> <span class="n">drop_data_older_than_periods</span><span class="o">=</span><span class="mi">240</span><span class="p">,</span>
-               <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span>
-                  <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span>
+    <span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+    <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
+    <span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;simple&#39;</span><span class="p">,</span>
+    <span class="n">drop_data_older_than_periods</span><span class="o">=</span><span class="mi">240</span><span class="p">,</span>
+    <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span> <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
 
 <span class="o">#</span> <span class="n">Print</span> <span class="n">the</span> <span class="n">name</span> <span class="k">of</span> <span class="n">the</span> <span class="n">best</span> <span class="n">model</span>
 <span class="n">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
@@ -74,15 +80,9 @@
 </div>
 <div class="section" id="import-of-data">
 <h4>Import of data<a class="headerlink" href="#import-of-data" title="Permalink to this headline">¶</a></h4>
-<p>There are two shapes/styles of pandas <code class="docutils literal notranslate"><span class="pre">DataFrame</span></code> which are accepted.
+<p>There are two shapes/styles of <code class="docutils literal notranslate"><span class="pre">pandas.DataFrame</span></code> which are accepted.
 The first is <em>long</em> data, like that out of an aggregated sales-transaction table containing three columns identified to <code class="docutils literal notranslate"><span class="pre">.fit()</span></code> as <code class="docutils literal notranslate"><span class="pre">date_col</span> <span class="pre">{pd.Datetime},</span> <span class="pre">value_col</span> <span class="pre">{the</span> <span class="pre">numeric</span> <span class="pre">or</span> <span class="pre">categorical</span> <span class="pre">data</span> <span class="pre">of</span> <span class="pre">interest},</span> <span class="pre">and</span> <span class="pre">id_col</span> <span class="pre">{id</span> <span class="pre">string,</span> <span class="pre">if</span> <span class="pre">multiple</span> <span class="pre">series</span> <span class="pre">are</span> <span class="pre">provided}</span></code>.
-Alternatively, the data may be in a <em>wide</em> format where the index is a <code class="docutils literal notranslate"><span class="pre">pandas.DatetimeIndex</span></code>, and each column is a distinct data series.<span class="raw-html-m2r"><br></span>
-Some <code class="docutils literal notranslate"><span class="pre">AutoTS</span></code> parameters are only applicable if <em>long</em> style data is provided, which is the recommended input shape.</p>
-<p>If your data is already wide (one column for each value), to bring to a long format:</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">df_long</span> <span class="o">=</span> <span class="n">df_wide</span><span class="p">.</span><span class="n">melt</span><span class="p">(</span><span class="n">id_vars</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;datetime_col_name&#39;</span><span class="p">],</span>
-                       <span class="n">var_name</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">,</span> <span class="n">value_name</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
-</pre></div>
-</div>
+Alternatively, the data may be in a <em>wide</em> format where the index is a <code class="docutils literal notranslate"><span class="pre">pandas.DatetimeIndex</span></code>, and each column is a distinct data series.</p>
 </div>
 <div class="section" id="you-can-tailor-the-process-in-a-few-ways">
 <h4>You can tailor the process in a few ways…<a class="headerlink" href="#you-can-tailor-the-process-in-a-few-ways" title="Permalink to this headline">¶</a></h4>
@@ -112,33 +112,46 @@ Here, two methods of cross validation are in place, <code class="docutils litera
 </div>
 <div class="section" id="a-more-detailed-example">
 <h3>A more detailed example:<a class="headerlink" href="#a-more-detailed-example" title="Permalink to this headline">¶</a></h3>
-<p>Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in (lovely) Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting.
-Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. This carries information to models such as <code class="docutils literal notranslate"><span class="pre">RollingRegression</span></code>, <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code>, and <code class="docutils literal notranslate"><span class="pre">VECM</span></code>.</p>
+<p>Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting.
+Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. These additional series carry information to models such as <code class="docutils literal notranslate"><span class="pre">RollingRegression</span></code>, <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code>, and <code class="docutils literal notranslate"><span class="pre">VECM</span></code>.</p>
 <p>Also seen in use here is the <code class="docutils literal notranslate"><span class="pre">model_list</span></code>.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>from autots.datasets import load_hourly
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>from autots import AutoTS
+from autots.datasets import load_hourly
 
-df_long = load_hourly()
+df_wide = load_hourly(long=False)
 
-# all other series assumed to be weight of 1
+# here we care most about traffic volume, all other series assumed to be weight of 1
 weights_hourly = {&#39;traffic_volume&#39;: 20}
 
-model_list = [&#39;ZeroesNaive&#39;, &#39;LastValueNaive&#39;, &#39;MedValueNaive&#39;, &#39;GLS&#39;,
-              &#39;ETS&#39;,  &#39;RollingRegression&#39;, &#39;UnobservedComponents&#39;, &#39;VECM&#39;]
+model_list = [
+    &#39;LastValueNaive&#39;,
+    &#39;GLS&#39;,
+    &#39;ETS&#39;,
+    &#39;AverageValueNaive&#39;,
+]
 
-from autots import AutoTS
-model = AutoTS(forecast_length=73, frequency=&#39;infer&#39;,
-               prediction_interval=0.95, ensemble=&#39;simple&#39;,
-               max_generations=5, num_validations=2,
-               validation_method=&#39;even&#39;,
-               model_list=model_list, models_to_validate=15,
-               drop_most_recent=1)
+model = AutoTS(
+    forecast_length=49,
+    frequency=&#39;infer&#39;,
+    prediction_interval=0.95,
+    ensemble=&#39;simple&#39;,
+    max_generations=5,
+    num_validations=2,
+    validation_method=&#39;seasonal 168&#39;,
+    model_list=model_list,
+    models_to_validate=15,
+    drop_most_recent=1,
+    n_jobs=&#39;auto&#39;,
+)
 
-model = model.fit(df_long, date_col=&#39;datetime&#39;,
-                  value_col=&#39;value&#39;, id_col=&#39;series_id&#39;,
-                  weights=weights_hourly)
+model = model.fit(
+    df_wide,
+    weights=weights_hourly,
+)
 
 prediction = model.predict()
 forecasts_df = prediction.forecast
+# model.best_model.to_string()
 </pre></div>
 </div>
 <p>Probabilistic forecasts are <em>available</em> for all models, but in many cases are just data-based estimates in lieu of model estimates, so be careful.</p>
@@ -150,15 +163,7 @@ forecasts_df = prediction.forecast
 <div class="section" id="model-lists">
 <h3>Model Lists<a class="headerlink" href="#model-lists" title="Permalink to this headline">¶</a></h3>
 <p>By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of <code class="docutils literal notranslate"><span class="pre">'probabilistic',</span> <span class="pre">'multivariate',</span> <span class="pre">'fast',</span> <span class="pre">'superfast',</span> <span class="pre">or</span> <span class="pre">'all'</span></code>.</p>
-<p>As of <code class="docutils literal notranslate"><span class="pre">0.2.0</span></code> the following models are included:</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="s1">&#39;ZeroesNaive&#39;</span><span class="p">,</span> <span class="s1">&#39;LastValueNaive&#39;</span><span class="p">,</span> <span class="s1">&#39;AverageValueNaive&#39;</span><span class="p">,</span> <span class="s1">&#39;GLS&#39;</span><span class="p">,</span>
-<span class="s1">&#39;GLM&#39;</span><span class="p">,</span> <span class="s1">&#39;ETS&#39;</span><span class="p">,</span> <span class="s1">&#39;ARIMA&#39;</span><span class="p">,</span> <span class="s1">&#39;FBProphet&#39;</span><span class="p">,</span> <span class="s1">&#39;RollingRegression&#39;</span><span class="p">,</span>
-<span class="s1">&#39;GluonTS&#39;</span><span class="p">,</span> <span class="s1">&#39;SeasonalNaive&#39;</span><span class="p">,</span> <span class="s1">&#39;UnobservedComponents&#39;</span><span class="p">,</span> <span class="s1">&#39;VARMAX&#39;</span><span class="p">,</span>
-<span class="s1">&#39;VECM&#39;</span><span class="p">,</span> <span class="s1">&#39;DynamicFactor&#39;</span><span class="p">,</span> <span class="s1">&#39;TSFreshRegressor&#39;</span><span class="p">,</span> <span class="s1">&#39;MotifSimulation&#39;</span><span class="p">,</span>
-<span class="s1">&#39;WindowRegression&#39;</span><span class="p">,</span> <span class="s1">&#39;VAR&#39;</span><span class="p">,</span> <span class="s1">&#39;TensorflowSTS&#39;</span><span class="p">,</span> <span class="s1">&#39;TFPRegression&#39;</span><span class="p">,</span>
-<span class="s1">&#39;ComponentAnalysis&#39;</span><span class="p">]</span>
-</pre></div>
-</div>
+<p>A table of all available models is available further below.</p>
 <p>On large multivariate series, <code class="docutils literal notranslate"><span class="pre">TSFreshRegressor</span></code>, <code class="docutils literal notranslate"><span class="pre">DynamicFactor</span></code> and <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code> can be impractically slow.</p>
 </div>
 </div>
@@ -169,7 +174,7 @@ There are some advantages to deploying within AutoTS using a reduced starting te
 This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve.
 One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.</p>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">#</span> <span class="k">after</span> <span class="n">fitting</span> <span class="n">an</span> <span class="n">AutoTS</span> <span class="n">model</span>
-<span class="n">example_filename</span> <span class="o">=</span> <span class="ss">&quot;example_export.csv&quot;</span> <span class="o">#</span> <span class="p">.</span><span class="n">csv</span><span class="o">/</span><span class="p">.</span><span class="n">json</span>
+<span class="n">example_filename</span> <span class="o">=</span> <span class="ss">&quot;example_export.csv&quot;</span>  <span class="o">#</span> <span class="p">.</span><span class="n">csv</span><span class="o">/</span><span class="p">.</span><span class="n">json</span>
 <span class="n">model</span><span class="p">.</span><span class="n">export_template</span><span class="p">(</span><span class="n">example_filename</span><span class="p">,</span> <span class="n">models</span><span class="o">=</span><span class="s1">&#39;best&#39;</span><span class="p">,</span>
                       <span class="n">n</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">max_per_model_class</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 
@@ -186,17 +191,21 @@ One thing to note is that, as AutoTS is still under development, template format
 <p>There are a number of available metrics, all combined together into a ‘Score’ which evaluates the best model. The ‘Score’ that compares models can easily be adjusted by passing through custom metric weights dictionary.
 Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers.
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>metric_weighting = {&#39;smape_weighting&#39; : 10,
-                    &#39;mae_weighting&#39; : 1,
-                    &#39;rmse_weighting&#39; : 5,
-                    &#39;containment_weighting&#39; : 1,
-                    &#39;runtime_weighting&#39; : 0,
-                    &#39;spl_weighting&#39;: 1,
-                    &#39;contour_weighting&#39;: 0}
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>metric_weighting = {
+    &#39;smape_weighting&#39; : 10,
+    &#39;mae_weighting&#39; : 1,
+    &#39;rmse_weighting&#39; : 5,
+    &#39;containment_weighting&#39; : 1,
+    &#39;runtime_weighting&#39; : 0,
+    &#39;spl_weighting&#39;: 1,
+    &#39;contour_weighting&#39;: 0,
+}
 
-model = AutoTS(forecast_length=forecast_length,
-               frequency=&#39;infer&#39;,
-               metric_weighting=metric_weighting)
+model = AutoTS(
+    forecast_length=forecast_length,
+    frequency=&#39;infer&#39;,
+    metric_weighting=metric_weighting,
+)
 </pre></div>
 </div>
 <p>It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE.</p>
@@ -318,17 +327,20 @@ Some models will support a more limited range of frequencies.</p>
 <div class="section" id="tested-frequencies">
 <h4>Tested Frequencies<a class="headerlink" href="#tested-frequencies" title="Permalink to this headline">¶</a></h4>
 </div>
+</div>
+</div>
 <div class="section" id="models">
-<h4>Models<a class="headerlink" href="#models" title="Permalink to this headline">¶</a></h4>
+<h2>Models<a class="headerlink" href="#models" title="Permalink to this headline">¶</a></h2>
 <table class="docutils align-default">
 <colgroup>
-<col style="width: 14%" />
-<col style="width: 14%" />
-<col style="width: 14%" />
-<col style="width: 14%" />
-<col style="width: 14%" />
-<col style="width: 14%" />
-<col style="width: 14%" />
+<col style="width: 13%" />
+<col style="width: 13%" />
+<col style="width: 13%" />
+<col style="width: 13%" />
+<col style="width: 13%" />
+<col style="width: 13%" />
+<col style="width: 13%" />
+<col style="width: 13%" />
 </colgroup>
 <thead>
 <tr class="row-odd"><th class="head"><p>Model</p></th>
@@ -337,11 +349,13 @@ Some models will support a more limited range of frequencies.</p>
 <th class="head"><p>Probabilistic</p></th>
 <th class="head"><p>Multiprocessing</p></th>
 <th class="head"><p>GPU</p></th>
+<th class="head"><p>Multivariate</p></th>
 <th class="head"><p>Experimental</p></th>
 </tr>
 </thead>
 <tbody>
 <tr class="row-even"><td><p>ZeroesNaive</p></td>
+<td></td>
 <td></td>
 <td></td>
 <td></td>
@@ -356,6 +370,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td></td>
+<td></td>
 </tr>
 <tr class="row-even"><td><p>AverageValueNaive</p></td>
 <td></td>
@@ -364,8 +379,10 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td></td>
+<td></td>
 </tr>
 <tr class="row-odd"><td><p>SeasonalNaive</p></td>
+<td></td>
 <td></td>
 <td></td>
 <td></td>
@@ -379,6 +396,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td></td>
+<td><p>True</p></td>
 <td></td>
 </tr>
 <tr class="row-odd"><td><p>GLM</p></td>
@@ -386,6 +404,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td><p>joblib</p></td>
+<td></td>
 <td></td>
 <td></td>
 </tr>
@@ -396,9 +415,11 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>joblib</p></td>
 <td></td>
 <td></td>
+<td></td>
 </tr>
 <tr class="row-odd"><td><p>UnobservedComponents</p></td>
 <td><p>statsmodels</p></td>
+<td></td>
 <td></td>
 <td></td>
 <td></td>
@@ -412,6 +433,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>joblib</p></td>
 <td></td>
 <td></td>
+<td></td>
 </tr>
 <tr class="row-odd"><td><p>VARMAX</p></td>
 <td><p>statsmodels</p></td>
@@ -419,6 +441,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>True</p></td>
 <td></td>
 <td></td>
+<td><p>True</p></td>
 <td></td>
 </tr>
 <tr class="row-even"><td><p>DynamicFactor</p></td>
@@ -427,6 +450,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>True</p></td>
 <td></td>
 <td></td>
+<td><p>True</p></td>
 <td></td>
 </tr>
 <tr class="row-odd"><td><p>VECM</p></td>
@@ -435,6 +459,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td></td>
+<td><p>True</p></td>
 <td></td>
 </tr>
 <tr class="row-even"><td><p>VAR</p></td>
@@ -443,6 +468,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>True</p></td>
 <td></td>
 <td></td>
+<td><p>True</p></td>
 <td></td>
 </tr>
 <tr class="row-odd"><td><p>FBProphet</p></td>
@@ -452,6 +478,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>joblib</p></td>
 <td></td>
 <td></td>
+<td></td>
 </tr>
 <tr class="row-even"><td><p>GluonTS</p></td>
 <td><p>gluonts, mxnet</p></td>
@@ -459,6 +486,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>True</p></td>
 <td></td>
 <td><p>yes</p></td>
+<td><p>True</p></td>
 <td></td>
 </tr>
 <tr class="row-odd"><td><p>RollingRegression</p></td>
@@ -467,6 +495,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td><p>sklearn</p></td>
 <td><p>some</p></td>
+<td><p>True</p></td>
 <td></td>
 </tr>
 <tr class="row-even"><td><p>WindowRegression</p></td>
@@ -475,6 +504,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td><p>sklearn</p></td>
 <td><p>some</p></td>
+<td><p>True</p></td>
 <td></td>
 </tr>
 <tr class="row-odd"><td><p>MotifSimulation</p></td>
@@ -483,6 +513,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>True</p></td>
 <td></td>
 <td></td>
+<td><p>True*</p></td>
 <td><p>True</p></td>
 </tr>
 <tr class="row-even"><td><p>TensorflowSTS</p></td>
@@ -492,6 +523,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td><p>yes</p></td>
 <td><p>True</p></td>
+<td><p>True</p></td>
 </tr>
 <tr class="row-odd"><td><p>TFPRegression</p></td>
 <td><p>tensorflow_probability</p></td>
@@ -499,6 +531,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>True</p></td>
 <td></td>
 <td><p>yes</p></td>
+<td><p>True</p></td>
 <td><p>True</p></td>
 </tr>
 <tr class="row-even"><td><p>ComponentAnalysis</p></td>
@@ -508,9 +541,11 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td><p>True</p></td>
+<td><p>True</p></td>
 </tr>
 <tr class="row-odd"><td><p>TSFreshRegressor</p></td>
 <td><p>tsfresh, sklearn</p></td>
+<td></td>
 <td></td>
 <td></td>
 <td></td>
@@ -519,8 +554,6 @@ Some models will support a more limited range of frequencies.</p>
 </tr>
 </tbody>
 </table>
-</div>
-</div>
 </div>
 </div>
 
@@ -564,6 +597,7 @@ Some models will support a more limited range of frequencies.</p>
 <li class="toctree-l2"><a class="reference internal" href="#deployment-and-template-import-export">Deployment and Template Import/Export</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#installation-and-dependency-versioning">Installation and Dependency Versioning</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#caveats-and-advice">Caveats and Advice</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#models">Models</a></li>
 </ul>
 </li>
 </ul>

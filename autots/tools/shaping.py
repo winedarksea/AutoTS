@@ -3,11 +3,8 @@ import numpy as np
 import pandas as pd
 
 
-def long_to_wide(
-    df,
-    date_col: str = 'datetime',
-    value_col: str = 'value',
-    id_col: str = 'series_id',
+def df_cleanup(
+    df_wide,
     frequency: str = "infer",
     na_tolerance: float = 0.999,
     drop_data_older_than_periods: int = 100000,
@@ -15,53 +12,21 @@ def long_to_wide(
     aggfunc: str = 'first',
     verbose: int = 1,
 ):
-    """
-    Take long data and convert into wide, cleaner data.
+    """Pass cleaning functions through to dataframe.
 
     Args:
-        df (pd.DataFrame) - a pandas dataframe having three columns:
-        date_col (str) - the name of the column containing dates, preferrably already in pandas datetime format
-        value_col (str): - the name of the column with the values of the time series (ie sales $)
-        id_col (str): - name of the id column, unique for each time series
+        df_wide (pd.DataFrame): input dataframe to clean.
+        frequency (str, optional): frequency in string of alias for DateOffset object, normally "1D" -daily, "MS" -month start etc. Currently, aliases are listed somewhere in here: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html. Defaults to "infer".
+        na_tolerance (float, optional): allow up to this percent of values to be NaN, else drop the entire series. The default of 0.95 means a series can be 95% NaN values and still be included. Defaults to 0.999.
+        drop_data_older_than_periods (int, optional): cut off older data because eventually you just get too much. Defaults to 100000.
+        drop_most_recent (int, optional): number of most recent data points to remove. Useful if you pull monthly data before month end, and you don't want an incomplete month appearing complete. Defaults to 0.
+        aggfunc (str, optional): passed to pd.pivot_table, determines how to aggregate duplicates for upsampling. Other options include "mean" and other numpy functions, beware data *must* already be input as numeric type for these to work. If categorical data is provided, `aggfunc='first'` is recommended. Defaults to 'first'.
+        verbose (int, optional): 0 for silence, higher values for more noise. Defaults to 1.
 
-        frequency (str): - frequency in string of alias for DateOffset object, normally "1D" -daily, "MS" -month start etc.
-            currently, aliases are listed somewhere in here: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html
-        na_tolerance (float): - allow up to this percent of values to be NaN, else drop the entire series
-            the default of 0.95 means a series can be 95% NaN values and still be included.
-        drop_data_older_than_periods (int): - cut off older data because eventually you just get too much
-            10,000 is meant to be rather high, normally for daily data I'd use only the last couple of years, say 1500 samples
-        drop_most_recent (int): - if to drop the most recent data point
-            useful if you pull monthly data before month end, and you don't want an incomplete month appearing complete
-        aggfunc (str): - passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
-            other options include "mean" and other numpy functions, beware data *must* already be input as numeric type for these to work.
-            if categorical data is provided, `aggfunc='first'` is recommended
+    Returns:
+        pd.DataFrame: original dataframe, now possibly shorter.
+
     """
-    df_long = df.copy()
-
-    # Attempt to convert to datetime format if not already
-    try:
-        df_long[date_col] = pd.to_datetime(
-            df_long[date_col], infer_datetime_format=True
-        )
-    except Exception:
-        raise ValueError(
-            "Could not convert date to datetime format. Incorrect column name or preformat with pandas to_datetime"
-        )
-
-    # handle no id_col for if only one time series
-    if id_col in [None, 'None']:
-        df_long[id_col] = 'First'
-        df_long.drop_duplicates(subset=date_col, keep='first', inplace=True)
-
-    # drop any unnecessary columns
-    df_long = df_long[[date_col, id_col, value_col]]
-
-    # pivot to different wide shape
-    df_wide = df_long.pivot_table(
-        values=value_col, index=date_col, columns=id_col, aggfunc=aggfunc
-    )
-    df_wide = df_wide.sort_index(ascending=True)
-
     # infer frequency
     if frequency == 'infer':
         frequency = pd.infer_freq(df_wide.index, warn=True)
@@ -105,6 +70,54 @@ def long_to_wide(
     # drop most recent value when desired
     if drop_most_recent > 0:
         df_wide.drop(df_wide.tail(drop_most_recent).index, inplace=True)
+
+    return pd.DataFrame(df_wide)
+
+
+def long_to_wide(
+    df,
+    date_col: str = 'datetime',
+    value_col: str = 'value',
+    id_col: str = 'series_id',
+    aggfunc: str = 'first',
+):
+    """
+    Take long data and convert into wide, cleaner data.
+
+    Args:
+        df (pd.DataFrame) - a pandas dataframe having three columns:
+        date_col (str) - the name of the column containing dates, preferrably already in pandas datetime format
+        value_col (str): - the name of the column with the values of the time series (ie sales $)
+        id_col (str): - name of the id column, unique for each time series
+        aggfunc (str): - passed to pd.pivot_table, determines how to aggregate duplicates for series_id and datetime
+            other options include "mean" and other numpy functions, beware data *must* already be input as numeric type for these to work.
+            if categorical data is provided, `aggfunc='first'` is recommended
+    """
+    df_long = df.copy()
+
+    # Attempt to convert to datetime format if not already
+    try:
+        df_long[date_col] = pd.to_datetime(
+            df_long[date_col], infer_datetime_format=True
+        )
+    except Exception:
+        raise ValueError(
+            "Could not convert date to datetime format. Incorrect column name or preformat with pandas to_datetime"
+        )
+
+    # handle no id_col for if only one time series
+    if id_col in [None, 'None']:
+        df_long[id_col] = 'First'
+        df_long.drop_duplicates(subset=date_col, keep='first', inplace=True)
+
+    # drop any unnecessary columns
+    df_long = df_long[[date_col, id_col, value_col]]
+
+    # pivot to different wide shape
+    df_wide = df_long.pivot_table(
+        values=value_col, index=date_col, columns=id_col, aggfunc=aggfunc
+    )
+    df_wide = df_wide.sort_index(ascending=True)
 
     return pd.DataFrame(df_wide)
 

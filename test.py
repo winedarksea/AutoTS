@@ -16,11 +16,13 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 example_filename = "example_export2.csv"  # .csv/.json
 forecast_length = 3
-df_long = load_hourly()
+long = False
+df = load_weekly(long=long)
 n_jobs = 'auto'
 generations = 2
 
-# df_long = df_long[df_long['series_id'] == 'GS10']
+
+# df = df[df['series_id'] == 'GS10']
 
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
@@ -92,20 +94,26 @@ model = AutoTS(
 
 
 future_regressor_train, future_regressor_forecast = fake_regressor(
-    df_long,
+    df,
     dimensions=1,
     forecast_length=forecast_length,
-    date_col='datetime',
-    value_col='value',
-    id_col='series_id',
+    date_col='datetime' if long else None,
+    value_col='value' if long else None,
+    id_col='series_id' if long else None,
+    drop_most_recent=model.drop_most_recent,
+    aggfunc=model.aggfunc,
+    verbose=model.verbose,
 )
 future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
-    df_long,
+    df,
     dimensions=4,
     forecast_length=forecast_length,
-    date_col='datetime',
-    value_col='value',
-    id_col='series_id',
+    date_col='datetime' if long else None,
+    value_col='value' if long else None,
+    id_col='series_id' if long else None,
+    drop_most_recent=model.drop_most_recent,
+    aggfunc=model.aggfunc,
+    verbose=model.verbose,
 )
 
 # model = model.import_results('test.pickle')
@@ -113,43 +121,56 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
 
 start_time_for = timeit.default_timer()
 model = model.fit(
-    df_long,
+    df,
     future_regressor=future_regressor_train2d,
     # weights=weights_weekly,
     grouping_ids=grouping_monthly,
     # result_file='test.pickle',
-    date_col='datetime',
-    value_col='value',
-    id_col='series_id',
+    date_col='datetime' if long else None,
+    value_col='value' if long else None,
+    id_col='series_id' if long else None,
 )
 elapsed_for = timeit.default_timer() - start_time_for
 
+
 """
-del(model)
-model = AutoTS(forecast_length=forecast_length, frequency='infer',
-               prediction_interval=0.9,
-               ensemble=None,
-               constraint=2,
-               max_generations=generations, num_validations=2,
-               validation_method='backwards',
-               model_list=model_list, initial_template='General+Random',
-               metric_weighting=metric_weighting, models_to_validate=0.1,
-               max_per_model_class=None,
-               model_interrupt=True,
-               n_jobs=None,
-               drop_most_recent=0, verbose=1)
+del model
+model = AutoTS(
+    forecast_length=forecast_length,
+    frequency='infer',
+    prediction_interval=0.9,
+    ensemble=None,
+    constraint=2,
+    max_generations=generations,
+    num_validations=2,
+    validation_method='backwards',
+    model_list=model_list,
+    initial_template='General+Random',
+    metric_weighting=metric_weighting,
+    models_to_validate=0.1,
+    max_per_model_class=None,
+    model_interrupt=True,
+    n_jobs=None,
+    drop_most_recent=0,
+    verbose=1,
+)
 # model = model.import_template(example_filename, method='only')
 import time
+
 time.sleep(30)
 import joblib
+
 with joblib.parallel_backend("loky", n_jobs=n_jobs):
     start_time_cxt = timeit.default_timer()
-    model = model.fit(df_long,
-                      future_regressor=future_regressor_train2d,
-                      grouping_ids=grouping_monthly,
-                      # result_file='test.pickle',
-                      date_col='datetime', value_col='value',
-                      id_col='series_id')
+    model = model.fit(
+        df,
+        future_regressor=future_regressor_train2d,
+        grouping_ids=grouping_monthly,
+        # result_file='test.pickle',
+        date_col='datetime' if long else None,
+        value_col='value' if long else None,
+        id_col='series_id' if long else None,
+    )
     elapsed_cxt = timeit.default_timer() - start_time_cxt
 print(f"With Context {elapsed_cxt}\nWithout Context {elapsed_for}")
 """
@@ -170,6 +191,8 @@ forecasts_df = prediction.forecast
 initial_results = model.results()
 # validation results
 validation_results = model.results("validation")
+
+print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 
 """
 Import/Export
@@ -232,37 +255,43 @@ Merge dev to master on GitHub and create release (include .tar.gz)
 """
 
 #%%
-"""
-# Help correlate errors with parameters
 
+# Help correlate errors with parameters
+"""
 # test = initial_results[initial_results['TransformationParameters'].str.contains('kmeans')]
-cols = ['Model', 'ModelParameters',
-        'TransformationParameters', 'Exceptions']
+cols = ['Model', 'ModelParameters', 'TransformationParameters', 'Exceptions']
 if (~initial_results['Exceptions'].isna()).sum() > 0:
-    test_corr = error_correlations(initial_results[cols],
-                                   result='corr')  # result='poly corr'
+    test_corr = error_correlations(
+        initial_results[cols], result='corr'
+    )  # result='poly corr'
 """
 """
 prediction_intervals = [0.99, 0.67]
 model_list = 'superfast'  # ['FBProphet', 'VAR', 'AverageValueNaive']
 from autots.evaluator.auto_ts import AutoTSIntervals
+
 intervalModel = AutoTSIntervals().fit(
     prediction_intervals=prediction_intervals,
     import_template=None,
     forecast_length=forecast_length,
-    df_long=df_long, max_generations=1, num_validations=2,
+    df=df,
+    max_generations=1,
+    num_validations=2,
     import_results='test.pickle',
     result_file='testProb.pickle',
     validation_method='seasonal 12',
     models_to_validate=0.2,
     interval_models_to_validate=50,
-    date_col='datetime', value_col='value',
+    date_col='datetime',
+    value_col='value',
     id_col='series_id',
     model_list=model_list,
     future_regressor=[],
-    constraint=2, no_negatives=True,
-    remove_leading_zeroes=True, random_seed=2020
-    )  # weights, future_regressor, metrics
+    constraint=2,
+    no_negatives=True,
+    remove_leading_zeroes=True,
+    random_seed=2020,
+)  # weights, future_regressor, metrics
 intervalForecasts = intervalModel.predict()
 intervalForecasts[0.99].upper_forecast
 """

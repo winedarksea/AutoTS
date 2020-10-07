@@ -18,30 +18,29 @@ AutoTS works in the following way at present:
 ```
 # also: _hourly, _daily, _weekly, or _yearly
 from autots.datasets import load_monthly
+
 df_long = load_monthly()
 
 from autots import AutoTS
-model = AutoTS(forecast_length=3, frequency='infer',
-			   ensemble='simple', drop_data_older_than_periods=240,
-               max_generations=5, num_validations=2)
-model = model.fit(df_long, date_col='datetime', 
-				  value_col='value', id_col='series_id')
+
+model = AutoTS(
+    forecast_length=3,
+    frequency='infer',
+    ensemble='simple',
+    drop_data_older_than_periods=240,
+    max_generations=5,
+    num_validations=2,
+)
+model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id')
 
 # Print the name of the best model
 print(model)
 ```
 
 #### Import of data
-There are two shapes/styles of pandas `DataFrame` which are accepted. 
+There are two shapes/styles of `pandas.DataFrame` which are accepted. 
 The first is *long* data, like that out of an aggregated sales-transaction table containing three columns identified to `.fit()` as `date_col {pd.Datetime}, value_col {the numeric or categorical data of interest}, and id_col {id string, if multiple series are provided}`. 
 Alternatively, the data may be in a *wide* format where the index is a `pandas.DatetimeIndex`, and each column is a distinct data series.  
-Some `AutoTS` parameters are only applicable if *long* style data is provided, which is the recommended input shape. 
-
-If your data is already wide (one column for each value), to bring to a long format:
-```
-df_long = df_wide.melt(id_vars=['datetime_col_name'],
-					   var_name='series_id', value_name='value')
-```
 
 #### You can tailor the process in a few ways...
 The simplest way to improve accuracy is to increase the number of generations `max_generations=15`. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.
@@ -77,37 +76,51 @@ Here, two methods of cross validation are in place, `'even'` and '`backwards'`.
 Only a subset of models are based from initial validation to cross validation. The number of models is set such as `models_to_validate=10`. If a float in 0 to 1 is provided, it is treated as a % of models to select. If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter. 
 
 ### A more detailed example:
-Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in (lovely) Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting. 
-Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. This carries information to models such as `RollingRegression`, `VARMAX`, and `VECM`. 
+Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting. 
+Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. These additional series carry information to models such as `RollingRegression`, `VARMAX`, and `VECM`. 
 
 Also seen in use here is the `model_list`. 
 
 ```
+from autots import AutoTS
 from autots.datasets import load_hourly
 
-df_long = load_hourly()
+df_wide = load_hourly(long=False)
 
-# all other series assumed to be weight of 1
+# here we care most about traffic volume, all other series assumed to be weight of 1
 weights_hourly = {'traffic_volume': 20}
 
-model_list = ['ZeroesNaive', 'LastValueNaive', 'MedValueNaive', 'GLS',
-			  'ETS',  'RollingRegression', 'UnobservedComponents', 'VECM']
+model_list = [
+    'LastValueNaive',
+    'GLS',
+    'ETS',
+    'AverageValueNaive',
+]
 
-from autots import AutoTS
-model = AutoTS(forecast_length=73, frequency='infer',
-               prediction_interval=0.95, ensemble='simple',
-               max_generations=5, num_validations=2,
-			   validation_method='even',
-               model_list=model_list, models_to_validate=15,
-               drop_most_recent=1)
-		
-model = model.fit(df_long, date_col='datetime',
-				  value_col='value', id_col='series_id',
-				  weights=weights_hourly)
+model = AutoTS(
+    forecast_length=49,
+    frequency='infer',
+    prediction_interval=0.95,
+    ensemble='simple',
+    max_generations=5,
+    num_validations=2,
+    validation_method='seasonal 168',
+    model_list=model_list,
+    models_to_validate=15,
+    drop_most_recent=1,
+	n_jobs='auto',
+)
+
+model = model.fit(
+    df_wide,
+    weights=weights_hourly,
+)
 
 prediction = model.predict()
 forecasts_df = prediction.forecast
+# model.best_model.to_string()
 ```
+
 Probabilistic forecasts are *available* for all models, but in many cases are just data-based estimates in lieu of model estimates, so be careful. 
 ```
 upper_forecasts_df = prediction.upper_forecast
@@ -117,15 +130,7 @@ lower_forecasts_df = prediction.lower_forecast
 ### Model Lists
 By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of `'probabilistic', 'multivariate', 'fast', 'superfast', or 'all'`.
 
-As of `0.2.0` the following models are included:
-```
-['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
-'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
-'GluonTS', 'SeasonalNaive', 'UnobservedComponents', 'VARMAX',
-'VECM', 'DynamicFactor', 'TSFreshRegressor', 'MotifSimulation',
-'WindowRegression', 'VAR', 'TensorflowSTS', 'TFPRegression', 
-'ComponentAnalysis']
-```
+A table of all available models is available further below.
 
 On large multivariate series, `TSFreshRegressor`, `DynamicFactor` and `VARMAX` can be impractically slow.
 
@@ -136,7 +141,7 @@ This allows for improved fault tolerance (by relying not on one, but several pos
 One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.
 ```
 # after fitting an AutoTS model
-example_filename = "example_export.csv" # .csv/.json
+example_filename = "example_export.csv"  # .csv/.json
 model.export_template(example_filename, models='best',
 					  n=15, max_per_model_class=3)
 
@@ -153,17 +158,21 @@ There are a number of available metrics, all combined together into a 'Score' wh
 Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers. 
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series. 
 ```
-metric_weighting = {'smape_weighting' : 10,
-					'mae_weighting' : 1,
-					'rmse_weighting' : 5,
-					'containment_weighting' : 1,
-					'runtime_weighting' : 0,
-					'spl_weighting': 1,
-					'contour_weighting': 0}
+metric_weighting = {
+	'smape_weighting' : 10,
+	'mae_weighting' : 1,
+	'rmse_weighting' : 5,
+	'containment_weighting' : 1,
+	'runtime_weighting' : 0,
+	'spl_weighting': 1,
+	'contour_weighting': 0,
+}
 
-model = AutoTS(forecast_length=forecast_length,
-			   frequency='infer',
-			   metric_weighting=metric_weighting)
+model = AutoTS(
+	forecast_length=forecast_length,
+	frequency='infer',
+	metric_weighting=metric_weighting,
+)
 ```		
 It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE. 
 			
@@ -284,27 +293,27 @@ Some models will support a more limited range of frequencies.
 
 ## Models
 
-| Model                   | Dependencies | Optional Dependencies   | Probabilistic | Multiprocessing | GPU   | Experimental |
-| :-------------          | :----------: | :---------------------: | :-----------  | :-------------- | :---- | :----------: |
-|  ZeroesNaive            |              |                         |               |                 |       |              |
-|  LastValueNaive         |              |                         |               |                 |       |              |
-|  AverageValueNaive      |              |                         |    True       |                 |       |              |
-|  SeasonalNaive          |              |                         |               |                 |       |              |
-|  GLS                    | statsmodels  |                         |               |                 |       |              |
-|  GLM                    | statsmodels  |                         |               |     joblib      |       |              |
-|  ETS                    | statsmodels  |                         |               |     joblib      |       |              |
-|  UnobservedComponents   | statsmodels  |                         |               |                 |       |              |
-|  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |
-|  VARMAX                 | statsmodels  |                         |    True       |                 |       |              |
-|  DynamicFactor          | statsmodels  |                         |    True       |                 |       |              |
-|  VECM                   | statsmodels  |                         |               |                 |       |              |
-|  VAR                    | statsmodels  |                         |    True       |                 |       |              |
-|  FBProphet              | fbprophet    |                         |    True       |     joblib      |       |              |
-|  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   |              |
-|  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |
-|  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |
-|  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |                 |       | True         |
-|  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         |
-|  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         |
-|  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         |
-|  TSFreshRegressor       | tsfresh, sklearn |                     |               |                 |       | True         |
+| Model                   | Dependencies | Optional Dependencies   | Probabilistic | Multiprocessing | GPU   | Multivariate | Experimental |
+| :-------------          | :----------: | :---------------------: | :-----------  | :-------------- | :---- | :----------: | :----------: |
+|  ZeroesNaive            |              |                         |               |                 |       |              |              |
+|  LastValueNaive         |              |                         |               |                 |       |              |              |
+|  AverageValueNaive      |              |                         |    True       |                 |       |              |              |
+|  SeasonalNaive          |              |                         |               |                 |       |              |              |
+|  GLS                    | statsmodels  |                         |               |                 |       | True         |              |
+|  GLM                    | statsmodels  |                         |               |     joblib      |       |              |              |
+|  ETS                    | statsmodels  |                         |               |     joblib      |       |              |              |
+|  UnobservedComponents   | statsmodels  |                         |               |                 |       |              |              |
+|  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |              |
+|  VARMAX                 | statsmodels  |                         |    True       |                 |       | True         |              |
+|  DynamicFactor          | statsmodels  |                         |    True       |                 |       | True         |              |
+|  VECM                   | statsmodels  |                         |               |                 |       | True         |              |
+|  VAR                    | statsmodels  |                         |    True       |                 |       | True         |              |
+|  FBProphet              | fbprophet    |                         |    True       |     joblib      |       |              |              |
+|  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   | True         |              |
+|  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              |
+|  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              |
+|  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |                 |       | True*        | True         |
+|  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |
+|  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |
+|  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |
+|  TSFreshRegressor       | tsfresh, sklearn |                     |               |                 |       |              | True         |

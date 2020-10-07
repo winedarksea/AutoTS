@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Intro &#8212; AutoTS 0.2.4 documentation</title>
+    <title>Intro &#8212; AutoTS 0.2.5 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -37,8 +37,6 @@
 </div>
 <div class="section" id="autots">
 <h1>AutoTS<a class="headerlink" href="#autots" title="Permalink to this headline">¶</a></h1>
-<a class="reference external image-reference" href="https://pypi.python.org/pypi/autots/"><img alt="PyPI download month" src="https://img.shields.io/pypi/dm/autots.svg" /></a>
-<a class="reference external image-reference" href="https://pypi.python.org/pypi/autots/"><img alt="PyPI version fury.io" src="https://badge.fury.io/py/autots.svg" /></a>
 <p><span class="raw-html-m2r"><img src="/img/autots_logo.png" width="400" height="184" title="AutoTS Logo"></span></p>
 <p><strong>Model Selection for Multiple Time Series</strong></p>
 <p>Simple package for comparing and predicting with open-source time series implementations.</p>
@@ -59,31 +57,45 @@
 <li><p>Import and export of templates allowing greater user customization</p></li>
 </ul>
 </div>
-<div class="section" id="basic-use">
-<h2>Basic Use<a class="headerlink" href="#basic-use" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">autots</span>
 </pre></div>
 </div>
 <p>This includes dependencies for basic models, but additonal packages are required for some models and methods.</p>
-<p>Input data is expected to come in a ‘long’ format with three columns:</p>
+</div>
+<div class="section" id="basic-use">
+<h2>Basic Use<a class="headerlink" href="#basic-use" title="Permalink to this headline">¶</a></h2>
+<p>Input data is expected to come in either a <em>long</em> or a <em>wide</em> format:</p>
 <ul class="simple">
+<li><p>The <em>wide</em> format is a <code class="docutils literal notranslate"><span class="pre">pandas.DataFrame</span></code> with a <code class="docutils literal notranslate"><span class="pre">pandas.DatetimeIndex</span></code> and each column a distinct series.</p></li>
+<li><p>The <em>long</em> format has three columns:</p>
+<ul>
 <li><p>Date (ideally already in pd.DateTime format)</p></li>
-<li><p>Value</p></li>
 <li><p>Series ID. For a single time series, series_id can be <code class="docutils literal notranslate"><span class="pre">=</span> <span class="pre">None</span></code>.</p></li>
+<li><p>Value</p></li>
 </ul>
-<p>The column name for each of these is passed to .fit().</p>
+</li>
+<li><p>For <em>long</em> data, the column name for each of these is passed to .fit() as <code class="docutils literal notranslate"><span class="pre">date_col</span></code>, <code class="docutils literal notranslate"><span class="pre">id_col</span></code>, and <code class="docutils literal notranslate"><span class="pre">value_col</span></code>. No parameters are needed for <em>wide</em> data.</p></li>
+</ul>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">#</span> <span class="n">also</span><span class="p">:</span> <span class="n">_hourly</span><span class="p">,</span> <span class="n">_daily</span><span class="p">,</span> <span class="n">_weekly</span><span class="p">,</span> <span class="k">or</span> <span class="n">_yearly</span>
 <span class="k">from</span> <span class="n">autots</span><span class="p">.</span><span class="n">datasets</span> <span class="n">import</span> <span class="n">load_monthly</span>
+
 <span class="n">df_long</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">()</span>
 
 <span class="k">from</span> <span class="n">autots</span> <span class="n">import</span> <span class="n">AutoTS</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span><span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
-               <span class="n">prediction_interval</span><span class="o">=</span><span class="mi">0</span><span class="p">.</span><span class="mi">9</span><span class="p">,</span> <span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;all&#39;</span><span class="p">,</span>
-               <span class="n">model_list</span><span class="o">=</span><span class="s1">&#39;superfast&#39;</span><span class="p">,</span>
-               <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-               <span class="n">validation_method</span><span class="o">=</span><span class="s1">&#39;even&#39;</span><span class="p">)</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span>
-                  <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span>
+    <span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+    <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
+    <span class="n">prediction_interval</span><span class="o">=</span><span class="mi">0</span><span class="p">.</span><span class="mi">9</span><span class="p">,</span>
+    <span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;all&#39;</span><span class="p">,</span>
+    <span class="n">model_list</span><span class="o">=</span><span class="s1">&#39;superfast&#39;</span><span class="p">,</span>
+    <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">validation_method</span><span class="o">=</span><span class="s1">&#39;even&#39;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span> <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
 
 <span class="o">#</span> <span class="n">Print</span> <span class="n">the</span> <span class="n">details</span> <span class="k">of</span> <span class="n">the</span> <span class="n">best</span> <span class="n">model</span>
 <span class="n">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
@@ -151,6 +163,7 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Intro</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#autots">AutoTS</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#features">Features</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#basic-use">Basic Use</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#how-to-contribute">How to Contribute:</a></li>
 </ul>

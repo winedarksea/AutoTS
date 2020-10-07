@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.evaluator package &#8212; AutoTS 0.2.4 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 0.2.5 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -410,6 +410,20 @@ the max number of each model class to include in template</p></li>
 </dd></dl>
 
 <dl class="method">
+<dt id="autots.evaluator.auto_ts.AutoTS.failure_rate">
+<code class="sig-name descname">failure_rate</code><span class="sig-paren">(</span><em class="sig-param">result_set: str = 'initial'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.failure_rate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return fraction of models passing with exceptions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>result_set</strong> (<em>str</em><em>, </em><em>optional</em>) – ‘validation’ or ‘initial’. Defaults to ‘initial’.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>float.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
 <dt id="autots.evaluator.auto_ts.AutoTS.fit">
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = None</em>, <em class="sig-param">value_col: str = None</em>, <em class="sig-param">id_col: str = None</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">weights: dict = {}</em>, <em class="sig-param">result_file: str = None</em>, <em class="sig-param">grouping_ids=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
@@ -537,7 +551,7 @@ Currently result_file and import only save/load initial run, no validations.</p>
 
 <dl class="function">
 <dt id="autots.evaluator.auto_ts.fake_regressor">
-<code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">fake_regressor</code><span class="sig-paren">(</span><em class="sig-param">df_long</em>, <em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = 'series_id'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">na_tolerance: float = 0.95</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">dimensions: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.fake_regressor" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">fake_regressor</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = 'series_id'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">na_tolerance: float = 0.95</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">dimensions: int = 1</em>, <em class="sig-param">verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.fake_regressor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a fake regressor of random numbers for testing purposes.</p>
 </dd></dl>
 

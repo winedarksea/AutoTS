@@ -1065,7 +1065,6 @@ class WindowRegression(ModelObject):
         Args:
             df (pandas.DataFrame): Datetime Indexed
         """
-        print(f"N_jobs is {self.n_jobs}")
         df = self.basic_profile(df)
         self.df_train = df
         X, Y = window_maker(
@@ -1117,7 +1116,7 @@ class WindowRegression(ModelObject):
         if univariate and 1, transpose
         """
         if int(forecast_length) > int(self.forecast_length):
-            print("GluonTS must be refit to change forecast length!")
+            print("Regression must be refit to change forecast length!")
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
 

@@ -4,23 +4,28 @@ import pandas as pd
 import copy
 import json
 
-from autots.tools.shaping import long_to_wide
-import random
-from autots.tools.shaping import subset_series
-from autots.tools.shaping import simple_train_test_split
-from autots.evaluator.auto_model import TemplateEvalObject
-from autots.evaluator.auto_model import NewGeneticTemplate
-from autots.evaluator.auto_model import RandomTemplate
-from autots.evaluator.auto_model import TemplateWizard
-from autots.evaluator.auto_model import unpack_ensemble_models
-from autots.evaluator.auto_model import generate_score
+from autots.tools.shaping import (
+    long_to_wide,
+    df_cleanup,
+    subset_series,
+    simple_train_test_split,
+    NumericTransformer,
+)
+from autots.evaluator.auto_model import (
+    TemplateEvalObject,
+    NewGeneticTemplate,
+    RandomTemplate,
+    TemplateWizard,
+    unpack_ensemble_models,
+    generate_score,
+    PredictWitch,
+    validation_aggregation,
+)
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
     HorizontalTemplateGenerator,
 )
-from autots.evaluator.auto_model import PredictWitch
-from autots.tools.shaping import NumericTransformer
-from autots.evaluator.auto_model import validation_aggregation
+import random
 
 
 class AutoTS(object):
@@ -381,13 +386,18 @@ class AutoTS(object):
                 date_col=self.date_col,
                 value_col=self.value_col,
                 id_col=self.id_col,
-                frequency=self.frequency,
-                na_tolerance=self.na_tolerance,
-                drop_data_older_than_periods=self.drop_data_older_than_periods,
                 aggfunc=self.aggfunc,
-                drop_most_recent=self.drop_most_recent,
-                verbose=self.verbose,
             )
+
+        df_wide = df_cleanup(
+            df_wide,
+            frequency=self.frequency,
+            na_tolerance=self.na_tolerance,
+            drop_data_older_than_periods=self.drop_data_older_than_periods,
+            aggfunc=self.aggfunc,
+            drop_most_recent=self.drop_most_recent,
+            verbose=self.verbose,
+        )
 
         # clean up series weighting input
         if not weighted:
@@ -1146,6 +1156,21 @@ or otherwise increase models available."""
         else:
             return self.initial_results.model_results
 
+    def failure_rate(self, result_set: str = 'initial'):
+        """Return fraction of models passing with exceptions.
+
+        Args:
+            result_set (str, optional): 'validation' or 'initial'. Defaults to 'initial'.
+
+        Returns:
+            float.
+
+        """
+        initial_results = self.results(result_set=result_set)
+        n = initial_results.shape[0]
+        x = (n - initial_results['Exceptions'].isna().sum()) / n
+        return x
+
     def export_template(
         self,
         filename,
@@ -1494,7 +1519,7 @@ class AutoTSIntervals(object):
 
 
 def fake_regressor(
-    df_long,
+    df,
     forecast_length: int = 14,
     date_col: str = 'datetime',
     value_col: str = 'value',
@@ -1505,20 +1530,30 @@ def fake_regressor(
     na_tolerance: float = 0.95,
     drop_data_older_than_periods: int = 100000,
     dimensions: int = 1,
+    verbose: int = 0,
 ):
     """Create a fake regressor of random numbers for testing purposes."""
-    from autots.tools.shaping import long_to_wide
 
-    df_wide = long_to_wide(
-        df_long,
-        date_col=date_col,
-        value_col=value_col,
-        id_col=id_col,
+    if date_col is None and value_col is None:
+        df_wide = pd.DataFrame(df)
+        assert type(df.index) is pd.DatetimeIndex, "df index is not pd.DatetimeIndex"
+    else:
+        df_wide = long_to_wide(
+            df,
+            date_col=date_col,
+            value_col=value_col,
+            id_col=id_col,
+            aggfunc=aggfunc,
+        )
+
+    df_wide = df_cleanup(
+        df_wide,
         frequency=frequency,
         na_tolerance=na_tolerance,
-        aggfunc=aggfunc,
         drop_data_older_than_periods=drop_data_older_than_periods,
+        aggfunc=aggfunc,
         drop_most_recent=drop_most_recent,
+        verbose=verbose,
     )
     if frequency == 'infer':
         frequency = pd.infer_freq(df_wide.index, warn=True)
