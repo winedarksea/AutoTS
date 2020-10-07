@@ -16,6 +16,7 @@
 
 # Latest
 * fix error where wide data import skipped cleaning steps
+* long=True/False for all example data
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

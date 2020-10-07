@@ -27,6 +27,8 @@ pip install autots
 ```
 This includes dependencies for basic models, but additonal packages are required for some models and methods.
 
+Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html) for a more detailed guide to features!
+
 Input data is expected to come in either a *long* or a *wide* format:
 
 - The *wide* format is a pandas.DataFrame with a pandas.DatetimeIndex and each column a distinct series. 
@@ -37,19 +39,24 @@ Input data is expected to come in either a *long* or a *wide* format:
 - For *long* data, the column name for each of these is passed to .fit() as `date_col`, `id_col`, and `value_col`. No parameters are needed for *wide* data.
 
 ```
-
 # also: _hourly, _daily, _weekly, or _yearly
-from autots.datasets import load_monthly 
+from autots.datasets import load_monthly
+
 df_long = load_monthly()
 
 from autots import AutoTS
-model = AutoTS(forecast_length=3, frequency='infer',
-               prediction_interval=0.9, ensemble='all',
-			   model_list='superfast',
-               max_generations=5, num_validations=2,
-			   validation_method='even')
-model = model.fit(df_long, date_col='datetime',
-				  value_col='value', id_col='series_id')
+
+model = AutoTS(
+    forecast_length=3,
+    frequency='infer',
+    prediction_interval=0.9,
+    ensemble='all',
+    model_list='superfast',
+    max_generations=5,
+    num_validations=2,
+    validation_method='even',
+)
+model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id')
 
 # Print the details of the best model
 print(model)
@@ -61,10 +68,7 @@ forecasts_df = prediction.forecast
 model_results = model.results()
 # and aggregated from cross validation
 validation_results = model.results("validation")
-
 ```
-
-Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html) for a more detailed guide to features!
 
 ## How to Contribute:
 * Give feedback on where you find the documentation confusing

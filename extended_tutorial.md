@@ -18,14 +18,20 @@ AutoTS works in the following way at present:
 ```
 # also: _hourly, _daily, _weekly, or _yearly
 from autots.datasets import load_monthly
+
 df_long = load_monthly()
 
 from autots import AutoTS
-model = AutoTS(forecast_length=3, frequency='infer',
-			   ensemble='simple', drop_data_older_than_periods=240,
-               max_generations=5, num_validations=2)
-model = model.fit(df_long, date_col='datetime', 
-				  value_col='value', id_col='series_id')
+
+model = AutoTS(
+    forecast_length=3,
+    frequency='infer',
+    ensemble='simple',
+    drop_data_older_than_periods=240,
+    max_generations=5,
+    num_validations=2,
+)
+model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id')
 
 # Print the name of the best model
 print(model)
@@ -83,6 +89,7 @@ Here weather data is included - winter and road construction being the major inf
 Also seen in use here is the `model_list`. 
 
 ```
+from autots import AutoTS
 from autots.datasets import load_hourly
 
 df_wide = load_hourly(long=False)
@@ -96,8 +103,6 @@ model_list = [
     'ETS',
     'AverageValueNaive',
 ]
-
-from autots import AutoTS
 
 model = AutoTS(
     forecast_length=49,
@@ -131,15 +136,7 @@ lower_forecasts_df = prediction.lower_forecast
 ### Model Lists
 By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of `'probabilistic', 'multivariate', 'fast', 'superfast', or 'all'`.
 
-As of `0.2.0` the following models are included:
-```
-['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS',
-'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression',
-'GluonTS', 'SeasonalNaive', 'UnobservedComponents', 'VARMAX',
-'VECM', 'DynamicFactor', 'TSFreshRegressor', 'MotifSimulation',
-'WindowRegression', 'VAR', 'TensorflowSTS', 'TFPRegression', 
-'ComponentAnalysis']
-```
+A table of all available models is available further below.
 
 On large multivariate series, `TSFreshRegressor`, `DynamicFactor` and `VARMAX` can be impractically slow.
 
