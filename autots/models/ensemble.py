@@ -365,7 +365,12 @@ def EnsembleTemplateGenerator(
             best3nu_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
-                    {'model_name': 'BestN', 'model_count': n_models, 'models': ensemble_models}
+                    {
+                        'model_name': 'BestN',
+                        'model_count': n_models,
+                        'model_metric': 'best_score',
+                        'models': ensemble_models,
+                    }
                 ),
                 'TransformationParameters': '{}',
                 'Ensemble': 1,
@@ -391,7 +396,12 @@ def EnsembleTemplateGenerator(
             best3m_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
-                    {'model_name': 'BestN', 'model_count': n_models, 'models': ensemble_models}
+                    {
+                        'model_name': 'BestN',
+                        'model_count': n_models,
+                        'model_metric': 'mixed_metric',
+                        'models': ensemble_models,
+                    }
                 ),
                 'TransformationParameters': '{}',
                 'Ensemble': 1,
@@ -420,7 +430,12 @@ def EnsembleTemplateGenerator(
             best3u_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
-                    {'model_name': 'BestN', 'model_count': n_models, 'models': ensemble_models}
+                    {
+                        'model_name': 'BestN',
+                        'model_count': n_models,
+                        'model_metric': 'best_score_unique',
+                        'models': ensemble_models,
+                    }
                 ),
                 'TransformationParameters': '{}',
                 'Ensemble': 1,
@@ -463,6 +478,7 @@ def EnsembleTemplateGenerator(
                 {
                     'model_name': 'Dist',
                     'model_count': 2,
+                    'model_metric': 'smape',
                     'models': ensemble_models,
                     'dis_frac': dis_frac,
                     'FirstModel': first_model,
@@ -509,6 +525,7 @@ def EnsembleTemplateGenerator(
                 {
                     'model_name': 'Dist',
                     'model_count': 2,
+                    'model_metric': 'smape',
                     'models': ensemble_models,
                     'dis_frac': dis_frac,
                     'FirstModel': first_model,
@@ -570,7 +587,12 @@ def EnsembleTemplateGenerator(
         best3_params = {
             'Model': 'Ensemble',
             'ModelParameters': json.dumps(
-                {'model_name': 'BestNHorizontal', 'model_count': n_models, 'models': ensemble_models}
+                {
+                    'model_name': 'BestN',
+                    'model_count': n_models,
+                    'model_metric': 'horizontal',
+                    'models': ensemble_models,
+                }
             ),
             'TransformationParameters': '{}',
             'Ensemble': 1,
@@ -611,12 +633,14 @@ def HorizontalTemplateGenerator(
                 }
                 ensemble_models[row['ID']] = temp_dict
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
+            metric = 'MAE' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
                     {
                         'model_name': nomen,
                         'model_count': mods.shape[0],
+                        'model_metric': metric,
                         'models': ensemble_models,
                         'series': mods_per_series.to_dict(),
                     }
@@ -709,12 +733,14 @@ def HorizontalTemplateGenerator(
                 }
                 ensemble_models[row['ID']] = temp_dict
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
+            metric = 'MAE' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
                     {
                         'model_name': nomen,
                         'model_count': mods_per_series.unique().shape[0],
+                        'model_metric': metric,
                         'models': ensemble_models,
                         'series': mods_per_series.to_dict(),
                     }

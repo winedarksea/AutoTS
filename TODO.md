@@ -82,10 +82,7 @@ Tensorflow GPU backend may crash on occasion.
 * have subsetting sample for diversity, not just random
 * cleanse similar models out first, before horizontal ensembling
 * BestNEnsemble
-	* Work on model failure
-	* Rename from Best3 to BestN
-	* Dicts instead of list of DFs
-	* Add 'model_count' to parameters
+	* Add 5 or more model option
 * allow best_model to be specified and entirely bypass the .fit() stage.
 
 * check models from M5 competition results
