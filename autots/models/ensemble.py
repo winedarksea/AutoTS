@@ -18,6 +18,11 @@ def Best3Ensemble(
     """Generate mean forecast for ensemble of models."""
     id_list = list(ensemble_params['models'].keys())
     model_indexes = [idx for idx, x in enumerate(forecasts_list) if x in id_list]
+    # handle that the inputs are now dictionaries
+    forecasts = list(forecasts.values())
+    lower_forecasts = list(lower_forecasts.values())
+    upper_forecasts = list(upper_forecasts.values())
+    forecasts_runtime = list(forecasts_runtime.values())
 
     ens_df = pd.DataFrame(0, index=forecasts[0].index, columns=forecasts[0].columns)
     for idx, x in enumerate(forecasts):
@@ -72,6 +77,12 @@ def DistEnsemble(
     prediction_interval,
 ):
     """Generate forecast for distance ensemble."""
+    # handle that the inputs are now dictionaries
+    forecasts = list(forecasts.values())
+    lower_forecasts = list(lower_forecasts.values())
+    upper_forecasts = list(upper_forecasts.values())
+    forecasts_runtime = list(forecasts_runtime.values())
+
     first_model_index = forecasts_list.index(ensemble_params['FirstModel'])
     second_model_index = forecasts_list.index(ensemble_params['SecondModel'])
     forecast_length = forecasts[0].shape[0]
@@ -129,6 +140,12 @@ def HorizontalEnsemble(
     prediction_interval,
 ):
     """Generate forecast for per_series ensembling."""
+    # handle that the inputs are now dictionaries
+    forecasts = list(forecasts.values())
+    lower_forecasts = list(lower_forecasts.values())
+    upper_forecasts = list(upper_forecasts.values())
+    forecasts_runtime = list(forecasts_runtime.values())
+
     id_list = list(ensemble_params['models'].keys())
     mod_dic = {x: idx for idx, x in enumerate(forecasts_list) if x in id_list}
 
@@ -184,6 +201,12 @@ def HDistEnsemble(
     prediction_interval,
 ):
     """Generate forecast for per_series per distance ensembling."""
+    # handle that the inputs are now dictionaries
+    forecasts = list(forecasts.values())
+    lower_forecasts = list(lower_forecasts.values())
+    upper_forecasts = list(upper_forecasts.values())
+    forecasts_runtime = list(forecasts_runtime.values())
+
     id_list = list(ensemble_params['models'].keys())
     mod_dic = {x: idx for idx, x in enumerate(forecasts_list) if x in id_list}
     forecast_length = forecasts[0].shape[0]

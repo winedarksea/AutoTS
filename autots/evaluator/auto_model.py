@@ -1086,10 +1086,10 @@ def PredictWitch(
             from autots.models.ensemble import EnsembleForecast
 
             forecasts_list = []
-            forecasts_runtime = []
-            forecasts = []
-            upper_forecasts = []
-            lower_forecasts = []
+            forecasts_runtime = {}
+            forecasts = {}
+            upper_forecasts = {}
+            lower_forecasts = {}
             ens_model_str = row_upper['Model']
             ens_params = json.loads(row_upper['ModelParameters'])
             ens_template = unpack_ensemble_models(
@@ -1134,10 +1134,14 @@ def PredictWitch(
                 )
 
                 forecasts_list.extend([model_id])
-                forecasts_runtime.extend([total_runtime])
-                forecasts.extend([df_forecast.forecast])
-                upper_forecasts.extend([df_forecast.upper_forecast])
-                lower_forecasts.extend([df_forecast.lower_forecast])
+                forecasts_runtime[model_id] = total_runtime
+                forecasts[model_id] = df_forecast.forecast
+                upper_forecasts[model_id] = df_forecast.upper_forecast
+                lower_forecasts[model_id] = df_forecast.lower_forecast
+                # forecasts_runtime.extend([total_runtime])
+                # forecasts.extend([df_forecast.forecast])
+                # upper_forecasts.extend([df_forecast.upper_forecast])
+                # lower_forecasts.extend([df_forecast.lower_forecast])
             ens_forecast = EnsembleForecast(
                 ens_model_str,
                 ens_params,

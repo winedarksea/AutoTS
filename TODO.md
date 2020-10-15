@@ -52,7 +52,7 @@ Tensorflow GPU backend may crash on occasion.
 
 ## To-Do
 * Migrate to-do to GitHub issues and project board
-	* GitHub badges in Readme, GitHub Actions flake8
+	* GitHub Actions flake8
 * Horizontal improvements
 	* don't run univariate models on all series, only on needed series
 	* generalizable from run on only a subset
@@ -194,7 +194,7 @@ Tensorflow GPU backend may crash on occasion.
 	Constraint as a transformation parameter
 
 ### New Model Checklist:
-	* Add to ModelMonster
-	* Add to AutoTS 'all' list
-	* all to recombination_approved if so
-	* add to model table in tutorial
+	* Add to ModelMonster in auto_model.py
+	* Add to AutoTS 'all' list in auto_ts.py
+	* add to recombination_approved if so, in auto_model.py
+	* add to model table in extended_tutorial.md
