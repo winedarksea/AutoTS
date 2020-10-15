@@ -17,39 +17,35 @@ def BestNEnsemble(
 ):
     """Generate mean forecast for ensemble of models."""
     id_list = list(ensemble_params['models'].keys())
-    model_indexes = [idx for idx, x in enumerate(forecasts_list) if x in id_list]
-    # handle that the inputs are now dictionaries
-    forecasts = list(forecasts.values())
-    lower_forecasts = list(lower_forecasts.values())
-    upper_forecasts = list(upper_forecasts.values())
-    forecasts_runtime = list(forecasts_runtime.values())
+    # is checking 'in id_list' necessary?
+    # does it handle missing models well?
+    model_indexes = [x for x in forecasts.keys() if x in id_list]
+    model_count = len(model_indexes)
+    sample_df = next(iter(forecasts.values()))
+    columnz = sample_df.columns
+    indices = sample_df.index
 
-    ens_df = pd.DataFrame(0, index=forecasts[0].index, columns=forecasts[0].columns)
-    for idx, x in enumerate(forecasts):
-        if idx in model_indexes:
-            ens_df = ens_df + forecasts[idx]
-    ens_df = ens_df / len(model_indexes)
+    ens_df = pd.DataFrame(0, index=indices, columns=columnz)
+    for idx, x in forecasts.items():
+        if idx in id_list:
+            ens_df = ens_df + x
+    ens_df = ens_df / model_count
 
-    ens_df_lower = pd.DataFrame(
-        0, index=forecasts[0].index, columns=forecasts[0].columns
-    )
-    for idx, x in enumerate(lower_forecasts):
-        if idx in model_indexes:
-            ens_df_lower = ens_df_lower + lower_forecasts[idx]
-    ens_df_lower = ens_df_lower / len(model_indexes)
+    ens_df_lower = pd.DataFrame(0, index=indices, columns=columnz)
+    for idx, x in lower_forecasts.items():
+        if idx in id_list:
+            ens_df_lower = ens_df_lower + x
+    ens_df_lower = ens_df_lower / model_count
 
-    ens_df_upper = pd.DataFrame(
-        0, index=forecasts[0].index, columns=forecasts[0].columns
-    )
-    for idx, x in enumerate(upper_forecasts):
-        if idx in model_indexes:
-            ens_df_upper = ens_df_upper + upper_forecasts[idx]
-    ens_df_upper = ens_df_upper / len(model_indexes)
+    ens_df_upper = pd.DataFrame(0, index=indices, columns=columnz)
+    for idx, x in upper_forecasts.items():
+        if idx in id_list:
+            ens_df_upper = ens_df_upper + x
+    ens_df_upper = ens_df_upper / model_count
 
     ens_runtime = datetime.timedelta(0)
-    for idx, x in enumerate(forecasts_runtime):
-        if idx in model_indexes:
-            ens_runtime = ens_runtime + forecasts_runtime[idx]
+    for x in forecasts_runtime.values():
+        ens_runtime = ens_runtime + x
 
     ens_result = PredictionObject(
         model_name="Ensemble",
