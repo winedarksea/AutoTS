@@ -1093,7 +1093,7 @@ def PredictWitch(
             ens_model_str = row_upper['Model']
             ens_params = json.loads(row_upper['ModelParameters'])
             ens_template = unpack_ensemble_models(
-                template, template_cols, keep_ensemble=False
+                template, template_cols, keep_ensemble=False, recursive=False
             )
             total_ens = ens_template.shape[0]
             for index, row in ens_template.iterrows():

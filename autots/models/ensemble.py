@@ -16,31 +16,29 @@ def BestNEnsemble(
     prediction_interval,
 ):
     """Generate mean forecast for ensemble of models."""
-    id_list = list(ensemble_params['models'].keys())
-    # is checking 'in id_list' necessary?
+    # id_list = list(ensemble_params['models'].keys())
     # does it handle missing models well?
-    model_indexes = [x for x in forecasts.keys() if x in id_list]
-    model_count = len(model_indexes)
+    # model_indexes = [x for x in forecasts.keys() if x in id_list]
+    model_count = len(forecasts.keys())
+    if model_count < 1:
+        raise ValueError("BestN failed, no component models available.")
     sample_df = next(iter(forecasts.values()))
     columnz = sample_df.columns
     indices = sample_df.index
 
     ens_df = pd.DataFrame(0, index=indices, columns=columnz)
     for idx, x in forecasts.items():
-        if idx in id_list:
-            ens_df = ens_df + x
+        ens_df = ens_df + x
     ens_df = ens_df / model_count
 
     ens_df_lower = pd.DataFrame(0, index=indices, columns=columnz)
     for idx, x in lower_forecasts.items():
-        if idx in id_list:
-            ens_df_lower = ens_df_lower + x
+        ens_df_lower = ens_df_lower + x
     ens_df_lower = ens_df_lower / model_count
 
     ens_df_upper = pd.DataFrame(0, index=indices, columns=columnz)
     for idx, x in upper_forecasts.items():
-        if idx in id_list:
-            ens_df_upper = ens_df_upper + x
+        ens_df_upper = ens_df_upper + x
     ens_df_upper = ens_df_upper / model_count
 
     ens_runtime = datetime.timedelta(0)
@@ -293,7 +291,7 @@ def EnsembleForecast(
     prediction_interval,
 ):
     """Return PredictionObject for given ensemble method."""
-    s3list = ['best3', 'best3horizontal']
+    s3list = ['best3', 'best3horizontal', 'bestn', 'bestnhorizontal']
     if ensemble_params['model_name'].lower().strip() in s3list:
         ens_forecast = BestNEnsemble(
             ensemble_params,
@@ -354,7 +352,8 @@ def EnsembleTemplateGenerator(
         ens_temp = ens_temp[ens_temp['Ensemble'] == 0]
         # best 3, all can be of same model type
         best3nonunique = ens_temp.nsmallest(3, columns=['Score'])
-        if best3nonunique.shape[0] == 3:
+        n_models = best3nonunique.shape[0]
+        if n_models == 3:
             ensemble_models = {}
             for index, row in best3nonunique.iterrows():
                 temp_dict = {
@@ -366,7 +365,7 @@ def EnsembleTemplateGenerator(
             best3nu_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
-                    {'model_name': 'Best3', 'models': ensemble_models}
+                    {'model_name': 'BestN', 'model_count': n_models, 'models': ensemble_models}
                 ),
                 'TransformationParameters': '{}',
                 'Ensemble': 1,
@@ -379,7 +378,8 @@ def EnsembleTemplateGenerator(
         bestmae = ens_temp.nsmallest(3, columns=['spl_weighted'])
         best3metric = pd.concat([bestsmape, bestrmse, bestmae], axis=0)
         best3metric = best3metric.drop_duplicates().head(3)
-        if best3metric.shape[0] == 3:
+        n_models = best3metric.shape[0]
+        if n_models == 3:
             ensemble_models = {}
             for index, row in best3metric.iterrows():
                 temp_dict = {
@@ -391,7 +391,7 @@ def EnsembleTemplateGenerator(
             best3m_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
-                    {'model_name': 'Best3', 'models': ensemble_models}
+                    {'model_name': 'BestN', 'model_count': n_models, 'models': ensemble_models}
                 ),
                 'TransformationParameters': '{}',
                 'Ensemble': 1,
@@ -407,7 +407,8 @@ def EnsembleTemplateGenerator(
         )
         best3unique = ens_temp.nsmallest(3, columns=['Score'])
         # only run if there are more than 3 model types available...
-        if best3unique.shape[0] == 3:
+        n_models = best3unique.shape[0]
+        if n_models == 3:
             ensemble_models = {}
             for index, row in best3unique.iterrows():
                 temp_dict = {
@@ -419,7 +420,7 @@ def EnsembleTemplateGenerator(
             best3u_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
-                    {'model_name': 'Best3', 'models': ensemble_models}
+                    {'model_name': 'BestN', 'model_count': n_models, 'models': ensemble_models}
                 ),
                 'TransformationParameters': '{}',
                 'Ensemble': 1,
@@ -461,6 +462,7 @@ def EnsembleTemplateGenerator(
             'ModelParameters': json.dumps(
                 {
                     'model_name': 'Dist',
+                    'model_count': 2,
                     'models': ensemble_models,
                     'dis_frac': dis_frac,
                     'FirstModel': first_model,
@@ -506,6 +508,7 @@ def EnsembleTemplateGenerator(
             'ModelParameters': json.dumps(
                 {
                     'model_name': 'Dist',
+                    'model_count': 2,
                     'models': ensemble_models,
                     'dis_frac': dis_frac,
                     'FirstModel': first_model,
@@ -567,7 +570,7 @@ def EnsembleTemplateGenerator(
         best3_params = {
             'Model': 'Ensemble',
             'ModelParameters': json.dumps(
-                {'model_name': 'best3horizontal', 'models': ensemble_models}
+                {'model_name': 'BestNHorizontal', 'model_count': n_models, 'models': ensemble_models}
             ),
             'TransformationParameters': '{}',
             'Ensemble': 1,
