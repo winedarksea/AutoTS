@@ -81,7 +81,7 @@ Tensorflow GPU backend may crash on occasion.
 	* 'fast' option for RandomTransformations generator
 * have subsetting sample for diversity, not just random
 * cleanse similar models out first, before horizontal ensembling
-* Best3Ensemble
+* BestNEnsemble
 	* Work on model failure
 	* Rename from Best3 to BestN
 	* Dicts instead of list of DFs

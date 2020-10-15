@@ -6,7 +6,7 @@ import json
 from autots.evaluator.auto_model import PredictionObject
 
 
-def Best3Ensemble(
+def BestNEnsemble(
     ensemble_params,
     forecasts_list,
     forecasts,
@@ -299,7 +299,7 @@ def EnsembleForecast(
     """Return PredictionObject for given ensemble method."""
     s3list = ['best3', 'best3horizontal']
     if ensemble_params['model_name'].lower().strip() in s3list:
-        ens_forecast = Best3Ensemble(
+        ens_forecast = BestNEnsemble(
             ensemble_params,
             forecasts_list,
             forecasts,

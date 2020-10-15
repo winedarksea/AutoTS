@@ -1095,53 +1095,52 @@ def PredictWitch(
             ens_template = unpack_ensemble_models(
                 template, template_cols, keep_ensemble=False
             )
+            total_ens = ens_template.shape[0]
             for index, row in ens_template.iterrows():
                 # recursive recursion!
-                if verbose > 2:
-                    total_ens = ens_template.shape[0]
-                    print(
-                        "Ensemble component {} of {} ".format(
-                            str(index), str(total_ens)
-                        )
+                try:
+                    if verbose > 2:
+                        p = f"Ensemble component {index} of {total_ens} FAILED"
+                        print(p)
+                    df_forecast = PredictWitch(
+                        row,
+                        df_train=df_train,
+                        forecast_length=forecast_length,
+                        frequency=frequency,
+                        prediction_interval=prediction_interval,
+                        no_negatives=no_negatives,
+                        constraint=constraint,
+                        future_regressor_train=future_regressor_train,
+                        future_regressor_forecast=future_regressor_forecast,
+                        holiday_country=holiday_country,
+                        startTimeStamps=startTimeStamps,
+                        grouping_ids=grouping_ids,
+                        random_seed=random_seed,
+                        verbose=verbose,
+                        n_jobs=n_jobs,
+                        template_cols=template_cols,
                     )
-                df_forecast = PredictWitch(
-                    row,
-                    df_train=df_train,
-                    forecast_length=forecast_length,
-                    frequency=frequency,
-                    prediction_interval=prediction_interval,
-                    no_negatives=no_negatives,
-                    constraint=constraint,
-                    future_regressor_train=future_regressor_train,
-                    future_regressor_forecast=future_regressor_forecast,
-                    holiday_country=holiday_country,
-                    startTimeStamps=startTimeStamps,
-                    grouping_ids=grouping_ids,
-                    random_seed=random_seed,
-                    verbose=verbose,
-                    n_jobs=n_jobs,
-                    template_cols=template_cols,
-                )
-                model_id = create_model_id(
-                    df_forecast.model_name,
-                    df_forecast.model_parameters,
-                    df_forecast.transformation_parameters,
-                )
-                total_runtime = (
-                    df_forecast.fit_runtime
-                    + df_forecast.predict_runtime
-                    + df_forecast.transformation_runtime
-                )
+                    model_id = create_model_id(
+                        df_forecast.model_name,
+                        df_forecast.model_parameters,
+                        df_forecast.transformation_parameters,
+                    )
+                    total_runtime = (
+                        df_forecast.fit_runtime
+                        + df_forecast.predict_runtime
+                        + df_forecast.transformation_runtime
+                    )
 
-                forecasts_list.extend([model_id])
-                forecasts_runtime[model_id] = total_runtime
-                forecasts[model_id] = df_forecast.forecast
-                upper_forecasts[model_id] = df_forecast.upper_forecast
-                lower_forecasts[model_id] = df_forecast.lower_forecast
-                # forecasts_runtime.extend([total_runtime])
-                # forecasts.extend([df_forecast.forecast])
-                # upper_forecasts.extend([df_forecast.upper_forecast])
-                # lower_forecasts.extend([df_forecast.lower_forecast])
+                    forecasts_list.extend([model_id])
+                    forecasts_runtime[model_id] = total_runtime
+                    forecasts[model_id] = df_forecast.forecast
+                    upper_forecasts[model_id] = df_forecast.upper_forecast
+                    lower_forecasts[model_id] = df_forecast.lower_forecast
+                except Exception:
+                    # currently this leaves no key/value for models that fail
+                    if verbose > 1:
+                        p = f"Ensemble component {index} of {total_ens} FAILED"
+                        print(p)
             ens_forecast = EnsembleForecast(
                 ens_model_str,
                 ens_params,
