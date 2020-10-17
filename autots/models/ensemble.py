@@ -124,6 +124,43 @@ def DistEnsemble(
     return ens_result_obj
 
 
+def summarize_series(df):
+    """Summarize time series data. For now just df.describe()."""
+    df_sum = df.describe(percentiles=[0.1, .25, .5, .75, 0.9])
+    return df_sum
+
+
+def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
+    """
+    CLassify unknown series with the appropriate model for horizontal ensembling.
+
+    Args:
+        df_train (pandas.DataFrame): historical data about the series. Columns = series_ids.
+        known (dict): dict of series_id: classifier outcome including some but not all series.
+
+    Returns:
+        dict.
+
+    """
+    # known = {'EXUSEU': 'xx1', 'MCOILWTICO': 'xx2', 'CSUSHPISA': 'xx3'}
+    columnz = df_train.columns.tolist()
+    X = summarize_series(df_train).transpose()
+    known_l = list(known.keys())
+    unknown = list(set(columnz) - set(known_l))
+    Xt = X.loc[known_l]
+    Xf = X.loc[unknown]
+    Y = np.array(list(known.values()))
+    from sklearn.naive_bayes import GaussianNB
+    clf = GaussianNB()
+    clf.fit(Xt, Y)
+    result = clf.predict(Xf)
+    result_d = dict(zip(Xf.index.tolist(), result))
+    final = {**result_d, **known}
+    # temp = pd.DataFrame({'series': list(final.keys()), 'model': list(final.values())})
+    # temp2 = temp.merge(X, left_on='series', right_index=True)
+    return final
+
+
 def HorizontalEnsemble(
     ensemble_params,
     forecasts_list,
@@ -132,8 +169,21 @@ def HorizontalEnsemble(
     upper_forecasts,
     forecasts_runtime,
     prediction_interval,
+    df_train=None,
 ):
     """Generate forecast for per_series ensembling."""
+    available_models = list(forecasts.keys())
+    sample_df = next(iter(forecasts.values()))
+    needed_series = sample_df.columns
+    known_matches = ensemble_params['series']
+    org_idx = df_train.columns
+    # remove any unavailable models
+    k = {ser: mod for ser, mod in known_matches.items() if mod in available_models}
+    if len(k) < len(org_idx):
+        all_series = horizontal_classifier(df_train, k)
+    else:
+        all_series = known_matches
+
     # handle that the inputs are now dictionaries
     forecasts = list(forecasts.values())
     lower_forecasts = list(lower_forecasts.values())
@@ -148,7 +198,7 @@ def HorizontalEnsemble(
         pd.DataFrame(),
         pd.DataFrame(),
     )
-    for series, mod_id in ensemble_params['series'].items():
+    for series, mod_id in all_series.items():
         l_idx = mod_dic[mod_id]
         try:
             c_fore = forecasts[l_idx][series]
@@ -163,7 +213,11 @@ def HorizontalEnsemble(
         # lower
         c_fore = lower_forecasts[l_idx][series]
         l_forecast_df = pd.concat([l_forecast_df, c_fore], axis=1)
-
+    # make sure columns align to original
+    forecast_df.reindex(columns=org_idx)
+    u_forecast_df.reindex(columns=org_idx)
+    l_forecast_df.reindex(columns=org_idx)
+    # combine runtimes
     ens_runtime = datetime.timedelta(0)
     for idx, x in enumerate(forecasts_runtime):
         if idx in list(mod_dic.values()):
@@ -289,9 +343,10 @@ def EnsembleForecast(
     upper_forecasts,
     forecasts_runtime,
     prediction_interval,
+    df_train=None,
 ):
     """Return PredictionObject for given ensemble method."""
-    s3list = ['best3', 'best3horizontal', 'bestn', 'bestnhorizontal']
+    s3list = ['best3', 'best3horizontal', 'bestn']
     if ensemble_params['model_name'].lower().strip() in s3list:
         ens_forecast = BestNEnsemble(
             ensemble_params,
@@ -326,6 +381,7 @@ def EnsembleForecast(
             upper_forecasts,
             forecasts_runtime,
             prediction_interval,
+            df_train=df_train,
         )
         return ens_forecast
 

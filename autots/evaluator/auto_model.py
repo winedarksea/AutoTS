@@ -1150,6 +1150,7 @@ def PredictWitch(
                 upper_forecasts=upper_forecasts,
                 forecasts_runtime=forecasts_runtime,
                 prediction_interval=prediction_interval,
+                df_train=df_train,
             )
             return ens_forecast
         # if not an ensemble
