@@ -173,25 +173,17 @@ def HorizontalEnsemble(
 ):
     """Generate forecast for per_series ensembling."""
     available_models = list(forecasts.keys())
-    sample_df = next(iter(forecasts.values()))
-    needed_series = sample_df.columns
     known_matches = ensemble_params['series']
     org_idx = df_train.columns
-    # remove any unavailable models
+    org_list = org_idx.tolist()
+    # remove any unavailable models or unnecessary series
+    known_matches = {ser: mod for ser, mod in known_matches.items() if ser in org_list}
     k = {ser: mod for ser, mod in known_matches.items() if mod in available_models}
-    if len(k) < len(org_idx):
+    # check if any series are missing from model list
+    if len(set(org_list) - set(list(k.keys()))) > 0:
         all_series = horizontal_classifier(df_train, k)
     else:
         all_series = known_matches
-
-    # handle that the inputs are now dictionaries
-    forecasts = list(forecasts.values())
-    lower_forecasts = list(lower_forecasts.values())
-    upper_forecasts = list(upper_forecasts.values())
-    forecasts_runtime = list(forecasts_runtime.values())
-
-    id_list = list(ensemble_params['models'].keys())
-    mod_dic = {x: idx for idx, x in enumerate(forecasts_list) if x in id_list}
 
     forecast_df, u_forecast_df, l_forecast_df = (
         pd.DataFrame(),
@@ -199,19 +191,18 @@ def HorizontalEnsemble(
         pd.DataFrame(),
     )
     for series, mod_id in all_series.items():
-        l_idx = mod_dic[mod_id]
         try:
-            c_fore = forecasts[l_idx][series]
+            c_fore = forecasts[mod_id][series]
             forecast_df = pd.concat([forecast_df, c_fore], axis=1)
         except Exception as e:
             repr(e)
-            print(forecasts[l_idx].columns)
-            print(forecasts[l_idx].head())
+            print(forecasts[mod_id].columns)
+            print(forecasts[mod_id].head())
         # upper
-        c_fore = upper_forecasts[l_idx][series]
+        c_fore = upper_forecasts[mod_id][series]
         u_forecast_df = pd.concat([u_forecast_df, c_fore], axis=1)
         # lower
-        c_fore = lower_forecasts[l_idx][series]
+        c_fore = lower_forecasts[mod_id][series]
         l_forecast_df = pd.concat([l_forecast_df, c_fore], axis=1)
     # make sure columns align to original
     forecast_df.reindex(columns=org_idx)
@@ -219,9 +210,8 @@ def HorizontalEnsemble(
     l_forecast_df.reindex(columns=org_idx)
     # combine runtimes
     ens_runtime = datetime.timedelta(0)
-    for idx, x in enumerate(forecasts_runtime):
-        if idx in list(mod_dic.values()):
-            ens_runtime = ens_runtime + forecasts_runtime[idx]
+    for idx, x in forecasts_runtime.items():
+        ens_runtime = ens_runtime + x
 
     ens_result = PredictionObject(
         model_name="Ensemble",
@@ -671,7 +661,7 @@ def HorizontalTemplateGenerator(
     """Generate horizontal ensemble templates given a table of results."""
     ensemble_templates = pd.DataFrame()
     ensy = ['horizontal', 'probabilistic', 'hdist']
-    if any(x in ensemble for x in ensy) and not subset_flag:
+    if any(x in ensemble for x in ensy):
         if ('horizontal-max' in ensemble) or ('probabilistic-max' in ensemble):
             mods_per_series = per_series.idxmin()
             mods = mods_per_series.unique()
@@ -708,7 +698,7 @@ def HorizontalTemplateGenerator(
             ensemble_templates = pd.concat(
                 [ensemble_templates, best5_params], axis=0, ignore_index=True
             )
-        elif 'hdist' in ensemble:
+        elif 'hdist' in ensemble and not subset_flag:
             mods_per_series = per_series.idxmin()
             mods_per_series2 = per_series2.idxmin()
             mods = pd.concat([mods_per_series, mods_per_series2]).unique()
