@@ -1077,6 +1077,19 @@ def PredictWitch(
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object):
     """
+    no_shared = [  # for models that don't share information among series
+        'ZeroesNaive',
+        'LastValueNaive',
+        'AverageValueNaive',
+        'GLM',
+        'ETS',
+        'ARIMA',
+        'FBProphet',
+        'SeasonalNaive',
+        'UnobservedComponents',
+        'MotifSimulation',
+        'TensorflowSTS',
+    ]
     if isinstance(template, pd.Series):
         template = pd.DataFrame(template).transpose()
     template = template.head(1)

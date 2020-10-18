@@ -180,6 +180,8 @@ def HorizontalEnsemble(
     known_matches = {ser: mod for ser, mod in known_matches.items() if ser in org_list}
     k = {ser: mod for ser, mod in known_matches.items() if mod in available_models}
     # check if any series are missing from model list
+    if not k:
+        raise ValueError("Horizontal template has no models matching this data!")
     if len(set(org_list) - set(list(k.keys()))) > 0:
         all_series = horizontal_classifier(df_train, k)
     else:
@@ -195,9 +197,7 @@ def HorizontalEnsemble(
             c_fore = forecasts[mod_id][series]
             forecast_df = pd.concat([forecast_df, c_fore], axis=1)
         except Exception as e:
-            repr(e)
-            print(forecasts[mod_id].columns)
-            print(forecasts[mod_id].head())
+            print(f"Horizontal ensemble unable to add model {repr(e)}")
         # upper
         c_fore = upper_forecasts[mod_id][series]
         u_forecast_df = pd.concat([u_forecast_df, c_fore], axis=1)

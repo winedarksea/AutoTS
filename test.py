@@ -76,7 +76,7 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble="simple,distance,horizontal-max",
+    ensemble=None, # "simple,distance,horizontal-max",
     constraint=2,
     max_generations=generations,
     num_validations=2,
@@ -89,7 +89,7 @@ model = AutoTS(
     model_interrupt=True,
     n_jobs=n_jobs,
     drop_most_recent=0,
-    subset=2,
+    subset=5,
     verbose=1,
 )
 

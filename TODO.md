@@ -16,6 +16,10 @@
 
 # Latest
 * fix verbose > 2 error in auto_model
+* use of f-strings to print some error messages. Python 3.5 may see more complicated error messages as a result.
+* improved BestN (formery Best3) Ensembles, ensemble collected in dicts
+* made Horizontal and BestN ensembles tolerant of a component model failure
+* made Horizontal models capable of generalizing from a subset of series
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -30,6 +34,19 @@ Is Template Eval Error: ValueError('array must not contain infs or NaNs',) relat
 'Fake Date' doesn't work on entirely NaN series - ValueError('Found array with 0 sample(s) (shape=(0, 1)) while a minimum of 1 is required.',)
 ValueError: percentiles should all be in the interval [0, 1]. Try [-0.00089  0.01089] instead. .sample in Motif Simulation line 729 point_method == 'sample'
 
+```
+[in PredictWitch]
+if model in ['Horizontal', 'Probabilistic'] and series_count > 20:
+	if needed:
+		run horizontal_classifier(df_train, known)
+
+for model in ensemble_models
+	if model in no_shared AND if transformations not in shared_transformations/bagging:
+		filter dictionary to only series with this model
+		df_train.reindex(copy=True) to these series
+		run model
+```
+
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
 GluonTS not accepting quite a lot of frequencies
@@ -38,7 +55,6 @@ Tensorflow GPU backend may crash on occasion.
 
 ## Concerns
 * resource utilization at scale
-	* improve horizontal ensembling efficiency in particular
 * structure of General Transformer
 * overfitting on first train segment (train progressive subsets?)
 * End Users add their own models
@@ -55,25 +71,22 @@ Tensorflow GPU backend may crash on occasion.
 	* GitHub Actions flake8
 * Horizontal improvements
 	* don't run univariate models on all series, only on needed series
-	* generalizable from run on only a subset
-		* need to start capturing per_series_mae if subset
-	* handle failure of a lower level model on some series (but not for dist variants)
-		* catch errors in PredictWitch
 	* remove 'horizontal' sanity check run, takes too long (only if metric weights are x)
 	* add 'horizontal-runtime'
-	* allow multiprocessing for each model of horizontal
-		* allow multiprocessing to models, pass through num_process + **kwargs
 * User friendly:
 	* clean up lower level
 	* make passing in own models easy
 		* clean up base model object
 * Make preprocessing templates more flexible...
+	* bagging/boosting
+	* 'shared' and 'slow' transformers must be easily separable
 * Speed:
 	* Fast window regression only
 	* Fast MotifSimulation
 		* could memoization of pairwise comparisons be possible? (joblib)
 * Improve templates
 	* 'fake date' dataset with high diversity of series to train on
+* BestN runtime variant, where speed is highly important in model selection
 
 
 * Profile slow parts of AutoTS on 1,000 series
@@ -194,4 +207,5 @@ Tensorflow GPU backend may crash on occasion.
 	* Add to ModelMonster in auto_model.py
 	* Add to AutoTS 'all' list in auto_ts.py
 	* add to recombination_approved if so, in auto_model.py
+	* add to no_shared if so, in auto_model.py
 	* add to model table in extended_tutorial.md
