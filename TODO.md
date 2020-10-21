@@ -20,6 +20,7 @@
 * improved BestN (formery Best3) Ensembles, ensemble collected in dicts
 * made Horizontal and BestN ensembles tolerant of a component model failure
 * made Horizontal models capable of generalizing from a subset of series
+* added info to model table for models that can use future_regressor
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
