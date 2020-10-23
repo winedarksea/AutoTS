@@ -246,6 +246,7 @@ class AutoTS(object):
                 'TensorflowSTS',
                 'TFPRegression',
                 'ComponentAnalysis',
+                'DatepartRegression',
             ]
 
         # generate template to begin with

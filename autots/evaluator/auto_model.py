@@ -756,6 +756,33 @@ def ModelMonster(
                 forecast_length=forecast_length,
             )
         return model
+    if model == 'DatepartRegression':
+        from autots.models.sklearn import DatepartRegression
+
+        if parameters == {}:
+            model = DatepartRegression(
+                frequency=frequency,
+                prediction_interval=prediction_interval,
+                holiday_country=holiday_country,
+                random_seed=random_seed,
+                verbose=verbose,
+                forecast_length=forecast_length,
+                n_jobs=n_jobs,
+            )
+        else:
+            model = DatepartRegression(
+                frequency=frequency,
+                prediction_interval=prediction_interval,
+                holiday_country=holiday_country,
+                random_seed=random_seed,
+                verbose=verbose,
+                regression_model=parameters['regression_model'],
+                datepart_method=parameters['datepart_method'],
+                regression_type=parameters['regression_type'],
+                forecast_length=forecast_length,
+                n_jobs=n_jobs,
+            )
+        return model
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)
@@ -1089,6 +1116,7 @@ def PredictWitch(
         'UnobservedComponents',
         'MotifSimulation',
         'TensorflowSTS',
+        'DatepartRegression',
     ]
     if isinstance(template, pd.Series):
         template = pd.DataFrame(template).transpose()

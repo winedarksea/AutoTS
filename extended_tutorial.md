@@ -317,3 +317,5 @@ Some models will support a more limited range of frequencies.
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |
 |  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |               |
 |  TSFreshRegressor       | tsfresh, sklearn |                     |               |                 |       |              | True         |               |
+|  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              | True         | True          |
+

@@ -19,7 +19,7 @@ forecast_length = 3
 long = False
 df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 2
+generations = 10
 
 
 # df = df[df['series_id'] == 'GS10']
@@ -58,7 +58,7 @@ model_list = [
     'WindowRegression',
 ]
 model_list = 'superfast'
-# model_list = ['AverageValueNaive', 'LastValueNaive', 'GLM']
+model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {
