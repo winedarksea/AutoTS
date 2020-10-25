@@ -17,9 +17,9 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 example_filename = "example_export2.csv"  # .csv/.json
 forecast_length = 3
 long = False
-df = load_weekly(long=long)
+df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 2
+generations = 6
 
 
 # df = df[df['series_id'] == 'GS10']
@@ -57,8 +57,8 @@ model_list = [
     'VECM',
     'WindowRegression',
 ]
-model_list = 'superfast'
-# model_list = ['AverageValueNaive', 'LastValueNaive', 'GLM']
+model_list = 'default'
+# model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {
@@ -76,7 +76,7 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble=None,
+    ensemble="simple,distance,horizontal-max",
     constraint=2,
     max_generations=generations,
     num_validations=2,
@@ -84,11 +84,12 @@ model = AutoTS(
     model_list=model_list,
     initial_template='General+Random',
     metric_weighting=metric_weighting,
-    models_to_validate=0.1,
+    models_to_validate=0.3,
     max_per_model_class=None,
     model_interrupt=True,
     n_jobs=n_jobs,
     drop_most_recent=0,
+    subset=5,
     verbose=1,
 )
 
@@ -179,11 +180,13 @@ print(model.best_model['Model'].iloc[0])
 print(model.best_model['ModelParameters'].iloc[0])
 print(model.best_model['TransformationParameters'].iloc[0])
 
+"""
 prediction_ints = model.predict(
     future_regressor=future_regressor_forecast2d,
     prediction_interval=[0.99, 0.5],
     verbose=0,
 )
+"""
 prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=0)
 # point forecasts dataframe
 forecasts_df = prediction.forecast

@@ -27,6 +27,12 @@ def df_cleanup(
         pd.DataFrame: original dataframe, now possibly shorter.
 
     """
+    # check to make sure column names are unique
+    if verbose > 0:
+        dupes = df_wide.columns.duplicated()
+        if sum(dupes) > 0:
+            print("Warning, series ids are not unique: {df_wide.columns[dupes]}")
+
     # infer frequency
     if frequency == 'infer':
         frequency = pd.infer_freq(df_wide.index, warn=True)

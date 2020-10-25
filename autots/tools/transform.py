@@ -657,7 +657,7 @@ class SeasonalDifference(object):
         return df + sdf
 
 
-class DatepartRegression(object):
+class DatepartRegressionTransformer(object):
     """Remove a regression on datepart from the data."""
 
     def __init__(
@@ -668,7 +668,7 @@ class DatepartRegression(object):
         },
         datepart_method: str = 'expanded',
     ):
-        self.name = 'DatepartRegression'
+        self.name = 'DatepartRegressionTransformer'
         self.regression_model = regression_model
         self.datepart_method = datepart_method
 
@@ -960,23 +960,23 @@ trans_dict = {
     'SeasonalDifference28': SeasonalDifference(lag_1=28, method='Mean'),
     'bkfilter': StatsmodelsFilter(method='bkfilter'),
     'cffilter': StatsmodelsFilter(method='cffilter'),
-    'DatepartRegression': DatepartRegression(
+    'DatepartRegression': DatepartRegressionTransformer(
         regression_model={
             "model": 'DecisionTree',
             "model_params": {"max_depth": 5, "min_samples_split": 2},
         }
     ),
-    'DatepartRegressionLtd': DatepartRegression(
+    'DatepartRegressionLtd': DatepartRegressionTransformer(
         regression_model={
             "model": 'DecisionTree',
             "model_params": {"max_depth": 4, "min_samples_split": 2},
         },
         datepart_method='recurring',
     ),
-    'DatepartRegressionElasticNet': DatepartRegression(
+    'DatepartRegressionElasticNet': DatepartRegressionTransformer(
         regression_model={"model": 'ElasticNet', "model_params": {}}
     ),
-    'DatepartRegressionRandForest': DatepartRegression(
+    'DatepartRegressionRandForest': DatepartRegressionTransformer(
         regression_model={"model": 'RandomForest', "model_params": {}}
     ),
 }

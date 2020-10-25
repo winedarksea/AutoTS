@@ -4,10 +4,9 @@ import numpy as np
 import pandas as pd
 import json
 from autots.evaluator.auto_model import PredictionObject
-from autots.evaluator.auto_model import create_model_id
 
 
-def Best3Ensemble(
+def BestNEnsemble(
     ensemble_params,
     forecasts_list,
     forecasts,
@@ -17,35 +16,34 @@ def Best3Ensemble(
     prediction_interval,
 ):
     """Generate mean forecast for ensemble of models."""
-    id_list = list(ensemble_params['models'].keys())
-    model_indexes = [idx for idx, x in enumerate(forecasts_list) if x in id_list]
+    # id_list = list(ensemble_params['models'].keys())
+    # does it handle missing models well?
+    # model_indexes = [x for x in forecasts.keys() if x in id_list]
+    model_count = len(forecasts.keys())
+    if model_count < 1:
+        raise ValueError("BestN failed, no component models available.")
+    sample_df = next(iter(forecasts.values()))
+    columnz = sample_df.columns
+    indices = sample_df.index
 
-    ens_df = pd.DataFrame(0, index=forecasts[0].index, columns=forecasts[0].columns)
-    for idx, x in enumerate(forecasts):
-        if idx in model_indexes:
-            ens_df = ens_df + forecasts[idx]
-    ens_df = ens_df / len(model_indexes)
+    ens_df = pd.DataFrame(0, index=indices, columns=columnz)
+    for idx, x in forecasts.items():
+        ens_df = ens_df + x
+    ens_df = ens_df / model_count
 
-    ens_df_lower = pd.DataFrame(
-        0, index=forecasts[0].index, columns=forecasts[0].columns
-    )
-    for idx, x in enumerate(lower_forecasts):
-        if idx in model_indexes:
-            ens_df_lower = ens_df_lower + lower_forecasts[idx]
-    ens_df_lower = ens_df_lower / len(model_indexes)
+    ens_df_lower = pd.DataFrame(0, index=indices, columns=columnz)
+    for idx, x in lower_forecasts.items():
+        ens_df_lower = ens_df_lower + x
+    ens_df_lower = ens_df_lower / model_count
 
-    ens_df_upper = pd.DataFrame(
-        0, index=forecasts[0].index, columns=forecasts[0].columns
-    )
-    for idx, x in enumerate(upper_forecasts):
-        if idx in model_indexes:
-            ens_df_upper = ens_df_upper + upper_forecasts[idx]
-    ens_df_upper = ens_df_upper / len(model_indexes)
+    ens_df_upper = pd.DataFrame(0, index=indices, columns=columnz)
+    for idx, x in upper_forecasts.items():
+        ens_df_upper = ens_df_upper + x
+    ens_df_upper = ens_df_upper / model_count
 
     ens_runtime = datetime.timedelta(0)
-    for idx, x in enumerate(forecasts_runtime):
-        if idx in model_indexes:
-            ens_runtime = ens_runtime + forecasts_runtime[idx]
+    for x in forecasts_runtime.values():
+        ens_runtime = ens_runtime + x
 
     ens_result = PredictionObject(
         model_name="Ensemble",
@@ -73,6 +71,12 @@ def DistEnsemble(
     prediction_interval,
 ):
     """Generate forecast for distance ensemble."""
+    # handle that the inputs are now dictionaries
+    forecasts = list(forecasts.values())
+    lower_forecasts = list(lower_forecasts.values())
+    upper_forecasts = list(upper_forecasts.values())
+    forecasts_runtime = list(forecasts_runtime.values())
+
     first_model_index = forecasts_list.index(ensemble_params['FirstModel'])
     second_model_index = forecasts_list.index(ensemble_params['SecondModel'])
     forecast_length = forecasts[0].shape[0]
@@ -120,6 +124,44 @@ def DistEnsemble(
     return ens_result_obj
 
 
+def summarize_series(df):
+    """Summarize time series data. For now just df.describe()."""
+    df_sum = df.describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
+    return df_sum
+
+
+def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
+    """
+    CLassify unknown series with the appropriate model for horizontal ensembling.
+
+    Args:
+        df_train (pandas.DataFrame): historical data about the series. Columns = series_ids.
+        known (dict): dict of series_id: classifier outcome including some but not all series.
+
+    Returns:
+        dict.
+
+    """
+    # known = {'EXUSEU': 'xx1', 'MCOILWTICO': 'xx2', 'CSUSHPISA': 'xx3'}
+    columnz = df_train.columns.tolist()
+    X = summarize_series(df_train).transpose()
+    known_l = list(known.keys())
+    unknown = list(set(columnz) - set(known_l))
+    Xt = X.loc[known_l]
+    Xf = X.loc[unknown]
+    Y = np.array(list(known.values()))
+    from sklearn.naive_bayes import GaussianNB
+
+    clf = GaussianNB()
+    clf.fit(Xt, Y)
+    result = clf.predict(Xf)
+    result_d = dict(zip(Xf.index.tolist(), result))
+    final = {**result_d, **known}
+    # temp = pd.DataFrame({'series': list(final.keys()), 'model': list(final.values())})
+    # temp2 = temp.merge(X, left_on='series', right_index=True)
+    return final
+
+
 def HorizontalEnsemble(
     ensemble_params,
     forecasts_list,
@@ -128,36 +170,49 @@ def HorizontalEnsemble(
     upper_forecasts,
     forecasts_runtime,
     prediction_interval,
+    df_train=None,
 ):
     """Generate forecast for per_series ensembling."""
-    id_list = list(ensemble_params['models'].keys())
-    mod_dic = {x: idx for idx, x in enumerate(forecasts_list) if x in id_list}
+    available_models = list(forecasts.keys())
+    known_matches = ensemble_params['series']
+    org_idx = df_train.columns
+    org_list = org_idx.tolist()
+    # remove any unavailable models or unnecessary series
+    known_matches = {ser: mod for ser, mod in known_matches.items() if ser in org_list}
+    k = {ser: mod for ser, mod in known_matches.items() if mod in available_models}
+    # check if any series are missing from model list
+    if not k:
+        raise ValueError("Horizontal template has no models matching this data!")
+    if len(set(org_list) - set(list(k.keys()))) > 0:
+        all_series = horizontal_classifier(df_train, k)
+    else:
+        all_series = known_matches
 
     forecast_df, u_forecast_df, l_forecast_df = (
         pd.DataFrame(),
         pd.DataFrame(),
         pd.DataFrame(),
     )
-    for series, mod_id in ensemble_params['series'].items():
-        l_idx = mod_dic[mod_id]
+    for series, mod_id in all_series.items():
         try:
-            c_fore = forecasts[l_idx][series]
+            c_fore = forecasts[mod_id][series]
             forecast_df = pd.concat([forecast_df, c_fore], axis=1)
         except Exception as e:
-            repr(e)
-            print(forecasts[l_idx].columns)
-            print(forecasts[l_idx].head())
+            print(f"Horizontal ensemble unable to add model {repr(e)}")
         # upper
-        c_fore = upper_forecasts[l_idx][series]
+        c_fore = upper_forecasts[mod_id][series]
         u_forecast_df = pd.concat([u_forecast_df, c_fore], axis=1)
         # lower
-        c_fore = lower_forecasts[l_idx][series]
+        c_fore = lower_forecasts[mod_id][series]
         l_forecast_df = pd.concat([l_forecast_df, c_fore], axis=1)
-
+    # make sure columns align to original
+    forecast_df.reindex(columns=org_idx)
+    u_forecast_df.reindex(columns=org_idx)
+    l_forecast_df.reindex(columns=org_idx)
+    # combine runtimes
     ens_runtime = datetime.timedelta(0)
-    for idx, x in enumerate(forecasts_runtime):
-        if idx in list(mod_dic.values()):
-            ens_runtime = ens_runtime + forecasts_runtime[idx]
+    for idx, x in forecasts_runtime.items():
+        ens_runtime = ens_runtime + x
 
     ens_result = PredictionObject(
         model_name="Ensemble",
@@ -185,6 +240,12 @@ def HDistEnsemble(
     prediction_interval,
 ):
     """Generate forecast for per_series per distance ensembling."""
+    # handle that the inputs are now dictionaries
+    forecasts = list(forecasts.values())
+    lower_forecasts = list(lower_forecasts.values())
+    upper_forecasts = list(upper_forecasts.values())
+    forecasts_runtime = list(forecasts_runtime.values())
+
     id_list = list(ensemble_params['models'].keys())
     mod_dic = {x: idx for idx, x in enumerate(forecasts_list) if x in id_list}
     forecast_length = forecasts[0].shape[0]
@@ -273,11 +334,12 @@ def EnsembleForecast(
     upper_forecasts,
     forecasts_runtime,
     prediction_interval,
+    df_train=None,
 ):
     """Return PredictionObject for given ensemble method."""
-    s3list = ['best3', 'best3horizontal']
+    s3list = ['best3', 'best3horizontal', 'bestn']
     if ensemble_params['model_name'].lower().strip() in s3list:
-        ens_forecast = Best3Ensemble(
+        ens_forecast = BestNEnsemble(
             ensemble_params,
             forecasts_list,
             forecasts,
@@ -310,6 +372,7 @@ def EnsembleForecast(
             upper_forecasts,
             forecasts_runtime,
             prediction_interval,
+            df_train=df_train,
         )
         return ens_forecast
 
@@ -336,7 +399,8 @@ def EnsembleTemplateGenerator(
         ens_temp = ens_temp[ens_temp['Ensemble'] == 0]
         # best 3, all can be of same model type
         best3nonunique = ens_temp.nsmallest(3, columns=['Score'])
-        if best3nonunique.shape[0] == 3:
+        n_models = best3nonunique.shape[0]
+        if n_models == 3:
             ensemble_models = {}
             for index, row in best3nonunique.iterrows():
                 temp_dict = {
@@ -348,7 +412,12 @@ def EnsembleTemplateGenerator(
             best3nu_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
-                    {'model_name': 'Best3', 'models': ensemble_models}
+                    {
+                        'model_name': 'BestN',
+                        'model_count': n_models,
+                        'model_metric': 'best_score',
+                        'models': ensemble_models,
+                    }
                 ),
                 'TransformationParameters': '{}',
                 'Ensemble': 1,
@@ -361,7 +430,8 @@ def EnsembleTemplateGenerator(
         bestmae = ens_temp.nsmallest(3, columns=['spl_weighted'])
         best3metric = pd.concat([bestsmape, bestrmse, bestmae], axis=0)
         best3metric = best3metric.drop_duplicates().head(3)
-        if best3metric.shape[0] == 3:
+        n_models = best3metric.shape[0]
+        if n_models == 3:
             ensemble_models = {}
             for index, row in best3metric.iterrows():
                 temp_dict = {
@@ -373,7 +443,12 @@ def EnsembleTemplateGenerator(
             best3m_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
-                    {'model_name': 'Best3', 'models': ensemble_models}
+                    {
+                        'model_name': 'BestN',
+                        'model_count': n_models,
+                        'model_metric': 'mixed_metric',
+                        'models': ensemble_models,
+                    }
                 ),
                 'TransformationParameters': '{}',
                 'Ensemble': 1,
@@ -389,7 +464,8 @@ def EnsembleTemplateGenerator(
         )
         best3unique = ens_temp.nsmallest(3, columns=['Score'])
         # only run if there are more than 3 model types available...
-        if best3unique.shape[0] == 3:
+        n_models = best3unique.shape[0]
+        if n_models == 3:
             ensemble_models = {}
             for index, row in best3unique.iterrows():
                 temp_dict = {
@@ -401,7 +477,12 @@ def EnsembleTemplateGenerator(
             best3u_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
-                    {'model_name': 'Best3', 'models': ensemble_models}
+                    {
+                        'model_name': 'BestN',
+                        'model_count': n_models,
+                        'model_metric': 'best_score_unique',
+                        'models': ensemble_models,
+                    }
                 ),
                 'TransformationParameters': '{}',
                 'Ensemble': 1,
@@ -443,6 +524,8 @@ def EnsembleTemplateGenerator(
             'ModelParameters': json.dumps(
                 {
                     'model_name': 'Dist',
+                    'model_count': 2,
+                    'model_metric': 'smape',
                     'models': ensemble_models,
                     'dis_frac': dis_frac,
                     'FirstModel': first_model,
@@ -488,6 +571,8 @@ def EnsembleTemplateGenerator(
             'ModelParameters': json.dumps(
                 {
                     'model_name': 'Dist',
+                    'model_count': 2,
+                    'model_metric': 'smape',
                     'models': ensemble_models,
                     'dis_frac': dis_frac,
                     'FirstModel': first_model,
@@ -549,7 +634,12 @@ def EnsembleTemplateGenerator(
         best3_params = {
             'Model': 'Ensemble',
             'ModelParameters': json.dumps(
-                {'model_name': 'best3horizontal', 'models': ensemble_models}
+                {
+                    'model_name': 'BestN',
+                    'model_count': n_models,
+                    'model_metric': 'horizontal',
+                    'models': ensemble_models,
+                }
             ),
             'TransformationParameters': '{}',
             'Ensemble': 1,
@@ -572,7 +662,7 @@ def HorizontalTemplateGenerator(
     """Generate horizontal ensemble templates given a table of results."""
     ensemble_templates = pd.DataFrame()
     ensy = ['horizontal', 'probabilistic', 'hdist']
-    if any(x in ensemble for x in ensy) and not subset_flag:
+    if any(x in ensemble for x in ensy):
         if ('horizontal-max' in ensemble) or ('probabilistic-max' in ensemble):
             mods_per_series = per_series.idxmin()
             mods = mods_per_series.unique()
@@ -590,12 +680,14 @@ def HorizontalTemplateGenerator(
                 }
                 ensemble_models[row['ID']] = temp_dict
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
+            metric = 'MAE' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
                     {
                         'model_name': nomen,
                         'model_count': mods.shape[0],
+                        'model_metric': metric,
                         'models': ensemble_models,
                         'series': mods_per_series.to_dict(),
                     }
@@ -607,7 +699,7 @@ def HorizontalTemplateGenerator(
             ensemble_templates = pd.concat(
                 [ensemble_templates, best5_params], axis=0, ignore_index=True
             )
-        elif 'hdist' in ensemble:
+        elif 'hdist' in ensemble and not subset_flag:
             mods_per_series = per_series.idxmin()
             mods_per_series2 = per_series2.idxmin()
             mods = pd.concat([mods_per_series, mods_per_series2]).unique()
@@ -688,12 +780,14 @@ def HorizontalTemplateGenerator(
                 }
                 ensemble_models[row['ID']] = temp_dict
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
+            metric = 'MAE' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
                     {
                         'model_name': nomen,
                         'model_count': mods_per_series.unique().shape[0],
+                        'model_metric': metric,
                         'models': ensemble_models,
                         'series': mods_per_series.to_dict(),
                     }

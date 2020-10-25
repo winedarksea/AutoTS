@@ -756,6 +756,33 @@ def ModelMonster(
                 forecast_length=forecast_length,
             )
         return model
+    if model == 'DatepartRegression':
+        from autots.models.sklearn import DatepartRegression
+
+        if parameters == {}:
+            model = DatepartRegression(
+                frequency=frequency,
+                prediction_interval=prediction_interval,
+                holiday_country=holiday_country,
+                random_seed=random_seed,
+                verbose=verbose,
+                forecast_length=forecast_length,
+                n_jobs=n_jobs,
+            )
+        else:
+            model = DatepartRegression(
+                frequency=frequency,
+                prediction_interval=prediction_interval,
+                holiday_country=holiday_country,
+                random_seed=random_seed,
+                verbose=verbose,
+                regression_model=parameters['regression_model'],
+                datepart_method=parameters['datepart_method'],
+                regression_type=parameters['regression_type'],
+                forecast_length=forecast_length,
+                n_jobs=n_jobs,
+            )
+        return model
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)
@@ -1077,6 +1104,20 @@ def PredictWitch(
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object):
     """
+    no_shared = [  # for models that don't share information among series
+        'ZeroesNaive',
+        'LastValueNaive',
+        'AverageValueNaive',
+        'GLM',
+        'ETS',
+        'ARIMA',
+        'FBProphet',
+        'SeasonalNaive',
+        'UnobservedComponents',
+        'MotifSimulation',
+        'TensorflowSTS',
+        'DatepartRegression',
+    ]
     if isinstance(template, pd.Series):
         template = pd.DataFrame(template).transpose()
     template = template.head(1)
@@ -1086,58 +1127,61 @@ def PredictWitch(
             from autots.models.ensemble import EnsembleForecast
 
             forecasts_list = []
-            forecasts_runtime = []
-            forecasts = []
-            upper_forecasts = []
-            lower_forecasts = []
+            forecasts_runtime = {}
+            forecasts = {}
+            upper_forecasts = {}
+            lower_forecasts = {}
             ens_model_str = row_upper['Model']
             ens_params = json.loads(row_upper['ModelParameters'])
             ens_template = unpack_ensemble_models(
-                template, template_cols, keep_ensemble=False
+                template, template_cols, keep_ensemble=False, recursive=False
             )
+            total_ens = ens_template.shape[0]
             for index, row in ens_template.iterrows():
                 # recursive recursion!
-                if verbose > 2:
-                    total_ens = ens_template.shape[0]
-                    print(
-                        "Ensemble component {} of {} ".format(
-                            model_str, str(index), str(total_ens)
-                        )
+                try:
+                    if verbose > 2:
+                        p = f"Ensemble component {index} of {total_ens} FAILED"
+                        print(p)
+                    df_forecast = PredictWitch(
+                        row,
+                        df_train=df_train,
+                        forecast_length=forecast_length,
+                        frequency=frequency,
+                        prediction_interval=prediction_interval,
+                        no_negatives=no_negatives,
+                        constraint=constraint,
+                        future_regressor_train=future_regressor_train,
+                        future_regressor_forecast=future_regressor_forecast,
+                        holiday_country=holiday_country,
+                        startTimeStamps=startTimeStamps,
+                        grouping_ids=grouping_ids,
+                        random_seed=random_seed,
+                        verbose=verbose,
+                        n_jobs=n_jobs,
+                        template_cols=template_cols,
                     )
-                df_forecast = PredictWitch(
-                    row,
-                    df_train=df_train,
-                    forecast_length=forecast_length,
-                    frequency=frequency,
-                    prediction_interval=prediction_interval,
-                    no_negatives=no_negatives,
-                    constraint=constraint,
-                    future_regressor_train=future_regressor_train,
-                    future_regressor_forecast=future_regressor_forecast,
-                    holiday_country=holiday_country,
-                    startTimeStamps=startTimeStamps,
-                    grouping_ids=grouping_ids,
-                    random_seed=random_seed,
-                    verbose=verbose,
-                    n_jobs=n_jobs,
-                    template_cols=template_cols,
-                )
-                model_id = create_model_id(
-                    df_forecast.model_name,
-                    df_forecast.model_parameters,
-                    df_forecast.transformation_parameters,
-                )
-                total_runtime = (
-                    df_forecast.fit_runtime
-                    + df_forecast.predict_runtime
-                    + df_forecast.transformation_runtime
-                )
+                    model_id = create_model_id(
+                        df_forecast.model_name,
+                        df_forecast.model_parameters,
+                        df_forecast.transformation_parameters,
+                    )
+                    total_runtime = (
+                        df_forecast.fit_runtime
+                        + df_forecast.predict_runtime
+                        + df_forecast.transformation_runtime
+                    )
 
-                forecasts_list.extend([model_id])
-                forecasts_runtime.extend([total_runtime])
-                forecasts.extend([df_forecast.forecast])
-                upper_forecasts.extend([df_forecast.upper_forecast])
-                lower_forecasts.extend([df_forecast.lower_forecast])
+                    forecasts_list.extend([model_id])
+                    forecasts_runtime[model_id] = total_runtime
+                    forecasts[model_id] = df_forecast.forecast
+                    upper_forecasts[model_id] = df_forecast.upper_forecast
+                    lower_forecasts[model_id] = df_forecast.lower_forecast
+                except Exception:
+                    # currently this leaves no key/value for models that fail
+                    if verbose > 1:
+                        p = f"Ensemble component {index} of {total_ens} FAILED"
+                        print(p)
             ens_forecast = EnsembleForecast(
                 ens_model_str,
                 ens_params,
@@ -1147,6 +1191,7 @@ def PredictWitch(
                 upper_forecasts=upper_forecasts,
                 forecasts_runtime=forecasts_runtime,
                 prediction_interval=prediction_interval,
+                df_train=df_train,
             )
             return ens_forecast
         # if not an ensemble
@@ -1632,7 +1677,7 @@ def NewGeneticTemplate(
         'TensorflowSTS',
         'TFPRegression',
     ]
-    borrow = ['ComponentAnalysis']
+    # borrow = ['ComponentAnalysis']
     best = json.loads(sorted_results.iloc[0, :]['TransformationParameters'])
 
     for model_type in sorted_results['Model'].unique():

@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Tutorial &#8212; AutoTS 0.2.5 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.2.6 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -57,25 +57,25 @@
 </ul>
 <div class="section" id="a-simple-example">
 <h3>A simple example<a class="headerlink" href="#a-simple-example" title="Permalink to this headline">¶</a></h3>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">#</span> <span class="n">also</span><span class="p">:</span> <span class="n">_hourly</span><span class="p">,</span> <span class="n">_daily</span><span class="p">,</span> <span class="n">_weekly</span><span class="p">,</span> <span class="k">or</span> <span class="n">_yearly</span>
-<span class="k">from</span> <span class="n">autots</span><span class="p">.</span><span class="n">datasets</span> <span class="n">import</span> <span class="n">load_monthly</span>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span># also: _hourly, _daily, _weekly, or _yearly
+from autots.datasets import load_monthly
 
-<span class="n">df_long</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">()</span>
+df_long = load_monthly()
 
-<span class="k">from</span> <span class="n">autots</span> <span class="n">import</span> <span class="n">AutoTS</span>
+from autots import AutoTS
 
-<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span>
-    <span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
-    <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
-    <span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;simple&#39;</span><span class="p">,</span>
-    <span class="n">drop_data_older_than_periods</span><span class="o">=</span><span class="mi">240</span><span class="p">,</span>
-    <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
-    <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-<span class="p">)</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span> <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
+model = AutoTS(
+    forecast_length=3,
+    frequency=&#39;infer&#39;,
+    ensemble=&#39;simple&#39;,
+    drop_data_older_than_periods=240,
+    max_generations=5,
+    num_validations=2,
+)
+model = model.fit(df_long, date_col=&#39;datetime&#39;, value_col=&#39;value&#39;, id_col=&#39;series_id&#39;)
 
-<span class="o">#</span> <span class="n">Print</span> <span class="n">the</span> <span class="n">name</span> <span class="k">of</span> <span class="n">the</span> <span class="n">best</span> <span class="n">model</span>
-<span class="n">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+# Print the name of the best model
+print(model)
 </pre></div>
 </div>
 <div class="section" id="import-of-data">
@@ -155,8 +155,8 @@ forecasts_df = prediction.forecast
 </pre></div>
 </div>
 <p>Probabilistic forecasts are <em>available</em> for all models, but in many cases are just data-based estimates in lieu of model estimates, so be careful.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">upper_forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="p">.</span><span class="n">upper_forecast</span>
-<span class="n">lower_forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="p">.</span><span class="n">lower_forecast</span>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>upper_forecasts_df = prediction.upper_forecast
+lower_forecasts_df = prediction.lower_forecast
 </pre></div>
 </div>
 </div>
@@ -173,17 +173,17 @@ forecasts_df = prediction.forecast
 There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a <code class="docutils literal notranslate"><span class="pre">.csv</span></code> or <code class="docutils literal notranslate"><span class="pre">.json</span></code> file, then on next run only those models will be tried.
 This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve.
 One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">#</span> <span class="k">after</span> <span class="n">fitting</span> <span class="n">an</span> <span class="n">AutoTS</span> <span class="n">model</span>
-<span class="n">example_filename</span> <span class="o">=</span> <span class="ss">&quot;example_export.csv&quot;</span>  <span class="o">#</span> <span class="p">.</span><span class="n">csv</span><span class="o">/</span><span class="p">.</span><span class="n">json</span>
-<span class="n">model</span><span class="p">.</span><span class="n">export_template</span><span class="p">(</span><span class="n">example_filename</span><span class="p">,</span> <span class="n">models</span><span class="o">=</span><span class="s1">&#39;best&#39;</span><span class="p">,</span>
-                      <span class="n">n</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">max_per_model_class</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span># after fitting an AutoTS model
+example_filename = &quot;example_export.csv&quot;  # .csv/.json
+model.export_template(example_filename, models=&#39;best&#39;,
+                      n=15, max_per_model_class=3)
 
-<span class="o">#</span> <span class="k">on</span> <span class="k">new</span> <span class="n">training</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span><span class="n">forecast_length</span><span class="o">=</span><span class="n">forecast_length</span><span class="p">,</span>
-               <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span> <span class="n">max_generations</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
-               <span class="n">num_validations</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="k">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">import_template</span><span class="p">(</span><span class="n">example_filename</span><span class="p">,</span> <span class="k">method</span><span class="o">=</span><span class="s1">&#39;only&#39;</span><span class="p">)</span> <span class="o">#</span> <span class="k">method</span><span class="o">=</span><span class="s1">&#39;add on&#39;</span>
-<span class="n">print</span><span class="p">(</span><span class="ss">&quot;Overwrite template is: {}&quot;</span><span class="p">.</span><span class="n">format</span><span class="p">(</span><span class="n">str</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">initial_template</span><span class="p">)))</span>
+# on new training
+model = AutoTS(forecast_length=forecast_length,
+               frequency=&#39;infer&#39;, max_generations=0,
+               num_validations=0, verbose=0)
+model = model.import_template(example_filename, method=&#39;only&#39;) # method=&#39;add on&#39;
+print(&quot;Overwrite template is: {}&quot;.format(str(model.initial_template)))
 </pre></div>
 </div>
 <div class="section" id="metrics">
@@ -221,12 +221,12 @@ model = AutoTS(
 <p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">autots</span></code></p>
 <div class="section" id="requirements">
 <h3>Requirements:<a class="headerlink" href="#requirements" title="Permalink to this headline">¶</a></h3>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">Python</span> <span class="o">&gt;=</span> <span class="mi">3</span><span class="p">.</span><span class="mi">5</span>
-<span class="n">numpy</span>
-<span class="n">pandas</span>
-<span class="n">sklearn</span>     <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">.</span><span class="mi">20</span><span class="p">.</span><span class="mi">0</span> <span class="p">(</span><span class="n">ColumnTransformer</span><span class="p">)</span>
-            <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">.</span><span class="mi">23</span><span class="p">.</span><span class="mi">0</span> <span class="p">(</span><span class="n">PoissonReg</span><span class="p">)</span>
-<span class="n">statsmodels</span>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>Python &gt;= 3.5
+numpy
+pandas
+sklearn     &gt;= 0.20.0 (ColumnTransformer)
+            &gt;= 0.23.0 (PoissonReg)
+statsmodels
 </pre></div>
 </div>
 <p>Of these, numpy and pandas are critical.
@@ -236,21 +236,21 @@ Full functionality should be maintained without statsmodels, albeit with fewer a
 </div>
 <div class="section" id="optional-requirements">
 <h3>Optional Requirements<a class="headerlink" href="#optional-requirements" title="Permalink to this headline">¶</a></h3>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">holidays</span>
-<span class="n">fbprophet</span>
-<span class="n">gluonts</span> <span class="p">(</span><span class="n">requires</span> <span class="n">mxnet</span><span class="p">)</span>
-<span class="n">mxnet</span> <span class="p">(</span><span class="n">mxnet</span><span class="o">-</span><span class="n">mkl</span><span class="p">,</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu91</span><span class="p">,</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu101mkl</span><span class="p">,</span> <span class="n">etc</span><span class="p">.)</span>
-<span class="n">tensorflow</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">.</span><span class="mi">0</span><span class="p">.</span><span class="mi">0</span>
-<span class="n">lightgbm</span>
-<span class="n">xgboost</span>
-<span class="n">psutil</span>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>holidays
+fbprophet
+gluonts (requires mxnet)
+mxnet (mxnet-mkl, mxnet-cu91, mxnet-cu101mkl, etc.)
+tensorflow &gt;= 2.0.0
+lightgbm
+xgboost
+psutil
 </pre></div>
 </div>
 <div class="section" id="experimental-dev-requirements">
 <h4>Experimental &amp; Dev Requirements<a class="headerlink" href="#experimental-dev-requirements" title="Permalink to this headline">¶</a></h4>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">tensorflow</span><span class="o">-</span><span class="n">probability</span>
-<span class="n">fredapi</span>
-<span class="n">tsfresh</span>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>tensorflow-probability
+fredapi
+tsfresh
 </pre></div>
 </div>
 </div>
@@ -264,23 +264,23 @@ Intel MKL is included with <code class="docutils literal notranslate"><span clas
 You can check if your system is using mkl with <code class="docutils literal notranslate"><span class="pre">numpy.show_config()</span></code>.
 If you are on an AMD CPU, you do <strong>not</strong> want to be using MKL, OpenBLAS is better.
 On Linux ARM-based systems, apt-get/yum (rather than pip) installs of numpy/pandas <em>may</em> install faster compilations.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">conda</span> <span class="k">create</span> <span class="o">-</span><span class="n">n</span> <span class="n">timeseries</span> <span class="n">python</span><span class="o">=</span><span class="mi">3</span><span class="p">.</span><span class="mi">8</span>
-<span class="n">conda</span> <span class="n">activate</span> <span class="n">timeseries</span>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>conda create -n timeseries python=3.8
+conda activate timeseries
 
-<span class="o">#</span> <span class="k">for</span> <span class="n">simplicity</span><span class="p">:</span>
-<span class="n">conda</span> <span class="n">install</span> <span class="n">anaconda</span>
-<span class="o">#</span> <span class="n">elsewise</span><span class="p">:</span>
-<span class="n">conda</span> <span class="n">install</span> <span class="n">numpy</span> <span class="n">scipy</span>
-<span class="n">conda</span> <span class="n">install</span> <span class="o">-</span><span class="k">c</span> <span class="n">conda</span><span class="o">-</span><span class="n">forge</span> <span class="n">scikit</span><span class="o">-</span><span class="n">learn</span>
-<span class="n">pip</span> <span class="n">install</span> <span class="n">statsmodels</span>
+# for simplicity:
+conda install anaconda
+# elsewise:
+conda install numpy scipy
+conda install -c conda-forge scikit-learn
+pip install statsmodels
 
-<span class="o">#</span> <span class="k">check</span> <span class="n">the</span> <span class="n">mxnet</span> <span class="n">documentation</span> <span class="k">for</span> <span class="n">various</span> <span class="n">flavors</span> <span class="k">of</span> <span class="n">mxnet</span> <span class="n">available</span>
-<span class="n">pip</span> <span class="n">install</span> <span class="n">mxnet</span>
-<span class="n">pip</span> <span class="n">install</span> <span class="n">gluonts</span>
-<span class="n">conda</span> <span class="k">update</span> <span class="n">anaconda</span>
-<span class="n">conda</span> <span class="n">install</span> <span class="o">-</span><span class="k">c</span> <span class="n">conda</span><span class="o">-</span><span class="n">forge</span> <span class="n">fbprophet</span>
-<span class="n">pip</span> <span class="n">install</span> <span class="n">tensorflow</span>
-<span class="n">pip</span> <span class="n">install</span> <span class="n">tensorflow</span><span class="o">-</span><span class="n">probability</span>
+# check the mxnet documentation for various flavors of mxnet available
+pip install mxnet
+pip install gluonts
+conda update anaconda
+conda install -c conda-forge fbprophet
+pip install tensorflow
+pip install tensorflow-probability
 </pre></div>
 </div>
 </div>
@@ -333,14 +333,15 @@ Some models will support a more limited range of frequencies.</p>
 <h2>Models<a class="headerlink" href="#models" title="Permalink to this headline">¶</a></h2>
 <table class="docutils align-default">
 <colgroup>
-<col style="width: 13%" />
-<col style="width: 13%" />
-<col style="width: 13%" />
-<col style="width: 13%" />
-<col style="width: 13%" />
-<col style="width: 13%" />
-<col style="width: 13%" />
-<col style="width: 13%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
 </colgroup>
 <thead>
 <tr class="row-odd"><th class="head"><p>Model</p></th>
@@ -351,10 +352,12 @@ Some models will support a more limited range of frequencies.</p>
 <th class="head"><p>GPU</p></th>
 <th class="head"><p>Multivariate</p></th>
 <th class="head"><p>Experimental</p></th>
+<th class="head"><p>Use Regressor</p></th>
 </tr>
 </thead>
 <tbody>
 <tr class="row-even"><td><p>ZeroesNaive</p></td>
+<td></td>
 <td></td>
 <td></td>
 <td></td>
@@ -371,6 +374,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td></td>
+<td></td>
 </tr>
 <tr class="row-even"><td><p>AverageValueNaive</p></td>
 <td></td>
@@ -380,8 +384,10 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td></td>
+<td></td>
 </tr>
 <tr class="row-odd"><td><p>SeasonalNaive</p></td>
+<td></td>
 <td></td>
 <td></td>
 <td></td>
@@ -398,6 +404,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td><p>True</p></td>
 <td></td>
+<td></td>
 </tr>
 <tr class="row-odd"><td><p>GLM</p></td>
 <td><p>statsmodels</p></td>
@@ -407,12 +414,14 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td></td>
+<td><p>True</p></td>
 </tr>
 <tr class="row-even"><td><p>ETS</p></td>
 <td><p>statsmodels</p></td>
 <td></td>
 <td></td>
 <td><p>joblib</p></td>
+<td></td>
 <td></td>
 <td></td>
 <td></td>
@@ -425,6 +434,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td></td>
+<td><p>True</p></td>
 </tr>
 <tr class="row-even"><td><p>ARIMA</p></td>
 <td><p>statsmodels</p></td>
@@ -434,6 +444,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td></td>
+<td><p>True</p></td>
 </tr>
 <tr class="row-odd"><td><p>VARMAX</p></td>
 <td><p>statsmodels</p></td>
@@ -442,6 +453,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td><p>True</p></td>
+<td></td>
 <td></td>
 </tr>
 <tr class="row-even"><td><p>DynamicFactor</p></td>
@@ -452,6 +464,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td><p>True</p></td>
 <td></td>
+<td><p>True</p></td>
 </tr>
 <tr class="row-odd"><td><p>VECM</p></td>
 <td><p>statsmodels</p></td>
@@ -461,6 +474,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td><p>True</p></td>
 <td></td>
+<td><p>True</p></td>
 </tr>
 <tr class="row-even"><td><p>VAR</p></td>
 <td><p>statsmodels</p></td>
@@ -470,6 +484,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td><p>True</p></td>
 <td></td>
+<td><p>True</p></td>
 </tr>
 <tr class="row-odd"><td><p>FBProphet</p></td>
 <td><p>fbprophet</p></td>
@@ -479,6 +494,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td></td>
+<td><p>True</p></td>
 </tr>
 <tr class="row-even"><td><p>GluonTS</p></td>
 <td><p>gluonts, mxnet</p></td>
@@ -487,6 +503,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td><p>yes</p></td>
 <td><p>True</p></td>
+<td></td>
 <td></td>
 </tr>
 <tr class="row-odd"><td><p>RollingRegression</p></td>
@@ -497,6 +514,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>some</p></td>
 <td><p>True</p></td>
 <td></td>
+<td><p>True</p></td>
 </tr>
 <tr class="row-even"><td><p>WindowRegression</p></td>
 <td><p>sklearn</p></td>
@@ -505,6 +523,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>sklearn</p></td>
 <td><p>some</p></td>
 <td><p>True</p></td>
+<td></td>
 <td></td>
 </tr>
 <tr class="row-odd"><td><p>MotifSimulation</p></td>
@@ -515,6 +534,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td><p>True*</p></td>
 <td><p>True</p></td>
+<td></td>
 </tr>
 <tr class="row-even"><td><p>TensorflowSTS</p></td>
 <td><p>tensorflow_probability</p></td>
@@ -524,6 +544,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>yes</p></td>
 <td><p>True</p></td>
 <td><p>True</p></td>
+<td></td>
 </tr>
 <tr class="row-odd"><td><p>TFPRegression</p></td>
 <td><p>tensorflow_probability</p></td>
@@ -531,6 +552,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>True</p></td>
 <td></td>
 <td><p>yes</p></td>
+<td><p>True</p></td>
 <td><p>True</p></td>
 <td><p>True</p></td>
 </tr>
@@ -542,6 +564,7 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td><p>True</p></td>
 <td><p>True</p></td>
+<td></td>
 </tr>
 <tr class="row-odd"><td><p>TSFreshRegressor</p></td>
 <td><p>tsfresh, sklearn</p></td>
@@ -550,6 +573,17 @@ Some models will support a more limited range of frequencies.</p>
 <td></td>
 <td></td>
 <td></td>
+<td><p>True</p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>DatepartRegression</p></td>
+<td><p>sklearn</p></td>
+<td><p>lightgbm, tensorflow</p></td>
+<td></td>
+<td><p>sklearn</p></td>
+<td><p>some</p></td>
+<td></td>
+<td><p>True</p></td>
 <td><p>True</p></td>
 </tr>
 </tbody>

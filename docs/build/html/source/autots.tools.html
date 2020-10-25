@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.tools package &#8212; AutoTS 0.2.5 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.2.6 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -471,13 +471,13 @@ inverse_transform can only be applied to the original series, or an immediately 
 </dd></dl>
 
 <dl class="class">
-<dt id="autots.tools.transform.DatepartRegression">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">DatepartRegression</code><span class="sig-paren">(</span><em class="sig-param">regression_model: dict = {'model': 'DecisionTree'</em>, <em class="sig-param">'model_params': {'max_depth': 5</em>, <em class="sig-param">'min_samples_split': 2}}</em>, <em class="sig-param">datepart_method: str = 'expanded'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegression" title="Permalink to this definition">¶</a></dt>
+<dt id="autots.tools.transform.DatepartRegressionTransformer">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">DatepartRegressionTransformer</code><span class="sig-paren">(</span><em class="sig-param">regression_model: dict = {'model': 'DecisionTree'</em>, <em class="sig-param">'model_params': {'max_depth': 5</em>, <em class="sig-param">'min_samples_split': 2}}</em>, <em class="sig-param">datepart_method: str = 'expanded'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Remove a regression on datepart from the data.</p>
 <dl class="method">
-<dt id="autots.tools.transform.DatepartRegression.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegression.fit" title="Permalink to this definition">¶</a></dt>
+<dt id="autots.tools.transform.DatepartRegressionTransformer.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fits trend for later detrending.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -487,8 +487,8 @@ inverse_transform can only be applied to the original series, or an immediately 
 </dd></dl>
 
 <dl class="method">
-<dt id="autots.tools.transform.DatepartRegression.fit_transform">
-<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegression.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dt id="autots.tools.transform.DatepartRegressionTransformer.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer.fit_transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fit and Return Detrended DataFrame.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -498,8 +498,8 @@ inverse_transform can only be applied to the original series, or an immediately 
 </dd></dl>
 
 <dl class="method">
-<dt id="autots.tools.transform.DatepartRegression.inverse_transform">
-<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegression.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dt id="autots.tools.transform.DatepartRegressionTransformer.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return data to original form.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -509,8 +509,8 @@ inverse_transform can only be applied to the original series, or an immediately 
 </dd></dl>
 
 <dl class="method">
-<dt id="autots.tools.transform.DatepartRegression.transform">
-<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegression.transform" title="Permalink to this definition">¶</a></dt>
+<dt id="autots.tools.transform.DatepartRegressionTransformer.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer.transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return detrended data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>

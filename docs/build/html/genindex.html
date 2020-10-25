@@ -5,7 +5,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Index &#8212; AutoTS 0.2.5 documentation</title>
+    <title>Index &#8212; AutoTS 0.2.6 documentation</title>
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
@@ -96,11 +96,13 @@
 </li>
       <li><a href="source/autots.models.html#module-autots.models.prophet">autots.models.prophet (module)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#module-autots.models.sklearn">autots.models.sklearn (module)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#module-autots.models.statsmodels">autots.models.statsmodels (module)</a>
+</li>
+      <li><a href="source/autots.models.html#module-autots.models.temp">autots.models.temp (module)</a>
 </li>
       <li><a href="source/autots.models.html#module-autots.models.tfp">autots.models.tfp (module)</a>
 </li>
@@ -140,16 +142,16 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelObject.basic_profile">basic_profile() (autots.evaluator.auto_model.ModelObject method)</a>
 </li>
-      <li><a href="source/autots.models.html#autots.models.ensemble.Best3Ensemble">Best3Ensemble() (in module autots.models.ensemble)</a>
-</li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.html#autots.AutoTS.best_model">best_model (autots.AutoTS attribute)</a>
 
       <ul>
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.best_model">(autots.evaluator.auto_ts.AutoTS attribute)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.models.html#autots.models.ensemble.BestNEnsemble">BestNEnsemble() (in module autots.models.ensemble)</a>
+</li>
       <li><a href="source/autots.tools.html#autots.tools.impute.biased_ffill">biased_ffill() (in module autots.tools.impute)</a>
 </li>
   </ul></td>
@@ -188,12 +190,18 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.sklearn.date_part">date_part() (in module autots.models.sklearn)</a>
 </li>
-      <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegression">DatepartRegression (class in autots.tools.transform)</a>
+      <li><a href="source/autots.models.html#autots.models.sklearn.DatepartRegression">DatepartRegression (class in autots.models.sklearn)</a>
+
+      <ul>
+        <li><a href="source/autots.models.html#autots.models.temp.DatepartRegression">(class in autots.models.temp)</a>
 </li>
-      <li><a href="source/autots.tools.html#autots.tools.transform.Detrend">Detrend (class in autots.tools.transform)</a>
+      </ul></li>
+      <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegressionTransformer">DatepartRegressionTransformer (class in autots.tools.transform)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.tools.html#autots.tools.transform.Detrend">Detrend (class in autots.tools.transform)</a>
+</li>
       <li><a href="source/autots.tools.html#autots.tools.shaping.df_cleanup">df_cleanup() (in module autots.tools.shaping)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.dict_recombination">dict_recombination() (in module autots.evaluator.auto_model)</a>
@@ -291,6 +299,8 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.sklearn.ComponentAnalysis.fit">(autots.models.sklearn.ComponentAnalysis method)</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.sklearn.DatepartRegression.fit">(autots.models.sklearn.DatepartRegression method)</a>
+</li>
         <li><a href="source/autots.models.html#autots.models.sklearn.RollingRegression.fit">(autots.models.sklearn.RollingRegression method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.sklearn.WindowRegression.fit">(autots.models.sklearn.WindowRegression method)</a>
@@ -313,6 +323,8 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.statsmodels.VECM.fit">(autots.models.statsmodels.VECM method)</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.temp.DatepartRegression.fit">(autots.models.temp.DatepartRegression method)</a>
+</li>
         <li><a href="source/autots.models.html#autots.models.tfp.TensorflowSTS.fit">(autots.models.tfp.TensorflowSTS method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.tfp.TFPRegression.fit">(autots.models.tfp.TFPRegression method)</a>
@@ -327,7 +339,7 @@
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.CumSumTransformer.fit">(autots.tools.transform.CumSumTransformer method)</a>
 </li>
-        <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegression.fit">(autots.tools.transform.DatepartRegression method)</a>
+        <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegressionTransformer.fit">(autots.tools.transform.DatepartRegressionTransformer method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Detrend.fit">(autots.tools.transform.Detrend method)</a>
 </li>
@@ -361,7 +373,7 @@
       <ul>
         <li><a href="source/autots.tools.html#autots.tools.transform.CumSumTransformer.fit_transform">(autots.tools.transform.CumSumTransformer method)</a>
 </li>
-        <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegression.fit_transform">(autots.tools.transform.DatepartRegression method)</a>
+        <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegressionTransformer.fit_transform">(autots.tools.transform.DatepartRegressionTransformer method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Detrend.fit_transform">(autots.tools.transform.Detrend method)</a>
 </li>
@@ -423,6 +435,8 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.sklearn.ComponentAnalysis.get_new_params">(autots.models.sklearn.ComponentAnalysis method)</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.sklearn.DatepartRegression.get_new_params">(autots.models.sklearn.DatepartRegression method)</a>
+</li>
         <li><a href="source/autots.models.html#autots.models.sklearn.RollingRegression.get_new_params">(autots.models.sklearn.RollingRegression method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.sklearn.WindowRegression.get_new_params">(autots.models.sklearn.WindowRegression method)</a>
@@ -444,6 +458,8 @@
         <li><a href="source/autots.models.html#autots.models.statsmodels.VARMAX.get_new_params">(autots.models.statsmodels.VARMAX method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.statsmodels.VECM.get_new_params">(autots.models.statsmodels.VECM method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.temp.DatepartRegression.get_new_params">(autots.models.temp.DatepartRegression method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.tfp.TensorflowSTS.get_new_params">(autots.models.tfp.TensorflowSTS method)</a>
 </li>
@@ -473,6 +489,8 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.sklearn.ComponentAnalysis.get_params">(autots.models.sklearn.ComponentAnalysis method)</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.sklearn.DatepartRegression.get_params">(autots.models.sklearn.DatepartRegression method)</a>
+</li>
         <li><a href="source/autots.models.html#autots.models.sklearn.RollingRegression.get_params">(autots.models.sklearn.RollingRegression method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.sklearn.WindowRegression.get_params">(autots.models.sklearn.WindowRegression method)</a>
@@ -494,6 +512,8 @@
         <li><a href="source/autots.models.html#autots.models.statsmodels.VARMAX.get_params">(autots.models.statsmodels.VARMAX method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.statsmodels.VECM.get_params">(autots.models.statsmodels.VECM method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.temp.DatepartRegression.get_params">(autots.models.temp.DatepartRegression method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.tfp.TensorflowSTS.get_params">(autots.models.tfp.TensorflowSTS method)</a>
 </li>
@@ -523,6 +543,8 @@
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.tools.html#autots.tools.holiday.holiday_flag">holiday_flag() (in module autots.tools.holiday)</a>
+</li>
+      <li><a href="source/autots.models.html#autots.models.ensemble.horizontal_classifier">horizontal_classifier() (in module autots.models.ensemble)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.ensemble.HorizontalEnsemble">HorizontalEnsemble() (in module autots.models.ensemble)</a>
 </li>
@@ -557,7 +579,7 @@
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.CumSumTransformer.inverse_transform">(autots.tools.transform.CumSumTransformer method)</a>
 </li>
-        <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegression.inverse_transform">(autots.tools.transform.DatepartRegression method)</a>
+        <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegressionTransformer.inverse_transform">(autots.tools.transform.DatepartRegressionTransformer method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Detrend.inverse_transform">(autots.tools.transform.Detrend method)</a>
 </li>
@@ -721,6 +743,8 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.sklearn.ComponentAnalysis.predict">(autots.models.sklearn.ComponentAnalysis method)</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.sklearn.DatepartRegression.predict">(autots.models.sklearn.DatepartRegression method)</a>
+</li>
         <li><a href="source/autots.models.html#autots.models.sklearn.RollingRegression.predict">(autots.models.sklearn.RollingRegression method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.sklearn.WindowRegression.predict">(autots.models.sklearn.WindowRegression method)</a>
@@ -742,6 +766,8 @@
         <li><a href="source/autots.models.html#autots.models.statsmodels.VARMAX.predict">(autots.models.statsmodels.VARMAX method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.statsmodels.VECM.predict">(autots.models.statsmodels.VECM method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.temp.DatepartRegression.predict">(autots.models.temp.DatepartRegression method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.tfp.TensorflowSTS.predict">(autots.models.tfp.TensorflowSTS method)</a>
 </li>
@@ -816,10 +842,10 @@
 </li>
       <li><a href="source/autots.tools.html#autots.tools.transform.simple_context_slicer">simple_context_slicer() (in module autots.tools.transform)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.tools.html#autots.tools.shaping.simple_train_test_split">simple_train_test_split() (in module autots.tools.shaping)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.tools.html#autots.tools.transform.SinTrend">SinTrend (class in autots.tools.transform)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.smape">smape() (in module autots.evaluator.metrics)</a>
@@ -829,6 +855,8 @@
       <li><a href="source/autots.tools.html#autots.tools.transform.StatsmodelsFilter">StatsmodelsFilter (class in autots.tools.transform)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.shaping.subset_series">subset_series() (in module autots.tools.shaping)</a>
+</li>
+      <li><a href="source/autots.models.html#autots.models.ensemble.summarize_series">summarize_series() (in module autots.models.ensemble)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -859,7 +887,7 @@
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.CumSumTransformer.transform">(autots.tools.transform.CumSumTransformer method)</a>
 </li>
-        <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegression.transform">(autots.tools.transform.DatepartRegression method)</a>
+        <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegressionTransformer.transform">(autots.tools.transform.DatepartRegressionTransformer method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.Detrend.transform">(autots.tools.transform.Detrend method)</a>
 </li>

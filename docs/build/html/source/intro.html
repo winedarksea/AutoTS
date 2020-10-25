@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Intro &#8212; AutoTS 0.2.5 documentation</title>
+    <title>Intro &#8212; AutoTS 0.2.6 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -59,7 +59,7 @@
 </div>
 <div class="section" id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">autots</span>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>pip install autots
 </pre></div>
 </div>
 <p>This includes dependencies for basic models, but additonal packages are required for some models and methods.</p>
@@ -78,35 +78,35 @@
 </li>
 <li><p>For <em>long</em> data, the column name for each of these is passed to .fit() as <code class="docutils literal notranslate"><span class="pre">date_col</span></code>, <code class="docutils literal notranslate"><span class="pre">id_col</span></code>, and <code class="docutils literal notranslate"><span class="pre">value_col</span></code>. No parameters are needed for <em>wide</em> data.</p></li>
 </ul>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span><span class="o">#</span> <span class="n">also</span><span class="p">:</span> <span class="n">_hourly</span><span class="p">,</span> <span class="n">_daily</span><span class="p">,</span> <span class="n">_weekly</span><span class="p">,</span> <span class="k">or</span> <span class="n">_yearly</span>
-<span class="k">from</span> <span class="n">autots</span><span class="p">.</span><span class="n">datasets</span> <span class="n">import</span> <span class="n">load_monthly</span>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span># also: _hourly, _daily, _weekly, or _yearly
+from autots.datasets import load_monthly
 
-<span class="n">df_long</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">()</span>
+df_long = load_monthly()
 
-<span class="k">from</span> <span class="n">autots</span> <span class="n">import</span> <span class="n">AutoTS</span>
+from autots import AutoTS
 
-<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span>
-    <span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
-    <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
-    <span class="n">prediction_interval</span><span class="o">=</span><span class="mi">0</span><span class="p">.</span><span class="mi">9</span><span class="p">,</span>
-    <span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;all&#39;</span><span class="p">,</span>
-    <span class="n">model_list</span><span class="o">=</span><span class="s1">&#39;superfast&#39;</span><span class="p">,</span>
-    <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
-    <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-    <span class="n">validation_method</span><span class="o">=</span><span class="s1">&#39;even&#39;</span><span class="p">,</span>
-<span class="p">)</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span> <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
+model = AutoTS(
+    forecast_length=3,
+    frequency=&#39;infer&#39;,
+    prediction_interval=0.9,
+    ensemble=&#39;all&#39;,
+    model_list=&#39;superfast&#39;,
+    max_generations=5,
+    num_validations=2,
+    validation_method=&#39;even&#39;,
+)
+model = model.fit(df_long, date_col=&#39;datetime&#39;, value_col=&#39;value&#39;, id_col=&#39;series_id&#39;)
 
-<span class="o">#</span> <span class="n">Print</span> <span class="n">the</span> <span class="n">details</span> <span class="k">of</span> <span class="n">the</span> <span class="n">best</span> <span class="n">model</span>
-<span class="n">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+# Print the details of the best model
+print(model)
 
-<span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">predict</span><span class="p">()</span>
-<span class="o">#</span> <span class="n">point</span> <span class="n">forecasts</span> <span class="n">dataframe</span>
-<span class="n">forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="p">.</span><span class="n">forecast</span>
-<span class="o">#</span> <span class="n">accuracy</span> <span class="k">of</span> <span class="k">all</span> <span class="n">tried</span> <span class="n">model</span> <span class="n">results</span>
-<span class="n">model_results</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">results</span><span class="p">()</span>
-<span class="o">#</span> <span class="k">and</span> <span class="n">aggregated</span> <span class="k">from</span> <span class="k">cross</span> <span class="n">validation</span>
-<span class="n">validation_results</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">results</span><span class="p">(</span><span class="ss">&quot;validation&quot;</span><span class="p">)</span>
+prediction = model.predict()
+# point forecasts dataframe
+forecasts_df = prediction.forecast
+# accuracy of all tried model results
+model_results = model.results()
+# and aggregated from cross validation
+validation_results = model.results(&quot;validation&quot;)
 </pre></div>
 </div>
 <p>Check out <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html">extended_tutorial.md</a> for a more detailed guide to features!</p>

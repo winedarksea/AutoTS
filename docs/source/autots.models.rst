@@ -60,6 +60,14 @@ autots.models.statsmodels module
    :undoc-members:
    :show-inheritance:
 
+autots.models.temp module
+-------------------------
+
+.. automodule:: autots.models.temp
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.models.tfp module
 ------------------------
 

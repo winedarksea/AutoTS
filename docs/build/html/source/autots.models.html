@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.models package &#8212; AutoTS 0.2.5 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.2.6 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -388,8 +388,8 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <span id="autots-models-ensemble-module"></span><h2>autots.models.ensemble module<a class="headerlink" href="#module-autots.models.ensemble" title="Permalink to this headline">¶</a></h2>
 <p>Tools for generating and forecasting with ensembles of models.</p>
 <dl class="function">
-<dt id="autots.models.ensemble.Best3Ensemble">
-<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">Best3Ensemble</code><span class="sig-paren">(</span><em class="sig-param">ensemble_params</em>, <em class="sig-param">forecasts_list</em>, <em class="sig-param">forecasts</em>, <em class="sig-param">lower_forecasts</em>, <em class="sig-param">upper_forecasts</em>, <em class="sig-param">forecasts_runtime</em>, <em class="sig-param">prediction_interval</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.Best3Ensemble" title="Permalink to this definition">¶</a></dt>
+<dt id="autots.models.ensemble.BestNEnsemble">
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">BestNEnsemble</code><span class="sig-paren">(</span><em class="sig-param">ensemble_params</em>, <em class="sig-param">forecasts_list</em>, <em class="sig-param">forecasts</em>, <em class="sig-param">lower_forecasts</em>, <em class="sig-param">upper_forecasts</em>, <em class="sig-param">forecasts_runtime</em>, <em class="sig-param">prediction_interval</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.BestNEnsemble" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate mean forecast for ensemble of models.</p>
 </dd></dl>
 
@@ -401,7 +401,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="function">
 <dt id="autots.models.ensemble.EnsembleForecast">
-<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">EnsembleForecast</code><span class="sig-paren">(</span><em class="sig-param">ensemble_str</em>, <em class="sig-param">ensemble_params</em>, <em class="sig-param">forecasts_list</em>, <em class="sig-param">forecasts</em>, <em class="sig-param">lower_forecasts</em>, <em class="sig-param">upper_forecasts</em>, <em class="sig-param">forecasts_runtime</em>, <em class="sig-param">prediction_interval</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.EnsembleForecast" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">EnsembleForecast</code><span class="sig-paren">(</span><em class="sig-param">ensemble_str</em>, <em class="sig-param">ensemble_params</em>, <em class="sig-param">forecasts_list</em>, <em class="sig-param">forecasts</em>, <em class="sig-param">lower_forecasts</em>, <em class="sig-param">upper_forecasts</em>, <em class="sig-param">forecasts_runtime</em>, <em class="sig-param">prediction_interval</em>, <em class="sig-param">df_train=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.EnsembleForecast" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return PredictionObject for given ensemble method.</p>
 </dd></dl>
 
@@ -419,7 +419,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="function">
 <dt id="autots.models.ensemble.HorizontalEnsemble">
-<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">HorizontalEnsemble</code><span class="sig-paren">(</span><em class="sig-param">ensemble_params</em>, <em class="sig-param">forecasts_list</em>, <em class="sig-param">forecasts</em>, <em class="sig-param">lower_forecasts</em>, <em class="sig-param">upper_forecasts</em>, <em class="sig-param">forecasts_runtime</em>, <em class="sig-param">prediction_interval</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.HorizontalEnsemble" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">HorizontalEnsemble</code><span class="sig-paren">(</span><em class="sig-param">ensemble_params</em>, <em class="sig-param">forecasts_list</em>, <em class="sig-param">forecasts</em>, <em class="sig-param">lower_forecasts</em>, <em class="sig-param">upper_forecasts</em>, <em class="sig-param">forecasts_runtime</em>, <em class="sig-param">prediction_interval</em>, <em class="sig-param">df_train=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.HorizontalEnsemble" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast for per_series ensembling.</p>
 </dd></dl>
 
@@ -427,6 +427,29 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dt id="autots.models.ensemble.HorizontalTemplateGenerator">
 <code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">HorizontalTemplateGenerator</code><span class="sig-paren">(</span><em class="sig-param">per_series</em>, <em class="sig-param">model_results</em>, <em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">ensemble: str = 'horizontal'</em>, <em class="sig-param">subset_flag: bool = True</em>, <em class="sig-param">per_series2=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.HorizontalTemplateGenerator" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate horizontal ensemble templates given a table of results.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.ensemble.horizontal_classifier">
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">horizontal_classifier</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">known: dict</em>, <em class="sig-param">method: str = 'whatever'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.horizontal_classifier" title="Permalink to this definition">¶</a></dt>
+<dd><p>CLassify unknown series with the appropriate model for horizontal ensembling.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df_train</strong> (<em>pandas.DataFrame</em>) – historical data about the series. Columns = series_ids.</p></li>
+<li><p><strong>known</strong> (<em>dict</em>) – dict of series_id: classifier outcome including some but not all series.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>dict.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.ensemble.summarize_series">
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">summarize_series</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.summarize_series" title="Permalink to this definition">¶</a></dt>
+<dd><p>Summarize time series data. For now just df.describe().</p>
 </dd></dl>
 
 </div>
@@ -621,6 +644,64 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.models.sklearn.DatepartRegression">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">DatepartRegression</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'DatepartRegression'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">forecast_length: int = 1</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">regression_model: dict = {'model': 'DecisionTree'</em>, <em class="sig-param">'model_params': {'max_depth': 5</em>, <em class="sig-param">'min_samples_split': 2}}</em>, <em class="sig-param">datepart_method: str = 'expanded'</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.DatepartRegression" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="autots.evaluator.html#autots.evaluator.auto_model.ModelObject" title="autots.evaluator.auto_model.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.evaluator.auto_model.ModelObject</span></code></a></p>
+<p>Regression not on series but datetime</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.sklearn.DatepartRegression.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.DatepartRegression.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.sklearn.DatepartRegression.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.DatepartRegression.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.sklearn.DatepartRegression.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.DatepartRegression.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.sklearn.DatepartRegression.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.DatepartRegression.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
@@ -1345,6 +1426,67 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-autots.models.temp">
+<span id="autots-models-temp-module"></span><h2>autots.models.temp module<a class="headerlink" href="#module-autots.models.temp" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="autots.models.temp.DatepartRegression">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.temp.</code><code class="sig-name descname">DatepartRegression</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'DatepartRegression'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">forecast_length: int = 1</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">regression_model: dict = {'model': 'DecisionTree'</em>, <em class="sig-param">'model_params': {'max_depth': 5</em>, <em class="sig-param">'min_samples_split': 2}}</em>, <em class="sig-param">datepart_method: str = 'expanded'</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.temp.DatepartRegression" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="autots.evaluator.html#autots.evaluator.auto_model.ModelObject" title="autots.evaluator.auto_model.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.evaluator.auto_model.ModelObject</span></code></a></p>
+<p>Regression not on series but datetime</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.temp.DatepartRegression.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.temp.DatepartRegression.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.temp.DatepartRegression.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.temp.DatepartRegression.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.temp.DatepartRegression.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.temp.DatepartRegression.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.temp.DatepartRegression.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.temp.DatepartRegression.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
