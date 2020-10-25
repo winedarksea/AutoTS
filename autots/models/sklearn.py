@@ -40,6 +40,7 @@ def date_part(DTindex, method: str = 'simple'):
             }
         )
     else:
+        # method == "simple"
         date_part_df = pd.DataFrame(
             {
                 'year': DTindex.year,
@@ -322,7 +323,7 @@ def retrieve_regressor(
         from sklearn.svm import SVR
 
         regr = MultiOutputRegressor(
-            SVR(kernel='rbf', gamma='scale', verbose=verbose_bool, n_jobs=n_jobs)
+            SVR(kernel='rbf', gamma='scale', verbose=verbose_bool)
         )
         return regr
     elif regression_model['model'] == 'BayesianRidge':
@@ -1557,9 +1558,7 @@ class DatepartRegression(ModelObject):
 
         X = date_part(df.index, method=self.datepart_method)
         if self.regression_type == 'User':
-            X = pd.concat(
-                [X, future_regressor], axis=0
-            )
+            X = pd.concat([X, future_regressor], axis=0)
 
         self.model = retrieve_regressor(
             regression_model=self.regression_model,
@@ -1594,9 +1593,7 @@ class DatepartRegression(ModelObject):
         index = self.create_forecast_index(forecast_length=forecast_length)
         X = date_part(index, method=self.datepart_method)
         if self.regression_type == 'User':
-            X = pd.concat(
-                [X, future_regressor], axis=0
-            )
+            X = pd.concat([X, future_regressor], axis=0)
 
         forecast = pd.DataFrame(self.model.predict(X.values))
 

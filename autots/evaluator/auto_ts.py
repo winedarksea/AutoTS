@@ -176,6 +176,7 @@ class AutoTS(object):
                 'VAR',
                 'VECM',
                 'WindowRegression',
+                'DatepartRegression',
             ]
         if model_list == 'superfast':
             self.model_list = [
@@ -239,7 +240,6 @@ class AutoTS(object):
                 'VARMAX',
                 'VECM',
                 'DynamicFactor',
-                'TSFreshRegressor',
                 'MotifSimulation',
                 'WindowRegression',
                 'VAR',

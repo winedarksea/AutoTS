@@ -19,7 +19,7 @@ forecast_length = 3
 long = False
 df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 10
+generations = 6
 
 
 # df = df[df['series_id'] == 'GS10']
@@ -57,8 +57,8 @@ model_list = [
     'VECM',
     'WindowRegression',
 ]
-model_list = 'superfast'
-model_list = ['GLM', 'DatepartRegression']
+model_list = 'default'
+# model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {
@@ -76,7 +76,7 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble=None, # "simple,distance,horizontal-max",
+    ensemble="simple,distance,horizontal-max",
     constraint=2,
     max_generations=generations,
     num_validations=2,
@@ -84,7 +84,7 @@ model = AutoTS(
     model_list=model_list,
     initial_template='General+Random',
     metric_weighting=metric_weighting,
-    models_to_validate=0.6,
+    models_to_validate=0.3,
     max_per_model_class=None,
     model_interrupt=True,
     n_jobs=n_jobs,

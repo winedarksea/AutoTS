@@ -126,7 +126,7 @@ def DistEnsemble(
 
 def summarize_series(df):
     """Summarize time series data. For now just df.describe()."""
-    df_sum = df.describe(percentiles=[0.1, .25, .5, .75, 0.9])
+    df_sum = df.describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
     return df_sum
 
 
@@ -151,6 +151,7 @@ def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
     Xf = X.loc[unknown]
     Y = np.array(list(known.values()))
     from sklearn.naive_bayes import GaussianNB
+
     clf = GaussianNB()
     clf.fit(Xt, Y)
     result = clf.predict(Xf)
