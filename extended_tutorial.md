@@ -198,6 +198,7 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 
 Of these, numpy and pandas are critical. 
 Limited functionality should exist without scikit-learn. 
+	* Sklearn needed for categorical to numeric, some detrends/transformers, horizontal generalization, numerous models
 Full functionality should be maintained without statsmodels, albeit with fewer available models. 
 
 `pip install autots['additional']`

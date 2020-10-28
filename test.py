@@ -57,7 +57,7 @@ model_list = [
     'VECM',
     'WindowRegression',
 ]
-model_list = 'default'
+model_list = 'superfast'
 # model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 

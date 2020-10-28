@@ -15,13 +15,8 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* fix verbose > 2 error in auto_model
-* use of f-strings to print some error messages. Python 3.5 may see more complicated error messages as a result.
-* improved BestN (formery Best3) Ensembles, ensemble collected in dicts
-* made Horizontal and BestN ensembles tolerant of a component model failure
-* made Horizontal models capable of generalizing from a subset of series
-* added info to model table for models that can use future_regressor
-* added Datepart Regression model, sklearn regressor on time components only
+* improve IntermittentOccurence
+* ClipOutliers transformer, Discretize Transformer
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -48,6 +43,14 @@ for model in ensemble_models
 		df_train.reindex(copy=True) to these series
 		run model
 ```
+### HAVE PARAMETERS:
+* IntermittentOccurence
+* StatsmodelsFilter
+* SeasonalDifference
+* PositiveShift
+* RollingMeanTransformer
+* ClipOutliers
+* Discretize
 
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
