@@ -861,8 +861,8 @@ def ModelPrediction(
         grouping_ids=grouping_ids,
         reconciliation=reconciliation,
         coerce_integer=coerce_integer,
-    ).fit(df_train)
-    df_train_transformed = transformer_object.transform(df_train)
+    )
+    df_train_transformed = transformer_object._fit(df_train)
 
     # slice the context, ie shorten the amount of data available.
     if transformation_dict['context_slicer'] not in [None, 'None']:

@@ -17,6 +17,7 @@
 # Latest
 * improve IntermittentOccurence
 * ClipOutliers transformer, Discretize Transformer
+* 2x speedup in transformation runtime by removing double transformation
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

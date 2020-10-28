@@ -1057,8 +1057,6 @@ class Discretize(object):
                 df.columns = self.df_colnames
                 self.bin_min = df.min(axis=0)
                 self.bin_max = df.max(axis=0)
-                if self.use_existing:
-                    self.df_transformed = df
             else:
                 steps = 1 / self.n_bins
                 quantiles = np.arange(0, 1 + steps, steps)
@@ -1080,26 +1078,28 @@ class Discretize(object):
                     index=self.df_index,
                     columns=self.df_colnames,
                 )
+            if self.use_existing:
+                    self.df_transformed = df
         return self
 
-    def transform(self, df):
+    def transform(self, df, override_existing: bool = False):
         """Return changed data.
 
         Args:
             df (pandas.DataFrame): input dataframe
+            override_existing (bool): override existing if use_existing True
         """
         if self.discretization not in [None, 'None']:
-            if self.discretization in [
+            if self.use_existing and not override_existing:
+                df = self.df_transformed
+            elif self.discretization in [
                 'sklearn-quantile',
                 'sklearn-uniform',
                 'sklearn-kmeans',
             ]:
-                if self.use_existing:
-                    df = self.df_transformed
-                else:
-                    df = pd.DataFrame(self.kbins_discretizer.transform(df))
-                    df.index = self.df_index
-                    df.columns = self.df_colnames
+                df = pd.DataFrame(self.kbins_discretizer.transform(df))
+                df.index = self.df_index
+                df.columns = self.df_colnames
             else:
                 binned = (np.abs(df.values - self.bins)).argmin(axis=0)
                 indices = np.indices(binned.shape)[1]
@@ -1187,6 +1187,8 @@ class GeneralTransformer(object):
     """Remove outliers, fillNA, then mathematical transformations.
 
     Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a 'wide' (one column per series) shape.
+    
+    The _fit() method returns a df and is twice as fast as fit_transform().
 
     Warning:
         - inverse_transform will not fully return the original data under some conditions
