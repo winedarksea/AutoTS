@@ -19,7 +19,7 @@ forecast_length = 3
 long = False
 df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 6
+generations = 15
 
 
 # df = df[df['series_id'] == 'GS10']
@@ -261,7 +261,7 @@ Merge dev to master on GitHub and create release (include .tar.gz)
 
 # Help correlate errors with parameters
 """
-# test = initial_results[initial_results['TransformationParameters'].str.contains('kmeans')]
+# test = initial_results[initial_results['TransformationParameters'].str.contains('Detrend')]
 cols = ['Model', 'ModelParameters', 'TransformationParameters', 'Exceptions']
 if (~initial_results['Exceptions'].isna()).sum() > 0:
     test_corr = error_correlations(

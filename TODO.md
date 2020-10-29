@@ -15,8 +15,8 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* improve IntermittentOccurence
-* ClipOutliers transformer, Discretize Transformer
+* bug fix on IntermittentOccurence
+* ClipOutliers transformer, Discretize Transformer, CenterLastValue
 * 2x speedup in transformation runtime by removing double transformation
 
 # Errors: 
@@ -52,6 +52,8 @@ for model in ensemble_models
 * RollingMeanTransformer
 * ClipOutliers
 * Discretize
+* CenterLastValue
+* Detrend
 
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
