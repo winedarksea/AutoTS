@@ -15,7 +15,7 @@ AutoTS works in the following way at present:
 * The best model in validation is selected as best_model and used in the `.predict()` method to generate forecasts.
 
 ### A simple example
-```
+```python
 # also: _hourly, _daily, _weekly, or _yearly
 from autots.datasets import load_monthly
 
@@ -81,7 +81,7 @@ Here weather data is included - winter and road construction being the major inf
 
 Also seen in use here is the `model_list`. 
 
-```
+```python
 from autots import AutoTS
 from autots.datasets import load_hourly
 
@@ -122,7 +122,7 @@ forecasts_df = prediction.forecast
 ```
 
 Probabilistic forecasts are *available* for all models, but in many cases are just data-based estimates in lieu of model estimates, so be careful. 
-```
+```python
 upper_forecasts_df = prediction.upper_forecast
 lower_forecasts_df = prediction.lower_forecast
 ```
@@ -139,7 +139,7 @@ Many models can be reverse engineered with (relative) simplicity outside of Auto
 There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a `.csv` or `.json` file, then on next run only those models will be tried. 
 This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve. 
 One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.
-```
+```python
 # after fitting an AutoTS model
 example_filename = "example_export.csv"  # .csv/.json
 model.export_template(example_filename, models='best',
