@@ -241,6 +241,7 @@ pip install statsmodels
 # check the mxnet documentation for various flavors of mxnet available
 pip install mxnet
 pip install gluonts
+pip install lightgbm
 conda update anaconda
 conda install -c conda-forge fbprophet
 pip install tensorflow
