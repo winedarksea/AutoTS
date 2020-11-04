@@ -15,11 +15,11 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 # raise ValueError("aaargh!")
 
 example_filename = "example_export2.csv"  # .csv/.json
-forecast_length = 3
+forecast_length = 12
 long = False
-df = load_monthly(long=long)
+df = load_weekly(long=long)
 n_jobs = 'auto'
-generations = 15
+generations = 0
 
 
 # df = df[df['series_id'] == 'GS10']
@@ -53,11 +53,12 @@ model_list = [
     'RollingRegression',
     'GluonTS',
     'UnobservedComponents',
+    'DatepartRegression',
     'VAR',
     'VECM',
     'WindowRegression',
 ]
-model_list = 'superfast'
+# model_list = 'superfast'
 # model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
@@ -76,20 +77,20 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble="simple,distance,horizontal-max",
+    ensemble=None,  # "simple,distance,horizontal-max",
     constraint=2,
     max_generations=generations,
-    num_validations=2,
+    num_validations=0,
     validation_method='backwards',
     model_list=model_list,
-    initial_template='General+Random',
+    initial_template='Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.3,
     max_per_model_class=None,
     model_interrupt=True,
     n_jobs=n_jobs,
     drop_most_recent=0,
-    subset=5,
+    subset=None,
     verbose=1,
 )
 
@@ -118,14 +119,14 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
 )
 
 # model = model.import_results('test.pickle')
-# model = model.import_template(example_filename, method='only')
+model = model.import_template(example_filename, method='only')
 
 start_time_for = timeit.default_timer()
 model = model.fit(
     df,
     future_regressor=future_regressor_train2d,
     # weights=weights_weekly,
-    grouping_ids=grouping_monthly,
+    # grouping_ids=grouping_monthly,
     # result_file='test.pickle',
     date_col='datetime' if long else None,
     value_col='value' if long else None,
@@ -166,7 +167,7 @@ with joblib.parallel_backend("loky", n_jobs=n_jobs):
     model = model.fit(
         df,
         future_regressor=future_regressor_train2d,
-        grouping_ids=grouping_monthly,
+        # grouping_ids=grouping_monthly,
         # result_file='test.pickle',
         date_col='datetime' if long else None,
         value_col='value' if long else None,
@@ -195,12 +196,20 @@ initial_results = model.results()
 # validation results
 validation_results = model.results("validation")
 
+initial_results['TransformationRuntime'] = initial_results['TransformationRuntime'].dt.total_seconds()
+initial_results['FitRuntime'] = initial_results['FitRuntime'].dt.total_seconds()
+initial_results['PredictRuntime'] = initial_results['PredictRuntime'].dt.total_seconds()
+initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_seconds()
+
+temp = initial_results.groupby("Model")[['TransformationRuntime', 'FitRuntime', 'PredictRuntime', 'TotalRuntime']].mean()
+import platform
+temp.to_csv("speedtest_summarized" + str(platform.node()) + ".csv")
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
+initial_results.to_csv("speedtest" + str(platform.node()) + ".csv")
 
 """
-Import/Export
-
-model.export_template(example_filename, models='best',
+# Import/Export
+model.export_template(example_filename, models='all',
                       n=15, max_per_model_class=3)
 
 del(model)
