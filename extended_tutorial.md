@@ -243,7 +243,7 @@ pip install mxnet
 pip install gluonts
 pip install lightgbm
 conda update anaconda
-conda install -c conda-forge fbprophet
+pip install fbprophet  # try running a second time if it fails on the first try
 pip install tensorflow
 pip install tensorflow-probability
 ```
