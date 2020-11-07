@@ -53,13 +53,13 @@ model_list = [
     'GLM',
     'ETS',
     # 'FBProphet',
-    'RollingRegression',
+    # 'RollingRegression',
     # 'GluonTS',
     'UnobservedComponents',
     'DatepartRegression',
     'VAR',
     'VECM',
-    'WindowRegression',
+    # 'WindowRegression',
 ]
 # model_list = 'superfast'
 # model_list = ['GLM', 'DatepartRegression']
