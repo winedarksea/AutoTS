@@ -21,7 +21,10 @@ df = load_weekly(long=long)
 n_jobs = 'auto'
 generations = 0
 
-
+df = pd.read_csv("m5_sample.gz")
+df['datetime'] = pd.DatetimeIndex(df['datetime'])
+df = df.set_index("datetime", drop=True)
+df = df.iloc[:, 0:100]
 # df = df[df['series_id'] == 'GS10']
 
 weights_hourly = {'traffic_volume': 10}
@@ -49,9 +52,9 @@ model_list = [
     'SeasonalNaive',
     'GLM',
     'ETS',
-    'FBProphet',
+    # 'FBProphet',
     'RollingRegression',
-    'GluonTS',
+    # 'GluonTS',
     'UnobservedComponents',
     'DatepartRegression',
     'VAR',
@@ -119,7 +122,7 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
 )
 
 # model = model.import_results('test.pickle')
-model = model.import_template(example_filename, method='only')
+model = model.import_template(example_filename, method='only', enforce_model_list=True)
 
 start_time_for = timeit.default_timer()
 model = model.fit(
@@ -201,11 +204,9 @@ initial_results['FitRuntime'] = initial_results['FitRuntime'].dt.total_seconds()
 initial_results['PredictRuntime'] = initial_results['PredictRuntime'].dt.total_seconds()
 initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_seconds()
 
-temp = initial_results.groupby("Model")[['TransformationRuntime', 'FitRuntime', 'PredictRuntime', 'TotalRuntime']].mean()
 import platform
-temp.to_csv("speedtest_summarized" + str(platform.node()) + ".csv")
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
-initial_results.to_csv("speedtest" + str(platform.node()) + ".csv")
+initial_results.to_csv("bigger_speedtest" + str(platform.node()) + ".csv")
 
 """
 # Import/Export
