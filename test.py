@@ -55,7 +55,7 @@ model_list = [
     # 'FBProphet',
     # 'RollingRegression',
     # 'GluonTS',
-    'UnobservedComponents',
+    # 'UnobservedComponents',
     'DatepartRegression',
     'VAR',
     'VECM',
@@ -206,7 +206,7 @@ initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_secon
 
 import platform
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
-initial_results.to_csv("bigger_speedtest" + str(platform.node()) + ".csv")
+initial_results.to_csv("bigger_speedtest" + str(platform.node()) + "_openblas.csv")
 
 """
 # Import/Export

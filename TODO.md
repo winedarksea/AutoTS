@@ -95,6 +95,9 @@ Tensorflow GPU backend may crash on occasion.
 * Improve templates
 	* 'fake date' dataset with high diversity of series to train on
 * BestN runtime variant, where speed is highly important in model selection
+* joblib to UnobservedComponents
+* total runtime for .fit() as attribute
+* allow Index to be other datetime not just DatetimeIndex
 
 
 * Profile slow parts of AutoTS on 1,000 series
