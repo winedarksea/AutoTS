@@ -18,6 +18,8 @@
 * bug fix on IntermittentOccurence
 * ClipOutliers transformer, Discretize Transformer, CenterLastValue
 * 2x speedup in transformation runtime by removing double transformation
+* joblib parallel to UnobservedComponents
+* minor changes to ETS, now replaces single series failure with zero fill, damped now is damped_trend
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -95,7 +97,6 @@ Tensorflow GPU backend may crash on occasion.
 * Improve templates
 	* 'fake date' dataset with high diversity of series to train on
 * BestN runtime variant, where speed is highly important in model selection
-* joblib to UnobservedComponents
 * total runtime for .fit() as attribute
 * allow Index to be other datetime not just DatetimeIndex
 
@@ -116,6 +117,7 @@ Tensorflow GPU backend may crash on occasion.
 * improve test.py script for actual testing of many features
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
+* export and import of results includes all model parameters (but not templates?)
 * Option to use full traceback in errors in table
 * Better point to probabilistic (uncertainty of naive last-value forecast) 
 	* linear reg of abs error of samples - simulations
@@ -155,6 +157,7 @@ Tensorflow GPU backend may crash on occasion.
 * Improve usability on rarer frequenices (ie monthly data where some series start on 1st, others on 15th, etc.)
 * Figures: Add option to output figures of train/test + forecast, other performance figures
 * Replace most 'print' with logging.
+ * still use verbose: set 0 = error, 1 = info, 2 = debug
 * Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
 * Development tools:
 	* Add to Conda (Forge) distribution as well as pip

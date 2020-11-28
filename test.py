@@ -19,7 +19,7 @@ forecast_length = 12
 long = False
 df = load_weekly(long=long)
 n_jobs = 'auto'
-generations = 0
+generations = 2
 
 df = pd.read_csv("m5_sample.gz")
 df['datetime'] = pd.DatetimeIndex(df['datetime'])
@@ -48,17 +48,17 @@ model_list = [
     'ZeroesNaive',
     'LastValueNaive',
     'AverageValueNaive',
-    'GLS',
-    'SeasonalNaive',
+    # 'GLS',
+    # 'SeasonalNaive',
     'GLM',
     'ETS',
     # 'FBProphet',
     # 'RollingRegression',
     # 'GluonTS',
-    # 'UnobservedComponents',
-    'DatepartRegression',
-    'VAR',
-    'VECM',
+    'UnobservedComponents',
+    # 'DatepartRegression',
+    # 'VAR',
+    # 'VECM',
     # 'WindowRegression',
 ]
 # model_list = 'superfast'
@@ -83,7 +83,7 @@ model = AutoTS(
     ensemble=None,  # "simple,distance,horizontal-max",
     constraint=2,
     max_generations=generations,
-    num_validations=0,
+    num_validations=2,
     validation_method='backwards',
     model_list=model_list,
     initial_template='Random',
@@ -122,7 +122,7 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
 )
 
 # model = model.import_results('test.pickle')
-model = model.import_template(example_filename, method='only', enforce_model_list=True)
+# model = model.import_template(example_filename, method='only', enforce_model_list=True)
 
 start_time_for = timeit.default_timer()
 model = model.fit(
@@ -204,9 +204,9 @@ initial_results['FitRuntime'] = initial_results['FitRuntime'].dt.total_seconds()
 initial_results['PredictRuntime'] = initial_results['PredictRuntime'].dt.total_seconds()
 initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_seconds()
 
-import platform
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
-initial_results.to_csv("bigger_speedtest" + str(platform.node()) + "_openblas.csv")
+# import platform
+# initial_results.to_csv("bigger_speedtest" + str(platform.node()) + "_openblas.csv")
 
 """
 # Import/Export

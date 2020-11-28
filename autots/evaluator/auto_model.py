@@ -343,7 +343,7 @@ def ModelMonster(
             model = ETS(
                 frequency=frequency,
                 prediction_interval=prediction_interval,
-                damped=parameters['damped'],
+                damped_trend=parameters['damped_trend'],
                 trend=parameters['trend'],
                 seasonal=parameters['seasonal'],
                 seasonal_periods=parameters['seasonal_periods'],
@@ -453,6 +453,7 @@ def ModelMonster(
                 holiday_country=holiday_country,
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
             )
         else:
             model = UnobservedComponents(
@@ -462,6 +463,7 @@ def ModelMonster(
                 regression_type=parameters['regression_type'],
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
                 level=parameters['level'],
                 trend=parameters['trend'],
                 cycle=parameters['cycle'],

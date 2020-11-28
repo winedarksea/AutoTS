@@ -304,7 +304,7 @@ Some models will support a more limited range of frequencies.
 |  GLS                    | statsmodels  |                         |               |                 |       | True         |              |               |
 |  GLM                    | statsmodels  |                         |               |     joblib      |       |              |              | True          |
 |  ETS                    | statsmodels  |                         |               |     joblib      |       |              |              |               |
-|  UnobservedComponents   | statsmodels  |                         |               |                 |       |              |              | True          |
+|  UnobservedComponents   | statsmodels  |                         |               |     joblib      |       |              |              | True          |
 |  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  VARMAX                 | statsmodels  |                         |    True       |                 |       | True         |              |               |
 |  DynamicFactor          | statsmodels  |                         |    True       |                 |       | True         |              | True          |
