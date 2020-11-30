@@ -178,11 +178,14 @@ class Detrend(object):
         X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
         if self.model == 'GLS':
             from statsmodels.regression.linear_model import GLS
+
             self.model = GLS(Y, X, missing='drop').fit()
         else:
             self.model = self._retrieve_detrend(detrend=self.model)
             if self.model in self.need_positive:
-                self.trnd_trans = PositiveShift(log=False, center_one=True, squared=False)
+                self.trnd_trans = PositiveShift(
+                    log=False, center_one=True, squared=False
+                )
                 Y = pd.DataFrame(self.trnd_trans.fit_transform(df)).values
             X = X.reshape((-1, 1))
             self.model.fit(X, Y)
@@ -1134,7 +1137,7 @@ class Discretize(object):
                 if self.discretization == 'center':
                     bins = np.cumsum(bins, dtype=float, axis=0)
                     bins[2:] = bins[2:] - bins[:-2]
-                    bins = bins[2 - 1:] / 2
+                    bins = bins[2 - 1 :] / 2
                 elif self.discretization == 'lower':
                     bins = np.delete(bins, (-1), axis=0)
                 elif self.discretization == 'upper':

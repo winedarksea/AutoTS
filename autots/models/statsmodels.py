@@ -23,7 +23,7 @@ class GLS(ModelObject):
         prediction_interval: float = 0.9,
         holiday_country: str = 'US',
         random_seed: int = 2020,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -125,7 +125,7 @@ class GLM(ModelObject):
         constant: bool = False,
         verbose: int = 1,
         n_jobs: int = None,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -428,7 +428,7 @@ class ETS(ModelObject):
         random_seed: int = 2020,
         verbose: int = 0,
         n_jobs: int = None,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -443,12 +443,13 @@ class ETS(ModelObject):
         self.damped_trend = damped_trend
         self.trend = trend
         self.seasonal = seasonal
-        if (seasonal not in ["additive", "multiplicative"]) or (seasonal_periods is None):
+        if (seasonal not in ["additive", "multiplicative"]) or (
+            seasonal_periods is None
+        ):
             self.seasonal = None
             self.seasonal_periods = None
         else:
             self.seasonal_periods = abs(int(seasonal_periods))
-        
 
     def fit(self, df, future_regressor=[]):
         """Train algorithm given data supplied
@@ -519,7 +520,9 @@ class ETS(ModelObject):
                     )
                 esModel = esModel.fit()
                 srt = current_series.shape[0]
-                esPred = esModel.predict(start=srt, end=srt + args['forecast_length'] - 1)
+                esPred = esModel.predict(
+                    start=srt, end=srt + args['forecast_length'] - 1
+                )
                 esPred = pd.Series(esPred)
             except Exception as e:
                 if args['verbose'] > 1:
@@ -644,7 +647,7 @@ class ARIMA(ModelObject):
         random_seed: int = 2020,
         verbose: int = 0,
         n_jobs: int = None,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -934,7 +937,7 @@ class UnobservedComponents(ModelObject):
         stochastic_cycle: bool = False,
         stochastic_trend: bool = False,
         stochastic_level: bool = False,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1015,16 +1018,16 @@ class UnobservedComponents(ModelObject):
 
         parallel = True
         args = {
-            'freq':self.frequency,
-            'exog':self.regressor_train,
-            'level':self.level,
-            'trend':self.trend,
-            'cycle':self.cycle,
-            'damped_cycle':self.damped_cycle,
-            'irregular':self.irregular,
-            'stochastic_cycle':self.stochastic_cycle,
-            'stochastic_level':self.stochastic_level,
-            'stochastic_trend':self.stochastic_trend,
+            'freq': self.frequency,
+            'exog': self.regressor_train,
+            'level': self.level,
+            'trend': self.trend,
+            'cycle': self.cycle,
+            'damped_cycle': self.damped_cycle,
+            'irregular': self.irregular,
+            'stochastic_cycle': self.stochastic_cycle,
+            'stochastic_level': self.stochastic_level,
+            'stochastic_trend': self.stochastic_trend,
             'forecast_length': forecast_length,
             'regression_type': self.regression_type,
             'verbose_bool': self.verbose_bool,
@@ -1053,7 +1056,9 @@ class UnobservedComponents(ModelObject):
                         stochastic_trend=args['stochastic_trend'],
                     ).fit(disp=args['verbose_bool'])
                     maPred = maModel.predict(
-                        start=test_index[0], end=test_index[-1], exog=args['future_regressor']
+                        start=test_index[0],
+                        end=test_index[-1],
+                        exog=args['future_regressor'],
                     )
                 else:
                     maModel = UnobservedComponents(
@@ -1258,7 +1263,7 @@ class DynamicFactor(ModelObject):
         verbose: int = 0,
         k_factors: int = 1,
         factor_order: int = 0,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1447,7 +1452,7 @@ class VECM(ModelObject):
         verbose: int = 0,
         deterministic: str = 'nc',
         k_ar_diff: int = 1,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1619,7 +1624,7 @@ class VARMAX(ModelObject):
         verbose: int = 0,
         order: tuple = (1, 0),
         trend: str = 'c',
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1745,7 +1750,7 @@ class VAR(ModelObject):
         verbose: int = 0,
         maxlags: int = 15,
         ic: str = 'fpe',
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
