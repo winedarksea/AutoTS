@@ -15,13 +15,14 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* bug fix on IntermittentOccurence
-* ClipOutliers transformer, Discretize Transformer, CenterLastValue
 * 2x speedup in transformation runtime by removing double transformation
 * joblib parallel to UnobservedComponents
+* ClipOutliers transformer, Discretize Transformer, CenterLastValue - added in prep for transform template change
+* bug fix on IntermittentOccurence
 * minor changes to ETS, now replaces single series failure with zero fill, damped now is damped_trend
+* 0.3.0 is expected to feature a breaking change to model templates in the transformation/pre-processing
 
-# Errors: 
+# Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
 VECM does not recognize exog to predict
 ARIMA with User or Holiday ValueError('Can only compare identically-labeled DataFrame objects',)
