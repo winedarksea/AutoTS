@@ -23,7 +23,7 @@ class GLS(ModelObject):
         prediction_interval: float = 0.9,
         holiday_country: str = 'US',
         random_seed: int = 2020,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -125,7 +125,7 @@ class GLM(ModelObject):
         constant: bool = False,
         verbose: int = 1,
         n_jobs: int = None,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -408,7 +408,7 @@ class ETS(ModelObject):
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
-        damped (bool): passed through to statsmodel ETS
+        damped_trend (bool): passed through to statsmodel ETS (formerly just 'damped')
         trend (str): passed through to statsmodel ETS
         seasonal (bool): passed through to statsmodel ETS
         seasonal_periods (int): passed through to statsmodel ETS
@@ -420,7 +420,7 @@ class ETS(ModelObject):
         name: str = "ETS",
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
-        damped: bool = False,
+        damped_trend: bool = False,
         trend: str = None,
         seasonal: str = None,
         seasonal_periods: int = None,
@@ -428,7 +428,7 @@ class ETS(ModelObject):
         random_seed: int = 2020,
         verbose: int = 0,
         n_jobs: int = None,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -440,10 +440,13 @@ class ETS(ModelObject):
             verbose=verbose,
             n_jobs=n_jobs,
         )
-        self.damped = damped
+        self.damped_trend = damped_trend
         self.trend = trend
         self.seasonal = seasonal
-        if seasonal not in ["additive", "multiplicative"]:
+        if (seasonal not in ["additive", "multiplicative"]) or (
+            seasonal_periods is None
+        ):
+            self.seasonal = None
             self.seasonal_periods = None
         else:
             self.seasonal_periods = abs(int(seasonal_periods))
@@ -480,42 +483,51 @@ class ETS(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         parallel = True
         args = {
-            'damped': self.damped,
+            'damped_trend': self.damped_trend,
             'trend': self.trend,
             'seasonal': self.seasonal,
             'seasonal_periods': self.seasonal_periods,
             'freq': self.frequency,
             'forecast_length': forecast_length,
+            'verbose': self.verbose,
         }
 
         def forecast_by_column(df, args, col):
             """Run one series of ETS and return prediction."""
             current_series = df[col]
             series_name = current_series.name
-            # handle statsmodels 0.13 method changes
             try:
-                esModel = ExponentialSmoothing(
-                    current_series,
-                    damped_trend=args['damped'],
-                    trend=args['trend'],
-                    seasonal=args['seasonal'],
-                    seasonal_periods=args['seasonal_periods'],
-                    initialization_method=None,
-                    freq=args['freq'],
-                ).fit()
-            except Exception:
-                esModel = ExponentialSmoothing(
-                    current_series,
-                    damped=args['damped'],
-                    trend=args['trend'],
-                    seasonal=args['seasonal'],
-                    seasonal_periods=args['seasonal_periods'],
-                    # initialization_method='heuristic',  # estimated
-                    freq=args['freq'],
-                ).fit()
-            srt = current_series.shape[0]
-            esPred = esModel.predict(start=srt, end=srt + args['forecast_length'] - 1)
-            esPred = pd.Series(esPred)
+                # handle statsmodels 0.13 method changes
+                try:
+                    esModel = ExponentialSmoothing(
+                        current_series,
+                        damped_trend=args['damped_trend'],
+                        trend=args['trend'],
+                        seasonal=args['seasonal'],
+                        seasonal_periods=args['seasonal_periods'],
+                        initialization_method=None,
+                        freq=args['freq'],
+                    )
+                except Exception:
+                    esModel = ExponentialSmoothing(
+                        current_series,
+                        damped=args['damped_trend'],
+                        trend=args['trend'],
+                        seasonal=args['seasonal'],
+                        seasonal_periods=args['seasonal_periods'],
+                        # initialization_method='heuristic',  # estimated
+                        freq=args['freq'],
+                    )
+                esModel = esModel.fit()
+                srt = current_series.shape[0]
+                esPred = esModel.predict(
+                    start=srt, end=srt + args['forecast_length'] - 1
+                )
+                esPred = pd.Series(esPred)
+            except Exception as e:
+                if args['verbose'] > 1:
+                    print(f"ETS failed on {series_name} with {repr(e)}")
+                esPred = pd.Series((np.zeros((forecast_length,))), index=test_index)
             esPred.name = series_name
             return esPred
 
@@ -589,7 +601,7 @@ class ETS(ModelObject):
         else:
             seasonal_period_choice = None
         parameter_dict = {
-            'damped': damped_choice,
+            'damped_trend': damped_choice,
             'trend': trend_choice,
             'seasonal': seasonal_choice,
             'seasonal_periods': seasonal_period_choice,
@@ -599,7 +611,7 @@ class ETS(ModelObject):
     def get_params(self):
         """Return dict of current parameters."""
         parameter_dict = {
-            'damped': self.damped,
+            'damped_trend': self.damped_trend,
             'trend': self.trend,
             'seasonal': self.seasonal,
             'seasonal_periods': self.seasonal_periods,
@@ -635,7 +647,7 @@ class ARIMA(ModelObject):
         random_seed: int = 2020,
         verbose: int = 0,
         n_jobs: int = None,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -916,6 +928,7 @@ class UnobservedComponents(ModelObject):
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
+        n_jobs: int = 1,
         level: bool = False,
         trend: bool = False,
         cycle: bool = False,
@@ -924,7 +937,7 @@ class UnobservedComponents(ModelObject):
         stochastic_cycle: bool = False,
         stochastic_trend: bool = False,
         stochastic_level: bool = False,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -935,6 +948,7 @@ class UnobservedComponents(ModelObject):
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
+            n_jobs=n_jobs,
         )
         self.level = level
         self.trend = trend
@@ -953,6 +967,7 @@ class UnobservedComponents(ModelObject):
         """
         df = self.basic_profile(df)
         self.df_train = df
+        self.regressor_train = None
 
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
@@ -1000,6 +1015,100 @@ class UnobservedComponents(ModelObject):
             assert (
                 len(future_regressor) == forecast_length
             ), "regressor not equal to forecast length"
+
+        parallel = True
+        args = {
+            'freq': self.frequency,
+            'exog': self.regressor_train,
+            'level': self.level,
+            'trend': self.trend,
+            'cycle': self.cycle,
+            'damped_cycle': self.damped_cycle,
+            'irregular': self.irregular,
+            'stochastic_cycle': self.stochastic_cycle,
+            'stochastic_level': self.stochastic_level,
+            'stochastic_trend': self.stochastic_trend,
+            'forecast_length': forecast_length,
+            'regression_type': self.regression_type,
+            'verbose_bool': self.verbose_bool,
+            'test_index': test_index,
+            'future_regressor': future_regressor,
+        }
+
+        def forecast_by_column(df, args, col):
+            """Run one series of ETS and return prediction."""
+            current_series = df[col]
+            series_name = current_series.name
+            test_index = args['test_index']
+            try:
+                if args['regression_type'] in ["User", "Holiday"]:
+                    maModel = UnobservedComponents(
+                        current_series,
+                        freq=args['frequency'],
+                        exog=args['regressor_train'],
+                        level=args['level'],
+                        trend=args['trend'],
+                        cycle=args['cycle'],
+                        damped_cycle=args['damped_cycle'],
+                        irregular=args['irregular'],
+                        stochastic_cycle=args['stochastic_cycle'],
+                        stochastic_level=args['stochastic_level'],
+                        stochastic_trend=args['stochastic_trend'],
+                    ).fit(disp=args['verbose_bool'])
+                    maPred = maModel.predict(
+                        start=test_index[0],
+                        end=test_index[-1],
+                        exog=args['future_regressor'],
+                    )
+                else:
+                    maModel = UnobservedComponents(
+                        current_series,
+                        freq=args['frequency'],
+                        level=args['level'],
+                        trend=args['trend'],
+                        cycle=args['cycle'],
+                        damped_cycle=args['damped_cycle'],
+                        irregular=args['irregular'],
+                        stochastic_cycle=args['stochastic_cycle'],
+                        stochastic_level=args['stochastic_level'],
+                        stochastic_trend=args['stochastic_trend'],
+                    ).fit(disp=args['verbose_bool'])
+                    maPred = maModel.predict(start=test_index[0], end=test_index[-1])
+            except Exception as e:
+                if args['verbose_bool']:
+                    print(f"Uncomp failed on {series_name} with {repr(e)}")
+                maPred = pd.Series((np.zeros((forecast_length,))), index=test_index)
+
+            maPred = pd.Series(maPred)
+            maPred.name = series_name
+            return maPred
+
+        cols = self.df_train.columns.tolist()
+        if self.n_jobs in [0, 1] or len(cols) < 4:
+            parallel = False
+        else:
+            try:
+                from joblib import Parallel, delayed
+            except Exception:
+                if self.verbose > 1:
+                    print("Joblib import failed, not parallel...")
+                parallel = False
+        # joblib multiprocessing to loop through series
+        # print(f"parallel is {parallel} and n_jobs is {self.n_jobs}")
+        if parallel:
+            df_list = Parallel(n_jobs=self.n_jobs)(
+                delayed(forecast_by_column, check_pickle=False)(
+                    self.df_train, args, col
+                )
+                for (col) in cols
+            )
+            forecast = pd.concat(df_list, axis=1)
+        else:
+            df_list = []
+            for col in cols:
+                df_list.append(forecast_by_column(self.df_train, args, col))
+            forecast = pd.concat(df_list, axis=1)
+        """
         forecast = pd.DataFrame()
         for series in self.df_train.columns:
             current_series = self.df_train[series].copy()
@@ -1039,6 +1148,7 @@ class UnobservedComponents(ModelObject):
                 maPred = pd.Series((np.zeros((forecast_length,))), index=test_index)
             forecast = pd.concat([forecast, maPred], axis=1)
         forecast.columns = self.column_names
+        """
 
         if just_point_forecast:
             return forecast
@@ -1153,7 +1263,7 @@ class DynamicFactor(ModelObject):
         verbose: int = 0,
         k_factors: int = 1,
         factor_order: int = 0,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1342,7 +1452,7 @@ class VECM(ModelObject):
         verbose: int = 0,
         deterministic: str = 'nc',
         k_ar_diff: int = 1,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1514,7 +1624,7 @@ class VARMAX(ModelObject):
         verbose: int = 0,
         order: tuple = (1, 0),
         trend: str = 'c',
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1640,7 +1750,7 @@ class VAR(ModelObject):
         verbose: int = 0,
         maxlags: int = 15,
         ic: str = 'fpe',
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,

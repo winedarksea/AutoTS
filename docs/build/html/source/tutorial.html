@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Tutorial &#8212; AutoTS 0.2.6 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.2.7 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -57,25 +57,25 @@
 </ul>
 <div class="section" id="a-simple-example">
 <h3>A simple example<a class="headerlink" href="#a-simple-example" title="Permalink to this headline">¶</a></h3>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span># also: _hourly, _daily, _weekly, or _yearly
-from autots.datasets import load_monthly
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># also: _hourly, _daily, _weekly, or _yearly</span>
+<span class="kn">from</span> <span class="nn">autots.datasets</span> <span class="kn">import</span> <span class="n">load_monthly</span>
 
-df_long = load_monthly()
+<span class="n">df_long</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">()</span>
 
-from autots import AutoTS
+<span class="kn">from</span> <span class="nn">autots</span> <span class="kn">import</span> <span class="n">AutoTS</span>
 
-model = AutoTS(
-    forecast_length=3,
-    frequency=&#39;infer&#39;,
-    ensemble=&#39;simple&#39;,
-    drop_data_older_than_periods=240,
-    max_generations=5,
-    num_validations=2,
-)
-model = model.fit(df_long, date_col=&#39;datetime&#39;, value_col=&#39;value&#39;, id_col=&#39;series_id&#39;)
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span>
+    <span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+    <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
+    <span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;simple&#39;</span><span class="p">,</span>
+    <span class="n">drop_data_older_than_periods</span><span class="o">=</span><span class="mi">240</span><span class="p">,</span>
+    <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span> <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
 
-# Print the name of the best model
-print(model)
+<span class="c1"># Print the name of the best model</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
 </pre></div>
 </div>
 <div class="section" id="import-of-data">
@@ -115,48 +115,48 @@ Here, two methods of cross validation are in place, <code class="docutils litera
 <p>Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting.
 Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. These additional series carry information to models such as <code class="docutils literal notranslate"><span class="pre">RollingRegression</span></code>, <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code>, and <code class="docutils literal notranslate"><span class="pre">VECM</span></code>.</p>
 <p>Also seen in use here is the <code class="docutils literal notranslate"><span class="pre">model_list</span></code>.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>from autots import AutoTS
-from autots.datasets import load_hourly
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">autots</span> <span class="kn">import</span> <span class="n">AutoTS</span>
+<span class="kn">from</span> <span class="nn">autots.datasets</span> <span class="kn">import</span> <span class="n">load_hourly</span>
 
-df_wide = load_hourly(long=False)
+<span class="n">df_wide</span> <span class="o">=</span> <span class="n">load_hourly</span><span class="p">(</span><span class="n">long</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 
-# here we care most about traffic volume, all other series assumed to be weight of 1
-weights_hourly = {&#39;traffic_volume&#39;: 20}
+<span class="c1"># here we care most about traffic volume, all other series assumed to be weight of 1</span>
+<span class="n">weights_hourly</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;traffic_volume&#39;</span><span class="p">:</span> <span class="mi">20</span><span class="p">}</span>
 
-model_list = [
-    &#39;LastValueNaive&#39;,
-    &#39;GLS&#39;,
-    &#39;ETS&#39;,
-    &#39;AverageValueNaive&#39;,
-]
+<span class="n">model_list</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s1">&#39;LastValueNaive&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;GLS&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;ETS&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;AverageValueNaive&#39;</span><span class="p">,</span>
+<span class="p">]</span>
 
-model = AutoTS(
-    forecast_length=49,
-    frequency=&#39;infer&#39;,
-    prediction_interval=0.95,
-    ensemble=&#39;simple&#39;,
-    max_generations=5,
-    num_validations=2,
-    validation_method=&#39;seasonal 168&#39;,
-    model_list=model_list,
-    models_to_validate=15,
-    drop_most_recent=1,
-    n_jobs=&#39;auto&#39;,
-)
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span>
+    <span class="n">forecast_length</span><span class="o">=</span><span class="mi">49</span><span class="p">,</span>
+    <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
+    <span class="n">prediction_interval</span><span class="o">=</span><span class="mf">0.95</span><span class="p">,</span>
+    <span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;simple&#39;</span><span class="p">,</span>
+    <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">validation_method</span><span class="o">=</span><span class="s1">&#39;seasonal 168&#39;</span><span class="p">,</span>
+    <span class="n">model_list</span><span class="o">=</span><span class="n">model_list</span><span class="p">,</span>
+    <span class="n">models_to_validate</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+    <span class="n">drop_most_recent</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">n_jobs</span><span class="o">=</span><span class="s1">&#39;auto&#39;</span><span class="p">,</span>
+<span class="p">)</span>
 
-model = model.fit(
-    df_wide,
-    weights=weights_hourly,
-)
+<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span>
+    <span class="n">df_wide</span><span class="p">,</span>
+    <span class="n">weights</span><span class="o">=</span><span class="n">weights_hourly</span><span class="p">,</span>
+<span class="p">)</span>
 
-prediction = model.predict()
-forecasts_df = prediction.forecast
-# model.best_model.to_string()
+<span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">()</span>
+<span class="n">forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="o">.</span><span class="n">forecast</span>
+<span class="c1"># model.best_model.to_string()</span>
 </pre></div>
 </div>
 <p>Probabilistic forecasts are <em>available</em> for all models, but in many cases are just data-based estimates in lieu of model estimates, so be careful.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>upper_forecasts_df = prediction.upper_forecast
-lower_forecasts_df = prediction.lower_forecast
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">upper_forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="o">.</span><span class="n">upper_forecast</span>
+<span class="n">lower_forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="o">.</span><span class="n">lower_forecast</span>
 </pre></div>
 </div>
 </div>
@@ -173,17 +173,17 @@ lower_forecasts_df = prediction.lower_forecast
 There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a <code class="docutils literal notranslate"><span class="pre">.csv</span></code> or <code class="docutils literal notranslate"><span class="pre">.json</span></code> file, then on next run only those models will be tried.
 This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve.
 One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span># after fitting an AutoTS model
-example_filename = &quot;example_export.csv&quot;  # .csv/.json
-model.export_template(example_filename, models=&#39;best&#39;,
-                      n=15, max_per_model_class=3)
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># after fitting an AutoTS model</span>
+<span class="n">example_filename</span> <span class="o">=</span> <span class="s2">&quot;example_export.csv&quot;</span>  <span class="c1"># .csv/.json</span>
+<span class="n">model</span><span class="o">.</span><span class="n">export_template</span><span class="p">(</span><span class="n">example_filename</span><span class="p">,</span> <span class="n">models</span><span class="o">=</span><span class="s1">&#39;best&#39;</span><span class="p">,</span>
+                      <span class="n">n</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">max_per_model_class</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 
-# on new training
-model = AutoTS(forecast_length=forecast_length,
-               frequency=&#39;infer&#39;, max_generations=0,
-               num_validations=0, verbose=0)
-model = model.import_template(example_filename, method=&#39;only&#39;) # method=&#39;add on&#39;
-print(&quot;Overwrite template is: {}&quot;.format(str(model.initial_template)))
+<span class="c1"># on new training</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span><span class="n">forecast_length</span><span class="o">=</span><span class="n">forecast_length</span><span class="p">,</span>
+               <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span> <span class="n">max_generations</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+               <span class="n">num_validations</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">import_template</span><span class="p">(</span><span class="n">example_filename</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;only&#39;</span><span class="p">)</span> <span class="c1"># method=&#39;add on&#39;</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Overwrite template is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">initial_template</span><span class="p">)))</span>
 </pre></div>
 </div>
 <div class="section" id="metrics">
@@ -191,21 +191,21 @@ print(&quot;Overwrite template is: {}&quot;.format(str(model.initial_template)))
 <p>There are a number of available metrics, all combined together into a ‘Score’ which evaluates the best model. The ‘Score’ that compares models can easily be adjusted by passing through custom metric weights dictionary.
 Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers.
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>metric_weighting = {
-    &#39;smape_weighting&#39; : 10,
-    &#39;mae_weighting&#39; : 1,
-    &#39;rmse_weighting&#39; : 5,
-    &#39;containment_weighting&#39; : 1,
-    &#39;runtime_weighting&#39; : 0,
-    &#39;spl_weighting&#39;: 1,
-    &#39;contour_weighting&#39;: 0,
-}
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">metric_weighting</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;smape_weighting&#39;</span> <span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="s1">&#39;mae_weighting&#39;</span> <span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="s1">&#39;rmse_weighting&#39;</span> <span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="s1">&#39;containment_weighting&#39;</span> <span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="s1">&#39;runtime_weighting&#39;</span> <span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="s1">&#39;spl_weighting&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="s1">&#39;contour_weighting&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+<span class="p">}</span>
 
-model = AutoTS(
-    forecast_length=forecast_length,
-    frequency=&#39;infer&#39;,
-    metric_weighting=metric_weighting,
-)
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span>
+    <span class="n">forecast_length</span><span class="o">=</span><span class="n">forecast_length</span><span class="p">,</span>
+    <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
+    <span class="n">metric_weighting</span><span class="o">=</span><span class="n">metric_weighting</span><span class="p">,</span>
+<span class="p">)</span>
 </pre></div>
 </div>
 <p>It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE.</p>
@@ -221,17 +221,20 @@ model = AutoTS(
 <p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">autots</span></code></p>
 <div class="section" id="requirements">
 <h3>Requirements:<a class="headerlink" href="#requirements" title="Permalink to this headline">¶</a></h3>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>Python &gt;= 3.5
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>Python &gt;= 3.6
 numpy
 pandas
-sklearn     &gt;= 0.20.0 (ColumnTransformer)
+sklearn     &gt;= 0.20.0
             &gt;= 0.23.0 (PoissonReg)
 statsmodels
 </pre></div>
 </div>
 <p>Of these, numpy and pandas are critical.
-Limited functionality should exist without scikit-learn.
-Full functionality should be maintained without statsmodels, albeit with fewer available models.</p>
+Limited functionality should exist without scikit-learn.</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>* Sklearn needed for categorical to numeric, some detrends/transformers, horizontal generalization, numerous models
+</pre></div>
+</div>
+<p>Full functionality should be maintained without statsmodels, albeit with fewer available models.</p>
 <p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">autots['additional']</span></code></p>
 </div>
 <div class="section" id="optional-requirements">
@@ -257,31 +260,43 @@ tsfresh
 </div>
 <div class="section" id="hardware-acceleration-with-intel-cpu-and-nvidia-gpu-for-ubuntu-windows">
 <h3>Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows<a class="headerlink" href="#hardware-acceleration-with-intel-cpu-and-nvidia-gpu-for-ubuntu-windows" title="Permalink to this headline">¶</a></h3>
-<p>Download Anaconda or Miniconda.</p>
+<p>If you are on an Intel CPU, download Anaconda or Miniconda. For AMD/ARM/etc use a venv environment and pip which will use OpenBLAS.
+Intel MKL is included with <code class="docutils literal notranslate"><span class="pre">anaconda</span></code> and offers significant performance gain for Intel CPUs. Use of the Intel conda channel sometimes is necessary.</p>
 <p>(install Visual Studio if on Windows for C compilers)</p>
-<p>If you have an Nvidia GPU, download NVIDIA CUDA and CuDNN.
-Intel MKL is included with <code class="docutils literal notranslate"><span class="pre">anaconda</span></code> and offers significant performance gain for Intel CPUs.
-You can check if your system is using mkl with <code class="docutils literal notranslate"><span class="pre">numpy.show_config()</span></code>.
-If you are on an AMD CPU, you do <strong>not</strong> want to be using MKL, OpenBLAS is better.
-On Linux ARM-based systems, apt-get/yum (rather than pip) installs of numpy/pandas <em>may</em> install faster compilations.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>conda create -n timeseries python=3.8
+<p>If you have an Nvidia GPU and plan to use the GPU-accelerated models, download NVIDIA CUDA and CuDNN.</p>
+<p>You can check if your system is using mkl, OpenBLAS, or none with <code class="docutils literal notranslate"><span class="pre">numpy.show_config()</span></code>. Generally recommended that you double-check this after installing new packages to make sure you haven’t broken the LINPACK connection.</p>
+<p>On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas <em>may</em> install faster/more stable compilations.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>conda create -n timeseries <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.8
 conda activate timeseries
 
-# for simplicity:
+<span class="c1"># for simplicity:</span>
 conda install anaconda
-# elsewise:
+<span class="c1"># elsewise:</span>
 conda install numpy scipy
-conda install -c conda-forge scikit-learn
-pip install statsmodels
+conda install scikit-learn   <span class="c1"># -c conda-forge is sometimes a version ahead of main channel</span>
+pip install statsmodels     <span class="c1"># pip is sometimes a version ahead of main conda channel</span>
 
-# check the mxnet documentation for various flavors of mxnet available
-pip install mxnet
-pip install gluonts
+pip install mxnet     <span class="c1"># check the mxnet documentation for more install options</span>
+pip install gluonts   <span class="c1"># sometimes the dependency versioning for gluonts can be picky</span>
+pip install lightgbm
 conda update anaconda
-conda install -c conda-forge fbprophet
+pip install fbprophet  <span class="c1"># try running a second time if it fails on the first try</span>
 pip install tensorflow
 pip install tensorflow-probability
 </pre></div>
+</div>
+<div class="section" id="intel-conda-channel-installation">
+<h4>Intel conda channel installation<a class="headerlink" href="#intel-conda-channel-installation" title="Permalink to this headline">¶</a></h4>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create the environment. Intelpy compatability is often a version or two behind latest py</span>
+conda create -n intelpy -c intel <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.7 intelpython3_full
+activate intelpy
+
+<span class="c1"># install additional packages as desired</span>
+conda install -c intel statsmodels
+
+<span class="c1"># also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html</span>
+</pre></div>
+</div>
 </div>
 </div>
 </div>
@@ -430,7 +445,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>statsmodels</p></td>
 <td></td>
 <td></td>
-<td></td>
+<td><p>joblib</p></td>
 <td></td>
 <td></td>
 <td></td>

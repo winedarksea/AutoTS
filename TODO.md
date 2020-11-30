@@ -15,15 +15,14 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* fix verbose > 2 error in auto_model
-* use of f-strings to print some error messages. Python 3.5 may see more complicated error messages as a result.
-* improved BestN (formery Best3) Ensembles, ensemble collected in dicts
-* made Horizontal and BestN ensembles tolerant of a component model failure
-* made Horizontal models capable of generalizing from a subset of series
-* added info to model table for models that can use future_regressor
-* added Datepart Regression model, sklearn regressor on time components only
+* 2x speedup in transformation runtime by removing double transformation
+* joblib parallel to UnobservedComponents
+* ClipOutliers transformer, Discretize Transformer, CenterLastValue - added in prep for transform template change
+* bug fix on IntermittentOccurence
+* minor changes to ETS, now replaces single series failure with zero fill, damped now is damped_trend
+* 0.3.0 is expected to feature a breaking change to model templates in the transformation/pre-processing
 
-# Errors: 
+# Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
 VECM does not recognize exog to predict
 ARIMA with User or Holiday ValueError('Can only compare identically-labeled DataFrame objects',)
@@ -48,6 +47,16 @@ for model in ensemble_models
 		df_train.reindex(copy=True) to these series
 		run model
 ```
+### HAVE PARAMETERS:
+* IntermittentOccurence
+* StatsmodelsFilter
+* SeasonalDifference
+* PositiveShift
+* RollingMeanTransformer
+* ClipOutliers
+* Discretize
+* CenterLastValue
+* Detrend
 
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
@@ -89,6 +98,8 @@ Tensorflow GPU backend may crash on occasion.
 * Improve templates
 	* 'fake date' dataset with high diversity of series to train on
 * BestN runtime variant, where speed is highly important in model selection
+* total runtime for .fit() as attribute
+* allow Index to be other datetime not just DatetimeIndex
 
 
 * Profile slow parts of AutoTS on 1,000 series
@@ -107,6 +118,7 @@ Tensorflow GPU backend may crash on occasion.
 * improve test.py script for actual testing of many features
 * Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
+* export and import of results includes all model parameters (but not templates?)
 * Option to use full traceback in errors in table
 * Better point to probabilistic (uncertainty of naive last-value forecast) 
 	* linear reg of abs error of samples - simulations
@@ -146,6 +158,7 @@ Tensorflow GPU backend may crash on occasion.
 * Improve usability on rarer frequenices (ie monthly data where some series start on 1st, others on 15th, etc.)
 * Figures: Add option to output figures of train/test + forecast, other performance figures
 * Replace most 'print' with logging.
+ * still use verbose: set 0 = error, 1 = info, 2 = debug
 * Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
 * Development tools:
 	* Add to Conda (Forge) distribution as well as pip

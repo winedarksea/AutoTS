@@ -4,6 +4,54 @@ import pandas as pd
 from autots.tools.impute import FillNA
 
 
+class EmptyTransformer(object):
+    """Base transformer returning raw data."""
+
+    def __init__(self):
+        self.name = 'EmptyTransformer'
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+
 def remove_outliers(df, std_threshold: float = 3):
     """Replace outliers with np.nan.
     https://stackoverflow.com/questions/23199796/detect-and-exclude-outliers-in-pandas-data-frame
@@ -62,29 +110,58 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
     else:
         print("Context Slicer Method not recognized")
         return df
-    """
-    if method == '2ForecastLength':
-        return df.tail(2 * forecast_length)
-    elif method == '6ForecastLength':
-        return df.tail(6 * forecast_length)
-    elif method == '12ForecastLength':
-        return df.tail(12 * forecast_length)
-    elif method == 'ForecastLength':
-        return df.tail(forecast_length)
-    elif method == '4ForecastLength':
-        return df.tail(4 * forecast_length)
-    elif method == '8ForecastLength':
-        return df.tail(8 * forecast_length)
-    elif method == '10ForecastLength':
-        return df.tail(10 * forecast_length)
-    """
 
 
 class Detrend(object):
     """Remove a linear trend from the data."""
 
-    def __init__(self):
+    def __init__(self, model: str = 'GLS'):
         self.name = 'Detrend'
+        self.model = model
+        self.need_positive = ['Poisson', 'Gamma', 'Tweedie']
+
+    def _retrieve_detrend(self, detrend: str = "Linear"):
+        if detrend == 'Linear':
+            from sklearn.linear_model import LinearRegression
+
+            return LinearRegression(fit_intercept=True)
+        elif detrend == "Poisson":
+            from sklearn.linear_model import PoissonRegressor
+            from sklearn.multioutput import MultiOutputRegressor
+
+            return MultiOutputRegressor(
+                PoissonRegressor(fit_intercept=True, max_iter=200)
+            )
+        elif detrend == 'Tweedie':
+            from sklearn.linear_model import TweedieRegressor
+            from sklearn.multioutput import MultiOutputRegressor
+
+            return MultiOutputRegressor(TweedieRegressor(power=1.5, max_iter=200))
+        elif detrend == 'Gamma':
+            from sklearn.linear_model import GammaRegressor
+            from sklearn.multioutput import MultiOutputRegressor
+
+            return MultiOutputRegressor(
+                GammaRegressor(fit_intercept=True, max_iter=200)
+            )
+        elif detrend == 'TheilSen':
+            from sklearn.linear_model import TheilSenRegressor
+            from sklearn.multioutput import MultiOutputRegressor
+
+            return MultiOutputRegressor(TheilSenRegressor())
+        elif detrend == 'RANSAC':
+            from sklearn.linear_model import RANSACRegressor
+
+            return RANSACRegressor()
+        elif detrend == 'ARD':
+            from sklearn.linear_model import ARDRegression
+            from sklearn.multioutput import MultiOutputRegressor
+
+            return MultiOutputRegressor(ARDRegression())
+        else:
+            from sklearn.linear_model import LinearRegression
+
+            return LinearRegression()
 
     def fit(self, df):
         """Fits trend for later detrending.
@@ -92,19 +169,26 @@ class Detrend(object):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        from statsmodels.regression.linear_model import GLS
-
         try:
             df = df.astype(float)
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
-        # formerly df.index.astype( int ).values
-        y = df.values
+        Y = df.values
         X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
-        # from statsmodels.tools import add_constant
-        # X = add_constant(X, has_constant='add')
-        self.model = GLS(y, X, missing='drop').fit()
+        if self.model == 'GLS':
+            from statsmodels.regression.linear_model import GLS
+
+            self.model = GLS(Y, X, missing='drop').fit()
+        else:
+            self.model = self._retrieve_detrend(detrend=self.model)
+            if self.model in self.need_positive:
+                self.trnd_trans = PositiveShift(
+                    log=False, center_one=True, squared=False
+                )
+                Y = pd.DataFrame(self.trnd_trans.fit_transform(df)).values
+            X = X.reshape((-1, 1))
+            self.model.fit(X, Y)
         self.shape = df.shape
         return self
 
@@ -127,11 +211,18 @@ class Detrend(object):
             df = df.astype(float)
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
-        # formerly X = df.index.astype( int ).values
         X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
-        # from statsmodels.tools import add_constant
-        # X = add_constant(X, has_constant='add')
-        df = df.astype(float) - self.model.predict(X)
+        if self.model != "GLS":
+            X = X.reshape((-1, 1))
+        # df = df.astype(float) - self.model.predict(X)
+        if self.model in self.need_positive:
+            temp = pd.DataFrame(
+                self.model.predict(X), index=df.index, columns=df.columns
+            )
+            temp = self.trnd_trans.inverse_transform(temp)
+            df = df - temp
+        else:
+            df = df - self.model.predict(X)
         return df
 
     def inverse_transform(self, df):
@@ -145,8 +236,15 @@ class Detrend(object):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
         X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
-        # from statsmodels.tools import add_constant
-        # X = add_constant(X, has_constant='add')
+        if self.model != "GLS":
+            X = X.reshape((-1, 1))
+        if self.model in self.need_positive:
+            temp = pd.DataFrame(
+                self.model.predict(X), index=df.index, columns=df.columns
+            )
+            df = df + self.trnd_trans.inverse_transform(temp)
+        else:
+            df = df + self.model.predict(X)
         df = df.astype(float) + self.model.predict(X)
         return df
 
@@ -336,6 +434,7 @@ class PositiveShift(object):
     Args:
         log (bool): whether to include a log transform.
         center_one (bool): whether to shift to 1 instead of 0.
+        squared (bool): whether to square (**2) values after shift.
     """
 
     def __init__(self, log: bool = False, center_one: bool = True, squared=False):
@@ -397,10 +496,15 @@ class PositiveShift(object):
 
 
 class IntermittentOccurrence(object):
-    """Intermittent inspired binning predicts probability of not median."""
+    """Intermittent inspired binning predicts probability of not center.
 
-    def __init__(self):
+    Args:
+        center (str): one of "mean", "median", "midhinge"
+    """
+
+    def __init__(self, center: str = "median"):
         self.name = 'IntermittentOccurrence'
+        self.center = center
 
     def fit(self, df):
         """Fits shift interval.
@@ -408,9 +512,16 @@ class IntermittentOccurrence(object):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        self.df_med = df.median(axis=0)
+        if self.center == "mean":
+            self.df_med = df.mean(axis=0)
+        elif self.center == "midhinge":
+            self.df_med = (df.quantile(0.75, axis=0) + df.quantile(0.25, axis=0)) / 2
+        else:
+            self.df_med = df.median(axis=0, skipna=True)
         self.upper_mean = df[df > self.df_med].mean(axis=0) - self.df_med
         self.lower_mean = df[df < self.df_med].mean(axis=0) - self.df_med
+        self.lower_mean.fillna(0, inplace=True)
+        self.upper_mean.fillna(0, inplace=True)
         return self
 
     def fit_transform(self, df):
@@ -423,7 +534,7 @@ class IntermittentOccurrence(object):
         return self.transform(df)
 
     def transform(self, df):
-        """Return detrended data.
+        """0 if Median. 1 if > Median, -1 if less.
 
         Args:
             df (pandas.DataFrame): input dataframe
@@ -929,37 +1040,256 @@ class CumSumTransformer(object):
             return df.tail(df_len)
 
 
-class EmptyTransformer(object):
+class ClipOutliers(object):
+    """PURGE THE OUTLIERS."""
+
+    def __init__(self, std_threshold: float = 4):
+        self.name = 'ClipOutliers'
+        self.std_threshold = std_threshold
+
     def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.df_std = df.std(axis=0, skipna=True)
+        self.df_mean = df.mean(axis=0, skipna=True)
         return self
 
     def transform(self, df):
-        return df
+        """Return changed data.
 
-    def inverse_transform(self, df):
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        lower = self.df_mean - (self.df_std * self.std_threshold)
+        upper = self.df_mean + (self.df_std * self.std_threshold)
+        df2 = df.clip(lower=lower, upper=upper, axis=1)
+        return df2
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
         return df
 
     def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+
+class Discretize(object):
+    """Round/convert data to bins.
+
+    Args:
+        discretization (str): method of binning to apply
+            None - no discretization
+            'center' - values are rounded to center value of each bin
+            'lower' - values are rounded to lower range of closest bin
+            'upper' - values are rounded up to upper edge of closest bin
+            'sklearn-quantile', 'sklearn-uniform', 'sklearn-kmeans' - sklearn kbins discretizer
+        n_bins (int): number of bins to group data into.
+    """
+
+    def __init__(self, discretization: str = "center", n_bins: int = 10):
+        self.name = 'Discretize'
+        self.discretization = discretization
+        self.n_bins = n_bins
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.discretization not in [None, 'None']:
+            self.df_index = df.index
+            self.df_colnames = df.columns
+            if self.discretization in [
+                'sklearn-quantile',
+                'sklearn-uniform',
+                'sklearn-kmeans',
+            ]:
+                from sklearn.preprocessing import KBinsDiscretizer
+
+                self.kbins_discretizer = KBinsDiscretizer(
+                    n_bins=self.n_bins,
+                    encode='ordinal',
+                    strategy=self.discretization.split('-')[1],
+                )
+                df = pd.DataFrame(self.kbins_discretizer.fit_transform(df))
+                df.index = self.df_index
+                df.columns = self.df_colnames
+                self.bin_min = df.min(axis=0)
+                self.bin_max = df.max(axis=0)
+            else:
+                steps = 1 / self.n_bins
+                quantiles = np.arange(0, 1 + steps, steps)
+                bins = np.nanquantile(df, quantiles, axis=0, keepdims=True)
+                if self.discretization == 'center':
+                    bins = np.cumsum(bins, dtype=float, axis=0)
+                    bins[2:] = bins[2:] - bins[:-2]
+                    bins = bins[2 - 1 :] / 2
+                elif self.discretization == 'lower':
+                    bins = np.delete(bins, (-1), axis=0)
+                elif self.discretization == 'upper':
+                    bins = np.delete(bins, (0), axis=0)
+                self.bins = bins
+                binned = (np.abs(df.values - self.bins)).argmin(axis=0)
+                indices = np.indices(binned.shape)[1]
+                bins_reshaped = self.bins.reshape((self.n_bins, len(df.columns)))
+                df = pd.DataFrame(
+                    bins_reshaped[binned, indices],
+                    index=self.df_index,
+                    columns=self.df_colnames,
+                )
         return df
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.discretization not in [None, 'None']:
+            if self.discretization in [
+                'sklearn-quantile',
+                'sklearn-uniform',
+                'sklearn-kmeans',
+            ]:
+                df = pd.DataFrame(self.kbins_discretizer.transform(df))
+                df.index = self.df_index
+                df.columns = self.df_colnames
+            else:
+                binned = (np.abs(df.values - self.bins)).argmin(axis=0)
+                indices = np.indices(binned.shape)[1]
+                bins_reshaped = self.bins.reshape((self.n_bins, df.shape[1]))
+                df = pd.DataFrame(
+                    bins_reshaped[binned, indices],
+                    index=self.df_index,
+                    columns=self.df_colnames,
+                )
+        return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+
+        if self.discretization in [
+            'sklearn-quantile',
+            'sklearn-uniform',
+            'sklearn-kmeans',
+        ]:
+            df_index = df.index
+            df_colnames = df.columns9
+            df = df.clip(upper=self.bin_max, lower=self.bin_min, axis=1)
+            df = df.astype(int).clip(lower=0, upper=(self.n_bins - 1))
+            df = pd.DataFrame(self.kbins_discretizer.inverse_transform(df))
+            df.index = df_index
+            df.columns = df_colnames
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+
+class CenterLastValue(EmptyTransformer):
+    """Scale all data relative to the last value(s) of the series.
+
+    Args:
+        rows (int): number of rows to average from most recent data
+    """
+
+    def __init__(self, rows: int = 1):
+        self.name = 'CenterLastValue'
+        self.rows = rows
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.center = df.tail(self.rows).mean()
+        self.center = self.center.replace(0, np.nan)
+        if self.center.isnull().any():
+            surrogate = df.replace(0, np.nan).median().fillna(1)
+            self.center = self.center.fillna(surrogate)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        df = df / self.center
+        return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        df = df * self.center
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
 
 
 trans_dict = {
     'None': EmptyTransformer(),
     None: EmptyTransformer(),
     'RollingMean10': RollingMeanTransformer(window=10),
-    'Detrend': Detrend(),
+    'Detrend': Detrend(model="GLS"),
     'DifferencedTransformer': DifferencedTransformer(),
     'PctChangeTransformer': PctChangeTransformer(),
     'SinTrend': SinTrend(),
     'PositiveShift': PositiveShift(squared=True),
     'Log': PositiveShift(log=True),
-    'IntermittentOccurrence': IntermittentOccurrence(),
+    'IntermittentOccurrence': IntermittentOccurrence(center="mean"),
     'CumSumTransformer': CumSumTransformer(),
     'SeasonalDifference7': SeasonalDifference(lag_1=7, method='LastValue'),
     'SeasonalDifference12': SeasonalDifference(lag_1=12, method='Mean'),
     'SeasonalDifference28': SeasonalDifference(lag_1=28, method='Mean'),
     'bkfilter': StatsmodelsFilter(method='bkfilter'),
     'cffilter': StatsmodelsFilter(method='cffilter'),
+    "ClipOutliers": ClipOutliers(std_threshold=4),
+    "Discretize": Discretize(discretization="center", n_bins=10),
+    "CenterLastValue": CenterLastValue(rows=3),
     'DatepartRegression': DatepartRegressionTransformer(
         regression_model={
             "model": 'DecisionTree',
@@ -1329,8 +1659,8 @@ class GeneralTransformer(object):
         self.transformer = self._retrieve_transformer(
             transformation=self.transformation, df=df
         )
-        self.transformer = self.transformer.fit(df)
-        df = pd.DataFrame(self.transformer.transform(df))
+        # self.transformer = self.transformer.fit(df)
+        df = pd.DataFrame(self.transformer.fit_transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
@@ -1341,8 +1671,8 @@ class GeneralTransformer(object):
             param=self.transformation_param,
             df=df,
         )
-        self.second_transformer = self.second_transformer.fit(df)
-        df = pd.DataFrame(self.second_transformer.transform(df))
+        # self.second_transformer = self.second_transformer.fit(df)
+        df = pd.DataFrame(self.second_transformer.fit_transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
@@ -1351,8 +1681,7 @@ class GeneralTransformer(object):
             self.model = self._retrieve_detrend(detrend=self.detrend)
             if self.detrend in self.need_positive:
                 self.trnd_trans = self._retrieve_transformer("PositiveShift")
-                self.trnd_trans.fit(df)
-                Y = pd.DataFrame(self.trnd_trans.transform(df)).values
+                Y = pd.DataFrame(self.trnd_trans.fit_transform(df)).values
             else:
                 Y = df.values
             X = (
@@ -1382,8 +1711,8 @@ class GeneralTransformer(object):
             param=self.transformation_param2,
             df=df,
         )
-        self.third_transformer = self.third_transformer.fit(df)
-        df = pd.DataFrame(self.third_transformer.transform(df))
+        # self.third_transformer = self.third_transformer.fit(df)
+        df = pd.DataFrame(self.third_transformer.fit_transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)
@@ -1394,8 +1723,8 @@ class GeneralTransformer(object):
             param=self.transformation_param,
             df=df,
         )
-        self.fourth_transformer = self.fourth_transformer.fit(df)
-        df = pd.DataFrame(self.fourth_transformer.transform(df))
+        # self.fourth_transformer = self.fourth_transformer.fit(df)
+        df = pd.DataFrame(self.fourth_transformer.fit_transform(df))
         df.index = self.df_index
         df.columns = self.df_colnames
         df = df.replace([np.inf, -np.inf], 0).fillna(0)

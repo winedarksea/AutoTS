@@ -343,7 +343,7 @@ def ModelMonster(
             model = ETS(
                 frequency=frequency,
                 prediction_interval=prediction_interval,
-                damped=parameters['damped'],
+                damped_trend=parameters['damped_trend'],
                 trend=parameters['trend'],
                 seasonal=parameters['seasonal'],
                 seasonal_periods=parameters['seasonal_periods'],
@@ -453,6 +453,7 @@ def ModelMonster(
                 holiday_country=holiday_country,
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
             )
         else:
             model = UnobservedComponents(
@@ -462,6 +463,7 @@ def ModelMonster(
                 regression_type=parameters['regression_type'],
                 random_seed=random_seed,
                 verbose=verbose,
+                n_jobs=n_jobs,
                 level=parameters['level'],
                 trend=parameters['trend'],
                 cycle=parameters['cycle'],
@@ -861,8 +863,8 @@ def ModelPrediction(
         grouping_ids=grouping_ids,
         reconciliation=reconciliation,
         coerce_integer=coerce_integer,
-    ).fit(df_train)
-    df_train_transformed = transformer_object.transform(df_train)
+    )
+    df_train_transformed = transformer_object._fit(df_train)
 
     # slice the context, ie shorten the amount of data available.
     if transformation_dict['context_slicer'] not in [None, 'None']:

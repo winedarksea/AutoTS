@@ -15,7 +15,7 @@ AutoTS works in the following way at present:
 * The best model in validation is selected as best_model and used in the `.predict()` method to generate forecasts.
 
 ### A simple example
-```
+```python
 # also: _hourly, _daily, _weekly, or _yearly
 from autots.datasets import load_monthly
 
@@ -81,7 +81,7 @@ Here weather data is included - winter and road construction being the major inf
 
 Also seen in use here is the `model_list`. 
 
-```
+```python
 from autots import AutoTS
 from autots.datasets import load_hourly
 
@@ -122,7 +122,7 @@ forecasts_df = prediction.forecast
 ```
 
 Probabilistic forecasts are *available* for all models, but in many cases are just data-based estimates in lieu of model estimates, so be careful. 
-```
+```python
 upper_forecasts_df = prediction.upper_forecast
 lower_forecasts_df = prediction.lower_forecast
 ```
@@ -139,7 +139,7 @@ Many models can be reverse engineered with (relative) simplicity outside of Auto
 There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a `.csv` or `.json` file, then on next run only those models will be tried. 
 This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve. 
 One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.
-```
+```python
 # after fitting an AutoTS model
 example_filename = "example_export.csv"  # .csv/.json
 model.export_template(example_filename, models='best',
@@ -157,7 +157,7 @@ print("Overwrite template is: {}".format(str(model.initial_template)))
 There are a number of available metrics, all combined together into a 'Score' which evaluates the best model. The 'Score' that compares models can easily be adjusted by passing through custom metric weights dictionary. 
 Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers. 
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series. 
-```
+```python
 metric_weighting = {
 	'smape_weighting' : 10,
 	'mae_weighting' : 1,
@@ -189,15 +189,16 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 ## Installation and Dependency Versioning
 `pip install autots`
 ### Requirements:
-	Python >= 3.5
+	Python >= 3.6
 	numpy
 	pandas
-	sklearn 	>= 0.20.0 (ColumnTransformer)
+	sklearn 	>= 0.20.0
 				>= 0.23.0 (PoissonReg)
 	statsmodels
 
 Of these, numpy and pandas are critical. 
 Limited functionality should exist without scikit-learn. 
+	* Sklearn needed for categorical to numeric, some detrends/transformers, horizontal generalization, numerous models
 Full functionality should be maintained without statsmodels, albeit with fewer available models. 
 
 `pip install autots['additional']`
@@ -217,16 +218,17 @@ Full functionality should be maintained without statsmodels, albeit with fewer a
 	tsfresh
 
 ### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
-Download Anaconda or Miniconda.
+If you are on an Intel CPU, download Anaconda or Miniconda. For AMD/ARM/etc use a venv environment and pip which will use OpenBLAS. 
+Intel MKL is included with `anaconda` and offers significant performance gain for Intel CPUs. Use of the Intel conda channel sometimes is necessary. 
 
 (install Visual Studio if on Windows for C compilers)
 
-If you have an Nvidia GPU, download NVIDIA CUDA and CuDNN. 
-Intel MKL is included with `anaconda` and offers significant performance gain for Intel CPUs.
-You can check if your system is using mkl with `numpy.show_config()`. 
-If you are on an AMD CPU, you do **not** want to be using MKL, OpenBLAS is better. 
-On Linux ARM-based systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster compilations.  
-```
+If you have an Nvidia GPU and plan to use the GPU-accelerated models, download NVIDIA CUDA and CuDNN. 
+
+You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_config()`. Generally recommended that you double-check this after installing new packages to make sure you haven't broken the LINPACK connection. 
+
+On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster/more stable compilations.  
+```shell
 conda create -n timeseries python=3.8
 conda activate timeseries
 
@@ -234,16 +236,27 @@ conda activate timeseries
 conda install anaconda
 # elsewise: 
 conda install numpy scipy
-conda install -c conda-forge scikit-learn
-pip install statsmodels
+conda install scikit-learn   # -c conda-forge is sometimes a version ahead of main channel
+pip install statsmodels     # pip is sometimes a version ahead of main conda channel
 
-# check the mxnet documentation for various flavors of mxnet available
-pip install mxnet
-pip install gluonts
+pip install mxnet     # check the mxnet documentation for more install options
+pip install gluonts   # sometimes the dependency versioning for gluonts can be picky
+pip install lightgbm
 conda update anaconda
-conda install -c conda-forge fbprophet
+pip install fbprophet  # try running a second time if it fails on the first try
 pip install tensorflow
 pip install tensorflow-probability
+```
+#### Intel conda channel installation
+```shell
+# create the environment. Intelpy compatability is often a version or two behind latest py
+conda create -n intelpy -c intel python=3.7 intelpython3_full
+activate intelpy
+
+# install additional packages as desired
+conda install -c intel statsmodels
+
+# also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html
 ```
 
 ## Caveats and Advice
@@ -302,7 +315,7 @@ Some models will support a more limited range of frequencies.
 |  GLS                    | statsmodels  |                         |               |                 |       | True         |              |               |
 |  GLM                    | statsmodels  |                         |               |     joblib      |       |              |              | True          |
 |  ETS                    | statsmodels  |                         |               |     joblib      |       |              |              |               |
-|  UnobservedComponents   | statsmodels  |                         |               |                 |       |              |              | True          |
+|  UnobservedComponents   | statsmodels  |                         |               |     joblib      |       |              |              | True          |
 |  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  VARMAX                 | statsmodels  |                         |    True       |                 |       | True         |              |               |
 |  DynamicFactor          | statsmodels  |                         |    True       |                 |       | True         |              | True          |
