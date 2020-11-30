@@ -157,7 +157,7 @@ print("Overwrite template is: {}".format(str(model.initial_template)))
 There are a number of available metrics, all combined together into a 'Score' which evaluates the best model. The 'Score' that compares models can easily be adjusted by passing through custom metric weights dictionary. 
 Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers. 
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series. 
-```
+```python
 metric_weighting = {
 	'smape_weighting' : 10,
 	'mae_weighting' : 1,
@@ -189,10 +189,10 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 ## Installation and Dependency Versioning
 `pip install autots`
 ### Requirements:
-	Python >= 3.5
+	Python >= 3.6
 	numpy
 	pandas
-	sklearn 	>= 0.20.0 (ColumnTransformer)
+	sklearn 	>= 0.20.0
 				>= 0.23.0 (PoissonReg)
 	statsmodels
 
@@ -218,16 +218,17 @@ Full functionality should be maintained without statsmodels, albeit with fewer a
 	tsfresh
 
 ### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
-Download Anaconda or Miniconda.
+If you are on an Intel CPU, download Anaconda or Miniconda. For AMD/ARM/etc use a venv environment and pip which will use OpenBLAS. 
+Intel MKL is included with `anaconda` and offers significant performance gain for Intel CPUs. Use of the Intel conda channel sometimes is necessary. 
 
 (install Visual Studio if on Windows for C compilers)
 
-If you have an Nvidia GPU, download NVIDIA CUDA and CuDNN. 
-Intel MKL is included with `anaconda` and offers significant performance gain for Intel CPUs.
-You can check if your system is using mkl with `numpy.show_config()`. 
-If you are on an AMD CPU, you do **not** want to be using MKL, OpenBLAS is better. 
-On Linux ARM-based systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster compilations.  
-```
+If you have an Nvidia GPU and plan to use the GPU-accelerated models, download NVIDIA CUDA and CuDNN. 
+
+You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_config()`. Generally recommended that you double-check this after installing new packages to make sure you haven't broken the LINPACK connection. 
+
+On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster/more stable compilations.  
+```shell
 conda create -n timeseries python=3.8
 conda activate timeseries
 
@@ -235,17 +236,27 @@ conda activate timeseries
 conda install anaconda
 # elsewise: 
 conda install numpy scipy
-conda install -c conda-forge scikit-learn
-pip install statsmodels
+conda install scikit-learn   # -c conda-forge is sometimes a version ahead of main channel
+pip install statsmodels     # pip is sometimes a version ahead of main conda channel
 
-# check the mxnet documentation for various flavors of mxnet available
-pip install mxnet
-pip install gluonts
+pip install mxnet     # check the mxnet documentation for more install options
+pip install gluonts   # sometimes the dependency versioning for gluonts can be picky
 pip install lightgbm
 conda update anaconda
 pip install fbprophet  # try running a second time if it fails on the first try
 pip install tensorflow
 pip install tensorflow-probability
+```
+#### Intel conda channel installation
+```shell
+# create the environment. Intelpy compatability is often a version or two behind latest py
+conda create -n intelpy -c intel python=3.7 intelpython3_full
+activate intelpy
+
+# install additional packages as desired
+conda install -c intel statsmodels
+
+# also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html
 ```
 
 ## Caveats and Advice

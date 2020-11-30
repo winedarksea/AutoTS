@@ -5,7 +5,7 @@ AutoTS
 
 Features:
 
-- Twenty available model classes, with tens of thousands of possible hyperparameter configurations
+- Twenty-two available model classes, with tens of thousands of possible hyperparameter configurations
 - Finds optimal time series models by genetic programming
 - Handles univariate and multivariate/parallel time series
 
@@ -17,7 +17,7 @@ Installation
    pip install autots
 
 
-Requirements: Python 3.5+, numpy, pandas, and scikit-learn.
+Requirements: Python 3.6+, numpy, pandas, and scikit-learn.
 
 Getting Started
 ===================

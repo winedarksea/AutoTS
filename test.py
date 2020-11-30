@@ -54,7 +54,7 @@ model_list = [
     'ETS',
     'FBProphet',
     # 'RollingRegression',
-    'GluonTS',
+    # 'GluonTS',
     'UnobservedComponents',
     'DatepartRegression',
     # 'VAR',
