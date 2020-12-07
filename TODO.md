@@ -226,3 +226,4 @@ Tensorflow GPU backend may crash on occasion.
 	* depth of recombination is?
 	* add to "all" transformer dict
 	* add to no_shared if so, in auto_model.py
+	* oddities_list for those with forecast/original transform difference
