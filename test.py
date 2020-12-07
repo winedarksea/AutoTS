@@ -17,7 +17,7 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 example_filename = "example_export2.csv"  # .csv/.json
 forecast_length = 12
 long = False
-df = load_weekly(long=long)
+df = load_monthly(long=long)
 n_jobs = 'auto'
 generations = 2
 

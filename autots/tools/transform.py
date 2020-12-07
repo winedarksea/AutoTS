@@ -1,7 +1,7 @@
 """Preprocessing data methods."""
 import numpy as np
 import pandas as pd
-from autots.tools.impute import FillNA
+from autots.tools.impute import FillNA, df_interpolate
 
 
 class EmptyTransformer(object):
@@ -1041,11 +1041,23 @@ class CumSumTransformer(object):
 
 
 class ClipOutliers(object):
-    """PURGE THE OUTLIERS."""
+    """PURGE THE OUTLIERS.
+    
+    Args:
+        method (str): "clip" or "remove"
+        std_threshold (float): number of std devs from mean to call an outlier
+        fillna (str): fillna method to use per tools.impute.FillNA
+    """
 
-    def __init__(self, std_threshold: float = 4):
+    def __init__(self,
+                 method: str = "clip",
+                 std_threshold: float = 4,
+                 fillna: str = None
+                 ):
         self.name = 'ClipOutliers'
+        self.method = method
         self.std_threshold = std_threshold
+        self.fillna = fillna
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -1063,10 +1075,137 @@ class ClipOutliers(object):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        lower = self.df_mean - (self.df_std * self.std_threshold)
-        upper = self.df_mean + (self.df_std * self.std_threshold)
-        df2 = df.clip(lower=lower, upper=upper, axis=1)
+        if self.method == "remove":
+            df2 = df[np.abs(df - self.df_mean) <= (self.std_threshold * self.df_std)]
+        else:
+            lower = self.df_mean - (self.df_std * self.std_threshold)
+            upper = self.df_mean + (self.df_std * self.std_threshold)
+            df2 = df.clip(lower=lower, upper=upper, axis=1)
+
+        if self.fillna is not None:
+            df2 = FillNA(df2, method=self.fillna, window=10)
         return df2
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+
+class Round(object):
+    """Round all values. Convert into Integers if decimal <= 0.
+    
+    Inverse_transform will not undo the transformation!
+    
+    Args:
+        method (str): only "middle", in future potentially up/ceiling floor/down
+        decimals (int): number of decimal places to round to.
+        on_transform (bool): perform rounding on transformation
+        on_inverse (bool): perform rounding on inverse transform
+    """
+
+    def __init__(self,
+                 method: str = "middle",
+                 decimals: int = 0,
+                 on_transform: bool = False,
+                 on_inverse: bool = True, 
+                 **kwargs,
+                 ):
+        self.name = 'Round'
+        self.method = method
+        self.decimals = decimals
+        self.on_transform = on_transform
+        self.on_inverse = on_inverse
+
+        self.force_int = False
+        if decimals <= 0:
+            self.force_int = True
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.on_transform:
+            df = df.round(decimals=self.decimals)
+            if self.force_int:
+                df = df.astype(int)
+        return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.on_inverse:
+            df = df.round(decimals=self.decimals)
+            if self.force_int:
+                df = df.astype(int)
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+
+class Slice(object):
+    """Take the .tail() of the data returning only most recent values.
+    
+    Inverse_transform will not undo the transformation!
+    
+    Args:
+        method (str): only "middle", in future potentially up/ceiling floor/down
+    """
+
+    def __init__(self,
+                 method: str = "middle",
+                 **kwargs,
+                 ):
+        self.name = 'Slice'
+        self.method = method
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -1099,7 +1238,7 @@ class Discretize(object):
         n_bins (int): number of bins to group data into.
     """
 
-    def __init__(self, discretization: str = "center", n_bins: int = 10):
+    def __init__(self, discretization: str = "center", n_bins: int = 10, **kwargs):
         self.name = 'Discretize'
         self.discretization = discretization
         self.n_bins = n_bins
@@ -1225,7 +1364,7 @@ class CenterLastValue(EmptyTransformer):
         rows (int): number of rows to average from most recent data
     """
 
-    def __init__(self, rows: int = 1):
+    def __init__(self, rows: int = 1, **kwargs):
         self.name = 'CenterLastValue'
         self.rows = rows
 
@@ -1290,6 +1429,7 @@ trans_dict = {
     "ClipOutliers": ClipOutliers(std_threshold=4),
     "Discretize": Discretize(discretization="center", n_bins=10),
     "CenterLastValue": CenterLastValue(rows=3),
+    "Round": Round(),
     'DatepartRegression': DatepartRegressionTransformer(
         regression_model={
             "model": 'DecisionTree',
@@ -1638,7 +1778,7 @@ class GeneralTransformer(object):
             else:
                 n_groups = 3
             self.hier = hierarchial(
-                n_groups=3,
+                n_groups=n_groups,
                 grouping_method=self.grouping,
                 grouping_ids=self.grouping_ids,
                 reconciliation=self.reconciliation,
@@ -2015,11 +2155,15 @@ def RandomTransform():
         'DatepartRegression',
         'DatepartRegressionElasticNet',
         'DatepartRegressionLtd',
+        "ClipOutliers",
+        "Discretize",
+        "CenterLastValue",
+        "Round",
     ]
     first_transformer_prob = [
         0.25,
         0.05,
-        0.15,
+        0.11,
         0.1,
         0.05,
         0.04,
@@ -2034,6 +2178,10 @@ def RandomTransform():
         0.01,
         0.02,
         0.02,
+        0.01,
+        0.01,
+        0.01,
+        0.01,
         0.01,
         0.01,
         0.01,
@@ -2073,6 +2221,10 @@ def RandomTransform():
         0.01,
         0.01,
         0.01,
+        0,
+        0,
+        0,
+        0,
     ]
     outlier_method_choice = np.random.choice(
         a=[None, 'clip', 'remove'], size=1, p=[0.5, 0.3, 0.2]
@@ -2100,10 +2252,14 @@ def RandomTransform():
             'zero',
             'ffill mean biased',
             'median',
+            None,
+            "interpolate"
         ],
         size=1,
-        p=[0.2, 0.2, 0.1999, 0.0001, 0.1, 0.1, 0.1, 0.1],
+        p=[0.2, 0.1, 0.1998, 0.0001, 0.1, 0.1, 0.1, 0.1, 0.0001, 0.1],
     ).item()
+    if na_choice == "interpolate":
+        na_choice = np.random.choice(df_interpolate, size=1).item()
     transformation_choice = np.random.choice(
         a=transformer_list, size=1, p=first_transformer_prob
     ).item()

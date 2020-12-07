@@ -15,7 +15,8 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-
+* Round transformer to replace coerce_integer, ClipOutliers expanded,
+* pd.df Interpolate added to FillNA options
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -206,12 +207,10 @@ Tensorflow GPU backend may crash on occasion.
 	
 
 #### New Transformations:
-	Sklearn iterative imputer 
 	lag and beta to DifferencedTransformer to make it more of an AR process
 	Weighted moving average
 	Symbolic aggregate approximation (SAX) and (PAA) (basically these are just binning)
 	Shared discretization (all series get same shared binning)
-	Last Value Centering
 	More sophisticated fillna methods
 	Constraint as a transformation parameter
 
@@ -221,3 +220,9 @@ Tensorflow GPU backend may crash on occasion.
 	* add to recombination_approved if so, in auto_model.py
 	* add to no_shared if so, in auto_model.py
 	* add to model table in extended_tutorial.md
+
+## New Transformer Checklist:
+	* Make sure that if it modifies the size (more/fewer columns or rows) it returns pd.DataFrame with proper index/columns
+	* depth of recombination is?
+	* add to "all" transformer dict
+	* add to no_shared if so, in auto_model.py

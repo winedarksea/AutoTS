@@ -49,13 +49,13 @@ def fake_date_fill(df, back_method: str = 'slice'):
     Return a dataframe where na values are removed and values shifted forward.
 
     Warnings:
-        Thus, values will likely have incorrect timestamps!
+        Thus, values will have incorrect timestamps!
 
     Args:
         back_method (str): how to deal with tails left by shifting NaN
             - 'bfill' -back fill the last value
             - 'slice' - drop any rows with any na
-            - 'keepNA' - keep the lagging na
+            - 'keepna' - keep the lagging na
     """
     df_index = df.index.to_series().copy()
     df = df.sort_index(ascending=False)
@@ -70,12 +70,16 @@ def fake_date_fill(df, back_method: str = 'slice'):
     elif back_method == 'slice':
         df = df.dropna(how='any', axis=0)
         return df
-    elif back_method == 'keepNA':
+    elif back_method == 'keepna':
         return df
     else:
         print('back_method not recognized in fake_date_fill')
         return df
 
+df_interpolate = ['linear', 'time', 'pad', 'nearest', 'zero', 'slinear',
+                      'quadratic', 'cubic', 'spline', 'barycentric',
+                      'polynomial', 'krogh', 'piecewise_polynomial', 'spline',
+                      'pchip', 'akima', 'cubicspline', 'from_derivatives']
 
 def FillNA(df, method: str = 'ffill', window: int = 10):
     """Fill NA values using different methods.
@@ -89,37 +93,39 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
             'rolling mean' - fill with last n (window) values
             'ffill mean biased' - simple avg of ffill and mean
             'fake date' - shifts forward data over nan, thus values will have incorrect timestamps
+            also most `method` values of pd.DataFrame.interpolate()
         window (int): length of rolling windows for filling na, for rolling methods
     """
+
     if method == 'zero':
         df = fill_zero(df)
         return df
 
-    if method == 'ffill':
+    elif method == 'ffill':
         df = fill_forward(df)
         return df
 
-    if method == 'mean':
+    elif method == 'mean':
         df = fill_mean(df)
         return df
 
-    if method == 'median':
+    elif method == 'median':
         df = fill_median(df)
         return df
 
-    if method == 'rolling mean':
+    elif method == 'rolling mean':
         df = rolling_mean(df, window=window)
         return df
 
-    if method == 'ffill mean biased':
+    elif method == 'ffill mean biased':
         df = biased_ffill(df)
         return df
 
-    if method == 'fake date':
+    elif method == 'fake date':
         df = fake_date_fill(df, back_method='slice')
         return df
 
-    if method == 'IterativeImputer':
+    elif method == 'IterativeImputer':
         cols = df.columns
         indx = df.index
         try:
@@ -134,8 +140,12 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
             df.index = indx
             df.columns = cols
         return df
+    
+    elif method in df_interpolate:
+        df = df.interpolate(method=method, order=5).fillna(method='bfill')
+        return df
 
-    if method is None:
+    elif method is None:
         return df
 
     else:
