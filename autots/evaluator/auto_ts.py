@@ -50,7 +50,8 @@ class AutoTS(object):
         metric_weighting (dict): weights to assign to metrics, effecting how the ranking score is generated.
         drop_most_recent (int): option to drop n most recent data points. Useful, say, for monthly sales data where the current (unfinished) month is included.
         drop_data_older_than_periods (int): take only the n most recent timestamps
-        model_list (list): list of names of model objects to use
+        model_list (list): str alias or list of names of model objects to use
+        transformer_list (list): list of transformers to use, or dict of transformer:probability.
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
             0.99 is forced to 100% validation. 1 evaluates just 1 model.
@@ -102,6 +103,7 @@ class AutoTS(object):
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
         model_list: str = 'default',
+        transformer_list: dict = {},
         num_validations: int = 2,
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
@@ -127,6 +129,7 @@ class AutoTS(object):
         self.drop_most_recent = drop_most_recent
         self.drop_data_older_than_periods = drop_data_older_than_periods
         self.model_list = model_list
+        self.transformer_list = transformer_list
         self.num_validations = abs(int(num_validations))
         self.models_to_validate = models_to_validate
         self.max_per_model_class = max_per_model_class
@@ -252,7 +255,7 @@ class AutoTS(object):
         # generate template to begin with
         initial_template = str(initial_template).lower()
         if initial_template == 'random':
-            self.initial_template = RandomTemplate(50, model_list=self.model_list)
+            self.initial_template = RandomTemplate(50, model_list=self.model_list, transformer_list=self.transformer_list)
         elif initial_template == 'general':
             from autots.templates.general import general_template
 
@@ -260,7 +263,7 @@ class AutoTS(object):
         elif initial_template == 'general+random':
             from autots.templates.general import general_template
 
-            random_template = RandomTemplate(40, model_list=self.model_list)
+            random_template = RandomTemplate(40, model_list=self.model_list, transformer_list=self.transformer_list)
             self.initial_template = pd.concat(
                 [general_template, random_template], axis=0
             ).drop_duplicates()
@@ -268,7 +271,7 @@ class AutoTS(object):
             self.initial_template = initial_template
         else:
             print("Input initial_template unrecognized. Using Random.")
-            self.initial_template = RandomTemplate(50)
+            self.initial_template = RandomTemplate(50, model_list=self.model_list, transformer_list=self.transformer_list)
 
         # remove models not in given model list
         self.initial_template = self.initial_template[
@@ -558,6 +561,7 @@ class AutoTS(object):
                 max_per_model_class=5,
                 top_n=top_n,
                 template_cols=template_cols,
+                transformer_list=self.transformer_list
             )
             submitted_parameters = pd.concat(
                 [submitted_parameters, new_template],

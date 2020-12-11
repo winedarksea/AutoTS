@@ -96,34 +96,31 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
             also most `method` values of pd.DataFrame.interpolate()
         window (int): length of rolling windows for filling na, for rolling methods
     """
+    method = str(method).replace(" ", "_")
 
     if method == 'zero':
-        df = fill_zero(df)
-        return df
+        return fill_zero(df)
 
     elif method == 'ffill':
-        df = fill_forward(df)
-        return df
+        return fill_forward(df)
 
     elif method == 'mean':
-        df = fill_mean(df)
-        return df
+        return fill_mean(df)
 
     elif method == 'median':
-        df = fill_median(df)
-        return df
+        return fill_median(df)
 
-    elif method == 'rolling mean':
-        df = rolling_mean(df, window=window)
-        return df
+    elif method == 'rolling_mean':
+        return rolling_mean(df, window=window)
+    
+    elif method == 'rolling_mean_24':
+        return rolling_mean(df, window=24)
 
-    elif method == 'ffill mean biased':
-        df = biased_ffill(df)
-        return df
+    elif method == 'ffill_mean_biased':
+        return biased_ffill(df)
 
-    elif method == 'fake date':
-        df = fake_date_fill(df, back_method='slice')
-        return df
+    elif method == 'fake_date':
+        return fake_date_fill(df, back_method='slice')
 
     elif method == 'IterativeImputer':
         cols = df.columns
@@ -142,8 +139,7 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         return df
     
     elif method in df_interpolate:
-        df = df.interpolate(method=method, order=5).fillna(method='bfill')
-        return df
+        return df.interpolate(method=method, order=5).fillna(method='bfill')
 
     elif method is None:
         return df

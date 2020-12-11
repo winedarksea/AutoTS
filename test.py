@@ -63,6 +63,8 @@ model_list = [
     # 'VECM',
     # 'WindowRegression',
 ]
+
+transformer_list = [None]
 # model_list = 'superfast'
 # model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
@@ -88,6 +90,7 @@ model = AutoTS(
     num_validations=2,
     validation_method='backwards',
     model_list=model_list,
+    transformer_list=transformer_list,
     initial_template='Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.3,
@@ -152,6 +155,7 @@ model = AutoTS(
     num_validations=2,
     validation_method='backwards',
     model_list=model_list,
+    transformer_list=transformer_list,
     initial_template='General+Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.1,

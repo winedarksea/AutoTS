@@ -16,8 +16,10 @@
 
 # Latest
 * Round transformer to replace coerce_integer, ClipOutliers expanded, Slice to replace context_slicer
-* pd.df Interpolate added to FillNA options
+* pd.df Interpolate methods added to FillNA options
 * slight improvement to printed progress messages
+* transformer_list (also takes a dict of value:probability) allows adjusting which transformers are created in new generations.
+	* this does not apply to transformers loaded from imported templates
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

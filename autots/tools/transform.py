@@ -2185,6 +2185,9 @@ transformer_dict = {
 
 def RandomTransform(transformer_list: dict = transformer_dict, transformer_max_depth: int = 6,):
     """Return a dict of randomly choosen transformation selections."""
+    if not transformer_list or transformer_list == "all":
+        transformer_list = transformer_dict
+
     if isinstance(transformer_list, dict):
         first_transformer_prob = list(transformer_list.values())
         transformer_list = [*transformer_list]
@@ -2201,7 +2204,7 @@ def RandomTransform(transformer_list: dict = transformer_dict, transformer_max_d
     transformation_choice = np.random.choice(
         a=transformer_list, size=1, p=first_transformer_prob
     ).item()
-    
+
     outlier_method_choice = np.random.choice(
         a=[None, 'clip', 'remove'], size=1, p=[0.5, 0.3, 0.2]
     ).item()
@@ -2221,18 +2224,19 @@ def RandomTransform(transformer_list: dict = transformer_dict, transformer_max_d
     na_choice = np.random.choice(
         a=[
             'ffill',
-            'fake date',
-            'rolling mean',
+            'fake_date',
+            'rolling_mean',
+            'rolling_mean_24',
             'IterativeImputer',
             'mean',
             'zero',
-            'ffill mean biased',
+            'ffill_mean_biased',
             'median',
             None,
             "interpolate"
         ],
         size=1,
-        p=[0.2, 0.1, 0.1998, 0.0001, 0.1, 0.1, 0.1, 0.1, 0.0001, 0.1],
+        p=[0.2, 0.1, 0.1, 0.0998, 0.0001, 0.1, 0.1, 0.1, 0.1, 0.0001, 0.1],
     ).item()
     if na_choice == "interpolate":
         na_choice = np.random.choice(df_interpolate, size=1).item()

@@ -1464,6 +1464,7 @@ def RandomTemplate(
         'VECM',
         'DynamicFactor',
     ],
+    transformer_list: dict = {},
 ):
     """
     Returns a template dataframe of randomly generated transformations, models, and hyperparameters.
@@ -1477,7 +1478,7 @@ def RandomTemplate(
     while len(template.index) < n:
         model_str = np.random.choice(model_list)
         param_dict = ModelMonster(model_str).get_new_params()
-        trans_dict = RandomTransform()
+        trans_dict = RandomTransform(transformer_list=transformer_list)
         row = pd.DataFrame(
             {
                 'Model': model_str,
@@ -1558,7 +1559,7 @@ def trans_dict_recomb(dict_array):
     return c
 
 
-def _trans_dicts(current_ops, best=None, n: int = 5):
+def _trans_dicts(current_ops, best=None, n: int = 5, transformer_list: dict = {}):
     fir = json.loads(current_ops.iloc[0, :]['TransformationParameters'])
     cur_len = current_ops.shape[0]
     if cur_len > 1:
@@ -1567,10 +1568,10 @@ def _trans_dicts(current_ops, best=None, n: int = 5):
         r_id = np.random.randint(1, top_r)
         sec = json.loads(current_ops.iloc[r_id, :]['TransformationParameters'])
     else:
-        sec = RandomTransform()
-    r = RandomTransform()
+        sec = RandomTransform(transformer_list=transformer_list)
+    r = RandomTransform(transformer_list=transformer_list)
     if best is None:
-        best = RandomTransform()
+        best = RandomTransform(transformer_list=transformer_list)
     arr = [fir, sec, best, r]
     trans_dicts = [json.dumps(trans_dict_recomb(arr)) for _ in range(n)]
     return trans_dicts
@@ -1590,6 +1591,7 @@ def NewGeneticTemplate(
         'TransformationParameters',
         'Ensemble',
     ],
+    transformer_list: dict = {},
 ):
     """
     Return new template given old template with model accuracies.
@@ -1643,7 +1645,7 @@ def NewGeneticTemplate(
         if model_type in no_params:
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 3
-            trans_dicts = _trans_dicts(current_ops, best=best, n=n)
+            trans_dicts = _trans_dicts(current_ops, best=best, n=n, transformer_list=transformer_list)
             model_param = current_ops.iloc[0, :]['ModelParameters']
             new_row = pd.DataFrame(
                 {
@@ -1657,7 +1659,7 @@ def NewGeneticTemplate(
         elif model_type in recombination_approved:
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 4
-            trans_dicts = _trans_dicts(current_ops, best=best, n=n)
+            trans_dicts = _trans_dicts(current_ops, best=best, n=n, transformer_list=transformer_list)
             # select the best model of this type
             fir = json.loads(current_ops.iloc[0, :]['ModelParameters'])
             cur_len = current_ops.shape[0]
@@ -1692,7 +1694,7 @@ def NewGeneticTemplate(
         else:
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 3
-            trans_dicts = _trans_dicts(current_ops, best=best, n=n)
+            trans_dicts = _trans_dicts(current_ops, best=best, n=n, transformer_list=transformer_list)
             model_dicts = list()
             for _ in range(n):
                 c = ModelMonster(model_type).get_new_params()
