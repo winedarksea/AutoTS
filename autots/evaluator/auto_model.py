@@ -10,88 +10,32 @@ from autots.tools.transform import RandomTransform
 
 def seasonal_int(include_one: bool = False):
     """Generate a random integer of typical seasonalities."""
-    if include_one:
-        lag = np.random.choice(
-            a=[
-                'random_int',
-                1,
-                2,
-                4,
-                7,
-                10,
-                12,
-                24,
-                28,
-                60,
-                96,
-                168,
-                364,
-                1440,
-                420,
-                52,
-                84,
-            ],
-            size=1,
-            p=[
-                0.10,
-                0.05,
-                0.05,
-                0.05,
-                0.15,
-                0.01,
-                0.1,
-                0.1,
-                0.1,
-                0.1,
-                0.04,
-                0.01,
-                0.1,
-                0.01,
-                0.01,
-                0.01,
-                0.01,
-            ],
-        ).item()
-    else:
-        lag = np.random.choice(
-            a=[
-                'random_int',
-                2,
-                4,
-                7,
-                10,
-                12,
-                24,
-                28,
-                60,
-                96,
-                168,
-                364,
-                1440,
-                420,
-                52,
-                84,
-            ],
-            size=1,
-            p=[
-                0.15,
-                0.05,
-                0.05,
-                0.15,
-                0.01,
-                0.1,
-                0.1,
-                0.1,
-                0.1,
-                0.04,
-                0.01,
-                0.1,
-                0.01,
-                0.01,
-                0.01,
-                0.01,
-            ],
-        ).item()
+    prob_dict = {
+        'random_int': 0.1,
+        1: 0.05,
+        2: 0.05,
+        4: 0.05,
+        7: 0.15,
+        10: 0.01,
+        12: 0.1,
+        24: 0.1,
+        28: 0.1,
+        60: 0.1,
+        96: 0.04,
+        168: 0.01,
+        364: 0.1,
+        1440: 0.01,
+        420: 0.01,
+        52: 0.01,
+        84: 0.01,
+        }
+    lag = np.random.choice(
+        a=list(prob_dict.keys()),
+        p=list(prob_dict.values()),
+        size=1,
+    ).item()
+    if not include_one and str(lag) == '1':
+        lag = 'random_int'
     if lag == 'random_int':
         lag = np.random.randint(2, 100, size=1).item()
     return int(lag)
@@ -1018,7 +962,13 @@ def unpack_ensemble_models(
     keep_ensemble: bool = True,
     recursive: bool = False,
 ):
-    """Take ensemble models from template and add as new rows."""
+    """Take ensemble models from template and add as new rows.
+    
+    Args:
+        template (pd.DataFrame): AutoTS template containing template_cols
+        keep_ensemble (bool): if False, drop row containing original ensemble
+        recursive (bool): if True, unnest ensembles of ensembles...
+    """
     ensemble_template = pd.DataFrame()
     template['Ensemble'] = np.where(
         ((template['Model'] == 'Ensemble') & (template['Ensemble'] < 1)),
@@ -1245,6 +1195,8 @@ def TemplateWizard(
     verbose: int = 0,
     n_jobs: int = None,
     validation_round: int = 0,
+    current_generation: int = 0,
+    max_generations: int = 0,
     model_interrupt: bool = False,
     grouping_ids=None,
     template_cols: list = [
@@ -1277,6 +1229,8 @@ def TemplateWizard(
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
         validation_round (int): int passed to record current validation.
+        current_generation (int): info to pass to print statements
+        max_generations (int): info to pass to print statements
         model_interrupt (bool): if True, keyboard interrupts are caught and only break current model eval.
         template_cols (list): column names of columns used as model template
 
@@ -1299,24 +1253,27 @@ def TemplateWizard(
             current_template = pd.DataFrame(row).transpose()
             template_result.model_count += 1
             if verbose > 0:
+                if validation_round >= 1:
+                    base_print = "Model Number: {} of {} with model {} for Validation {}".format(
+                        str(template_result.model_count),
+                        template.shape[0],
+                        model_str,
+                        str(validation_round),)
+                else:
+                    base_print = "Model Number: {} with model {} in generation {} of {}".format(
+                        str(template_result.model_count),
+                        model_str,
+                        str(current_generation),
+                        str(max_generations),)
                 if verbose > 1:
                     print(
-                        "Model Number: {} with model {} in Validation {} with params {} and transformations {}".format(
-                            str(template_result.model_count),
-                            model_str,
-                            str(validation_round),
+                        base_print + " with params {} and transformations {}".format(
                             json.dumps(parameter_dict),
                             json.dumps(transformation_dict),
                         )
                     )
                 else:
-                    print(
-                        "Model Number: {} with model {} in Validation {} ".format(
-                            str(template_result.model_count),
-                            model_str,
-                            str(validation_round),
-                        )
-                    )
+                    print(base_print)
             df_forecast = PredictWitch(
                 current_template,
                 df_train=df_train,

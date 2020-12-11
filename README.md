@@ -4,7 +4,7 @@
 
 **Forecasting Model Selection for Multiple Time Series**
 
-Package for forecasting with open-source time series implementations.
+AutoML for forecasting with open-source time series implementations.
 
 For other time series needs, check out the list [here](https://github.com/MaxBenChrist/awesome_time_series_in_python).
 

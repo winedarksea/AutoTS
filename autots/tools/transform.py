@@ -2183,44 +2183,25 @@ transformer_dict = {
     }
 
 
-def RandomTransform():
+def RandomTransform(transformer_list: dict = transformer_dict, transformer_max_depth: int = 6,):
     """Return a dict of randomly choosen transformation selections."""
-    transformer_list = [*transformer_dict]
-    first_transformer_prob = list(transformer_dict.values())
-    fourth_transformer_prob = [
-        0.3,
-        0.05,
-        0.05,
-        0.05,
-        0.05,
-        0.1,
-        0.05,
-        0.02,
-        0.01,
-        0.04,
-        0.02,
-        0.02,
-        0.1,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0,
-        0,
-        0,
-        0,
-        0,
-    ]
+    if isinstance(transformer_list, dict):
+        first_transformer_prob = list(transformer_list.values())
+        transformer_list = [*transformer_list]
+        xsx = sum(first_transformer_prob)
+        if xsx != 1:
+            first_transformer_prob = [float(i)/xsx for i in first_transformer_prob]
+    elif isinstance(transformer_list, list):
+        trs_len = len(transformer_list)
+        first_transformer_prob = [1/trs_len] * trs_len
+    # or just try/except where if prob list fails, then pass no prob
+
+    fourth_transformer_prob = first_transformer_prob
+
+    transformation_choice = np.random.choice(
+        a=transformer_list, size=1, p=first_transformer_prob
+    ).item()
+    
     outlier_method_choice = np.random.choice(
         a=[None, 'clip', 'remove'], size=1, p=[0.5, 0.3, 0.2]
     ).item()
@@ -2255,9 +2236,7 @@ def RandomTransform():
     ).item()
     if na_choice == "interpolate":
         na_choice = np.random.choice(df_interpolate, size=1).item()
-    transformation_choice = np.random.choice(
-        a=transformer_list, size=1, p=first_transformer_prob
-    ).item()
+
     detrend_choice = np.random.choice(
         a=[None, 'Linear', 'Poisson', 'Tweedie', 'Gamma', 'RANSAC', 'ARD'],
         size=1,

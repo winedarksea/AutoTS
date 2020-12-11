@@ -79,7 +79,7 @@ def fake_date_fill(df, back_method: str = 'slice'):
 df_interpolate = ['linear', 'time', 'pad', 'nearest', 'zero', 'slinear',
                       'quadratic', 'cubic', 'spline', 'barycentric',
                       'polynomial', 'krogh', 'piecewise_polynomial', 'spline',
-                      'pchip', 'akima', 'cubicspline', 'from_derivatives']
+                      'pchip', 'akima', 'from_derivatives']  # 'cubicspline'
 
 def FillNA(df, method: str = 'ffill', window: int = 10):
     """Fill NA values using different methods.

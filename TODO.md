@@ -15,8 +15,9 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* Round transformer to replace coerce_integer, ClipOutliers expanded,
+* Round transformer to replace coerce_integer, ClipOutliers expanded, Slice to replace context_slicer
 * pd.df Interpolate added to FillNA options
+* slight improvement to printed progress messages
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

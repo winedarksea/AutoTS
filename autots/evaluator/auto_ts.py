@@ -527,6 +527,7 @@ class AutoTS(object):
             grouping_ids=self.grouping_ids,
             verbose=verbose,
             n_jobs=self.n_jobs,
+            max_generations=self.max_generations,
         )
         model_count = template_result.model_count
 
@@ -545,7 +546,7 @@ class AutoTS(object):
         while current_generation < self.max_generations:
             current_generation += 1
             if verbose > 0:
-                print("New Generation: {}".format(current_generation))
+                print("New Generation: {} of {}".format(current_generation, self.max_generations))
             cutoff_multiple = 5 if current_generation < 10 else 3
             top_n = len(self.model_list) * cutoff_multiple
             new_template = NewGeneticTemplate(
@@ -587,6 +588,8 @@ class AutoTS(object):
                 random_seed=random_seed,
                 verbose=verbose,
                 n_jobs=self.n_jobs,
+                current_generation=current_generation,
+                max_generations=self.max_generations,
             )
             model_count = template_result.model_count
 
@@ -809,7 +812,7 @@ class AutoTS(object):
                     df_train=val_df_train,
                     df_test=val_df_test,
                     weights=current_weights,
-                    model_count=model_count,
+                    # model_count=model_count,
                     forecast_length=forecast_length,
                     frequency=frequency,
                     prediction_interval=prediction_interval,

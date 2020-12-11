@@ -255,6 +255,8 @@ activate intelpy
 
 # install additional packages as desired
 conda install -c intel statsmodels
+conda install -c intel lightgbm
+conda install -c intel tensorflow
 
 # also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html
 ```

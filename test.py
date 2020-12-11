@@ -19,12 +19,14 @@ forecast_length = 12
 long = False
 df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 2
+generations = 3
 
+"""
 df = pd.read_csv("m5_sample.gz")
 df['datetime'] = pd.DatetimeIndex(df['datetime'])
 df = df.set_index("datetime", drop=True)
 df = df.iloc[:, 0:100]
+"""
 # df = df[df['series_id'] == 'GS10']
 
 weights_hourly = {'traffic_volume': 10}
@@ -52,7 +54,7 @@ model_list = [
     'SeasonalNaive',
     'GLM',
     'ETS',
-    'FBProphet',
+    # 'FBProphet',
     # 'RollingRegression',
     # 'GluonTS',
     'UnobservedComponents',
