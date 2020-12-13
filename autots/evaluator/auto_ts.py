@@ -51,7 +51,7 @@ class AutoTS(object):
         drop_most_recent (int): option to drop n most recent data points. Useful, say, for monthly sales data where the current (unfinished) month is included.
         drop_data_older_than_periods (int): take only the n most recent timestamps
         model_list (list): str alias or list of names of model objects to use
-        transformer_list (list): list of transformers to use, or dict of transformer:probability.
+        transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
             0.99 is forced to 100% validation. 1 evaluates just 1 model.
