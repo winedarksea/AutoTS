@@ -17,14 +17,16 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 example_filename = "example_export2.csv"  # .csv/.json
 forecast_length = 12
 long = False
-df = load_weekly(long=long)
+df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 2
+generations = 3
 
+"""
 df = pd.read_csv("m5_sample.gz")
 df['datetime'] = pd.DatetimeIndex(df['datetime'])
 df = df.set_index("datetime", drop=True)
 df = df.iloc[:, 0:100]
+"""
 # df = df[df['series_id'] == 'GS10']
 
 weights_hourly = {'traffic_volume': 10}
@@ -52,7 +54,7 @@ model_list = [
     'SeasonalNaive',
     'GLM',
     'ETS',
-    'FBProphet',
+    # 'FBProphet',
     # 'RollingRegression',
     # 'GluonTS',
     'UnobservedComponents',
@@ -61,6 +63,8 @@ model_list = [
     # 'VECM',
     # 'WindowRegression',
 ]
+
+transformer_list = {}  # [None]
 # model_list = 'superfast'
 # model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
@@ -86,6 +90,7 @@ model = AutoTS(
     num_validations=2,
     validation_method='backwards',
     model_list=model_list,
+    transformer_list=transformer_list,
     initial_template='Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.3,
@@ -150,6 +155,7 @@ model = AutoTS(
     num_validations=2,
     validation_method='backwards',
     model_list=model_list,
+    transformer_list=transformer_list,
     initial_template='General+Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.1,

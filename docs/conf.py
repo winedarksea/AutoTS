@@ -25,7 +25,7 @@ author = 'Colin Catlin'
 # import AutoTS
 # from  AutoTS import __version__
 # release = __version__
-release = "0.2.7"
+release = "0.2.8"
 
 # -- General configuration ---------------------------------------------------
 
@@ -33,7 +33,8 @@ release = "0.2.7"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 # Add napoleon to the extensions list
-extensions = ['sphinx.ext.napoleon', 'sphinx.ext.autodoc', 'm2r', 'sphinx.ext.githubpages']
+# 'recommonmark',
+extensions = ['sphinx.ext.napoleon', 'sphinx.ext.autodoc', 'm2r', 'sphinx.ext.githubpages',]
 
 source_suffix = ['.rst', '.md']
 

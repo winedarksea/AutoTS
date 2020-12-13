@@ -15,12 +15,11 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* 2x speedup in transformation runtime by removing double transformation
-* joblib parallel to UnobservedComponents
-* ClipOutliers transformer, Discretize Transformer, CenterLastValue - added in prep for transform template change
-* bug fix on IntermittentOccurence
-* minor changes to ETS, now replaces single series failure with zero fill, damped now is damped_trend
-* 0.3.0 is expected to feature a breaking change to model templates in the transformation/pre-processing
+* Round transformer to replace coerce_integer, ClipOutliers expanded, Slice to replace context_slicer
+* pd.df Interpolate methods added to FillNA options, " " to "_" in names, rolling_mean_24
+* slight improvement to printed progress messages
+* transformer_list (also takes a dict of value:probability) allows adjusting which transformers are created in new generations.
+	* this does not apply to transformers loaded from imported templates
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -211,12 +210,10 @@ Tensorflow GPU backend may crash on occasion.
 	
 
 #### New Transformations:
-	Sklearn iterative imputer 
 	lag and beta to DifferencedTransformer to make it more of an AR process
 	Weighted moving average
 	Symbolic aggregate approximation (SAX) and (PAA) (basically these are just binning)
 	Shared discretization (all series get same shared binning)
-	Last Value Centering
 	More sophisticated fillna methods
 	Constraint as a transformation parameter
 
@@ -226,3 +223,10 @@ Tensorflow GPU backend may crash on occasion.
 	* add to recombination_approved if so, in auto_model.py
 	* add to no_shared if so, in auto_model.py
 	* add to model table in extended_tutorial.md
+
+## New Transformer Checklist:
+	* Make sure that if it modifies the size (more/fewer columns or rows) it returns pd.DataFrame with proper index/columns
+	* depth of recombination is?
+	* add to "all" transformer dict
+	* add to no_shared if so, in auto_model.py
+	* oddities_list for those with forecast/original transform difference

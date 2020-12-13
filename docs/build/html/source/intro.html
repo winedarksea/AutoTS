@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Intro &#8212; AutoTS 0.2.7 documentation</title>
+    <title>Intro &#8212; AutoTS 0.2.8 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -38,23 +38,36 @@
 <div class="section" id="autots">
 <h1>AutoTS<a class="headerlink" href="#autots" title="Permalink to this headline">¶</a></h1>
 <p><span class="raw-html-m2r"><img src="/img/autots_logo.png" width="400" height="184" title="AutoTS Logo"></span></p>
-<p><strong>Model Selection for Multiple Time Series</strong></p>
-<p>Simple package for comparing and predicting with open-source time series implementations.</p>
+<p><strong>Forecasting Model Selection for Multiple Time Series</strong></p>
+<p>AutoML for forecasting with open-source time series implementations.</p>
 <p>For other time series needs, check out the list <a class="reference external" href="https://github.com/MaxBenChrist/awesome_time_series_in_python">here</a>.</p>
 <div class="section" id="features">
 <h2>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
-<li><p>Twenty available model classes, with tens of thousands of possible hyperparameter configurations</p></li>
-<li><p>Finds optimal time series models by genetic programming</p></li>
+<li><p>Finds optimal time series forecasting model and data transformations by genetic programming optimization</p></li>
 <li><p>Handles univariate and multivariate/parallel time series</p></li>
-<li><p>Point and probabilistic forecasts</p></li>
+<li><p>Point and probabilistic upper/lower bound forecasts for all models</p></li>
+<li><p>Twenty-two available model classes, with tens of thousands of possible hyperparameter configurations</p>
+<ul>
+<li><p>Includes naive, statistical, machine learning, and deep learning models</p></li>
+<li><p>Multiprocessing for univariate models for scalability on multivariate datasets</p></li>
+<li><p>Ability to add external regressors</p></li>
+</ul>
+</li>
+<li><p>Over thirty time series specific data transformations</p>
+<ul>
 <li><p>Ability to handle messy data by learning optimal NaN imputation and outlier removal</p></li>
-<li><p>Ability to add external known-in-advance regressor</p></li>
-<li><p>Allows automatic ensembling of best models</p></li>
+</ul>
+</li>
+<li><p>Allows automatic ensembling of best models</p>
+<ul>
+<li><p>‘horizontal’ ensembling on multivariate series - learning the best model for each series</p></li>
+</ul>
+</li>
 <li><p>Multiple cross validation options</p></li>
 <li><p>Subsetting and weighting to improve search on many multivariate series</p></li>
 <li><p>Option to use one or a combination of metrics for model selection</p></li>
-<li><p>Import and export of templates allowing greater user customization</p></li>
+<li><p>Import and export of model templates for deployment and greater user customization</p></li>
 </ul>
 </div>
 <div class="section" id="installation">

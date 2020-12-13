@@ -1,13 +1,13 @@
 """Preprocessing data methods."""
 import numpy as np
 import pandas as pd
-from autots.tools.impute import FillNA
+from autots.tools.impute import FillNA, df_interpolate
 
 
 class EmptyTransformer(object):
     """Base transformer returning raw data."""
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.name = 'EmptyTransformer'
 
     def _fit(self, df):
@@ -94,6 +94,9 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
             'ForecastLength' - return dataframe equal to length of forecast
             '2ForecastLength' - return dataframe equal to twice length of forecast
                 (also takes 4, 6, 8, 10 in addition to 2)
+            'n' - any integer length to slice by
+            '-n' - full length less this amount
+            "0.n" - this percent of the full data
     """
     if method in [None, "None"]:
         return df
@@ -105,8 +108,14 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
         return df.tail(len_int * forecast_length)
     elif method == 'HalfMax':
         return df.tail(int(len(df.index) / 2))
-    elif str(method).isdigit():
-        return df.tail(int(method))
+    elif str(method).replace("-", "").replace(".", "").isdigit():
+        method = float(method)
+        if method >= 1:
+            return df.tail(int(method))
+        elif method > -1:
+            return df.tail(int(df.shape[0] * abs(method)))
+        else:
+            return df.tail(int(df.shape[0] + method))
     else:
         print("Context Slicer Method not recognized")
         return df
@@ -115,7 +124,7 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
 class Detrend(object):
     """Remove a linear trend from the data."""
 
-    def __init__(self, model: str = 'GLS'):
+    def __init__(self, model: str = 'GLS', **kwargs):
         self.name = 'Detrend'
         self.model = model
         self.need_positive = ['Poisson', 'Gamma', 'Tweedie']
@@ -252,7 +261,7 @@ class Detrend(object):
 class StatsmodelsFilter(object):
     """Irreversible filters."""
 
-    def __init__(self, method: str = 'bkfilter'):
+    def __init__(self, method: str = 'bkfilter', **kwargs):
         self.method = method
 
     def fit(self, df):
@@ -309,7 +318,7 @@ class StatsmodelsFilter(object):
 class SinTrend(object):
     """Modelling sin."""
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.name = 'SinTrend'
 
     def fit_sin(self, tt, yy):
@@ -437,7 +446,9 @@ class PositiveShift(object):
         squared (bool): whether to square (**2) values after shift.
     """
 
-    def __init__(self, log: bool = False, center_one: bool = True, squared=False):
+    def __init__(
+        self, log: bool = False, center_one: bool = True, squared=False, **kwargs
+    ):
         self.name = 'PositiveShift'
         self.log = log
         self.center_one = center_one
@@ -502,7 +513,7 @@ class IntermittentOccurrence(object):
         center (str): one of "mean", "median", "midhinge"
     """
 
-    def __init__(self, center: str = "median"):
+    def __init__(self, center: str = "median", **kwargs):
         self.name = 'IntermittentOccurrence'
         self.center = center
 
@@ -570,7 +581,7 @@ class RollingMeanTransformer(object):
         window (int): number of periods to take mean over
     """
 
-    def __init__(self, window: int = 10, fixed: bool = False):
+    def __init__(self, window: int = 10, fixed: bool = False, **kwargs):
         self.window = window
         self.fixed = fixed
 
@@ -695,7 +706,7 @@ class SeasonalDifference(object):
         method (str): 'LastValue', 'Mean', 'Median' to construct seasonality
     """
 
-    def __init__(self, lag_1: int = 7, method: str = 'LastValue'):
+    def __init__(self, lag_1: int = 7, method: str = 'LastValue', **kwargs):
         self.lag_1 = 7  # abs(int(lag_1))
         self.method = method
 
@@ -778,6 +789,7 @@ class DatepartRegressionTransformer(object):
             "model_params": {"max_depth": 5, "min_samples_split": 2},
         },
         datepart_method: str = 'expanded',
+        **kwargs,
     ):
         self.name = 'DatepartRegressionTransformer'
         self.regression_model = regression_model
@@ -866,7 +878,7 @@ class DifferencedTransformer(object):
         lag (int): number of periods to shift (not implemented, default = 1)
     """
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.lag = 1
         self.beta = 1
 
@@ -927,7 +939,7 @@ class PctChangeTransformer(object):
         inverse_transform can only be applied to the original series, or an immediately following forecast
     """
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.name = 'PctChangeTransformer'
 
     def fit(self, df):
@@ -992,6 +1004,9 @@ class CumSumTransformer(object):
         inverse_transform can only be applied to the original series, or an immediately following forecast
     """
 
+    def __init__(self, **kwargs):
+        self.name = 'CumSumTransformer'
+
     def fit(self, df):
         """Fits.
 
@@ -1041,11 +1056,25 @@ class CumSumTransformer(object):
 
 
 class ClipOutliers(object):
-    """PURGE THE OUTLIERS."""
+    """PURGE THE OUTLIERS.
 
-    def __init__(self, std_threshold: float = 4):
+    Args:
+        method (str): "clip" or "remove"
+        std_threshold (float): number of std devs from mean to call an outlier
+        fillna (str): fillna method to use per tools.impute.FillNA
+    """
+
+    def __init__(
+        self,
+        method: str = "clip",
+        std_threshold: float = 4,
+        fillna: str = None,
+        **kwargs,
+    ):
         self.name = 'ClipOutliers'
+        self.method = method
         self.std_threshold = std_threshold
+        self.fillna = fillna
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -1063,10 +1092,147 @@ class ClipOutliers(object):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        lower = self.df_mean - (self.df_std * self.std_threshold)
-        upper = self.df_mean + (self.df_std * self.std_threshold)
-        df2 = df.clip(lower=lower, upper=upper, axis=1)
+        if self.method == "remove":
+            df2 = df[np.abs(df - self.df_mean) <= (self.std_threshold * self.df_std)]
+        else:
+            lower = self.df_mean - (self.df_std * self.std_threshold)
+            upper = self.df_mean + (self.df_std * self.std_threshold)
+            df2 = df.clip(lower=lower, upper=upper, axis=1)
+
+        if self.fillna is not None:
+            df2 = FillNA(df2, method=self.fillna, window=10)
         return df2
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+
+class Round(object):
+    """Round all values. Convert into Integers if decimal <= 0.
+
+    Inverse_transform will not undo the transformation!
+
+    Args:
+        method (str): only "middle", in future potentially up/ceiling floor/down
+        decimals (int): number of decimal places to round to.
+        on_transform (bool): perform rounding on transformation
+        on_inverse (bool): perform rounding on inverse transform
+    """
+
+    def __init__(
+        self,
+        method: str = "middle",
+        decimals: int = 0,
+        on_transform: bool = False,
+        on_inverse: bool = True,
+        **kwargs,
+    ):
+        self.name = 'Round'
+        self.method = method
+        self.decimals = decimals
+        self.on_transform = on_transform
+        self.on_inverse = on_inverse
+
+        self.force_int = False
+        if decimals <= 0:
+            self.force_int = True
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.on_transform:
+            df = df.round(decimals=self.decimals)
+            if self.force_int:
+                df = df.astype(int)
+        return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.on_inverse:
+            df = df.round(decimals=self.decimals)
+            if self.force_int:
+                df = df.astype(int)
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+
+class Slice(object):
+    """Take the .tail() of the data returning only most recent values.
+
+    Inverse_transform will not undo the transformation!
+
+    Args:
+        method (str): only "middle", in future potentially up/ceiling floor/down
+        forecast_length (int): forecast horizon, scales some slice windows
+    """
+
+    def __init__(
+        self,
+        method: str = "100",
+        forecast_length: int = 30,
+        **kwargs,
+    ):
+        self.name = 'Slice'
+        self.method = method
+        self.forecast_length = forecast_length
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        df = simple_context_slicer(
+            df,
+            method=self.method,
+            forecast_length=self.forecast_length,
+        )
+        return df
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -1099,7 +1265,7 @@ class Discretize(object):
         n_bins (int): number of bins to group data into.
     """
 
-    def __init__(self, discretization: str = "center", n_bins: int = 10):
+    def __init__(self, discretization: str = "center", n_bins: int = 10, **kwargs):
         self.name = 'Discretize'
         self.discretization = discretization
         self.n_bins = n_bins
@@ -1225,7 +1391,7 @@ class CenterLastValue(EmptyTransformer):
         rows (int): number of rows to average from most recent data
     """
 
-    def __init__(self, rows: int = 1):
+    def __init__(self, rows: int = 1, **kwargs):
         self.name = 'CenterLastValue'
         self.rows = rows
 
@@ -1290,6 +1456,8 @@ trans_dict = {
     "ClipOutliers": ClipOutliers(std_threshold=4),
     "Discretize": Discretize(discretization="center", n_bins=10),
     "CenterLastValue": CenterLastValue(rows=3),
+    "Round": Round(),
+    "Slice": Slice(),
     'DatepartRegression': DatepartRegressionTransformer(
         regression_model={
             "model": 'DecisionTree',
@@ -1638,7 +1806,7 @@ class GeneralTransformer(object):
             else:
                 n_groups = 3
             self.hier = hierarchial(
-                n_groups=3,
+                n_groups=n_groups,
                 grouping_method=self.grouping,
                 grouping_ids=self.grouping_ids,
                 reconciliation=self.reconciliation,
@@ -1985,95 +2153,67 @@ class GeneralTransformer(object):
         return df
 
 
-def RandomTransform():
+transformer_dict = {
+    None: 0.25,
+    'MinMaxScaler': 0.05,
+    'PowerTransformer': 0.11,
+    'QuantileTransformer': 0.1,
+    'MaxAbsScaler': 0.05,
+    'StandardScaler': 0.04,
+    'RobustScaler': 0.05,
+    'PCA': 0.01,
+    'FastICA': 0.01,
+    'Detrend': 0.01,
+    'RollingMean10': 0.01,
+    'RollingMean100thN': 0.01,
+    'DifferencedTransformer': 0.1,
+    'SinTrend': 0.01,
+    'PctChangeTransformer': 0.01,
+    'CumSumTransformer': 0.02,
+    'PositiveShift': 0.02,
+    'Log': 0.01,
+    'IntermittentOccurrence': 0.01,
+    'SeasonalDifference7': 0.01,
+    'SeasonalDifference12': 0.01,
+    'SeasonalDifference28': 0.01,
+    'cffilter': 0.01,
+    'bkfilter': 0.01,
+    'DatepartRegression': 0.01,
+    'DatepartRegressionElasticNet': 0.01,
+    'DatepartRegressionLtd': 0.01,
+    "ClipOutliers": 0.01,
+    "Discretize": 0.01,
+    "CenterLastValue": 0.01,
+    "Round": 0.01,
+    "Slice": 0,
+}
+
+
+def RandomTransform(
+    transformer_list: dict = transformer_dict,
+    transformer_max_depth: int = 6,
+):
     """Return a dict of randomly choosen transformation selections."""
-    transformer_list = [
-        None,
-        'MinMaxScaler',
-        'PowerTransformer',
-        'QuantileTransformer',
-        'MaxAbsScaler',
-        'StandardScaler',
-        'RobustScaler',
-        'PCA',
-        'FastICA',
-        'Detrend',
-        'RollingMean10',
-        'RollingMean100thN',
-        'DifferencedTransformer',
-        'SinTrend',
-        'PctChangeTransformer',
-        'CumSumTransformer',
-        'PositiveShift',
-        'Log',
-        'IntermittentOccurrence',
-        'SeasonalDifference7',
-        'SeasonalDifference12',
-        'SeasonalDifference28',
-        'cffilter',
-        'bkfilter',
-        'DatepartRegression',
-        'DatepartRegressionElasticNet',
-        'DatepartRegressionLtd',
-    ]
-    first_transformer_prob = [
-        0.25,
-        0.05,
-        0.15,
-        0.1,
-        0.05,
-        0.04,
-        0.05,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.1,
-        0.01,
-        0.01,
-        0.02,
-        0.02,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-    ]
-    fourth_transformer_prob = [
-        0.3,
-        0.05,
-        0.05,
-        0.05,
-        0.05,
-        0.1,
-        0.05,
-        0.02,
-        0.01,
-        0.04,
-        0.02,
-        0.02,
-        0.1,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-        0.01,
-    ]
+    if not transformer_list or transformer_list == "all":
+        transformer_list = transformer_dict
+
+    if isinstance(transformer_list, dict):
+        first_transformer_prob = list(transformer_list.values())
+        transformer_list = [*transformer_list]
+        xsx = sum(first_transformer_prob)
+        if xsx != 1:
+            first_transformer_prob = [float(i) / xsx for i in first_transformer_prob]
+    elif isinstance(transformer_list, list):
+        trs_len = len(transformer_list)
+        first_transformer_prob = [1 / trs_len] * trs_len
+    # or just try/except where if prob list fails, then pass no prob
+
+    fourth_transformer_prob = first_transformer_prob
+
+    transformation_choice = np.random.choice(
+        a=transformer_list, size=1, p=first_transformer_prob
+    ).item()
+
     outlier_method_choice = np.random.choice(
         a=[None, 'clip', 'remove'], size=1, p=[0.5, 0.3, 0.2]
     ).item()
@@ -2093,20 +2233,23 @@ def RandomTransform():
     na_choice = np.random.choice(
         a=[
             'ffill',
-            'fake date',
-            'rolling mean',
+            'fake_date',
+            'rolling_mean',
+            'rolling_mean_24',
             'IterativeImputer',
             'mean',
             'zero',
-            'ffill mean biased',
+            'ffill_mean_biased',
             'median',
+            None,
+            "interpolate",
         ],
         size=1,
-        p=[0.2, 0.2, 0.1999, 0.0001, 0.1, 0.1, 0.1, 0.1],
+        p=[0.2, 0.1, 0.1, 0.0998, 0.0001, 0.1, 0.1, 0.1, 0.1, 0.0001, 0.1],
     ).item()
-    transformation_choice = np.random.choice(
-        a=transformer_list, size=1, p=first_transformer_prob
-    ).item()
+    if na_choice == "interpolate":
+        na_choice = np.random.choice(df_interpolate, size=1).item()
+
     detrend_choice = np.random.choice(
         a=[None, 'Linear', 'Poisson', 'Tweedie', 'Gamma', 'RANSAC', 'ARD'],
         size=1,

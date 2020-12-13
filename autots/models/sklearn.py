@@ -1201,9 +1201,12 @@ class WindowRegression(ModelObject):
         input_dim_choice = np.random.choice(
             ['multivariate', 'univariate'], p=[0.3, 0.7], size=1
         ).item()
-        output_dim_choice = np.random.choice(
-            ['forecast_length', '1step'], size=1
-        ).item()
+        if input_dim_choice == "multivariate":
+            output_dim_choice = "1step"
+        else:
+            output_dim_choice = np.random.choice(
+                ['forecast_length', '1step'], size=1
+            ).item()
         normalize_window_choice = np.random.choice(
             a=[True, False], size=1, p=[0.05, 0.95]
         ).item()
