@@ -64,7 +64,7 @@ model_list = [
     # 'WindowRegression',
 ]
 
-transformer_list = [None]
+transformer_list = {}  # [None]
 # model_list = 'superfast'
 # model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']

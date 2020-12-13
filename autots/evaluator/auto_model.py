@@ -28,7 +28,7 @@ def seasonal_int(include_one: bool = False):
         420: 0.01,
         52: 0.01,
         84: 0.01,
-        }
+    }
     lag = np.random.choice(
         a=list(prob_dict.keys()),
         p=list(prob_dict.values()),
@@ -963,7 +963,7 @@ def unpack_ensemble_models(
     recursive: bool = False,
 ):
     """Take ensemble models from template and add as new rows.
-    
+
     Args:
         template (pd.DataFrame): AutoTS template containing template_cols
         keep_ensemble (bool): if False, drop row containing original ensemble
@@ -1254,20 +1254,27 @@ def TemplateWizard(
             template_result.model_count += 1
             if verbose > 0:
                 if validation_round >= 1:
-                    base_print = "Model Number: {} of {} with model {} for Validation {}".format(
-                        str(template_result.model_count),
-                        template.shape[0],
-                        model_str,
-                        str(validation_round),)
+                    base_print = (
+                        "Model Number: {} of {} with model {} for Validation {}".format(
+                            str(template_result.model_count),
+                            template.shape[0],
+                            model_str,
+                            str(validation_round),
+                        )
+                    )
                 else:
-                    base_print = "Model Number: {} with model {} in generation {} of {}".format(
-                        str(template_result.model_count),
-                        model_str,
-                        str(current_generation),
-                        str(max_generations),)
+                    base_print = (
+                        "Model Number: {} with model {} in generation {} of {}".format(
+                            str(template_result.model_count),
+                            model_str,
+                            str(current_generation),
+                            str(max_generations),
+                        )
+                    )
                 if verbose > 1:
                     print(
-                        base_print + " with params {} and transformations {}".format(
+                        base_print
+                        + " with params {} and transformations {}".format(
                             json.dumps(parameter_dict),
                             json.dumps(transformation_dict),
                         )
@@ -1645,7 +1652,9 @@ def NewGeneticTemplate(
         if model_type in no_params:
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 3
-            trans_dicts = _trans_dicts(current_ops, best=best, n=n, transformer_list=transformer_list)
+            trans_dicts = _trans_dicts(
+                current_ops, best=best, n=n, transformer_list=transformer_list
+            )
             model_param = current_ops.iloc[0, :]['ModelParameters']
             new_row = pd.DataFrame(
                 {
@@ -1659,7 +1668,9 @@ def NewGeneticTemplate(
         elif model_type in recombination_approved:
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 4
-            trans_dicts = _trans_dicts(current_ops, best=best, n=n, transformer_list=transformer_list)
+            trans_dicts = _trans_dicts(
+                current_ops, best=best, n=n, transformer_list=transformer_list
+            )
             # select the best model of this type
             fir = json.loads(current_ops.iloc[0, :]['ModelParameters'])
             cur_len = current_ops.shape[0]
@@ -1694,7 +1705,9 @@ def NewGeneticTemplate(
         else:
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 3
-            trans_dicts = _trans_dicts(current_ops, best=best, n=n, transformer_list=transformer_list)
+            trans_dicts = _trans_dicts(
+                current_ops, best=best, n=n, transformer_list=transformer_list
+            )
             model_dicts = list()
             for _ in range(n):
                 c = ModelMonster(model_type).get_new_params()

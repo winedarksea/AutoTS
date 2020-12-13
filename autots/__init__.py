@@ -3,7 +3,13 @@ Automated Time Series Model Selection for Python
 
 https://github.com/winedarksea/AutoTS
 """
-from autots.datasets import load_hourly, load_daily, load_monthly, load_yearly, load_weekly
+from autots.datasets import (
+    load_hourly,
+    load_daily,
+    load_monthly,
+    load_yearly,
+    load_weekly,
+)
 
 from autots.evaluator.auto_ts import AutoTS
 from autots.tools.transform import GeneralTransformer

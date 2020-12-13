@@ -108,7 +108,7 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
         return df.tail(len_int * forecast_length)
     elif method == 'HalfMax':
         return df.tail(int(len(df.index) / 2))
-    elif str(method).replace("-","").replace(".","").isdigit():
+    elif str(method).replace("-", "").replace(".", "").isdigit():
         method = float(method)
         if method >= 1:
             return df.tail(int(method))
@@ -446,7 +446,9 @@ class PositiveShift(object):
         squared (bool): whether to square (**2) values after shift.
     """
 
-    def __init__(self, log: bool = False, center_one: bool = True, squared=False, **kwargs):
+    def __init__(
+        self, log: bool = False, center_one: bool = True, squared=False, **kwargs
+    ):
         self.name = 'PositiveShift'
         self.log = log
         self.center_one = center_one
@@ -1001,6 +1003,7 @@ class CumSumTransformer(object):
         Inverse transformed values returned will also not return as 'exactly' equals due to floating point imprecision.
         inverse_transform can only be applied to the original series, or an immediately following forecast
     """
+
     def __init__(self, **kwargs):
         self.name = 'CumSumTransformer'
 
@@ -1054,19 +1057,20 @@ class CumSumTransformer(object):
 
 class ClipOutliers(object):
     """PURGE THE OUTLIERS.
-    
+
     Args:
         method (str): "clip" or "remove"
         std_threshold (float): number of std devs from mean to call an outlier
         fillna (str): fillna method to use per tools.impute.FillNA
     """
 
-    def __init__(self,
-                 method: str = "clip",
-                 std_threshold: float = 4,
-                 fillna: str = None,
-                 **kwargs,
-                 ):
+    def __init__(
+        self,
+        method: str = "clip",
+        std_threshold: float = 4,
+        fillna: str = None,
+        **kwargs,
+    ):
         self.name = 'ClipOutliers'
         self.method = method
         self.std_threshold = std_threshold
@@ -1119,9 +1123,9 @@ class ClipOutliers(object):
 
 class Round(object):
     """Round all values. Convert into Integers if decimal <= 0.
-    
+
     Inverse_transform will not undo the transformation!
-    
+
     Args:
         method (str): only "middle", in future potentially up/ceiling floor/down
         decimals (int): number of decimal places to round to.
@@ -1129,13 +1133,14 @@ class Round(object):
         on_inverse (bool): perform rounding on inverse transform
     """
 
-    def __init__(self,
-                 method: str = "middle",
-                 decimals: int = 0,
-                 on_transform: bool = False,
-                 on_inverse: bool = True, 
-                 **kwargs,
-                 ):
+    def __init__(
+        self,
+        method: str = "middle",
+        decimals: int = 0,
+        on_transform: bool = False,
+        on_inverse: bool = True,
+        **kwargs,
+    ):
         self.name = 'Round'
         self.method = method
         self.decimals = decimals
@@ -1190,19 +1195,20 @@ class Round(object):
 
 class Slice(object):
     """Take the .tail() of the data returning only most recent values.
-    
+
     Inverse_transform will not undo the transformation!
-    
+
     Args:
         method (str): only "middle", in future potentially up/ceiling floor/down
         forecast_length (int): forecast horizon, scales some slice windows
     """
 
-    def __init__(self,
-                 method: str = "100",
-                 forecast_length: int = 30,
-                 **kwargs,
-                 ):
+    def __init__(
+        self,
+        method: str = "100",
+        forecast_length: int = 30,
+        **kwargs,
+    ):
         self.name = 'Slice'
         self.method = method
         self.forecast_length = forecast_length
@@ -2180,10 +2186,13 @@ transformer_dict = {
     "CenterLastValue": 0.01,
     "Round": 0.01,
     "Slice": 0,
-    }
+}
 
 
-def RandomTransform(transformer_list: dict = transformer_dict, transformer_max_depth: int = 6,):
+def RandomTransform(
+    transformer_list: dict = transformer_dict,
+    transformer_max_depth: int = 6,
+):
     """Return a dict of randomly choosen transformation selections."""
     if not transformer_list or transformer_list == "all":
         transformer_list = transformer_dict
@@ -2193,10 +2202,10 @@ def RandomTransform(transformer_list: dict = transformer_dict, transformer_max_d
         transformer_list = [*transformer_list]
         xsx = sum(first_transformer_prob)
         if xsx != 1:
-            first_transformer_prob = [float(i)/xsx for i in first_transformer_prob]
+            first_transformer_prob = [float(i) / xsx for i in first_transformer_prob]
     elif isinstance(transformer_list, list):
         trs_len = len(transformer_list)
-        first_transformer_prob = [1/trs_len] * trs_len
+        first_transformer_prob = [1 / trs_len] * trs_len
     # or just try/except where if prob list fails, then pass no prob
 
     fourth_transformer_prob = first_transformer_prob
@@ -2233,7 +2242,7 @@ def RandomTransform(transformer_list: dict = transformer_dict, transformer_max_d
             'ffill_mean_biased',
             'median',
             None,
-            "interpolate"
+            "interpolate",
         ],
         size=1,
         p=[0.2, 0.1, 0.1, 0.0998, 0.0001, 0.1, 0.1, 0.1, 0.1, 0.0001, 0.1],

@@ -76,10 +76,27 @@ def fake_date_fill(df, back_method: str = 'slice'):
         print('back_method not recognized in fake_date_fill')
         return df
 
-df_interpolate = ['linear', 'time', 'pad', 'nearest', 'zero', 'slinear',
-                      'quadratic', 'cubic', 'spline', 'barycentric',
-                      'polynomial', 'krogh', 'piecewise_polynomial', 'spline',
-                      'pchip', 'akima', 'from_derivatives']  # 'cubicspline'
+
+df_interpolate = [
+    'linear',
+    'time',
+    'pad',
+    'nearest',
+    'zero',
+    'slinear',
+    'quadratic',
+    'cubic',
+    'spline',
+    'barycentric',
+    'polynomial',
+    'krogh',
+    'piecewise_polynomial',
+    'spline',
+    'pchip',
+    'akima',
+    'from_derivatives',
+]  # 'cubicspline'
+
 
 def FillNA(df, method: str = 'ffill', window: int = 10):
     """Fill NA values using different methods.
@@ -112,7 +129,7 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
 
     elif method == 'rolling_mean':
         return rolling_mean(df, window=window)
-    
+
     elif method == 'rolling_mean_24':
         return rolling_mean(df, window=24)
 
@@ -137,7 +154,7 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
             df.index = indx
             df.columns = cols
         return df
-    
+
     elif method in df_interpolate:
         return df.interpolate(method=method, order=5).fillna(method='bfill')
 

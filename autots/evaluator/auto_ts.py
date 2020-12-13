@@ -255,7 +255,9 @@ class AutoTS(object):
         # generate template to begin with
         initial_template = str(initial_template).lower()
         if initial_template == 'random':
-            self.initial_template = RandomTemplate(50, model_list=self.model_list, transformer_list=self.transformer_list)
+            self.initial_template = RandomTemplate(
+                50, model_list=self.model_list, transformer_list=self.transformer_list
+            )
         elif initial_template == 'general':
             from autots.templates.general import general_template
 
@@ -263,7 +265,9 @@ class AutoTS(object):
         elif initial_template == 'general+random':
             from autots.templates.general import general_template
 
-            random_template = RandomTemplate(40, model_list=self.model_list, transformer_list=self.transformer_list)
+            random_template = RandomTemplate(
+                40, model_list=self.model_list, transformer_list=self.transformer_list
+            )
             self.initial_template = pd.concat(
                 [general_template, random_template], axis=0
             ).drop_duplicates()
@@ -271,7 +275,9 @@ class AutoTS(object):
             self.initial_template = initial_template
         else:
             print("Input initial_template unrecognized. Using Random.")
-            self.initial_template = RandomTemplate(50, model_list=self.model_list, transformer_list=self.transformer_list)
+            self.initial_template = RandomTemplate(
+                50, model_list=self.model_list, transformer_list=self.transformer_list
+            )
 
         # remove models not in given model list
         self.initial_template = self.initial_template[
@@ -549,7 +555,11 @@ class AutoTS(object):
         while current_generation < self.max_generations:
             current_generation += 1
             if verbose > 0:
-                print("New Generation: {} of {}".format(current_generation, self.max_generations))
+                print(
+                    "New Generation: {} of {}".format(
+                        current_generation, self.max_generations
+                    )
+                )
             cutoff_multiple = 5 if current_generation < 10 else 3
             top_n = len(self.model_list) * cutoff_multiple
             new_template = NewGeneticTemplate(
@@ -561,7 +571,7 @@ class AutoTS(object):
                 max_per_model_class=5,
                 top_n=top_n,
                 template_cols=template_cols,
-                transformer_list=self.transformer_list
+                transformer_list=self.transformer_list,
             )
             submitted_parameters = pd.concat(
                 [submitted_parameters, new_template],
