@@ -1,11 +1,13 @@
 """Mid-level helper functions for AutoTS."""
+import random
 import numpy as np
 import pandas as pd
 import datetime
 import json
 from hashlib import md5
 from autots.evaluator.metrics import PredictionEval
-from autots.tools.transform import RandomTransform
+from autots.tools.transform import RandomTransform, GeneralTransformer
+from itertools import zip_longest
 
 
 def seasonal_int(include_one: bool = False):
@@ -775,50 +777,9 @@ def ModelPrediction(
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
     """
     transformationStartTime = datetime.datetime.now()
-    from autots.tools.transform import GeneralTransformer
 
-    try:
-        coerce_integer = transformation_dict['coerce_integer']
-        grouping = transformation_dict['grouping']
-        if grouping == 'user' and grouping_ids is None:
-            grouping = 'kmeans5'
-            transformation_dict['grouping'] = 'kmeans5'
-        reconciliation = transformation_dict['reconciliation']
-    except Exception:
-        coerce_integer = False
-        grouping = None
-        grouping_ids = None
-        reconciliation = None
-    transformer_object = GeneralTransformer(
-        outlier_method=transformation_dict['outlier_method'],
-        outlier_threshold=transformation_dict['outlier_threshold'],
-        outlier_position=transformation_dict['outlier_position'],
-        fillna=transformation_dict['fillna'],
-        transformation=transformation_dict['transformation'],
-        detrend=transformation_dict['detrend'],
-        second_transformation=transformation_dict['second_transformation'],
-        transformation_param=transformation_dict['transformation_param'],
-        third_transformation=transformation_dict['third_transformation'],
-        transformation_param2=transformation_dict['transformation_param2'],
-        fourth_transformation=transformation_dict['fourth_transformation'],
-        discretization=transformation_dict['discretization'],
-        n_bins=transformation_dict['n_bins'],
-        grouping=grouping,
-        grouping_ids=grouping_ids,
-        reconciliation=reconciliation,
-        coerce_integer=coerce_integer,
-    )
+    transformer_object = GeneralTransformer(**transformation_dict)
     df_train_transformed = transformer_object._fit(df_train)
-
-    # slice the context, ie shorten the amount of data available.
-    if transformation_dict['context_slicer'] not in [None, 'None']:
-        from autots.tools.transform import simple_context_slicer
-
-        df_train_transformed = simple_context_slicer(
-            df_train_transformed,
-            method=transformation_dict['context_slicer'],
-            forecast_length=forecast_length,
-        )
 
     # make sure regressor has same length. This could be a problem if wrong size regressor is passed.
     if len(future_regressor_train) > 0:
@@ -1472,6 +1433,7 @@ def RandomTemplate(
         'DynamicFactor',
     ],
     transformer_list: dict = {},
+    transformer_max_depth: int = 8,
 ):
     """
     Returns a template dataframe of randomly generated transformations, models, and hyperparameters.
@@ -1485,7 +1447,10 @@ def RandomTemplate(
     while len(template.index) < n:
         model_str = np.random.choice(model_list)
         param_dict = ModelMonster(model_str).get_new_params()
-        trans_dict = RandomTransform(transformer_list=transformer_list)
+        if n % 4 == 0:
+            trans_dict = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth, traditional_order=True)
+        else:
+            trans_dict = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth)
         row = pd.DataFrame(
             {
                 'Model': model_str,
@@ -1530,7 +1495,7 @@ def dict_recombination(a: dict, b: dict):
     """Recombine two dictionaries with identical keys. Return new dict."""
     b_keys = [*b]
     key_size = int(len(b_keys) / 2) if len(b_keys) > 1 else 1
-    bs_keys = np.random.choice(b_keys, size=key_size)
+    bs_keys = random.choices(b_keys, k=key_size)
     b_prime = {k: b[k] for k in bs_keys}
     c = {**a, **b_prime}  # overwrites with B
     return c
@@ -1538,35 +1503,27 @@ def dict_recombination(a: dict, b: dict):
 
 def trans_dict_recomb(dict_array):
     """Recombine two transformation param dictionaries from array of dicts."""
-    r_sel = np.random.choice(dict_array, size=2, replace=False)
-    a = r_sel[0]
-    b = r_sel[1]
-    c = dict_recombination(a, b)
+    empty_trans = (None, {})
+    a, b = random.sample(dict_array, 2)
+    na_choice = random.sample([a, b], 1)[0]['fillna']
 
-    out_keys = ['outlier_method', 'outlier_threshold', 'outlier_position']
-    current_dict = np.random.choice([a, b], size=1).item()
-    c = {**c, **{k: current_dict[k] for k in out_keys}}
-
-    mid_trans_keys = ['second_transformation', 'transformation_param']
-    current_dict = np.random.choice([a, b], size=1).item()
-    c = {**c, **{k: current_dict[k] for k in mid_trans_keys}}
-
-    mid_trans_keys = ['third_transformation', 'transformation_param2']
-    current_dict = np.random.choice([a, b], size=1).item()
-    c = {**c, **{k: current_dict[k] for k in mid_trans_keys}}
-
-    disc_keys = ['discretization', 'n_bins']
-    current_dict = np.random.choice([a, b], size=1).item()
-    c = {**c, **{k: current_dict[k] for k in disc_keys}}
-
-    disc_keys = ['grouping', 'reconciliation']
-    current_dict = np.random.choice([a, b], size=1).item()
-    if all([x in current_dict.keys() for x in disc_keys]):
-        c = {**c, **{k: current_dict[k] for k in disc_keys}}
-    return c
+    a_result = [(a['transformations'][key], a['transformation_params'][key]) for key in sorted(a['transformations'].keys())]
+    b_result = [(b['transformations'][key], b['transformation_params'][key]) for key in sorted(b['transformations'].keys())]
+    combi = zip_longest(a_result, b_result, fillvalue=empty_trans)
+    selected = [random.choice(x) for x in combi]
+    selected = [x for x in selected if x != empty_trans]
+    if not selected:
+        selected = [empty_trans]
+    selected_vals = list(zip(*selected))
+    keys = range(len(selected))
+    return {
+        "fillna": na_choice,
+        "transformations": dict(zip(keys, selected_vals[0])), 
+        "transformation_params":  dict(zip(keys, selected_vals[1])), 
+    }
 
 
-def _trans_dicts(current_ops, best=None, n: int = 5, transformer_list: dict = {}):
+def _trans_dicts(current_ops, best=None, n: int = 5, transformer_list: dict = {}, transformer_max_depth: int = 8):
     fir = json.loads(current_ops.iloc[0, :]['TransformationParameters'])
     cur_len = current_ops.shape[0]
     if cur_len > 1:
@@ -1575,10 +1532,10 @@ def _trans_dicts(current_ops, best=None, n: int = 5, transformer_list: dict = {}
         r_id = np.random.randint(1, top_r)
         sec = json.loads(current_ops.iloc[r_id, :]['TransformationParameters'])
     else:
-        sec = RandomTransform(transformer_list=transformer_list)
-    r = RandomTransform(transformer_list=transformer_list)
+        sec = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth, traditional_order=True,)
+    r = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,)
     if best is None:
-        best = RandomTransform(transformer_list=transformer_list)
+        best = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,)
     arr = [fir, sec, best, r]
     trans_dicts = [json.dumps(trans_dict_recomb(arr)) for _ in range(n)]
     return trans_dicts
@@ -1599,6 +1556,7 @@ def NewGeneticTemplate(
         'Ensemble',
     ],
     transformer_list: dict = {},
+    transformer_max_depth: int = 8,
 ):
     """
     Return new template given old template with model accuracies.
@@ -1653,7 +1611,7 @@ def NewGeneticTemplate(
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 3
             trans_dicts = _trans_dicts(
-                current_ops, best=best, n=n, transformer_list=transformer_list
+                current_ops, best=best, n=n, transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,
             )
             model_param = current_ops.iloc[0, :]['ModelParameters']
             new_row = pd.DataFrame(
@@ -1669,7 +1627,7 @@ def NewGeneticTemplate(
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 4
             trans_dicts = _trans_dicts(
-                current_ops, best=best, n=n, transformer_list=transformer_list
+                current_ops, best=best, n=n, transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,
             )
             # select the best model of this type
             fir = json.loads(current_ops.iloc[0, :]['ModelParameters'])
@@ -1706,7 +1664,7 @@ def NewGeneticTemplate(
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 3
             trans_dicts = _trans_dicts(
-                current_ops, best=best, n=n, transformer_list=transformer_list
+                current_ops, best=best, n=n, transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,
             )
             model_dicts = list()
             for _ in range(n):

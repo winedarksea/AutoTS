@@ -15,11 +15,10 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* Round transformer to replace coerce_integer, ClipOutliers expanded, Slice to replace context_slicer
-* pd.df Interpolate methods added to FillNA options, " " to "_" in names, rolling_mean_24
-* slight improvement to printed progress messages
-* transformer_list (also takes a dict of value:probability) allows adjusting which transformers are created in new generations.
-	* this does not apply to transformers loaded from imported templates
+* breaking change to model templates: transformers structure change
+* transformer_max_depth parameter
+* bug fix in Detrend transformer
+
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

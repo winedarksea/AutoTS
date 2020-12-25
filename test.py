@@ -14,7 +14,7 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 # raise ValueError("aaargh!")
 
-example_filename = "example_export2.csv"  # .csv/.json
+example_filename = "example_export.csv"  # .csv/.json
 forecast_length = 12
 long = False
 df = load_monthly(long=long)
@@ -84,13 +84,14 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble=None,  # "simple,distance,horizontal-max",
+    ensemble="simple,distance,horizontal-max,probabilistic-max",
     constraint=2,
     max_generations=generations,
     num_validations=2,
     validation_method='backwards',
     model_list=model_list,
     transformer_list=transformer_list,
+    transformer_max_depth=4,
     initial_template='Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.3,
@@ -156,6 +157,7 @@ model = AutoTS(
     validation_method='backwards',
     model_list=model_list,
     transformer_list=transformer_list,
+    transformer_max_depth=4,
     initial_template='General+Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.1,
@@ -186,10 +188,6 @@ with joblib.parallel_backend("loky", n_jobs=n_jobs):
 print(f"With Context {elapsed_cxt}\nWithout Context {elapsed_for}")
 """
 
-print(model.best_model['Model'].iloc[0])
-print(model.best_model['ModelParameters'].iloc[0])
-print(model.best_model['TransformationParameters'].iloc[0])
-
 """
 prediction_ints = model.predict(
     future_regressor=future_regressor_forecast2d,
@@ -210,6 +208,7 @@ initial_results['FitRuntime'] = initial_results['FitRuntime'].dt.total_seconds()
 initial_results['PredictRuntime'] = initial_results['PredictRuntime'].dt.total_seconds()
 initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_seconds()
 
+print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 # import platform
 # initial_results.to_csv("bigger_speedtest" + str(platform.node()) + "_openblas.csv")

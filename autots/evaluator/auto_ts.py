@@ -52,6 +52,7 @@ class AutoTS(object):
         drop_data_older_than_periods (int): take only the n most recent timestamps
         model_list (list): str alias or list of names of model objects to use
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
+        transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
             0.99 is forced to 100% validation. 1 evaluates just 1 model.
@@ -104,6 +105,7 @@ class AutoTS(object):
         drop_data_older_than_periods: int = 100000,
         model_list: str = 'default',
         transformer_list: dict = {},
+        transformer_max_depth: int = 8,
         num_validations: int = 2,
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
@@ -130,6 +132,7 @@ class AutoTS(object):
         self.drop_data_older_than_periods = drop_data_older_than_periods
         self.model_list = model_list
         self.transformer_list = transformer_list
+        self.transformer_max_depth = transformer_max_depth
         self.num_validations = abs(int(num_validations))
         self.models_to_validate = models_to_validate
         self.max_per_model_class = max_per_model_class
@@ -256,7 +259,7 @@ class AutoTS(object):
         initial_template = str(initial_template).lower()
         if initial_template == 'random':
             self.initial_template = RandomTemplate(
-                50, model_list=self.model_list, transformer_list=self.transformer_list
+                50, model_list=self.model_list, transformer_list=self.transformer_list, transformer_max_depth=self.transformer_max_depth,
             )
         elif initial_template == 'general':
             from autots.templates.general import general_template
@@ -266,7 +269,7 @@ class AutoTS(object):
             from autots.templates.general import general_template
 
             random_template = RandomTemplate(
-                40, model_list=self.model_list, transformer_list=self.transformer_list
+                40, model_list=self.model_list, transformer_list=self.transformer_list, transformer_max_depth=self.transformer_max_depth,
             )
             self.initial_template = pd.concat(
                 [general_template, random_template], axis=0
@@ -276,7 +279,7 @@ class AutoTS(object):
         else:
             print("Input initial_template unrecognized. Using Random.")
             self.initial_template = RandomTemplate(
-                50, model_list=self.model_list, transformer_list=self.transformer_list
+                50, model_list=self.model_list, transformer_list=self.transformer_list, transformer_max_depth=self.transformer_max_depth,
             )
 
         # remove models not in given model list
@@ -336,6 +339,7 @@ class AutoTS(object):
                 ".csv" save model results table.
                 ".pickle" saves full object, including ensemble information.
             grouping_ids (dict): currently a one-level dict containing series_id:group_id mapping.
+                used in 0.2.x but not 0.3.x+ versions. retained for potential future use
         """
         self.weights = weights
         self.date_col = date_col
@@ -572,6 +576,7 @@ class AutoTS(object):
                 top_n=top_n,
                 template_cols=template_cols,
                 transformer_list=self.transformer_list,
+                transformer_max_depth=self.transformer_max_depth,
             )
             submitted_parameters = pd.concat(
                 [submitted_parameters, new_template],
