@@ -16,8 +16,12 @@
 
 # Latest
 * breaking change to model templates: transformers structure change
+	* grouping no longer used
+* parameter generation for transformers allowing more possible combinations
 * transformer_max_depth parameter
+* change many np.random to random
 * bug fix in Detrend transformer
+* restructuring of some function locations
 
 
 # Known Errors: 
@@ -226,6 +230,7 @@ Tensorflow GPU backend may crash on occasion.
 ## New Transformer Checklist:
 	* Make sure that if it modifies the size (more/fewer columns or rows) it returns pd.DataFrame with proper index/columns
 	* depth of recombination is?
-	* add to "all" transformer dict
+	* add to "all" transformer_dict
+	* add to no_params or external if so
 	* add to no_shared if so, in auto_model.py
 	* oddities_list for those with forecast/original transform difference

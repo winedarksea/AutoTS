@@ -3,7 +3,7 @@ import datetime
 import numpy as np
 import pandas as pd
 import json
-from autots.evaluator.auto_model import PredictionObject
+from autots.models.base import PredictionObject
 
 
 def BestNEnsemble(

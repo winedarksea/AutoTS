@@ -4,9 +4,11 @@ Sklearn dependent models
 Decision Tree, Elastic Net,  Random Forest, MLPRegressor, KNN, Adaboost
 """
 import datetime
+import random
 import numpy as np
 import pandas as pd
-from autots.evaluator.auto_model import ModelObject, PredictionObject, seasonal_int
+from autots.models.base import ModelObject, PredictionObject
+from autots.tools import seasonal_int
 from autots.tools.probabilistic import Point_to_Probability
 
 
@@ -343,37 +345,23 @@ def retrieve_regressor(
 
 
 def generate_regressor_params(
-    models: list = [
-        'RandomForest',
-        'ElasticNet',
-        'MLP',
-        'DecisionTree',
-        'KNN',
-        'Adaboost',
-        'SVM',
-        'BayesianRidge',
-        'xgboost',
-        'KerasRNN',
-        'HistGradientBoost',
-        'LightGBM',
-    ],
-    model_probs: list = [
-        0.05,
-        0.05,
-        0.14,
-        0.25,
-        0.1,
-        0.14,
-        0.02,
-        0.08,
-        0.01,
-        0.05,
-        0.01,
-        0.1,
-    ],
+    model_dict: dict = {
+        'RandomForest': 0.05,
+        'ElasticNet': 0.05,
+        'MLP': 0.14,
+        'DecisionTree': 0.25,
+        'KNN': 0.1,
+        'Adaboost': 0.14,
+        'SVM': 0.02,
+        'BayesianRidge': 0.08,
+        'xgboost': 0.01,
+        'KerasRNN': 0.05,
+        'HistGradientBoost': 0.01,
+        'LightGBM': 0.1,
+    },
 ):
     """Generate new parameters for input to regressor."""
-    model = np.random.choice(a=models, size=1, p=model_probs).item()
+    model = random.choices(list(model_dict.keys()), list(model_dict.values()), k=1)[0]
     if model in [
         'xgboost',
         'Adaboost',
