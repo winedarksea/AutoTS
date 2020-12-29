@@ -1,4 +1,5 @@
 """Informal testing script."""
+from time import sleep
 import timeit
 import numpy as np
 import pandas as pd
@@ -19,7 +20,7 @@ forecast_length = 12
 long = False
 df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 3
+generations = 2
 
 """
 df = pd.read_csv("m5_sample.gz")
@@ -27,7 +28,6 @@ df['datetime'] = pd.DatetimeIndex(df['datetime'])
 df = df.set_index("datetime", drop=True)
 df = df.iloc[:, 0:100]
 """
-# df = df[df['series_id'] == 'GS10']
 
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
@@ -52,19 +52,19 @@ model_list = [
     'AverageValueNaive',
     'GLS',
     'SeasonalNaive',
-    'GLM',
-    'ETS',
+    # 'GLM',
+    # 'ETS',
     # 'FBProphet',
     # 'RollingRegression',
     # 'GluonTS',
-    'UnobservedComponents',
+    # 'UnobservedComponents',
     'DatepartRegression',
     # 'VAR',
     # 'VECM',
     # 'WindowRegression',
 ]
 
-transformer_list = {}  # [None]
+transformer_list = "all"  # {}  # ["SeasonalDifference"]
 # model_list = 'superfast'
 # model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
@@ -91,7 +91,7 @@ model = AutoTS(
     validation_method='backwards',
     model_list=model_list,
     transformer_list=transformer_list,
-    transformer_max_depth=4,
+    transformer_max_depth=6,
     initial_template='Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.3,
@@ -208,6 +208,7 @@ initial_results['FitRuntime'] = initial_results['FitRuntime'].dt.total_seconds()
 initial_results['PredictRuntime'] = initial_results['PredictRuntime'].dt.total_seconds()
 initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_seconds()
 
+sleep(5)
 print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 # import platform
@@ -276,7 +277,8 @@ Merge dev to master on GitHub and create release (include .tar.gz)
 
 # Help correlate errors with parameters
 """
-# test = initial_results[initial_results['TransformationParameters'].str.contains('Detrend')]
+test = initial_results[initial_results['TransformationParameters'].str.contains('FastICA')]
+
 cols = ['Model', 'ModelParameters', 'TransformationParameters', 'Exceptions']
 if (~initial_results['Exceptions'].isna()).sum() > 0:
     test_corr = error_correlations(

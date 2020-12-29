@@ -20,7 +20,9 @@
 * parameter generation for transformers allowing more possible combinations
 * transformer_max_depth parameter
 * change many np.random to random
+	* random.choices further necessitates python 3.6 or greater
 * bug fix in Detrend transformer
+* bug fix in SeasonalDifference transformer
 * restructuring of some function locations
 
 

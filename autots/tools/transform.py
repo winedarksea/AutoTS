@@ -57,8 +57,8 @@ class EmptyTransformer(object):
         """Print."""
         return 'Transformer ' + str(self.name) + ', uses standard .fit/.transform'
 
-    @classmethod
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         """Generate new random parameters"""
         if method == 'test':
             return {'test': random.choice([1,2])}
@@ -143,8 +143,8 @@ class Detrend(EmptyTransformer):
         self.model = model
         self.need_positive = ['Poisson', 'Gamma', 'Tweedie']
 
-    @classmethod
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         if method == "fast":
             choice = random.choices(["GLS", "Linear",],
                                     [0.5, 0.5,], k=1)[0]
@@ -548,8 +548,8 @@ class IntermittentOccurrence(EmptyTransformer):
         super().__init__(name="IntermittentOccurrence")
         self.center = center
 
-    @classmethod
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         if method == "fast":
             choice = "mean"
         else:
@@ -626,8 +626,8 @@ class RollingMeanTransformer(EmptyTransformer):
         self.window = window
         self.fixed = fixed
 
-    @classmethod
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         bool_c = bool(random.getrandbits(1))
         if method == "fast":
             choice = random.choice([3, 7, 10, 12])
@@ -758,11 +758,11 @@ class SeasonalDifference(EmptyTransformer):
 
     def __init__(self, lag_1: int = 7, method: str = 'LastValue', **kwargs):
         super().__init__(name="SeasonalDifference")
-        self.lag_1 = 7  # abs(int(lag_1))
+        self.lag_1 = int(abs(lag_1))
         self.method = method
 
-    @classmethod
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         method_c = random.choice(['LastValue', 'Mean', "Median"])
         if method == "fast":
             choice = random.choice([7, 12])
@@ -779,15 +779,16 @@ class SeasonalDifference(EmptyTransformer):
         df_length = df.shape[0]
 
         if self.method in ['Mean', 'Median']:
+            df2 = df.copy()
             tile_index = np.tile(
                 np.arange(self.lag_1), int(np.ceil(df_length / self.lag_1))
             )
             tile_index = tile_index[len(tile_index) - (df_length) :]
-            df.index = tile_index
+            df2.index = tile_index
             if self.method == "Median":
-                self.tile_values_lag_1 = df.groupby(level=0, axis=0).median()
+                self.tile_values_lag_1 = df2.groupby(level=0, axis=0).median()
             else:
-                self.tile_values_lag_1 = df.groupby(level=0, axis=0).mean()
+                self.tile_values_lag_1 = df2.groupby(level=0, axis=0).mean()
         else:
             self.method == 'LastValue'
             self.tile_values_lag_1 = df.tail(self.lag_1)
@@ -798,11 +799,12 @@ class SeasonalDifference(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        tile_len = len(self.tile_values_lag_1.index)
+        tile_len = len(self.tile_values_lag_1.index)  # self.lag_1
         df_len = df.shape[0]
         sdf = pd.DataFrame(
             np.tile(self.tile_values_lag_1, (int(np.ceil(df_len / tile_len)), 1))
         )
+        # 
         sdf = sdf.tail(df_len)
         sdf.index = df.index
         sdf.columns = df.columns
@@ -855,8 +857,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
         self.regression_model = regression_model
         self.datepart_method = datepart_method
 
-    @classmethod
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         method_c = random.choice(["simple", "expanded", "recurring"])
         from autots.models.sklearn import generate_regressor_params
 
@@ -1155,8 +1157,8 @@ class ClipOutliers(EmptyTransformer):
         self.std_threshold = std_threshold
         self.fillna = fillna
 
-    @classmethod
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         fillna_c = None
         if method == "fast":
             method_c = "clip"
@@ -1245,8 +1247,8 @@ class Round(EmptyTransformer):
         if decimals <= 0:
             self.force_int = True
 
-    @classmethod
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         on_inverse_c = bool(random.getrandbits(1))
         on_transform_c = bool(random.getrandbits(1))
         if not on_inverse_c and not on_transform_c:
@@ -1318,8 +1320,8 @@ class Slice(EmptyTransformer):
         self.method = method
         self.forecast_length = forecast_length
 
-    @classmethod
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         if method == "fast":
             choice = random.choices([100, 0.5, 0.2],
                                     [0.3, 0.5, 0.2], k=1)[0]
@@ -1385,8 +1387,8 @@ class Discretize(EmptyTransformer):
         self.discretization = discretization
         self.n_bins = n_bins
 
-    @classmethod
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         if method == "fast":
             choice = random.choice(["center", "upper", "lower"])
             n_bin_c = random.choice([5, 10, 20])
@@ -1521,8 +1523,8 @@ class CenterLastValue(EmptyTransformer):
         super().__init__(name="CenterLastValue")
         self.rows = rows
 
-    @classmethod
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         choice = random.randint(1, 6)
         return {"rows": choice,}
 
@@ -1610,8 +1612,31 @@ trans_dict = {
     ),
 }
 
+have_params = {
+    'RollingMeanTransformer': RollingMeanTransformer,
+    'SeasonalDifference': SeasonalDifference,
+    'Discretize': Discretize,
+    'CenterLastValue': CenterLastValue,
+    'IntermittentOccurrence': IntermittentOccurrence,
+    'ClipOutliers': ClipOutliers,
+    'DatepartRegression': DatepartRegression,
+    'Round': Round,
+    'Slice': Slice,
+    'Detrend': Detrend,
+}
+external_transformers = [
+    'MinMaxScaler',
+    'PowerTransformer',
+    'QuantileTransformer',
+    'MaxAbsScaler',
+    'StandardScaler',
+    'RobustScaler',
+    "PCA",
+    "FastICA",
+]
+
 class GeneralTransformer(object):
-    """Remove outliers, fillNA, then mathematical transformations.
+    """Remove fillNA and then mathematical transformations.
 
     Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a 'wide' (one column per series) shape.
 
@@ -1643,7 +1668,7 @@ class GeneralTransformer(object):
             'RobustScaler' - Sklearn
             'PCA, 'FastICA' - performs sklearn decomposition and returns n-cols worth of n_components
             'Detrend' - fit then remove a linear regression from the data
-            'RollingMean' - 10 period rolling average, can receive a custom window by transformation_param if used as second_transformation
+            'RollingMeanTransformer' - 10 period rolling average, can receive a custom window by transformation_param if used as second_transformation
             'FixedRollingMean' - same as RollingMean, but with inverse_transform disabled, so smoothed forecasts are maintained.
             'RollingMean10' - 10 period rolling average (smoothing)
             'RollingMean100thN' - Rolling mean of periods of len(train)/100 (minimum 2)
@@ -1657,6 +1682,12 @@ class GeneralTransformer(object):
             'SeasonalDifference' - remove the last lag values from all values
             'SeasonalDifferenceMean' - remove the average lag values from all
             'SeasonalDifference7','12','28' - non-parameterized version of Seasonal
+            'CenterLastValue' - center data around tail of dataset
+            'Round' - round values on inverse or transform
+            'Slice' - use only recent records
+            'ClipOutliers' - remove outliers
+            'Discretize' - bin or round data into groups
+            'DatepartRegression' - move a trend trained on datetime index
 
         random_seed (int): random state passed through where applicable
     """
@@ -1689,6 +1720,7 @@ class GeneralTransformer(object):
             'RollingMean10thN',
             'RollingMean10',
             'RollingMean',
+            'RollingMeanTransformer',
             'PctChangeTransformer',
             'CumSumTransformer',
             'SeasonalDifference',
@@ -1710,13 +1742,16 @@ class GeneralTransformer(object):
         df = FillNA(df, method=self.fillna, window=window)
         return df
 
-    def _retrieve_transformer(
-        self, transformation: str = None, param: str = None, df=None
+    @classmethod
+    def retrieve_transformer(
+        self, transformation: str = None, param: dict = {}, df=None, random_seed: int=2020
     ):
-        """
+        """Retrieves a specific transformer object from a string.
+
         Args:
             df (pandas.DataFrame): Datetime Indexed - required to set params for some transformers
             transformation (str): name of desired method
+            param (dict): dict of kwargs to pass (legacy: an actual param)
 
         Returns:
             transformer object
@@ -1725,11 +1760,14 @@ class GeneralTransformer(object):
         if transformation in (trans_dict.keys()):
             return trans_dict[transformation]
 
+        elif transformation in list(have_params.keys()):
+            trans = have_params[transformation](**param)
+            return trans
+
         elif transformation == 'MinMaxScaler':
             from sklearn.preprocessing import MinMaxScaler
 
-            transformer = MinMaxScaler(feature_range=(0, 1), copy=True)
-            return transformer
+            return MinMaxScaler()
 
         elif transformation == 'PowerTransformer':
             from sklearn.preprocessing import PowerTransformer
@@ -1742,26 +1780,40 @@ class GeneralTransformer(object):
         elif transformation == 'QuantileTransformer':
             from sklearn.preprocessing import QuantileTransformer
 
-            quants = 1000 if df.shape[0] > 1000 else int(df.shape[0] / 3)
-            transformer = QuantileTransformer(n_quantiles=quants, copy=True)
-            return transformer
+            quants = param["n_quantiles"]
+            quants = quants if df.shape[0] > quants else int(df.shape[0] / 3)
+            param["n_quantiles"] = quants
+            return QuantileTransformer(copy=True, **param)
 
         elif transformation == 'StandardScaler':
             from sklearn.preprocessing import StandardScaler
 
-            transformer = StandardScaler(copy=True)
-            return transformer
+            return StandardScaler(copy=True)
 
         elif transformation == 'MaxAbsScaler':
             from sklearn.preprocessing import MaxAbsScaler
 
-            transformer = MaxAbsScaler(copy=True)
-            return transformer
+            return MaxAbsScaler(copy=True)
 
         elif transformation == 'RobustScaler':
             from sklearn.preprocessing import RobustScaler
 
-            transformer = RobustScaler(copy=True)
+            return RobustScaler(copy=True)
+
+        elif transformation == 'PCA':
+            from sklearn.decomposition import PCA
+
+            transformer = PCA(
+                n_components=df.shape[1], whiten=False, random_state=random_seed
+            )
+            return transformer
+
+        elif transformation == 'FastICA':
+            from sklearn.decomposition import FastICA
+
+            transformer = FastICA(
+                n_components=df.shape[1], whiten=True, random_state=random_seed, **param,
+            )
             return transformer
 
         elif transformation in ['RollingMean', 'FixedRollingMean']:
@@ -1789,38 +1841,19 @@ class GeneralTransformer(object):
             window = int(df.shape[0] / 100)
             window = 2 if window < 2 else window
             self.window = window
-            transformer = RollingMeanTransformer(window=self.window)
-            return transformer
+            return RollingMeanTransformer(window=self.window)
 
         elif transformation == 'RollingMean10thN':
             window = int(df.shape[0] / 10)
             window = 2 if window < 2 else window
             self.window = window
-            transformer = RollingMeanTransformer(window=self.window)
-            return transformer
-
-        elif transformation == 'PCA':
-            from sklearn.decomposition import PCA
-
-            transformer = PCA(
-                n_components=df.shape[1], whiten=False, random_state=self.random_seed
-            )
-            return transformer
-
-        elif transformation == 'FastICA':
-            from sklearn.decomposition import FastICA
-
-            transformer = FastICA(
-                n_components=df.shape[1], whiten=True, random_state=self.random_seed
-            )
-            return transformer
+            return RollingMeanTransformer(window=self.window)
 
         else:
             print(
-                "Transformation method not known or improperly entered, returning untransformed df"
+                f"Transformation {transformation} not known or improperly entered, returning untransformed df"
             )
-            transformer = EmptyTransformer()
-            return transformer
+            return EmptyTransformer()
 
     def _fit(self, df):
         """
@@ -1844,19 +1877,24 @@ class GeneralTransformer(object):
 
         self.df_index = df.index
         self.df_colnames = df.columns
-
         for i in sorted(self.transformations.keys()):
-            self.transformers[i] = self._retrieve_transformer(
-                transformation=self.transformations[i], df=df
+            transformation = self.transformations[i]
+            self.transformers[i] = self.retrieve_transformer(
+                transformation=transformation, df=df, param=self.transformation_params[i], random_seed=self.random_seed
             )
             df = self.transformers[i].fit_transform(df)
+            # convert to DataFrame only if it isn't already
             if not isinstance(df, pd.DataFrame):
                 df = pd.DataFrame(df)
                 df.index = self.df_index
                 df.columns = self.df_colnames
-            df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+            # update index reference if sliced
+            if transformation in ['Slice']:
+                self.df_index = df.index
+                self.df_colnames = df.columns
+            # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
 
-        # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+        df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         return df
 
     def fit(self, df):
@@ -1884,15 +1922,20 @@ class GeneralTransformer(object):
 
         self.df_index = df.index
         self.df_colnames = df.columns
-
         # transformations
         for i in sorted(self.transformations.keys()):
+            transformation = self.transformations[i]
             df = self.transformers[i].transform(df)
+            # convert to DataFrame only if it isn't already
             if not isinstance(df, pd.DataFrame):
                 df = pd.DataFrame(df)
                 df.index = self.df_index
                 df.columns = self.df_colnames
-            df = df.replace([np.inf, -np.inf], 0)
+            # update index reference if sliced
+            if transformation in ['Slice']:
+                self.df_index = df.index
+                self.df_colnames = df.columns
+        df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         return df
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
@@ -1924,43 +1967,28 @@ class GeneralTransformer(object):
         return df
 
 
-have_params = [
-    'RollingMean',
-    'SeasonalDifference',
-    'Discretize',
-    'CenterLastValue',
-    'IntermittentOccurrence',
-    'ClipOutliers',
-    'DatepartRegression',
-    'Round',
-    'Slice',
-    'Detrend',
-]
-external_transformers = [
-    'MinMaxScaler',
-    'PowerTransformer',
-    'QuantileTransformer',
-    'MaxAbsScaler',
-    'StandardScaler',
-    'RobustScaler',
-    "PCA",
-    "FastICA",
-]
-
 def get_transformer_params(transformer: str = "EmptyTransformer", method: str = None):
-    """Clunky way of retrieving new random params for new Transformers."""
-    if transformer in have_params:
-        # eval should be safe here as it is on a limited selection
-        return eval(transformer).get_new_params(method=method)
-    elif transformer in external_transformers:
-        return {}
+    """Retrieve new random params for new Transformers."""
+    if transformer in list(have_params.keys()):
+        return have_params[transformer].get_new_params(method=method)
+    elif transformer == "FastICA":
+        return {
+            "algorithm": random.choice(["parallel", "deflation"]),
+            "fun": random.choice(["logcosh", "exp", "cube"]),
+            }
+    elif transformer == "QuantileTransformer":
+        return {
+            "output_distribution": random.choices(["uniform", "normal"], [0.8, 0.2], k=1)[0],
+            "n_quantiles": random.choices([1000, 100, 20], [0.7, 0.2, 0.1], k=1)[0],
+            }
     else:
         return {}
 
+# dictionary of probabilities for randomly choosen transformers
 transformer_dict = {
-    None: 0,
+    None: 0.0,
     'MinMaxScaler': 0.05,
-    'PowerTransformer': 0.11,
+    'PowerTransformer': 0.1,
     'QuantileTransformer': 0.1,
     'MaxAbsScaler': 0.05,
     'StandardScaler': 0.04,
@@ -1968,8 +1996,8 @@ transformer_dict = {
     'PCA': 0.01,
     'FastICA': 0.01,
     'Detrend': 0.05,
-    'RollingMean10': 0.01,
-    'RollingMean100thN': 0.01,
+    'RollingMeanTransformer': 0.02,
+    'RollingMean100thN': 0.01,  # old
     'DifferencedTransformer': 0.1,
     'SinTrend': 0.01,
     'PctChangeTransformer': 0.01,
@@ -1977,22 +2005,27 @@ transformer_dict = {
     'PositiveShift': 0.02,
     'Log': 0.01,
     'IntermittentOccurrence': 0.01,
-    'SeasonalDifference7': 0.01,
-    'SeasonalDifference12': 0.01,
-    'SeasonalDifference28': 0.01,
+    'SeasonalDifference7': 0.0,  # old
+    'SeasonalDifference': 0.08,
+    'SeasonalDifference28': 0.0,  # old
     'cffilter': 0.01,
     'bkfilter': 0.05,
-    'DatepartRegression': 0.01,
-    'DatepartRegressionElasticNet': 0.01,
-    'DatepartRegressionLtd': 0.01,
+    'DatepartRegression': 0.02,
+    'DatepartRegressionElasticNet': 0.0,  # old
+    'DatepartRegressionLtd': 0.0,  # old
     "ClipOutliers": 0.05,
     "Discretize": 0.05,
     "CenterLastValue": 0.01,
     "Round": 0.05,
-    "Slice": 0.05,
+    "Slice": 0.01,
 }
+# remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
 del fast_transformer_dict['DatepartRegression']
+del fast_transformer_dict['SinTrend']
+del fast_transformer_dict['FastICA']
+
+# probability dictionary of FillNA methods
 na_probs = {
     'ffill': 0.1,
     'fake_date': 0.1,
@@ -2013,7 +2046,10 @@ def RandomTransform(transformer_list: dict = transformer_dict,
     fast_params: bool = None,
     traditional_order: bool = False,
 ):
-    """Return a dict of randomly choosen transformation selections."""
+    """Return a dict of randomly choosen transformation selections.
+    
+    DatepartRegression is used as a signal that slow parameters are allowed.
+    """
     if not transformer_list or transformer_list == "all":
         transformer_list = transformer_dict
     elif transformer_list == "fast":
@@ -2030,7 +2066,6 @@ def RandomTransform(transformer_list: dict = transformer_dict,
         transformer_prob = [1 / trs_len] * trs_len
     else:
         raise ValueError("transformer_list alias not recognized.")
-    # or just try/except where if prob list fails, then pass no prob
 
     # adjust fast/slow based on Transformers allowed
     if fast_params is None:
@@ -2082,10 +2117,8 @@ def RandomTransform(transformer_list: dict = transformer_dict,
         num_trans = len(trans)
     else:
         trans = random.choices(transformer_list, transformer_prob, k=num_trans)
-    # potentially have actual classes in dict, pull params then .name or __str__
-    # use my_func(**dict) to pass args from a dict
+
     keys = list(range(num_trans))
-    # params = [{} for i in keys]
     params = [get_transformer_params(x, method=params_method) for x in trans]
     return {
         "fillna": na_choice,
