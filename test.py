@@ -18,7 +18,7 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 example_filename = "example_export.csv"  # .csv/.json
 forecast_length = 12
 long = False
-df = load_monthly(long=long)
+df = load_daily(long=long)
 n_jobs = 'auto'
 generations = 2
 
@@ -84,7 +84,7 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble="simple,distance,horizontal-max,probabilistic-max",
+    ensemble="simple",
     constraint=2,
     max_generations=generations,
     num_validations=2,

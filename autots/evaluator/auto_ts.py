@@ -1,6 +1,7 @@
 """Higher-level backbone of auto time series modeling."""
 import numpy as np
 import pandas as pd
+import random
 import copy
 import json
 
@@ -25,7 +26,7 @@ from autots.models.ensemble import (
     EnsembleTemplateGenerator,
     HorizontalTemplateGenerator,
 )
-import random
+from autots.models.model_list import model_lists
 
 
 class AutoTS(object):
@@ -165,96 +166,9 @@ class AutoTS(object):
             self.n_jobs = cpu_count()
 
         # convert shortcuts of model lists to actual lists of models
-        if model_list == 'default':
-            self.model_list = [
-                'ZeroesNaive',
-                'LastValueNaive',
-                'AverageValueNaive',
-                'GLS',
-                'SeasonalNaive',
-                'GLM',
-                'ETS',
-                'ARIMA',
-                'FBProphet',
-                'RollingRegression',
-                'GluonTS',
-                'UnobservedComponents',
-                'VAR',
-                'VECM',
-                'WindowRegression',
-                'DatepartRegression',
-            ]
-        if model_list == 'superfast':
-            self.model_list = [
-                'ZeroesNaive',
-                'LastValueNaive',
-                'AverageValueNaive',
-                'GLS',
-                'SeasonalNaive',
-            ]
-        if model_list == 'fast':
-            self.model_list = [
-                'ZeroesNaive',
-                'LastValueNaive',
-                'AverageValueNaive',
-                'GLS',
-                'GLM',
-                'ETS',
-                'WindowRegression',
-                'GluonTS',
-                'VAR',
-                'SeasonalNaive',
-                'VECM',
-                'ComponentAnalysis',
-            ]
-        if model_list == 'probabilistic':
-            self.model_list = [
-                'ARIMA',
-                'GluonTS',
-                'FBProphet',
-                'AverageValueNaive',
-                'MotifSimulation',
-                'VARMAX',
-                'DynamicFactor',
-                'VAR',
-            ]
-        if model_list == 'multivariate':
-            self.model_list = [
-                'VECM',
-                'DynamicFactor',
-                'GluonTS',
-                'VARMAX',
-                'RollingRegression',
-                'WindowRegression',
-                'VAR',
-                'ComponentAnalysis',
-            ]
-        if model_list == 'all':
-            self.model_list = [
-                'ZeroesNaive',
-                'LastValueNaive',
-                'AverageValueNaive',
-                'GLS',
-                'GLM',
-                'ETS',
-                'ARIMA',
-                'FBProphet',
-                'RollingRegression',
-                'GluonTS',
-                'SeasonalNaive',
-                'UnobservedComponents',
-                'VARMAX',
-                'VECM',
-                'DynamicFactor',
-                'MotifSimulation',
-                'WindowRegression',
-                'VAR',
-                'TensorflowSTS',
-                'TFPRegression',
-                'ComponentAnalysis',
-                'DatepartRegression',
-            ]
-
+        if model_list in list(model_lists.keys()):
+            self.model_list = model_lists[model_list]
+        
         # generate template to begin with
         initial_template = str(initial_template).lower()
         if initial_template == 'random':

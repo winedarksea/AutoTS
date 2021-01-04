@@ -3,8 +3,7 @@ import random
 import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
-from autots.tools import seasonal_int
-
+from autots.tools.seasonal import date_part, seasonal_int
 
 class EmptyTransformer(object):
     """Base transformer returning raw data."""
@@ -862,16 +861,17 @@ class DatepartRegressionTransformer(EmptyTransformer):
         method_c = random.choice(["simple", "expanded", "recurring"])
         from autots.models.sklearn import generate_regressor_params
 
-        if method == "fast":
+        if method == "all":
+            choice = generate_regressor_params()
+        else:
             choice = generate_regressor_params(model_dict = {
                 'ElasticNet': 0.25,
                 'DecisionTree': 0.25,
                 'KNN': 0.1,
-                'SVM': 0.2,
-                'BayesianRidge': 0.2,
+                'MLP': 0.2,
+                'RandomForest': 0.2,
             })
-        else:
-            choice = generate_regressor_params()
+
         return {"regression_model": choice,
                 "datepart_method": method_c}
 
@@ -887,8 +887,6 @@ class DatepartRegressionTransformer(EmptyTransformer):
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
         y = df.values
-        from autots.models.sklearn import date_part
-
         X = date_part(df.index, method=self.datepart_method)
         from autots.models.sklearn import retrieve_regressor
 
@@ -921,7 +919,6 @@ class DatepartRegressionTransformer(EmptyTransformer):
             df = df.astype(float)
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
-        from autots.models.sklearn import date_part
 
         X = date_part(df.index, method=self.datepart_method)
         y = pd.DataFrame(self.model.predict(X))
@@ -940,7 +937,6 @@ class DatepartRegressionTransformer(EmptyTransformer):
             df = df.astype(float)
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
-        from autots.models.sklearn import date_part
 
         X = date_part(df.index, method=self.datepart_method)
         y = pd.DataFrame(self.model.predict(X))
@@ -1568,35 +1564,23 @@ class CenterLastValue(EmptyTransformer):
         self.fit(df)
         return self.transform(df)
 
-
+# lookup dict for all non-parameterized transformers
 trans_dict = {
     'None': EmptyTransformer(),
     None: EmptyTransformer(),
     'RollingMean10': RollingMeanTransformer(window=10),
-    'Detrend': Detrend(model="GLS"),
     'DifferencedTransformer': DifferencedTransformer(),
     'PctChangeTransformer': PctChangeTransformer(),
     'SinTrend': SinTrend(),
-    'PositiveShift': PositiveShift(squared=True),
+    'PositiveShift': PositiveShift(squared=False),
     'Log': PositiveShift(log=True),
-    'IntermittentOccurrence': IntermittentOccurrence(center="mean"),
     'CumSumTransformer': CumSumTransformer(),
     'SeasonalDifference7': SeasonalDifference(lag_1=7, method='LastValue'),
     'SeasonalDifference12': SeasonalDifference(lag_1=12, method='Mean'),
     'SeasonalDifference28': SeasonalDifference(lag_1=28, method='Mean'),
     'bkfilter': StatsmodelsFilter(method='bkfilter'),
     'cffilter': StatsmodelsFilter(method='cffilter'),
-    "ClipOutliers": ClipOutliers(std_threshold=4),
     "Discretize": Discretize(discretization="center", n_bins=10),
-    "CenterLastValue": CenterLastValue(rows=3),
-    "Round": Round(),
-    "Slice": Slice(),
-    'DatepartRegression': DatepartRegressionTransformer(
-        regression_model={
-            "model": 'DecisionTree',
-            "model_params": {"max_depth": 5, "min_samples_split": 2},
-        }
-    ),
     'DatepartRegressionLtd': DatepartRegressionTransformer(
         regression_model={
             "model": 'DecisionTree',
@@ -1611,7 +1595,7 @@ trans_dict = {
         regression_model={"model": 'RandomForest', "model_params": {}}
     ),
 }
-
+# transformers with parameter pass through (internal only)
 have_params = {
     'RollingMeanTransformer': RollingMeanTransformer,
     'SeasonalDifference': SeasonalDifference,
@@ -1624,6 +1608,9 @@ have_params = {
     'Slice': Slice,
     'Detrend': Detrend,
 }
+# where will results will vary if not all series are included together
+shared_trans = ['PCA', 'FastICA']
+# transformers not defined in AutoTS
 external_transformers = [
     'MinMaxScaler',
     'PowerTransformer',
@@ -1761,8 +1748,7 @@ class GeneralTransformer(object):
             return trans_dict[transformation]
 
         elif transformation in list(have_params.keys()):
-            trans = have_params[transformation](**param)
-            return trans
+            return have_params[transformation](**param)
 
         elif transformation == 'MinMaxScaler':
             from sklearn.preprocessing import MinMaxScaler
@@ -1938,12 +1924,13 @@ class GeneralTransformer(object):
         df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         return df
 
-    def inverse_transform(self, df, trans_method: str = "forecast"):
+    def inverse_transform(self, df, trans_method: str = "forecast", fillzero: bool = False):
         """Undo the madness.
 
         Args:
             df (pandas.DataFrame): Datetime Indexed
             trans_method (str): 'forecast' or 'original' passed through
+            fillzero (bool): if inverse returns NaN, fill with zero
         """
         self.df_index = df.index
         self.df_colnames = df.columns
@@ -1959,6 +1946,9 @@ class GeneralTransformer(object):
                 df.index = self.df_index
                 df.columns = self.df_colnames
             df = df.replace([np.inf, -np.inf], 0)
+        
+        if fillzero:
+            df = df.fillna(0)
 
         """
         if self.grouping is not None:

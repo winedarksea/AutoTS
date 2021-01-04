@@ -248,6 +248,7 @@ pip install tensorflow
 pip install tensorflow-probability
 ```
 #### Intel conda channel installation
+https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html
 ```shell
 # create the environment. Intelpy compatability is often a version or two behind latest py
 conda create -n intelpy -c intel python=3.7 intelpython3_full
@@ -259,6 +260,8 @@ conda install -c intel lightgbm
 conda install -c intel tensorflow
 
 # also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html
+# pip install intel-tensorflow-avx512  and conda install tensorflow-mkl
+# MKL_NUM_THREADS, USE_DAAL4PY_SKLEARN=1
 ```
 
 ## Caveats and Advice

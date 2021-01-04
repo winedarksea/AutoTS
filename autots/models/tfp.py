@@ -2,7 +2,7 @@ import datetime
 import numpy as np
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
-from autots.tools import seasonal_int
+from autots.tools.seasonal import date_part, seasonal_int
 
 try:
     import tensorflow as tf
@@ -433,8 +433,6 @@ class TFPRegression(ModelObject):
                 self.future_regressor_train = future_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
 
-        from autots.models.sklearn import date_part
-
         X = date_part(df.index, method='expanded')
         if self.regression_type == 'User':
             # if self.future_regressor_train.ndim == 1:
@@ -474,7 +472,7 @@ class TFPRegression(ModelObject):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
-        from autots.models.sklearn import date_part
+        from autots.tools.seasonal import date_part
 
         Xf = date_part(test_index, method='expanded')
         if self.regression_type == 'User':

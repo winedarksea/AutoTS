@@ -5,6 +5,7 @@ seasonal
 @author: Colin
 """
 import random
+import pandas as pd
 
 def seasonal_int(include_one: bool = False):
     """Generate a random integer of typical seasonalities."""
@@ -37,3 +38,70 @@ def seasonal_int(include_one: bool = False):
     if lag == 'random_int':
         lag = random.randint(2, 100)
     return int(lag)
+
+def date_part(DTindex, method: str = 'simple'):
+    """Create date part columns from pd.DatetimeIndex.
+
+    Args:
+        DTindex (pd.DatetimeIndex): datetime index to provide dates
+        method (str): expanded, recurring, or simple
+            simple - just day, year, month, weekday
+            expanded - all available futures
+            recurring - all features that should commonly repeat without aging
+
+    Returns:
+        pd.Dataframe with DTindex
+    """
+    if method == 'recurring':
+        date_part_df = pd.DataFrame(
+            {
+                'month': DTindex.month,
+                'day': DTindex.day,
+                'weekday': DTindex.weekday,
+                'weekend': (DTindex.weekday > 4).astype(int),
+                'hour': DTindex.hour,
+                'quarter': DTindex.quarter,
+                'midyear': (
+                    (DTindex.dayofyear > 74) & (DTindex.dayofyear < 258)
+                ).astype(
+                    int
+                ),  # 2 season
+            }
+        )
+    else:
+        # method == "simple"
+        date_part_df = pd.DataFrame(
+            {
+                'year': DTindex.year,
+                'month': DTindex.month,
+                'day': DTindex.day,
+                'weekday': DTindex.weekday,
+            }
+        )
+        if method == 'expanded':
+            try:
+                weekyear = pd.Int64Index(DTindex.isocalendar().week)
+            except Exception:
+                weekyear = DTindex.week
+            date_part_df2 = pd.DataFrame(
+                {
+                    'hour': DTindex.hour,
+                    'week': weekyear,
+                    'quarter': DTindex.quarter,
+                    'dayofyear': DTindex.dayofyear,
+                    'midyear': (
+                        (DTindex.dayofyear > 74) & (DTindex.dayofyear < 258)
+                    ).astype(
+                        int
+                    ),  # 2 season
+                    'weekend': (DTindex.weekday > 4).astype(int),
+                    'month_end': (DTindex.is_month_end).astype(int),
+                    'month_start': (DTindex.is_month_start).astype(int),
+                    "quarter_end": (DTindex.is_quarter_end).astype(int),
+                    'year_end': (DTindex.is_year_end).astype(int),
+                    'daysinmonth': DTindex.daysinmonth,
+                    'epoch': DTindex.astype(int),
+                }
+            )
+            date_part_df = pd.concat([date_part_df, date_part_df2], axis=1)
+    return date_part_df

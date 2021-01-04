@@ -3,9 +3,8 @@ import datetime
 import numpy as np
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
-from autots.tools import seasonal_int
 from autots.tools.probabilistic import Point_to_Probability
-
+from autots.tools.seasonal import date_part, seasonal_int
 
 class GLS(ModelObject):
     """Simple linear regression from statsmodels
@@ -180,7 +179,7 @@ class GLM(ModelObject):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         from statsmodels.api import GLM
-        from autots.models.sklearn import date_part
+        from autots.tools.seasonal import date_part
 
         if self.regression_type == 'datepart':
             X = date_part(self.df_train.index, method='expanded').values

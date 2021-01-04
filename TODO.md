@@ -23,6 +23,8 @@
 	* random.choices further necessitates python 3.6 or greater
 * bug fix in Detrend transformer
 * bug fix in SeasonalDifference transformer
+* SPL bug fix when NaN in test set
+* inverse_transform now fills NaN with zero for upper/lower forecasts
 * restructuring of some function locations
 
 
@@ -51,16 +53,6 @@ for model in ensemble_models
 		df_train.reindex(copy=True) to these series
 		run model
 ```
-### HAVE PARAMETERS:
-* IntermittentOccurence
-* StatsmodelsFilter
-* SeasonalDifference
-* PositiveShift
-* RollingMeanTransformer
-* ClipOutliers
-* Discretize
-* CenterLastValue
-* Detrend
 
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
@@ -80,7 +72,6 @@ Tensorflow GPU backend may crash on occasion.
 * Ability to automatically add useful global information as regressors or parallel series
 * Built in GUI or Command Line tools
 
-
 ## To-Do
 * Migrate to-do to GitHub issues and project board
 	* GitHub Actions flake8
@@ -88,24 +79,9 @@ Tensorflow GPU backend may crash on occasion.
 	* don't run univariate models on all series, only on needed series
 	* remove 'horizontal' sanity check run, takes too long (only if metric weights are x)
 	* add 'horizontal-runtime'
-* User friendly:
-	* clean up lower level
-	* make passing in own models easy
-		* clean up base model object
-* Make preprocessing templates more flexible...
-	* bagging/boosting
-	* 'shared' and 'slow' transformers must be easily separable
-* Speed:
-	* Fast window regression only
-	* Fast MotifSimulation
-		* could memoization of pairwise comparisons be possible? (joblib)
-* Improve templates
-	* 'fake date' dataset with high diversity of series to train on
 * BestN runtime variant, where speed is highly important in model selection
 * total runtime for .fit() as attribute
 * allow Index to be other datetime not just DatetimeIndex
-
-
 * Profile slow parts of AutoTS on 1,000 series
 	* remove slow transformers unless parameter
 	* 'fast' option for RandomTransformations generator
@@ -114,13 +90,9 @@ Tensorflow GPU backend may crash on occasion.
 * BestNEnsemble
 	* Add 5 or more model option
 * allow best_model to be specified and entirely bypass the .fit() stage.
-
-* check models from M5 competition results
 * minmaxscaler as scoring for weighted Score generation
 * drop duplicates as function of TemplateEvalObject
-* optimize randomtransform probabilities
 * improve test.py script for actual testing of many features
-* Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
 * export and import of results includes all model parameters (but not templates?)
 * Option to use full traceback in errors in table
@@ -133,7 +105,6 @@ Tensorflow GPU backend may crash on occasion.
 	* Data quantile, recentered around median of forecast.
 	* Categorical class probabilities as range for RollingRegression
 * get_forecast for Statsmodels Statespace models to include confidence interval where possible
-	* migrate arima_model to arima.model
 	* uncomp with uncertainty intervals
 * GUI overlay for editing/creating templates, and for running (Flask)
 * Window regression
@@ -224,9 +195,7 @@ Tensorflow GPU backend may crash on occasion.
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
-	* Add to AutoTS 'all' list in auto_ts.py
-	* add to recombination_approved if so, in auto_model.py
-	* add to no_shared if so, in auto_model.py
+	* add to appropriate model_lists: all, recombination_approved if so, no_shared if so
 	* add to model table in extended_tutorial.md
 
 ## New Transformer Checklist:

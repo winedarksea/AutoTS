@@ -7,6 +7,8 @@ import json
 from hashlib import md5
 from autots.evaluator.metrics import PredictionEval
 from autots.tools.transform import RandomTransform, GeneralTransformer
+from autots.models.ensemble import EnsembleForecast
+from autots.models.model_list import no_params, recombination_approved, no_shared
 from itertools import zip_longest
 
 
@@ -645,22 +647,23 @@ def ModelPrediction(
         forecast_length=forecast_length, future_regressor=future_regressor_forecast
     )
 
+    # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
     if df_forecast.forecast.isnull().all(axis=0).astype(int).sum() > 0:
         raise ValueError(
             "Model {} returned NaN for one or more series".format(model_str)
         )
 
     transformationStartTime = datetime.datetime.now()
-    # Inverse the transformations
+    # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
     df_forecast.forecast = pd.DataFrame(
         transformer_object.inverse_transform(df_forecast.forecast)
-    )  # , index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
+    )
     df_forecast.lower_forecast = pd.DataFrame(
-        transformer_object.inverse_transform(df_forecast.lower_forecast)
-    )  # , index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
+        transformer_object.inverse_transform(df_forecast.lower_forecast, fillzero=True)
+    )
     df_forecast.upper_forecast = pd.DataFrame(
-        transformer_object.inverse_transform(df_forecast.upper_forecast)
-    )  # , index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
+        transformer_object.inverse_transform(df_forecast.upper_forecast, fillzero=True)
+    )
 
     df_forecast.transformation_parameters = transformation_dict
     # Remove negatives if desired
@@ -857,28 +860,13 @@ def PredictWitch(
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object):
     """
-    no_shared = [  # for models that don't share information among series
-        'ZeroesNaive',
-        'LastValueNaive',
-        'AverageValueNaive',
-        'GLM',
-        'ETS',
-        'ARIMA',
-        'FBProphet',
-        'SeasonalNaive',
-        'UnobservedComponents',
-        'MotifSimulation',
-        'TensorflowSTS',
-        'DatepartRegression',
-    ]
+
     if isinstance(template, pd.Series):
         template = pd.DataFrame(template).transpose()
     template = template.head(1)
     for index_upper, row_upper in template.iterrows():
         # if an ensemble
         if row_upper['Model'] == 'Ensemble':
-            from autots.models.ensemble import EnsembleForecast
-
             forecasts_list = []
             forecasts_runtime = {}
             forecasts = {}
@@ -1374,9 +1362,10 @@ def _trans_dicts(current_ops, best=None, n: int = 5, transformer_list: dict = {}
     else:
         sec = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth, traditional_order=True,)
     r = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,)
+    r2 = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,)
     if best is None:
         best = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,)
-    arr = [fir, sec, best, r]
+    arr = [fir, sec, best, r, r2]
     trans_dicts = [json.dumps(trans_dict_recomb(arr)) for _ in range(n)]
     return trans_dicts
 
@@ -1425,24 +1414,6 @@ def NewGeneticTemplate(
         by=sort_column, ascending=sort_ascending, na_position='last'
     ).head(top_n)
 
-    no_params = ['ZeroesNaive', 'LastValueNaive', 'GLS']
-    recombination_approved = [
-        'SeasonalNaive',
-        'MotifSimulation',
-        "ETS",
-        'DynamicFactor',
-        'VECM',
-        'VARMAX',
-        'GLM',
-        'ARIMA',
-        'FBProphet',
-        'GluonTS',
-        'RollingRegression',
-        'VAR',
-        'WindowRegression',
-        'TensorflowSTS',
-        'TFPRegression',
-    ]
     # borrow = ['ComponentAnalysis']
     best = json.loads(sorted_results.iloc[0, :]['TransformationParameters'])
 
