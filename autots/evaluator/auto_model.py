@@ -1591,9 +1591,13 @@ def generate_score(
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         if 'TotalRuntime' in model_results.columns:
+            try:
+                outz = model_results['TotalRuntime'].dt.seconds
+            except Exception:
+                outz = model_results['TotalRuntime'].astype(int)
             model_results['TotalRuntimeSeconds'] = np.where(
                 model_results['TotalRuntimeSeconds'].isna(),
-                model_results['TotalRuntime'].dt.seconds,
+                outz,
                 model_results['TotalRuntimeSeconds'],
             )
         else:

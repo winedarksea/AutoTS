@@ -20,14 +20,14 @@ forecast_length = 12
 long = False
 df = load_daily(long=long)
 n_jobs = 'auto'
-generations = 2
+generations = 30
 
-"""
+
 df = pd.read_csv("m5_sample.gz")
 df['datetime'] = pd.DatetimeIndex(df['datetime'])
 df = df.set_index("datetime", drop=True)
 df = df.iloc[:, 0:100]
-"""
+
 
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
@@ -52,16 +52,17 @@ model_list = [
     'AverageValueNaive',
     'GLS',
     'SeasonalNaive',
-    # 'GLM',
-    # 'ETS',
+    'GLM',
+    'ETS',
     # 'FBProphet',
-    # 'RollingRegression',
-    # 'GluonTS',
-    # 'UnobservedComponents',
+    'RollingRegression',
+    'GluonTS',
+    'UnobservedComponents',
     'DatepartRegression',
-    # 'VAR',
-    # 'VECM',
-    # 'WindowRegression',
+    'ARIMA',
+    'VAR',
+    'VECM',
+    'WindowRegression',
 ]
 
 transformer_list = "all"  # {}  # ["SeasonalDifference"]
@@ -84,7 +85,7 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble="simple",
+    ensemble="simple,horizontal-max",
     constraint=2,
     max_generations=generations,
     num_validations=2,
@@ -92,7 +93,7 @@ model = AutoTS(
     model_list=model_list,
     transformer_list=transformer_list,
     transformer_max_depth=6,
-    initial_template='Random',
+    initial_template='General+Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.3,
     max_per_model_class=None,
@@ -211,6 +212,7 @@ initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_secon
 sleep(5)
 print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
+# temp3 = unpack_ensemble_models(model.best_model, keep_ensemble=False, recursive=True)
 # import platform
 # initial_results.to_csv("bigger_speedtest" + str(platform.node()) + "_openblas.csv")
 
