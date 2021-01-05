@@ -20,13 +20,14 @@ forecast_length = 12
 long = False
 df = load_daily(long=long)
 n_jobs = 'auto'
-generations = 30
+generations = 2
 
-
+"""
 df = pd.read_csv("m5_sample.gz")
 df['datetime'] = pd.DatetimeIndex(df['datetime'])
 df = df.set_index("datetime", drop=True)
 df = df.iloc[:, 0:100]
+"""
 
 
 weights_hourly = {'traffic_volume': 10}
@@ -56,7 +57,7 @@ model_list = [
     'ETS',
     # 'FBProphet',
     'RollingRegression',
-    'GluonTS',
+    # 'GluonTS',
     'UnobservedComponents',
     'DatepartRegression',
     'ARIMA',
@@ -65,7 +66,7 @@ model_list = [
     'WindowRegression',
 ]
 
-transformer_list = "all"  # {}  # ["SeasonalDifference"]
+transformer_list = "fast"  # ["SeasonalDifference", "MinMaxScaler", "Detrend"]
 # model_list = 'superfast'
 # model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
