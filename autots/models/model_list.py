@@ -40,6 +40,7 @@ default = [
     'WindowRegression',
     'DatepartRegression',
 ]
+# fastest models at any scale
 superfast =  [
     'ZeroesNaive',
     'LastValueNaive',
@@ -47,6 +48,7 @@ superfast =  [
     'GLS',
     'SeasonalNaive',
 ]
+# relatively fast at any scale
 fast = [
     'ZeroesNaive',
     'LastValueNaive',
@@ -61,6 +63,7 @@ fast = [
     'VECM',
     'ComponentAnalysis',
 ]
+# models with model-based upper/lower forecasts
 probabilistic = [
     'ARIMA',
     'GluonTS',
@@ -71,6 +74,7 @@ probabilistic = [
     'DynamicFactor',
     'VAR',
 ]
+# models that use the shared information of multiple series to improve accuracy
 multivariate = [
     'VECM',
     'DynamicFactor',

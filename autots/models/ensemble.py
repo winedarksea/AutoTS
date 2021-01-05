@@ -136,7 +136,7 @@ def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
 
     Args:
         df_train (pandas.DataFrame): historical data about the series. Columns = series_ids.
-        known (dict): dict of series_id: classifier outcome including some but not all series.
+        known (dict): dict of series_id: classifier outcome including some but not all series in df_train.
 
     Returns:
         dict.

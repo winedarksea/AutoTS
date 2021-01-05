@@ -25,6 +25,7 @@
 * bug fix in SeasonalDifference transformer
 * SPL bug fix when NaN in test set
 * inverse_transform now fills NaN with zero for upper/lower forecasts
+* expanded model_list aliases, with dedicated module
 * restructuring of some function locations
 
 
