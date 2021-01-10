@@ -67,6 +67,7 @@ model_list = [
 ]
 
 transformer_list = "fast"  # ["SeasonalDifference", "MinMaxScaler", "Detrend"]
+transformer_max_depth = 1
 # model_list = 'superfast'
 # model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
@@ -93,7 +94,7 @@ model = AutoTS(
     validation_method='backwards',
     model_list=model_list,
     transformer_list=transformer_list,
-    transformer_max_depth=6,
+    transformer_max_depth=transformer_max_depth,
     initial_template='General+Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.3,
@@ -159,7 +160,7 @@ model = AutoTS(
     validation_method='backwards',
     model_list=model_list,
     transformer_list=transformer_list,
-    transformer_max_depth=4,
+    transformer_max_depth=transformer_max_depth,
     initial_template='General+Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.1,

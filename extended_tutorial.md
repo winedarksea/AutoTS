@@ -258,6 +258,7 @@ activate intelpy
 conda install -c intel statsmodels
 conda install -c intel lightgbm
 conda install -c intel tensorflow
+conda install -c intel tensorflow-probability
 pip install mxnet
 pip install gluonts
 pip install fbprophet

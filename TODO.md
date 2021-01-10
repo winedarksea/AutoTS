@@ -197,7 +197,7 @@ Tensorflow GPU backend may crash on occasion.
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
 	* add to appropriate model_lists: all, recombination_approved if so, no_shared if so
-	* add to model table in extended_tutorial.md
+	* add to model table in extended_tutorial.md (most columns here have an equivalent model_list)
 
 ## New Transformer Checklist:
 	* Make sure that if it modifies the size (more/fewer columns or rows) it returns pd.DataFrame with proper index/columns
