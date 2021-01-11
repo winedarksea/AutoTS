@@ -162,19 +162,8 @@ def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
     return final
 
 
-def HorizontalEnsemble(
-    ensemble_params,
-    forecasts_list,
-    forecasts,
-    lower_forecasts,
-    upper_forecasts,
-    forecasts_runtime,
-    prediction_interval,
-    df_train=None,
-):
-    """Generate forecast for per_series ensembling."""
-    available_models = list(forecasts.keys())
-    known_matches = ensemble_params['series']
+def generalize_horizontal(df_train, known_matches, available_models):
+    """generalize a horizontal model trained on a subset of all series"""
     org_idx = df_train.columns
     org_list = org_idx.tolist()
     # remove any unavailable models or unnecessary series
@@ -187,6 +176,26 @@ def HorizontalEnsemble(
         all_series = horizontal_classifier(df_train, k)
     else:
         all_series = known_matches
+    return all_series
+
+
+def HorizontalEnsemble(
+    ensemble_params,
+    forecasts_list,
+    forecasts,
+    lower_forecasts,
+    upper_forecasts,
+    forecasts_runtime,
+    prediction_interval,
+    df_train=None,
+    all_series: dict=None,
+):
+    """Generate forecast for per_series ensembling."""
+    if all_series is None:
+        available_models = list(forecasts.keys())
+        known_matches = ensemble_params['series']
+        all_series = generalize_horizontal(df_train, known_matches, available_models)
+    org_idx = df_train.columns
 
     forecast_df, u_forecast_df, l_forecast_df = (
         pd.DataFrame(),

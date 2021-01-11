@@ -26,6 +26,7 @@
 * SPL bug fix when NaN in test set
 * inverse_transform now fills NaN with zero for upper/lower forecasts
 * expanded model_list aliases, with dedicated module
+* bug fix (creating 0,0 order) and tuning of VARMAX
 * restructuring of some function locations
 
 
@@ -51,7 +52,7 @@ if model in ['Horizontal', 'Probabilistic'] and series_count > 20:
 for model in ensemble_models
 	if model in no_shared AND if transformations not in shared_transformations/bagging:
 		filter dictionary to only series with this model
-		df_train.reindex(copy=True) to these series
+		df_train2 = df_train.reindex(copy=True) to these series
 		run model
 ```
 

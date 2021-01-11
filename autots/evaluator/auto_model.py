@@ -6,8 +6,8 @@ import datetime
 import json
 from hashlib import md5
 from autots.evaluator.metrics import PredictionEval
-from autots.tools.transform import RandomTransform, GeneralTransformer
-from autots.models.ensemble import EnsembleForecast
+from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
+from autots.models.ensemble import EnsembleForecast, generalize_horizontal
 from autots.models.model_list import no_params, recombination_approved, no_shared
 from itertools import zip_longest
 
