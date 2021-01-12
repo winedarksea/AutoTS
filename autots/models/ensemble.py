@@ -182,8 +182,8 @@ def generalize_horizontal(df_train, known_matches: dict, available_models: list,
         raise ValueError("Horizontal template has no models matching this data!")
     if len(set(org_list) - set(list(k.keys()))) > 0:
         # filter down to only models available for all
-        print(f"Models not available: {[ser for ser, mod in known_matches.items() if mod not in available_models]}")
-        print(f"Series not available: {[ser for ser in df_train.columns if ser not in list(known_matches.keys())]}")
+        # print(f"Models not available: {[ser for ser, mod in known_matches.items() if mod not in available_models]}")
+        # print(f"Series not available: {[ser for ser in df_train.columns if ser not in list(known_matches.keys())]}")
         if full_models is not None:
             k2 = {ser: mod for ser, mod in k.items() if mod in full_models}
         else:
@@ -211,15 +211,15 @@ def HorizontalEnsemble(
     # this is meant to fill in any failures
     available_models = list(forecasts.keys())
     train_size = df_train.shape
-    print(f"running inner generalization with training size: {train_size}")
+    # print(f"running inner generalization with training size: {train_size}")
     full_models = [mod for mod, fcs in forecasts.items() if fcs.shape[1] == train_size[1]]
     if not full_models:
         full_models = available_models  # hope it doesn't need to fill
-    print(f"FULLMODEL {len(full_models)}: {full_models}")
+    # print(f"FULLMODEL {len(full_models)}: {full_models}")
     if prematched_series is None:
         prematched_series = ensemble_params['series']
     all_series = generalize_horizontal(df_train, prematched_series, available_models, full_models)
-    print(f"ALLSERIES {len(all_series.keys())}: {all_series}")
+    # print(f"ALLSERIES {len(all_series.keys())}: {all_series}")
 
     org_idx = df_train.columns
 

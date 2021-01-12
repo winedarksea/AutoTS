@@ -881,7 +881,6 @@ def PredictWitch(
             )
             # horizontal generalization
             if str(row_upper['Ensemble']) == '2':
-                print("running outer generalization")
                 available_models = list(ens_params['models'].keys())
                 known_matches = ens_params['series']
                 all_series = generalize_horizontal(df_train, known_matches, available_models)
@@ -928,12 +927,12 @@ def PredictWitch(
                     forecasts[model_id] = df_forecast.forecast
                     upper_forecasts[model_id] = df_forecast.upper_forecast
                     lower_forecasts[model_id] = df_forecast.lower_forecast
-                    if verbose >= 0:  # 2
+                    if verbose >= 2:
                         p = f"Ensemble {ens_params['model_name']} component {index + 1} of {total_ens} succeeded"
                         print(p)
                 except Exception as e:
                     # currently this leaves no key/value for models that fail
-                    if verbose >= 0:  # 1
+                    if verbose >= 1:  # 1
                         p = f"FAILED: Ensemble {ens_params['model_name']} component {index} of {total_ens} with error: {repr(e)}"
                         print(p)
             ens_forecast = EnsembleForecast(
@@ -956,7 +955,8 @@ def PredictWitch(
             transformation_dict = json.loads(row_upper['TransformationParameters'])
             if horizontal_subset is not None and model_str in no_shared and all(trs not in shared_trans for trs in list(transformation_dict['transformations'].values())):
                 df_train_low = df_train.reindex(copy=True, columns=horizontal_subset)
-                print(f"Reducing to subset for {model_str} with {df_train_low.columns}")
+                if verbose >= 2:
+                    print(f"Reducing to subset for {model_str} with {df_train_low.columns}")
             else:
                 df_train_low = df_train
 

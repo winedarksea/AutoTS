@@ -19,6 +19,7 @@
 	* grouping no longer used
 * parameter generation for transformers allowing more possible combinations
 * transformer_max_depth parameter
+* Horizontal Ensembles are now much faster by only running models on the subset of series they apply to
 * change many np.random to random
 	* random.choices further necessitates python 3.6 or greater
 * bug fix in Detrend transformer
@@ -57,7 +58,6 @@ for model in ensemble_models
 
 pass through all_series to Ensemble Forecast to Horizontal
 what if an ensemble component fails?
-	primary and backup assigned?
 	"limited" generalization option  - only available models with those from all series
 		what if all models are limited?
 			put the very fastest model in "no_shared"
