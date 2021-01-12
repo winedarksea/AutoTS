@@ -258,6 +258,10 @@ activate intelpy
 conda install -c intel statsmodels
 conda install -c intel lightgbm
 conda install -c intel tensorflow
+conda install -c intel tensorflow-probability
+pip install mxnet
+pip install gluonts
+pip install fbprophet
 
 # also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html
 # pip install intel-tensorflow-avx512  and conda install tensorflow-mkl

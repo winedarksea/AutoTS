@@ -1,3 +1,4 @@
+"""Lists of models grouped by aspects."""
 all_models = [
     'ZeroesNaive',
     'LastValueNaive',
@@ -17,7 +18,6 @@ all_models = [
     'MotifSimulation',
     'WindowRegression',
     'VAR',
-    'TensorflowSTS',
     'TFPRegression',
     'ComponentAnalysis',
     'DatepartRegression',
@@ -30,7 +30,6 @@ default = [
     'SeasonalNaive',
     'GLM',
     'ETS',
-    'ARIMA',
     'FBProphet',
     'RollingRegression',
     'GluonTS',
@@ -40,6 +39,7 @@ default = [
     'WindowRegression',
     'DatepartRegression',
 ]
+# fastest models at any scale
 superfast =  [
     'ZeroesNaive',
     'LastValueNaive',
@@ -47,6 +47,7 @@ superfast =  [
     'GLS',
     'SeasonalNaive',
 ]
+# relatively fast at any scale
 fast = [
     'ZeroesNaive',
     'LastValueNaive',
@@ -61,6 +62,17 @@ fast = [
     'VECM',
     'ComponentAnalysis',
 ]
+# models that can scale well if many CPU cores are available
+parallel = ['ETS', 'FBProphet', 'ARIMA', 'GLM', 'UnobservedComponents']
+# models that should be fast given many CPU cores
+fast_parallel = list(set(parallel + fast))
+# models that are explicitly not production ready
+experimental = ['MotifSimulation', 'TensorflowSTS', 'ComponentAnalysis', 'TFPRegression']
+# models that perform slowly at scale
+slow = list((set(all_models) - set(fast)) - set(experimental))
+# use GPU
+gpu = ['GluonTS']
+# models with model-based upper/lower forecasts
 probabilistic = [
     'ARIMA',
     'GluonTS',
@@ -71,6 +83,7 @@ probabilistic = [
     'DynamicFactor',
     'VAR',
 ]
+# models that use the shared information of multiple series to improve accuracy
 multivariate = [
     'VECM',
     'DynamicFactor',
@@ -113,6 +126,7 @@ no_shared = [
     'SeasonalNaive',
     'UnobservedComponents',
     'TensorflowSTS',
+    "GLS",
     # 'MotifSimulation',
     # 'DatepartRegression',
 ]
@@ -121,9 +135,14 @@ model_lists = {
     "default": default,
     "fast": fast,
     "superfast": superfast,
+    "parallel": parallel,
+    "fast_parallel": fast_parallel,
     "probabilistic": probabilistic,
     "multivariate": multivariate,
     "no_params": no_params,
     "recombination_approved": recombination_approved,
     "no_shared": no_shared,
+    "experimental": experimental,
+    "slow": slow,
+    "gpu": gpu,
 }

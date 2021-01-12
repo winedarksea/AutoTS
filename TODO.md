@@ -19,12 +19,15 @@
 	* grouping no longer used
 * parameter generation for transformers allowing more possible combinations
 * transformer_max_depth parameter
+* Horizontal Ensembles are now much faster by only running models on the subset of series they apply to
 * change many np.random to random
 	* random.choices further necessitates python 3.6 or greater
 * bug fix in Detrend transformer
 * bug fix in SeasonalDifference transformer
 * SPL bug fix when NaN in test set
 * inverse_transform now fills NaN with zero for upper/lower forecasts
+* expanded model_list aliases, with dedicated module
+* bug fix (creating 0,0 order) and tuning of VARMAX
 * restructuring of some function locations
 
 
@@ -50,8 +53,22 @@ if model in ['Horizontal', 'Probabilistic'] and series_count > 20:
 for model in ensemble_models
 	if model in no_shared AND if transformations not in shared_transformations/bagging:
 		filter dictionary to only series with this model
-		df_train.reindex(copy=True) to these series
+		df_train2 = df_train.reindex(copy=True, columns) to these series
 		run model
+
+pass through all_series to Ensemble Forecast to Horizontal
+what if an ensemble component fails?
+	"limited" generalization option  - only available models with those from all series
+		what if all models are limited?
+			put the very fastest model in "no_shared"
+			model_list or recommend at least one non_shared (which is fast) be included
+Make sure df_train to Horizontal is FULL dataset, not subset
+	it is in validation 0...
+handle shortening ensemble==1 type
+	should work if some only return part...
+	
+all models are being run even if not used?
+all_series only has 2...
 ```
 
 ### Ignored Errors:
@@ -196,7 +213,7 @@ Tensorflow GPU backend may crash on occasion.
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
 	* add to appropriate model_lists: all, recombination_approved if so, no_shared if so
-	* add to model table in extended_tutorial.md
+	* add to model table in extended_tutorial.md (most columns here have an equivalent model_list)
 
 ## New Transformer Checklist:
 	* Make sure that if it modifies the size (more/fewer columns or rows) it returns pd.DataFrame with proper index/columns

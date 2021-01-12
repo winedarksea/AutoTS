@@ -6,8 +6,8 @@ import datetime
 import json
 from hashlib import md5
 from autots.evaluator.metrics import PredictionEval
-from autots.tools.transform import RandomTransform, GeneralTransformer
-from autots.models.ensemble import EnsembleForecast
+from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
+from autots.models.ensemble import EnsembleForecast, generalize_horizontal
 from autots.models.model_list import no_params, recombination_approved, no_shared
 from itertools import zip_longest
 
@@ -833,6 +833,7 @@ def PredictWitch(
         'TransformationParameters',
         'Ensemble',
     ],
+    horizontal_subset: list=None,
 ):
     """Takes numeric data, returns numeric forecasts.
 
@@ -856,6 +857,7 @@ def PredictWitch(
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
         template_cols (list): column names of columns used as model template
+        horizontal_subset (list): columns of df_train to use for forecast, meant for horizontal ensembling
 
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object):
@@ -877,13 +879,20 @@ def PredictWitch(
             ens_template = unpack_ensemble_models(
                 template, template_cols, keep_ensemble=False, recursive=False
             )
+            # horizontal generalization
+            if str(row_upper['Ensemble']) == '2':
+                available_models = list(ens_params['models'].keys())
+                known_matches = ens_params['series']
+                all_series = generalize_horizontal(df_train, known_matches, available_models)
+            else:
+                all_series = None
             total_ens = ens_template.shape[0]
             for index, row in ens_template.iterrows():
                 # recursive recursion!
                 try:
-                    if verbose > 2:
-                        p = f"Ensemble component {index} of {total_ens} FAILED"
-                        print(p)
+                    if all_series is not None:
+                        test_mod = row['ID']
+                        horizontal_subset = [ser for ser, mod in all_series.items() if mod == test_mod]
                     df_forecast = PredictWitch(
                         row,
                         df_train=df_train,
@@ -901,6 +910,7 @@ def PredictWitch(
                         verbose=verbose,
                         n_jobs=n_jobs,
                         template_cols=template_cols,
+                        horizontal_subset=horizontal_subset,
                     )
                     model_id = create_model_id(
                         df_forecast.model_name,
@@ -912,16 +922,18 @@ def PredictWitch(
                         + df_forecast.predict_runtime
                         + df_forecast.transformation_runtime
                     )
-
                     forecasts_list.extend([model_id])
                     forecasts_runtime[model_id] = total_runtime
                     forecasts[model_id] = df_forecast.forecast
                     upper_forecasts[model_id] = df_forecast.upper_forecast
                     lower_forecasts[model_id] = df_forecast.lower_forecast
-                except Exception:
+                    if verbose >= 2:
+                        p = f"Ensemble {ens_params['model_name']} component {index + 1} of {total_ens} succeeded"
+                        print(p)
+                except Exception as e:
                     # currently this leaves no key/value for models that fail
-                    if verbose > 1:
-                        p = f"Ensemble component {index} of {total_ens} FAILED"
+                    if verbose >= 1:  # 1
+                        p = f"FAILED: Ensemble {ens_params['model_name']} component {index} of {total_ens} with error: {repr(e)}"
                         print(p)
             ens_forecast = EnsembleForecast(
                 ens_model_str,
@@ -933,6 +945,7 @@ def PredictWitch(
                 forecasts_runtime=forecasts_runtime,
                 prediction_interval=prediction_interval,
                 df_train=df_train,
+                prematched_series=all_series
             )
             return ens_forecast
         # if not an ensemble
@@ -940,9 +953,15 @@ def PredictWitch(
             model_str = row_upper['Model']
             parameter_dict = json.loads(row_upper['ModelParameters'])
             transformation_dict = json.loads(row_upper['TransformationParameters'])
+            if horizontal_subset is not None and model_str in no_shared and all(trs not in shared_trans for trs in list(transformation_dict['transformations'].values())):
+                df_train_low = df_train.reindex(copy=True, columns=horizontal_subset)
+                if verbose >= 2:
+                    print(f"Reducing to subset for {model_str} with {df_train_low.columns}")
+            else:
+                df_train_low = df_train
 
             df_forecast = ModelPrediction(
-                df_train,
+                df_train_low,
                 forecast_length,
                 transformation_dict,
                 model_str,
@@ -1591,9 +1610,13 @@ def generate_score(
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         if 'TotalRuntime' in model_results.columns:
+            try:
+                outz = model_results['TotalRuntime'].dt.seconds
+            except Exception:
+                outz = model_results['TotalRuntime'].astype(int)
             model_results['TotalRuntimeSeconds'] = np.where(
                 model_results['TotalRuntimeSeconds'].isna(),
-                model_results['TotalRuntime'].dt.seconds,
+                outz,
                 model_results['TotalRuntimeSeconds'],
             )
         else:

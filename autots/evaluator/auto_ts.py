@@ -117,6 +117,8 @@ class AutoTS(object):
         verbose: int = 1,
         n_jobs: int = None,
     ):
+        assert forecast_length > 0, "forecast_length must be greater than 0"
+        assert transformer_max_depth > 0, "transformer_max_depth must be greater than 0"
         self.forecast_length = int(abs(forecast_length))
         self.frequency = frequency
         self.aggfunc = aggfunc
@@ -204,6 +206,28 @@ class AutoTS(object):
             raise ValueError(
                 "No models in template! Adjust initial_template or model_list"
             )
+        # remove transformers not in transformer_list and max_depth
+        # yes it is awkward, but I cannot think of a better way at this time
+        if self.transformer_max_depth < 6 or self.transformer_list not in ["all", "fast"]:
+            from autots.tools.transform import transformer_list_to_dict
+
+            transformer_lst, prb = transformer_list_to_dict(self.transformer_list)
+            for index, row in self.initial_template.iterrows():
+                full_params = json.loads(row['TransformationParameters'])
+                transformations = full_params['transformations']
+                transformation_params = full_params['transformation_params']
+                # remove those not in transformer_list
+                bad_keys = [i for i,x in json.loads(row['TransformationParameters'])['transformations'].items() if x not in transformer_lst]
+                [transformations.pop(key) for key in bad_keys]
+                [transformation_params.pop(key) for key in bad_keys]
+
+                # shorten any remaining if beyond length
+                transformations = dict(list(transformations.items())[:self.transformer_max_depth])
+                transformation_params = dict(list(transformation_params.items())[:self.transformer_max_depth])
+
+                full_params['transformations'] = transformations
+                full_params['transformation_params'] = transformation_params
+                self.initial_template.loc[index, 'TransformationParameters'] = json.dumps(full_params)
 
         self.best_model = pd.DataFrame()
         self.regressor_used = False
@@ -1041,6 +1065,7 @@ or otherwise increase models available."""
                     verbose=verbose,
                     template_cols=self.template_cols,
                 )
+                # convert categorical back to numeric
                 trans = self.categorical_transformer
                 df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
                 df_forecast.lower_forecast = trans.inverse_transform(
@@ -1069,6 +1094,7 @@ or otherwise increase models available."""
                 verbose=verbose,
                 template_cols=self.template_cols,
             )
+            # convert categorical back to numeric
             trans = self.categorical_transformer
             df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
             df_forecast.lower_forecast = trans.inverse_transform(

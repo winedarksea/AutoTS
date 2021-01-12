@@ -2030,16 +2030,8 @@ na_probs = {
     "interpolate": 0.1,
 }
 
-def RandomTransform(transformer_list: dict = transformer_dict,
-    transformer_max_depth: int = 4,
-    na_prob_dict: dict = na_probs,
-    fast_params: bool = None,
-    traditional_order: bool = False,
-):
-    """Return a dict of randomly choosen transformation selections.
-    
-    DatepartRegression is used as a signal that slow parameters are allowed.
-    """
+def transformer_list_to_dict(transformer_list):
+    """Convert various possibilities to dict."""
     if not transformer_list or transformer_list == "all":
         transformer_list = transformer_dict
     elif transformer_list == "fast":
@@ -2056,6 +2048,19 @@ def RandomTransform(transformer_list: dict = transformer_dict,
         transformer_prob = [1 / trs_len] * trs_len
     else:
         raise ValueError("transformer_list alias not recognized.")
+    return transformer_list, transformer_prob
+
+def RandomTransform(transformer_list: dict = transformer_dict,
+    transformer_max_depth: int = 4,
+    na_prob_dict: dict = na_probs,
+    fast_params: bool = None,
+    traditional_order: bool = False,
+):
+    """Return a dict of randomly choosen transformation selections.
+    
+    DatepartRegression is used as a signal that slow parameters are allowed.
+    """
+    transformer_list, transformer_prob = transformer_list_to_dict(transformer_list)
 
     # adjust fast/slow based on Transformers allowed
     if fast_params is None:

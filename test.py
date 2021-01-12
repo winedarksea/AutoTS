@@ -29,6 +29,7 @@ df = df.set_index("datetime", drop=True)
 df = df.iloc[:, 0:100]
 """
 
+
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
 weights_weekly = {
@@ -52,19 +53,21 @@ model_list = [
     'AverageValueNaive',
     'GLS',
     'SeasonalNaive',
-    # 'GLM',
-    # 'ETS',
+    'GLM',
+    'ETS',
     # 'FBProphet',
-    # 'RollingRegression',
+    'RollingRegression',
     # 'GluonTS',
-    # 'UnobservedComponents',
+    'UnobservedComponents',
     'DatepartRegression',
-    # 'VAR',
-    # 'VECM',
-    # 'WindowRegression',
+    'ARIMA',
+    'VAR',
+    'VECM',
+    'WindowRegression',
 ]
 
-transformer_list = "all"  # {}  # ["SeasonalDifference"]
+transformer_list = "fast"  # ["SeasonalDifference", "MinMaxScaler", "Detrend"]
+transformer_max_depth = 1
 # model_list = 'superfast'
 # model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
@@ -84,15 +87,15 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble="simple",
+    ensemble="simple,horizontal-max",
     constraint=2,
     max_generations=generations,
     num_validations=2,
     validation_method='backwards',
     model_list=model_list,
     transformer_list=transformer_list,
-    transformer_max_depth=6,
-    initial_template='Random',
+    transformer_max_depth=transformer_max_depth,
+    initial_template='General+Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.3,
     max_per_model_class=None,
@@ -157,7 +160,7 @@ model = AutoTS(
     validation_method='backwards',
     model_list=model_list,
     transformer_list=transformer_list,
-    transformer_max_depth=4,
+    transformer_max_depth=transformer_max_depth,
     initial_template='General+Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.1,
@@ -211,6 +214,7 @@ initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_secon
 sleep(5)
 print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
+# temp3 = unpack_ensemble_models(model.best_model, keep_ensemble=False, recursive=True)
 # import platform
 # initial_results.to_csv("bigger_speedtest" + str(platform.node()) + "_openblas.csv")
 
