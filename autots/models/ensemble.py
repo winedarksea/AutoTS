@@ -156,14 +156,22 @@ def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
     clf.fit(Xt, Y)
     result = clf.predict(Xf)
     result_d = dict(zip(Xf.index.tolist(), result))
+    # since this only has estimates, overwrite with known that includes more
     final = {**result_d, **known}
     # temp = pd.DataFrame({'series': list(final.keys()), 'model': list(final.values())})
     # temp2 = temp.merge(X, left_on='series', right_index=True)
     return final
 
 
-def generalize_horizontal(df_train, known_matches, available_models):
-    """generalize a horizontal model trained on a subset of all series"""
+def generalize_horizontal(df_train, known_matches: dict, available_models: list, full_models: list=None):
+    """generalize a horizontal model trained on a subset of all series
+    
+    Args:
+        df_train (pd.DataFrame): time series data
+        known_matches (dict): series:model dictionary for some to all series
+        available_models (dict): list of models actually available
+        full_models (dict): models that are available for every single series
+    """
     org_idx = df_train.columns
     org_list = org_idx.tolist()
     # remove any unavailable models or unnecessary series
@@ -173,7 +181,16 @@ def generalize_horizontal(df_train, known_matches, available_models):
     if not k:
         raise ValueError("Horizontal template has no models matching this data!")
     if len(set(org_list) - set(list(k.keys()))) > 0:
-        all_series = horizontal_classifier(df_train, k)
+        # filter down to only models available for all
+        print(f"Models not available: {[ser for ser, mod in known_matches.items() if mod not in available_models]}")
+        print(f"Series not available: {[ser for ser in df_train.columns if ser not in list(known_matches.keys())]}")
+        if full_models is not None:
+            k2 = {ser: mod for ser, mod in k.items() if mod in full_models}
+        else:
+            k2 = k.copy()
+        all_series_part = horizontal_classifier(df_train, k2)
+        # since this only has "full", overwrite with known that includes more
+        all_series = {**all_series_part, **k}
     else:
         all_series = known_matches
     return all_series
@@ -188,13 +205,22 @@ def HorizontalEnsemble(
     forecasts_runtime,
     prediction_interval,
     df_train=None,
-    all_series: dict=None,
+    prematched_series: dict=None,
 ):
     """Generate forecast for per_series ensembling."""
-    if all_series is None:
-        available_models = list(forecasts.keys())
-        known_matches = ensemble_params['series']
-        all_series = generalize_horizontal(df_train, known_matches, available_models)
+    # this is meant to fill in any failures
+    available_models = list(forecasts.keys())
+    train_size = df_train.shape
+    print(f"running inner generalization with training size: {train_size}")
+    full_models = [mod for mod, fcs in forecasts.items() if fcs.shape[1] == train_size[1]]
+    if not full_models:
+        full_models = available_models  # hope it doesn't need to fill
+    print(f"FULLMODEL {len(full_models)}: {full_models}")
+    if prematched_series is None:
+        prematched_series = ensemble_params['series']
+    all_series = generalize_horizontal(df_train, prematched_series, available_models, full_models)
+    print(f"ALLSERIES {len(all_series.keys())}: {all_series}")
+
     org_idx = df_train.columns
 
     forecast_df, u_forecast_df, l_forecast_df = (
@@ -344,6 +370,7 @@ def EnsembleForecast(
     forecasts_runtime,
     prediction_interval,
     df_train=None,
+    prematched_series: dict=None,
 ):
     """Return PredictionObject for given ensemble method."""
     s3list = ['best3', 'best3horizontal', 'bestn']
@@ -382,6 +409,7 @@ def EnsembleForecast(
             forecasts_runtime,
             prediction_interval,
             df_train=df_train,
+            prematched_series=prematched_series,
         )
         return ens_forecast
 

@@ -126,6 +126,7 @@ no_shared = [
     'SeasonalNaive',
     'UnobservedComponents',
     'TensorflowSTS',
+    "GLS",
     # 'MotifSimulation',
     # 'DatepartRegression',
 ]

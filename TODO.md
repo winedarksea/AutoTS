@@ -52,8 +52,23 @@ if model in ['Horizontal', 'Probabilistic'] and series_count > 20:
 for model in ensemble_models
 	if model in no_shared AND if transformations not in shared_transformations/bagging:
 		filter dictionary to only series with this model
-		df_train2 = df_train.reindex(copy=True) to these series
+		df_train2 = df_train.reindex(copy=True, columns) to these series
 		run model
+
+pass through all_series to Ensemble Forecast to Horizontal
+what if an ensemble component fails?
+	primary and backup assigned?
+	"limited" generalization option  - only available models with those from all series
+		what if all models are limited?
+			put the very fastest model in "no_shared"
+			model_list or recommend at least one non_shared (which is fast) be included
+Make sure df_train to Horizontal is FULL dataset, not subset
+	it is in validation 0...
+handle shortening ensemble==1 type
+	should work if some only return part...
+	
+all models are being run even if not used?
+all_series only has 2...
 ```
 
 ### Ignored Errors:

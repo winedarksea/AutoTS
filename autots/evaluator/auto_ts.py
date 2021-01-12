@@ -1065,6 +1065,7 @@ or otherwise increase models available."""
                     verbose=verbose,
                     template_cols=self.template_cols,
                 )
+                # convert categorical back to numeric
                 trans = self.categorical_transformer
                 df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
                 df_forecast.lower_forecast = trans.inverse_transform(
@@ -1093,6 +1094,7 @@ or otherwise increase models available."""
                 verbose=verbose,
                 template_cols=self.template_cols,
             )
+            # convert categorical back to numeric
             trans = self.categorical_transformer
             df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
             df_forecast.lower_forecast = trans.inverse_transform(
