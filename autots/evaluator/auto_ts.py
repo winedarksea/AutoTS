@@ -811,9 +811,12 @@ or otherwise increase models available."""
             try:
                 if 'horizontal' in ensemble:
                     per_series = self.initial_results.per_series_mae.copy()
+                    # select only those models which were validated
                     temp = per_series.mean(axis=1).groupby(level=0).count()
                     temp = temp[temp >= (num_validations + 1)]
                     per_series = per_series[per_series.index.isin(temp.index)]
+                    # this .mean() should assure all series get a value
+                    # as long as they worked in at least one validation
                     per_series = per_series.groupby(level=0).mean()
                     ens_templates = HorizontalTemplateGenerator(
                         per_series,
