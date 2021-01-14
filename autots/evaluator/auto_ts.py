@@ -1139,7 +1139,7 @@ or otherwise increase models available."""
 
     def export_template(
         self,
-        filename,
+        filename=None,
         models: str = 'best',
         n: int = 5,
         max_per_model_class: int = None,

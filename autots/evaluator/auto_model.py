@@ -1613,7 +1613,7 @@ def generate_score(
             try:
                 outz = model_results['TotalRuntime'].dt.seconds
             except Exception:
-                outz = model_results['TotalRuntime'].astype(int)
+                outz = model_results['TotalRuntime'].astype(float)
             model_results['TotalRuntimeSeconds'] = np.where(
                 model_results['TotalRuntimeSeconds'].isna(),
                 outz,
