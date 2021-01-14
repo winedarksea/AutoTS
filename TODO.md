@@ -28,6 +28,7 @@
 * inverse_transform now fills NaN with zero for upper/lower forecasts
 * expanded model_list aliases, with dedicated module
 * bug fix (creating 0,0 order) and tuning of VARMAX
+* Fix export_template bug
 * restructuring of some function locations
 
 
