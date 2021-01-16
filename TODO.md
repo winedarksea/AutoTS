@@ -15,11 +15,12 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* breaking change to model templates: transformers structure change
+* **breaking change** to model templates: transformers structure change
 	* grouping no longer used
 * parameter generation for transformers allowing more possible combinations
 * transformer_max_depth parameter
 * Horizontal Ensembles are now much faster by only running models on the subset of series they apply to
+* general starting template improved and updated to new transformer format
 * change many np.random to random
 	* random.choices further necessitates python 3.6 or greater
 * bug fix in Detrend transformer

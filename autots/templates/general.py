@@ -6,6 +6,7 @@ general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')
 
 """
 # Basic Template Construction Code
+# transformer_max_depth = 6 and transformer_list = "fast"
 from autots.evaluator.auto_model import unpack_ensemble_models
 max_per_model_class = 1
 export_template = model.validation_results.model_results

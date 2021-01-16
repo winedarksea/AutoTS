@@ -54,11 +54,12 @@ model = AutoTS(
     forecast_length=3,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble='all',
-    model_list='superfast',
+    ensemble=None,
+    model_list="superfast",
+	transformer_list="fast",
     max_generations=5,
     num_validations=2,
-    validation_method='even',
+    validation_method='backwards',
 )
 model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id')
 

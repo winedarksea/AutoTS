@@ -12,11 +12,12 @@ from autots.datasets import (
 )
 
 from autots.evaluator.auto_ts import AutoTS
-from autots.tools.transform import GeneralTransformer
+from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.tools.shaping import long_to_wide
 
 __version__ = '0.3.0'
 
+TransformTS = GeneralTransformer
 
 __all__ = [
     'load_daily',
@@ -25,7 +26,9 @@ __all__ = [
     'load_hourly',
     'load_weekly',
     'AutoTS',
+    'TransformTS',
     'GeneralTransformer',
+    'RandomTransform',
     'long_to_wide',
 ]
 

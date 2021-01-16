@@ -1628,11 +1628,11 @@ class GeneralTransformer(object):
     Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a 'wide' (one column per series) shape.
 
     Warning:
-        - inverse_transform will not fully return the original data under some conditions
-            * outliers removed or clipped will be returned in the clipped or filled na form
+        - inverse_transform will not fully return the original data under many conditions
+            * the primary intention of inverse_transform is to inverse for forecast (immediately following the historical time period) data from models, not to return original data
             * NAs filled will be returned with the filled value
-            * Discretization cannot be inversed
-            * RollingMean, PctChange, CumSum, and DifferencedTransformer will only return original or an immediately following forecast
+            * Discretization, statsmodels filters, Round, Slice, ClipOutliers cannot be inversed
+            * RollingMean, PctChange, CumSum, Seasonal Difference, and DifferencedTransformer will only return original or an immediately following forecast
                 - by default 'forecast' is expected, 'original' can be set in trans_method
 
     Args:
@@ -1641,11 +1641,14 @@ class GeneralTransformer(object):
             'zero' - fill with zero. Useful for sales and other data where NA does usually mean $0.
             'mean' - fill all missing values with the series' overall average value
             'median' - fill all missing values with the series' overall median value
-            'rolling mean' - fill with last n (window = 10) values
-            'ffill mean biased' - simple avg of ffill and mean
-            'fake date' - shifts forward data over nan, thus values will have incorrect timestamps
+            'rolling_mean' - fill with last n (window = 10) values
+            'rolling_mean_24' - fill with avg of last 24
+            'ffill_mean_biased' - simple avg of ffill and mean
+            'fake_date' - shifts forward data over nan, thus values will have incorrect timestamps
+            'IterativeImputer' - sklearn iterative imputer
+            most of the interpolate methods from pandas.interpolate
 
-        transformations (dict): - transformations to apply {0: "MinMaxScaler", ...}
+        transformations (dict): - transformations to apply {0: "MinMaxScaler", 1: "Detrend", ...}
             'None'
             'MinMaxScaler' - Sklearn MinMaxScaler
             'PowerTransformer' - Sklearn PowerTransformer
@@ -1675,6 +1678,9 @@ class GeneralTransformer(object):
             'ClipOutliers' - remove outliers
             'Discretize' - bin or round data into groups
             'DatepartRegression' - move a trend trained on datetime index
+
+        transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
+            pass through dictionary of empty dictionaries to utilize defaults
 
         random_seed (int): random state passed through where applicable
     """
