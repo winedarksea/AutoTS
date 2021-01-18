@@ -59,7 +59,7 @@ model = AutoTS(
 	transformer_list="fast",
     max_generations=5,
     num_validations=2,
-    validation_method='backwards',
+    validation_method="backwards"
 )
 model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id')
 
