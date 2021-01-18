@@ -653,6 +653,10 @@ def ModelPrediction(
             "Model {} returned NaN for one or more series".format(model_str)
         )
 
+    # CHECK Forecasts are proper length!
+    if df_forecast.forecast.shape[0] != forecast_length:
+        raise ValueError(f"Model {model_str} returned improper forecast_length")
+
     transformationStartTime = datetime.datetime.now()
     # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
     df_forecast.forecast = pd.DataFrame(

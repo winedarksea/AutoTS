@@ -6,20 +6,21 @@ There are a number of ways to get a more accurate time series model. AutoTS take
 
 ## Underlying Process
 AutoTS works in the following way at present:
-* It begins by taking long data and converting it to a wide dataframe with DateTimeIndex
+* The process begins with data reshaping and basic data handling as needed
 * An initial train/test split is generated where the test is the most recent data, of forecast_length
-* A random template of models is generated and tested on the initial train/test
-* Models consist of a pre-transformation step (fill na options, outlier removal options, etc), and algorithm (ie ETS) and model paramters (trend, damped, etc)
+* The initial model template is a combination of transfer learning and randomly generated models. This is tested on the initial train/test
+* Models consist of a pre-transformation step (fill na options, outlier removal options, etc), and algorithm (ie ETS) and model paramters (trend, damped, ...)
 * The top models (selected by a combination of metrics) are recombined with random mutations for n_generations
-* A handful of the best models from this process go to cross validation, where they are re-assessed on new train/test splits.
-* The best model in validation is selected as best_model and used in the `.predict()` method to generate forecasts.
+* A percentage of the best models from this process go to cross validation, where they are re-assessed on new train/test splits.
+* If used, horizontal ensembling uses the validation data to choose the best model for each series.
+* The best model or ensemble in validation is selected as best_model and used in the `.predict()` method to generate forecasts.
 
 ### A simple example
 ```python
 # also: _hourly, _daily, _weekly, or _yearly
 from autots.datasets import load_monthly
 
-df_long = load_monthly()
+df_long = load_monthly(long=True)
 
 from autots import AutoTS
 
@@ -27,7 +28,6 @@ model = AutoTS(
     forecast_length=3,
     frequency='infer',
     ensemble='simple',
-    drop_data_older_than_periods=240,
     max_generations=5,
     num_validations=2,
 )
@@ -106,7 +106,8 @@ model = AutoTS(
     num_validations=2,
     validation_method='seasonal 168',
     model_list=model_list,
-    models_to_validate=15,
+	transformer_list='all',
+    models_to_validate=0.2,
     drop_most_recent=1,
 	n_jobs='auto',
 )
@@ -121,7 +122,7 @@ forecasts_df = prediction.forecast
 # model.best_model.to_string()
 ```
 
-Probabilistic forecasts are *available* for all models, but in many cases are just data-based estimates in lieu of model estimates, so be careful. 
+Probabilistic forecasts are *available* for all models, but in many cases are just data-based estimates in lieu of model estimates. 
 ```python
 upper_forecasts_df = prediction.upper_forecast
 lower_forecasts_df = prediction.lower_forecast

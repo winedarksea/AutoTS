@@ -16,9 +16,9 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 # raise ValueError("aaargh!")
 
 example_filename = "example_export.csv"  # .csv/.json
-forecast_length = 12
+forecast_length = 8
 long = False
-df = load_daily(long=long)
+df = load_weekly(long=long)
 n_jobs = 'auto'
 generations = 2
 
@@ -26,14 +26,13 @@ generations = 2
 df = pd.read_csv("m5_sample.gz")
 df['datetime'] = pd.DatetimeIndex(df['datetime'])
 df = df.set_index("datetime", drop=True)
-df = df.iloc[:, 0:100]
+df = df.iloc[:, 0:40]
 """
-
 
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
 weights_weekly = {
-    'Weekly Minnesota Midgrade Conventional Retail Gasoline Prices  (Dollars per Gallon)': 20
+    'Weekly Minnesota Midgrade Conventional Retail Gasoline Prices  (Dollars per Gallon)': 2
 }
 grouping_monthly = {
     'CSUSHPISA': 'A',
@@ -56,8 +55,8 @@ model_list = [
     'GLM',
     'ETS',
     # 'FBProphet',
-    'RollingRegression',
-    # 'GluonTS',
+    # 'RollingRegression',
+    'GluonTS',
     'UnobservedComponents',
     'DatepartRegression',
     'ARIMA',
@@ -67,15 +66,15 @@ model_list = [
 ]
 
 transformer_list = "fast"  # ["SeasonalDifference", "MinMaxScaler", "Detrend"]
-transformer_max_depth = 1
+transformer_max_depth = 6
 # model_list = 'superfast'
 # model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {
-    'smape_weighting': 2,
+    'smape_weighting': 3,
     'mae_weighting': 1,
-    'rmse_weighting': 2,
+    'rmse_weighting': 1,
     'containment_weighting': 0,
     'runtime_weighting': 0,
     'spl_weighting': 1,
@@ -88,7 +87,7 @@ model = AutoTS(
     frequency='infer',
     prediction_interval=0.9,
     ensemble="simple,horizontal-max",
-    constraint=2,
+    constraint=None,
     max_generations=generations,
     num_validations=2,
     validation_method='backwards',
@@ -97,11 +96,11 @@ model = AutoTS(
     transformer_max_depth=transformer_max_depth,
     initial_template='General+Random',
     metric_weighting=metric_weighting,
-    models_to_validate=0.3,
+    models_to_validate=0.35,
     max_per_model_class=None,
     model_interrupt=True,
     n_jobs=n_jobs,
-    drop_most_recent=0,
+    drop_most_recent=1,
     subset=None,
     verbose=1,
 )
@@ -137,7 +136,7 @@ start_time_for = timeit.default_timer()
 model = model.fit(
     df,
     future_regressor=future_regressor_train2d,
-    # weights=weights_weekly,
+    weights=weights_weekly,
     # grouping_ids=grouping_monthly,
     # result_file='test.pickle',
     date_col='datetime' if long else None,
@@ -154,7 +153,7 @@ model = AutoTS(
     frequency='infer',
     prediction_interval=0.9,
     ensemble=None,
-    constraint=2,
+    constraint=None,
     max_generations=generations,
     num_validations=2,
     validation_method='backwards',
@@ -214,9 +213,8 @@ initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_secon
 sleep(5)
 print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
-# temp3 = unpack_ensemble_models(model.best_model, keep_ensemble=False, recursive=True)
-# import platform
-# initial_results.to_csv("bigger_speedtest" + str(platform.node()) + "_openblas.csv")
+import platform
+initial_results.to_csv("general_template" + str(platform.node()) + ".csv")
 
 """
 # Import/Export
