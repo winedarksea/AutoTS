@@ -170,12 +170,15 @@ class AutoTS(object):
         # convert shortcuts of model lists to actual lists of models
         if model_list in list(model_lists.keys()):
             self.model_list = model_lists[model_list]
-        
+
         # generate template to begin with
         initial_template = str(initial_template).lower()
         if initial_template == 'random':
             self.initial_template = RandomTemplate(
-                50, model_list=self.model_list, transformer_list=self.transformer_list, transformer_max_depth=self.transformer_max_depth,
+                50,
+                model_list=self.model_list,
+                transformer_list=self.transformer_list,
+                transformer_max_depth=self.transformer_max_depth,
             )
         elif initial_template == 'general':
             from autots.templates.general import general_template
@@ -185,7 +188,10 @@ class AutoTS(object):
             from autots.templates.general import general_template
 
             random_template = RandomTemplate(
-                40, model_list=self.model_list, transformer_list=self.transformer_list, transformer_max_depth=self.transformer_max_depth,
+                40,
+                model_list=self.model_list,
+                transformer_list=self.transformer_list,
+                transformer_max_depth=self.transformer_max_depth,
             )
             self.initial_template = pd.concat(
                 [general_template, random_template], axis=0
@@ -195,7 +201,10 @@ class AutoTS(object):
         else:
             print("Input initial_template unrecognized. Using Random.")
             self.initial_template = RandomTemplate(
-                50, model_list=self.model_list, transformer_list=self.transformer_list, transformer_max_depth=self.transformer_max_depth,
+                50,
+                model_list=self.model_list,
+                transformer_list=self.transformer_list,
+                transformer_max_depth=self.transformer_max_depth,
             )
 
         # remove models not in given model list
@@ -208,7 +217,10 @@ class AutoTS(object):
             )
         # remove transformers not in transformer_list and max_depth
         # yes it is awkward, but I cannot think of a better way at this time
-        if self.transformer_max_depth < 6 or self.transformer_list not in ["all", "fast"]:
+        if self.transformer_max_depth < 6 or self.transformer_list not in [
+            "all",
+            "fast",
+        ]:
             from autots.tools.transform import transformer_list_to_dict
 
             transformer_lst, prb = transformer_list_to_dict(self.transformer_list)
@@ -217,17 +229,29 @@ class AutoTS(object):
                 transformations = full_params['transformations']
                 transformation_params = full_params['transformation_params']
                 # remove those not in transformer_list
-                bad_keys = [i for i,x in json.loads(row['TransformationParameters'])['transformations'].items() if x not in transformer_lst]
+                bad_keys = [
+                    i
+                    for i, x in json.loads(row['TransformationParameters'])[
+                        'transformations'
+                    ].items()
+                    if x not in transformer_lst
+                ]
                 [transformations.pop(key) for key in bad_keys]
                 [transformation_params.pop(key) for key in bad_keys]
 
                 # shorten any remaining if beyond length
-                transformations = dict(list(transformations.items())[:self.transformer_max_depth])
-                transformation_params = dict(list(transformation_params.items())[:self.transformer_max_depth])
+                transformations = dict(
+                    list(transformations.items())[: self.transformer_max_depth]
+                )
+                transformation_params = dict(
+                    list(transformation_params.items())[: self.transformer_max_depth]
+                )
 
                 full_params['transformations'] = transformations
                 full_params['transformation_params'] = transformation_params
-                self.initial_template.loc[index, 'TransformationParameters'] = json.dumps(full_params)
+                self.initial_template.loc[
+                    index, 'TransformationParameters'
+                ] = json.dumps(full_params)
 
         self.best_model = pd.DataFrame()
         self.regressor_used = False

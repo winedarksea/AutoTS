@@ -40,7 +40,7 @@ default = [
     'DatepartRegression',
 ]
 # fastest models at any scale
-superfast =  [
+superfast = [
     'ZeroesNaive',
     'LastValueNaive',
     'AverageValueNaive',
@@ -67,7 +67,12 @@ parallel = ['ETS', 'FBProphet', 'ARIMA', 'GLM', 'UnobservedComponents']
 # models that should be fast given many CPU cores
 fast_parallel = list(set(parallel + fast))
 # models that are explicitly not production ready
-experimental = ['MotifSimulation', 'TensorflowSTS', 'ComponentAnalysis', 'TFPRegression']
+experimental = [
+    'MotifSimulation',
+    'TensorflowSTS',
+    'ComponentAnalysis',
+    'TFPRegression',
+]
 # models that perform slowly at scale
 slow = list((set(all_models) - set(fast)) - set(experimental))
 # use GPU

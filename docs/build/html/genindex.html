@@ -5,7 +5,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Index &#8212; AutoTS 0.2.8 documentation</title>
+    <title>Index &#8212; AutoTS 0.3.0 documentation</title>
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
@@ -48,7 +48,6 @@
  | <a href="#L"><strong>L</strong></a>
  | <a href="#M"><strong>M</strong></a>
  | <a href="#N"><strong>N</strong></a>
- | <a href="#O"><strong>O</strong></a>
  | <a href="#P"><strong>P</strong></a>
  | <a href="#R"><strong>R</strong></a>
  | <a href="#S"><strong>S</strong></a>
@@ -86,6 +85,8 @@
 </li>
       <li><a href="source/autots.models.html#module-autots.models">autots.models (module)</a>
 </li>
+      <li><a href="source/autots.models.html#module-autots.models.base">autots.models.base (module)</a>
+</li>
       <li><a href="source/autots.models.html#module-autots.models.basics">autots.models.basics (module)</a>
 </li>
       <li><a href="source/autots.models.html#module-autots.models.dnn">autots.models.dnn (module)</a>
@@ -93,6 +94,8 @@
       <li><a href="source/autots.models.html#module-autots.models.ensemble">autots.models.ensemble (module)</a>
 </li>
       <li><a href="source/autots.models.html#module-autots.models.gluonts">autots.models.gluonts (module)</a>
+</li>
+      <li><a href="source/autots.models.html#module-autots.models.model_list">autots.models.model_list (module)</a>
 </li>
       <li><a href="source/autots.models.html#module-autots.models.prophet">autots.models.prophet (module)</a>
 </li>
@@ -124,6 +127,8 @@
 </li>
       <li><a href="source/autots.tools.html#module-autots.tools.profile">autots.tools.profile (module)</a>
 </li>
+      <li><a href="source/autots.tools.html#module-autots.tools.seasonal">autots.tools.seasonal (module)</a>
+</li>
       <li><a href="source/autots.tools.html#module-autots.tools.shaping">autots.tools.shaping (module)</a>
 </li>
       <li><a href="source/autots.tools.html#module-autots.tools.transform">autots.tools.transform (module)</a>
@@ -138,7 +143,7 @@
 <h2 id="B">B</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelObject.basic_profile">basic_profile() (autots.evaluator.auto_model.ModelObject method)</a>
+      <li><a href="source/autots.models.html#autots.models.base.ModelObject.basic_profile">basic_profile() (autots.models.base.ModelObject method)</a>
 </li>
       <li><a href="source/autots.html#autots.AutoTS.best_model">best_model (autots.AutoTS attribute)</a>
 
@@ -176,7 +181,7 @@
 </li>
       <li><a href="source/autots.tools.html#autots.tools.cpu_count.cpu_count">cpu_count() (in module autots.tools.cpu_count)</a>
 </li>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelObject.create_forecast_index">create_forecast_index() (autots.evaluator.auto_model.ModelObject method)</a>
+      <li><a href="source/autots.models.html#autots.models.base.ModelObject.create_forecast_index">create_forecast_index() (autots.models.base.ModelObject method)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.create_model_id">create_model_id() (in module autots.evaluator.auto_model)</a>
 </li>
@@ -190,10 +195,14 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.tools.html#autots.tools.profile.data_profile">data_profile() (in module autots.tools.profile)</a>
 </li>
-      <li><a href="source/autots.models.html#autots.models.sklearn.date_part">date_part() (in module autots.models.sklearn)</a>
+      <li><a href="source/autots.tools.html#autots.tools.seasonal.date_part">date_part() (in module autots.tools.seasonal)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.sklearn.DatepartRegression">DatepartRegression (class in autots.models.sklearn)</a>
+
+      <ul>
+        <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegression">(in module autots.tools.transform)</a>
 </li>
+      </ul></li>
       <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegressionTransformer">DatepartRegressionTransformer (class in autots.tools.transform)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.transform.Detrend">Detrend (class in autots.tools.transform)</a>
@@ -422,6 +431,10 @@
 <h2 id="G">G</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.templates.html#autots.templates.general.general_template">general_template (in module autots.templates.general)</a>
+</li>
+      <li><a href="source/autots.models.html#autots.models.ensemble.generalize_horizontal">generalize_horizontal() (in module autots.models.ensemble)</a>
+</li>
       <li><a href="source/autots.html#autots.GeneralTransformer">GeneralTransformer (class in autots)</a>
 
       <ul>
@@ -434,7 +447,7 @@
 </li>
       <li><a href="source/autots.datasets.html#autots.datasets.fred.get_fred_data">get_fred_data() (in module autots.datasets.fred)</a>
 </li>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelObject.get_new_params">get_new_params() (autots.evaluator.auto_model.ModelObject method)</a>
+      <li><a href="source/autots.models.html#autots.models.base.ModelObject.get_new_params">get_new_params() (autots.models.base.ModelObject method)</a>
 
       <ul>
         <li><a href="source/autots.models.html#autots.models.basics.AverageValueNaive.get_new_params">(autots.models.basics.AverageValueNaive method)</a>
@@ -483,10 +496,32 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.tsfresh.TSFreshRegressor.get_new_params">(autots.models.tsfresh.TSFreshRegressor method)</a>
 </li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.CenterLastValue.get_new_params">(autots.tools.transform.CenterLastValue static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.ClipOutliers.get_new_params">(autots.tools.transform.ClipOutliers static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.DatepartRegressionTransformer.get_new_params">(autots.tools.transform.DatepartRegressionTransformer static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.Detrend.get_new_params">(autots.tools.transform.Detrend static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.Discretize.get_new_params">(autots.tools.transform.Discretize static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.EmptyTransformer.get_new_params">(autots.tools.transform.EmptyTransformer static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.IntermittentOccurrence.get_new_params">(autots.tools.transform.IntermittentOccurrence static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.RollingMeanTransformer.get_new_params">(autots.tools.transform.RollingMeanTransformer static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.Round.get_new_params">(autots.tools.transform.Round static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.SeasonalDifference.get_new_params">(autots.tools.transform.SeasonalDifference static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.Slice.get_new_params">(autots.tools.transform.Slice static method)</a>
+</li>
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelObject.get_params">get_params() (autots.evaluator.auto_model.ModelObject method)</a>
+      <li><a href="source/autots.models.html#autots.models.base.ModelObject.get_params">get_params() (autots.models.base.ModelObject method)</a>
 
       <ul>
         <li><a href="source/autots.models.html#autots.models.basics.AverageValueNaive.get_params">(autots.models.basics.AverageValueNaive method)</a>
@@ -536,6 +571,8 @@
         <li><a href="source/autots.models.html#autots.models.tsfresh.TSFreshRegressor.get_params">(autots.models.tsfresh.TSFreshRegressor method)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.tools.html#autots.tools.transform.get_transformer_params">get_transformer_params() (in module autots.tools.transform)</a>
+</li>
       <li><a href="source/autots.models.html#autots.models.statsmodels.GLM">GLM (class in autots.models.statsmodels)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.statsmodels.GLS">GLS (class in autots.models.statsmodels)</a>
@@ -696,7 +733,7 @@
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelObject">ModelObject (class in autots.evaluator.auto_model)</a>
+      <li><a href="source/autots.models.html#autots.models.base.ModelObject">ModelObject (class in autots.models.base)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelPrediction">ModelPrediction() (in module autots.evaluator.auto_model)</a>
 </li>
@@ -714,18 +751,6 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.tools.html#autots.tools.shaping.NumericTransformer">NumericTransformer (class in autots.tools.shaping)</a>
 </li>
-  </ul></td>
-</tr></table>
-
-<h2 id="O">O</h2>
-<table style="width: 100%" class="indextable genindextable"><tr>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="source/autots.html#autots.GeneralTransformer.outlier_treatment">outlier_treatment() (autots.GeneralTransformer method)</a>
-
-      <ul>
-        <li><a href="source/autots.tools.html#autots.tools.transform.GeneralTransformer.outlier_treatment">(autots.tools.transform.GeneralTransformer method)</a>
-</li>
-      </ul></li>
   </ul></td>
 </tr></table>
 
@@ -804,7 +829,7 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.PredictionEval">PredictionEval() (in module autots.evaluator.metrics)</a>
 </li>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.PredictionObject">PredictionObject (class in autots.evaluator.auto_model)</a>
+      <li><a href="source/autots.models.html#autots.models.base.PredictionObject">PredictionObject (class in autots.models.base)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.PredictWitch">PredictWitch() (in module autots.evaluator.auto_model)</a>
 </li>
@@ -816,8 +841,12 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.RandomTemplate">RandomTemplate() (in module autots.evaluator.auto_model)</a>
 </li>
-      <li><a href="source/autots.tools.html#autots.tools.transform.RandomTransform">RandomTransform() (in module autots.tools.transform)</a>
+      <li><a href="source/autots.html#autots.RandomTransform">RandomTransform() (in module autots)</a>
+
+      <ul>
+        <li><a href="source/autots.tools.html#autots.tools.transform.RandomTransform">(in module autots.tools.transform)</a>
 </li>
+      </ul></li>
       <li><a href="source/autots.tools.html#autots.tools.hierarchial.hierarchial.reconcile">reconcile() (autots.tools.hierarchial.hierarchial method)</a>
 </li>
       <li><a href="source/autots.html#autots.AutoTS.regression_check">regression_check (autots.AutoTS attribute)</a>
@@ -838,6 +867,12 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#autots.models.sklearn.retrieve_regressor">retrieve_regressor() (in module autots.models.sklearn)</a>
 </li>
+      <li><a href="source/autots.html#autots.GeneralTransformer.retrieve_transformer">retrieve_transformer() (autots.GeneralTransformer class method)</a>
+
+      <ul>
+        <li><a href="source/autots.tools.html#autots.tools.transform.GeneralTransformer.retrieve_transformer">(autots.tools.transform.GeneralTransformer class method)</a>
+</li>
+      </ul></li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.rmse">rmse() (in module autots.evaluator.metrics)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.impute.rolling_mean">rolling_mean() (in module autots.tools.impute)</a>
@@ -858,7 +893,7 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.TemplateEvalObject.save">save() (autots.evaluator.auto_model.TemplateEvalObject method)</a>
 </li>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.seasonal_int">seasonal_int() (in module autots.evaluator.auto_model)</a>
+      <li><a href="source/autots.tools.html#autots.tools.seasonal.seasonal_int">seasonal_int() (in module autots.tools.seasonal)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.transform.SeasonalDifference">SeasonalDifference (class in autots.tools.transform)</a>
 </li>
@@ -900,7 +935,7 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.tfp.TFPRegressor">TFPRegressor (class in autots.models.tfp)</a>
 </li>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.PredictionObject.total_runtime">total_runtime() (autots.evaluator.auto_model.PredictionObject method)</a>
+      <li><a href="source/autots.models.html#autots.models.base.PredictionObject.total_runtime">total_runtime() (autots.models.base.PredictionObject method)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.trans_dict_recomb">trans_dict_recomb() (in module autots.evaluator.auto_model)</a>
 </li>
@@ -950,6 +985,10 @@
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.tools.html#autots.tools.transform.transformer_list_to_dict">transformer_list_to_dict() (in module autots.tools.transform)</a>
+</li>
+      <li><a href="source/autots.html#autots.TransformTS">TransformTS (in module autots)</a>
+</li>
       <li><a href="source/autots.models.html#autots.models.tsfresh.TSFreshRegressor">TSFreshRegressor (class in autots.models.tsfresh)</a>
 </li>
   </ul></td>
@@ -1078,7 +1117,7 @@
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2020, Colin Catlin.
+      &copy;2021, Colin Catlin.
       
     </div>
 

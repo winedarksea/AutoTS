@@ -837,7 +837,7 @@ def PredictWitch(
         'TransformationParameters',
         'Ensemble',
     ],
-    horizontal_subset: list=None,
+    horizontal_subset: list = None,
 ):
     """Takes numeric data, returns numeric forecasts.
 
@@ -887,7 +887,9 @@ def PredictWitch(
             if str(row_upper['Ensemble']) == '2':
                 available_models = list(ens_params['models'].keys())
                 known_matches = ens_params['series']
-                all_series = generalize_horizontal(df_train, known_matches, available_models)
+                all_series = generalize_horizontal(
+                    df_train, known_matches, available_models
+                )
             else:
                 all_series = None
             total_ens = ens_template.shape[0]
@@ -896,7 +898,9 @@ def PredictWitch(
                 try:
                     if all_series is not None:
                         test_mod = row['ID']
-                        horizontal_subset = [ser for ser, mod in all_series.items() if mod == test_mod]
+                        horizontal_subset = [
+                            ser for ser, mod in all_series.items() if mod == test_mod
+                        ]
                     df_forecast = PredictWitch(
                         row,
                         df_train=df_train,
@@ -950,7 +954,7 @@ def PredictWitch(
                 forecasts_runtime=forecasts_runtime,
                 prediction_interval=prediction_interval,
                 df_train=df_train,
-                prematched_series=all_series
+                prematched_series=all_series,
             )
             return ens_forecast
         # if not an ensemble
@@ -958,10 +962,19 @@ def PredictWitch(
             model_str = row_upper['Model']
             parameter_dict = json.loads(row_upper['ModelParameters'])
             transformation_dict = json.loads(row_upper['TransformationParameters'])
-            if horizontal_subset is not None and model_str in no_shared and all(trs not in shared_trans for trs in list(transformation_dict['transformations'].values())):
+            if (
+                horizontal_subset is not None
+                and model_str in no_shared
+                and all(
+                    trs not in shared_trans
+                    for trs in list(transformation_dict['transformations'].values())
+                )
+            ):
                 df_train_low = df_train.reindex(copy=True, columns=horizontal_subset)
                 if verbose >= 2:
-                    print(f"Reducing to subset for {model_str} with {df_train_low.columns}")
+                    print(
+                        f"Reducing to subset for {model_str} with {df_train_low.columns}"
+                    )
             else:
                 df_train_low = df_train
 
@@ -1300,9 +1313,16 @@ def RandomTemplate(
         model_str = np.random.choice(model_list)
         param_dict = ModelMonster(model_str).get_new_params()
         if n % 4 == 0:
-            trans_dict = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth, traditional_order=True)
+            trans_dict = RandomTransform(
+                transformer_list=transformer_list,
+                transformer_max_depth=transformer_max_depth,
+                traditional_order=True,
+            )
         else:
-            trans_dict = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth)
+            trans_dict = RandomTransform(
+                transformer_list=transformer_list,
+                transformer_max_depth=transformer_max_depth,
+            )
         row = pd.DataFrame(
             {
                 'Model': model_str,
@@ -1359,8 +1379,14 @@ def trans_dict_recomb(dict_array):
     a, b = random.sample(dict_array, 2)
     na_choice = random.sample([a, b], 1)[0]['fillna']
 
-    a_result = [(a['transformations'][key], a['transformation_params'][key]) for key in sorted(a['transformations'].keys())]
-    b_result = [(b['transformations'][key], b['transformation_params'][key]) for key in sorted(b['transformations'].keys())]
+    a_result = [
+        (a['transformations'][key], a['transformation_params'][key])
+        for key in sorted(a['transformations'].keys())
+    ]
+    b_result = [
+        (b['transformations'][key], b['transformation_params'][key])
+        for key in sorted(b['transformations'].keys())
+    ]
     combi = zip_longest(a_result, b_result, fillvalue=empty_trans)
     selected = [random.choice(x) for x in combi]
     selected = [x for x in selected if x != empty_trans]
@@ -1370,12 +1396,18 @@ def trans_dict_recomb(dict_array):
     keys = range(len(selected))
     return {
         "fillna": na_choice,
-        "transformations": dict(zip(keys, selected_vals[0])), 
-        "transformation_params":  dict(zip(keys, selected_vals[1])), 
+        "transformations": dict(zip(keys, selected_vals[0])),
+        "transformation_params": dict(zip(keys, selected_vals[1])),
     }
 
 
-def _trans_dicts(current_ops, best=None, n: int = 5, transformer_list: dict = {}, transformer_max_depth: int = 8):
+def _trans_dicts(
+    current_ops,
+    best=None,
+    n: int = 5,
+    transformer_list: dict = {},
+    transformer_max_depth: int = 8,
+):
     fir = json.loads(current_ops.iloc[0, :]['TransformationParameters'])
     cur_len = current_ops.shape[0]
     if cur_len > 1:
@@ -1384,11 +1416,24 @@ def _trans_dicts(current_ops, best=None, n: int = 5, transformer_list: dict = {}
         r_id = np.random.randint(1, top_r)
         sec = json.loads(current_ops.iloc[r_id, :]['TransformationParameters'])
     else:
-        sec = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth, traditional_order=True,)
-    r = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,)
-    r2 = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,)
+        sec = RandomTransform(
+            transformer_list=transformer_list,
+            transformer_max_depth=transformer_max_depth,
+            traditional_order=True,
+        )
+    r = RandomTransform(
+        transformer_list=transformer_list,
+        transformer_max_depth=transformer_max_depth,
+    )
+    r2 = RandomTransform(
+        transformer_list=transformer_list,
+        transformer_max_depth=transformer_max_depth,
+    )
     if best is None:
-        best = RandomTransform(transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,)
+        best = RandomTransform(
+            transformer_list=transformer_list,
+            transformer_max_depth=transformer_max_depth,
+        )
     arr = [fir, sec, best, r, r2]
     trans_dicts = [json.dumps(trans_dict_recomb(arr)) for _ in range(n)]
     return trans_dicts
@@ -1446,7 +1491,11 @@ def NewGeneticTemplate(
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 3
             trans_dicts = _trans_dicts(
-                current_ops, best=best, n=n, transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,
+                current_ops,
+                best=best,
+                n=n,
+                transformer_list=transformer_list,
+                transformer_max_depth=transformer_max_depth,
             )
             model_param = current_ops.iloc[0, :]['ModelParameters']
             new_row = pd.DataFrame(
@@ -1462,7 +1511,11 @@ def NewGeneticTemplate(
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 4
             trans_dicts = _trans_dicts(
-                current_ops, best=best, n=n, transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,
+                current_ops,
+                best=best,
+                n=n,
+                transformer_list=transformer_list,
+                transformer_max_depth=transformer_max_depth,
             )
             # select the best model of this type
             fir = json.loads(current_ops.iloc[0, :]['ModelParameters'])
@@ -1499,7 +1552,11 @@ def NewGeneticTemplate(
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 3
             trans_dicts = _trans_dicts(
-                current_ops, best=best, n=n, transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,
+                current_ops,
+                best=best,
+                n=n,
+                transformer_list=transformer_list,
+                transformer_max_depth=transformer_max_depth,
             )
             model_dicts = list()
             for _ in range(n):

@@ -21,7 +21,7 @@ long = False
 df = load_weekly(long=long)
 n_jobs = 'auto'
 generations = 5
-verbose = 0
+verbose = 1
 
 """
 df = pd.read_csv("m5_sample.gz")
