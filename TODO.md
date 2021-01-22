@@ -30,7 +30,7 @@
 * expanded model_list aliases, with dedicated module
 * bug fix (creating 0,0 order) and tuning of VARMAX
 * Fix export_template bug
-* restructuring of some function locations
+* restructuring of some lower-level function locations
 
 
 # Known Errors: 

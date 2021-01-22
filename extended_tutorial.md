@@ -71,9 +71,17 @@ Here, two methods of cross validation are in place, `'even'` and '`backwards'`.
 
 **Backwards** cross validation works backwards from the most recent data. First the most recent forecast_length samples are taken, then the next most recent forecast_length samples, and so on. This makes it more ideal for smaller or fast-changing datasets. 
 
-**Seasonal** validation is supplied as `'seasonal n'` ie `'seasonal 364'`. It trains on the most recent data as usual, then valdations are `n` periods back from the datetime of the forecast would be. For example with daily data, forecasting for a month ahead, and `n=364`, the first test might be on May 2020, with validation on June 2019 and June 2018, the final forecast then of June 2020.
+**Seasonal** validation is supplied as `'seasonal n'` ie `'seasonal 364'`. It trains on the most recent data as usual, then valdations are `n` periods back from the datetime of the forecast would be. 
+For example with daily data, forecasting for a month ahead, and `n=364`, the first test might be on May 2020, with validation on June 2019 and June 2018, the final forecast then of June 2020.
 
-Only a subset of models are based from initial validation to cross validation. The number of models is set such as `models_to_validate=10`. If a float in 0 to 1 is provided, it is treated as a % of models to select. If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter. 
+Only a subset of models are taken from initial validation to cross validation. The number of models is set such as `models_to_validate=10`. 
+If a float in 0 to 1 is provided, it is treated as a % of models to select. 
+If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter. 
+However, increasing this value above, say, `0.35` (ie 35%) is unlikely to have much benefit, due to the similarity of many model parameters. 
+
+While NaN values are handled, model selection will suffer if any series have large numbers of NaN values in any of the generated train/test splits. 
+Most commonly, this may occur where some series have a very long history, while others in the same dataset only have very recent data. 
+In these cases, avoid the `even` cross validation and use one of the other validation methods. 
 
 ### A more detailed example:
 Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting. 
