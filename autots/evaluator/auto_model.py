@@ -931,6 +931,7 @@ def PredictWitch(
                     forecasts[model_id] = df_forecast.forecast
                     upper_forecasts[model_id] = df_forecast.upper_forecast
                     lower_forecasts[model_id] = df_forecast.lower_forecast
+                    # print(f"{ens_params['model_name']} with shape {df_forecast.forecast.shape}")
                     if verbose >= 2:
                         p = f"Ensemble {ens_params['model_name']} component {index + 1} of {total_ens} succeeded"
                         print(p)

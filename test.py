@@ -20,7 +20,8 @@ forecast_length = 8
 long = False
 df = load_weekly(long=long)
 n_jobs = 'auto'
-generations = 2
+generations = 5
+verbose = 0
 
 """
 df = pd.read_csv("m5_sample.gz")
@@ -102,7 +103,7 @@ model = AutoTS(
     n_jobs=n_jobs,
     drop_most_recent=1,
     subset=None,
-    verbose=1,
+    verbose=verbose,
 )
 
 
@@ -167,7 +168,7 @@ model = AutoTS(
     model_interrupt=True,
     n_jobs=None,
     drop_most_recent=0,
-    verbose=1,
+    verbose=verbose,
 )
 # model = model.import_template(example_filename, method='only')
 import time
