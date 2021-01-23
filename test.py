@@ -20,7 +20,7 @@ forecast_length = 8
 long = False
 df = load_weekly(long=long)
 n_jobs = 'auto'
-generations = 5
+generations = 4
 verbose = 1
 
 """
@@ -57,7 +57,7 @@ model_list = [
     'ETS',
     # 'FBProphet',
     # 'RollingRegression',
-    'GluonTS',
+    # 'GluonTS',
     'UnobservedComponents',
     'DatepartRegression',
     'ARIMA',
