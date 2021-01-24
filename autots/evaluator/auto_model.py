@@ -1,44 +1,15 @@
 """Mid-level helper functions for AutoTS."""
+import random
 import numpy as np
 import pandas as pd
 import datetime
 import json
 from hashlib import md5
 from autots.evaluator.metrics import PredictionEval
-from autots.tools.transform import RandomTransform
-
-
-def seasonal_int(include_one: bool = False):
-    """Generate a random integer of typical seasonalities."""
-    prob_dict = {
-        'random_int': 0.1,
-        1: 0.05,
-        2: 0.05,
-        4: 0.05,
-        7: 0.15,
-        10: 0.01,
-        12: 0.1,
-        24: 0.1,
-        28: 0.1,
-        60: 0.1,
-        96: 0.04,
-        168: 0.01,
-        364: 0.1,
-        1440: 0.01,
-        420: 0.01,
-        52: 0.01,
-        84: 0.01,
-    }
-    lag = np.random.choice(
-        a=list(prob_dict.keys()),
-        p=list(prob_dict.values()),
-        size=1,
-    ).item()
-    if not include_one and str(lag) == '1':
-        lag = 'random_int'
-    if lag == 'random_int':
-        lag = np.random.randint(2, 100, size=1).item()
-    return int(lag)
+from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
+from autots.models.ensemble import EnsembleForecast, generalize_horizontal
+from autots.models.model_list import no_params, recombination_approved, no_shared
+from itertools import zip_longest
 
 
 def create_model_id(
@@ -51,133 +22,6 @@ def create_model_id(
     str_repr = ''.join(str_repr.split())
     hashed = md5(str_repr.encode('utf-8')).hexdigest()
     return hashed
-
-
-class ModelObject(object):
-    """Generic class for holding forecasting models.
-
-    Models should all have methods:
-        .fit(df, future_regressor = []) (taking a DataFrame with DatetimeIndex and n columns of n timeseries)
-        .predict(forecast_length = int, future_regressor = [], just_point_forecast = False)
-        .get_new_params() - return a dictionary of weighted random selected parameters
-
-    Args:
-        name (str): Model Name
-        frequency (str): String alias of datetime index frequency or else 'infer'
-        prediction_interval (float): Confidence interval for probabilistic forecast
-        n_jobs (int): used by some models that parallelize to multiple cores
-    """
-
-    def __init__(
-        self,
-        name: str = "Uninitiated Model Name",
-        frequency: str = 'infer',
-        prediction_interval: float = 0.9,
-        regression_type: str = None,
-        fit_runtime=datetime.timedelta(0),
-        holiday_country: str = 'US',
-        random_seed: int = 2020,
-        verbose: int = 0,
-        n_jobs: int = -1,
-    ):
-        self.name = name
-        self.frequency = frequency
-        self.prediction_interval = prediction_interval
-        self.regression_type = regression_type
-        self.fit_runtime = fit_runtime
-        self.holiday_country = holiday_country
-        self.random_seed = random_seed
-        self.verbose = verbose
-        self.verbose_bool = True if self.verbose > 1 else False
-        self.n_jobs = n_jobs
-
-    def __repr__(self):
-        """Print."""
-        return 'ModelObject of ' + self.name + ' uses standard .fit/.predict'
-
-    def basic_profile(self, df):
-        """Capture basic training details."""
-        self.startTime = datetime.datetime.now()
-        self.train_shape = df.shape
-        self.column_names = df.columns
-        self.train_last_date = df.index[-1]
-        if self.frequency == 'infer':
-            self.frequency = pd.infer_freq(df.index, warn=False)
-
-        return df
-
-    def create_forecast_index(self, forecast_length: int):
-        """Generate a pd.DatetimeIndex appropriate for a new forecast.
-
-        Warnings:
-            Requires ModelObject.basic_profile() being called as part of .fit()
-        """
-        forecast_index = pd.date_range(
-            freq=self.frequency, start=self.train_last_date, periods=forecast_length + 1
-        )
-        forecast_index = forecast_index[1:]
-        self.forecast_index = forecast_index
-        return forecast_index
-
-    def get_params(self):
-        """Return dict of current parameters."""
-        return {}
-
-    def get_new_params(self, method: str = 'random'):
-        """Return dict of new parameters for parameter tuning."""
-        return {}
-
-
-class PredictionObject(object):
-    """Generic class for holding forecast information."""
-
-    def __init__(
-        self,
-        model_name: str = 'Uninitiated',
-        forecast_length: int = 0,
-        forecast_index=np.nan,
-        forecast_columns=np.nan,
-        lower_forecast=np.nan,
-        forecast=np.nan,
-        upper_forecast=np.nan,
-        prediction_interval: float = 0.9,
-        predict_runtime=datetime.timedelta(0),
-        fit_runtime=datetime.timedelta(0),
-        model_parameters={},
-        transformation_parameters={},
-        transformation_runtime=datetime.timedelta(0),
-    ):
-        self.model_name = model_name
-        self.model_parameters = model_parameters
-        self.transformation_parameters = transformation_parameters
-        self.forecast_length = forecast_length
-        self.forecast_index = forecast_index
-        self.forecast_columns = forecast_columns
-        self.lower_forecast = lower_forecast
-        self.forecast = forecast
-        self.upper_forecast = upper_forecast
-        self.prediction_interval = prediction_interval
-        self.predict_runtime = predict_runtime
-        self.fit_runtime = fit_runtime
-        self.transformation_runtime = transformation_runtime
-
-    def __repr__(self):
-        """Print."""
-        if isinstance(self.forecast, pd.DataFrame):
-            return "Prediction object: \nReturn .forecast, \n .upper_forecast, \n .lower_forecast \n .model_parameters \n .transformation_parameters"
-        else:
-            return "Empty prediction object."
-
-    def __bool__(self):
-        """bool version of class."""
-        if isinstance(self.forecast, pd.DataFrame):
-            return True
-        else:
-            return False
-
-    def total_runtime(self):
-        """Combine runtimes."""
-        return self.fit_runtime + self.predict_runtime + self.transformation_runtime
 
 
 def ModelMonster(
@@ -775,50 +619,9 @@ def ModelPrediction(
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
     """
     transformationStartTime = datetime.datetime.now()
-    from autots.tools.transform import GeneralTransformer
 
-    try:
-        coerce_integer = transformation_dict['coerce_integer']
-        grouping = transformation_dict['grouping']
-        if grouping == 'user' and grouping_ids is None:
-            grouping = 'kmeans5'
-            transformation_dict['grouping'] = 'kmeans5'
-        reconciliation = transformation_dict['reconciliation']
-    except Exception:
-        coerce_integer = False
-        grouping = None
-        grouping_ids = None
-        reconciliation = None
-    transformer_object = GeneralTransformer(
-        outlier_method=transformation_dict['outlier_method'],
-        outlier_threshold=transformation_dict['outlier_threshold'],
-        outlier_position=transformation_dict['outlier_position'],
-        fillna=transformation_dict['fillna'],
-        transformation=transformation_dict['transformation'],
-        detrend=transformation_dict['detrend'],
-        second_transformation=transformation_dict['second_transformation'],
-        transformation_param=transformation_dict['transformation_param'],
-        third_transformation=transformation_dict['third_transformation'],
-        transformation_param2=transformation_dict['transformation_param2'],
-        fourth_transformation=transformation_dict['fourth_transformation'],
-        discretization=transformation_dict['discretization'],
-        n_bins=transformation_dict['n_bins'],
-        grouping=grouping,
-        grouping_ids=grouping_ids,
-        reconciliation=reconciliation,
-        coerce_integer=coerce_integer,
-    )
+    transformer_object = GeneralTransformer(**transformation_dict)
     df_train_transformed = transformer_object._fit(df_train)
-
-    # slice the context, ie shorten the amount of data available.
-    if transformation_dict['context_slicer'] not in [None, 'None']:
-        from autots.tools.transform import simple_context_slicer
-
-        df_train_transformed = simple_context_slicer(
-            df_train_transformed,
-            method=transformation_dict['context_slicer'],
-            forecast_length=forecast_length,
-        )
 
     # make sure regressor has same length. This could be a problem if wrong size regressor is passed.
     if len(future_regressor_train) > 0:
@@ -844,22 +647,27 @@ def ModelPrediction(
         forecast_length=forecast_length, future_regressor=future_regressor_forecast
     )
 
+    # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
     if df_forecast.forecast.isnull().all(axis=0).astype(int).sum() > 0:
         raise ValueError(
             "Model {} returned NaN for one or more series".format(model_str)
         )
 
+    # CHECK Forecasts are proper length!
+    if df_forecast.forecast.shape[0] != forecast_length:
+        raise ValueError(f"Model {model_str} returned improper forecast_length")
+
     transformationStartTime = datetime.datetime.now()
-    # Inverse the transformations
+    # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
     df_forecast.forecast = pd.DataFrame(
         transformer_object.inverse_transform(df_forecast.forecast)
-    )  # , index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
+    )
     df_forecast.lower_forecast = pd.DataFrame(
-        transformer_object.inverse_transform(df_forecast.lower_forecast)
-    )  # , index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
+        transformer_object.inverse_transform(df_forecast.lower_forecast, fillzero=True)
+    )
     df_forecast.upper_forecast = pd.DataFrame(
-        transformer_object.inverse_transform(df_forecast.upper_forecast)
-    )  # , index = df_forecast.forecast_index, columns = df_forecast.forecast_columns)
+        transformer_object.inverse_transform(df_forecast.upper_forecast, fillzero=True)
+    )
 
     df_forecast.transformation_parameters = transformation_dict
     # Remove negatives if desired
@@ -1029,6 +837,7 @@ def PredictWitch(
         'TransformationParameters',
         'Ensemble',
     ],
+    horizontal_subset: list = None,
 ):
     """Takes numeric data, returns numeric forecasts.
 
@@ -1052,32 +861,18 @@ def PredictWitch(
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
         template_cols (list): column names of columns used as model template
+        horizontal_subset (list): columns of df_train to use for forecast, meant for horizontal ensembling
 
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object):
     """
-    no_shared = [  # for models that don't share information among series
-        'ZeroesNaive',
-        'LastValueNaive',
-        'AverageValueNaive',
-        'GLM',
-        'ETS',
-        'ARIMA',
-        'FBProphet',
-        'SeasonalNaive',
-        'UnobservedComponents',
-        'MotifSimulation',
-        'TensorflowSTS',
-        'DatepartRegression',
-    ]
+
     if isinstance(template, pd.Series):
         template = pd.DataFrame(template).transpose()
     template = template.head(1)
     for index_upper, row_upper in template.iterrows():
         # if an ensemble
         if row_upper['Model'] == 'Ensemble':
-            from autots.models.ensemble import EnsembleForecast
-
             forecasts_list = []
             forecasts_runtime = {}
             forecasts = {}
@@ -1088,13 +883,24 @@ def PredictWitch(
             ens_template = unpack_ensemble_models(
                 template, template_cols, keep_ensemble=False, recursive=False
             )
+            # horizontal generalization
+            if str(row_upper['Ensemble']) == '2':
+                available_models = list(ens_params['models'].keys())
+                known_matches = ens_params['series']
+                all_series = generalize_horizontal(
+                    df_train, known_matches, available_models
+                )
+            else:
+                all_series = None
             total_ens = ens_template.shape[0]
             for index, row in ens_template.iterrows():
                 # recursive recursion!
                 try:
-                    if verbose > 2:
-                        p = f"Ensemble component {index} of {total_ens} FAILED"
-                        print(p)
+                    if all_series is not None:
+                        test_mod = row['ID']
+                        horizontal_subset = [
+                            ser for ser, mod in all_series.items() if mod == test_mod
+                        ]
                     df_forecast = PredictWitch(
                         row,
                         df_train=df_train,
@@ -1112,6 +918,7 @@ def PredictWitch(
                         verbose=verbose,
                         n_jobs=n_jobs,
                         template_cols=template_cols,
+                        horizontal_subset=horizontal_subset,
                     )
                     model_id = create_model_id(
                         df_forecast.model_name,
@@ -1123,16 +930,19 @@ def PredictWitch(
                         + df_forecast.predict_runtime
                         + df_forecast.transformation_runtime
                     )
-
                     forecasts_list.extend([model_id])
                     forecasts_runtime[model_id] = total_runtime
                     forecasts[model_id] = df_forecast.forecast
                     upper_forecasts[model_id] = df_forecast.upper_forecast
                     lower_forecasts[model_id] = df_forecast.lower_forecast
-                except Exception:
+                    # print(f"{ens_params['model_name']} with shape {df_forecast.forecast.shape}")
+                    if verbose >= 2:
+                        p = f"Ensemble {ens_params['model_name']} component {index + 1} of {total_ens} succeeded"
+                        print(p)
+                except Exception as e:
                     # currently this leaves no key/value for models that fail
-                    if verbose > 1:
-                        p = f"Ensemble component {index} of {total_ens} FAILED"
+                    if verbose >= 1:  # 1
+                        p = f"FAILED: Ensemble {ens_params['model_name']} component {index} of {total_ens} with error: {repr(e)}"
                         print(p)
             ens_forecast = EnsembleForecast(
                 ens_model_str,
@@ -1144,6 +954,7 @@ def PredictWitch(
                 forecasts_runtime=forecasts_runtime,
                 prediction_interval=prediction_interval,
                 df_train=df_train,
+                prematched_series=all_series,
             )
             return ens_forecast
         # if not an ensemble
@@ -1151,9 +962,24 @@ def PredictWitch(
             model_str = row_upper['Model']
             parameter_dict = json.loads(row_upper['ModelParameters'])
             transformation_dict = json.loads(row_upper['TransformationParameters'])
+            if (
+                horizontal_subset is not None
+                and model_str in no_shared
+                and all(
+                    trs not in shared_trans
+                    for trs in list(transformation_dict['transformations'].values())
+                )
+            ):
+                df_train_low = df_train.reindex(copy=True, columns=horizontal_subset)
+                if verbose >= 2:
+                    print(
+                        f"Reducing to subset for {model_str} with {df_train_low.columns}"
+                    )
+            else:
+                df_train_low = df_train
 
             df_forecast = ModelPrediction(
-                df_train,
+                df_train_low,
                 forecast_length,
                 transformation_dict,
                 model_str,
@@ -1472,6 +1298,7 @@ def RandomTemplate(
         'DynamicFactor',
     ],
     transformer_list: dict = {},
+    transformer_max_depth: int = 8,
 ):
     """
     Returns a template dataframe of randomly generated transformations, models, and hyperparameters.
@@ -1485,7 +1312,17 @@ def RandomTemplate(
     while len(template.index) < n:
         model_str = np.random.choice(model_list)
         param_dict = ModelMonster(model_str).get_new_params()
-        trans_dict = RandomTransform(transformer_list=transformer_list)
+        if n % 4 == 0:
+            trans_dict = RandomTransform(
+                transformer_list=transformer_list,
+                transformer_max_depth=transformer_max_depth,
+                traditional_order=True,
+            )
+        else:
+            trans_dict = RandomTransform(
+                transformer_list=transformer_list,
+                transformer_max_depth=transformer_max_depth,
+            )
         row = pd.DataFrame(
             {
                 'Model': model_str,
@@ -1530,7 +1367,7 @@ def dict_recombination(a: dict, b: dict):
     """Recombine two dictionaries with identical keys. Return new dict."""
     b_keys = [*b]
     key_size = int(len(b_keys) / 2) if len(b_keys) > 1 else 1
-    bs_keys = np.random.choice(b_keys, size=key_size)
+    bs_keys = random.choices(b_keys, k=key_size)
     b_prime = {k: b[k] for k in bs_keys}
     c = {**a, **b_prime}  # overwrites with B
     return c
@@ -1538,35 +1375,39 @@ def dict_recombination(a: dict, b: dict):
 
 def trans_dict_recomb(dict_array):
     """Recombine two transformation param dictionaries from array of dicts."""
-    r_sel = np.random.choice(dict_array, size=2, replace=False)
-    a = r_sel[0]
-    b = r_sel[1]
-    c = dict_recombination(a, b)
+    empty_trans = (None, {})
+    a, b = random.sample(dict_array, 2)
+    na_choice = random.sample([a, b], 1)[0]['fillna']
 
-    out_keys = ['outlier_method', 'outlier_threshold', 'outlier_position']
-    current_dict = np.random.choice([a, b], size=1).item()
-    c = {**c, **{k: current_dict[k] for k in out_keys}}
-
-    mid_trans_keys = ['second_transformation', 'transformation_param']
-    current_dict = np.random.choice([a, b], size=1).item()
-    c = {**c, **{k: current_dict[k] for k in mid_trans_keys}}
-
-    mid_trans_keys = ['third_transformation', 'transformation_param2']
-    current_dict = np.random.choice([a, b], size=1).item()
-    c = {**c, **{k: current_dict[k] for k in mid_trans_keys}}
-
-    disc_keys = ['discretization', 'n_bins']
-    current_dict = np.random.choice([a, b], size=1).item()
-    c = {**c, **{k: current_dict[k] for k in disc_keys}}
-
-    disc_keys = ['grouping', 'reconciliation']
-    current_dict = np.random.choice([a, b], size=1).item()
-    if all([x in current_dict.keys() for x in disc_keys]):
-        c = {**c, **{k: current_dict[k] for k in disc_keys}}
-    return c
+    a_result = [
+        (a['transformations'][key], a['transformation_params'][key])
+        for key in sorted(a['transformations'].keys())
+    ]
+    b_result = [
+        (b['transformations'][key], b['transformation_params'][key])
+        for key in sorted(b['transformations'].keys())
+    ]
+    combi = zip_longest(a_result, b_result, fillvalue=empty_trans)
+    selected = [random.choice(x) for x in combi]
+    selected = [x for x in selected if x != empty_trans]
+    if not selected:
+        selected = [empty_trans]
+    selected_vals = list(zip(*selected))
+    keys = range(len(selected))
+    return {
+        "fillna": na_choice,
+        "transformations": dict(zip(keys, selected_vals[0])),
+        "transformation_params": dict(zip(keys, selected_vals[1])),
+    }
 
 
-def _trans_dicts(current_ops, best=None, n: int = 5, transformer_list: dict = {}):
+def _trans_dicts(
+    current_ops,
+    best=None,
+    n: int = 5,
+    transformer_list: dict = {},
+    transformer_max_depth: int = 8,
+):
     fir = json.loads(current_ops.iloc[0, :]['TransformationParameters'])
     cur_len = current_ops.shape[0]
     if cur_len > 1:
@@ -1575,11 +1416,25 @@ def _trans_dicts(current_ops, best=None, n: int = 5, transformer_list: dict = {}
         r_id = np.random.randint(1, top_r)
         sec = json.loads(current_ops.iloc[r_id, :]['TransformationParameters'])
     else:
-        sec = RandomTransform(transformer_list=transformer_list)
-    r = RandomTransform(transformer_list=transformer_list)
+        sec = RandomTransform(
+            transformer_list=transformer_list,
+            transformer_max_depth=transformer_max_depth,
+            traditional_order=True,
+        )
+    r = RandomTransform(
+        transformer_list=transformer_list,
+        transformer_max_depth=transformer_max_depth,
+    )
+    r2 = RandomTransform(
+        transformer_list=transformer_list,
+        transformer_max_depth=transformer_max_depth,
+    )
     if best is None:
-        best = RandomTransform(transformer_list=transformer_list)
-    arr = [fir, sec, best, r]
+        best = RandomTransform(
+            transformer_list=transformer_list,
+            transformer_max_depth=transformer_max_depth,
+        )
+    arr = [fir, sec, best, r, r2]
     trans_dicts = [json.dumps(trans_dict_recomb(arr)) for _ in range(n)]
     return trans_dicts
 
@@ -1599,6 +1454,7 @@ def NewGeneticTemplate(
         'Ensemble',
     ],
     transformer_list: dict = {},
+    transformer_max_depth: int = 8,
 ):
     """
     Return new template given old template with model accuracies.
@@ -1627,24 +1483,6 @@ def NewGeneticTemplate(
         by=sort_column, ascending=sort_ascending, na_position='last'
     ).head(top_n)
 
-    no_params = ['ZeroesNaive', 'LastValueNaive', 'GLS']
-    recombination_approved = [
-        'SeasonalNaive',
-        'MotifSimulation',
-        "ETS",
-        'DynamicFactor',
-        'VECM',
-        'VARMAX',
-        'GLM',
-        'ARIMA',
-        'FBProphet',
-        'GluonTS',
-        'RollingRegression',
-        'VAR',
-        'WindowRegression',
-        'TensorflowSTS',
-        'TFPRegression',
-    ]
     # borrow = ['ComponentAnalysis']
     best = json.loads(sorted_results.iloc[0, :]['TransformationParameters'])
 
@@ -1653,7 +1491,11 @@ def NewGeneticTemplate(
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 3
             trans_dicts = _trans_dicts(
-                current_ops, best=best, n=n, transformer_list=transformer_list
+                current_ops,
+                best=best,
+                n=n,
+                transformer_list=transformer_list,
+                transformer_max_depth=transformer_max_depth,
             )
             model_param = current_ops.iloc[0, :]['ModelParameters']
             new_row = pd.DataFrame(
@@ -1669,7 +1511,11 @@ def NewGeneticTemplate(
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 4
             trans_dicts = _trans_dicts(
-                current_ops, best=best, n=n, transformer_list=transformer_list
+                current_ops,
+                best=best,
+                n=n,
+                transformer_list=transformer_list,
+                transformer_max_depth=transformer_max_depth,
             )
             # select the best model of this type
             fir = json.loads(current_ops.iloc[0, :]['ModelParameters'])
@@ -1706,7 +1552,11 @@ def NewGeneticTemplate(
             current_ops = sorted_results[sorted_results['Model'] == model_type]
             n = 3
             trans_dicts = _trans_dicts(
-                current_ops, best=best, n=n, transformer_list=transformer_list
+                current_ops,
+                best=best,
+                n=n,
+                transformer_list=transformer_list,
+                transformer_max_depth=transformer_max_depth,
             )
             model_dicts = list()
             for _ in range(n):
@@ -1822,9 +1672,13 @@ def generate_score(
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         if 'TotalRuntime' in model_results.columns:
+            try:
+                outz = model_results['TotalRuntime'].dt.seconds
+            except Exception:
+                outz = model_results['TotalRuntime'].astype(float)
             model_results['TotalRuntimeSeconds'] = np.where(
                 model_results['TotalRuntimeSeconds'].isna(),
-                model_results['TotalRuntime'].dt.seconds,
+                outz,
                 model_results['TotalRuntimeSeconds'],
             )
         else:

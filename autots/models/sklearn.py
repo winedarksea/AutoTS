@@ -4,78 +4,12 @@ Sklearn dependent models
 Decision Tree, Elastic Net,  Random Forest, MLPRegressor, KNN, Adaboost
 """
 import datetime
+import random
 import numpy as np
 import pandas as pd
-from autots.evaluator.auto_model import ModelObject, PredictionObject, seasonal_int
+from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
-
-
-def date_part(DTindex, method: str = 'simple'):
-    """Create date part columns from pd.DatetimeIndex.
-
-    Args:
-        DTindex (pd.DatetimeIndex): datetime index to provide dates
-        method (str): expanded, recurring, or simple
-            simple - just day, year, month, weekday
-            expanded - all available futures
-            recurring - all features that should commonly repeat without aging
-
-    Returns:
-        pd.Dataframe with DTindex
-    """
-    if method == 'recurring':
-        date_part_df = pd.DataFrame(
-            {
-                'month': DTindex.month,
-                'day': DTindex.day,
-                'weekday': DTindex.weekday,
-                'weekend': (DTindex.weekday > 4).astype(int),
-                'hour': DTindex.hour,
-                'quarter': DTindex.quarter,
-                'midyear': (
-                    (DTindex.dayofyear > 74) & (DTindex.dayofyear < 258)
-                ).astype(
-                    int
-                ),  # 2 season
-            }
-        )
-    else:
-        # method == "simple"
-        date_part_df = pd.DataFrame(
-            {
-                'year': DTindex.year,
-                'month': DTindex.month,
-                'day': DTindex.day,
-                'weekday': DTindex.weekday,
-            }
-        )
-        if method == 'expanded':
-            try:
-                weekyear = pd.Int64Index(DTindex.isocalendar().week)
-            except Exception:
-                weekyear = DTindex.week
-            date_part_df2 = pd.DataFrame(
-                {
-                    'hour': DTindex.hour,
-                    'week': weekyear,
-                    'quarter': DTindex.quarter,
-                    'dayofyear': DTindex.dayofyear,
-                    'midyear': (
-                        (DTindex.dayofyear > 74) & (DTindex.dayofyear < 258)
-                    ).astype(
-                        int
-                    ),  # 2 season
-                    'weekend': (DTindex.weekday > 4).astype(int),
-                    'month_end': (DTindex.is_month_end).astype(int),
-                    'month_start': (DTindex.is_month_start).astype(int),
-                    "quarter_end": (DTindex.is_quarter_end).astype(int),
-                    'year_end': (DTindex.is_year_end).astype(int),
-                    'daysinmonth': DTindex.daysinmonth,
-                    'epoch': DTindex.astype(int),
-                }
-            )
-            date_part_df = pd.concat([date_part_df, date_part_df2], axis=1)
-    return date_part_df
+from autots.tools.seasonal import date_part, seasonal_int
 
 
 def rolling_x_regressor(
@@ -343,37 +277,23 @@ def retrieve_regressor(
 
 
 def generate_regressor_params(
-    models: list = [
-        'RandomForest',
-        'ElasticNet',
-        'MLP',
-        'DecisionTree',
-        'KNN',
-        'Adaboost',
-        'SVM',
-        'BayesianRidge',
-        'xgboost',
-        'KerasRNN',
-        'HistGradientBoost',
-        'LightGBM',
-    ],
-    model_probs: list = [
-        0.05,
-        0.05,
-        0.14,
-        0.25,
-        0.1,
-        0.14,
-        0.02,
-        0.08,
-        0.01,
-        0.05,
-        0.01,
-        0.1,
-    ],
+    model_dict: dict = {
+        'RandomForest': 0.05,
+        'ElasticNet': 0.05,
+        'MLP': 0.14,
+        'DecisionTree': 0.25,
+        'KNN': 0.1,
+        'Adaboost': 0.14,
+        'SVM': 0.02,
+        'BayesianRidge': 0.08,
+        'xgboost': 0.01,
+        'KerasRNN': 0.05,
+        'HistGradientBoost': 0.01,
+        'LightGBM': 0.1,
+    },
 ):
     """Generate new parameters for input to regressor."""
-    model = np.random.choice(a=models, size=1, p=model_probs).item()
+    model = random.choices(list(model_dict.keys()), list(model_dict.values()), k=1)[0]
     if model in [
         'xgboost',
         'Adaboost',
