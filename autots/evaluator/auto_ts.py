@@ -1,6 +1,7 @@
 """Higher-level backbone of auto time series modeling."""
 import numpy as np
 import pandas as pd
+import random
 import copy
 import json
 
@@ -25,7 +26,7 @@ from autots.models.ensemble import (
     EnsembleTemplateGenerator,
     HorizontalTemplateGenerator,
 )
-import random
+from autots.models.model_list import model_lists
 
 
 class AutoTS(object):
@@ -52,6 +53,7 @@ class AutoTS(object):
         drop_data_older_than_periods (int): take only the n most recent timestamps
         model_list (list): str alias or list of names of model objects to use
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
+        transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
             0.99 is forced to 100% validation. 1 evaluates just 1 model.
@@ -103,7 +105,8 @@ class AutoTS(object):
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
         model_list: str = 'default',
-        transformer_list: dict = {},
+        transformer_list: dict = "fast",
+        transformer_max_depth: int = 6,
         num_validations: int = 2,
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
@@ -114,6 +117,8 @@ class AutoTS(object):
         verbose: int = 1,
         n_jobs: int = None,
     ):
+        assert forecast_length > 0, "forecast_length must be greater than 0"
+        assert transformer_max_depth > 0, "transformer_max_depth must be greater than 0"
         self.forecast_length = int(abs(forecast_length))
         self.frequency = frequency
         self.aggfunc = aggfunc
@@ -130,6 +135,7 @@ class AutoTS(object):
         self.drop_data_older_than_periods = drop_data_older_than_periods
         self.model_list = model_list
         self.transformer_list = transformer_list
+        self.transformer_max_depth = transformer_max_depth
         self.num_validations = abs(int(num_validations))
         self.models_to_validate = models_to_validate
         self.max_per_model_class = max_per_model_class
@@ -162,101 +168,17 @@ class AutoTS(object):
             self.n_jobs = cpu_count()
 
         # convert shortcuts of model lists to actual lists of models
-        if model_list == 'default':
-            self.model_list = [
-                'ZeroesNaive',
-                'LastValueNaive',
-                'AverageValueNaive',
-                'GLS',
-                'SeasonalNaive',
-                'GLM',
-                'ETS',
-                'ARIMA',
-                'FBProphet',
-                'RollingRegression',
-                'GluonTS',
-                'UnobservedComponents',
-                'VAR',
-                'VECM',
-                'WindowRegression',
-                'DatepartRegression',
-            ]
-        if model_list == 'superfast':
-            self.model_list = [
-                'ZeroesNaive',
-                'LastValueNaive',
-                'AverageValueNaive',
-                'GLS',
-                'SeasonalNaive',
-            ]
-        if model_list == 'fast':
-            self.model_list = [
-                'ZeroesNaive',
-                'LastValueNaive',
-                'AverageValueNaive',
-                'GLS',
-                'GLM',
-                'ETS',
-                'WindowRegression',
-                'GluonTS',
-                'VAR',
-                'SeasonalNaive',
-                'VECM',
-                'ComponentAnalysis',
-            ]
-        if model_list == 'probabilistic':
-            self.model_list = [
-                'ARIMA',
-                'GluonTS',
-                'FBProphet',
-                'AverageValueNaive',
-                'MotifSimulation',
-                'VARMAX',
-                'DynamicFactor',
-                'VAR',
-            ]
-        if model_list == 'multivariate':
-            self.model_list = [
-                'VECM',
-                'DynamicFactor',
-                'GluonTS',
-                'VARMAX',
-                'RollingRegression',
-                'WindowRegression',
-                'VAR',
-                'ComponentAnalysis',
-            ]
-        if model_list == 'all':
-            self.model_list = [
-                'ZeroesNaive',
-                'LastValueNaive',
-                'AverageValueNaive',
-                'GLS',
-                'GLM',
-                'ETS',
-                'ARIMA',
-                'FBProphet',
-                'RollingRegression',
-                'GluonTS',
-                'SeasonalNaive',
-                'UnobservedComponents',
-                'VARMAX',
-                'VECM',
-                'DynamicFactor',
-                'MotifSimulation',
-                'WindowRegression',
-                'VAR',
-                'TensorflowSTS',
-                'TFPRegression',
-                'ComponentAnalysis',
-                'DatepartRegression',
-            ]
+        if model_list in list(model_lists.keys()):
+            self.model_list = model_lists[model_list]
 
         # generate template to begin with
         initial_template = str(initial_template).lower()
         if initial_template == 'random':
             self.initial_template = RandomTemplate(
-                50, model_list=self.model_list, transformer_list=self.transformer_list
+                50,
+                model_list=self.model_list,
+                transformer_list=self.transformer_list,
+                transformer_max_depth=self.transformer_max_depth,
             )
         elif initial_template == 'general':
             from autots.templates.general import general_template
@@ -266,7 +188,10 @@ class AutoTS(object):
             from autots.templates.general import general_template
 
             random_template = RandomTemplate(
-                40, model_list=self.model_list, transformer_list=self.transformer_list
+                40,
+                model_list=self.model_list,
+                transformer_list=self.transformer_list,
+                transformer_max_depth=self.transformer_max_depth,
             )
             self.initial_template = pd.concat(
                 [general_template, random_template], axis=0
@@ -276,7 +201,10 @@ class AutoTS(object):
         else:
             print("Input initial_template unrecognized. Using Random.")
             self.initial_template = RandomTemplate(
-                50, model_list=self.model_list, transformer_list=self.transformer_list
+                50,
+                model_list=self.model_list,
+                transformer_list=self.transformer_list,
+                transformer_max_depth=self.transformer_max_depth,
             )
 
         # remove models not in given model list
@@ -287,6 +215,43 @@ class AutoTS(object):
             raise ValueError(
                 "No models in template! Adjust initial_template or model_list"
             )
+        # remove transformers not in transformer_list and max_depth
+        # yes it is awkward, but I cannot think of a better way at this time
+        if self.transformer_max_depth < 6 or self.transformer_list not in [
+            "all",
+            "fast",
+        ]:
+            from autots.tools.transform import transformer_list_to_dict
+
+            transformer_lst, prb = transformer_list_to_dict(self.transformer_list)
+            for index, row in self.initial_template.iterrows():
+                full_params = json.loads(row['TransformationParameters'])
+                transformations = full_params['transformations']
+                transformation_params = full_params['transformation_params']
+                # remove those not in transformer_list
+                bad_keys = [
+                    i
+                    for i, x in json.loads(row['TransformationParameters'])[
+                        'transformations'
+                    ].items()
+                    if x not in transformer_lst
+                ]
+                [transformations.pop(key) for key in bad_keys]
+                [transformation_params.pop(key) for key in bad_keys]
+
+                # shorten any remaining if beyond length
+                transformations = dict(
+                    list(transformations.items())[: self.transformer_max_depth]
+                )
+                transformation_params = dict(
+                    list(transformation_params.items())[: self.transformer_max_depth]
+                )
+
+                full_params['transformations'] = transformations
+                full_params['transformation_params'] = transformation_params
+                self.initial_template.loc[
+                    index, 'TransformationParameters'
+                ] = json.dumps(full_params)
 
         self.best_model = pd.DataFrame()
         self.regressor_used = False
@@ -298,6 +263,9 @@ class AutoTS(object):
             'Ensemble',
         ]
         self.initial_results = TemplateEvalObject()
+
+        if verbose >= 0 and ensemble is not None and "GluonTS" in self.model_list:
+            print("WARNING: GluonTS may cause errors in ensembling")
 
         if verbose > 2:
             print('"Hello. Would you like to destroy some evil today?" - Sanderson')
@@ -336,6 +304,7 @@ class AutoTS(object):
                 ".csv" save model results table.
                 ".pickle" saves full object, including ensemble information.
             grouping_ids (dict): currently a one-level dict containing series_id:group_id mapping.
+                used in 0.2.x but not 0.3.x+ versions. retained for potential future use
         """
         self.weights = weights
         self.date_col = date_col
@@ -572,6 +541,7 @@ class AutoTS(object):
                 top_n=top_n,
                 template_cols=template_cols,
                 transformer_list=self.transformer_list,
+                transformer_max_depth=self.transformer_max_depth,
             )
             submitted_parameters = pd.concat(
                 [submitted_parameters, new_template],
@@ -868,9 +838,12 @@ or otherwise increase models available."""
             try:
                 if 'horizontal' in ensemble:
                     per_series = self.initial_results.per_series_mae.copy()
+                    # select only those models which were validated
                     temp = per_series.mean(axis=1).groupby(level=0).count()
                     temp = temp[temp >= (num_validations + 1)]
                     per_series = per_series[per_series.index.isin(temp.index)]
+                    # this .mean() should assure all series get a value
+                    # as long as they worked in at least one validation
                     per_series = per_series.groupby(level=0).mean()
                     ens_templates = HorizontalTemplateGenerator(
                         per_series,
@@ -1122,6 +1095,7 @@ or otherwise increase models available."""
                     verbose=verbose,
                     template_cols=self.template_cols,
                 )
+                # convert categorical back to numeric
                 trans = self.categorical_transformer
                 df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
                 df_forecast.lower_forecast = trans.inverse_transform(
@@ -1150,6 +1124,7 @@ or otherwise increase models available."""
                 verbose=verbose,
                 template_cols=self.template_cols,
             )
+            # convert categorical back to numeric
             trans = self.categorical_transformer
             df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
             df_forecast.lower_forecast = trans.inverse_transform(
@@ -1191,7 +1166,7 @@ or otherwise increase models available."""
 
     def export_template(
         self,
-        filename,
+        filename=None,
         models: str = 'best',
         n: int = 5,
         max_per_model_class: int = None,

@@ -4,6 +4,14 @@ autots.models package
 Submodules
 ----------
 
+autots.models.base module
+-------------------------
+
+.. automodule:: autots.models.base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.models.basics module
 ---------------------------
 
@@ -32,6 +40,14 @@ autots.models.gluonts module
 ----------------------------
 
 .. automodule:: autots.models.gluonts
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+autots.models.model\_list module
+--------------------------------
+
+.. automodule:: autots.models.model_list
    :members:
    :undoc-members:
    :show-inheritance:
@@ -75,6 +91,7 @@ autots.models.tsfresh module
    :members:
    :undoc-members:
    :show-inheritance:
+
 
 Module contents
 ---------------

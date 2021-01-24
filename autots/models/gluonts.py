@@ -7,7 +7,7 @@ Except it is really the only thing I use that runs mxnet, and it takes a while t
 import datetime
 import numpy as np
 import pandas as pd
-from autots.evaluator.auto_model import ModelObject, PredictionObject
+from autots.models.base import ModelObject, PredictionObject
 
 try:
     from gluonts.dataset.common import ListDataset

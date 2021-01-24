@@ -4,7 +4,8 @@ Naives and Others Requiring No Additional Packages Beyond Numpy and Pandas
 import datetime
 import numpy as np
 import pandas as pd
-from autots.evaluator.auto_model import ModelObject, PredictionObject, seasonal_int
+from autots.models.base import ModelObject, PredictionObject
+from autots.tools import seasonal_int
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 
 

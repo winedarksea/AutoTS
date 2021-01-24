@@ -15,11 +15,23 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* Round transformer to replace coerce_integer, ClipOutliers expanded, Slice to replace context_slicer
-* pd.df Interpolate methods added to FillNA options, " " to "_" in names, rolling_mean_24
-* slight improvement to printed progress messages
-* transformer_list (also takes a dict of value:probability) allows adjusting which transformers are created in new generations.
-	* this does not apply to transformers loaded from imported templates
+* **breaking change** to model templates: transformers structure change
+	* grouping no longer used
+* parameter generation for transformers allowing more possible combinations
+* transformer_max_depth parameter
+* Horizontal Ensembles are now much faster by only running models on the subset of series they apply to
+* general starting template improved and updated to new transformer format
+* change many np.random to random
+	* random.choices further necessitates python 3.6 or greater
+* bug fix in Detrend transformer
+* bug fix in SeasonalDifference transformer
+* SPL bug fix when NaN in test set
+* inverse_transform now fills NaN with zero for upper/lower forecasts
+* expanded model_list aliases, with dedicated module
+* bug fix (creating 0,0 order) and tuning of VARMAX
+* Fix export_template bug
+* restructuring of some lower-level function locations
+
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -34,29 +46,6 @@ Is Template Eval Error: ValueError('array must not contain infs or NaNs',) relat
 'Fake Date' doesn't work on entirely NaN series - ValueError('Found array with 0 sample(s) (shape=(0, 1)) while a minimum of 1 is required.',)
 ValueError: percentiles should all be in the interval [0, 1]. Try [-0.00089  0.01089] instead. .sample in Motif Simulation line 729 point_method == 'sample'
 
-```
-[in PredictWitch]
-if model in ['Horizontal', 'Probabilistic'] and series_count > 20:
-	if needed:
-		run horizontal_classifier(df_train, known)
-
-for model in ensemble_models
-	if model in no_shared AND if transformations not in shared_transformations/bagging:
-		filter dictionary to only series with this model
-		df_train.reindex(copy=True) to these series
-		run model
-```
-### HAVE PARAMETERS:
-* IntermittentOccurence
-* StatsmodelsFilter
-* SeasonalDifference
-* PositiveShift
-* RollingMeanTransformer
-* ClipOutliers
-* Discretize
-* CenterLastValue
-* Detrend
-
 ### Ignored Errors:
 xgboost poisson loss does not accept negatives
 GluonTS not accepting quite a lot of frequencies
@@ -65,57 +54,22 @@ Tensorflow GPU backend may crash on occasion.
 
 ## Concerns
 * resource utilization at scale
-* structure of General Transformer
 * overfitting on first train segment (train progressive subsets?)
 * End Users add their own models
-* improve starting templates (sorta best to wait until other things ironed out)
 * Improve documentation and usability of lower level code
-* better metrics, perhaps improve contour
 * better summarization of many time series into a few high-information time series as parallel or regressors
-* Ability to automatically add useful global information as regressors or parallel series
-* Built in GUI or Command Line tools
-
 
 ## To-Do
 * Migrate to-do to GitHub issues and project board
-	* GitHub Actions flake8
-* Horizontal improvements
-	* don't run univariate models on all series, only on needed series
-	* remove 'horizontal' sanity check run, takes too long (only if metric weights are x)
-	* add 'horizontal-runtime'
-* User friendly:
-	* clean up lower level
-	* make passing in own models easy
-		* clean up base model object
-* Make preprocessing templates more flexible...
-	* bagging/boosting
-	* 'shared' and 'slow' transformers must be easily separable
-* Speed:
-	* Fast window regression only
-	* Fast MotifSimulation
-		* could memoization of pairwise comparisons be possible? (joblib)
-* Improve templates
-	* 'fake date' dataset with high diversity of series to train on
-* BestN runtime variant, where speed is highly important in model selection
-* total runtime for .fit() as attribute
+* Remove 'horizontal' sanity check run, takes too long (only if metric weights are x)?
+* Horizontal and BestN runtime variant, where speed is highly important in model selection
+* total runtime for .fit() as attribute (not just manual sum but capture in ModelPrediction)
 * allow Index to be other datetime not just DatetimeIndex
-
-
-* Profile slow parts of AutoTS on 1,000 series
-	* remove slow transformers unless parameter
-	* 'fast' option for RandomTransformations generator
-* have subsetting sample for diversity, not just random
 * cleanse similar models out first, before horizontal ensembling
-* BestNEnsemble
-	* Add 5 or more model option
+* BestNEnsemble Add 5 or more model option
 * allow best_model to be specified and entirely bypass the .fit() stage.
-
-* check models from M5 competition results
-* minmaxscaler as scoring for weighted Score generation
 * drop duplicates as function of TemplateEvalObject
-* optimize randomtransform probabilities
 * improve test.py script for actual testing of many features
-* Add to template: Gluon, Motif, WindowRegression
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
 * export and import of results includes all model parameters (but not templates?)
 * Option to use full traceback in errors in table
@@ -128,11 +82,8 @@ Tensorflow GPU backend may crash on occasion.
 	* Data quantile, recentered around median of forecast.
 	* Categorical class probabilities as range for RollingRegression
 * get_forecast for Statsmodels Statespace models to include confidence interval where possible
-	* migrate arima_model to arima.model
 	* uncomp with uncertainty intervals
 * GUI overlay for editing/creating templates, and for running (Flask)
-* Window regression
-	* transfer learning
 * Datepart Regression
 	* add holiday
 * RollingRegression
@@ -142,48 +93,23 @@ Tensorflow GPU backend may crash on occasion.
 		* https://link.springer.com/article/10.1007/s10618-019-00647-x/tables/1
 	* Probabilistic:
 		https://scikit-learn.org/stable/auto_examples/ensemble/plot_gradient_boosting_quantile.html
-* Simple performance:
-	* replace try/except with if/else in some cases
 * GluonTS
 	* Add support for future_regressor
-	* Make sure of rolling regression setup
 	* Modify GluonStart if lots of NaN at start of that series
 	* GPU and CPU ctx
 * implement 'borrow' Genetic Recombination for ComponentAnalysis
-* Relative/Absolute Imports and reduce package reloading messages
 * Replace OrdinalEncoder with non-external code
 * 'Age' regressor as an option in addition to User/Holiday in ARIMA, etc.
-* Multiprocessing or Distributed options (Dask) for general greater speed
-* Improve usability on rarer frequenices (ie monthly data where some series start on 1st, others on 15th, etc.)
 * Figures: Add option to output figures of train/test + forecast, other performance figures
 * Replace most 'print' with logging.
  * still use verbose: set 0 = error, 1 = info, 2 = debug
 * Analyze and return inaccuracy patterns (most inaccurate periods out, days of week, most inaccurate series)
-* Development tools:
-	* Add to Conda (Forge) distribution as well as pip
-	* Continuous integration
-	* Code/documentation quality checkers
 * Ability to automatically add external datasets of parallel time series of global usability (ie from FRED or others)
 * make datetime input optional, just allow dataframes of numbers
 * Infer column names for df_long to wide based on which is datetime, which is string, and which is numeric
-
-### Links
-* https://link.springer.com/article/10.1007/s10618-019-00647-x/tables/1
-* https://github.com/gantheory/TPA-LSTM
-* https://github.com/huseinzol05/Stock-Prediction-Models/tree/master/deep-learning
-
-### Faster Convergence / Faster in General
-* Only search useful parameters, highest probability for most likely effective parameters
-* Remove parameters that are rarely/never useful from get_new_params
-* Don't apply transformations to Zeroes naive, possibly other naives
 * Option to run generations until generations no longer see improvement of at least X % over n generations
+* tune probability of parameters for models and transformers
 * ignore series of weight 0 in univariate models
-* Method to 'unlock' deeper parameter search, 
-	* potentially a method = 'deep' to get_new_params used after n generations
-	* no unlock, but simply very low-probability deep options in get_new_params
-* Exempt or reduce slow models from unnecessary runs, particularly with different transformations
-* Numba and Cython acceleration
-* GPU - xgboost, GluontTS
 
 #### New datasets:
 	Second level data that is music (like a radio stream)
@@ -213,20 +139,18 @@ Tensorflow GPU backend may crash on occasion.
 	lag and beta to DifferencedTransformer to make it more of an AR process
 	Weighted moving average
 	Symbolic aggregate approximation (SAX) and (PAA) (basically these are just binning)
-	Shared discretization (all series get same shared binning)
-	More sophisticated fillna methods
-	Constraint as a transformation parameter
+	Scipy filter Transformer scipy.signal.lfilter — SciPy v1.5.4 Reference Guide
+	Transformer that removes all median IQR values. Selective filters that remove some patterns...
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
-	* Add to AutoTS 'all' list in auto_ts.py
-	* add to recombination_approved if so, in auto_model.py
-	* add to no_shared if so, in auto_model.py
-	* add to model table in extended_tutorial.md
+	* add to appropriate model_lists: all, recombination_approved if so, no_shared if so
+	* add to model table in extended_tutorial.md (most columns here have an equivalent model_list)
 
 ## New Transformer Checklist:
 	* Make sure that if it modifies the size (more/fewer columns or rows) it returns pd.DataFrame with proper index/columns
 	* depth of recombination is?
-	* add to "all" transformer dict
+	* add to "all" transformer_dict
+	* add to no_params or external if so
 	* add to no_shared if so, in auto_model.py
 	* oddities_list for those with forecast/original transform difference

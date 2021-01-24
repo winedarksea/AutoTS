@@ -1,6 +1,5 @@
 """Tools for calculating forecast errors."""
 import warnings
-import math
 import numpy as np
 import pandas as pd
 
@@ -56,13 +55,19 @@ def pinball_loss(A, F, quantile):
 def SPL(A, F, df_train, quantile):
     """Scaled pinball loss."""
     # scaler = df_train.tail(1000).diff().abs().mean(axis=0)
-    scaler = np.abs(np.diff(df_train[-1000:], axis=0)).mean(axis=0)
+    # scaler = np.abs(np.diff(df_train[-1000:], axis=0)).mean(axis=0)
+    scaler = np.nanmean(np.abs(np.diff(df_train[-1000:], axis=0)), axis=0)
     # need to handle zeroes to prevent div 0 errors.
     # this will tend to make that series irrelevant to the overall evaluation
-    fill_val = scaler.max()
+    fill_val = np.nanmax(scaler)
     fill_val = fill_val if fill_val > 0 else 1
     scaler[scaler == 0] = fill_val
-    return pinball_loss(A=A, F=F, quantile=quantile) / scaler
+    scaler[np.isnan(scaler)] = fill_val
+    pl = pinball_loss(A=A, F=F, quantile=quantile)
+    # for those cases where an entire series is NaN...
+    # if any(np.isnan(pl)):
+    #     pl[np.isnan(pl)] = np.nanmax(pl)
+    return pl / scaler
 
 
 def rmse(actual, forecast):
@@ -213,7 +218,7 @@ def PredictionEval(
     errors.avg_metrics_weighted = (per_series * series_weights).sum(
         axis=1, skipna=True
     ) / sum(series_weights.values())
-    errors.avg_metrics = per_series.mean(axis=1)
+    errors.avg_metrics = per_series.mean(axis=1, skipna=True)
 
     if str(dist_n).isdigit():
         per_series_d = pd.DataFrame(

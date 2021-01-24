@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots package &#8212; AutoTS 0.2.8 documentation</title>
+    <title>autots package &#8212; AutoTS 0.3.0 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -54,10 +54,12 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="autots.models.html">autots.models package</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.base">autots.models.base module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.basics">autots.models.basics module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.dnn">autots.models.dnn module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.ensemble">autots.models.ensemble module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.gluonts">autots.models.gluonts module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.model_list">autots.models.model_list module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.prophet">autots.models.prophet module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.sklearn">autots.models.sklearn module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.statsmodels">autots.models.statsmodels module</a></li>
@@ -80,6 +82,7 @@
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.impute">autots.tools.impute module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.probabilistic">autots.tools.probabilistic module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.profile">autots.tools.profile module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.seasonal">autots.tools.seasonal module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.shaping">autots.tools.shaping module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.transform">autots.tools.transform module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools">Module contents</a></li>
@@ -130,7 +133,7 @@
 
 <dl class="class">
 <dt id="autots.AutoTS">
-<em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 5</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 0</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 1}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = {}</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'even'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 5</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 0</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 1}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'fast'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'even'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Automate time series modeling using a genetic algorithm.</p>
 <dl class="field-list simple">
@@ -156,6 +159,7 @@ Beware numeric aggregations like ‘mean’ will not work with non-numeric input
 <li><p><strong>drop_data_older_than_periods</strong> (<em>int</em>) – take only the n most recent timestamps</p></li>
 <li><p><strong>model_list</strong> (<em>list</em>) – str alias or list of names of model objects to use</p></li>
 <li><p><strong>transformer_list</strong> (<em>list</em>) – list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.</p></li>
+<li><p><strong>transformer_max_depth</strong> (<em>int</em>) – maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.</p></li>
 <li><p><strong>num_validations</strong> (<em>int</em>) – number of cross validations to perform. 0 for just train/test on final split.</p></li>
 <li><p><strong>models_to_validate</strong> (<em>int</em>) – top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
 0.99 is forced to 100% validation. 1 evaluates just 1 model.
@@ -201,7 +205,7 @@ if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite
 
 <dl class="method">
 <dt id="autots.AutoTS.export_template">
-<code class="sig-name descname">export_template</code><span class="sig-paren">(</span><em class="sig-param">filename</em>, <em class="sig-param">models: str = 'best'</em>, <em class="sig-param">n: int = 5</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">include_results: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.export_template" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">export_template</code><span class="sig-paren">(</span><em class="sig-param">filename=None</em>, <em class="sig-param">models: str = 'best'</em>, <em class="sig-param">n: int = 5</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">include_results: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.export_template" title="Permalink to this definition">¶</a></dt>
 <dd><p>Export top results as a reusable template.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -248,7 +252,8 @@ the max number of each model class to include in template</p></li>
 <li><p><strong>result_file</strong> (<em>str</em>) – results saved on each new generation. Does not include validation rounds.
 “.csv” save model results table.
 “.pickle” saves full object, including ensemble information.</p></li>
-<li><p><strong>grouping_ids</strong> (<em>dict</em>) – currently a one-level dict containing series_id:group_id mapping.</p></li>
+<li><p><strong>grouping_ids</strong> (<em>dict</em>) – currently a one-level dict containing series_id:group_id mapping.
+used in 0.2.x but not 0.3.x+ versions. retained for potential future use</p></li>
 </ul>
 </dd>
 </dl>
@@ -314,22 +319,28 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 </dd></dl>
 
+<dl class="attribute">
+<dt id="autots.TransformTS">
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">TransformTS</code><a class="headerlink" href="#autots.TransformTS" title="Permalink to this definition">¶</a></dt>
+<dd><p>alias of <a class="reference internal" href="autots.tools.html#autots.tools.transform.GeneralTransformer" title="autots.tools.transform.GeneralTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.GeneralTransformer</span></code></a></p>
+</dd></dl>
+
 <dl class="class">
 <dt id="autots.GeneralTransformer">
-<em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">GeneralTransformer</code><span class="sig-paren">(</span><em class="sig-param">outlier_method: str = None</em>, <em class="sig-param">outlier_threshold: float = 3</em>, <em class="sig-param">outlier_position: str = 'first'</em>, <em class="sig-param">fillna: str = 'ffill'</em>, <em class="sig-param">transformation: str = None</em>, <em class="sig-param">second_transformation: str = None</em>, <em class="sig-param">transformation_param: str = None</em>, <em class="sig-param">detrend: str = None</em>, <em class="sig-param">third_transformation: str = None</em>, <em class="sig-param">transformation_param2: str = None</em>, <em class="sig-param">fourth_transformation: str = None</em>, <em class="sig-param">discretization: str = 'center'</em>, <em class="sig-param">n_bins: int = None</em>, <em class="sig-param">coerce_integer: bool = False</em>, <em class="sig-param">grouping: str = None</em>, <em class="sig-param">reconciliation: str = None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">constraint=None</em>, <em class="sig-param">random_seed: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">GeneralTransformer</code><span class="sig-paren">(</span><em class="sig-param">fillna: str = 'ffill'</em>, <em class="sig-param">transformations: dict = {}</em>, <em class="sig-param">transformation_params: dict = {}</em>, <em class="sig-param">grouping: str = None</em>, <em class="sig-param">reconciliation: str = None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">random_seed: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>Remove outliers, fillNA, then mathematical transformations.</p>
+<p>Remove fillNA and then mathematical transformations.</p>
 <p>Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a ‘wide’ (one column per series) shape.</p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
 <ul class="simple">
 <li><dl class="simple">
-<dt>inverse_transform will not fully return the original data under some conditions</dt><dd><ul>
-<li><p>outliers removed or clipped will be returned in the clipped or filled na form</p></li>
+<dt>inverse_transform will not fully return the original data under many conditions</dt><dd><ul>
+<li><p>the primary intention of inverse_transform is to inverse for forecast (immediately following the historical time period) data from models, not to return original data</p></li>
 <li><p>NAs filled will be returned with the filled value</p></li>
-<li><p>Discretization cannot be inversed</p></li>
+<li><p>Discretization, statsmodels filters, Round, Slice, ClipOutliers cannot be inversed</p></li>
 <li><dl class="simple">
-<dt>RollingMean, PctChange, CumSum, and DifferencedTransformer will only return original or an immediately following forecast</dt><dd><ul>
+<dt>RollingMean, PctChange, CumSum, Seasonal Difference, and DifferencedTransformer will only return original or an immediately following forecast</dt><dd><ul>
 <li><p>by default ‘forecast’ is expected, ‘original’ can be set in trans_method</p></li>
 </ul>
 </dd>
@@ -344,18 +355,6 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>outlier_method</strong> (<em>str</em>) – <ul>
-<li><p>level of outlier removal, if any, per series</p></li>
-</ul>
-<p>’None’
-‘clip’ - replace outliers with the highest value allowed by threshold
-‘remove’ - remove outliers and replace with np.nan</p>
-</p></li>
-<li><p><strong>outlier_threshold</strong> (<em>float</em>) – number of std deviations from mean to consider an outlier. Default 3.</p></li>
-<li><p><strong>outlier_position</strong> (<em>str</em>) – when to remove outliers
-‘first’ - remove outliers before other transformations
-‘middle’ - remove outliers after first_transformation
-‘last’ - remove outliers after fourth_transformation</p></li>
 <li><p><strong>fillNA</strong> (<em>str</em>) – <ul>
 <li><p>method to fill NA, passed through to FillNA()</p></li>
 </ul>
@@ -363,12 +362,15 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 ‘zero’ - fill with zero. Useful for sales and other data where NA does usually mean $0.
 ‘mean’ - fill all missing values with the series’ overall average value
 ‘median’ - fill all missing values with the series’ overall median value
-‘rolling mean’ - fill with last n (window = 10) values
-‘ffill mean biased’ - simple avg of ffill and mean
-‘fake date’ - shifts forward data over nan, thus values will have incorrect timestamps</p>
+‘rolling_mean’ - fill with last n (window = 10) values
+‘rolling_mean_24’ - fill with avg of last 24
+‘ffill_mean_biased’ - simple avg of ffill and mean
+‘fake_date’ - shifts forward data over nan, thus values will have incorrect timestamps
+‘IterativeImputer’ - sklearn iterative imputer
+most of the interpolate methods from pandas.interpolate</p>
 </p></li>
-<li><p><strong>transformation</strong> (<em>str</em>) – <ul>
-<li><p>transformation to apply</p></li>
+<li><p><strong>transformations</strong> (<em>dict</em>) – <ul>
+<li><p>transformations to apply {0: “MinMaxScaler”, 1: “Detrend”, …}</p></li>
 </ul>
 <p>’None’
 ‘MinMaxScaler’ - Sklearn MinMaxScaler
@@ -379,7 +381,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 ‘RobustScaler’ - Sklearn
 ‘PCA, ‘FastICA’ - performs sklearn decomposition and returns n-cols worth of n_components
 ‘Detrend’ - fit then remove a linear regression from the data
-‘RollingMean’ - 10 period rolling average, can receive a custom window by transformation_param if used as second_transformation
+‘RollingMeanTransformer’ - 10 period rolling average, can receive a custom window by transformation_param if used as second_transformation
 ‘FixedRollingMean’ - same as RollingMean, but with inverse_transform disabled, so smoothed forecasts are maintained.
 ‘RollingMean10’ - 10 period rolling average (smoothing)
 ‘RollingMean100thN’ - Rolling mean of periods of len(train)/100 (minimum 2)
@@ -392,22 +394,16 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 ‘IntermittentOccurrence’ - -1, 1 for non median values
 ‘SeasonalDifference’ - remove the last lag values from all values
 ‘SeasonalDifferenceMean’ - remove the average lag values from all
-‘SeasonalDifference7’,’12’,’28’ - non-parameterized version of Seasonal</p>
+‘SeasonalDifference7’,’12’,’28’ - non-parameterized version of Seasonal
+‘CenterLastValue’ - center data around tail of dataset
+‘Round’ - round values on inverse or transform
+‘Slice’ - use only recent records
+‘ClipOutliers’ - remove outliers
+‘Discretize’ - bin or round data into groups
+‘DatepartRegression’ - move a trend trained on datetime index</p>
 </p></li>
-<li><p><strong>second_transformation</strong> (<em>str</em>) – second transformation to apply. Same options as transformation, but with transformation_param passed in if used</p></li>
-<li><p><strong>detrend</strong> (<em>str</em>) – Model and remove a linear component from the data.
-None, ‘Linear’, ‘Poisson’, ‘Tweedie’, ‘Gamma’, ‘RANSAC’, ‘ARD’</p></li>
-<li><p><strong>second_transformation</strong> – second transformation to apply. Same options as transformation, but with transformation_param passed in if used</p></li>
-<li><p><strong>transformation_param</strong> (<em>str</em>) – passed to second_transformation, not used by most transformers.</p></li>
-<li><p><strong>fourth_transformation</strong> (<em>str</em>) – third transformation to apply. Sames options as transformation.</p></li>
-<li><p><strong>discretization</strong> (<em>str</em>) – method of binning to apply
-None - no discretization
-‘center’ - values are rounded to center value of each bin
-‘lower’ - values are rounded to lower range of closest bin
-‘upper’ - values are rounded up to upper edge of closest bin
-‘sklearn-quantile’, ‘sklearn-uniform’, ‘sklearn-kmeans’ - sklearn kbins discretizer</p></li>
-<li><p><strong>n_bins</strong> (<em>int</em>) – number of quantile bins to split data into</p></li>
-<li><p><strong>coerce_integer</strong> (<em>bool</em>) – whether to force inverse_transform into integers</p></li>
+<li><p><strong>transformation_params</strong> (<em>dict</em>) – params of transformers {0: {}, 1: {‘model’: ‘Poisson’}, …}
+pass through dictionary of empty dictionaries to utilize defaults</p></li>
 <li><p><strong>random_seed</strong> (<em>int</em>) – random state passed through where applicable</p></li>
 </ul>
 </dd>
@@ -447,27 +443,33 @@ None - no discretization
 
 <dl class="method">
 <dt id="autots.GeneralTransformer.inverse_transform">
-<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em>, <em class="sig-param">fillzero: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Undo the madness.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
 <li><p><strong>trans_method</strong> (<em>str</em>) – ‘forecast’ or ‘original’ passed through</p></li>
+<li><p><strong>fillzero</strong> (<em>bool</em>) – if inverse returns NaN, fill with zero</p></li>
 </ul>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="method">
-<dt id="autots.GeneralTransformer.outlier_treatment">
-<code class="sig-name descname">outlier_treatment</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer.outlier_treatment" title="Permalink to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dt id="autots.GeneralTransformer.retrieve_transformer">
+<em class="property">classmethod </em><code class="sig-name descname">retrieve_transformer</code><span class="sig-paren">(</span><em class="sig-param">transformation: str = None</em>, <em class="sig-param">param: dict = {}</em>, <em class="sig-param">df=None</em>, <em class="sig-param">random_seed: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer.retrieve_transformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieves a specific transformer object from a string.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed - required to set params for some transformers</p></li>
+<li><p><strong>transformation</strong> (<em>str</em>) – name of desired method</p></li>
+<li><p><strong>param</strong> (<em>dict</em>) – dict of kwargs to pass (legacy: an actual param)</p></li>
+</ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>pandas.DataFrame</p>
+<dd class="field-even"><p>transformer object</p>
 </dd>
 </dl>
 </dd></dl>
@@ -478,6 +480,13 @@ None - no discretization
 <dd><p>Apply transformations to convert df.</p>
 </dd></dl>
 
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.RandomTransform">
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.1</em>, <em class="sig-param">'QuantileTransformer': 0.1</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.05</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.1</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference7': 0.0</em>, <em class="sig-param">'SeasonalDifference': 0.08</em>, <em class="sig-param">'SeasonalDifference28': 0.0</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'DatepartRegression': 0.02</em>, <em class="sig-param">'DatepartRegressionElasticNet': 0.0</em>, <em class="sig-param">'DatepartRegressionLtd': 0.0</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.05</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.05</em>, <em class="sig-param">'Slice': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.1</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.1</em>, <em class="sig-param">'rolling_mean_24': 0.099</em>, <em class="sig-param">'IterativeImputer': 0.1</em>, <em class="sig-param">'mean': 0.1</em>, <em class="sig-param">'zero': 0.1</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.1</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.1}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.RandomTransform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a dict of randomly choosen transformation selections.</p>
+<p>DatepartRegression is used as a signal that slow parameters are allowed.</p>
 </dd></dl>
 
 <dl class="function">
@@ -588,7 +597,7 @@ if categorical data is provided, <cite>aggfunc=’first’</cite> is recommended
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2020, Colin Catlin.
+      &copy;2021, Colin Catlin.
       
       |
       <a href="../_sources/source/autots.rst.txt"

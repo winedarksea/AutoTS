@@ -274,6 +274,7 @@ def simple_train_test_split(
     train = df.head((df.shape[0]) - forecast_length)
     test = df.tail(forecast_length)
 
+    # not failing on the rational that it effects all models, and therefore all metrics equally
     if (verbose > 0) and ((train.isnull().sum(axis=0) / train.shape[0]).max() > 0.9):
         print("One or more series is 90% or more NaN in this train split")
     if (verbose >= 0) and ((test.isnull().sum(axis=0) / test.shape[0]).max() > 0.9):
