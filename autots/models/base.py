@@ -8,6 +8,7 @@ import datetime
 import numpy as np
 import pandas as pd
 
+
 class ModelObject(object):
     """Generic class for holding forecasting models.
 
@@ -133,4 +134,3 @@ class PredictionObject(object):
     def total_runtime(self):
         """Combine runtimes."""
         return self.fit_runtime + self.predict_runtime + self.transformation_runtime
-

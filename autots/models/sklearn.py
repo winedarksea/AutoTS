@@ -11,6 +11,7 @@ from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.seasonal import date_part, seasonal_int
 
+
 def rolling_x_regressor(
     df,
     mean_rolling_periods: int = 30,

@@ -163,9 +163,11 @@ def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
     return final
 
 
-def generalize_horizontal(df_train, known_matches: dict, available_models: list, full_models: list=None):
+def generalize_horizontal(
+    df_train, known_matches: dict, available_models: list, full_models: list = None
+):
     """generalize a horizontal model trained on a subset of all series
-    
+
     Args:
         df_train (pd.DataFrame): time series data
         known_matches (dict): series:model dictionary for some to all series
@@ -205,20 +207,24 @@ def HorizontalEnsemble(
     forecasts_runtime,
     prediction_interval,
     df_train=None,
-    prematched_series: dict=None,
+    prematched_series: dict = None,
 ):
     """Generate forecast for per_series ensembling."""
     # this is meant to fill in any failures
     available_models = list(forecasts.keys())
     train_size = df_train.shape
     # print(f"running inner generalization with training size: {train_size}")
-    full_models = [mod for mod, fcs in forecasts.items() if fcs.shape[1] == train_size[1]]
+    full_models = [
+        mod for mod, fcs in forecasts.items() if fcs.shape[1] == train_size[1]
+    ]
     if not full_models:
         full_models = available_models  # hope it doesn't need to fill
     # print(f"FULLMODEL {len(full_models)}: {full_models}")
     if prematched_series is None:
         prematched_series = ensemble_params['series']
-    all_series = generalize_horizontal(df_train, prematched_series, available_models, full_models)
+    all_series = generalize_horizontal(
+        df_train, prematched_series, available_models, full_models
+    )
     # print(f"ALLSERIES {len(all_series.keys())}: {all_series}")
 
     org_idx = df_train.columns
@@ -370,7 +376,7 @@ def EnsembleForecast(
     forecasts_runtime,
     prediction_interval,
     df_train=None,
-    prematched_series: dict=None,
+    prematched_series: dict = None,
 ):
     """Return PredictionObject for given ensemble method."""
     s3list = ['best3', 'best3horizontal', 'bestn']

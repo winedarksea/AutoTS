@@ -7,6 +7,7 @@ from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.seasonal import date_part, seasonal_int
 
+
 class GLS(ModelObject):
     """Simple linear regression from statsmodels
 
@@ -380,9 +381,7 @@ class GLM(ModelObject):
             ],
             [0.1, 0.3, 0.1, 0.3, 0.1, 0.1],
         )[0]
-        constant_choice = random.choices(
-            [False, True], [0.95, 0.05]
-        )[0]
+        constant_choice = random.choices([False, True], [0.95, 0.05])[0]
         regression_type_choice = random.choices(
             [None, 'datepart', 'User'], [0.4, 0.4, 0.2]
         )[0]
@@ -584,18 +583,14 @@ class ETS(ModelObject):
         """Return dict of new parameters for parameter tuning."""
         trend_list = ["additive", "multiplicative", None]
         trend_probability = [0.2, 0.2, 0.6]
-        trend_choice = random.choices(
-            trend_list, trend_probability
-        )[0]
+        trend_choice = random.choices(trend_list, trend_probability)[0]
         if trend_choice in ["additive", "multiplicative"]:
             damped_choice = random.choice([True, False])
         else:
             damped_choice = False
         seasonal_list = ["additive", "multiplicative", None]
         seasonal_probability = [0.2, 0.2, 0.6]
-        seasonal_choice = random.choices(
-            seasonal_list, seasonal_probability
-        )[0]
+        seasonal_choice = random.choices(seasonal_list, seasonal_probability)[0]
         if seasonal_choice in ["additive", "multiplicative"]:
             seasonal_period_choice = seasonal_int()
         else:

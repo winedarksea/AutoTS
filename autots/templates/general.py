@@ -1,5 +1,292 @@
 import pandas as pd
 
-general_template_dict = {"0":{"Model":"DatepartRegression","ModelParameters":"{\"regression_model\": {\"model\": \"DecisionTree\", \"model_params\": {\"max_depth\": 3, \"min_samples_split\": 1.0}}, \"datepart_method\": \"simple\", \"regression_type\": null}","TransformationParameters":"{\"fillna\": \"median\", \"transformations\": {\"0\": \"PowerTransformer\", \"1\": \"RobustScaler\", \"2\": \"DifferencedTransformer\", \"3\": \"DatepartRegression\"}, \"transformation_params\": {\"0\": {}, \"1\": {}, \"2\": {}, \"3\": {\"regression_model\": {\"model\": \"DecisionTree\", \"model_params\": {\"max_depth\": 9, \"min_samples_split\": 0.05}}, \"datepart_method\": \"recurring\"}}}","Ensemble":0,"ID":"c0766c5352e51e7814223ad3bee375c4"},"1":{"Model":"SeasonalNaive","ModelParameters":"{\"method\": \"Median\", \"lag_1\": 24, \"lag_2\": \"None\"}","TransformationParameters":"{\"fillna\": \"ffill_mean_biased\", \"transformations\": {\"0\": \"DifferencedTransformer\"}, \"transformation_params\": {\"0\": {}}}","Ensemble":0,"ID":"d118a11c5393ed6a33a2eb42f7af62f1"},"2":{"Model":"GluonTS","ModelParameters":"{\"gluon_model\": \"WaveNet\", \"epochs\": 20, \"learning_rate\": 0.01, \"context_length\": 10}","TransformationParameters":"{\"fillna\": \"IterativeImputer\", \"transformations\": {\"0\": \"MinMaxScaler\", \"1\": \"bkfilter\"}, \"transformation_params\": {\"0\": {}, \"1\": {}}}","Ensemble":0,"ID":"ec2e40af3f881652f3ec0c82fa5822af"},"3":{"Model":"SeasonalNaive","ModelParameters":"{\"method\": \"Median\", \"lag_1\": 28, \"lag_2\": 71}","TransformationParameters":"{\"fillna\": \"ffill_mean_biased\", \"transformations\": {\"0\": \"SinTrend\", \"1\": \"Discretize\", \"2\": \"Detrend\"}, \"transformation_params\": {\"0\": {}, \"1\": {\"discretization\": \"lower\", \"n_bins\": 20}, \"2\": {\"model\": \"Linear\"}}}","Ensemble":0,"ID":"e421e35930e896d134fa2d973f9daa86"},"4":{"Model":"ARIMA","ModelParameters":"{\"p\": 3, \"d\": 0, \"q\": 2, \"regression_type\": null}","TransformationParameters":"{\"fillna\": \"fake_date\", \"transformations\": {\"0\": \"PositiveShift\", \"1\": \"Detrend\", \"2\": \"MaxAbsScaler\"}, \"transformation_params\": {\"0\": {}, \"1\": {\"model\": \"Linear\"}, \"2\": {}}}","Ensemble":0,"ID":"91436edac3242f091efd51cdc679882f"},"5":{"Model":"ARIMA","ModelParameters":"{\"p\": 5, \"d\": 0, \"q\": 2, \"regression_type\": \"Holiday\"}","TransformationParameters":"{\"fillna\": \"fake_date\", \"transformations\": {\"0\": \"PositiveShift\", \"1\": \"Detrend\", \"2\": \"MaxAbsScaler\"}, \"transformation_params\": {\"0\": {}, \"1\": {\"model\": \"Linear\"}, \"2\": {}}}","Ensemble":0,"ID":"207999b5d3343b24c06b1bb03660c193"},"6":{"Model":"ARIMA","ModelParameters":"{\"p\": 5, \"d\": 0, \"q\": 0, \"regression_type\": \"Holiday\"}","TransformationParameters":"{\"fillna\": \"fake_date\", \"transformations\": {\"0\": \"PositiveShift\", \"1\": \"Detrend\", \"2\": \"MaxAbsScaler\"}, \"transformation_params\": {\"0\": {}, \"1\": {\"model\": \"Linear\"}, \"2\": {}}}","Ensemble":0,"ID":"c7601b8f51841b95eaa0124de4095c66"},"7":{"Model":"VAR","ModelParameters":"{\"regression_type\": null, \"maxlags\": null, \"ic\": \"fpe\"}","TransformationParameters":"{\"fillna\": \"rolling_mean_24\", \"transformations\": {\"0\": \"PositiveShift\", \"1\": \"CenterLastValue\"}, \"transformation_params\": {\"0\": {}, \"1\": {\"rows\": 6}}}","Ensemble":0,"ID":"18aa4100656127389088a7070c7b7d74"},"8":{"Model":"VAR","ModelParameters":"{\"regression_type\": null, \"maxlags\": 15, \"ic\": \"fpe\"}","TransformationParameters":"{\"fillna\": \"rolling_mean_24\", \"transformations\": {\"0\": \"PositiveShift\"}, \"transformation_params\": {\"0\": {}}}","Ensemble":0,"ID":"fc7ed813bc7b6bb6709057838ceeda23"},"9":{"Model":"ARIMA","ModelParameters":"{\"p\": 5, \"d\": 1, \"q\": 5, \"regression_type\": null}","TransformationParameters":"{\"fillna\": \"rolling_mean_24\", \"transformations\": {\"0\": \"PositiveShift\"}, \"transformation_params\": {\"0\": {}}}","Ensemble":0,"ID":"37fa9e28a939782cc2f443abb1aa6839"},"10":{"Model":"VAR","ModelParameters":"{\"regression_type\": null, \"maxlags\": 5, \"ic\": \"fpe\"}","TransformationParameters":"{\"fillna\": \"rolling_mean_24\", \"transformations\": {\"0\": \"PositiveShift\"}, \"transformation_params\": {\"0\": {}}}","Ensemble":0,"ID":"fed46e3c59fbecffe5d1337bf8ed1b0b"},"11":{"Model":"VECM","ModelParameters":"{\"deterministic\": \"nc\", \"k_ar_diff\": 2, \"regression_type\": null}","TransformationParameters":"{\"fillna\": \"ffill_mean_biased\", \"transformations\": {\"0\": \"DifferencedTransformer\", \"1\": \"DatepartRegression\", \"2\": \"Discretize\"}, \"transformation_params\": {\"0\": {}, \"1\": {\"regression_model\": {\"model\": \"RandomForest\", \"model_params\": {}}, \"datepart_method\": \"recurring\"}, \"2\": {\"discretization\": \"center\", \"n_bins\": 50}}}","Ensemble":0,"ID":"8abcaf54adc6c06d54e2f9943939dcff"},"12":{"Model":"RollingRegression","ModelParameters":"{\"regression_model\": {\"model\": \"MLP\", \"model_params\": {\"hidden_layer_sizes\": [100], \"max_iter\": 250, \"activation\": \"tanh\", \"solver\": \"lbfgs\", \"early_stopping\": false, \"learning_rate_init\": 0.001}}, \"holiday\": false, \"mean_rolling_periods\": 12, \"macd_periods\": 40, \"std_rolling_periods\": null, \"max_rolling_periods\": 2, \"min_rolling_periods\": null, \"ewm_alpha\": 0.8, \"additional_lag_periods\": 11, \"abs_energy\": false, \"rolling_autocorr_periods\": null, \"add_date_part\": null, \"polynomial_degree\": null, \"x_transform\": null, \"regression_type\": null}","TransformationParameters":"{\"fillna\": \"rolling_mean_24\", \"transformations\": {\"0\": \"PositiveShift\", \"1\": \"bkfilter\", \"2\": \"MinMaxScaler\", \"3\": \"ClipOutliers\", \"4\": \"SinTrend\"}, \"transformation_params\": {\"0\": {}, \"1\": {}, \"2\": {}, \"3\": {\"method\": \"remove\", \"std_threshold\": 3, \"fillna\": \"mean\"}, \"4\": {}}}","Ensemble":0,"ID":"87c81f4cb2794172d8e9a438b04427fd"},"13":{"Model":"GluonTS","ModelParameters":"{\"gluon_model\": \"DeepAR\", \"epochs\": 20, \"learning_rate\": 0.001, \"context_length\": 10}","TransformationParameters":"{\"fillna\": \"rolling_mean_24\", \"transformations\": {\"0\": \"PositiveShift\", \"1\": \"DifferencedTransformer\", \"2\": \"bkfilter\"}, \"transformation_params\": {\"0\": {}, \"1\": {}, \"2\": {}}}","Ensemble":0,"ID":"2c202e617e0ba51932074a490c815137"},"14":{"Model":"AverageValueNaive","ModelParameters":"{\"method\": \"Mean\"}","TransformationParameters":"{\"fillna\": \"ffill\", \"transformations\": {\"0\": \"DifferencedTransformer\", \"1\": \"SinTrend\"}, \"transformation_params\": {\"0\": {}, \"1\": {}}}","Ensemble":0,"ID":"cf77554cbd2012a8e3f6128bbcafa87f"},"15":{"Model":"SeasonalNaive","ModelParameters":"{\"method\": \"Median\", \"lag_1\": 2, \"lag_2\": \"None\"}","TransformationParameters":"{\"fillna\": \"ffill\", \"transformations\": {\"0\": \"DifferencedTransformer\", \"1\": \"Discretize\", \"2\": \"Detrend\"}, \"transformation_params\": {\"0\": {}, \"1\": {\"discretization\": \"lower\", \"n_bins\": 20}, \"2\": {\"model\": \"Linear\"}}}","Ensemble":0,"ID":"c1ea80aedeb67ed0d9337a77a2a54385"},"16":{"Model":"LastValueNaive","ModelParameters":"{}","TransformationParameters":"{\"fillna\": \"rolling_mean\", \"transformations\": {\"0\": \"RobustScaler\", \"1\": \"SinTrend\", \"2\": \"Detrend\", \"3\": \"PowerTransformer\", \"4\": \"IntermittentOccurrence\", \"5\": \"StandardScaler\"}, \"transformation_params\": {\"0\": {}, \"1\": {}, \"2\": {\"model\": \"Poisson\"}, \"3\": {}, \"4\": {\"center\": \"median\"}, \"5\": {}}}","Ensemble":0,"ID":"d065dd687cd9d8b9854a76f7e4266873"},"17":{"Model":"UnobservedComponents","ModelParameters":"{\"level\": true, \"trend\": true, \"cycle\": false, \"damped_cycle\": false, \"irregular\": false, \"stochastic_trend\": true, \"stochastic_level\": true, \"stochastic_cycle\": false, \"regression_type\": \"Holiday\"}","TransformationParameters":"{\"fillna\": \"fake_date\", \"transformations\": {\"0\": \"PositiveShift\", \"1\": \"Detrend\", \"2\": \"MaxAbsScaler\", \"3\": \"DifferencedTransformer\"}, \"transformation_params\": {\"0\": {}, \"1\": {\"model\": \"Linear\"}, \"2\": {}, \"3\": {}}}","Ensemble":0,"ID":"983c9418b6c876f51d3d7b13be2715d7"}}
-
+general_template_dict = {
+    "0": {
+        "Model": "ARIMA",
+        "ModelParameters": "{\"p\": 7, \"d\": 1, \"q\": 4, \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"rolling_mean_24\", \"transformations\": {\"0\": \"ClipOutliers\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3.5, \"fillna\": null}}}",
+        "Ensemble": 0,
+    },
+    "1": {
+        "Model": "ARIMA",
+        "ModelParameters": "{\"p\": 4, \"d\": 1, \"q\": 7, \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"fake_date\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
+        "Ensemble": 0,
+    },
+    "2": {
+        "Model": "ARIMA",
+        "ModelParameters": "{\"p\": 12, \"d\": 3, \"q\": 7, \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"fake_date\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"MaxAbsScaler\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {}}}",
+        "Ensemble": 0,
+    },
+    "3": {
+        "Model": "ARIMA",
+        "ModelParameters": "{\"p\": 12, \"d\": 1, \"q\": 7, \"regression_type\": \"Holiday\"}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}}}",
+        "Ensemble": 0,
+    },
+    "4": {
+        "Model": "ARIMA",
+        "ModelParameters": "{\"p\": 12, \"d\": 0, \"q\": 12, \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"ffill\", \"transformations\": {\"0\": \"Detrend\", \"1\": \"DifferencedTransformer\", \"2\": \"ClipOutliers\", \"3\": \"RobustScaler\", \"4\": \"StandardScaler\"}, \"transformation_params\": {\"0\": {\"model\": \"GLS\"}, \"1\": {}, \"2\": {\"method\": \"clip\", \"std_threshold\": 4, \"fillna\": null}, \"3\": {}, \"4\": {}}}",
+        "Ensemble": 0,
+    },
+    "5": {
+        "Model": "AverageValueNaive",
+        "ModelParameters": "{\"method\": \"Mean\"}",
+        "TransformationParameters": "{\"fillna\": \"fake_date\", \"transformations\": {\"0\": \"DifferencedTransformer\", \"1\": \"SinTrend\"}, \"transformation_params\": {\"0\": {}, \"1\": {}}}",
+        "Ensemble": 0,
+    },
+    "6": {
+        "Model": "AverageValueNaive",
+        "ModelParameters": "{\"method\": \"Mean\"}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\", \"2\": \"DifferencedTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {}}}",
+        "Ensemble": 0,
+    },
+    "7": {
+        "Model": "AverageValueNaive",
+        "ModelParameters": "{\"method\": \"Mean\"}",
+        "TransformationParameters": "{\"fillna\": \"rolling_mean_24\", \"transformations\": {\"0\": \"SeasonalDifference\", \"1\": \"Round\", \"2\": \"Detrend\"}, \"transformation_params\": {\"0\": {\"lag_1\": 7, \"method\": \"Mean\"}, \"1\": {\"model\": \"middle\", \"decimals\": 2, \"on_transform\": true, \"on_inverse\": false}, \"2\": {\"model\": \"GLS\"}}}",
+        "Ensemble": 0,
+    },
+    "8": {
+        "Model": "DatepartRegression",
+        "ModelParameters": "{\"regression_model\": {\"model\": \"DecisionTree\", \"model_params\": {\"max_depth\": 3, \"min_samples_split\": 2}}, \"datepart_method\": \"recurring\", \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\", \"2\": \"DifferencedTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {}}}",
+        "Ensemble": 0,
+    },
+    "9": {
+        "Model": "DatepartRegression",
+        "ModelParameters": "{\"regression_model\": {\"model\": \"SVM\", \"model_params\": {}}, \"datepart_method\": \"recurring\", \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"zero\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"RollingMeanTransformer\", \"2\": \"Detrend\", \"3\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3.5, \"fillna\": null}, \"1\": {\"fixed\": true, \"window\": 10}, \"2\": {\"model\": \"Linear\"}, \"3\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
+        "Ensemble": 0,
+    },
+    "10": {
+        "Model": "DatepartRegression",
+        "ModelParameters": "{\"regression_model\": {\"model\": \"MLP\", \"model_params\": {\"hidden_layer_sizes\": [25, 15, 25], \"max_iter\": 1000, \"activation\": \"tanh\", \"solver\": \"lbfgs\", \"early_stopping\": false, \"learning_rate_init\": 0.001}}, \"datepart_method\": \"recurring\", \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
+        "Ensemble": 0,
+    },
+    "11": {
+        "Model": "DatepartRegression",
+        "ModelParameters": "{\"regression_model\": {\"model\": \"KerasRNN\", \"model_params\": {\"kernel_initializer\": \"glorot_uniform\", \"epochs\": 50, \"batch_size\": 32, \"optimizer\": \"adam\", \"loss\": \"Huber\", \"hidden_layer_sizes\": [32, 32, 32], \"rnn_type\": \"GRU\"}}, \"datepart_method\": \"recurring\", \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"Round\", \"1\": \"QuantileTransformer\", \"2\": \"QuantileTransformer\", \"3\": \"QuantileTransformer\", \"4\": \"PowerTransformer\"}, \"transformation_params\": {\"0\": {\"model\": \"middle\", \"decimals\": 1, \"on_transform\": true, \"on_inverse\": false}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 20}, \"3\": {\"output_distribution\": \"normal\", \"n_quantiles\": 1000}, \"4\": {}}}",
+        "Ensemble": 0,
+    },
+    "12": {
+        "Model": "ETS",
+        "ModelParameters": "{\"damped_trend\": false, \"trend\": \"additive\", \"seasonal\": null, \"seasonal_periods\": null}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
+        "Ensemble": 0,
+    },
+    "13": {
+        "Model": "ETS",
+        "ModelParameters": "{\"damped_trend\": false, \"trend\": null, \"seasonal\": \"additive\", \"seasonal_periods\": 7}",
+        "TransformationParameters": "{\"fillna\": \"rolling_mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"Round\", \"2\": \"Detrend\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"model\": \"middle\", \"decimals\": 0, \"on_transform\": false, \"on_inverse\": true}, \"2\": {\"model\": \"GLS\"}}}",
+        "Ensemble": 0,
+    },
+    "14": {
+        "Model": "GLM",
+        "ModelParameters": "{\"family\": \"Binomial\", \"constant\": false, \"regression_type\": \"datepart\"}",
+        "TransformationParameters": "{\"fillna\": \"ffill_mean_biased\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 4, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
+        "Ensemble": 0,
+    },
+    "15": {
+        "Model": "GLM",
+        "ModelParameters": "{\"family\": \"Binomial\", \"constant\": false, \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\", \"2\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
+        "Ensemble": 0,
+    },
+    "16": {
+        "Model": "GLS",
+        "ModelParameters": "{}",
+        "TransformationParameters": "{\"fillna\": \"rolling_mean\", \"transformations\": {\"0\": \"RollingMeanTransformer\", \"1\": \"DifferencedTransformer\", \"2\": \"Detrend\", \"3\": \"Slice\"}, \"transformation_params\": {\"0\": {\"fixed\": true, \"window\": 3}, \"1\": {}, \"2\": {\"model\": \"Linear\"}, \"3\": {\"method\": 100}}}",
+        "Ensemble": 0,
+    },
+    "17": {
+        "Model": "GLS",
+        "ModelParameters": "{}",
+        "TransformationParameters": "{\"fillna\": \"median\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\", \"2\": \"RobustScaler\", \"3\": \"Round\", \"4\": \"MaxAbsScaler\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3.5, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {}, \"3\": {\"model\": \"middle\", \"decimals\": 2, \"on_transform\": true, \"on_inverse\": true}, \"4\": {}}}",
+        "Ensemble": 0,
+    },
+    "18": {
+        "Model": "GluonTS",
+        "ModelParameters": "{\"gluon_model\": \"DeepAR\", \"epochs\": 150, \"learning_rate\": 0.001, \"context_length\": 10}",
+        "TransformationParameters": "{\"fillna\": \"ffill\", \"transformations\": {\"0\": \"PowerTransformer\", \"1\": \"DifferencedTransformer\", \"2\": \"bkfilter\"}, \"transformation_params\": {\"0\": {}, \"1\": {}, \"2\": {}}}",
+        "Ensemble": 0,
+    },
+    "19": {
+        "Model": "GluonTS",
+        "ModelParameters": "{\"gluon_model\": \"NPTS\", \"epochs\": 20, \"learning_rate\": 0.001, \"context_length\": 10}",
+        "TransformationParameters": "{\"fillna\": \"ffill_mean_biased\", \"transformations\": {\"0\": \"Detrend\", \"1\": \"DifferencedTransformer\"}, \"transformation_params\": {\"0\": {\"model\": \"Linear\"}, \"1\": {}}}",
+        "Ensemble": 0,
+    },
+    "20": {
+        "Model": "GluonTS",
+        "ModelParameters": "{\"gluon_model\": \"WaveNet\", \"epochs\": 40, \"learning_rate\": 0.001, \"context_length\": 10}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
+        "Ensemble": 0,
+    },
+    "21": {
+        "Model": "GluonTS",
+        "ModelParameters": "{\"gluon_model\": \"NPTS\", \"epochs\": 20, \"learning_rate\": 0.001, \"context_length\": 10}",
+        "TransformationParameters": "{\"fillna\": \"ffill\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\", \"2\": \"PowerTransformer\", \"3\": \"SeasonalDifference\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {}, \"3\": {\"lag_1\": 7, \"method\": \"Median\"}}}",
+        "Ensemble": 0,
+    },
+    "22": {
+        "Model": "GluonTS",
+        "ModelParameters": "{\"gluon_model\": \"Transformer\", \"epochs\": 40, \"learning_rate\": 0.001, \"context_length\": 10}",
+        "TransformationParameters": "{\"fillna\": \"ffill_mean_biased\", \"transformations\": {\"0\": \"QuantileTransformer\", \"1\": \"MaxAbsScaler\"}, \"transformation_params\": {\"0\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"1\": {}}}",
+        "Ensemble": 0,
+    },
+    "23": {
+        "Model": "GluonTS",
+        "ModelParameters": "{\"gluon_model\": \"SFF\", \"epochs\": 40, \"learning_rate\": 0.01, \"context_length\": 10}",
+        "TransformationParameters": "{\"fillna\": \"ffill_mean_biased\", \"transformations\": {\"0\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
+        "Ensemble": 0,
+    },
+    "24": {
+        "Model": "LastValueNaive",
+        "ModelParameters": "{}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"bkfilter\", \"1\": \"SinTrend\", \"2\": \"Detrend\", \"3\": \"PowerTransformer\"}, \"transformation_params\": {\"0\": {}, \"1\": {}, \"2\": {\"model\": \"Linear\"}, \"3\": {}}}",
+        "Ensemble": 0,
+    },
+    "25": {
+        "Model": "LastValueNaive",
+        "ModelParameters": "{}",
+        "TransformationParameters": "{\"fillna\": \"rolling_mean_24\", \"transformations\": {\"0\": \"PositiveShift\", \"1\": \"SinTrend\", \"2\": \"bkfilter\"}, \"transformation_params\": {\"0\": {}, \"1\": {}, \"2\": {}}}",
+        "Ensemble": 0,
+    },
+    "26": {
+        "Model": "LastValueNaive",
+        "ModelParameters": "{}",
+        "TransformationParameters": "{\"fillna\": \"fake_date\", \"transformations\": {\"0\": \"SeasonalDifference\", \"1\": \"SinTrend\"}, \"transformation_params\": {\"0\": {\"lag_1\": 7, \"method\": \"LastValue\"}, \"1\": {}}}",
+        "Ensemble": 0,
+    },
+    "27": {
+        "Model": "LastValueNaive",
+        "ModelParameters": "{}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 1, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
+        "Ensemble": 0,
+    },
+    "28": {
+        "Model": "SeasonalNaive",
+        "ModelParameters": "{\"method\": \"LastValue\", \"lag_1\": 2, \"lag_2\": 7}",
+        "TransformationParameters": "{\"fillna\": \"rolling_mean_24\", \"transformations\": {\"0\": \"SinTrend\", \"1\": \"Round\", \"2\": \"PowerTransformer\"}, \"transformation_params\": {\"0\": {}, \"1\": {\"model\": \"middle\", \"decimals\": 2, \"on_transform\": false, \"on_inverse\": true}, \"2\": {}}}",
+        "Ensemble": 0,
+    },
+    "29": {
+        "Model": "SeasonalNaive",
+        "ModelParameters": "{\"method\": \"LastValue\", \"lag_1\": 96, \"lag_2\": 4}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\", \"2\": \"MinMaxScaler\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {}}}",
+        "Ensemble": 0,
+    },
+    "30": {
+        "Model": "SeasonalNaive",
+        "ModelParameters": "{\"method\": \"LastValue\", \"lag_1\": 2, \"lag_2\": 1}",
+        "TransformationParameters": "{\"fillna\": \"rolling_mean_24\", \"transformations\": {\"0\": \"SeasonalDifference\", \"1\": \"QuantileTransformer\", \"2\": \"Detrend\"}, \"transformation_params\": {\"0\": {\"lag_1\": 12, \"method\": \"Median\"}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {\"model\": \"GLS\"}}}",
+        "Ensemble": 0,
+    },
+    "31": {
+        "Model": "SeasonalNaive",
+        "ModelParameters": "{\"method\": \"LastValue\", \"lag_1\": 7, \"lag_2\": 2}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"QuantileTransformer\", \"1\": \"ClipOutliers\"}, \"transformation_params\": {\"0\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"1\": {\"method\": \"clip\", \"std_threshold\": 2, \"fillna\": null}}}",
+        "Ensemble": 0,
+    },
+    "32": {
+        "Model": "UnobservedComponents",
+        "ModelParameters": "{\"level\": true, \"trend\": false, \"cycle\": true, \"damped_cycle\": true, \"irregular\": true, \"stochastic_trend\": false, \"stochastic_level\": true, \"stochastic_cycle\": true, \"regression_type\": \"Holiday\"}",
+        "TransformationParameters": "{\"fillna\": \"fake_date\", \"transformations\": {\"0\": \"PositiveShift\", \"1\": \"Detrend\", \"2\": \"bkfilter\", \"3\": \"DifferencedTransformer\"}, \"transformation_params\": {\"0\": {}, \"1\": {\"model\": \"Linear\"}, \"2\": {}, \"3\": {}}}",
+        "Ensemble": 0,
+    },
+    "33": {
+        "Model": "UnobservedComponents",
+        "ModelParameters": "{\"level\": false, \"trend\": false, \"cycle\": true, \"damped_cycle\": false, \"irregular\": false, \"stochastic_trend\": false, \"stochastic_level\": true, \"stochastic_cycle\": false, \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\", \"2\": \"RobustScaler\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {}}}",
+        "Ensemble": 0,
+    },
+    "34": {
+        "Model": "UnobservedComponents",
+        "ModelParameters": "{\"level\": true, \"trend\": false, \"cycle\": false, \"damped_cycle\": false, \"irregular\": false, \"stochastic_trend\": false, \"stochastic_level\": true, \"stochastic_cycle\": true, \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"rolling_mean_24\", \"transformations\": {\"0\": \"ClipOutliers\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 5, \"fillna\": null}}}",
+        "Ensemble": 0,
+    },
+    "35": {
+        "Model": "VAR",
+        "ModelParameters": "{\"regression_type\": null, \"maxlags\": null, \"ic\": \"fpe\"}",
+        "TransformationParameters": "{\"fillna\": \"fake_date\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3.5, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
+        "Ensemble": 0,
+    },
+    "36": {
+        "Model": "VAR",
+        "ModelParameters": "{\"regression_type\": null, \"maxlags\": 5, \"ic\": \"fpe\"}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
+        "Ensemble": 0,
+    },
+    "37": {
+        "Model": "VAR",
+        "ModelParameters": "{\"regression_type\": null, \"maxlags\": 15, \"ic\": \"aic\"}",
+        "TransformationParameters": "{\"fillna\": \"zero\", \"transformations\": {\"0\": \"RollingMeanTransformer\", \"1\": \"QuantileTransformer\", \"2\": \"RollingMeanTransformer\"}, \"transformation_params\": {\"0\": {\"fixed\": true, \"window\": 10}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {\"fixed\": false, \"window\": 10}}}",
+        "Ensemble": 0,
+    },
+    "38": {
+        "Model": "VECM",
+        "ModelParameters": "{\"deterministic\": \"cili\", \"k_ar_diff\": 2, \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"Detrend\", \"2\": \"Detrend\", \"3\": \"PowerTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"model\": \"GLS\"}, \"2\": {\"model\": \"Linear\"}, \"3\": {}}}",
+        "Ensemble": 0,
+    },
+    "39": {
+        "Model": "VECM",
+        "ModelParameters": "{\"deterministic\": \"li\", \"k_ar_diff\": 3, \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\", \"2\": \"Detrend\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {\"model\": \"Linear\"}}}",
+        "Ensemble": 0,
+    },
+    "40": {
+        "Model": "VECM",
+        "ModelParameters": "{\"deterministic\": \"lo\", \"k_ar_diff\": 2, \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"ClipOutliers\", \"2\": \"QuantileTransformer\", \"3\": \"Discretize\", \"4\": \"RobustScaler\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"2\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"3\": {\"discretization\": \"lower\", \"n_bins\": 10}, \"4\": {}}}",
+        "Ensemble": 0,
+    },
+    "41": {
+        "Model": "VECM",
+        "ModelParameters": "{\"deterministic\": \"colo\", \"k_ar_diff\": 3, \"regression_type\": null}",
+        "TransformationParameters": "{\"fillna\": \"zero\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\", \"2\": \"Detrend\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {\"model\": \"Linear\"}}}",
+        "Ensemble": 0,
+    },
+    "42": {
+        "Model": "WindowRegression",
+        "ModelParameters": "{\"window_size\": 10, \"regression_model\": {\"model\": \"MLP\", \"model_params\": {\"hidden_layer_sizes\": [72, 36, 72], \"max_iter\": 250, \"activation\": \"relu\", \"solver\": \"lbfgs\", \"early_stopping\": false, \"learning_rate_init\": 0.001}}, \"input_dim\": \"univariate\", \"output_dim\": \"forecast_length\", \"normalize_window\": false, \"shuffle\": true, \"max_windows\": 5000}",
+        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"QuantileTransformer\", \"1\": \"MinMaxScaler\", \"2\": \"RobustScaler\"}, \"transformation_params\": {\"0\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 100}, \"1\": {}, \"2\": {}}}",
+        "Ensemble": 0,
+    },
+    "43": {
+        "Model": "ZeroesNaive",
+        "ModelParameters": "{}",
+        "TransformationParameters": "{\"fillna\": \"ffill\", \"transformations\": {\"0\": \"PowerTransformer\", \"1\": \"QuantileTransformer\", \"2\": \"SeasonalDifference\"}, \"transformation_params\": {\"0\": {}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {\"lag_1\": 7, \"method\": \"LastValue\"}}}",
+        "Ensemble": 0,
+    },
+}
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')
+
+
+"""
+# Basic Template Construction Code
+# transformer_max_depth = 6 and transformer_list = "fast"
+from autots.evaluator.auto_model import unpack_ensemble_models
+max_per_model_class = 1
+export_template = model.validation_results.model_results
+export_template = export_template[
+                export_template['Runs'] >= (model.num_validations + 1)
+            ]
+export_template = (
+                    export_template.sort_values('Score', ascending=True)
+                    .groupby('Model')
+                    .head(max_per_model_class)
+                    .reset_index()
+                )
+import json
+export2 = unpack_ensemble_models(model.best_model, keep_ensemble=False, recursive=True)
+export_final = pd.concat([export_template, export2])
+export_final = export_final[export_final['Ensemble'] < 1]
+export_final[["Model", "ModelParameters", "TransformationParameters", "Ensemble"]].reset_index(drop=True).to_json(orient='index')
+"""

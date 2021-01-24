@@ -5,6 +5,7 @@ import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
 from autots.tools.seasonal import date_part, seasonal_int
 
+
 class EmptyTransformer(object):
     """Base transformer returning raw data."""
 
@@ -60,7 +61,7 @@ class EmptyTransformer(object):
     def get_new_params(method: str = 'random'):
         """Generate new random parameters"""
         if method == 'test':
-            return {'test': random.choice([1,2])}
+            return {'test': random.choice([1, 2])}
         else:
             return {}
 
@@ -145,12 +146,35 @@ class Detrend(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = 'random'):
         if method == "fast":
-            choice = random.choices(["GLS", "Linear",],
-                                    [0.5, 0.5,], k=1)[0]
+            choice = random.choices(
+                [
+                    "GLS",
+                    "Linear",
+                ],
+                [
+                    0.5,
+                    0.5,
+                ],
+                k=1,
+            )[0]
         else:
-            choice = random.choices(["GLS", "Linear", "Poisson", "Tweedie", "Gamma", "TheilSen", "RANSAC", "ARD"],
-                                    [0.24, 0.2, 0.1, 0.1, 0.1, 0.02, 0.02, 0.02], k=1)[0]
-        return {"model": choice,}
+            choice = random.choices(
+                [
+                    "GLS",
+                    "Linear",
+                    "Poisson",
+                    "Tweedie",
+                    "Gamma",
+                    "TheilSen",
+                    "RANSAC",
+                    "ARD",
+                ],
+                [0.24, 0.2, 0.1, 0.1, 0.1, 0.02, 0.02, 0.02],
+                k=1,
+            )[0]
+        return {
+            "model": choice,
+        }
 
     def _retrieve_detrend(self, detrend: str = "Linear"):
         if detrend == 'Linear':
@@ -283,7 +307,7 @@ class Detrend(EmptyTransformer):
 
 class StatsmodelsFilter(EmptyTransformer):
     """Irreversible filters.
-    
+
     Args:
         method (str): bkfilter or cffilter
     """
@@ -536,7 +560,7 @@ class PositiveShift(EmptyTransformer):
 
 class IntermittentOccurrence(EmptyTransformer):
     """Intermittent inspired binning predicts probability of not center.
-    
+
     Does not inverse to original values!
 
     Args:
@@ -552,9 +576,18 @@ class IntermittentOccurrence(EmptyTransformer):
         if method == "fast":
             choice = "mean"
         else:
-            choice = random.choices(["mean", "median", "midhinge",],
-                                    [0.4, 0.3, 0.3], k=1)[0]
-        return {"center": choice,}
+            choice = random.choices(
+                [
+                    "mean",
+                    "median",
+                    "midhinge",
+                ],
+                [0.4, 0.3, 0.3],
+                k=1,
+            )[0]
+        return {
+            "center": choice,
+        }
 
     def fit(self, df):
         """Fits shift interval.
@@ -803,7 +836,7 @@ class SeasonalDifference(EmptyTransformer):
         sdf = pd.DataFrame(
             np.tile(self.tile_values_lag_1, (int(np.ceil(df_len / tile_len)), 1))
         )
-        # 
+        #
         sdf = sdf.tail(df_len)
         sdf.index = df.index
         sdf.columns = df.columns
@@ -864,16 +897,17 @@ class DatepartRegressionTransformer(EmptyTransformer):
         if method == "all":
             choice = generate_regressor_params()
         else:
-            choice = generate_regressor_params(model_dict = {
-                'ElasticNet': 0.25,
-                'DecisionTree': 0.25,
-                'KNN': 0.1,
-                'MLP': 0.2,
-                'RandomForest': 0.2,
-            })
+            choice = generate_regressor_params(
+                model_dict={
+                    'ElasticNet': 0.25,
+                    'DecisionTree': 0.25,
+                    'KNN': 0.1,
+                    'MLP': 0.2,
+                    'RandomForest': 0.2,
+                }
+            )
 
-        return {"regression_model": choice,
-                "datepart_method": method_c}
+        return {"regression_model": choice, "datepart_method": method_c}
 
     def fit(self, df):
         """Fits trend for later detrending.
@@ -944,7 +978,10 @@ class DatepartRegressionTransformer(EmptyTransformer):
         y.index = df.index
         df = df + y
         return df
+
+
 DatepartRegression = DatepartRegressionTransformer
+
 
 class DifferencedTransformer(EmptyTransformer):
     """Difference from lag n value.
@@ -1158,15 +1195,29 @@ class ClipOutliers(EmptyTransformer):
         fillna_c = None
         if method == "fast":
             method_c = "clip"
-            choice = random.choices(["GLS", "Linear",],
-                                    [0.5, 0.5,], k=1)[0]
+            choice = random.choices(
+                [
+                    "GLS",
+                    "Linear",
+                ],
+                [
+                    0.5,
+                    0.5,
+                ],
+                k=1,
+            )[0]
         else:
             method_c = random.choice(["clip", "remove"])
             if method_c == "remove":
                 fillna_c = random.choice(["ffill", "mean", "rolling_mean_24"])
-        choice = random.choices([1, 2, 3, 3.5, 4, 5],
-                                [0.1, 0.2, 0.2, 0.2, 0.2, 0.1], k=1)[0]
-        return {"method": method_c, "std_threshold": choice, "fillna": fillna_c,}
+        choice = random.choices(
+            [1, 2, 3, 3.5, 4, 5], [0.1, 0.2, 0.2, 0.2, 0.2, 0.1], k=1
+        )[0]
+        return {
+            "method": method_c,
+            "std_threshold": choice,
+            "fillna": fillna_c,
+        }
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -1249,10 +1300,13 @@ class Round(EmptyTransformer):
         on_transform_c = bool(random.getrandbits(1))
         if not on_inverse_c and not on_transform_c:
             on_inverse_c = True
-        choice = random.choices([-2, -1, 0, 1, 2],
-                                [0.1, 0.2, 0.4, 0.2, 0.1], k=1)[0]
-        return {"model": "middle", "decimals": choice,
-                "on_transform": on_transform_c, "on_inverse": on_inverse_c}
+        choice = random.choices([-2, -1, 0, 1, 2], [0.1, 0.2, 0.4, 0.2, 0.1], k=1)[0]
+        return {
+            "model": "middle",
+            "decimals": choice,
+            "on_transform": on_transform_c,
+            "on_inverse": on_inverse_c,
+        }
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -1319,12 +1373,14 @@ class Slice(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = 'random'):
         if method == "fast":
-            choice = random.choices([100, 0.5, 0.2],
-                                    [0.3, 0.5, 0.2], k=1)[0]
+            choice = random.choices([100, 0.5, 0.2], [0.3, 0.5, 0.2], k=1)[0]
         else:
-            choice = random.choices([100, 0.5, 0.8, 0.9, 0.3],
-                                    [0.2, 0.2, 0.2, 0.2, 0.2], k=1)[0]
-        return {"method": choice,}
+            choice = random.choices(
+                [100, 0.5, 0.8, 0.9, 0.3], [0.2, 0.2, 0.2, 0.2, 0.2], k=1
+            )[0]
+        return {
+            "method": choice,
+        }
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -1389,10 +1445,23 @@ class Discretize(EmptyTransformer):
             choice = random.choice(["center", "upper", "lower"])
             n_bin_c = random.choice([5, 10, 20])
         else:
-            choice = random.choices(["center", "upper", "lower", 'sklearn-quantile', 'sklearn-uniform', 'sklearn-kmeans'],
-                                    [0.3, 0.2, 0.2, 0.1, 0.1, 0.1], k=1)[0]
+            choice = random.choices(
+                [
+                    "center",
+                    "upper",
+                    "lower",
+                    'sklearn-quantile',
+                    'sklearn-uniform',
+                    'sklearn-kmeans',
+                ],
+                [0.3, 0.2, 0.2, 0.1, 0.1, 0.1],
+                k=1,
+            )[0]
             n_bin_c = random.choice([5, 10, 20, 50])
-        return {"discretization": choice, "n_bins" : n_bin_c,}
+        return {
+            "discretization": choice,
+            "n_bins": n_bin_c,
+        }
 
     def _fit(self, df):
         """Learn behavior of data to change.
@@ -1522,7 +1591,9 @@ class CenterLastValue(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = 'random'):
         choice = random.randint(1, 6)
-        return {"rows": choice,}
+        return {
+            "rows": choice,
+        }
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -1563,6 +1634,7 @@ class CenterLastValue(EmptyTransformer):
         """
         self.fit(df)
         return self.transform(df)
+
 
 # lookup dict for all non-parameterized transformers
 trans_dict = {
@@ -1622,17 +1694,18 @@ external_transformers = [
     "FastICA",
 ]
 
+
 class GeneralTransformer(object):
     """Remove fillNA and then mathematical transformations.
 
     Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a 'wide' (one column per series) shape.
 
     Warning:
-        - inverse_transform will not fully return the original data under some conditions
-            * outliers removed or clipped will be returned in the clipped or filled na form
+        - inverse_transform will not fully return the original data under many conditions
+            * the primary intention of inverse_transform is to inverse for forecast (immediately following the historical time period) data from models, not to return original data
             * NAs filled will be returned with the filled value
-            * Discretization cannot be inversed
-            * RollingMean, PctChange, CumSum, and DifferencedTransformer will only return original or an immediately following forecast
+            * Discretization, statsmodels filters, Round, Slice, ClipOutliers cannot be inversed
+            * RollingMean, PctChange, CumSum, Seasonal Difference, and DifferencedTransformer will only return original or an immediately following forecast
                 - by default 'forecast' is expected, 'original' can be set in trans_method
 
     Args:
@@ -1641,11 +1714,14 @@ class GeneralTransformer(object):
             'zero' - fill with zero. Useful for sales and other data where NA does usually mean $0.
             'mean' - fill all missing values with the series' overall average value
             'median' - fill all missing values with the series' overall median value
-            'rolling mean' - fill with last n (window = 10) values
-            'ffill mean biased' - simple avg of ffill and mean
-            'fake date' - shifts forward data over nan, thus values will have incorrect timestamps
+            'rolling_mean' - fill with last n (window = 10) values
+            'rolling_mean_24' - fill with avg of last 24
+            'ffill_mean_biased' - simple avg of ffill and mean
+            'fake_date' - shifts forward data over nan, thus values will have incorrect timestamps
+            'IterativeImputer' - sklearn iterative imputer
+            most of the interpolate methods from pandas.interpolate
 
-        transformations (dict): - transformations to apply {0: "MinMaxScaler", ...}
+        transformations (dict): - transformations to apply {0: "MinMaxScaler", 1: "Detrend", ...}
             'None'
             'MinMaxScaler' - Sklearn MinMaxScaler
             'PowerTransformer' - Sklearn PowerTransformer
@@ -1676,6 +1752,9 @@ class GeneralTransformer(object):
             'Discretize' - bin or round data into groups
             'DatepartRegression' - move a trend trained on datetime index
 
+        transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
+            pass through dictionary of empty dictionaries to utilize defaults
+
         random_seed (int): random state passed through where applicable
     """
 
@@ -1684,7 +1763,6 @@ class GeneralTransformer(object):
         fillna: str = 'ffill',
         transformations: dict = {},
         transformation_params: dict = {},
-
         grouping: str = None,
         reconciliation: str = None,
         grouping_ids=None,
@@ -1731,7 +1809,11 @@ class GeneralTransformer(object):
 
     @classmethod
     def retrieve_transformer(
-        self, transformation: str = None, param: dict = {}, df=None, random_seed: int=2020
+        self,
+        transformation: str = None,
+        param: dict = {},
+        df=None,
+        random_seed: int = 2020,
     ):
         """Retrieves a specific transformer object from a string.
 
@@ -1798,7 +1880,10 @@ class GeneralTransformer(object):
             from sklearn.decomposition import FastICA
 
             transformer = FastICA(
-                n_components=df.shape[1], whiten=True, random_state=random_seed, **param,
+                n_components=df.shape[1],
+                whiten=True,
+                random_state=random_seed,
+                **param,
             )
             return transformer
 
@@ -1866,7 +1951,10 @@ class GeneralTransformer(object):
         for i in sorted(self.transformations.keys()):
             transformation = self.transformations[i]
             self.transformers[i] = self.retrieve_transformer(
-                transformation=transformation, df=df, param=self.transformation_params[i], random_seed=self.random_seed
+                transformation=transformation,
+                df=df,
+                param=self.transformation_params[i],
+                random_seed=self.random_seed,
             )
             df = self.transformers[i].fit_transform(df)
             # convert to DataFrame only if it isn't already
@@ -1924,7 +2012,9 @@ class GeneralTransformer(object):
         df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         return df
 
-    def inverse_transform(self, df, trans_method: str = "forecast", fillzero: bool = False):
+    def inverse_transform(
+        self, df, trans_method: str = "forecast", fillzero: bool = False
+    ):
         """Undo the madness.
 
         Args:
@@ -1938,7 +2028,9 @@ class GeneralTransformer(object):
 
         for i in sorted(self.transformations.keys(), reverse=True):
             if self.transformations[i] in self.oddities_list:
-                df = self.transformers[i].inverse_transform(df, trans_method=trans_method)
+                df = self.transformers[i].inverse_transform(
+                    df, trans_method=trans_method
+                )
             else:
                 df = self.transformers[i].inverse_transform(df)
             if not isinstance(df, pd.DataFrame):
@@ -1946,7 +2038,7 @@ class GeneralTransformer(object):
                 df.index = self.df_index
                 df.columns = self.df_colnames
             df = df.replace([np.inf, -np.inf], 0)
-        
+
         if fillzero:
             df = df.fillna(0)
 
@@ -1965,14 +2057,17 @@ def get_transformer_params(transformer: str = "EmptyTransformer", method: str = 
         return {
             "algorithm": random.choice(["parallel", "deflation"]),
             "fun": random.choice(["logcosh", "exp", "cube"]),
-            }
+        }
     elif transformer == "QuantileTransformer":
         return {
-            "output_distribution": random.choices(["uniform", "normal"], [0.8, 0.2], k=1)[0],
+            "output_distribution": random.choices(
+                ["uniform", "normal"], [0.8, 0.2], k=1
+            )[0],
             "n_quantiles": random.choices([1000, 100, 20], [0.7, 0.2, 0.1], k=1)[0],
-            }
+        }
     else:
         return {}
+
 
 # dictionary of probabilities for randomly choosen transformers
 transformer_dict = {
@@ -2030,6 +2125,7 @@ na_probs = {
     "interpolate": 0.1,
 }
 
+
 def transformer_list_to_dict(transformer_list):
     """Convert various possibilities to dict."""
     if not transformer_list or transformer_list == "all":
@@ -2050,14 +2146,16 @@ def transformer_list_to_dict(transformer_list):
         raise ValueError("transformer_list alias not recognized.")
     return transformer_list, transformer_prob
 
-def RandomTransform(transformer_list: dict = transformer_dict,
+
+def RandomTransform(
+    transformer_list: dict = transformer_dict,
     transformer_max_depth: int = 4,
     na_prob_dict: dict = na_probs,
     fast_params: bool = None,
     traditional_order: bool = False,
 ):
     """Return a dict of randomly choosen transformation selections.
-    
+
     DatepartRegression is used as a signal that slow parameters are allowed.
     """
     transformer_list, transformer_prob = transformer_list_to_dict(transformer_list)
@@ -2097,8 +2195,8 @@ def RandomTransform(transformer_list: dict = transformer_dict,
         if test == "None":
             return {
                 "fillna": na_choice,
-                "transformations": {0: None}, 
-                "transformation_params":  {0: {}}, 
+                "transformations": {0: None},
+                "transformation_params": {0: {}},
             }
     if traditional_order:
         # handle these not being in TransformerList
@@ -2117,6 +2215,6 @@ def RandomTransform(transformer_list: dict = transformer_dict,
     params = [get_transformer_params(x, method=params_method) for x in trans]
     return {
         "fillna": na_choice,
-        "transformations": dict(zip(keys, trans)), 
-        "transformation_params":  dict(zip(keys, params)), 
+        "transformations": dict(zip(keys, trans)),
+        "transformation_params": dict(zip(keys, params)),
     }

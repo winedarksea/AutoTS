@@ -7,6 +7,7 @@ seasonal
 import random
 import pandas as pd
 
+
 def seasonal_int(include_one: bool = False):
     """Generate a random integer of typical seasonalities."""
     prob_dict = {
@@ -38,6 +39,7 @@ def seasonal_int(include_one: bool = False):
     if lag == 'random_int':
         lag = random.randint(2, 100)
     return int(lag)
+
 
 def date_part(DTindex, method: str = 'simple'):
     """Create date part columns from pd.DatetimeIndex.
