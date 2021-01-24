@@ -1,5 +1,4 @@
 """Informal testing script."""
-from time import sleep
 import timeit
 import numpy as np
 import pandas as pd
@@ -15,25 +14,25 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 # raise ValueError("aaargh!")
 
-example_filename = "example_export.csv"  # .csv/.json
-forecast_length = 8
+example_filename = "example_export2.csv"  # .csv/.json
+forecast_length = 12
 long = False
-df = load_weekly(long=long)
+df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 4
-verbose = 1
+generations = 3
 
 """
 df = pd.read_csv("m5_sample.gz")
 df['datetime'] = pd.DatetimeIndex(df['datetime'])
 df = df.set_index("datetime", drop=True)
-df = df.iloc[:, 0:40]
+df = df.iloc[:, 0:100]
 """
+# df = df[df['series_id'] == 'GS10']
 
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
 weights_weekly = {
-    'Weekly Minnesota Midgrade Conventional Retail Gasoline Prices  (Dollars per Gallon)': 2
+    'Weekly Minnesota Midgrade Conventional Retail Gasoline Prices  (Dollars per Gallon)': 20
 }
 grouping_monthly = {
     'CSUSHPISA': 'A',
@@ -60,22 +59,20 @@ model_list = [
     # 'GluonTS',
     'UnobservedComponents',
     'DatepartRegression',
-    'ARIMA',
-    'VAR',
-    'VECM',
-    'WindowRegression',
+    # 'VAR',
+    # 'VECM',
+    # 'WindowRegression',
 ]
 
-transformer_list = "fast"  # ["SeasonalDifference", "MinMaxScaler", "Detrend"]
-transformer_max_depth = 6
+transformer_list = {}  # [None]
 # model_list = 'superfast'
 # model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {
-    'smape_weighting': 3,
+    'smape_weighting': 2,
     'mae_weighting': 1,
-    'rmse_weighting': 1,
+    'rmse_weighting': 2,
     'containment_weighting': 0,
     'runtime_weighting': 0,
     'spl_weighting': 1,
@@ -87,23 +84,22 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble="simple,horizontal-max",
-    constraint=None,
+    ensemble=None,  # "simple,distance,horizontal-max",
+    constraint=2,
     max_generations=generations,
     num_validations=2,
     validation_method='backwards',
     model_list=model_list,
     transformer_list=transformer_list,
-    transformer_max_depth=transformer_max_depth,
-    initial_template='General+Random',
+    initial_template='Random',
     metric_weighting=metric_weighting,
-    models_to_validate=0.35,
+    models_to_validate=0.3,
     max_per_model_class=None,
     model_interrupt=True,
     n_jobs=n_jobs,
-    drop_most_recent=1,
+    drop_most_recent=0,
     subset=None,
-    verbose=verbose,
+    verbose=1,
 )
 
 
@@ -137,7 +133,7 @@ start_time_for = timeit.default_timer()
 model = model.fit(
     df,
     future_regressor=future_regressor_train2d,
-    weights=weights_weekly,
+    # weights=weights_weekly,
     # grouping_ids=grouping_monthly,
     # result_file='test.pickle',
     date_col='datetime' if long else None,
@@ -154,13 +150,12 @@ model = AutoTS(
     frequency='infer',
     prediction_interval=0.9,
     ensemble=None,
-    constraint=None,
+    constraint=2,
     max_generations=generations,
     num_validations=2,
     validation_method='backwards',
     model_list=model_list,
     transformer_list=transformer_list,
-    transformer_max_depth=transformer_max_depth,
     initial_template='General+Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.1,
@@ -168,7 +163,7 @@ model = AutoTS(
     model_interrupt=True,
     n_jobs=None,
     drop_most_recent=0,
-    verbose=verbose,
+    verbose=1,
 )
 # model = model.import_template(example_filename, method='only')
 import time
@@ -191,6 +186,10 @@ with joblib.parallel_backend("loky", n_jobs=n_jobs):
 print(f"With Context {elapsed_cxt}\nWithout Context {elapsed_for}")
 """
 
+print(model.best_model['Model'].iloc[0])
+print(model.best_model['ModelParameters'].iloc[0])
+print(model.best_model['TransformationParameters'].iloc[0])
+
 """
 prediction_ints = model.predict(
     future_regressor=future_regressor_forecast2d,
@@ -211,11 +210,9 @@ initial_results['FitRuntime'] = initial_results['FitRuntime'].dt.total_seconds()
 initial_results['PredictRuntime'] = initial_results['PredictRuntime'].dt.total_seconds()
 initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_seconds()
 
-sleep(5)
-print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
-import platform
-initial_results.to_csv("general_template" + str(platform.node()) + ".csv")
+# import platform
+# initial_results.to_csv("bigger_speedtest" + str(platform.node()) + "_openblas.csv")
 
 """
 # Import/Export
@@ -280,8 +277,7 @@ Merge dev to master on GitHub and create release (include .tar.gz)
 
 # Help correlate errors with parameters
 """
-test = initial_results[initial_results['TransformationParameters'].str.contains('FastICA')]
-
+# test = initial_results[initial_results['TransformationParameters'].str.contains('Detrend')]
 cols = ['Model', 'ModelParameters', 'TransformationParameters', 'Exceptions']
 if (~initial_results['Exceptions'].isna()).sum() > 0:
     test_corr = error_correlations(

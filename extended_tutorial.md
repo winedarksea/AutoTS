@@ -6,21 +6,20 @@ There are a number of ways to get a more accurate time series model. AutoTS take
 
 ## Underlying Process
 AutoTS works in the following way at present:
-* The process begins with data reshaping and basic data handling as needed
+* It begins by taking long data and converting it to a wide dataframe with DateTimeIndex
 * An initial train/test split is generated where the test is the most recent data, of forecast_length
-* The initial model template is a combination of transfer learning and randomly generated models. This is tested on the initial train/test
-* Models consist of a pre-transformation step (fill na options, outlier removal options, etc), and algorithm (ie ETS) and model paramters (trend, damped, ...)
+* A random template of models is generated and tested on the initial train/test
+* Models consist of a pre-transformation step (fill na options, outlier removal options, etc), and algorithm (ie ETS) and model paramters (trend, damped, etc)
 * The top models (selected by a combination of metrics) are recombined with random mutations for n_generations
-* A percentage of the best models from this process go to cross validation, where they are re-assessed on new train/test splits.
-* If used, horizontal ensembling uses the validation data to choose the best model for each series.
-* The best model or ensemble in validation is selected as best_model and used in the `.predict()` method to generate forecasts.
+* A handful of the best models from this process go to cross validation, where they are re-assessed on new train/test splits.
+* The best model in validation is selected as best_model and used in the `.predict()` method to generate forecasts.
 
 ### A simple example
 ```python
 # also: _hourly, _daily, _weekly, or _yearly
 from autots.datasets import load_monthly
 
-df_long = load_monthly(long=True)
+df_long = load_monthly()
 
 from autots import AutoTS
 
@@ -28,6 +27,7 @@ model = AutoTS(
     forecast_length=3,
     frequency='infer',
     ensemble='simple',
+    drop_data_older_than_periods=240,
     max_generations=5,
     num_validations=2,
 )
@@ -71,17 +71,9 @@ Here, two methods of cross validation are in place, `'even'` and '`backwards'`.
 
 **Backwards** cross validation works backwards from the most recent data. First the most recent forecast_length samples are taken, then the next most recent forecast_length samples, and so on. This makes it more ideal for smaller or fast-changing datasets. 
 
-**Seasonal** validation is supplied as `'seasonal n'` ie `'seasonal 364'`. It trains on the most recent data as usual, then valdations are `n` periods back from the datetime of the forecast would be. 
-For example with daily data, forecasting for a month ahead, and `n=364`, the first test might be on May 2020, with validation on June 2019 and June 2018, the final forecast then of June 2020.
+**Seasonal** validation is supplied as `'seasonal n'` ie `'seasonal 364'`. It trains on the most recent data as usual, then valdations are `n` periods back from the datetime of the forecast would be. For example with daily data, forecasting for a month ahead, and `n=364`, the first test might be on May 2020, with validation on June 2019 and June 2018, the final forecast then of June 2020.
 
-Only a subset of models are taken from initial validation to cross validation. The number of models is set such as `models_to_validate=10`. 
-If a float in 0 to 1 is provided, it is treated as a % of models to select. 
-If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter. 
-However, increasing this value above, say, `0.35` (ie 35%) is unlikely to have much benefit, due to the similarity of many model parameters. 
-
-While NaN values are handled, model selection will suffer if any series have large numbers of NaN values in any of the generated train/test splits. 
-Most commonly, this may occur where some series have a very long history, while others in the same dataset only have very recent data. 
-In these cases, avoid the `even` cross validation and use one of the other validation methods. 
+Only a subset of models are based from initial validation to cross validation. The number of models is set such as `models_to_validate=10`. If a float in 0 to 1 is provided, it is treated as a % of models to select. If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter. 
 
 ### A more detailed example:
 Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting. 
@@ -114,8 +106,7 @@ model = AutoTS(
     num_validations=2,
     validation_method='seasonal 168',
     model_list=model_list,
-	transformer_list='all',
-    models_to_validate=0.2,
+    models_to_validate=15,
     drop_most_recent=1,
 	n_jobs='auto',
 )
@@ -130,7 +121,7 @@ forecasts_df = prediction.forecast
 # model.best_model.to_string()
 ```
 
-Probabilistic forecasts are *available* for all models, but in many cases are just data-based estimates in lieu of model estimates. 
+Probabilistic forecasts are *available* for all models, but in many cases are just data-based estimates in lieu of model estimates, so be careful. 
 ```python
 upper_forecasts_df = prediction.upper_forecast
 lower_forecasts_df = prediction.lower_forecast
@@ -257,7 +248,6 @@ pip install tensorflow
 pip install tensorflow-probability
 ```
 #### Intel conda channel installation
-https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html
 ```shell
 # create the environment. Intelpy compatability is often a version or two behind latest py
 conda create -n intelpy -c intel python=3.7 intelpython3_full
@@ -267,14 +257,8 @@ activate intelpy
 conda install -c intel statsmodels
 conda install -c intel lightgbm
 conda install -c intel tensorflow
-conda install -c intel tensorflow-probability
-pip install mxnet
-pip install gluonts
-pip install fbprophet
 
 # also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html
-# pip install intel-tensorflow-avx512  and conda install tensorflow-mkl
-# MKL_NUM_THREADS, USE_DAAL4PY_SKLEARN=1
 ```
 
 ## Caveats and Advice

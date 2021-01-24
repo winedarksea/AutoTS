@@ -1,11 +1,9 @@
 """Statsmodels based forecasting models."""
 import datetime
-import random
 import numpy as np
 import pandas as pd
-from autots.models.base import ModelObject, PredictionObject
+from autots.evaluator.auto_model import ModelObject, seasonal_int, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
-from autots.tools.seasonal import date_part, seasonal_int
 
 
 class GLS(ModelObject):
@@ -181,7 +179,7 @@ class GLM(ModelObject):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         from statsmodels.api import GLM
-        from autots.tools.seasonal import date_part
+        from autots.models.sklearn import date_part
 
         if self.regression_type == 'datepart':
             X = date_part(self.df_train.index, method='expanded').values
@@ -370,8 +368,8 @@ class GLM(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        family_choice = random.choices(
-            [
+        family_choice = np.random.choice(
+            a=[
                 'Gaussian',
                 'Poisson',
                 'Binomial',
@@ -379,12 +377,15 @@ class GLM(ModelObject):
                 'Tweedie',
                 'Gamma',
             ],
-            [0.1, 0.3, 0.1, 0.3, 0.1, 0.1],
-        )[0]
-        constant_choice = random.choices([False, True], [0.95, 0.05])[0]
-        regression_type_choice = random.choices(
-            [None, 'datepart', 'User'], [0.4, 0.4, 0.2]
-        )[0]
+            size=1,
+            p=[0.1, 0.3, 0.1, 0.3, 0.1, 0.1],
+        ).item()
+        constant_choice = np.random.choice(
+            a=[False, True], size=1, p=[0.95, 0.05]
+        ).item()
+        regression_type_choice = np.random.choice(
+            a=[None, 'datepart', 'User'], size=1, p=[0.4, 0.4, 0.2]
+        ).item()
         return {
             'family': family_choice,
             'constant': constant_choice,
@@ -583,14 +584,18 @@ class ETS(ModelObject):
         """Return dict of new parameters for parameter tuning."""
         trend_list = ["additive", "multiplicative", None]
         trend_probability = [0.2, 0.2, 0.6]
-        trend_choice = random.choices(trend_list, trend_probability)[0]
+        trend_choice = np.random.choice(
+            a=trend_list, size=1, p=trend_probability
+        ).item()
         if trend_choice in ["additive", "multiplicative"]:
-            damped_choice = random.choice([True, False])
+            damped_choice = np.random.choice([True, False], size=1).item()
         else:
             damped_choice = False
         seasonal_list = ["additive", "multiplicative", None]
         seasonal_probability = [0.2, 0.2, 0.6]
-        seasonal_choice = random.choices(seasonal_list, seasonal_probability)[0]
+        seasonal_choice = np.random.choice(
+            a=seasonal_list, size=1, p=seasonal_probability
+        ).item()
         if seasonal_choice in ["additive", "multiplicative"]:
             seasonal_period_choice = seasonal_int()
         else:
@@ -1703,21 +1708,17 @@ class VARMAX(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        # make these big and it's REAL slow, and if both p and q are non zero
-        ar_choice = random.choices([0, 1, 2], [0.3, 0.5, 0.2])[0]
-        if ar_choice == 0:
-            ma_choice = random.choices([1, 2], [0.8, 0.2])[0]
-        else:
-            ma_choice = 0
-        trend_choice = random.choices(
-            ['n', 'c', 't', 'ct', 'poly'], [0.2, 0.4, 0.1, 0.2, 0.1]
-        )[0]
+        ar_choice = np.random.choice(a=[0, 1, 2], size=1, p=[0.3, 0.5, 0.2]).item()
+        ma_choice = np.random.choice(a=[0, 1, 2], size=1, p=[0.5, 0.3, 0.2]).item()
+        trend_choice = np.random.choice(
+            a=['n', 'c', 't', 'ct', 'poly'], size=1, p=[0.1, 0.5, 0.1, 0.2, 0.1]
+        ).item()
         if trend_choice == 'poly':
             trend_choice = [
-                random.randint(0, 2),
-                random.randint(0, 2),
-                random.randint(0, 2),
-                random.randint(0, 2),
+                np.random.randint(0, 2, 1).item(),
+                np.random.randint(0, 2, 1).item(),
+                np.random.randint(0, 2, 1).item(),
+                np.random.randint(0, 2, 1).item(),
             ]
         return {'order': (ar_choice, ma_choice), 'trend': trend_choice}
 

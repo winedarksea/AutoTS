@@ -52,14 +52,6 @@ autots.tools.profile module
    :undoc-members:
    :show-inheritance:
 
-autots.tools.seasonal module
-----------------------------
-
-.. automodule:: autots.tools.seasonal
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 autots.tools.shaping module
 ---------------------------
 
@@ -75,7 +67,6 @@ autots.tools.transform module
    :members:
    :undoc-members:
    :show-inheritance:
-
 
 Module contents
 ---------------
