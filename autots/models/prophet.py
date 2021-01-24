@@ -6,7 +6,8 @@ Since Prophet install can be finicky on Windows, it will be an optional dependen
 import datetime
 import numpy as np
 import pandas as pd
-from autots.models.base import ModelObject, PredictionObject
+from autots.evaluator.auto_model import ModelObject
+from autots.evaluator.auto_model import PredictionObject
 
 import logging
 

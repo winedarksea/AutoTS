@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Intro &#8212; AutoTS 0.3.0 documentation</title>
+    <title>Intro &#8212; AutoTS 0.2.8 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -47,7 +47,7 @@
 <li><p>Finds optimal time series forecasting model and data transformations by genetic programming optimization</p></li>
 <li><p>Handles univariate and multivariate/parallel time series</p></li>
 <li><p>Point and probabilistic upper/lower bound forecasts for all models</p></li>
-<li><p>Over twenty available model classes, with tens of thousands of possible hyperparameter configurations</p>
+<li><p>Twenty-two available model classes, with tens of thousands of possible hyperparameter configurations</p>
 <ul>
 <li><p>Includes naive, statistical, machine learning, and deep learning models</p></li>
 <li><p>Multiprocessing for univariate models for scalability on multivariate datasets</p></li>
@@ -64,16 +64,8 @@
 <li><p>‘horizontal’ ensembling on multivariate series - learning the best model for each series</p></li>
 </ul>
 </li>
-<li><p>Multiple cross validation options</p>
-<ul>
-<li><p>‘seasonal’ validation allows forecasts to be optimized for the season of your forecast period</p></li>
-</ul>
-</li>
-<li><p>Subsetting and weighting to improve speed and relevance of search on large datasets</p>
-<ul>
-<li><p>‘constraint’ parameter can be used to assure forecasts don’t drift beyond historic boundaries</p></li>
-</ul>
-</li>
+<li><p>Multiple cross validation options</p></li>
+<li><p>Subsetting and weighting to improve search on many multivariate series</p></li>
 <li><p>Option to use one or a combination of metrics for model selection</p></li>
 <li><p>Import and export of model templates for deployment and greater user customization</p></li>
 </ul>
@@ -102,9 +94,7 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># also: _hourly, _daily, _weekly, or _yearly</span>
 <span class="kn">from</span> <span class="nn">autots.datasets</span> <span class="kn">import</span> <span class="n">load_monthly</span>
 
-<span class="c1"># sample datasets can be used in either of the long or wide import shapes</span>
-<span class="n">long</span> <span class="o">=</span> <span class="kc">True</span>
-<span class="n">df</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">(</span><span class="n">long</span><span class="o">=</span><span class="n">long</span><span class="p">)</span>
+<span class="n">df_long</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">()</span>
 
 <span class="kn">from</span> <span class="nn">autots</span> <span class="kn">import</span> <span class="n">AutoTS</span>
 
@@ -112,19 +102,13 @@
     <span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
     <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
     <span class="n">prediction_interval</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>
-    <span class="n">ensemble</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-    <span class="n">model_list</span><span class="o">=</span><span class="s2">&quot;superfast&quot;</span><span class="p">,</span>
-    <span class="n">transformer_list</span><span class="o">=</span><span class="s2">&quot;fast&quot;</span><span class="p">,</span>
+    <span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;all&#39;</span><span class="p">,</span>
+    <span class="n">model_list</span><span class="o">=</span><span class="s1">&#39;superfast&#39;</span><span class="p">,</span>
     <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
     <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-    <span class="n">validation_method</span><span class="o">=</span><span class="s2">&quot;backwards&quot;</span>
+    <span class="n">validation_method</span><span class="o">=</span><span class="s1">&#39;even&#39;</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span>
-    <span class="n">df</span><span class="p">,</span>
-    <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span> <span class="k">if</span> <span class="n">long</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span> <span class="k">if</span> <span class="n">long</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span> <span class="k">if</span> <span class="n">long</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
-<span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span> <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
 
 <span class="c1"># Print the details of the best model</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
@@ -138,7 +122,6 @@
 <span class="n">validation_results</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">results</span><span class="p">(</span><span class="s2">&quot;validation&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>The lower-level API, in particular the large section of time series transformers in the scikit-learn style, can also be utilized independently from the AutoML framework.</p>
 <p>Check out <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html">extended_tutorial.md</a> for a more detailed guide to features!</p>
 </div>
 <div class="section" id="how-to-contribute">
@@ -236,7 +219,7 @@
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2021, Colin Catlin.
+      &copy;2020, Colin Catlin.
       
       |
       <a href="../_sources/source/intro.rst.txt"

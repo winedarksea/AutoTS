@@ -7,7 +7,8 @@ n_jobs>1 causes Windows issues, sometimes maybe
 import datetime
 import numpy as np
 import pandas as pd
-from autots.models.base import ModelObject, PredictionObject
+from autots.evaluator.auto_model import ModelObject
+from autots.evaluator.auto_model import PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 
 try:
