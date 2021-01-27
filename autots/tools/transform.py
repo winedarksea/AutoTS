@@ -1644,6 +1644,7 @@ trans_dict = {
     'DifferencedTransformer': DifferencedTransformer(),
     'PctChangeTransformer': PctChangeTransformer(),
     'SinTrend': SinTrend(),
+    'SineTrend': SinTrend(),
     'PositiveShift': PositiveShift(squared=False),
     'Log': PositiveShift(log=True),
     'CumSumTransformer': CumSumTransformer(),
@@ -1771,6 +1772,10 @@ class GeneralTransformer(object):
 
         self.fillna = fillna
         self.transformations = transformations
+        # handle users passing in no params
+        if transformation_params is None or not transformation_params:
+            keys = transformations.keys()
+            transformation_params = {x: {} for x in keys}
         self.transformation_params = transformation_params
 
         self.grouping = grouping

@@ -303,6 +303,41 @@ Additional regressors can be passed through as additional time series to forecas
 Some models here can utilize the additional information they provide to help improve forecast quality. 
 To prevent forecast accuracy for considering these additional series too heavily, input series weights that lower or remove their forecast accuracy from consideration.
 
+*an example of regressors:*
+```python
+from autots import AutoTS
+from autots.evaluator.auto_ts import fake_regressor
+from autots.datasets import load_monthly
+
+df = load_monthly(long=False)
+forecast_length = 4
+
+model = AutoTS(
+    forecast_length=forecast_length,
+    frequency='infer',
+    model_list='superfast',
+    validation_method="backwards",
+    max_generations=2,
+    num_validations=2,
+)
+future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
+    df,
+    dimensions=4,
+    forecast_length=forecast_length,
+    drop_most_recent=model.drop_most_recent,
+    aggfunc=model.aggfunc,
+    verbose=model.verbose,
+)
+model = model.fit(
+    df,
+    future_regressor=future_regressor_train2d,
+)
+# Print the name of the best model
+print(model)
+prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=0)
+forecasts_df = prediction.forecast
+```
+
 ### Categorical Data
 Categorical data is handled, but it is handled crudely. For example, optimization metrics do not currently include any categorical accuracy metrics. 
 For categorical data that has a meaningful order (ie 'low', 'medium', 'high') it is best for the user to encode that data before passing it in, 

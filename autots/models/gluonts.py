@@ -32,7 +32,7 @@ class GluonTS(ModelObject):
         prediction_interval (float): Confidence interval for probabilistic forecast
         regression_type (str): Not yet implemented
 
-        gluon_model (str): Model Structure to Use - ['DeepAR', 'NPTS', 'DeepState', 'WaveNet','DeepFactor', 'Transformer','SFF', 'MQCNN']
+        gluon_model (str): Model Structure to Use - ['DeepAR', 'NPTS', 'DeepState', 'WaveNet','DeepFactor', 'Transformer','SFF', 'MQCNN', 'DeepVAR', 'GPVAR', 'NBEATS']
         epochs (int): Number of neural network training epochs. Higher generally results in better, then over fit.
         learning_rate (float): Neural net training parameter
         context_length (str): int window, '2ForecastLength', or 'nForecastLength'
@@ -54,6 +54,7 @@ class GluonTS(ModelObject):
         learning_rate: float = 0.001,
         context_length=10,
         forecast_length: int = 14,
+        **kwargs
     ):
         ModelObject.__init__(
             self,
@@ -74,6 +75,7 @@ class GluonTS(ModelObject):
             self.learning_rate = learning_rate
         self.context_length = context_length
         self.forecast_length = forecast_length
+        self.multivariate_mods = ['DeepVAR', 'GPVAR']
 
     def fit(self, df, future_regressor=[]):
         """Train algorithm given data supplied.
@@ -106,8 +108,8 @@ class GluonTS(ModelObject):
             len_int = int([x for x in str(self.context_length) if x.isdigit()][0])
             self.gluon_context_length = int(len_int * self.forecast_length)
         else:
-            self.gluon_context_length = 2 * self.forecast_length
-            self.context_length = '2ForecastLength'
+            self.gluon_context_length = 20
+            self.context_length = '20'
         ts_metadata = {
             'num_series': len(gluon_train.index),
             'freq': gluon_freq,
@@ -117,15 +119,28 @@ class GluonTS(ModelObject):
             'context_length': self.gluon_context_length,
             'forecast_length': self.forecast_length,
         }
-        self.test_ds = ListDataset(
-            [
-                {FieldName.TARGET: target, FieldName.START: start}
-                for (target, start) in zip(
-                    gluon_train.values, ts_metadata['gluon_start']
-                )
-            ],
-            freq=ts_metadata['freq'],
-        )
+        if self.gluon_model in self.multivariate_mods:
+            self.test_ds = ListDataset(
+                [{"start": df.index[0], "target": gluon_train.values}],
+                freq=ts_metadata['freq'],
+                one_dim_target=False,
+            )
+        else:
+            """
+            time_series_dicts = []
+            for time_series in gluon_train.values:
+                time_series_dicts.append({"target": time_series, "start": ts_metadata['gluon_start']})
+            self.test_ds = ListDataset(time_series_dicts, freq=ts_metadata['freq'])
+            """
+            self.test_ds = ListDataset(
+                [
+                    {FieldName.TARGET: target, FieldName.START: start}
+                    for (target, start) in zip(
+                        gluon_train.values, ts_metadata['gluon_start']
+                    )
+                ],
+                freq=ts_metadata['freq'],
+            )
         if self.gluon_model == 'DeepAR':
             from gluonts.model.deepar import DeepAREstimator
 
@@ -209,6 +224,35 @@ class GluonTS(ModelObject):
 
             estimator = WaveNetEstimator(
                 freq=ts_metadata['freq'],
+                prediction_length=ts_metadata['forecast_length'],
+                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
+            )
+        elif self.gluon_model == 'DeepVAR':
+            from gluonts.model.deepvar import DeepVAREstimator
+
+            estimator = DeepVAREstimator(
+                target_dim=gluon_train.shape[0],
+                freq=ts_metadata['freq'],
+                context_length=ts_metadata['context_length'],
+                prediction_length=ts_metadata['forecast_length'],
+                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
+            )
+        elif self.gluon_model == 'GPVAR':
+            from gluonts.model.gpvar import GPVAREstimator
+
+            estimator = GPVAREstimator(
+                target_dim=gluon_train.shape[0],
+                freq=ts_metadata['freq'],
+                context_length=ts_metadata['context_length'],
+                prediction_length=ts_metadata['forecast_length'],
+                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
+            )
+        elif self.gluon_model == 'NBEATS':
+            from gluonts.model.n_beats import NBEATSEstimator
+
+            estimator = NBEATSEstimator(
+                freq=ts_metadata['freq'],
+                context_length=ts_metadata['context_length'],
                 prediction_length=ts_metadata['forecast_length'],
                 trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )
@@ -307,10 +351,14 @@ class GluonTS(ModelObject):
                 'Transformer',
                 'SFF',
                 'MQCNN',
+                'DeepVAR',
+                'GPVAR',
+                'NBEATS',
             ],
             size=1,
-            p=[0.2, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1],
+            p=[0.1, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05],
         ).item()
+        # NPTS doesn't use these, so just fill a constant
         if gluon_model_choice == 'NPTS':
             epochs_choice = 20
             learning_rate_choice = 0.001

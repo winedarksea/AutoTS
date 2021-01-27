@@ -18,9 +18,9 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 example_filename = "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
-df = load_weekly(long=long)
+df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 4
+generations = 2
 verbose = 1
 
 """
@@ -67,8 +67,8 @@ model_list = [
 ]
 
 transformer_list = "fast"  # ["SeasonalDifference", "MinMaxScaler", "Detrend"]
-transformer_max_depth = 6
-# model_list = 'superfast'
+transformer_max_depth = 2
+model_list = 'superfast'
 # model_list = ['GLM', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 

@@ -357,7 +357,7 @@ class AutoTS(object):
         if date_col is None and value_col is None:
             df_wide = pd.DataFrame(df)
             assert (
-                type(df.index) is pd.DatetimeIndex
+                type(df_wide.index) is pd.DatetimeIndex
             ), "df index is not pd.DatetimeIndex"
         else:
             df_wide = long_to_wide(
@@ -1514,9 +1514,9 @@ class AutoTSIntervals(object):
 def fake_regressor(
     df,
     forecast_length: int = 14,
-    date_col: str = 'datetime',
-    value_col: str = 'value',
-    id_col: str = 'series_id',
+    date_col: str = None,
+    value_col: str = None,
+    id_col: str = None,
     frequency: str = 'infer',
     aggfunc: str = 'first',
     drop_most_recent: int = 0,
@@ -1529,7 +1529,7 @@ def fake_regressor(
 
     if date_col is None and value_col is None:
         df_wide = pd.DataFrame(df)
-        assert type(df.index) is pd.DatetimeIndex, "df index is not pd.DatetimeIndex"
+        assert type(df_wide.index) is pd.DatetimeIndex, "df index is not pd.DatetimeIndex"
     else:
         df_wide = long_to_wide(
             df,
