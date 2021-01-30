@@ -17,6 +17,7 @@
 # Latest
 * Additional models to GluonTS
 * GeneralTransformer transformation_params - now handle None or empty dict
+* cleaning up of the appropriately named 'ModelMonster'
 
 
 # Known Errors: 
@@ -50,12 +51,8 @@ Tensorflow GPU backend may crash on occasion.
 * Remove 'horizontal' sanity check run, takes too long (only if metric weights are x)?
 * Horizontal and BestN runtime variant, where speed is highly important in model selection
 * total runtime for .fit() as attribute (not just manual sum but capture in ModelPrediction)
-* allow Index to be other datetime not just DatetimeIndex
-* cleanse similar models out first, before horizontal ensembling
 * BestNEnsemble Add 5 or more model option
-* allow best_model to be specified and entirely bypass the .fit() stage.
 * drop duplicates as function of TemplateEvalObject
-* improve test.py script for actual testing of many features
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
 * export and import of results includes all model parameters (but not templates?)
 * Option to use full traceback in errors in table
@@ -80,7 +77,7 @@ Tensorflow GPU backend may crash on occasion.
 	* Probabilistic:
 		https://scikit-learn.org/stable/auto_examples/ensemble/plot_gradient_boosting_quantile.html
 * GluonTS
-	* Add support for future_regressor
+	* Add support for future_regressor  (potentially PCA down to 1 feature, then use?)
 	* Modify GluonStart if lots of NaN at start of that series
 	* GPU and CPU ctx
 * implement 'borrow' Genetic Recombination for ComponentAnalysis

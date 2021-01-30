@@ -20,15 +20,15 @@ forecast_length = 8
 long = False
 df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 2
+generations = 1
 verbose = 1
 
-"""
+
 df = pd.read_csv("m5_sample.gz")
 df['datetime'] = pd.DatetimeIndex(df['datetime'])
 df = df.set_index("datetime", drop=True)
 df = df.iloc[:, 0:40]
-"""
+
 
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
@@ -69,7 +69,7 @@ model_list = [
 transformer_list = "fast"  # ["SeasonalDifference", "MinMaxScaler", "Detrend"]
 transformer_max_depth = 2
 model_list = 'superfast'
-# model_list = ['GLM', 'DatepartRegression']
+model_list = ['GluonTS', 'DatepartRegression']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {
