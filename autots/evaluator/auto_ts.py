@@ -4,6 +4,7 @@ import pandas as pd
 import random
 import copy
 import json
+import sys
 
 from autots.tools.shaping import (
     long_to_wide,
@@ -1015,6 +1016,8 @@ or otherwise increase models available."""
                     self.used_regressor_check = True
             except KeyError:
                 pass
+        # clean up any remaining print statements
+        sys.stdout.flush()
         return self
 
     def _regr_param_check(self, param_dict):
