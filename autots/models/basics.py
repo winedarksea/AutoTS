@@ -537,6 +537,9 @@ class MotifSimulation(ModelObject):
         Args:
             df (pandas.DataFrame): Datetime Indexed
         """
+        import timeit
+        start_time_1st = timeit.default_timer()
+
         if abs(float(self.max_motifs)) > 1:
             self.max_motifs_n = abs(int(self.max_motifs))
         elif float(self.max_motifs) == 1:
@@ -567,7 +570,7 @@ class MotifSimulation(ModelObject):
         df = self.basic_profile(df)
         """
         comparison = 'pct_change' # pct_change, pct_change_sign, magnitude_pct_change_sign, magnitude, magnitude_pct_change
-        distance_metric = 'hamming'
+        distance_metric = 'cityblock'
         max_motifs_n = 100
         phrase_n = 5
         shared = False
@@ -631,14 +634,15 @@ class MotifSimulation(ModelObject):
 
         if 'pct_change_sign' in comparison:
             motif_vecs = motif_vecs.where(motif_vecs >= 0, -1).where(motif_vecs <= 0, 1)
-
+        elapsed_1st = timeit.default_timer() - start_time_1st
+        start_time_2nd = timeit.default_timer()
         # compare the motif vectors to the most recent vector of the series
         from sklearn.metrics.pairwise import pairwise_distances
 
         if shared:
             comparative = pd.DataFrame(
                 pairwise_distances(
-                    motif_vecs, last_motif.transpose(), metric=distance_metric
+                    motif_vecs.values, last_motif.transpose().values, metric=distance_metric
                 )
             )
             comparative.index = motif_vecs.index
@@ -650,7 +654,7 @@ class MotifSimulation(ModelObject):
                 x = motif_vecs[motif_vecs.index.get_level_values(0) == column]
                 y = last_motif[column].values.reshape(1, -1)
                 current_comparative = pd.DataFrame(
-                    pairwise_distances(x, y, metric=distance_metric)
+                    pairwise_distances(x.values, y, metric=distance_metric)
                 )
                 current_comparative.index = x.index
                 current_comparative.columns = [column]
@@ -670,6 +674,8 @@ class MotifSimulation(ModelObject):
                 axis=1,
             )
             comparative = comparative.add(rec_weights, fill_value=0)
+        elapsed_2nd = timeit.default_timer() - start_time_2nd
+        start_time_3rd = timeit.default_timer()
 
         # make this faster
         upper_forecasts = pd.DataFrame()
@@ -680,12 +686,12 @@ class MotifSimulation(ModelObject):
             vals = comparative[col].sort_values(ascending=False)
             if not shared:
                 vals = vals[vals.index.get_level_values(0) == col]
-            vals = vals[vals > cutoff_threshold]
-            if vals.shape[0] < cutoff_minimum:
-                vals = comparative[col].sort_values(ascending=False)
-                if not shared:
-                    vals = vals[vals.index.get_level_values(0) == col]
-                vals = vals.head(cutoff_minimum)
+            # vals = vals[vals > cutoff_threshold]
+            # if vals.shape[0] < cutoff_minimum:
+            vals = comparative[col].sort_values(ascending=False)
+            if not shared:
+                vals = vals[vals.index.get_level_values(0) == col]
+            vals = vals.head(cutoff_minimum)
 
             pos_forecasts = pd.DataFrame()
             for val_index, val_value in vals.items():
@@ -778,6 +784,8 @@ class MotifSimulation(ModelObject):
         self.lower_forecasts = lower_forecasts
         self.upper_forecasts = upper_forecasts
 
+        elapsed_3rd = timeit.default_timer() - start_time_3rd
+        print(f"1st {elapsed_1st}\n2nd {elapsed_2nd}\n3rd {elapsed_3rd}")
         """
         In fit phase, only select motifs.
             table: start index, weight, column it applies to, and count of rows that follow motif
@@ -889,8 +897,8 @@ class MotifSimulation(ModelObject):
             p=[0.2, 0.1, 0.4, 0.2, 0.1],
         ).item()
         phrase_len_choice = np.random.choice(
-            a=[5, 10, 20, '10thN', '100thN', '1000thN', '20thN'],
-            p=[0.4, 0.1, 0.3, 0.01, 0.1, 0.08, 0.01],
+            a=[5, 10, 15, 20, 30, 90, 360, '10thN', '100thN', '1000thN', '20thN'],
+            p=[0.2, 0.2, 0.1, 0.25, 0.1, 0.1, 0.05, 0.0, 0.0, 0.0, 0.0],
             size=1,
         ).item()
         shared_choice = np.random.choice(a=[True, False], size=1, p=[0.05, 0.95]).item()
@@ -906,7 +914,7 @@ class MotifSimulation(ModelObject):
                 'manhattan',
             ],
             size=1,
-            p=[0.2, 0.05, 0.1, 0.1, 0.1, 0.2, 0.24, 0.01],
+            p=[0.44, 0.05, 0.1, 0.1, 0.1, 0.2, 0.0, 0.01],
         ).item()
         if distance_metric_choice == 'other':
             distance_metric_choice = np.random.choice(
@@ -923,7 +931,7 @@ class MotifSimulation(ModelObject):
                     'minkowski',
                     'rogerstanimoto',
                     'russellrao',
-                    'seuclidean',
+                    # 'seuclidean',
                     'sokalmichener',
                     'sokalsneath',
                     'sqeuclidean',
@@ -933,7 +941,7 @@ class MotifSimulation(ModelObject):
             ).item()
         max_motifs_choice = float(
             np.random.choice(
-                a=[20, 50, 0.05, 0.2, 0.5], size=1, p=[0.4, 0.1, 0.3, 0.19, 0.01]
+                a=[20, 50, 100, 200, 0.05, 0.2, 0.5], size=1, p=[0.4, 0.1, 0.2, 0.09, 0.1, 0.1, 0.01]
             ).item()
         )
         recency_weighting_choice = np.random.choice(
@@ -941,16 +949,16 @@ class MotifSimulation(ModelObject):
             size=1,
             p=[0.5, 0.02, 0.05, 0.35, 0.05, 0.03],
         ).item()
-        cutoff_threshold_choice = np.random.choice(
-            a=[0.7, 0.9, 0.99, 1.5], size=1, p=[0.1, 0.1, 0.4, 0.4]
-        ).item()
+        # cutoff_threshold_choice = np.random.choice(
+        #     a=[0.7, 0.9, 0.99, 1.5], size=1, p=[0.1, 0.1, 0.4, 0.4]
+        # ).item()
         cutoff_minimum_choice = np.random.choice(
-            a=[5, 10, 20, 50, 100, 200], size=1, p=[0.05, 0.05, 0.2, 0.2, 0.4, 0.1]
+            a=[5, 10, 20, 50, 100, 200, 500], size=1, p=[0, 0, 0.2, 0.2, 0.4, 0.1, 0.1]
         ).item()
         point_method_choice = np.random.choice(
             a=['median', 'sample', 'mean', 'sign_biased_mean'],
             size=1,
-            p=[0.5, 0.1, 0.3, 0.1],
+            p=[0.59, 0.01, 0.3, 0.1],
         ).item()
 
         return {
@@ -960,7 +968,7 @@ class MotifSimulation(ModelObject):
             'distance_metric': distance_metric_choice,
             'max_motifs': max_motifs_choice,
             'recency_weighting': recency_weighting_choice,
-            'cutoff_threshold': cutoff_threshold_choice,
+            # 'cutoff_threshold': cutoff_threshold_choice,
             'cutoff_minimum': cutoff_minimum_choice,
             'point_method': point_method_choice,
         }
@@ -974,7 +982,7 @@ class MotifSimulation(ModelObject):
             'distance_metric': self.distance_metric,
             'max_motifs': self.max_motifs,
             'recency_weighting': self.recency_weighting,
-            'cutoff_threshold': self.cutoff_threshold,
+            # 'cutoff_threshold': self.cutoff_threshold,
             'cutoff_minimum': self.cutoff_minimum,
             'point_method': self.point_method,
         }
