@@ -87,6 +87,9 @@ class GluonTS(ModelObject):
         Args:
             df (pandas.DataFrame): Datetime Indexed
         """
+        if not _has_gluonts:
+            raise ImportError("GluonTS installation not found or installed version is incompatible with AutoTS.")
+
         df = self.basic_profile(df)
 
         try:
