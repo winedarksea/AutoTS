@@ -510,6 +510,7 @@ class MotifSimulation(ModelObject):
         cutoff_threshold: float = 0.9,
         cutoff_minimum: int = 20,
         point_method: str = 'median',
+        n_jobs: int = -1,
         verbose: int = 1,
         **kwargs
     ):
@@ -520,6 +521,7 @@ class MotifSimulation(ModelObject):
             prediction_interval,
             holiday_country=holiday_country,
             random_seed=random_seed,
+            n_jobs=n_jobs,
         )
         self.phrase_len = phrase_len
         self.comparison = comparison
@@ -537,9 +539,6 @@ class MotifSimulation(ModelObject):
         Args:
             df (pandas.DataFrame): Datetime Indexed
         """
-        import timeit
-        start_time_1st = timeit.default_timer()
-
         if abs(float(self.max_motifs)) > 1:
             self.max_motifs_n = abs(int(self.max_motifs))
         elif float(self.max_motifs) == 1:
@@ -569,7 +568,7 @@ class MotifSimulation(ModelObject):
         # df = df_wide[df_wide.columns[0:3]].fillna(0).astype(float)
         df = self.basic_profile(df)
         """
-        comparison = 'pct_change' # pct_change, pct_change_sign, magnitude_pct_change_sign, magnitude, magnitude_pct_change
+        comparison = 'magnitude' # pct_change, pct_change_sign, magnitude_pct_change_sign, magnitude, magnitude_pct_change
         distance_metric = 'cityblock'
         max_motifs_n = 100
         phrase_n = 5
@@ -579,7 +578,7 @@ class MotifSimulation(ModelObject):
         cutoff_minimum = 20
         prediction_interval = 0.9
         na_threshold = 0.1
-        point_method = 'sample'
+        point_method = 'mean'
         """
         phrase_n = abs(int(self.phrase_n))
         max_motifs_n = abs(int(self.max_motifs_n))
@@ -593,6 +592,17 @@ class MotifSimulation(ModelObject):
         na_threshold = 0.1
         point_method = self.point_method
 
+        parallel = True
+        if self.n_jobs in [0, 1] or df.shape[1] < 3:
+            parallel = False
+        else:
+            try:
+                from joblib import Parallel, delayed
+            except Exception:
+                parallel = False
+
+        import timeit
+        start_time_1st = timeit.default_timer()
         # transform the data into different views (contour = percent_change)
         if 'pct_change' in comparison:
             if comparison in ['magnitude_pct_change', 'magnitude_pct_change_sign']:
@@ -606,16 +616,18 @@ class MotifSimulation(ModelObject):
                 .fillna(0)
             )
             df = df.replace([np.inf, -np.inf], 0)
-        else:
-            self.comparison = 'magnitude'
+        # else:
+            # self.comparison = 'magnitude'
 
         if 'pct_change_sign' in comparison:
             last_motif = df.where(df >= 0, -1).where(df <= 0, 1).tail(phrase_n)
         else:
             last_motif = df.tail(phrase_n)
 
+        max_samps = (df.shape[0] - phrase_n)
         numbers = np.random.choice(
-            (df.shape[0] - phrase_n), size=max_motifs_n, replace=False
+            max_samps,
+            size=max_motifs_n if max_motifs_n < max_samps else max_samps, replace=False
         )
 
         # make this faster
@@ -674,10 +686,11 @@ class MotifSimulation(ModelObject):
                 axis=1,
             )
             comparative = comparative.add(rec_weights, fill_value=0)
+
         elapsed_2nd = timeit.default_timer() - start_time_2nd
         start_time_3rd = timeit.default_timer()
 
-        # make this faster
+        """
         upper_forecasts = pd.DataFrame()
         forecasts = pd.DataFrame()
         lower_forecasts = pd.DataFrame()
@@ -762,6 +775,114 @@ class MotifSimulation(ModelObject):
         forecasts.columns = comparative.columns
         lower_forecasts.columns = comparative.columns
         upper_forecasts.columns = comparative.columns
+        """
+        args = {
+            "cutoff_minimum": cutoff_minimum,
+            "comparison": comparison,
+            "point_method": point_method,
+            "prediction_interval": prediction_interval,
+            "phrase_n": phrase_n,
+        }
+        
+        def seek_the_oracle(comparative, args, col):
+            # comparative.idxmax()
+            cutoff_minimum = args["cutoff_minimum"]
+            comparison = args["comparison"]
+            point_method = args["point_method"]
+            prediction_interval = args["prediction_interval"]
+            phrase_n = args["phrase_n"]
+            
+            vals = comparative[col].sort_values(ascending=False)
+            if not shared:
+                vals = vals[vals.index.get_level_values(0) == col]
+            # vals = vals[vals > cutoff_threshold]
+            # if vals.shape[0] < cutoff_minimum:
+            vals = comparative[col].sort_values(ascending=False)
+            if not shared:
+                vals = vals[vals.index.get_level_values(0) == col]
+            vals = vals.head(cutoff_minimum)
+        
+            pos_forecasts = pd.DataFrame()
+            for val_index, val_value in vals.items():
+                sec_start = val_index[1] + phrase_n
+                if comparison in ['magnitude_pct_change', 'magnitude_pct_change_sign']:
+                    current_pos = original_df[val_index[0]].iloc[sec_start + 1 :]
+                else:
+                    current_pos = df[val_index[0]].iloc[sec_start:]
+                pos_forecasts = pd.concat(
+                    [pos_forecasts, current_pos.reset_index(drop=True)],
+                    axis=1,
+                    sort=False,
+                )
+        
+            thresh = int(np.ceil(pos_forecasts.shape[1] * na_threshold))
+            if point_method == 'mean':
+                current_forecast = pos_forecasts.mean(axis=1)
+            elif point_method == 'sign_biased_mean':
+                axis_means = pos_forecasts.mean(axis=0)
+                if axis_means.mean() > 0:
+                    pos_forecasts = pos_forecasts[
+                        pos_forecasts.columns[~(axis_means < 0)]
+                    ]
+                else:
+                    pos_forecasts = pos_forecasts[
+                        pos_forecasts.columns[~(axis_means > 0)]
+                    ]
+                current_forecast = pos_forecasts.mean(axis=1)
+            elif point_method == 'sample':
+                current_forecast = pos_forecasts.sample(
+                    n=1, axis=1, weights=vals.values
+                )
+            else:
+                point_method = 'median'
+                current_forecast = pos_forecasts.median(axis=1)
+            # current_forecast.columns = [col]
+            forecast = current_forecast.copy()
+            forecast.name = col
+        
+            if point_method == 'sample':
+                n_samples = int(np.ceil(pos_forecasts.shape[1] / 2))
+                current_forecast = (
+                    pos_forecasts.sample(n=n_samples, axis=1, weights=vals.values)
+                    .dropna(thresh=thresh, axis=0)
+                    .quantile(
+                        q=[
+                            (1 - (prediction_interval * 1.1)),
+                            (prediction_interval * 1.1),
+                        ],
+                        axis=1,
+                    )
+                    .transpose()
+                )
+            else:
+                current_forecast = (
+                    pos_forecasts.dropna(thresh=thresh, axis=0)
+                    .quantile(
+                        q=[(1 - prediction_interval), prediction_interval], axis=1
+                    )
+                    .transpose()
+                )
+        
+            lower_forecast = pd.Series(current_forecast.iloc[:, 0], name=col)
+            upper_forecast = pd.Series(current_forecast.iloc[:, 1], name=col)
+            return (forecast, lower_forecast, upper_forecast)
+        
+        # seek_the_oracle(comparative, args, comparative.columns[0])
+        if parallel:
+            verbs = 0 if self.verbose < 1 else self.verbose - 1
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+                delayed(seek_the_oracle)(comparative=comparative, args=args, col=col)
+                for col in comparative.columns
+            )
+            complete = list(map(list, zip(*df_list)))
+        else:
+            df_list = []
+            for col in comparative.columns:
+                df_list.append(seek_the_oracle(comparative, args, col))
+            complete = list(map(list, zip(*df_list)))
+        forecasts = pd.concat(complete[0], axis=1)
+        lower_forecasts = pd.concat(complete[1], axis=1)
+        upper_forecasts = pd.concat(complete[2], axis=1)
 
         if comparison in ['pct_change', 'pct_change_sign']:
             forecasts = (forecasts + 1).replace([0], np.nan)

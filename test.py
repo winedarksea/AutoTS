@@ -25,11 +25,12 @@ verbose = 1
 num_validations = 1
 validation_method = "backwards"
 
+"""
 df = pd.read_csv("m5_sample.gz")
 df['datetime'] = pd.DatetimeIndex(df['datetime'])
 df = df.set_index("datetime", drop=True)
 # df = df.iloc[:, 0:40]
-
+"""
 
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
@@ -67,10 +68,10 @@ model_list = [
     'WindowRegression',
 ]
 
-transformer_list = ["SinTrend", "MinMaxScaler"]
+transformer_list = "all"  # ["SinTrend", "MinMaxScaler"]
 transformer_max_depth = 1
-model_list = 'fast_parallel'
-# model_list = ['GluonTS', 'DatepartRegression']
+model_list = 'fast'  # fast_parallel
+model_list = ['MotifSimulation', 'LastValueNaive']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {
