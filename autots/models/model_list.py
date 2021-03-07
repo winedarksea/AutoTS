@@ -63,9 +63,10 @@ fast = [
     'ComponentAnalysis',
 ]
 # models that can scale well if many CPU cores are available
-parallel = ['ETS', 'FBProphet', 'ARIMA', 'GLM', 'UnobservedComponents']
+parallel = ['ETS', 'FBProphet', 'ARIMA', 'GLM', 'UnobservedComponents', 'MotifSimulation']
 # models that should be fast given many CPU cores
 fast_parallel = list(set(parallel + fast))
+fast_parallel.remove('MotifSimulation')
 # models that are explicitly not production ready
 experimental = [
     'MotifSimulation',

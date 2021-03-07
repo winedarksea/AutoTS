@@ -574,7 +574,7 @@ class MotifSimulation(ModelObject):
         phrase_n = 5
         shared = False
         recency_weighting = 0.1
-        cutoff_threshold = 0.8
+        # cutoff_threshold = 0.8
         cutoff_minimum = 20
         prediction_interval = 0.9
         na_threshold = 0.1
@@ -586,7 +586,7 @@ class MotifSimulation(ModelObject):
         distance_metric = self.distance_metric
         shared = self.shared
         recency_weighting = float(self.recency_weighting)
-        cutoff_threshold = float(self.cutoff_threshold)
+        # cutoff_threshold = float(self.cutoff_threshold)
         cutoff_minimum = abs(int(self.cutoff_minimum))
         prediction_interval = float(self.prediction_interval)
         na_threshold = 0.1
@@ -604,6 +604,7 @@ class MotifSimulation(ModelObject):
         import timeit
         start_time_1st = timeit.default_timer()
         # transform the data into different views (contour = percent_change)
+        original_df = None
         if 'pct_change' in comparison:
             if comparison in ['magnitude_pct_change', 'magnitude_pct_change_sign']:
                 original_df = df.copy()
@@ -660,6 +661,10 @@ class MotifSimulation(ModelObject):
             "prediction_interval": prediction_interval,
             "phrase_n": phrase_n,
             "distance_metric": distance_metric,
+            "shared": shared,
+            "na_threshold": na_threshold,
+            "original_df": original_df,
+            "df": df,
         }
 
         if shared:
@@ -671,7 +676,7 @@ class MotifSimulation(ModelObject):
             comparative.index = motif_vecs.index
             comparative.columns = last_motif.columns
         if not shared:
-            # make this faster
+            """
             comparative = pd.DataFrame()
             for column in last_motif.columns:
                 x = motif_vecs[motif_vecs.index.get_level_values(0) == column]
@@ -685,6 +690,33 @@ class MotifSimulation(ModelObject):
                     [comparative, current_comparative], axis=0, sort=True
                 )
             comparative = comparative.groupby(level=[0, 1]).sum(min_count=0)
+            """
+            def create_comparative(motif_vecs, last_motif, args, col):
+                distance_metric = args["distance_metric"]
+                x = motif_vecs[motif_vecs.index.get_level_values(0) == col]
+                y = last_motif[col].values.reshape(1, -1)
+                current_comparative = pd.DataFrame(
+                    pairwise_distances(x.values, y, metric=distance_metric)
+                )
+                current_comparative.index = x.index
+                current_comparative.columns = [col]
+                return current_comparative
+            
+            if parallel:
+                verbs = 0 if self.verbose < 1 else self.verbose - 1
+                df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+                    delayed(create_comparative)(motif_vecs=motif_vecs, last_motif=last_motif, args=args, col=col)
+                    for col in last_motif.columns
+                )
+            else:
+                df_list = []
+                for col in last_motif.columns:
+                    df_list.append(create_comparative(motif_vecs, last_motif, args, col))
+            comparative = pd.concat(df_list, axis=0)
+            comparative = comparative.groupby(level=[0, 1]).sum(min_count=0)
+
+            # comparative comes out of this looking kinda funny, but get_level_values works with that later
+            # it might be possible to reshape it to a more memory efficient design
 
         # comparative is a df of motifs (in index) with their value to each series (per column)
         if recency_weighting != 0:
@@ -795,6 +827,10 @@ class MotifSimulation(ModelObject):
             point_method = args["point_method"]
             prediction_interval = args["prediction_interval"]
             phrase_n = args["phrase_n"]
+            shared = args["shared"]
+            na_threshold = args["na_threshold"]
+            original_df = args["original_df"]
+            df = args["df"]
             
             vals = comparative[col].sort_values(ascending=False)
             if not shared:
@@ -884,7 +920,7 @@ class MotifSimulation(ModelObject):
             for col in comparative.columns:
                 df_list.append(seek_the_oracle(comparative, args, col))
             complete = list(map(list, zip(*df_list)))
-        forecasts = pd.concat(complete[0], axis=1)
+        forecasts = pd.concat(complete[0], axis=1)  # .reindex(self.column_names, axis=1)
         lower_forecasts = pd.concat(complete[1], axis=1)
         upper_forecasts = pd.concat(complete[2], axis=1)
 
@@ -905,6 +941,7 @@ class MotifSimulation(ModelObject):
                 [last_row.reset_index(drop=True), (lower_forecasts)], axis=0, sort=False
             ).cumprod()
 
+        # reindex might be unnecessary but I assume the cost worth the safety
         self.forecasts = forecasts
         self.lower_forecasts = lower_forecasts
         self.upper_forecasts = upper_forecasts

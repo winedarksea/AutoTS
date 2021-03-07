@@ -384,7 +384,7 @@ Some models will support a more limited range of frequencies.
 |  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   | True         |              |               |
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              |               |
-|  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |                 |       | True*        | True         |               |
+|  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |
 |  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |               |
