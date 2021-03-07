@@ -305,35 +305,41 @@ To prevent forecast accuracy for considering these additional series too heavily
 
 *an example of regressors:*
 ```python
-from autots import AutoTS
-from autots.evaluator.auto_ts import fake_regressor
 from autots.datasets import load_monthly
+from autots.evaluator.auto_ts import fake_regressor
+from autots import AutoTS
 
-df = load_monthly(long=False)
-forecast_length = 4
-
+long = False
+df = load_monthly(long=long)
+forecast_length = 14
 model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
-    model_list='superfast',
     validation_method="backwards",
     max_generations=2,
-    num_validations=2,
 )
 future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
     df,
     dimensions=4,
     forecast_length=forecast_length,
+    date_col='datetime' if long else None,
+    value_col='value' if long else None,
+    id_col='series_id' if long else None,
     drop_most_recent=model.drop_most_recent,
     aggfunc=model.aggfunc,
     verbose=model.verbose,
 )
+
 model = model.fit(
     df,
     future_regressor=future_regressor_train2d,
+    date_col='datetime' if long else None,
+    value_col='value' if long else None,
+    id_col='series_id' if long else None,
 )
-# Print the name of the best model
 print(model)
+print(f"Was a model choosen that used the regressor? {model.used_regressor_check}")
+
 prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=0)
 forecasts_df = prediction.forecast
 ```
@@ -378,7 +384,7 @@ Some models will support a more limited range of frequencies.
 |  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   | True         |              |               |
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              |               |
-|  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |                 |       | True*        | True         |               |
+|  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |
 |  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |               |

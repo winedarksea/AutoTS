@@ -234,6 +234,7 @@ def ModelMonster(
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
+            n_jobs=n_jobs,
             **parameters,
         )
         return model

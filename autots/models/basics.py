@@ -510,6 +510,7 @@ class MotifSimulation(ModelObject):
         cutoff_threshold: float = 0.9,
         cutoff_minimum: int = 20,
         point_method: str = 'median',
+        n_jobs: int = -1,
         verbose: int = 1,
         **kwargs
     ):
@@ -520,6 +521,7 @@ class MotifSimulation(ModelObject):
             prediction_interval,
             holiday_country=holiday_country,
             random_seed=random_seed,
+            n_jobs=n_jobs,
         )
         self.phrase_len = phrase_len
         self.comparison = comparison
@@ -566,17 +568,17 @@ class MotifSimulation(ModelObject):
         # df = df_wide[df_wide.columns[0:3]].fillna(0).astype(float)
         df = self.basic_profile(df)
         """
-        comparison = 'pct_change' # pct_change, pct_change_sign, magnitude_pct_change_sign, magnitude, magnitude_pct_change
-        distance_metric = 'hamming'
+        comparison = 'magnitude' # pct_change, pct_change_sign, magnitude_pct_change_sign, magnitude, magnitude_pct_change
+        distance_metric = 'cityblock'
         max_motifs_n = 100
         phrase_n = 5
         shared = False
         recency_weighting = 0.1
-        cutoff_threshold = 0.8
+        # cutoff_threshold = 0.8
         cutoff_minimum = 20
         prediction_interval = 0.9
         na_threshold = 0.1
-        point_method = 'sample'
+        point_method = 'mean'
         """
         phrase_n = abs(int(self.phrase_n))
         max_motifs_n = abs(int(self.max_motifs_n))
@@ -584,13 +586,25 @@ class MotifSimulation(ModelObject):
         distance_metric = self.distance_metric
         shared = self.shared
         recency_weighting = float(self.recency_weighting)
-        cutoff_threshold = float(self.cutoff_threshold)
+        # cutoff_threshold = float(self.cutoff_threshold)
         cutoff_minimum = abs(int(self.cutoff_minimum))
         prediction_interval = float(self.prediction_interval)
         na_threshold = 0.1
         point_method = self.point_method
 
+        parallel = True
+        if self.n_jobs in [0, 1] or df.shape[1] < 3:
+            parallel = False
+        else:
+            try:
+                from joblib import Parallel, delayed
+            except Exception:
+                parallel = False
+
+        import timeit
+        start_time_1st = timeit.default_timer()
         # transform the data into different views (contour = percent_change)
+        original_df = None
         if 'pct_change' in comparison:
             if comparison in ['magnitude_pct_change', 'magnitude_pct_change_sign']:
                 original_df = df.copy()
@@ -603,20 +617,22 @@ class MotifSimulation(ModelObject):
                 .fillna(0)
             )
             df = df.replace([np.inf, -np.inf], 0)
-        else:
-            self.comparison = 'magnitude'
+        # else:
+            # self.comparison = 'magnitude'
 
         if 'pct_change_sign' in comparison:
             last_motif = df.where(df >= 0, -1).where(df <= 0, 1).tail(phrase_n)
         else:
             last_motif = df.tail(phrase_n)
 
+        max_samps = (df.shape[0] - phrase_n)
         numbers = np.random.choice(
-            (df.shape[0] - phrase_n), size=max_motifs_n, replace=False
+            max_samps,
+            size=max_motifs_n if max_motifs_n < max_samps else max_samps, replace=False
         )
 
         # make this faster
-        motif_vecs = pd.DataFrame()
+        motif_vecs_list = []
         # takes random slices of the time series and rearranges as phrase_n length vectors
         for z in numbers:
             rand_slice = df.iloc[
@@ -627,30 +643,46 @@ class MotifSimulation(ModelObject):
                 .transpose()
                 .set_index(np.repeat(z, (df.shape[1],)), append=True)
             )
-            motif_vecs = pd.concat([motif_vecs, rand_slice], axis=0)
+            # motif_vecs = pd.concat([motif_vecs, rand_slice], axis=0)
+            motif_vecs_list.append(rand_slice)
+        motif_vecs = pd.concat(motif_vecs_list, axis=0)
 
         if 'pct_change_sign' in comparison:
             motif_vecs = motif_vecs.where(motif_vecs >= 0, -1).where(motif_vecs <= 0, 1)
-
+        elapsed_1st = timeit.default_timer() - start_time_1st
+        start_time_2nd = timeit.default_timer()
         # compare the motif vectors to the most recent vector of the series
         from sklearn.metrics.pairwise import pairwise_distances
+
+        args = {
+            "cutoff_minimum": cutoff_minimum,
+            "comparison": comparison,
+            "point_method": point_method,
+            "prediction_interval": prediction_interval,
+            "phrase_n": phrase_n,
+            "distance_metric": distance_metric,
+            "shared": shared,
+            "na_threshold": na_threshold,
+            "original_df": original_df,
+            "df": df,
+        }
 
         if shared:
             comparative = pd.DataFrame(
                 pairwise_distances(
-                    motif_vecs, last_motif.transpose(), metric=distance_metric
+                    motif_vecs.values, last_motif.transpose().values, metric=distance_metric
                 )
             )
             comparative.index = motif_vecs.index
             comparative.columns = last_motif.columns
         if not shared:
-            # make this faster
+            """
             comparative = pd.DataFrame()
             for column in last_motif.columns:
                 x = motif_vecs[motif_vecs.index.get_level_values(0) == column]
                 y = last_motif[column].values.reshape(1, -1)
                 current_comparative = pd.DataFrame(
-                    pairwise_distances(x, y, metric=distance_metric)
+                    pairwise_distances(x.values, y, metric=distance_metric)
                 )
                 current_comparative.index = x.index
                 current_comparative.columns = [column]
@@ -658,6 +690,33 @@ class MotifSimulation(ModelObject):
                     [comparative, current_comparative], axis=0, sort=True
                 )
             comparative = comparative.groupby(level=[0, 1]).sum(min_count=0)
+            """
+            def create_comparative(motif_vecs, last_motif, args, col):
+                distance_metric = args["distance_metric"]
+                x = motif_vecs[motif_vecs.index.get_level_values(0) == col]
+                y = last_motif[col].values.reshape(1, -1)
+                current_comparative = pd.DataFrame(
+                    pairwise_distances(x.values, y, metric=distance_metric)
+                )
+                current_comparative.index = x.index
+                current_comparative.columns = [col]
+                return current_comparative
+            
+            if parallel:
+                verbs = 0 if self.verbose < 1 else self.verbose - 1
+                df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+                    delayed(create_comparative)(motif_vecs=motif_vecs, last_motif=last_motif, args=args, col=col)
+                    for col in last_motif.columns
+                )
+            else:
+                df_list = []
+                for col in last_motif.columns:
+                    df_list.append(create_comparative(motif_vecs, last_motif, args, col))
+            comparative = pd.concat(df_list, axis=0)
+            comparative = comparative.groupby(level=[0, 1]).sum(min_count=0)
+
+            # comparative comes out of this looking kinda funny, but get_level_values works with that later
+            # it might be possible to reshape it to a more memory efficient design
 
         # comparative is a df of motifs (in index) with their value to each series (per column)
         if recency_weighting != 0:
@@ -671,7 +730,10 @@ class MotifSimulation(ModelObject):
             )
             comparative = comparative.add(rec_weights, fill_value=0)
 
-        # make this faster
+        elapsed_2nd = timeit.default_timer() - start_time_2nd
+        start_time_3rd = timeit.default_timer()
+
+        """
         upper_forecasts = pd.DataFrame()
         forecasts = pd.DataFrame()
         lower_forecasts = pd.DataFrame()
@@ -680,12 +742,12 @@ class MotifSimulation(ModelObject):
             vals = comparative[col].sort_values(ascending=False)
             if not shared:
                 vals = vals[vals.index.get_level_values(0) == col]
-            vals = vals[vals > cutoff_threshold]
-            if vals.shape[0] < cutoff_minimum:
-                vals = comparative[col].sort_values(ascending=False)
-                if not shared:
-                    vals = vals[vals.index.get_level_values(0) == col]
-                vals = vals.head(cutoff_minimum)
+            # vals = vals[vals > cutoff_threshold]
+            # if vals.shape[0] < cutoff_minimum:
+            vals = comparative[col].sort_values(ascending=False)
+            if not shared:
+                vals = vals[vals.index.get_level_values(0) == col]
+            vals = vals.head(cutoff_minimum)
 
             pos_forecasts = pd.DataFrame()
             for val_index, val_value in vals.items():
@@ -756,6 +818,111 @@ class MotifSimulation(ModelObject):
         forecasts.columns = comparative.columns
         lower_forecasts.columns = comparative.columns
         upper_forecasts.columns = comparative.columns
+        """
+        
+        def seek_the_oracle(comparative, args, col):
+            # comparative.idxmax()
+            cutoff_minimum = args["cutoff_minimum"]
+            comparison = args["comparison"]
+            point_method = args["point_method"]
+            prediction_interval = args["prediction_interval"]
+            phrase_n = args["phrase_n"]
+            shared = args["shared"]
+            na_threshold = args["na_threshold"]
+            original_df = args["original_df"]
+            df = args["df"]
+            
+            vals = comparative[col].sort_values(ascending=False)
+            if not shared:
+                vals = vals[vals.index.get_level_values(0) == col]
+            # vals = vals[vals > cutoff_threshold]
+            # if vals.shape[0] < cutoff_minimum:
+            vals = comparative[col].sort_values(ascending=False)
+            if not shared:
+                vals = vals[vals.index.get_level_values(0) == col]
+            vals = vals.head(cutoff_minimum)
+        
+            pos_forecasts = pd.DataFrame()
+            for val_index, val_value in vals.items():
+                sec_start = val_index[1] + phrase_n
+                if comparison in ['magnitude_pct_change', 'magnitude_pct_change_sign']:
+                    current_pos = original_df[val_index[0]].iloc[sec_start + 1 :]
+                else:
+                    current_pos = df[val_index[0]].iloc[sec_start:]
+                pos_forecasts = pd.concat(
+                    [pos_forecasts, current_pos.reset_index(drop=True)],
+                    axis=1,
+                    sort=False,
+                )
+        
+            thresh = int(np.ceil(pos_forecasts.shape[1] * na_threshold))
+            if point_method == 'mean':
+                current_forecast = pos_forecasts.mean(axis=1)
+            elif point_method == 'sign_biased_mean':
+                axis_means = pos_forecasts.mean(axis=0)
+                if axis_means.mean() > 0:
+                    pos_forecasts = pos_forecasts[
+                        pos_forecasts.columns[~(axis_means < 0)]
+                    ]
+                else:
+                    pos_forecasts = pos_forecasts[
+                        pos_forecasts.columns[~(axis_means > 0)]
+                    ]
+                current_forecast = pos_forecasts.mean(axis=1)
+            elif point_method == 'sample':
+                current_forecast = pos_forecasts.sample(
+                    n=1, axis=1, weights=vals.values
+                )
+            else:
+                point_method = 'median'
+                current_forecast = pos_forecasts.median(axis=1)
+            # current_forecast.columns = [col]
+            forecast = current_forecast.copy()
+            forecast.name = col
+        
+            if point_method == 'sample':
+                n_samples = int(np.ceil(pos_forecasts.shape[1] / 2))
+                current_forecast = (
+                    pos_forecasts.sample(n=n_samples, axis=1, weights=vals.values)
+                    .dropna(thresh=thresh, axis=0)
+                    .quantile(
+                        q=[
+                            (1 - (prediction_interval * 1.1)),
+                            (prediction_interval * 1.1),
+                        ],
+                        axis=1,
+                    )
+                    .transpose()
+                )
+            else:
+                current_forecast = (
+                    pos_forecasts.dropna(thresh=thresh, axis=0)
+                    .quantile(
+                        q=[(1 - prediction_interval), prediction_interval], axis=1
+                    )
+                    .transpose()
+                )
+        
+            lower_forecast = pd.Series(current_forecast.iloc[:, 0], name=col)
+            upper_forecast = pd.Series(current_forecast.iloc[:, 1], name=col)
+            return (forecast, lower_forecast, upper_forecast)
+        
+        # seek_the_oracle(comparative, args, comparative.columns[0])
+        if parallel:
+            verbs = 0 if self.verbose < 1 else self.verbose - 1
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+                delayed(seek_the_oracle)(comparative=comparative, args=args, col=col)
+                for col in comparative.columns
+            )
+            complete = list(map(list, zip(*df_list)))
+        else:
+            df_list = []
+            for col in comparative.columns:
+                df_list.append(seek_the_oracle(comparative, args, col))
+            complete = list(map(list, zip(*df_list)))
+        forecasts = pd.concat(complete[0], axis=1)  # .reindex(self.column_names, axis=1)
+        lower_forecasts = pd.concat(complete[1], axis=1)
+        upper_forecasts = pd.concat(complete[2], axis=1)
 
         if comparison in ['pct_change', 'pct_change_sign']:
             forecasts = (forecasts + 1).replace([0], np.nan)
@@ -774,10 +941,13 @@ class MotifSimulation(ModelObject):
                 [last_row.reset_index(drop=True), (lower_forecasts)], axis=0, sort=False
             ).cumprod()
 
+        # reindex might be unnecessary but I assume the cost worth the safety
         self.forecasts = forecasts
         self.lower_forecasts = lower_forecasts
         self.upper_forecasts = upper_forecasts
 
+        elapsed_3rd = timeit.default_timer() - start_time_3rd
+        print(f"1st {elapsed_1st}\n2nd {elapsed_2nd}\n3rd {elapsed_3rd}")
         """
         In fit phase, only select motifs.
             table: start index, weight, column it applies to, and count of rows that follow motif
@@ -889,8 +1059,8 @@ class MotifSimulation(ModelObject):
             p=[0.2, 0.1, 0.4, 0.2, 0.1],
         ).item()
         phrase_len_choice = np.random.choice(
-            a=[5, 10, 20, '10thN', '100thN', '1000thN', '20thN'],
-            p=[0.4, 0.1, 0.3, 0.01, 0.1, 0.08, 0.01],
+            a=[5, 10, 15, 20, 30, 90, 360, '10thN', '100thN', '1000thN', '20thN'],
+            p=[0.2, 0.2, 0.1, 0.25, 0.1, 0.1, 0.05, 0.0, 0.0, 0.0, 0.0],
             size=1,
         ).item()
         shared_choice = np.random.choice(a=[True, False], size=1, p=[0.05, 0.95]).item()
@@ -906,7 +1076,7 @@ class MotifSimulation(ModelObject):
                 'manhattan',
             ],
             size=1,
-            p=[0.2, 0.05, 0.1, 0.1, 0.1, 0.2, 0.24, 0.01],
+            p=[0.44, 0.05, 0.1, 0.1, 0.1, 0.2, 0.0, 0.01],
         ).item()
         if distance_metric_choice == 'other':
             distance_metric_choice = np.random.choice(
@@ -923,7 +1093,7 @@ class MotifSimulation(ModelObject):
                     'minkowski',
                     'rogerstanimoto',
                     'russellrao',
-                    'seuclidean',
+                    # 'seuclidean',
                     'sokalmichener',
                     'sokalsneath',
                     'sqeuclidean',
@@ -933,7 +1103,7 @@ class MotifSimulation(ModelObject):
             ).item()
         max_motifs_choice = float(
             np.random.choice(
-                a=[20, 50, 0.05, 0.2, 0.5], size=1, p=[0.4, 0.1, 0.3, 0.19, 0.01]
+                a=[20, 50, 100, 200, 0.05, 0.2, 0.5], size=1, p=[0.4, 0.1, 0.2, 0.09, 0.1, 0.1, 0.01]
             ).item()
         )
         recency_weighting_choice = np.random.choice(
@@ -941,16 +1111,16 @@ class MotifSimulation(ModelObject):
             size=1,
             p=[0.5, 0.02, 0.05, 0.35, 0.05, 0.03],
         ).item()
-        cutoff_threshold_choice = np.random.choice(
-            a=[0.7, 0.9, 0.99, 1.5], size=1, p=[0.1, 0.1, 0.4, 0.4]
-        ).item()
+        # cutoff_threshold_choice = np.random.choice(
+        #     a=[0.7, 0.9, 0.99, 1.5], size=1, p=[0.1, 0.1, 0.4, 0.4]
+        # ).item()
         cutoff_minimum_choice = np.random.choice(
-            a=[5, 10, 20, 50, 100, 200], size=1, p=[0.05, 0.05, 0.2, 0.2, 0.4, 0.1]
+            a=[5, 10, 20, 50, 100, 200, 500], size=1, p=[0, 0, 0.2, 0.2, 0.4, 0.1, 0.1]
         ).item()
         point_method_choice = np.random.choice(
             a=['median', 'sample', 'mean', 'sign_biased_mean'],
             size=1,
-            p=[0.5, 0.1, 0.3, 0.1],
+            p=[0.59, 0.01, 0.3, 0.1],
         ).item()
 
         return {
@@ -960,7 +1130,7 @@ class MotifSimulation(ModelObject):
             'distance_metric': distance_metric_choice,
             'max_motifs': max_motifs_choice,
             'recency_weighting': recency_weighting_choice,
-            'cutoff_threshold': cutoff_threshold_choice,
+            # 'cutoff_threshold': cutoff_threshold_choice,
             'cutoff_minimum': cutoff_minimum_choice,
             'point_method': point_method_choice,
         }
@@ -974,7 +1144,7 @@ class MotifSimulation(ModelObject):
             'distance_metric': self.distance_metric,
             'max_motifs': self.max_motifs,
             'recency_weighting': self.recency_weighting,
-            'cutoff_threshold': self.cutoff_threshold,
+            # 'cutoff_threshold': self.cutoff_threshold,
             'cutoff_minimum': self.cutoff_minimum,
             'point_method': self.point_method,
         }
