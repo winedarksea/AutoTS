@@ -631,7 +631,7 @@ class MotifSimulation(ModelObject):
         )
 
         # make this faster
-        motif_vecs = pd.DataFrame()
+        motif_vecs_list = []
         # takes random slices of the time series and rearranges as phrase_n length vectors
         for z in numbers:
             rand_slice = df.iloc[
@@ -642,7 +642,9 @@ class MotifSimulation(ModelObject):
                 .transpose()
                 .set_index(np.repeat(z, (df.shape[1],)), append=True)
             )
-            motif_vecs = pd.concat([motif_vecs, rand_slice], axis=0)
+            # motif_vecs = pd.concat([motif_vecs, rand_slice], axis=0)
+            motif_vecs_list.append(rand_slice)
+        motif_vecs = pd.concat(motif_vecs_list, axis=0)
 
         if 'pct_change_sign' in comparison:
             motif_vecs = motif_vecs.where(motif_vecs >= 0, -1).where(motif_vecs <= 0, 1)
@@ -650,6 +652,15 @@ class MotifSimulation(ModelObject):
         start_time_2nd = timeit.default_timer()
         # compare the motif vectors to the most recent vector of the series
         from sklearn.metrics.pairwise import pairwise_distances
+
+        args = {
+            "cutoff_minimum": cutoff_minimum,
+            "comparison": comparison,
+            "point_method": point_method,
+            "prediction_interval": prediction_interval,
+            "phrase_n": phrase_n,
+            "distance_metric": distance_metric,
+        }
 
         if shared:
             comparative = pd.DataFrame(
@@ -776,13 +787,6 @@ class MotifSimulation(ModelObject):
         lower_forecasts.columns = comparative.columns
         upper_forecasts.columns = comparative.columns
         """
-        args = {
-            "cutoff_minimum": cutoff_minimum,
-            "comparison": comparison,
-            "point_method": point_method,
-            "prediction_interval": prediction_interval,
-            "phrase_n": phrase_n,
-        }
         
         def seek_the_oracle(comparative, args, col):
             # comparative.idxmax()
