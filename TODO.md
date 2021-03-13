@@ -18,6 +18,8 @@
 * Additional models to GluonTS
 * GeneralTransformer transformation_params - now handle None or empty dict
 * cleaning up of the appropriately named 'ModelMonster'
+* improving MotifSimulation
+* better error message for all models
 
 
 # Known Errors: 
