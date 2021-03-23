@@ -23,6 +23,10 @@
 * enable histgradientboost regressor, left it out before thinking it wouldn't stay experimental this long
 * import_template now has slightly better `method` input style
 * allow `ensemble` parameter to be a list
+* NumericTransformer
+	* add .fit_transform method
+	* generally more options and speed improvement
+* added NumericTransformer to future_regressors, should now coerce if they have different dtypes
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

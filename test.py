@@ -9,6 +9,7 @@ from autots.datasets import (
     load_monthly,
     load_yearly,
     load_weekly,
+    load_weekdays,
 )
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations

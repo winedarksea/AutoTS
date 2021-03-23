@@ -407,10 +407,8 @@ class AutoTS(object):
             }
 
         # handle categorical data if present
-        self.categorical_transformer = NumericTransformer(verbose=self.verbose).fit(
-            df_wide
-        )
-        df_wide_numeric = self.categorical_transformer.transform(df_wide)
+        self.categorical_transformer = NumericTransformer(verbose=self.verbose)
+        df_wide_numeric = self.categorical_transformer.fit_transform(df_wide)
 
         # replace any zeroes that occur prior to all non-zero values
         if self.remove_leading_zeroes:
@@ -461,9 +459,12 @@ class AutoTS(object):
             verbose=self.verbose,
         )
         try:
-            future_regressor = pd.DataFrame(future_regressor)
+            if not isinstance(future_regressor, pd.DataFrame):
+                future_regressor = pd.DataFrame(future_regressor)
             if not isinstance(future_regressor.index, pd.DatetimeIndex):
                 future_regressor.index = df_subset.index
+            # handle any non-numeric data, crudely
+            future_regressor = NumericTransformer(verbose=self.verbose).fit_transform(future_regressor)
             self.future_regressor_train = future_regressor
             future_regressor_train = future_regressor.reindex(index=df_train.index)
             future_regressor_test = future_regressor.reindex(index=df_test.index)
@@ -1056,7 +1057,7 @@ or otherwise increase models available."""
             prediction_interval (float): interval of upper/lower forecasts.
                 defaults to 'self' ie the interval specified in __init__()
                 if prediction_interval is a list, then returns a dict of forecast objects.
-            future_regressor (numpy.Array): additional regressor, not used
+            future_regressor (numpy.Array): additional regressor
             hierarchy: Not yet implemented
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
 
@@ -1075,7 +1076,11 @@ or otherwise increase models available."""
             future_regressor = []
             self.future_regressor_train = []
         else:
-            future_regressor = pd.DataFrame(future_regressor)
+            if not isinstance(future_regressor, pd.DataFrame):
+                future_regressor = pd.DataFrame(future_regressor)
+            # handle any non-numeric data, crudely
+            future_regressor = NumericTransformer(verbose=self.verbose).fit_transform(future_regressor)
+            # make sure training regressor fits training data index
             self.future_regressor_train = self.future_regressor_train.reindex(
                 index=self.df_wide_numeric.index
             )
