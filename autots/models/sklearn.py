@@ -161,6 +161,10 @@ def retrieve_regressor(
         return regr
     elif regression_model['model'] == 'HistGradientBoost':
         from sklearn.multioutput import MultiOutputRegressor
+        try:
+            from sklearn.experimental import enable_hist_gradient_boosting  # noqa
+        except Exception:
+            pass
         from sklearn.neighbors import HistGradientBoostingRegressor
 
         regr = MultiOutputRegressor(

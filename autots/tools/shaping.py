@@ -142,7 +142,7 @@ class NumericTransformer(object):
         self.verbose = verbose
         self.categorical_flag = False
 
-    def fit(self, df):
+    def _fit(self, df):
         """Fit categorical to numeric."""
         # replace some common nan datatypes from strings to np.nan
         df.replace(self.na_strings, np.nan, inplace=True)
@@ -172,9 +172,28 @@ class NumericTransformer(object):
             df_enc = self.cat_transformer.transform(df_enc) + 1
             self.cat_max = df_enc.max(axis=0)
             self.cat_min = df_enc.min(axis=0)
-            if self.verbose >= 0:
+            if self.verbose > 0:
                 print("Categorical features converted to numeric")
+            return df_enc
+        else:
+            return df
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
         return self
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
 
     def transform(self, df):
         """Convert categorical dataset to numeric."""

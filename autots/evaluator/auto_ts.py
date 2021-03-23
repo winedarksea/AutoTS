@@ -41,7 +41,8 @@ class AutoTS(object):
             More runs = longer runtime, generally better accuracy.
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.
-        ensemble (str): None, 'simple', 'distance'
+        ensemble (str): None or list or comma-separated string containing:
+            'auto', 'simple', 'distance', 'horizontal-max', 'probabilistic-max', "hdist"
         initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
         random_seed (int): random seed allows (slightly) more consistent results.
         holiday_country (str): passed through to Holidays package for some models.
@@ -128,6 +129,8 @@ class AutoTS(object):
         self.constraint = constraint
         self.random_seed = random_seed
         self.holiday_country = holiday_country
+        if isinstance(ensemble, list):
+            ensemble = ",".join(ensemble)
         self.ensemble = str(ensemble).lower()
         self.subset = subset
         self.na_tolerance = na_tolerance
@@ -1236,14 +1239,14 @@ or otherwise increase models available."""
             )
 
     def import_template(
-        self, filename: str, method: str = "Add On", enforce_model_list: bool = True
+        self, filename: str, method: str = "add_on", enforce_model_list: bool = True
     ):
         """Import a previously exported template of model parameters.
         Must be done before the AutoTS object is .fit().
 
         Args:
             filename (str): file location (or a pd.DataFrame already loaded)
-            method (str): 'Add On' or 'Only'
+            method (str): 'add_on' or 'only' - "add_on" keeps `initial_template` generated in init. "only" uses only this template.
             enforce_model_list (bool): if True, remove model types not in model_list
         """
         if isinstance(filename, pd.DataFrame):
@@ -1277,7 +1280,7 @@ or otherwise increase models available."""
                     "Len 0. Model_list does not match models in template! Try enforce_model_list=False."
                 )
 
-        if method.lower() in ['add on', 'addon']:
+        if method.lower() in ['add on', 'addon', 'add_on']:
             self.initial_template = self.initial_template.merge(
                 import_template,
                 how='outer',
@@ -1288,10 +1291,10 @@ or otherwise increase models available."""
             self.initial_template = self.initial_template.drop_duplicates(
                 subset=self.template_cols
             )
-        elif method.lower() in ['only', 'user only']:
+        elif method.lower() in ['only', 'user only', 'user_only', 'import_only']:
             self.initial_template = import_template
         else:
-            return ValueError("method must be 'add on' or 'only'")
+            return ValueError("method must be 'add_on' or 'only'")
 
         return self
 
