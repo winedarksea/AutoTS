@@ -129,77 +129,147 @@ def long_to_wide(
 
 
 class NumericTransformer(object):
-    """Test numeric conversion."""
+    """General purpose numeric conversion for pandas dataframes.
+
+    All categorical data and levels must be passed to .fit().
+    If new categorical series or levels are present in .transform() it won't work!
+
+    Currently datetimes cannot be inverse_transformed back to datetime
+
+    Args:
+        na_strings (list): list of strings to replace as pd.NA
+        categorical_fillna (str): how to fill NaN for categorical variables (numeric NaN are unaltered)
+            "ffill" - uses forward and backward filling to supply na values
+            "indicator" or anything else currently results in all missing replaced with str "missing_value"
+        verbose (int): greater than 0 to print some messages
+    """
 
     def __init__(
         self,
-        na_strings: list = ['', ' ', 'NULL', 'NA', 'NaN', 'na', 'nan'],
-        categorical_impute_strategy: str = 'constant',
+        na_strings: list = ['', ' '],  # 'NULL', 'NA', 'NaN', 'na', 'nan'
+        categorical_fillna: str = "ffill",
         verbose: int = 0,
     ):
         self.na_strings = na_strings
-        self.categorical_impute_strategy = categorical_impute_strategy
         self.verbose = verbose
+        self.categorical_fillna = categorical_fillna
         self.categorical_flag = False
+        self.needs_transformation = True
+
+    def _fit(self, df):
+        """Fit categorical to numeric."""
+        # test if any columns aren't numeric
+        if not isinstance(df, pd.DataFrame):  # basically just Series inputs
+            df = pd.DataFrame(df)
+
+        if df.shape[1] == df.select_dtypes(include=np.number).shape[1]:
+            self.needs_transformation = False
+            if self.verbose > 2:
+                print("All data is numeric, skipping NumericTransformer")
+
+        if self.needs_transformation:
+            # replace some common nan datatypes from strings to nan
+            df.replace(self.na_strings, np.nan, inplace=True)  # pd.NA in future
+
+            # convert series to numeric which can be readily converted.
+            df = df.apply(pd.to_numeric, errors='ignore')
+
+            # record which columns are which dtypes
+            self.column_order = df.columns
+            self.numeric_features = df.select_dtypes(
+                include=[np.number]
+            ).columns.tolist()
+            self.categorical_features = list(
+                set(df.columns.tolist()) - set(self.numeric_features)
+            )
+
+            if len(self.categorical_features) > 0:
+                self.categorical_flag = True
+            if self.categorical_flag:
+                from sklearn.preprocessing import OrdinalEncoder
+
+                df_enc = df[self.categorical_features]
+                if self.categorical_fillna == "ffill":
+                    df_enc = df_enc.fillna(method='ffill').fillna(method='bfill')
+                df_enc = df_enc.fillna('missing_value')
+                self.cat_transformer = OrdinalEncoder()
+                # the + 1 makes it compatible with remove_leading_zeroes
+                df_enc = self.cat_transformer.fit_transform(df_enc) + 1
+                # df_enc = self.cat_transformer.transform(df_enc) + 1
+
+                self.cat_max = df_enc.max(axis=0)
+                self.cat_min = df_enc.min(axis=0)
+                if self.verbose > 0:
+                    print("Categorical features converted to numeric")
+                df = pd.concat(
+                    [
+                        pd.DataFrame(
+                            df[self.numeric_features], columns=self.numeric_features
+                        ),
+                        pd.DataFrame(
+                            df_enc, columns=self.categorical_features, index=df.index
+                        ),
+                    ],
+                    axis=1,
+                )[self.column_order]
+        return df.astype(float)
 
     def fit(self, df):
-        """Fit categorical to numeric."""
-        # replace some common nan datatypes from strings to np.nan
-        df.replace(self.na_strings, np.nan, inplace=True)
+        """Learn behavior of data to change.
 
-        # convert series to numeric which can be readily converted.
-        df = df.apply(pd.to_numeric, errors='ignore')
-
-        # record which columns are which dtypes
-        self.column_order = df.columns
-        # df_datatypes = df.dtypes
-        self.numeric_features = df.select_dtypes(include=[np.number]).columns.tolist()
-        self.categorical_features = list(
-            set(df.columns.tolist()) - set(self.numeric_features)
-        )
-
-        if len(self.categorical_features) > 0:
-            self.categorical_flag = True
-        if self.categorical_flag:
-            from sklearn.preprocessing import OrdinalEncoder
-
-            df_enc = (df[self.categorical_features]).fillna(method='ffill')
-            df_enc = df_enc.fillna(method='bfill').fillna('missing_value')
-            self.cat_transformer = OrdinalEncoder()
-            self.cat_transformer.fit(df_enc)
-
-            # the + 1 makes it compatible with remove_leading_zeroes
-            df_enc = self.cat_transformer.transform(df_enc) + 1
-            self.cat_max = df_enc.max(axis=0)
-            self.cat_min = df_enc.min(axis=0)
-            if self.verbose >= 0:
-                print("Categorical features converted to numeric")
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
         return self
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
 
     def transform(self, df):
         """Convert categorical dataset to numeric."""
-        df.replace(self.na_strings, np.nan, inplace=True)
-        df = df.apply(pd.to_numeric, errors='ignore')
-        if self.categorical_flag:
-            df_enc = (df[self.categorical_features]).fillna(method='ffill')
-            df_enc = df_enc.fillna(method='bfill').fillna('missing_value')
-            df_enc = self.cat_transformer.transform(df_enc) + 1
-            df = pd.concat(
-                [
-                    pd.DataFrame(
-                        df[self.numeric_features], columns=self.numeric_features
-                    ),
-                    pd.DataFrame(
-                        df_enc, columns=self.categorical_features, index=df.index
-                    ),
-                ],
-                axis=1,
-            )[self.column_order]
-        return df.astype(float)
+        if self.needs_transformation:
+            if not isinstance(df, pd.DataFrame):
+                df = pd.DataFrame(df)
+            df.replace(self.na_strings, np.nan, inplace=True)
+            df = df.apply(pd.to_numeric, errors='ignore')
+            if self.categorical_flag:
+                df_enc = (df[self.categorical_features]).fillna(method='ffill')
+                df_enc = df_enc.fillna(method='bfill').fillna('missing_value')
+                df_enc = self.cat_transformer.transform(df_enc) + 1
+                df = pd.concat(
+                    [
+                        pd.DataFrame(
+                            df[self.numeric_features], columns=self.numeric_features
+                        ),
+                        pd.DataFrame(
+                            df_enc, columns=self.categorical_features, index=df.index
+                        ),
+                    ],
+                    axis=1,
+                )[self.column_order]
+        try:
+            df = df.astype(float)
+        except ValueError as e:
+            raise ValueError(
+                f"NumericTransformer.transform() could not convert data to float. {str(e)}."
+            )
+        return df
 
-    def inverse_transform(self, df):
-        """Convert numeric back to categorical."""
+    def inverse_transform(self, df, convert_dtypes: bool = False):
+        """Convert numeric back to categorical.
+        Args:
+            df (pandas.DataFrame): df
+            convert_dtypes (bool): whether to use pd.convert_dtypes after inverse
+        """
         if self.categorical_flag:
+            if not isinstance(df, pd.DataFrame):  # basically just Series inputs
+                df = pd.DataFrame(df)
             df_enc = (
                 df[self.categorical_features].clip(
                     upper=self.cat_max, lower=self.cat_min, axis=1
@@ -218,6 +288,8 @@ class NumericTransformer(object):
                 ],
                 axis=1,
             )[self.column_order]
+        if convert_dtypes:
+            df = df.convert_dtypes()
         return df
 
 

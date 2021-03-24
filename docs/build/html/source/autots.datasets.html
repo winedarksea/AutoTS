@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.datasets package &#8212; AutoTS 0.3.0 documentation</title>
+    <title>autots.datasets package &#8212; AutoTS 0.3.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -95,6 +95,22 @@ if default is use, several default samples are returned</p></li>
 <dt id="autots.datasets.load_weekly">
 <code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_weekly</code><span class="sig-paren">(</span><em class="sig-param">long: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_weekly" title="Permalink to this definition">¶</a></dt>
 <dd><p>Weekly petroleum industry data from the EIA.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.datasets.load_weekdays">
+<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_weekdays</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False</em>, <em class="sig-param">categorical: bool = True</em>, <em class="sig-param">periods: int = 180</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_weekdays" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test edge cases by creating a Series with values as day of week.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>long</strong> (<em>bool</em>) – if True, return a df with columns “value” and “datetime”
+if False, return a Series with dt index</p></li>
+<li><p><strong>categorical</strong> (<em>bool</em>) – if True, return str/object, else return int</p></li>
+<li><p><strong>periods</strong> (<em>int</em>) – number of periods, ie length of data to generate</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 </div>

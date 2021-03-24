@@ -15,23 +15,18 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* **breaking change** to model templates: transformers structure change
-	* grouping no longer used
-* parameter generation for transformers allowing more possible combinations
-* transformer_max_depth parameter
-* Horizontal Ensembles are now much faster by only running models on the subset of series they apply to
-* general starting template improved and updated to new transformer format
-* change many np.random to random
-	* random.choices further necessitates python 3.6 or greater
-* bug fix in Detrend transformer
-* bug fix in SeasonalDifference transformer
-* SPL bug fix when NaN in test set
-* inverse_transform now fills NaN with zero for upper/lower forecasts
-* expanded model_list aliases, with dedicated module
-* bug fix (creating 0,0 order) and tuning of VARMAX
-* Fix export_template bug
-* restructuring of some lower-level function locations
-
+* Additional models to GluonTS
+* GeneralTransformer transformation_params - now handle None or empty dict
+* cleaning up of the appropriately named 'ModelMonster'
+* improving MotifSimulation
+* better error message for all models
+* enable histgradientboost regressor, left it out before thinking it wouldn't stay experimental this long
+* import_template now has slightly better `method` input style
+* allow `ensemble` parameter to be a list
+* NumericTransformer
+	* add .fit_transform method
+	* generally more options and speed improvement
+* added NumericTransformer to future_regressors, should now coerce if they have different dtypes
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
@@ -64,12 +59,8 @@ Tensorflow GPU backend may crash on occasion.
 * Remove 'horizontal' sanity check run, takes too long (only if metric weights are x)?
 * Horizontal and BestN runtime variant, where speed is highly important in model selection
 * total runtime for .fit() as attribute (not just manual sum but capture in ModelPrediction)
-* allow Index to be other datetime not just DatetimeIndex
-* cleanse similar models out first, before horizontal ensembling
 * BestNEnsemble Add 5 or more model option
-* allow best_model to be specified and entirely bypass the .fit() stage.
 * drop duplicates as function of TemplateEvalObject
-* improve test.py script for actual testing of many features
 * Convert 'Holiday' regressors into Datepart + Holiday 2d
 * export and import of results includes all model parameters (but not templates?)
 * Option to use full traceback in errors in table
@@ -94,7 +85,7 @@ Tensorflow GPU backend may crash on occasion.
 	* Probabilistic:
 		https://scikit-learn.org/stable/auto_examples/ensemble/plot_gradient_boosting_quantile.html
 * GluonTS
-	* Add support for future_regressor
+	* Add support for future_regressor  (potentially PCA down to 1 feature, then use?)
 	* Modify GluonStart if lots of NaN at start of that series
 	* GPU and CPU ctx
 * implement 'borrow' Genetic Recombination for ComponentAnalysis

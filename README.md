@@ -21,7 +21,7 @@ For other time series needs, check out the list [here](https://github.com/MaxBen
 * Allows automatic ensembling of best models
 	* 'horizontal' ensembling on multivariate series - learning the best model for each series
 * Multiple cross validation options
-	* 'seasonal' validation allows forecasts to be optimized for the season of your forecast period
+	* 'seasonal' validation allows forecasts to be optimized for the seasonity of the data
 * Subsetting and weighting to improve speed and relevance of search on large datasets
 	* 'constraint' parameter can be used to assure forecasts don't drift beyond historic boundaries
 * Option to use one or a combination of metrics for model selection
@@ -72,12 +72,15 @@ model = model.fit(
     id_col='series_id' if long else None,
 )
 
+prediction = model.predict()
 # Print the details of the best model
 print(model)
 
-prediction = model.predict()
 # point forecasts dataframe
 forecasts_df = prediction.forecast
+# upper and lower forecasts
+forecasts_up, forecasts_low = prediction.upper_forecast, prediction.lower_forecast
+
 # accuracy of all tried model results
 model_results = model.results()
 # and aggregated from cross validation
@@ -87,6 +90,26 @@ validation_results = model.results("validation")
 The lower-level API, in particular the large section of time series transformers in the scikit-learn style, can also be utilized independently from the AutoML framework.
 
 Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html) for a more detailed guide to features!
+
+
+## Tips for Speed and Large Data:
+* Use appropriate model lists, especially the predefined lists:
+	* `superfast` (simple naive models) and `fast` (more complex but still faster models)
+	* `fast_parallel` (a combination of `fast` and `parallel`) or `parallel`, given mave many CPU cores are available
+		* `n_jobs` usually gets pretty close with `='auto'` but adjust as necessary for the environment
+	* see a dict of predefined lists (some defined for internal use) with `from autots.models.model_list import model_lists`
+* Use the `subset` parameter when there are many similar series, `subset=100` will often generalize well for tens of thousands of similar series.
+	* if using `subset`, passing `weights` for series will weight subset selection towards higher priority series.
+	* if limited by RAM, it can be easily distributed by running multiple instances of AutoTS on different batches of data, having first imported a template pretrained as a starting point for all.
+* Set `model_interrupt=True` which passes over the current model when a `KeyboardInterrupt` ie `crtl+c` is pressed (although if the interrupt falls between generations it will stop the entire training).
+* Use the `result_file` method of `.fit()` which will save progress after each generation - helpful to save progress if a long training is being done. Use `import_results` to recover.
+* While Transformations are pretty fast, setting `transformer_max_depth` to a lower number (say, 2) will increase speed. Also utilize `transformer_list`.
+* Ensembles are obviously slower to predict because they run many models, 'distance' models 2x slower, and 'simple' models 3x-5x slower.
+	* `ensemble='horizontal-max'` with `model_list='no_shared_fast'` can scale relatively well given many cpu cores because each model is only run on the series it is needed for.
+* Reducing `num_validations` and `models_to_validate` will decrease runtime but may lead to poorer model selections.
+* For datasets with many records, upsampling (for example, from daily to monthly frequency forecasts) can reduce training time if appropriate.
+	* this can be done by adjusting `frequency` and `aggfunc` but is probably best done before passing data into AutoTS.
+
 
 ## How to Contribute:
 * Give feedback on where you find the documentation confusing

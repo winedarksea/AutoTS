@@ -417,14 +417,14 @@ class SinTrend(EmptyTransformer):
 
         X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
         self.sin_params = pd.DataFrame()
-        # make this faster
+        # make this faster (250 columns in 2.5 seconds isn't bad, though)
         for column in df.columns:
             try:
                 y = df[column].values
                 vals = self.fit_sin(X, y)
                 current_param = pd.DataFrame(vals, index=[column])
             except Exception as e:
-                print(e)
+                print(f"SinTrend failed with {repr(e)}")
                 current_param = pd.DataFrame(
                     {"amp": 0, "omega": 1, "phase": 1, "offset": 1}, index=[column]
                 )
@@ -1644,6 +1644,7 @@ trans_dict = {
     'DifferencedTransformer': DifferencedTransformer(),
     'PctChangeTransformer': PctChangeTransformer(),
     'SinTrend': SinTrend(),
+    'SineTrend': SinTrend(),
     'PositiveShift': PositiveShift(squared=False),
     'Log': PositiveShift(log=True),
     'CumSumTransformer': CumSumTransformer(),
@@ -1771,6 +1772,10 @@ class GeneralTransformer(object):
 
         self.fillna = fillna
         self.transformations = transformations
+        # handle users passing in no params
+        if transformation_params is None or not transformation_params:
+            keys = transformations.keys()
+            transformation_params = {x: {} for x in keys}
         self.transformation_params = transformation_params
 
         self.grouping = grouping

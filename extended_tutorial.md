@@ -303,6 +303,48 @@ Additional regressors can be passed through as additional time series to forecas
 Some models here can utilize the additional information they provide to help improve forecast quality. 
 To prevent forecast accuracy for considering these additional series too heavily, input series weights that lower or remove their forecast accuracy from consideration.
 
+*an example of regressors:*
+```python
+from autots.datasets import load_monthly
+from autots.evaluator.auto_ts import fake_regressor
+from autots import AutoTS
+
+long = False
+df = load_monthly(long=long)
+forecast_length = 14
+model = AutoTS(
+    forecast_length=forecast_length,
+    frequency='infer',
+    validation_method="backwards",
+    max_generations=2,
+)
+future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
+    df,
+    dimensions=4,
+    forecast_length=forecast_length,
+    date_col='datetime' if long else None,
+    value_col='value' if long else None,
+    id_col='series_id' if long else None,
+    drop_most_recent=model.drop_most_recent,
+    aggfunc=model.aggfunc,
+    verbose=model.verbose,
+)
+
+model = model.fit(
+    df,
+    future_regressor=future_regressor_train2d,
+    date_col='datetime' if long else None,
+    value_col='value' if long else None,
+    id_col='series_id' if long else None,
+)
+
+prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=0)
+forecasts_df = prediction.forecast
+
+print(model)
+print(f"Was a model choosen that used the regressor? {model.used_regressor_check}")
+```
+
 ### Categorical Data
 Categorical data is handled, but it is handled crudely. For example, optimization metrics do not currently include any categorical accuracy metrics. 
 For categorical data that has a meaningful order (ie 'low', 'medium', 'high') it is best for the user to encode that data before passing it in, 
@@ -343,7 +385,7 @@ Some models will support a more limited range of frequencies.
 |  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   | True         |              |               |
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              |               |
-|  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |                 |       | True*        | True         |               |
+|  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |
 |  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |               |

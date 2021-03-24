@@ -63,9 +63,17 @@ fast = [
     'ComponentAnalysis',
 ]
 # models that can scale well if many CPU cores are available
-parallel = ['ETS', 'FBProphet', 'ARIMA', 'GLM', 'UnobservedComponents']
+parallel = [
+    'ETS',
+    'FBProphet',
+    'ARIMA',
+    'GLM',
+    'UnobservedComponents',
+    'MotifSimulation',
+]
 # models that should be fast given many CPU cores
 fast_parallel = list(set(parallel + fast))
+fast_parallel.remove('MotifSimulation')
 # models that are explicitly not production ready
 experimental = [
     'MotifSimulation',
@@ -135,6 +143,7 @@ no_shared = [
     # 'MotifSimulation',
     # 'DatepartRegression',
 ]
+no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {
     "all": all_models,
     "default": default,
@@ -147,6 +156,7 @@ model_lists = {
     "no_params": no_params,
     "recombination_approved": recombination_approved,
     "no_shared": no_shared,
+    "no_shared_fast": no_shared_fast,
     "experimental": experimental,
     "slow": slow,
     "gpu": gpu,

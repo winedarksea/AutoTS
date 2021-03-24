@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Intro &#8212; AutoTS 0.3.0 documentation</title>
+    <title>Intro &#8212; AutoTS 0.3.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -66,7 +66,7 @@
 </li>
 <li><p>Multiple cross validation options</p>
 <ul>
-<li><p>‘seasonal’ validation allows forecasts to be optimized for the season of your forecast period</p></li>
+<li><p>‘seasonal’ validation allows forecasts to be optimized for the seasonity of the data</p></li>
 </ul>
 </li>
 <li><p>Subsetting and weighting to improve speed and relevance of search on large datasets</p>
@@ -126,12 +126,15 @@
     <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span> <span class="k">if</span> <span class="n">long</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span>
 
+<span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">()</span>
 <span class="c1"># Print the details of the best model</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
 
-<span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">()</span>
 <span class="c1"># point forecasts dataframe</span>
 <span class="n">forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="o">.</span><span class="n">forecast</span>
+<span class="c1"># upper and lower forecasts</span>
+<span class="n">forecasts_up</span><span class="p">,</span> <span class="n">forecasts_low</span> <span class="o">=</span> <span class="n">prediction</span><span class="o">.</span><span class="n">upper_forecast</span><span class="p">,</span> <span class="n">prediction</span><span class="o">.</span><span class="n">lower_forecast</span>
+
 <span class="c1"># accuracy of all tried model results</span>
 <span class="n">model_results</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">results</span><span class="p">()</span>
 <span class="c1"># and aggregated from cross validation</span>
@@ -140,6 +143,42 @@
 </div>
 <p>The lower-level API, in particular the large section of time series transformers in the scikit-learn style, can also be utilized independently from the AutoML framework.</p>
 <p>Check out <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html">extended_tutorial.md</a> for a more detailed guide to features!</p>
+</div>
+<div class="section" id="tips-for-speed-and-large-data">
+<h2>Tips for Speed and Large Data:<a class="headerlink" href="#tips-for-speed-and-large-data" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><p>Use appropriate model lists, especially the predefined lists:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">superfast</span></code> (simple naive models) and <code class="docutils literal notranslate"><span class="pre">fast</span></code> (more complex but still faster models)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fast_parallel</span></code> (a combination of <code class="docutils literal notranslate"><span class="pre">fast</span></code> and <code class="docutils literal notranslate"><span class="pre">parallel</span></code>) or <code class="docutils literal notranslate"><span class="pre">parallel</span></code>, given mave many CPU cores are available</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">n_jobs</span></code> usually gets pretty close with <code class="docutils literal notranslate"><span class="pre">='auto'</span></code> but adjust as necessary for the environment</p></li>
+</ul>
+</li>
+<li><p>see a dict of predefined lists (some defined for internal use) with <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">autots.models.model_list</span> <span class="pre">import</span> <span class="pre">model_lists</span></code></p></li>
+</ul>
+</li>
+<li><p>Use the <code class="docutils literal notranslate"><span class="pre">subset</span></code> parameter when there are many similar series, <code class="docutils literal notranslate"><span class="pre">subset=100</span></code> will often generalize well for tens of thousands of similar series.</p>
+<ul>
+<li><p>if using <code class="docutils literal notranslate"><span class="pre">subset</span></code>, passing <code class="docutils literal notranslate"><span class="pre">weights</span></code> for series will weight subset selection towards higher priority series.</p></li>
+<li><p>if limited by RAM, it can be easily distributed by running multiple instances of AutoTS on different batches of data, having first imported a template pretrained as a starting point for all.</p></li>
+</ul>
+</li>
+<li><p>Set <code class="docutils literal notranslate"><span class="pre">model_interrupt=True</span></code> which passes over the current model when a <code class="docutils literal notranslate"><span class="pre">KeyboardInterrupt</span></code> ie <code class="docutils literal notranslate"><span class="pre">crtl+c</span></code> is pressed (although if the interrupt falls between generations it will stop the entire training).</p></li>
+<li><p>Use the <code class="docutils literal notranslate"><span class="pre">result_file</span></code> method of <code class="docutils literal notranslate"><span class="pre">.fit()</span></code> which will save progress after each generation - helpful to save progress if a long training is being done. Use <code class="docutils literal notranslate"><span class="pre">import_results</span></code> to recover.</p></li>
+<li><p>While Transformations are pretty fast, setting <code class="docutils literal notranslate"><span class="pre">transformer_max_depth</span></code> to a lower number (say, 2) will increase speed. Also utilize <code class="docutils literal notranslate"><span class="pre">transformer_list</span></code>.</p></li>
+<li><p>Ensembles are obviously slower to predict because they run many models, ‘distance’ models 2x slower, and ‘simple’ models 3x-5x slower.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">ensemble='horizontal-max'</span></code> with <code class="docutils literal notranslate"><span class="pre">model_list='no_shared_fast'</span></code> can scale relatively well given many cpu cores because each model is only run on the series it is needed for.</p></li>
+</ul>
+</li>
+<li><p>Reducing <code class="docutils literal notranslate"><span class="pre">num_validations</span></code> and <code class="docutils literal notranslate"><span class="pre">models_to_validate</span></code> will decrease runtime but may lead to poorer model selections.</p></li>
+<li><p>For datasets with many records, upsampling (for example, from daily to monthly frequency forecasts) can reduce training time if appropriate.</p>
+<ul>
+<li><p>this can be done by adjusting <code class="docutils literal notranslate"><span class="pre">frequency</span></code> and <code class="docutils literal notranslate"><span class="pre">aggfunc</span></code> but is probably best done before passing data into AutoTS.</p></li>
+</ul>
+</li>
+</ul>
 </div>
 <div class="section" id="how-to-contribute">
 <h2>How to Contribute:<a class="headerlink" href="#how-to-contribute" title="Permalink to this headline">¶</a></h2>
@@ -195,6 +234,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#features">Features</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#basic-use">Basic Use</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tips-for-speed-and-large-data">Tips for Speed and Large Data:</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#how-to-contribute">How to Contribute:</a></li>
 </ul>
 </li>

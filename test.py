@@ -9,6 +9,7 @@ from autots.datasets import (
     load_monthly,
     load_yearly,
     load_weekly,
+    load_weekdays,
 )
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
@@ -18,16 +19,18 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 example_filename = "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
-df = load_weekly(long=long)
+df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 4
+generations = 2
 verbose = 1
+num_validations = 1
+validation_method = "backwards"
 
 """
 df = pd.read_csv("m5_sample.gz")
 df['datetime'] = pd.DatetimeIndex(df['datetime'])
 df = df.set_index("datetime", drop=True)
-df = df.iloc[:, 0:40]
+# df = df.iloc[:, 0:40]
 """
 
 weights_hourly = {'traffic_volume': 10}
@@ -66,10 +69,10 @@ model_list = [
     'WindowRegression',
 ]
 
-transformer_list = "fast"  # ["SeasonalDifference", "MinMaxScaler", "Detrend"]
-transformer_max_depth = 6
-# model_list = 'superfast'
-# model_list = ['GLM', 'DatepartRegression']
+transformer_list = "all"  # ["SinTrend", "MinMaxScaler"]
+transformer_max_depth = 1
+model_list = 'fast'  # fast_parallel
+# model_list = ['MotifSimulation', 'LastValueNaive']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {
@@ -87,11 +90,11 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble="simple,horizontal-max",
+    ensemble=["simple","horizontal-max"],
     constraint=None,
     max_generations=generations,
-    num_validations=2,
-    validation_method='backwards',
+    num_validations=num_validations,
+    validation_method=validation_method,
     model_list=model_list,
     transformer_list=transformer_list,
     transformer_max_depth=transformer_max_depth,
@@ -156,8 +159,8 @@ model = AutoTS(
     ensemble=None,
     constraint=None,
     max_generations=generations,
-    num_validations=2,
-    validation_method='backwards',
+    num_validations=num_validations,
+    validation_method=validation_method,
     model_list=model_list,
     transformer_list=transformer_list,
     transformer_max_depth=transformer_max_depth,

@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots package &#8212; AutoTS 0.3.0 documentation</title>
+    <title>autots package &#8212; AutoTS 0.3.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -131,6 +131,22 @@
 <dd><p>Weekly petroleum industry data from the EIA.</p>
 </dd></dl>
 
+<dl class="function">
+<dt id="autots.load_weekdays">
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">load_weekdays</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False</em>, <em class="sig-param">categorical: bool = True</em>, <em class="sig-param">periods: int = 180</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.load_weekdays" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test edge cases by creating a Series with values as day of week.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>long</strong> (<em>bool</em>) – if True, return a df with columns “value” and “datetime”
+if False, return a Series with dt index</p></li>
+<li><p><strong>categorical</strong> (<em>bool</em>) – if True, return str/object, else return int</p></li>
+<li><p><strong>periods</strong> (<em>int</em>) – number of periods, ie length of data to generate</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
 <dl class="class">
 <dt id="autots.AutoTS">
 <em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 5</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 0</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 1}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'fast'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'even'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS" title="Permalink to this definition">¶</a></dt>
@@ -146,7 +162,8 @@
 More runs = longer runtime, generally better accuracy.</p></li>
 <li><p><strong>no_negatives</strong> (<em>bool</em>) – if True, all negative predictions are rounded up to 0.</p></li>
 <li><p><strong>constraint</strong> (<em>float</em>) – when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.</p></li>
-<li><p><strong>ensemble</strong> (<em>str</em>) – None, ‘simple’, ‘distance’</p></li>
+<li><p><strong>ensemble</strong> (<em>str</em>) – None or list or comma-separated string containing:
+‘auto’, ‘simple’, ‘distance’, ‘horizontal-max’, ‘probabilistic-max’, “hdist”</p></li>
 <li><p><strong>initial_template</strong> (<em>str</em>) – ‘Random’ - randomly generates starting template, ‘General’ uses template included in package, ‘General+Random’ - both of previous. Also can be overriden with self.import_template()</p></li>
 <li><p><strong>random_seed</strong> (<em>int</em>) – random seed allows (slightly) more consistent results.</p></li>
 <li><p><strong>holiday_country</strong> (<em>str</em>) – passed through to Holidays package for some models.</p></li>
@@ -269,14 +286,14 @@ or can be a DataFrame of model results or a full TemplateEvalObject</p>
 
 <dl class="method">
 <dt id="autots.AutoTS.import_template">
-<code class="sig-name descname">import_template</code><span class="sig-paren">(</span><em class="sig-param">filename: str</em>, <em class="sig-param">method: str = 'Add On'</em>, <em class="sig-param">enforce_model_list: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.import_template" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">import_template</code><span class="sig-paren">(</span><em class="sig-param">filename: str</em>, <em class="sig-param">method: str = 'add_on'</em>, <em class="sig-param">enforce_model_list: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.import_template" title="Permalink to this definition">¶</a></dt>
 <dd><p>Import a previously exported template of model parameters.
 Must be done before the AutoTS object is .fit().</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>filename</strong> (<em>str</em>) – file location (or a pd.DataFrame already loaded)</p></li>
-<li><p><strong>method</strong> (<em>str</em>) – ‘Add On’ or ‘Only’</p></li>
+<li><p><strong>method</strong> (<em>str</em>) – ‘add_on’ or ‘only’ - “add_on” keeps <cite>initial_template</cite> generated in init. “only” uses only this template.</p></li>
 <li><p><strong>enforce_model_list</strong> (<em>bool</em>) – if True, remove model types not in model_list</p></li>
 </ul>
 </dd>
@@ -294,7 +311,7 @@ Must be done before the AutoTS object is .fit().</p>
 <li><p><strong>prediction_interval</strong> (<em>float</em>) – interval of upper/lower forecasts.
 defaults to ‘self’ ie the interval specified in __init__()
 if prediction_interval is a list, then returns a dict of forecast objects.</p></li>
-<li><p><strong>future_regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>future_regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
 <li><p><strong>hierarchy</strong> – Not yet implemented</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
