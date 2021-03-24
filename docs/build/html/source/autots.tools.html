@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.tools package &#8212; AutoTS 0.3.0 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.3.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -330,19 +330,53 @@ recurring - all features that should commonly repeat without aging</p></li>
 <p>Reshape data.</p>
 <dl class="class">
 <dt id="autots.tools.shaping.NumericTransformer">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">NumericTransformer</code><span class="sig-paren">(</span><em class="sig-param">na_strings: list = ['', ' ', 'NULL', 'NA', 'NaN', 'na', 'nan'], categorical_impute_strategy: str = 'constant', verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.NumericTransformer" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">NumericTransformer</code><span class="sig-paren">(</span><em class="sig-param">na_strings: list = ['', ' '], categorical_fillna: str = 'ffill', verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.NumericTransformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>Test numeric conversion.</p>
+<p>General purpose numeric conversion for pandas dataframes.</p>
+<p>All categorical data and levels must be passed to .fit().
+If new categorical series or levels are present in .transform() it won’t work!</p>
+<p>Currently datetimes cannot be inverse_transformed back to datetime</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>na_strings</strong> (<em>list</em>) – list of strings to replace as pd.NA</p></li>
+<li><p><strong>categorical_fillna</strong> (<em>str</em>) – how to fill NaN for categorical variables (numeric NaN are unaltered)
+“ffill” - uses forward and backward filling to supply na values
+“indicator” or anything else currently results in all missing replaced with str “missing_value”</p></li>
+<li><p><strong>verbose</strong> (<em>int</em>) – greater than 0 to print some messages</p></li>
+</ul>
+</dd>
+</dl>
 <dl class="method">
 <dt id="autots.tools.shaping.NumericTransformer.fit">
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.NumericTransformer.fit" title="Permalink to this definition">¶</a></dt>
-<dd><p>Fit categorical to numeric.</p>
+<dd><p>Learn behavior of data to change.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.shaping.NumericTransformer.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.NumericTransformer.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns <em>Magical</em> DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="method">
 <dt id="autots.tools.shaping.NumericTransformer.inverse_transform">
-<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.NumericTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
-<dd><p>Convert numeric back to categorical.</p>
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">convert_dtypes: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.NumericTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert numeric back to categorical.
+:param df: df
+:type df: pandas.DataFrame
+:param convert_dtypes: whether to use pd.convert_dtypes after inverse
+:type convert_dtypes: bool</p>
 </dd></dl>
 
 <dl class="method">

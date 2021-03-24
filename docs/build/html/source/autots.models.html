@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.models package &#8212; AutoTS 0.3.0 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.3.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -227,7 +227,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="class">
 <dt id="autots.models.basics.MotifSimulation">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">MotifSimulation</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'MotifSimulation'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">phrase_len: str = '5'</em>, <em class="sig-param">comparison: str = 'magnitude_pct_change_sign'</em>, <em class="sig-param">shared: bool = False</em>, <em class="sig-param">distance_metric: str = 'l2'</em>, <em class="sig-param">max_motifs: float = 50</em>, <em class="sig-param">recency_weighting: float = 0.1</em>, <em class="sig-param">cutoff_threshold: float = 0.9</em>, <em class="sig-param">cutoff_minimum: int = 20</em>, <em class="sig-param">point_method: str = 'median'</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.MotifSimulation" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">MotifSimulation</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'MotifSimulation'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">phrase_len: str = '5'</em>, <em class="sig-param">comparison: str = 'magnitude_pct_change_sign'</em>, <em class="sig-param">shared: bool = False</em>, <em class="sig-param">distance_metric: str = 'l2'</em>, <em class="sig-param">max_motifs: float = 50</em>, <em class="sig-param">recency_weighting: float = 0.1</em>, <em class="sig-param">cutoff_threshold: float = 0.9</em>, <em class="sig-param">cutoff_minimum: int = 20</em>, <em class="sig-param">point_method: str = 'median'</em>, <em class="sig-param">n_jobs: int = -1</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.MotifSimulation" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>More dark magic created by the evil mastermind of this project.
 Basically a highly-customized KNN</p>
@@ -545,7 +545,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 Except it is really the only thing I use that runs mxnet, and it takes a while to train these guys…</p>
 <dl class="class">
 <dt id="autots.models.gluonts.GluonTS">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.gluonts.</code><code class="sig-name descname">GluonTS</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'GluonTS'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">gluon_model: str = 'DeepAR'</em>, <em class="sig-param">epochs: int = 20</em>, <em class="sig-param">learning_rate: float = 0.001</em>, <em class="sig-param">context_length=10</em>, <em class="sig-param">forecast_length: int = 14</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.gluonts.GluonTS" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.gluonts.</code><code class="sig-name descname">GluonTS</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'GluonTS'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">gluon_model: str = 'DeepAR'</em>, <em class="sig-param">epochs: int = 20</em>, <em class="sig-param">learning_rate: float = 0.001</em>, <em class="sig-param">context_length=10</em>, <em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.gluonts.GluonTS" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>GluonTS based on mxnet.</p>
 <dl class="field-list simple">
@@ -555,7 +555,7 @@ Except it is really the only thing I use that runs mxnet, and it takes a while t
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
 <li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
 <li><p><strong>regression_type</strong> (<em>str</em>) – Not yet implemented</p></li>
-<li><p><strong>gluon_model</strong> (<em>str</em>) – Model Structure to Use - [‘DeepAR’, ‘NPTS’, ‘DeepState’, ‘WaveNet’,’DeepFactor’, ‘Transformer’,’SFF’, ‘MQCNN’]</p></li>
+<li><p><strong>gluon_model</strong> (<em>str</em>) – Model Structure to Use - [‘DeepAR’, ‘NPTS’, ‘DeepState’, ‘WaveNet’,’DeepFactor’, ‘Transformer’,’SFF’, ‘MQCNN’, ‘DeepVAR’, ‘GPVAR’, ‘NBEATS’]</p></li>
 <li><p><strong>epochs</strong> (<em>int</em>) – Number of neural network training epochs. Higher generally results in better, then over fit.</p></li>
 <li><p><strong>learning_rate</strong> (<em>float</em>) – Neural net training parameter</p></li>
 <li><p><strong>context_length</strong> (<em>str</em>) – int window, ‘2ForecastLength’, or ‘nForecastLength’</p></li>

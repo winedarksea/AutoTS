@@ -72,7 +72,7 @@ model_list = [
 transformer_list = "all"  # ["SinTrend", "MinMaxScaler"]
 transformer_max_depth = 1
 model_list = 'fast'  # fast_parallel
-model_list = ['MotifSimulation', 'LastValueNaive']
+# model_list = ['MotifSimulation', 'LastValueNaive']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {
@@ -90,7 +90,7 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble="simple,horizontal-max",
+    ensemble=["simple","horizontal-max"],
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,

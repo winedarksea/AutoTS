@@ -133,7 +133,7 @@ class NumericTransformer(object):
 
     All categorical data and levels must be passed to .fit().
     If new categorical series or levels are present in .transform() it won't work!
-    
+
     Currently datetimes cannot be inverse_transformed back to datetime
 
     Args:
@@ -143,7 +143,6 @@ class NumericTransformer(object):
             "indicator" or anything else currently results in all missing replaced with str "missing_value"
         verbose (int): greater than 0 to print some messages
     """
-        
 
     def __init__(
         self,
@@ -160,7 +159,7 @@ class NumericTransformer(object):
     def _fit(self, df):
         """Fit categorical to numeric."""
         # test if any columns aren't numeric
-        if not isinstance(df, pd.DataFrame): # basically just Series inputs
+        if not isinstance(df, pd.DataFrame):  # basically just Series inputs
             df = pd.DataFrame(df)
 
         if df.shape[1] == df.select_dtypes(include=np.number).shape[1]:
@@ -177,17 +176,19 @@ class NumericTransformer(object):
 
             # record which columns are which dtypes
             self.column_order = df.columns
-            self.numeric_features = df.select_dtypes(include=[np.number]).columns.tolist()
+            self.numeric_features = df.select_dtypes(
+                include=[np.number]
+            ).columns.tolist()
             self.categorical_features = list(
                 set(df.columns.tolist()) - set(self.numeric_features)
             )
-    
+
             if len(self.categorical_features) > 0:
                 self.categorical_flag = True
             if self.categorical_flag:
                 from sklearn.preprocessing import OrdinalEncoder
-    
-                df_enc = (df[self.categorical_features])
+
+                df_enc = df[self.categorical_features]
                 if self.categorical_fillna == "ffill":
                     df_enc = df_enc.fillna(method='ffill').fillna(method='bfill')
                 df_enc = df_enc.fillna('missing_value')
@@ -255,7 +256,9 @@ class NumericTransformer(object):
         try:
             df = df.astype(float)
         except ValueError as e:
-            raise ValueError(f"NumericTransformer.transform() could not convert data to float. {str(e)}.")
+            raise ValueError(
+                f"NumericTransformer.transform() could not convert data to float. {str(e)}."
+            )
         return df
 
     def inverse_transform(self, df, convert_dtypes: bool = False):
@@ -265,7 +268,7 @@ class NumericTransformer(object):
             convert_dtypes (bool): whether to use pd.convert_dtypes after inverse
         """
         if self.categorical_flag:
-            if not isinstance(df, pd.DataFrame): # basically just Series inputs
+            if not isinstance(df, pd.DataFrame):  # basically just Series inputs
                 df = pd.DataFrame(df)
             df_enc = (
                 df[self.categorical_features].clip(

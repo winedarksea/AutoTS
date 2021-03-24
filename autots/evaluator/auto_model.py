@@ -10,8 +10,24 @@ from autots.tools.transform import RandomTransform, GeneralTransformer, shared_t
 from autots.models.ensemble import EnsembleForecast, generalize_horizontal
 from autots.models.model_list import no_params, recombination_approved, no_shared
 from itertools import zip_longest
-from autots.models.basics import MotifSimulation, LastValueNaive, AverageValueNaive, SeasonalNaive, ZeroesNaive
-from autots.models.statsmodels import GLS, GLM, ETS, ARIMA, UnobservedComponents, DynamicFactor, VAR, VECM, VARMAX
+from autots.models.basics import (
+    MotifSimulation,
+    LastValueNaive,
+    AverageValueNaive,
+    SeasonalNaive,
+    ZeroesNaive,
+)
+from autots.models.statsmodels import (
+    GLS,
+    GLM,
+    ETS,
+    ARIMA,
+    UnobservedComponents,
+    DynamicFactor,
+    VAR,
+    VECM,
+    VARMAX,
+)
 
 
 def create_model_id(
@@ -37,7 +53,7 @@ def ModelMonster(
     random_seed: int = 2020,
     verbose: int = 0,
     n_jobs: int = None,
-    **kwargs
+    **kwargs,
 ):
     """Directs strings and parameters to appropriate model objects.
 
@@ -87,7 +103,7 @@ def ModelMonster(
             random_seed=random_seed,
             verbose=verbose,
             n_jobs=n_jobs,
-            **parameters
+            **parameters,
         )
         return model
 
@@ -161,7 +177,7 @@ def ModelMonster(
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
-            **parameters
+            **parameters,
         )
         return model
 
@@ -183,7 +199,7 @@ def ModelMonster(
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
-            **parameters
+            **parameters,
         )
         return model
 

@@ -78,6 +78,9 @@ print(model)
 
 # point forecasts dataframe
 forecasts_df = prediction.forecast
+# upper and lower forecasts
+forecasts_up, forecasts_low = prediction.upper_forecast, prediction.lower_forecast
+
 # accuracy of all tried model results
 model_results = model.results()
 # and aggregated from cross validation
@@ -93,11 +96,11 @@ Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html
 * Use appropriate model lists, especially the predefined lists:
 	* `superfast` (simple naive models) and `fast` (more complex but still faster models)
 	* `fast_parallel` (a combination of `fast` and `parallel`) or `parallel`, given mave many CPU cores are available
-		* `n_jobs` usually gets pretty close with `="auto"` but adjust as necessary for the environment
+		* `n_jobs` usually gets pretty close with `='auto'` but adjust as necessary for the environment
 	* see a dict of predefined lists (some defined for internal use) with `from autots.models.model_list import model_lists`
 * Use the `subset` parameter when there are many similar series, `subset=100` will often generalize well for tens of thousands of similar series.
 	* if using `subset`, passing `weights` for series will weight subset selection towards higher priority series.
-	* if limited by RAM, it can be easily distribute by running multiple instances of AutoTS on different batches of data, having first imported a template pretrained as a starting point for all.
+	* if limited by RAM, it can be easily distributed by running multiple instances of AutoTS on different batches of data, having first imported a template pretrained as a starting point for all.
 * Set `model_interrupt=True` which passes over the current model when a `KeyboardInterrupt` ie `crtl+c` is pressed (although if the interrupt falls between generations it will stop the entire training).
 * Use the `result_file` method of `.fit()` which will save progress after each generation - helpful to save progress if a long training is being done. Use `import_results` to recover.
 * While Transformations are pretty fast, setting `transformer_max_depth` to a lower number (say, 2) will increase speed. Also utilize `transformer_list`.

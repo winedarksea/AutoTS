@@ -58,7 +58,7 @@ class GluonTS(ModelObject):
         learning_rate: float = 0.001,
         context_length=10,
         forecast_length: int = 14,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -88,7 +88,9 @@ class GluonTS(ModelObject):
             df (pandas.DataFrame): Datetime Indexed
         """
         if not _has_gluonts:
-            raise ImportError("GluonTS installation not found or installed version is incompatible with AutoTS.")
+            raise ImportError(
+                "GluonTS installation not found or installed version is incompatible with AutoTS."
+            )
 
         df = self.basic_profile(df)
 
@@ -296,9 +298,19 @@ class GluonTS(ModelObject):
         if self.gluon_model in self.multivariate_mods:
             result = list(gluon_results)[0]
             dt_index = result.index
-            forecast = pd.DataFrame(result.quantile(0.5), index=dt_index, columns=self.column_names)
-            upper_forecast =  pd.DataFrame(result.quantile(self.prediction_interval), index=dt_index, columns=self.column_names)
-            lower_forecast =  pd.DataFrame(result.quantile((1 - self.prediction_interval)), index=dt_index, columns=self.column_names)
+            forecast = pd.DataFrame(
+                result.quantile(0.5), index=dt_index, columns=self.column_names
+            )
+            upper_forecast = pd.DataFrame(
+                result.quantile(self.prediction_interval),
+                index=dt_index,
+                columns=self.column_names,
+            )
+            lower_forecast = pd.DataFrame(
+                result.quantile((1 - self.prediction_interval)),
+                index=dt_index,
+                columns=self.column_names,
+            )
         else:
             i = 0
             all_forecast = pd.DataFrame()
@@ -312,7 +324,9 @@ class GluonTS(ModelObject):
                             freq=self.frequency,
                         ),
                         "series_id": current_id,
-                        "LowerForecast": (result.quantile((1 - self.prediction_interval))),
+                        "LowerForecast": (
+                            result.quantile((1 - self.prediction_interval))
+                        ),
                         "MedianForecast": (result.quantile(0.5)),
                         "UpperForecast": (result.quantile(self.prediction_interval)),
                     }
@@ -372,19 +386,15 @@ class GluonTS(ModelObject):
                 'NBEATS',
             ],
             [0.1, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05],
-            k=1
+            k=1,
         )[0]
         # your base parameters
         context_length_choice = random.choices(
             [5, 10, 30, '1ForecastLength', '2ForecastLength'],
             [0.2, 0.3, 0.1, 0.1, 0.3],
         )[0]
-        epochs_choice = random.choices(
-            [20, 40, 80, 150], [0.58, 0.35, 0.05, 0.02]
-        )[0]
-        learning_rate_choice = random.choices(
-            [0.01, 0.001, 0.0001], [0.3, 0.6, 0.1]
-        )[0]
+        epochs_choice = random.choices([20, 40, 80, 150], [0.58, 0.35, 0.05, 0.02])[0]
+        learning_rate_choice = random.choices([0.01, 0.001, 0.0001], [0.3, 0.6, 0.1])[0]
         # NPTS doesn't use these, so just fill a constant
         if gluon_model_choice == 'NPTS':
             epochs_choice = 20
@@ -393,7 +403,7 @@ class GluonTS(ModelObject):
         elif gluon_model_choice == 'GPVAR':
             context_length_choice = random.choice([5, 7, 12])
             epochs_choice = random.choice([20, 40, 60])
-            
+
         return {
             'gluon_model': gluon_model_choice,
             'epochs': epochs_choice,

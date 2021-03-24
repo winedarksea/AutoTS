@@ -92,7 +92,6 @@ autots.models.tsfresh module
    :undoc-members:
    :show-inheritance:
 
-
 Module contents
 ---------------
 

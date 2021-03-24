@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Tutorial &#8212; AutoTS 0.3.0 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.3.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -345,6 +345,47 @@ The recommended way to provide regressors is as a pd.Series/pd.Dataframe with a 
 Additional regressors can be passed through as additional time series to forecast as part of df_long.
 Some models here can utilize the additional information they provide to help improve forecast quality.
 To prevent forecast accuracy for considering these additional series too heavily, input series weights that lower or remove their forecast accuracy from consideration.</p>
+<p><em>an example of regressors:</em></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">autots.datasets</span> <span class="kn">import</span> <span class="n">load_monthly</span>
+<span class="kn">from</span> <span class="nn">autots.evaluator.auto_ts</span> <span class="kn">import</span> <span class="n">fake_regressor</span>
+<span class="kn">from</span> <span class="nn">autots</span> <span class="kn">import</span> <span class="n">AutoTS</span>
+
+<span class="n">long</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">(</span><span class="n">long</span><span class="o">=</span><span class="n">long</span><span class="p">)</span>
+<span class="n">forecast_length</span> <span class="o">=</span> <span class="mi">14</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span>
+    <span class="n">forecast_length</span><span class="o">=</span><span class="n">forecast_length</span><span class="p">,</span>
+    <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
+    <span class="n">validation_method</span><span class="o">=</span><span class="s2">&quot;backwards&quot;</span><span class="p">,</span>
+    <span class="n">max_generations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">future_regressor_train2d</span><span class="p">,</span> <span class="n">future_regressor_forecast2d</span> <span class="o">=</span> <span class="n">fake_regressor</span><span class="p">(</span>
+    <span class="n">df</span><span class="p">,</span>
+    <span class="n">dimensions</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+    <span class="n">forecast_length</span><span class="o">=</span><span class="n">forecast_length</span><span class="p">,</span>
+    <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span> <span class="k">if</span> <span class="n">long</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span> <span class="k">if</span> <span class="n">long</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span> <span class="k">if</span> <span class="n">long</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">drop_most_recent</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">drop_most_recent</span><span class="p">,</span>
+    <span class="n">aggfunc</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">aggfunc</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">verbose</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span>
+    <span class="n">df</span><span class="p">,</span>
+    <span class="n">future_regressor</span><span class="o">=</span><span class="n">future_regressor_train2d</span><span class="p">,</span>
+    <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span> <span class="k">if</span> <span class="n">long</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span> <span class="k">if</span> <span class="n">long</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span> <span class="k">if</span> <span class="n">long</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">future_regressor</span><span class="o">=</span><span class="n">future_regressor_forecast2d</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="o">.</span><span class="n">forecast</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Was a model choosen that used the regressor? </span><span class="si">{</span><span class="n">model</span><span class="o">.</span><span class="n">used_regressor_check</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
 </div>
 <div class="section" id="categorical-data">
 <h3>Categorical Data<a class="headerlink" href="#categorical-data" title="Permalink to this headline">¶</a></h3>
@@ -562,7 +603,7 @@ Some models will support a more limited range of frequencies.</p>
 <td><p>sklearn.metrics.pairwise</p></td>
 <td></td>
 <td><p>True</p></td>
-<td></td>
+<td><p>joblib</p></td>
 <td></td>
 <td><p>True*</p></td>
 <td><p>True</p></td>

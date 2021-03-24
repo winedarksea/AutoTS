@@ -461,7 +461,9 @@ class AutoTS(object):
             if not isinstance(future_regressor.index, pd.DatetimeIndex):
                 future_regressor.index = df_subset.index
             # handle any non-numeric data, crudely
-            future_regressor = NumericTransformer(verbose=self.verbose).fit_transform(future_regressor)
+            future_regressor = NumericTransformer(verbose=self.verbose).fit_transform(
+                future_regressor
+            )
             self.future_regressor_train = future_regressor
             future_regressor_train = future_regressor.reindex(index=df_train.index)
             future_regressor_test = future_regressor.reindex(index=df_test.index)
@@ -1076,7 +1078,9 @@ or otherwise increase models available."""
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
             # handle any non-numeric data, crudely
-            future_regressor = NumericTransformer(verbose=self.verbose).fit_transform(future_regressor)
+            future_regressor = NumericTransformer(verbose=self.verbose).fit_transform(
+                future_regressor
+            )
             # make sure training regressor fits training data index
             self.future_regressor_train = self.future_regressor_train.reindex(
                 index=self.df_wide_numeric.index
@@ -1538,7 +1542,9 @@ def fake_regressor(
 
     if date_col is None and value_col is None:
         df_wide = pd.DataFrame(df)
-        assert type(df_wide.index) is pd.DatetimeIndex, "df index is not pd.DatetimeIndex"
+        assert (
+            type(df_wide.index) is pd.DatetimeIndex
+        ), "df index is not pd.DatetimeIndex"
     else:
         df_wide = long_to_wide(
             df,
