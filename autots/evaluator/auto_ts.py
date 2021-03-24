@@ -1144,6 +1144,7 @@ or otherwise increase models available."""
             df_forecast.upper_forecast = trans.inverse_transform(
                 df_forecast.upper_forecast
             )
+            sys.stdout.flush()
             if just_point_forecast:
                 return df_forecast.forecast
             else:

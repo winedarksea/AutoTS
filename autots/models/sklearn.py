@@ -165,7 +165,7 @@ def retrieve_regressor(
             from sklearn.experimental import enable_hist_gradient_boosting  # noqa
         except Exception:
             pass
-        from sklearn.neighbors import HistGradientBoostingRegressor
+        from sklearn.ensemble import HistGradientBoostingRegressor
 
         regr = MultiOutputRegressor(
             HistGradientBoostingRegressor(
