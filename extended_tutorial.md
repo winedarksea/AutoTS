@@ -337,11 +337,12 @@ model = model.fit(
     value_col='value' if long else None,
     id_col='series_id' if long else None,
 )
-print(model)
-print(f"Was a model choosen that used the regressor? {model.used_regressor_check}")
 
 prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=0)
 forecasts_df = prediction.forecast
+
+print(model)
+print(f"Was a model choosen that used the regressor? {model.used_regressor_check}")
 ```
 
 ### Categorical Data

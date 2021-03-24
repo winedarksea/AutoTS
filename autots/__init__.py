@@ -9,6 +9,7 @@ from autots.datasets import (
     load_monthly,
     load_yearly,
     load_weekly,
+    load_weekdays,
 )
 
 from autots.evaluator.auto_ts import AutoTS
@@ -25,6 +26,7 @@ __all__ = [
     'load_yearly',
     'load_hourly',
     'load_weekly',
+    'load_weekdays',
     'AutoTS',
     'TransformTS',
     'GeneralTransformer',

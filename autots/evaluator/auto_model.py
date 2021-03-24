@@ -1486,7 +1486,10 @@ def generate_score(
         )
     except KeyError:
         raise KeyError(
-            "Inconceivable! Evaluation Metrics are missing and all models have failed, by an error in TemplateWizard or metrics. A new template may help, or an adjusted model_list."
+            """Evaluation Metrics are missing and all models have failed, by an error in template or metrics. 
+            Usually this means you are missing required packages for the models like fbprophet or gluonts, 
+            or that the models in model_list are inappropriate for your data. 
+            A new starting template may also help."""
         )
     return (
         (smape_score * smape_weighting)

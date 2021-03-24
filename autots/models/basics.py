@@ -601,8 +601,8 @@ class MotifSimulation(ModelObject):
             except Exception:
                 parallel = False
 
-        import timeit
-        start_time_1st = timeit.default_timer()
+        # import timeit
+        # start_time_1st = timeit.default_timer()
         # transform the data into different views (contour = percent_change)
         original_df = None
         if 'pct_change' in comparison:
@@ -649,8 +649,8 @@ class MotifSimulation(ModelObject):
 
         if 'pct_change_sign' in comparison:
             motif_vecs = motif_vecs.where(motif_vecs >= 0, -1).where(motif_vecs <= 0, 1)
-        elapsed_1st = timeit.default_timer() - start_time_1st
-        start_time_2nd = timeit.default_timer()
+        # elapsed_1st = timeit.default_timer() - start_time_1st
+        # start_time_2nd = timeit.default_timer()
         # compare the motif vectors to the most recent vector of the series
         from sklearn.metrics.pairwise import pairwise_distances
 
@@ -730,8 +730,8 @@ class MotifSimulation(ModelObject):
             )
             comparative = comparative.add(rec_weights, fill_value=0)
 
-        elapsed_2nd = timeit.default_timer() - start_time_2nd
-        start_time_3rd = timeit.default_timer()
+        # elapsed_2nd = timeit.default_timer() - start_time_2nd
+        # start_time_3rd = timeit.default_timer()
 
         """
         upper_forecasts = pd.DataFrame()
@@ -946,8 +946,8 @@ class MotifSimulation(ModelObject):
         self.lower_forecasts = lower_forecasts
         self.upper_forecasts = upper_forecasts
 
-        elapsed_3rd = timeit.default_timer() - start_time_3rd
-        print(f"1st {elapsed_1st}\n2nd {elapsed_2nd}\n3rd {elapsed_3rd}")
+        # elapsed_3rd = timeit.default_timer() - start_time_3rd
+        # print(f"1st {elapsed_1st}\n2nd {elapsed_2nd}\n3rd {elapsed_3rd}")
         """
         In fit phase, only select motifs.
             table: start index, weight, column it applies to, and count of rows that follow motif

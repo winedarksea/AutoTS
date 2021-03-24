@@ -72,10 +72,10 @@ model = model.fit(
     id_col='series_id' if long else None,
 )
 
+prediction = model.predict()
 # Print the details of the best model
 print(model)
 
-prediction = model.predict()
 # point forecasts dataframe
 forecasts_df = prediction.forecast
 # accuracy of all tried model results

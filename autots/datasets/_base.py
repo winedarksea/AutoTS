@@ -172,3 +172,25 @@ def load_weekly(long: bool = True):
             aggfunc='first',
         )
         return df_wide
+
+def load_weekdays(long: bool = False, categorical: bool = True, periods: int = 180):
+    """Test edge cases by creating a Series with values as day of week.
+    
+    Args:
+        long (bool): 
+            if True, return a df with columns "value" and "datetime"
+            if False, return a Series with dt index
+        categorical (bool): if True, return str/object, else return int
+        periods (int): number of periods, ie length of data to generate
+    """
+    idx = pd.date_range(end=pd.Timestamp.today(), periods=periods, freq="D")
+    df_wide = pd.Series(idx.weekday, index=idx, name = "value")
+    df_wide.index.name = "datetime"
+    if categorical:
+        df_wide = df_wide.replace({0: "Mon", 1: "Tues", 2: "Wed",
+                                   3: "Thor's", 4: "Fri", 5: "Sat",
+                                   6: "Sun", 7: "Mon"})
+    if long:
+        return df_wide.reset_index()
+    else:
+        return df_wide
