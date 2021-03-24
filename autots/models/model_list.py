@@ -136,6 +136,7 @@ no_shared = [
     # 'MotifSimulation',
     # 'DatepartRegression',
 ]
+no_shared_fast =  list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {
     "all": all_models,
     "default": default,
@@ -148,6 +149,7 @@ model_lists = {
     "no_params": no_params,
     "recombination_approved": recombination_approved,
     "no_shared": no_shared,
+    "no_shared_fast": no_shared_fast,
     "experimental": experimental,
     "slow": slow,
     "gpu": gpu,

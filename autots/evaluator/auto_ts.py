@@ -268,9 +268,6 @@ class AutoTS(object):
         ]
         self.initial_results = TemplateEvalObject()
 
-        if verbose >= 0 and ensemble is not None and "GluonTS" in self.model_list:
-            print("WARNING: GluonTS may cause errors in ensembling")
-
         if verbose > 2:
             print('"Hello. Would you like to destroy some evil today?" - Sanderson')
 
