@@ -95,7 +95,7 @@ Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html
 ## Tips for Speed and Large Data:
 * Use appropriate model lists, especially the predefined lists:
 	* `superfast` (simple naive models) and `fast` (more complex but still faster models)
-	* `fast_parallel` (a combination of `fast` and `parallel`) or `parallel`, given mave many CPU cores are available
+	* `fast_parallel` (a combination of `fast` and `parallel`) or `parallel`, given many CPU cores are available
 		* `n_jobs` usually gets pretty close with `='auto'` but adjust as necessary for the environment
 	* see a dict of predefined lists (some defined for internal use) with `from autots.models.model_list import model_lists`
 * Use the `subset` parameter when there are many similar series, `subset=100` will often generalize well for tens of thousands of similar series.
