@@ -14,23 +14,22 @@ else:
     _has_fred = True
 
 
-def get_fred_data(fredkey: str, SeriesNameDict: dict = {'SeriesID': 'SeriesName'}):
-    """
-    Imports Data from Federal Reserve
+def get_fred_data(fredkey: str, SeriesNameDict: dict = None, **kwargs):
+    """Imports Data from Federal Reserve.
+    For simplest results, make sure requested series are all of the same frequency.
 
     args:
-        fredkey - an API key from FRED
-
-        SeriesNameDict, pairs of FRED Series IDs and Series Names
+        fredkey (str): an API key from FRED
+        SeriesNameDict (dict): pairs of FRED Series IDs and Series Names like: {'SeriesID': 'SeriesName'} or a list of FRED IDs.
             Series id must match Fred IDs, but name can be anything
-            if default is use, several default samples are returned
+            if None, several default series are returned
     """
     if not _has_fred:
         raise ImportError("Package fredapi is required")
 
     fred = Fred(api_key=fredkey)
 
-    if SeriesNameDict == {'SeriesID': 'SeriesName'}:
+    if SeriesNameDict is None:
         SeriesNameDict = {
             'T10Y2Y': '10 Year Treasury Constant Maturity Minus 2 Year Treasury Constant Maturity',
             'DGS10': '10 Year Treasury Constant Maturity Rate',
@@ -44,7 +43,10 @@ def get_fred_data(fredkey: str, SeriesNameDict: dict = {'SeriesID': 'SeriesName'
             'USEPUINDXD': 'Economic Policy Uncertainty Index for United States',  # also very irregular
         }
 
-    series_desired = list(SeriesNameDict.keys())
+    if isinstance(SeriesNameDict, dict):
+        series_desired = list(SeriesNameDict.keys())
+    else:
+        series_desired = list(SeriesNameDict)
 
     fred_timeseries = pd.DataFrame(
         columns=['date', 'value', 'series_id', 'series_name']
