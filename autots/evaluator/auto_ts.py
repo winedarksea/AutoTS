@@ -461,7 +461,8 @@ class AutoTS(object):
             if not isinstance(future_regressor.index, pd.DatetimeIndex):
                 future_regressor.index = df_subset.index
             # handle any non-numeric data, crudely
-            future_regressor = NumericTransformer(verbose=self.verbose).fit_transform(
+            self.regr_num_trans = NumericTransformer(verbose=self.verbose)
+            future_regressor = self.regr_num_trans.fit_transform(
                 future_regressor
             )
             self.future_regressor_train = future_regressor
@@ -1078,7 +1079,7 @@ or otherwise increase models available."""
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
             # handle any non-numeric data, crudely
-            future_regressor = NumericTransformer(verbose=self.verbose).fit_transform(
+            future_regressor = self.regr_num_trans.transform(
                 future_regressor
             )
             # make sure training regressor fits training data index
