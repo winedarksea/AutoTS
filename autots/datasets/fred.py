@@ -14,7 +14,7 @@ else:
     _has_fred = True
 
 
-def get_fred_data(fredkey: str, SeriesNameDict: dict = None, **kwargs):
+def get_fred_data(fredkey: str, SeriesNameDict: dict = None, long=True, **kwargs):
     """Imports Data from Federal Reserve.
     For simplest results, make sure requested series are all of the same frequency.
 
@@ -23,6 +23,7 @@ def get_fred_data(fredkey: str, SeriesNameDict: dict = None, **kwargs):
         SeriesNameDict (dict): pairs of FRED Series IDs and Series Names like: {'SeriesID': 'SeriesName'} or a list of FRED IDs.
             Series id must match Fred IDs, but name can be anything
             if None, several default series are returned
+        long (bool): if True, return long style data, else return wide style data with dt index
     """
     if not _has_fred:
         raise ImportError("Package fredapi is required")
@@ -48,9 +49,12 @@ def get_fred_data(fredkey: str, SeriesNameDict: dict = None, **kwargs):
     else:
         series_desired = list(SeriesNameDict)
 
-    fred_timeseries = pd.DataFrame(
-        columns=['date', 'value', 'series_id', 'series_name']
-    )
+    if long:
+        fred_timeseries = pd.DataFrame(
+            columns=['date', 'value', 'series_id', 'series_name']
+        )
+    else:
+        fred_timeseries = pd.DataFrame()
 
     for series in series_desired:
         data = fred.get_series(series)
@@ -58,17 +62,22 @@ def get_fred_data(fredkey: str, SeriesNameDict: dict = None, **kwargs):
             series_name = SeriesNameDict[series]
         except Exception:
             series_name = series
-        data_df = pd.DataFrame(
-            {
-                'date': data.index,
-                'value': data,
-                'series_id': series,
-                'series_name': series_name,
-            }
-        )
-        data_df.reset_index(drop=True, inplace=True)
-        fred_timeseries = pd.concat(
-            [fred_timeseries, data_df], axis=0, ignore_index=True
-        )
+
+        if long:
+            data_df = pd.DataFrame(
+                {
+                    'date': data.index,
+                    'value': data,
+                    'series_id': series,
+                    'series_name': series_name,
+                }
+            )
+            data_df.reset_index(drop=True, inplace=True)
+            fred_timeseries = pd.concat(
+                [fred_timeseries, data_df], axis=0, ignore_index=True
+            )
+        else:
+            data.name = series_name
+            fred_timeseries = fred_timeseries.merge(data, how="outer", left_index=True, right_index=True)
 
     return fred_timeseries
