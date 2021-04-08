@@ -1,7 +1,15 @@
 # -*- coding: utf-8 -*-
 """
 Uses a number of live public data sources to construct an example production case.
+First ~100 lines are just pulling in data.
+
+This is a highly opinionated approach.
+Evolve = True allows the timeseries to automatically adapt to changes.
+There is a slight risk of it getting caught in suboptimal position however.
+It should probably be coupled with some basic data sanity checks.
+
 """
+import os
 import datetime
 import pandas as pd
 
@@ -15,7 +23,7 @@ save_location = None  # directory to save templates to. Defaults to working dir
 
 # set max generations based on settings, increase for slower but greater chance of highest accuracy
 if initial_training:
-    gens = 50
+    gens = 100
 elif evolve:
     gens = 10
 else:
@@ -49,7 +57,7 @@ try:
     msft_hist.index = msft_hist.index.tz_localize(None)
     dataset_lists.append(msft_hist)
 except ModuleNotFoundError:
-    print("pip install yfinance")
+    print("You need to: pip install yfinance")
 except Exception as e:
     print(f"yfinance data failed: {repr(e)}")
 
@@ -64,7 +72,7 @@ try:
     gtrends.index = gtrends.index.tz_localize(None)
     dataset_lists.append(gtrends)
 except ModuleNotFoundError:
-    print("pip install pytrends")
+    print("You need to: pip install pytrends")
 except Exception as e:
     print(f"pytrends data failed: {repr(e)}")
 
@@ -105,10 +113,20 @@ else:
 
 start_time = datetime.datetime.now()
 
-df["datetime"] = pd.to_datetime(df["primary_cancer_index_yearmo"], format="%Y%m")
+# df["datetime"] = pd.to_datetime(df["your_date_column"], infer_datetime_format=True)
 
 
 from autots import AutoTS
+
+metric_weighting = {
+    'smape_weighting': 5,
+    'mae_weighting': 0,
+    'rmse_weighting': 1,
+    'containment_weighting': 0,
+    'runtime_weighting': 0,
+    'spl_weighting': 1,
+    'contour_weighting': 0,
+}
 
 model = AutoTS(
     forecast_length=forecast_length,
@@ -117,13 +135,21 @@ model = AutoTS(
     ensemble="simple,distance,horizontal-max",
     model_list="fast_parallel",
     transformer_list="all",
+    transformer_max_depth=8,
     max_generations=gens,
+    metric_weighting=metric_weighting,
     num_validations=2,
     validation_method="backwards",
+    constraint=2,
     # drop_most_recent=2,  # if newest data is incomplete
     n_jobs="auto",
 )
+
 template_filename = "autots_forecast_template.csv"
+if save_location is not None:
+    template_filename = os.path.join(save_location, template_filename)
+    
+
 if not initial_training:
     model.import_template(template_filename, method = "only")
 model = model.fit(
@@ -145,3 +171,8 @@ if initial_training or evolve:
     model.export_template(
         template_filename, models="best", n=25, max_per_model_class=5
     )
+    if archive_templates:
+        arc_file = f"{template_filename.split('.csv')[0]}_{start_time.strftime('%Y%m%d')}.csv"
+        model.export_template(
+            arc_file, models="best", n=1, max_per_model_class=5
+        )
