@@ -13,7 +13,7 @@ evolve = True  # allow time series to progressively evolve on each run, if False
 archive_templates = False  # save a copy of the model template with a timestamp
 save_location = None  # directory to save templates to. Defaults to working dir
 
-# set max generations based on settings
+# set max generations based on settings, increase for slower but greater chance of highest accuracy
 if initial_training:
     gens = 50
 elif evolve:
@@ -124,7 +124,8 @@ model = AutoTS(
     n_jobs="auto",
 )
 template_filename = "autots_forecast_template.csv"
-model.import_template(template_filename)
+if not initial_training:
+    model.import_template(template_filename, method = "only")
 model = model.fit(
     df
 )
@@ -140,6 +141,7 @@ forecasts_df = prediction.forecast
 # accuracy of all tried model results
 model_results = model.results()
 
-model.export_template(
-    template_filename, models="best", n=25, max_per_model_class=5
-)
+if initial_training or evolve:
+    model.export_template(
+        template_filename, models="best", n=25, max_per_model_class=5
+    )
