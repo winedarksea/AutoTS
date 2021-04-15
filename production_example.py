@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
+Recommended installs: pip install pytrends fredapi yfinance
 Uses a number of live public data sources to construct an example production case.
-First ~100 lines are just pulling in data.
+Some ~100 lines are just pulling in data.
 
 This is a highly opinionated approach.
 Evolve = True allows the timeseries to automatically adapt to changes.
 There is a slight risk of it getting caught in suboptimal position however.
 It should probably be coupled with some basic data sanity checks.
-
 """
 import os
 import datetime
@@ -15,19 +15,36 @@ import pandas as pd
 
 
 forecast_length = 21  # number of days to forecast ahead
-fred_key = None  # https://fred.stlouisfed.org/docs/api/api_key.html
-initial_training = True  # set this to True on first run, or on reset
-evolve = True  # allow time series to progressively evolve on each run, if False, used fixed template
-archive_templates = False  # save a copy of the model template with a timestamp
-save_location = None  # directory to save templates to. Defaults to working dir
+fred_key = None # https://fred.stlouisfed.org/docs/api/api_key.html
+initial_training = "auto"  # set this to True on first run, or on reset, 'auto' looks for existing template, if found, sets to False.
+evolve = True  # allow time series to progressively evolve on each run, if False, uses fixed template
+archive_templates = True  # save a copy of the model template used with a timestamp
+save_location = None  # "C:/Users/Colin/Downloads"  # directory to save templates to. Defaults to working dir
+template_filename = "autots_forecast_template.csv"
+
+
+if save_location is not None:
+    template_filename = os.path.join(save_location, template_filename)
+
+if initial_training == "auto":
+    initial_training = os.path.exists(template_filename)
+    if initial_training:
+        print("Existing template found.")
 
 # set max generations based on settings, increase for slower but greater chance of highest accuracy
 if initial_training:
     gens = 100
+    models_to_validate = 0.2
+    # if you don't care much about upper/lower forecasts, try ensemble="horizontal-max" instead of "probabilistic-max"
+    ensemble=["simple","distance","probabilistic-max"]
 elif evolve:
     gens = 10
+    models_to_validate = 0.3
+    ensemble=["probabilistic-max"]  # you can include "simple" and "distance" but they can nest, and may get huge as time goes on...
 else:
     gens = 0
+    models_to_validate = 0.99
+    ensemble=["probabilistic-max"]
 
 dataset_lists = []
 
@@ -36,7 +53,7 @@ try:
         from fredapi import Fred  # noqa
         from autots.datasets.fred import get_fred_data
 
-        fred_series = ["DGS10", "SP500", "T5YIE", "DCOILWTICO", "DEXUSEU"]
+        fred_series = ["DGS10", "T5YIE", "SP500", "DCOILWTICO", "DEXUSEU"]
         fred_df = get_fred_data(fred_key, fred_series, long=False)
         fred_df.index = fred_df.index.tz_localize(None)
         dataset_lists.append(fred_df)
@@ -70,6 +87,7 @@ try:
     pytrends.build_payload(kw_list, timeframe="all")
     gtrends = pytrends.interest_over_time()
     gtrends.index = gtrends.index.tz_localize(None)
+    gtrends.drop(columns="isPartial", inplace=True, errors="ignore")
     dataset_lists.append(gtrends)
 except ModuleNotFoundError:
     print("You need to: pip install pytrends")
@@ -107,10 +125,11 @@ else:
     from functools import reduce
 
     df = reduce(
-        lambda x, y: pd.merge(x, y, left_index=True, right_index=True), dataset_lists
+        lambda x, y: pd.merge(x, y, left_index=True, right_index=True, how="outer"), dataset_lists
     )
+print(f"{df.shape[1]} series downloaded.")
 
-
+df = df[df.index.year > 1999]
 start_time = datetime.datetime.now()
 
 # df["datetime"] = pd.to_datetime(df["your_date_column"], infer_datetime_format=True)
@@ -124,7 +143,7 @@ metric_weighting = {
     'rmse_weighting': 1,
     'containment_weighting': 0,
     'runtime_weighting': 0,
-    'spl_weighting': 1,
+    'spl_weighting': 2,
     'contour_weighting': 0,
 }
 
@@ -132,22 +151,20 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency="infer",
     prediction_interval=0.8,
-    ensemble="simple,distance,horizontal-max",
-    model_list="fast_parallel",
+    ensemble=ensemble,
+    model_list="fast",
     transformer_list="all",
     transformer_max_depth=8,
     max_generations=gens,
     metric_weighting=metric_weighting,
-    num_validations=2,
-    validation_method="backwards",
+    num_validations=3,
+    models_to_validate=models_to_validate,
+    model_interrupt=True,
+    validation_method="backwards",  # "seasonal 364" would be a good choice too
     constraint=2,
-    # drop_most_recent=2,  # if newest data is incomplete
+    # drop_most_recent=2,  # if newest data is incomplete, also remember to increase forecast_length
     n_jobs="auto",
 )
-
-template_filename = "autots_forecast_template.csv"
-if save_location is not None:
-    template_filename = os.path.join(save_location, template_filename)
     
 
 if not initial_training:
@@ -163,6 +180,8 @@ print(model)
 
 # point forecasts dataframe
 forecasts_df = prediction.forecast
+forecasts_upper_df = prediction.upper_forecast
+forecasts_lower_df = prediction.lower_forecast
 
 # accuracy of all tried model results
 model_results = model.results()
@@ -174,5 +193,14 @@ if initial_training or evolve:
     if archive_templates:
         arc_file = f"{template_filename.split('.csv')[0]}_{start_time.strftime('%Y%m%d')}.csv"
         model.export_template(
-            arc_file, models="best", n=1, max_per_model_class=5
+            arc_file, models="best", n=1
         )
+
+col = df.columns[1]
+plot_df = pd.DataFrame({
+    col : df.tail(forecast_length * 4).fillna(method="ffill")[col],
+    'up_forecast': forecasts_upper_df[col],
+    'low_forecast': forecasts_lower_df[col],
+    'forecast': forecasts_df[col],
+    })
+plot_df.plot()
