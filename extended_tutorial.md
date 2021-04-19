@@ -1,3 +1,15 @@
+## Table of Contents
+[A Simple Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#a-simple-example)
+[Validation and Cross Validation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#validation-and-cross-validation)
+[Another Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#another-example)
+[Model Lists](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#model-lists)
+[Deployment](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#deployment-and-template-import-export)
+[Metrics](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#metrics)
+[Installation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning)
+[Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
+[Adding Regressors](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information)
+[Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#models)
+
 ## Extended Tutorial
 There are a number of ways to get a more accurate time series model. AutoTS takes care of a few of these:
 1. Pretransforming the data optimally for each model
@@ -83,7 +95,7 @@ While NaN values are handled, model selection will suffer if any series have lar
 Most commonly, this may occur where some series have a very long history, while others in the same dataset only have very recent data. 
 In these cases, avoid the `even` cross validation and use one of the other validation methods. 
 
-### A more detailed example:
+### Another Example:
 Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting. 
 Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. These additional series carry information to models such as `RollingRegression`, `VARMAX`, and `VECM`. 
 
@@ -144,10 +156,13 @@ A table of all available models is available further below.
 On large multivariate series, `TSFreshRegressor`, `DynamicFactor` and `VARMAX` can be impractically slow.
 
 ## Deployment and Template Import/Export
+Take a look at the [production_example.py](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
+
 Many models can be reverse engineered with (relative) simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package. 
 There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a `.csv` or `.json` file, then on next run only those models will be tried. 
 This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve. 
 One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.
+
 ```python
 # after fitting an AutoTS model
 example_filename = "example_export.csv"  # .csv/.json
