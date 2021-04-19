@@ -1201,6 +1201,7 @@ or otherwise increase models available."""
             export_template = self.initial_results.model_results[self.template_cols]
             export_template = export_template.drop_duplicates()
         elif models == 'best':
+            # skip to the answer if just n==1
             if n == 1 and not include_results:
                 export_template = self.best_model
             else:

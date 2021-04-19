@@ -27,7 +27,7 @@ if save_location is not None:
     template_filename = os.path.join(save_location, template_filename)
 
 if initial_training == "auto":
-    initial_training = os.path.exists(template_filename)
+    initial_training = not os.path.exists(template_filename)
     if initial_training:
         print("Existing template found.")
 
@@ -45,6 +45,11 @@ else:
     gens = 0
     models_to_validate = 0.99
     ensemble=["probabilistic-max"]
+# only save the very best model if not evolve
+if evolve:
+    n_export = 25
+else:
+    n_export = 1  # wouldn't be a bad idea to do > 1, allowing some future adaptability
 
 dataset_lists = []
 
@@ -188,7 +193,7 @@ model_results = model.results()
 
 if initial_training or evolve:
     model.export_template(
-        template_filename, models="best", n=25, max_per_model_class=5
+        template_filename, models="best", n=n_export, max_per_model_class=5
     )
     if archive_templates:
         arc_file = f"{template_filename.split('.csv')[0]}_{start_time.strftime('%Y%m%d')}.csv"
