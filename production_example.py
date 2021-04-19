@@ -18,7 +18,7 @@ forecast_length = 21  # number of days to forecast ahead
 fred_key = None # https://fred.stlouisfed.org/docs/api/api_key.html
 initial_training = "auto"  # set this to True on first run, or on reset, 'auto' looks for existing template, if found, sets to False.
 evolve = True  # allow time series to progressively evolve on each run, if False, uses fixed template
-archive_templates = True  # save a copy of the model template used with a timestamp
+archive_templates = False  # save a copy of the model template used with a timestamp
 save_location = None  # "C:/Users/Colin/Downloads"  # directory to save templates to. Defaults to working dir
 template_filename = "autots_forecast_template.csv"
 
@@ -45,12 +45,16 @@ else:
     gens = 0
     models_to_validate = 0.99
     ensemble=["probabilistic-max"]
+
 # only save the very best model if not evolve
 if evolve:
     n_export = 25
 else:
     n_export = 1  # wouldn't be a bad idea to do > 1, allowing some future adaptability
 
+"""
+Begin Dataset retrieval section
+"""
 dataset_lists = []
 
 try:
@@ -103,7 +107,7 @@ try:
     current_date = datetime.datetime.utcnow()
     str_end_time = current_date.strftime("%Y-%m-%d")
     start_date = (current_date - datetime.timedelta(days=180)).strftime("%Y-%m-%d")
-    # is limited to 1000 rows of data
+    # is limited to ~1000 rows of data, ie individual earthquakes
     eq = pd.read_csv(
         f"https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime={start_date}&endtime={str_end_time}&minmagnitude=5"
     )
