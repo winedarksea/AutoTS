@@ -21,10 +21,13 @@ evolve = True  # allow time series to progressively evolve on each run, if False
 archive_templates = False  # save a copy of the model template used with a timestamp
 save_location = None  # "C:/Users/Colin/Downloads"  # directory to save templates to. Defaults to working dir
 template_filename = "autots_forecast_template.csv"
+forecast_csv_name = "autots_forecast.csv"  # or None, point forecast only is written
 
 
 if save_location is not None:
     template_filename = os.path.join(save_location, template_filename)
+    if forecast_csv_name is not None:
+        forecast_csv_name = os.path.join(save_location, forecast_csv_name)
 
 if initial_training == "auto":
     initial_training = not os.path.exists(template_filename)
@@ -189,6 +192,9 @@ print(model)
 
 # point forecasts dataframe
 forecasts_df = prediction.forecast
+if forecast_csv_name is not None:
+    forecasts_df.to_csv(forecast_csv_name)
+
 forecasts_upper_df = prediction.upper_forecast
 forecasts_lower_df = prediction.lower_forecast
 

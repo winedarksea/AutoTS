@@ -236,7 +236,9 @@ If you have an Nvidia GPU and plan to use the GPU-accelerated models, download N
 
 You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_config()`. Generally recommended that you double-check this after installing new packages to make sure you haven't broken the LINPACK connection. 
 
-On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster/more stable compilations.  
+On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster/more stable compilations. 
+Linux will also require `sudo apt install build-essential` for some packages.
+
 ```shell
 conda create -n timeseries python=3.8
 conda activate timeseries
@@ -264,13 +266,12 @@ conda create -n intelpy -c intel python=3.7 intelpython3_full
 activate intelpy
 
 # install additional packages as desired
-conda install -c intel statsmodels
-conda install -c intel lightgbm
-conda install -c intel tensorflow
+conda install -c intel statsmodels lightgbm tensorflow
 conda install -c intel tensorflow-probability
-pip install mxnet
-pip install gluonts
-pip install fbprophet
+python -m pip install mxnet
+python -m pip install gluonts
+# conda install -c anaconda tornado pystan  # may be necessary for fbprophet
+python -m pip install fbprophet
 
 # also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html
 # pip install intel-tensorflow-avx512  and conda install tensorflow-mkl
@@ -353,16 +354,6 @@ thus properly capturing the relative sequence (ie 'low'=1, 'medium'=2, 'high'=3)
 ### Custom and Unusual Frequencies
 Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects 
 Some models will support a more limited range of frequencies. 
-
-#### Tested Frequencies
-
-| Frequency      | Offset Str   | Notes                                        |
-| :------------- | :----------: | --------------------------------------------:|
-|  Hourly        |     'H'      |                                              |
-|  Daily         |     'D'      |                                              |
-|  Monthly 01    |     'MS'     |  First day of month                          |
-|  Annual        |   'A'/'AS'   | 											   |
-|  Weekly        |     'W'      | 											   |
 
 ## Models
 
