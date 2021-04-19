@@ -1,14 +1,14 @@
 ## Table of Contents
-[A Simple Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#a-simple-example)
-[Validation and Cross Validation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#validation-and-cross-validation)
-[Another Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#another-example)
-[Model Lists](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#model-lists)
-[Deployment](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#deployment-and-template-import-export)
-[Metrics](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#metrics)
-[Installation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning)
-[Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
-[Adding Regressors](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information)
-[Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#models)
+* [A Simple Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#a-simple-example)
+* [Validation and Cross Validation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#validation-and-cross-validation)
+* [Another Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#another-example)
+* [Model Lists](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#model-lists)
+* [Deployment](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#deployment-and-template-import-export)
+* [Metrics](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#metrics)
+* [Installation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning)
+* [Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
+* [Adding Regressors](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information)
+* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#models)
 
 ## Extended Tutorial
 There are a number of ways to get a more accurate time series model. AutoTS takes care of a few of these:

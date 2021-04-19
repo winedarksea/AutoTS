@@ -9,10 +9,12 @@ AutoML for forecasting with open-source time series implementations.
 For other time series needs, check out the list [here](https://github.com/MaxBenChrist/awesome_time_series_in_python).
 
 ## Table of Contents
-[Features](https://github.com/winedarksea/AutoTS#features)
-[Installation](https://github.com/winedarksea/AutoTS#installation)
-[Basic Use](https://github.com/winedarksea/AutoTS#basic-use)
-[Tips for Speed and Large Data](https://github.com/winedarksea/AutoTS#tips-for-speed-and-large-data)
+* [Features](https://github.com/winedarksea/AutoTS#features)
+* [Installation](https://github.com/winedarksea/AutoTS#installation)
+* [Basic Use](https://github.com/winedarksea/AutoTS#basic-use)
+* [Tips for Speed and Large Data](https://github.com/winedarksea/AutoTS#tips-for-speed-and-large-data)
+* Extended Tutorial [GitHub](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md) or [Docs](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html)
+* [Production Example](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
 
 ## Features
 * Finds optimal time series forecasting model and data transformations by genetic programming optimization
