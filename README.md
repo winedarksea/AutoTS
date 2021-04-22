@@ -39,7 +39,7 @@ For other time series needs, check out the list [here](https://github.com/MaxBen
 ```
 pip install autots
 ```
-This includes dependencies for basic models, but additonal packages are required for some models and methods.
+This includes dependencies for basic models, but [additonal packages](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md#installation-and-dependency-versioning) are required for some models and methods.
 
 ## Basic Use
 

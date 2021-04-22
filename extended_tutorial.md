@@ -370,6 +370,35 @@ thus properly capturing the relative sequence (ie 'low'=1, 'medium'=2, 'high'=3)
 Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects 
 Some models will support a more limited range of frequencies. 
 
+## Using the Transformers independently
+The transformers expect data only in the `wide` shape with ascending date. 
+The simplest way to access them is through the [GeneralTransformer](https://winedarksea.github.io/AutoTS/build/html/source/autots.tools.html#autots.tools.transform.GeneralTransformer). 
+This takes dictionaries containing strings of the desired transformers and parameters. 
+
+Inverse_transforms get confusing. It can be necessary to inverse_transform the data to get predictions back to a usable space.
+Some inverse_transformer only work on 'original' or 'forecast' data immediately following the training period. 
+The DifferencedTransformer is one example. 
+It can take the last N value of the training data to bring forecast data back to original space, but will not work for just 'any' future period unconnected to training data. 
+Some transformers (mostly the smoothing filters like `bkfilter`) cannot be inversed at all, but transformed values are close to original values. 
+
+```python
+from autots.tools.transform import transformer_dict, DifferencedTransformer
+from autots import load_monthly
+
+print(f"Available transformers are: {transformer_dict.keys()}")
+df = load_monthly(long=long)
+
+# some transformers tolerate NaN, and some don't...
+df = df.fillna(0)
+
+trans = DifferencedTransformer()
+df_trans = trans.fit_transform(df)
+print(df_trans.tail())
+
+# trans_method is not necessary for most transformers
+df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # forecast for future data
+```
+
 ## Models
 
 | Model                   | Dependencies | Optional Dependencies   | Probabilistic | Multiprocessing | GPU   | Multivariate | Experimental | Use Regressor |

@@ -15,18 +15,8 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* Additional models to GluonTS
-* GeneralTransformer transformation_params - now handle None or empty dict
-* cleaning up of the appropriately named 'ModelMonster'
-* improving MotifSimulation
-* better error message for all models
-* enable histgradientboost regressor, left it out before thinking it wouldn't stay experimental this long
-* import_template now has slightly better `method` input style
-* allow `ensemble` parameter to be a list
-* NumericTransformer
-	* add .fit_transform method
-	* generally more options and speed improvement
-* added NumericTransformer to future_regressors, should now coerce if they have different dtypes
+* Table of Contents to Extended Tutorial/Readme.md
+* Production Example
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
