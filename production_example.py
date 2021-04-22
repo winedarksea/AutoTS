@@ -15,7 +15,7 @@ import pandas as pd
 
 
 forecast_length = 21  # number of days to forecast ahead
-fred_key = None # https://fred.stlouisfed.org/docs/api/api_key.html
+fred_key = "93873d40f10c20fe6f6e75b1ad0aed4d" # https://fred.stlouisfed.org/docs/api/api_key.html
 initial_training = "auto"  # set this to True on first run, or on reset, 'auto' looks for existing template, if found, sets to False.
 evolve = True  # allow time series to progressively evolve on each run, if False, uses fixed template
 archive_templates = False  # save a copy of the model template used with a timestamp
@@ -41,7 +41,7 @@ if initial_training:
     # if you don't care much about upper/lower forecasts, try ensemble="horizontal-max" instead of "probabilistic-max"
     ensemble=["simple","distance","probabilistic-max"]
 elif evolve:
-    gens = 10
+    gens = 50
     models_to_validate = 0.3
     ensemble=["probabilistic-max"]  # you can include "simple" and "distance" but they can nest, and may get huge as time goes on...
 else:
