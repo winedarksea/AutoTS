@@ -16,6 +16,7 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 # raise ValueError("aaargh!")
 
+
 example_filename = "general_templateDESKTOP-JS3OJ8L.csv" # "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
@@ -26,12 +27,12 @@ verbose = 1
 num_validations = 0
 validation_method = "backwards"
 
-
+"""
 df = pd.read_csv("m5_sample.gz")
 df['datetime'] = pd.DatetimeIndex(df['datetime'])
 df = df.set_index("datetime", drop=True)
 # df = df.iloc[:, 0:40]
-
+"""
 
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
@@ -218,7 +219,7 @@ sleep(5)
 print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 import platform
-initial_results.to_csv("general_template_openblas" + str(platform.node()) + ".csv")
+initial_results.to_csv("general_template_10700small" + str(platform.node()) + ".csv")
 
 """
 # Import/Export
