@@ -23,7 +23,7 @@ df = load_monthly(long=long)
 n_jobs = 'auto'
 generations = 0
 verbose = 1
-num_validations = 1
+num_validations = 0
 validation_method = "backwards"
 
 
