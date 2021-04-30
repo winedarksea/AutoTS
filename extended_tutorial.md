@@ -255,7 +255,7 @@ On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* i
 Linux will also require `sudo apt install build-essential` for some packages.
 
 ```shell
-conda create -n timeseries python=3.8
+conda create -n timeseries python=3.9
 conda activate timeseries
 
 # for simplicity: 

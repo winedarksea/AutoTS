@@ -16,12 +16,12 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 # raise ValueError("aaargh!")
 
-example_filename = "example_export.csv"  # .csv/.json
+example_filename = "general_templateDESKTOP-JS3OJ8L.csv" # "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
 df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 5
+generations = 0
 verbose = 1
 num_validations = 1
 validation_method = "backwards"
@@ -90,7 +90,7 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble=["simple","horizontal-max"],
+    ensemble=["simple"],
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,
@@ -134,7 +134,7 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
 )
 
 # model = model.import_results('test.pickle')
-# model = model.import_template(example_filename, method='only', enforce_model_list=True)
+model = model.import_template(example_filename, method='only', enforce_model_list=True)
 
 start_time_for = timeit.default_timer()
 model = model.fit(
@@ -218,7 +218,7 @@ sleep(5)
 print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 import platform
-initial_results.to_csv("general_template" + str(platform.node()) + ".csv")
+initial_results.to_csv("general_template_openblas" + str(platform.node()) + ".csv")
 
 """
 # Import/Export
