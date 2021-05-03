@@ -219,7 +219,7 @@ sleep(5)
 print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 import platform
-initial_results.to_csv("general_template_10700small" + str(platform.node()) + ".csv")
+initial_results.to_csv("general_template_1135g7small" + str(platform.node()) + ".csv")
 
 """
 # Import/Export
