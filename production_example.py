@@ -4,6 +4,8 @@ Recommended installs: pip install pytrends fredapi yfinance
 Uses a number of live public data sources to construct an example production case.
 Some ~100 lines are just pulling in data.
 
+While stock price forecasting is shown here, time series forecasting alone is not a recommended basis for managing investments!
+
 This is a highly opinionated approach.
 Evolve = True allows the timeseries to automatically adapt to changes.
 There is a slight risk of it getting caught in suboptimal position however.
