@@ -66,7 +66,7 @@ Another convenience function is `drop_most_recent=1` specifing the number of mos
 `drop_data_older_than_periods` provides similar functionality but drops the oldest data to speed up the process on large datasets. 
 `remove_leading_zeroes=True` is useful for data where leading zeroes represent a process which has not yet started.
 
-When working with many time series, it can be helpful to take advantage of `subset=100`. Subset specifies the interger number of time series to test models on, and can be useful with many related time series (1000's of customer's sales). Usually the best model on a 100 related time series is very close to that tested on many thousands (or more) of series. This speeds up the model process in these cases, but does not work with `horizontal` ensemble types.
+When working with many time series, it can be helpful to take advantage of `subset=100`. Subset specifies the interger number of time series to test models on, and can be useful with many related time series (1000's of customer's sales). Usually the best model on a 100 related time series is very close to that tested on many thousands (or more) of series.
 
 Subset takes advantage of weighting, more highly-weighted series are more likely to be selected. Weighting is used with multiple time series to tell the evaluator which series are most important. Series weights are assumed to all be equal to 1, values need only be passed in when a value other than 1 is desired. 
 Note for weighting, larger weights = more important.
@@ -269,7 +269,8 @@ pip install mxnet     # check the mxnet documentation for more install options
 pip install gluonts   # sometimes the dependency versioning for gluonts can be picky
 pip install lightgbm
 conda update anaconda
-pip install fbprophet  # try running a second time if it fails on the first try
+pip install pystan
+pip install prophet  # try running a second time if it fails on the first try
 pip install tensorflow
 pip install tensorflow-probability
 ```
@@ -286,7 +287,7 @@ conda install -c intel tensorflow-probability
 python -m pip install mxnet
 python -m pip install gluonts
 # conda install -c anaconda tornado pystan  # may be necessary for fbprophet
-python -m pip install fbprophet
+python -m pip install prophet
 
 # also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html
 # pip install intel-tensorflow-avx512  and conda install tensorflow-mkl
@@ -301,7 +302,7 @@ Minimal training data most greatly impacts the ability to do proper cross valida
 Since ensembles are based on the test dataset, it would also be wise to set `ensemble=None` if `num_validations=0`.
 
 ### Too much training data.
-Too much data is already handled to some extent by `'context_slicer'` in the transformations, which tests using less training data. 
+Too much data is already handled to some extent by the `Slice` Transformer. 
 That said, large datasets will be slower and more memory intensive, for high frequency data (say hourly) it can often be advisable to roll that up to a higher level (daily, hourly, etc.). 
 Rollup can be accomplished by specifying the frequency = your rollup frequency, and then setting the `agg_func=np.sum` or 'mean' or other appropriate statistic.
 
