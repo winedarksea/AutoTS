@@ -27,12 +27,11 @@ verbose = 1
 num_validations = 0
 validation_method = "backwards"
 
-"""
+
 df = pd.read_csv("m5_sample.gz")
 df['datetime'] = pd.DatetimeIndex(df['datetime'])
 df = df.set_index("datetime", drop=True)
 # df = df.iloc[:, 0:40]
-"""
 
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
@@ -219,7 +218,7 @@ sleep(5)
 print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 import platform
-initial_results.to_csv("general_template_1135g7small" + str(platform.node()) + ".csv")
+initial_results.to_csv("general_template_amd_full" + str(platform.node()) + ".csv")
 
 """
 # Import/Export
