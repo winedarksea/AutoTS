@@ -218,6 +218,7 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 	pandas
 	sklearn 	>= 0.20.0
 				>= 0.23.0 (PoissonReg)
+				>= 0.24.0 (OrdinalEncoder unknown_values)
 	statsmodels
 
 Of these, numpy and pandas are critical. 
