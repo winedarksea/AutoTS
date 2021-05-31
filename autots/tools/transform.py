@@ -2095,14 +2095,14 @@ transformer_dict = {
     'PositiveShift': 0.02,
     'Log': 0.01,
     'IntermittentOccurrence': 0.01,
-    'SeasonalDifference7': 0.0,  # old
+    # 'SeasonalDifference7': 0.0,  # old
     'SeasonalDifference': 0.08,
-    'SeasonalDifference28': 0.0,  # old
+    # 'SeasonalDifference28': 0.0,  # old
     'cffilter': 0.01,
     'bkfilter': 0.05,
     'DatepartRegression': 0.02,
-    'DatepartRegressionElasticNet': 0.0,  # old
-    'DatepartRegressionLtd': 0.0,  # old
+    # 'DatepartRegressionElasticNet': 0.0,  # old
+    # 'DatepartRegressionLtd': 0.0,  # old
     "ClipOutliers": 0.05,
     "Discretize": 0.05,
     "CenterLastValue": 0.01,

@@ -141,6 +141,7 @@ class NumericTransformer(object):
         categorical_fillna (str): how to fill NaN for categorical variables (numeric NaN are unaltered)
             "ffill" - uses forward and backward filling to supply na values
             "indicator" or anything else currently results in all missing replaced with str "missing_value"
+        handle_unknown (str): passed through to scikit-learn OrdinalEncoder
         verbose (int): greater than 0 to print some messages
     """
 
@@ -148,11 +149,13 @@ class NumericTransformer(object):
         self,
         na_strings: list = ['', ' '],  # 'NULL', 'NA', 'NaN', 'na', 'nan'
         categorical_fillna: str = "ffill",
+        handle_unknown: str = 'use_encoded_value',
         verbose: int = 0,
     ):
         self.na_strings = na_strings
         self.verbose = verbose
         self.categorical_fillna = categorical_fillna
+        self.handle_unknown = handle_unknown
         self.categorical_flag = False
         self.needs_transformation = True
 
@@ -192,7 +195,7 @@ class NumericTransformer(object):
                 if self.categorical_fillna == "ffill":
                     df_enc = df_enc.fillna(method='ffill').fillna(method='bfill')
                 df_enc = df_enc.fillna('missing_value')
-                self.cat_transformer = OrdinalEncoder()
+                self.cat_transformer = OrdinalEncoder(handle_unknown=self.handle_unknown, unknown_value=np.nan)
                 # the + 1 makes it compatible with remove_leading_zeroes
                 df_enc = self.cat_transformer.fit_transform(df_enc) + 1
                 # df_enc = self.cat_transformer.transform(df_enc) + 1

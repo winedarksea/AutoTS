@@ -1,3 +1,15 @@
+## Table of Contents
+* [A Simple Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#a-simple-example)
+* [Validation and Cross Validation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#validation-and-cross-validation)
+* [Another Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#another-example)
+* [Model Lists](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#model-lists)
+* [Deployment](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#deployment-and-template-import-export)
+* [Metrics](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#metrics)
+* [Installation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning)
+* [Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
+* [Adding Regressors](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information)
+* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#models)
+
 ## Extended Tutorial
 There are a number of ways to get a more accurate time series model. AutoTS takes care of a few of these:
 1. Pretransforming the data optimally for each model
@@ -54,7 +66,7 @@ Another convenience function is `drop_most_recent=1` specifing the number of mos
 `drop_data_older_than_periods` provides similar functionality but drops the oldest data to speed up the process on large datasets. 
 `remove_leading_zeroes=True` is useful for data where leading zeroes represent a process which has not yet started.
 
-When working with many time series, it can be helpful to take advantage of `subset=100`. Subset specifies the interger number of time series to test models on, and can be useful with many related time series (1000's of customer's sales). Usually the best model on a 100 related time series is very close to that tested on many thousands (or more) of series. This speeds up the model process in these cases, but does not work with `horizontal` ensemble types.
+When working with many time series, it can be helpful to take advantage of `subset=100`. Subset specifies the interger number of time series to test models on, and can be useful with many related time series (1000's of customer's sales). Usually the best model on a 100 related time series is very close to that tested on many thousands (or more) of series.
 
 Subset takes advantage of weighting, more highly-weighted series are more likely to be selected. Weighting is used with multiple time series to tell the evaluator which series are most important. Series weights are assumed to all be equal to 1, values need only be passed in when a value other than 1 is desired. 
 Note for weighting, larger weights = more important.
@@ -83,7 +95,7 @@ While NaN values are handled, model selection will suffer if any series have lar
 Most commonly, this may occur where some series have a very long history, while others in the same dataset only have very recent data. 
 In these cases, avoid the `even` cross validation and use one of the other validation methods. 
 
-### A more detailed example:
+### Another Example:
 Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting. 
 Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. These additional series carry information to models such as `RollingRegression`, `VARMAX`, and `VECM`. 
 
@@ -144,10 +156,13 @@ A table of all available models is available further below.
 On large multivariate series, `TSFreshRegressor`, `DynamicFactor` and `VARMAX` can be impractically slow.
 
 ## Deployment and Template Import/Export
+Take a look at the [production_example.py](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
+
 Many models can be reverse engineered with (relative) simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package. 
 There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a `.csv` or `.json` file, then on next run only those models will be tried. 
 This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve. 
 One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.
+
 ```python
 # after fitting an AutoTS model
 example_filename = "example_export.csv"  # .csv/.json
@@ -203,6 +218,7 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 	pandas
 	sklearn 	>= 0.20.0
 				>= 0.23.0 (PoissonReg)
+				>= 0.24.0 (OrdinalEncoder handle_unknown)
 	statsmodels
 
 Of these, numpy and pandas are critical. 
@@ -236,9 +252,11 @@ If you have an Nvidia GPU and plan to use the GPU-accelerated models, download N
 
 You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_config()`. Generally recommended that you double-check this after installing new packages to make sure you haven't broken the LINPACK connection. 
 
-On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster/more stable compilations.  
+On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster/more stable compilations. 
+Linux will also require `sudo apt install build-essential` for some packages.
+
 ```shell
-conda create -n timeseries python=3.8
+conda create -n timeseries python=3.9
 conda activate timeseries
 
 # for simplicity: 
@@ -252,7 +270,8 @@ pip install mxnet     # check the mxnet documentation for more install options
 pip install gluonts   # sometimes the dependency versioning for gluonts can be picky
 pip install lightgbm
 conda update anaconda
-pip install fbprophet  # try running a second time if it fails on the first try
+pip install pystan
+pip install prophet  # try running a second time if it fails on the first try
 pip install tensorflow
 pip install tensorflow-probability
 ```
@@ -264,13 +283,12 @@ conda create -n intelpy -c intel python=3.7 intelpython3_full
 activate intelpy
 
 # install additional packages as desired
-conda install -c intel statsmodels
-conda install -c intel lightgbm
-conda install -c intel tensorflow
+conda install -c intel statsmodels lightgbm tensorflow
 conda install -c intel tensorflow-probability
-pip install mxnet
-pip install gluonts
-pip install fbprophet
+python -m pip install mxnet
+python -m pip install gluonts
+# conda install -c anaconda tornado pystan  # may be necessary for fbprophet
+python -m pip install prophet
 
 # also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html
 # pip install intel-tensorflow-avx512  and conda install tensorflow-mkl
@@ -285,7 +303,7 @@ Minimal training data most greatly impacts the ability to do proper cross valida
 Since ensembles are based on the test dataset, it would also be wise to set `ensemble=None` if `num_validations=0`.
 
 ### Too much training data.
-Too much data is already handled to some extent by `'context_slicer'` in the transformations, which tests using less training data. 
+Too much data is already handled to some extent by the `Slice` Transformer. 
 That said, large datasets will be slower and more memory intensive, for high frequency data (say hourly) it can often be advisable to roll that up to a higher level (daily, hourly, etc.). 
 Rollup can be accomplished by specifying the frequency = your rollup frequency, and then setting the `agg_func=np.sum` or 'mean' or other appropriate statistic.
 
@@ -354,15 +372,34 @@ thus properly capturing the relative sequence (ie 'low'=1, 'medium'=2, 'high'=3)
 Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects 
 Some models will support a more limited range of frequencies. 
 
-#### Tested Frequencies
+## Using the Transformers independently
+The transformers expect data only in the `wide` shape with ascending date. 
+The simplest way to access them is through the [GeneralTransformer](https://winedarksea.github.io/AutoTS/build/html/source/autots.tools.html#autots.tools.transform.GeneralTransformer). 
+This takes dictionaries containing strings of the desired transformers and parameters. 
 
-| Frequency      | Offset Str   | Notes                                        |
-| :------------- | :----------: | --------------------------------------------:|
-|  Hourly        |     'H'      |                                              |
-|  Daily         |     'D'      |                                              |
-|  Monthly 01    |     'MS'     |  First day of month                          |
-|  Annual        |   'A'/'AS'   | 											   |
-|  Weekly        |     'W'      | 											   |
+Inverse_transforms get confusing. It can be necessary to inverse_transform the data to get predictions back to a usable space.
+Some inverse_transformer only work on 'original' or 'forecast' data immediately following the training period. 
+The DifferencedTransformer is one example. 
+It can take the last N value of the training data to bring forecast data back to original space, but will not work for just 'any' future period unconnected to training data. 
+Some transformers (mostly the smoothing filters like `bkfilter`) cannot be inversed at all, but transformed values are close to original values. 
+
+```python
+from autots.tools.transform import transformer_dict, DifferencedTransformer
+from autots import load_monthly
+
+print(f"Available transformers are: {transformer_dict.keys()}")
+df = load_monthly(long=long)
+
+# some transformers tolerate NaN, and some don't...
+df = df.fillna(0)
+
+trans = DifferencedTransformer()
+df_trans = trans.fit_transform(df)
+print(df_trans.tail())
+
+# trans_method is not necessary for most transformers
+df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # forecast for future data
+```
 
 ## Models
 

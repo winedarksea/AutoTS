@@ -16,22 +16,22 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 # raise ValueError("aaargh!")
 
-example_filename = "example_export.csv"  # .csv/.json
+
+example_filename = "general_templateDESKTOP-JS3OJ8L.csv" # "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
 df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 2
+generations = 0
 verbose = 1
-num_validations = 1
+num_validations = 0
 validation_method = "backwards"
 
-"""
+
 df = pd.read_csv("m5_sample.gz")
 df['datetime'] = pd.DatetimeIndex(df['datetime'])
 df = df.set_index("datetime", drop=True)
 # df = df.iloc[:, 0:40]
-"""
 
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
@@ -71,7 +71,7 @@ model_list = [
 
 transformer_list = "all"  # ["SinTrend", "MinMaxScaler"]
 transformer_max_depth = 1
-model_list = 'fast'  # fast_parallel
+model_list = 'default'  # fast_parallel
 # model_list = ['MotifSimulation', 'LastValueNaive']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
@@ -90,7 +90,7 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble=["simple","horizontal-max"],
+    ensemble=["simple"],
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,
@@ -134,7 +134,7 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
 )
 
 # model = model.import_results('test.pickle')
-# model = model.import_template(example_filename, method='only', enforce_model_list=True)
+model = model.import_template(example_filename, method='only', enforce_model_list=True)
 
 start_time_for = timeit.default_timer()
 model = model.fit(
@@ -218,7 +218,7 @@ sleep(5)
 print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 import platform
-initial_results.to_csv("general_template" + str(platform.node()) + ".csv")
+initial_results.to_csv("general_template_amd_full" + str(platform.node()) + ".csv")
 
 """
 # Import/Export

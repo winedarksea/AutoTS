@@ -85,7 +85,7 @@ class AutoTS(object):
         forecast_length: int = 14,
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
-        max_generations: int = 5,
+        max_generations: int = 20,
         no_negatives: bool = False,
         constraint: float = None,
         ensemble: str = 'auto',
@@ -112,7 +112,7 @@ class AutoTS(object):
         num_validations: int = 2,
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
-        validation_method: str = 'even',
+        validation_method: str = 'backwards',
         min_allowed_train_percent: float = 0.5,
         remove_leading_zeroes: bool = False,
         model_interrupt: bool = False,
@@ -461,7 +461,8 @@ class AutoTS(object):
             if not isinstance(future_regressor.index, pd.DatetimeIndex):
                 future_regressor.index = df_subset.index
             # handle any non-numeric data, crudely
-            future_regressor = NumericTransformer(verbose=self.verbose).fit_transform(
+            self.regr_num_trans = NumericTransformer(verbose=self.verbose)
+            future_regressor = self.regr_num_trans.fit_transform(
                 future_regressor
             )
             self.future_regressor_train = future_regressor
@@ -1078,7 +1079,7 @@ or otherwise increase models available."""
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
             # handle any non-numeric data, crudely
-            future_regressor = NumericTransformer(verbose=self.verbose).fit_transform(
+            future_regressor = self.regr_num_trans.transform(
                 future_regressor
             )
             # make sure training regressor fits training data index
@@ -1200,35 +1201,39 @@ or otherwise increase models available."""
             export_template = self.initial_results.model_results[self.template_cols]
             export_template = export_template.drop_duplicates()
         elif models == 'best':
-            export_template = self.validation_results.model_results
-            export_template = export_template[
-                export_template['Runs'] >= (self.num_validations + 1)
-            ]
-            ens_list = ['horizontal', 'probabilistic', 'hdist']
-            if any(x in self.ensemble for x in ens_list):
-                temp = self.initial_results.model_results
-                temp = temp[temp['Ensemble'] >= 2]
-                temp = temp[temp['Exceptions'].isna()]
-                export_template = export_template.merge(
-                    temp,
-                    how='outer',
-                    on=export_template.columns.intersection(temp.columns).to_list(),
-                )
-                export_template['Score'] = generate_score(
-                    export_template,
-                    metric_weighting=self.metric_weighting,
-                    prediction_interval=self.prediction_interval,
-                )
-            if str(max_per_model_class).isdigit():
-                export_template = (
-                    export_template.sort_values('Score', ascending=True)
-                    .groupby('Model')
-                    .head(max_per_model_class)
-                    .reset_index()
-                )
-            export_template = export_template.nsmallest(n, columns=['Score'])
-            if not include_results:
-                export_template = export_template[self.template_cols]
+            # skip to the answer if just n==1
+            if n == 1 and not include_results:
+                export_template = self.best_model
+            else:
+                export_template = self.validation_results.model_results
+                export_template = export_template[
+                    export_template['Runs'] >= (self.num_validations + 1)
+                ]
+                ens_list = ['horizontal', 'probabilistic', 'hdist']
+                if any(x in self.ensemble for x in ens_list):
+                    temp = self.initial_results.model_results
+                    temp = temp[temp['Ensemble'] >= 2]
+                    temp = temp[temp['Exceptions'].isna()]
+                    export_template = export_template.merge(
+                        temp,
+                        how='outer',
+                        on=export_template.columns.intersection(temp.columns).to_list(),
+                    )
+                    export_template['Score'] = generate_score(
+                        export_template,
+                        metric_weighting=self.metric_weighting,
+                        prediction_interval=self.prediction_interval,
+                    )
+                if str(max_per_model_class).isdigit():
+                    export_template = (
+                        export_template.sort_values('Score', ascending=True)
+                        .groupby('Model')
+                        .head(max_per_model_class)
+                        .reset_index()
+                    )
+                export_template = export_template.nsmallest(n, columns=['Score'])
+                if not include_results:
+                    export_template = export_template[self.template_cols]
         else:
             raise ValueError("`models` must be 'all' or 'best'")
         try:

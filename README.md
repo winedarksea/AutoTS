@@ -8,6 +8,14 @@ AutoML for forecasting with open-source time series implementations.
 
 For other time series needs, check out the list [here](https://github.com/MaxBenChrist/awesome_time_series_in_python).
 
+## Table of Contents
+* [Features](https://github.com/winedarksea/AutoTS#features)
+* [Installation](https://github.com/winedarksea/AutoTS#installation)
+* [Basic Use](https://github.com/winedarksea/AutoTS#basic-use)
+* [Tips for Speed and Large Data](https://github.com/winedarksea/AutoTS#tips-for-speed-and-large-data)
+* Extended Tutorial [GitHub](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md) or [Docs](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html)
+* [Production Example](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
+
 ## Features
 * Finds optimal time series forecasting model and data transformations by genetic programming optimization
 * Handles univariate and multivariate/parallel time series
@@ -31,7 +39,7 @@ For other time series needs, check out the list [here](https://github.com/MaxBen
 ```
 pip install autots
 ```
-This includes dependencies for basic models, but additonal packages are required for some models and methods.
+This includes dependencies for basic models, but [additonal packages](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md#installation-and-dependency-versioning) are required for some models and methods.
 
 ## Basic Use
 
@@ -91,11 +99,13 @@ The lower-level API, in particular the large section of time series transformers
 
 Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html) for a more detailed guide to features!
 
+Also take a look at the [production_example.py](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
+
 
 ## Tips for Speed and Large Data:
 * Use appropriate model lists, especially the predefined lists:
 	* `superfast` (simple naive models) and `fast` (more complex but still faster models)
-	* `fast_parallel` (a combination of `fast` and `parallel`) or `parallel`, given mave many CPU cores are available
+	* `fast_parallel` (a combination of `fast` and `parallel`) or `parallel`, given many CPU cores are available
 		* `n_jobs` usually gets pretty close with `='auto'` but adjust as necessary for the environment
 	* see a dict of predefined lists (some defined for internal use) with `from autots.models.model_list import model_lists`
 * Use the `subset` parameter when there are many similar series, `subset=100` will often generalize well for tens of thousands of similar series.
