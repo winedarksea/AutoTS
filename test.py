@@ -15,23 +15,33 @@ from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 # raise ValueError("aaargh!")
+use_template = False
+use_m5 = False  # long = False
+force_univariate = True  # long = False
 
-
+# this is the template file imported:
 example_filename = "general_templateDESKTOP-JS3OJ8L.csv" # "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
 df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 0
 verbose = 1
-num_validations = 0
 validation_method = "backwards"
+if use_template:
+    generations = 0
+    num_validations = 0
+else:
+    generations = 2
+    num_validations = 2
 
-
-df = pd.read_csv("m5_sample.gz")
-df['datetime'] = pd.DatetimeIndex(df['datetime'])
-df = df.set_index("datetime", drop=True)
-# df = df.iloc[:, 0:40]
+if use_m5:
+    long = False
+    df = pd.read_csv("m5_sample.gz")
+    df['datetime'] = pd.DatetimeIndex(df['datetime'])
+    df = df.set_index("datetime", drop=True)
+    # df = df.iloc[:, 0:40]
+if force_univariate:
+    df = df.iloc[:, 0]
 
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
@@ -70,9 +80,9 @@ model_list = [
 ]
 
 transformer_list = "all"  # ["SinTrend", "MinMaxScaler"]
-transformer_max_depth = 1
+transformer_max_depth = 3
 model_list = 'default'  # fast_parallel
-# model_list = ['MotifSimulation', 'LastValueNaive']
+model_list = ['FBProphet', 'LastValueNaive']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {
@@ -134,7 +144,8 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
 )
 
 # model = model.import_results('test.pickle')
-model = model.import_template(example_filename, method='only', enforce_model_list=True)
+if use_template:
+    model = model.import_template(example_filename, method='only', enforce_model_list=True)
 
 start_time_for = timeit.default_timer()
 model = model.fit(
@@ -218,7 +229,7 @@ sleep(5)
 print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 import platform
-initial_results.to_csv("general_template_amd_full" + str(platform.node()) + ".csv")
+initial_results.to_csv("general_template_" + str(platform.node()) + ".csv")
 
 """
 # Import/Export
