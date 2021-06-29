@@ -21,6 +21,7 @@ all_models = [
     'TFPRegression',
     'ComponentAnalysis',
     'DatepartRegression',
+    "UnivariateRegression",
 ]
 default = [
     'ZeroesNaive',
@@ -126,6 +127,7 @@ recombination_approved = [
     'WindowRegression',
     'TensorflowSTS',
     'TFPRegression',
+    'UnivariateRegression'
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -140,8 +142,23 @@ no_shared = [
     'UnobservedComponents',
     'TensorflowSTS',
     "GLS",
+    "UnivariateRegression"
     # 'MotifSimulation',
     # 'DatepartRegression',
+]
+# allow the use of a regressor
+regressor = [
+    'GLM',
+    'ARIMA',
+    'FBProphet',
+    'RollingRegression',
+    'UnobservedComponents',
+    'VECM',
+    'DynamicFactor',
+    'WindowRegression',
+    'VAR',
+    'DatepartRegression',
+    "UnivariateRegression",
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {
@@ -160,4 +177,5 @@ model_lists = {
     "experimental": experimental,
     "slow": slow,
     "gpu": gpu,
+    "regressor": regressor,
 }

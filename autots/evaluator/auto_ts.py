@@ -52,6 +52,7 @@ class AutoTS(object):
         na_tolerance (float): 0 to 1. Series are dropped if they have more than this percent NaN. 0.95 here would allow series containing up to 95% NaN values.
         metric_weighting (dict): weights to assign to metrics, effecting how the ranking score is generated.
         drop_most_recent (int): option to drop n most recent data points. Useful, say, for monthly sales data where the current (unfinished) month is included.
+            occurs after any aggregration is applied, so will be whatever is specified by frequency, will drop n frequencies
         drop_data_older_than_periods (int): take only the n most recent timestamps
         model_list (list): str alias or list of names of model objects to use
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
@@ -174,6 +175,9 @@ class AutoTS(object):
         # convert shortcuts of model lists to actual lists of models
         if model_list in list(model_lists.keys()):
             self.model_list = model_lists[model_list]
+        # prepare for a common Typo
+        elif 'Prophet' in model_list:
+            model_list = ["FBProphet" if x=="Prophet" else x for x in model_list]
 
         # generate template to begin with
         initial_template = str(initial_template).lower()
@@ -301,6 +305,8 @@ class AutoTS(object):
             id_col (str): name of column identifying different series.
             future_regressor (numpy.Array): single external regressor matching train.index
             weights (dict): {'colname1': 2, 'colname2': 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
+                pass the alias 'mean' as a str ie `weights='mean'` to automatically use the mean value of a series as its weight 
+                available aliases: mean, median, min, max
             result_file (str): results saved on each new generation. Does not include validation rounds.
                 ".csv" save model results table.
                 ".pickle" saves full object, including ensemble information.
@@ -379,33 +385,43 @@ class AutoTS(object):
             verbose=self.verbose,
         )
 
+        # handle categorical data if present
+        self.categorical_transformer = NumericTransformer(verbose=self.verbose)
+        df_wide_numeric = self.categorical_transformer.fit_transform(df_wide)
+
+
+        # use "mean" to assign weight as mean
+        if weights == 'mean':
+            weights = df_wide_numeric.mean(axis=0).to_dict()
+        elif weights == 'median':
+            weights = df_wide_numeric.median(axis=0).to_dict()
+        elif weights == 'min':
+            weights = df_wide_numeric.min(axis=0).to_dict()
+        elif weights == 'max':
+            weights = df_wide_numeric.max(axis=0).to_dict()
         # clean up series weighting input
         if not weighted:
-            weights = {x: 1 for x in df_wide.columns}
+            weights = {x: 1 for x in df_wide_numeric.columns}
         else:
             # handle not all weights being provided
             if self.verbose > 1:
                 key_count = 0
-                for col in df_wide.columns:
+                for col in df_wide_numeric.columns:
                     if col in weights:
                         key_count += 1
-                key_count = df_wide.shape[1] - key_count
+                key_count = df_wide_numeric.shape[1] - key_count
                 if key_count > 0:
                     print(f"{key_count} series_id not in weights. Inferring 1.")
                 else:
                     print("All series_id present in weighting.")
             weights = {
-                col: (weights[col] if col in weights else 1) for col in df_wide.columns
+                col: (weights[col] if col in weights else 1) for col in df_wide_numeric.columns
             }
             # handle non-numeric inputs
             weights = {
                 key: (abs(float(weights[key])) if str(weights[key]).isdigit() else 1)
                 for key in weights
             }
-
-        # handle categorical data if present
-        self.categorical_transformer = NumericTransformer(verbose=self.verbose)
-        df_wide_numeric = self.categorical_transformer.fit_transform(df_wide)
 
         # replace any zeroes that occur prior to all non-zero values
         if self.remove_leading_zeroes:

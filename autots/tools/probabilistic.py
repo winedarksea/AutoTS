@@ -4,7 +4,10 @@ Point to Probabilistic
 import pandas as pd
 import numpy as np
 from autots.tools.impute import fake_date_fill
-from scipy.stats import percentileofscore
+try:
+    from scipy.stats import percentileofscore
+except Exception:
+    pass
 
 
 def percentileofscore_appliable(x, a, kind='rank'):

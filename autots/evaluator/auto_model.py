@@ -146,6 +146,20 @@ def ModelMonster(
             **parameters,
         )
         return model
+    elif model == 'UnivariateRegression':
+        from autots.models.sklearn import UnivariateRegression
+
+        model = UnivariateRegression(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            forecast_length=forecast_length,
+            **parameters,
+        )
+        return model
 
     elif model == 'UnobservedComponents':
         model = UnobservedComponents(

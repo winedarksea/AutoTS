@@ -208,7 +208,9 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 
 `Containment` measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL.
 
-`Contour` is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. Does not work with forecast_length=1.
+`Contour` is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. Does not work with forecast_length=1. 
+
+The contour metric is useful as it encourages 'wavy' forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they "don't look like they are trying hard enough" to some managers, and using contour favors non-flat forecasts that (to many) look like a more serious model.
 
 ## Installation and Dependency Versioning
 `pip install autots`
@@ -428,4 +430,5 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |               |
 |  TSFreshRegressor       | tsfresh, sklearn |                     |               |                 |       |              | True         |               |
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              | True         | True          |
+|  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              | True         | True          |
 

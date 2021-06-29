@@ -17,6 +17,9 @@
 # Latest
 * Table of Contents to Extended Tutorial/Readme.md
 * Production Example
+* add weights="mean"/median/min/max
+* UnivariateRegression
+* fix check_pickle error for ETS
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

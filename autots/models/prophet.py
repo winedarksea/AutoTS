@@ -126,15 +126,15 @@ class FBProphet(ModelObject):
         # if self.regression_type != None:
         #   assert len(future_regressor) == forecast_length, "regressor not equal to forecast length"
         test_index = self.create_forecast_index(forecast_length=forecast_length)
-        forecast = pd.DataFrame()
-        lower_forecast = pd.DataFrame()
-        upper_forecast = pd.DataFrame()
         if self.verbose <= 0:
             logging.getLogger('fbprophet').setLevel(logging.WARNING)
         if self.regression_type == 'User':
             self.df_train[self.regressor_name] = self.regressor_train
 
         """
+        forecast = pd.DataFrame()
+        lower_forecast = pd.DataFrame()
+        upper_forecast = pd.DataFrame()
         for series in self.df_train.columns:
             current_series = self.df_train.copy()
             current_series['y'] = current_series[series]
@@ -167,8 +167,8 @@ class FBProphet(ModelObject):
         """
 
         def seek_the_oracle(df, args, series):
-            current_series = df
-            current_series['y'] = current_series[series]
+            current_series = pd.DataFrame(df[series].copy())
+            current_series = current_series.rename(columns={series: 'y'})
             current_series['ds'] = current_series.index
             m = Prophet(interval_width=args['prediction_interval'])
             if args['holiday']:
@@ -226,8 +226,14 @@ class FBProphet(ModelObject):
                 df_list.append(seek_the_oracle(self.df_train, args, col))
             complete = list(map(list, zip(*df_list)))
         forecast = pd.concat(complete[0], axis=1)
+        forecast.index = test_index
+        forecast = forecast[self.column_names]
         lower_forecast = pd.concat(complete[1], axis=1)
+        lower_forecast.index = test_index
+        lower_forecast = lower_forecast[self.column_names]
         upper_forecast = pd.concat(complete[2], axis=1)
+        upper_forecast.index = test_index
+        upper_forecast = upper_forecast[self.column_names]
 
         if just_point_forecast:
             return forecast

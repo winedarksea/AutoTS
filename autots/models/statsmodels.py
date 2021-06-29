@@ -275,7 +275,6 @@ class GLM(ModelObject):
         else:
             pool_verbose = 0
 
-        # @wrap_non_picklable_objects
         def forecast_by_column(df, X, Xf, args, col):
             """Run one series of ETS and return prediction."""
             current_series = df[col]
@@ -541,7 +540,7 @@ class ETS(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(forecast_by_column, check_pickle=False)(
+                delayed(forecast_by_column)(
                     self.df_train, args, col
                 )
                 for (col) in cols
@@ -1092,7 +1091,7 @@ class UnobservedComponents(ModelObject):
         # print(f"parallel is {parallel} and n_jobs is {self.n_jobs}")
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(forecast_by_column, check_pickle=False)(
+                delayed(forecast_by_column)(
                     self.df_train, args, col
                 )
                 for (col) in cols
