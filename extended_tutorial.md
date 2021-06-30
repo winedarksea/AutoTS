@@ -268,12 +268,11 @@ conda install numpy scipy
 conda install scikit-learn   # -c conda-forge is sometimes a version ahead of main channel
 pip install statsmodels     # pip is sometimes a version ahead of main conda channel
 
-pip install mxnet     # check the mxnet documentation for more install options
+conda install -c conda-forge prophet
+pip install mxnet     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
 pip install gluonts   # sometimes the dependency versioning for gluonts can be picky
 pip install lightgbm
 conda update anaconda
-pip install pystan
-pip install prophet  # try running a second time if it fails on the first try
 pip install tensorflow
 pip install tensorflow-probability
 ```
@@ -298,6 +297,11 @@ python -m pip install prophet
 ```
 
 ## Caveats and Advice
+
+### Series IDs really need to be unique (or column names need to be all unique in wide data)
+Pretty much as it says, if this isn't true, some odd things may happen that shouldn't.
+
+Also if using the model Prophet models, you can't have any columns named 'ds'
 
 ### Short Training History
 How much data is 'too little' depends on the seasonality and volatility of the data. 

@@ -34,7 +34,7 @@ if save_location is not None:
 if initial_training == "auto":
     initial_training = not os.path.exists(template_filename)
     if initial_training:
-        print("Existing template found.")
+        print("Existing template not found.")
 
 # set max generations based on settings, increase for slower but greater chance of highest accuracy
 if initial_training:

@@ -70,6 +70,8 @@ class AutoTS(object):
             0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
             Useful in (unrecommended) cases where forecast_length > training length.
         remove_leading_zeroes (bool): replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn't started yet.
+        prefill_na (str): value to input to fill all NaNs with. Leaving as None and allowing model interpolation is recommended.
+            None, 0, 'mean', or 'median'. 0 may be useful in for examples sales cases where all NaN can be assumed equal to zero.
         model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
@@ -102,8 +104,8 @@ class AutoTS(object):
             'rmse_weighting': 2,
             'containment_weighting': 0,
             'runtime_weighting': 0,
-            'spl_weighting': 1,
-            'contour_weighting': 0,
+            'spl_weighting': 2,
+            'contour_weighting': 1,
         },
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
@@ -116,6 +118,7 @@ class AutoTS(object):
         validation_method: str = 'backwards',
         min_allowed_train_percent: float = 0.5,
         remove_leading_zeroes: bool = False,
+        prefill_na: str = None,
         model_interrupt: bool = False,
         verbose: int = 1,
         n_jobs: int = None,
@@ -148,6 +151,7 @@ class AutoTS(object):
         self.min_allowed_train_percent = min_allowed_train_percent
         self.max_generations = max_generations
         self.remove_leading_zeroes = remove_leading_zeroes
+        self.prefill_na = prefill_na
         self.model_interrupt = model_interrupt
         self.verbose = int(verbose)
         self.n_jobs = n_jobs
@@ -177,7 +181,7 @@ class AutoTS(object):
             self.model_list = model_lists[model_list]
         # prepare for a common Typo
         elif 'Prophet' in model_list:
-            model_list = ["FBProphet" if x=="Prophet" else x for x in model_list]
+            self.model_list = ["FBProphet" if x=="Prophet" else x for x in model_list]
 
         # generate template to begin with
         initial_template = str(initial_template).lower()
@@ -378,6 +382,7 @@ class AutoTS(object):
         df_wide = df_cleanup(
             df_wide,
             frequency=self.frequency,
+            prefill_na=self.prefill_na,
             na_tolerance=self.na_tolerance,
             drop_data_older_than_periods=self.drop_data_older_than_periods,
             aggfunc=self.aggfunc,
@@ -950,6 +955,7 @@ or otherwise increase models available."""
                     random_seed=random_seed,
                     verbose=verbose,
                     n_jobs=self.n_jobs,
+                    traceback=True
                 )
                 # capture results from lower-level template run
                 template_result.model_results['TotalRuntime'].fillna(

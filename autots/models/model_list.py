@@ -158,7 +158,7 @@ regressor = [
     'WindowRegression',
     'VAR',
     'DatepartRegression',
-    "UnivariateRegression",
+    # "UnivariateRegression",
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {

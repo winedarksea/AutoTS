@@ -6,6 +6,7 @@ import pandas as pd
 def df_cleanup(
     df_wide,
     frequency: str = "infer",
+    prefill_na: str = None,
     na_tolerance: float = 0.999,
     drop_data_older_than_periods: int = 100000,
     drop_most_recent: int = 0,
@@ -56,9 +57,21 @@ def df_cleanup(
     # drop older data, because too much of a good thing...
     if str(drop_data_older_than_periods).isdigit():
         if int(drop_data_older_than_periods) < df_wide.shape[0]:
-            if verbose >= 0:
+            if verbose >= 1:
                 print("Old data dropped by `drop_data_older_than_periods`.")
             df_wide = df_wide.tail(int(drop_data_older_than_periods))
+
+    # fill NaN now if asked:
+    if prefill_na is not None:
+        if str(prefill_na).isdigit():
+            df_wide = df_wide.fillna(float(prefill_na))
+        elif prefill_na == "mean":
+            df_wide = df_wide.fillna(df_wide.mean(axis=0))
+        elif prefill_na == "median":
+            df_wide = df_wide.fillna(df_wide.median(axis=0))
+        else:
+            if verbose >= 0:
+                print("WARNING: prefill_na method {prefill_na} not recognized.")
 
     # remove series with way too many NaNs
     na_tolerance = abs(float(na_tolerance))

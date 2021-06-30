@@ -17,7 +17,7 @@ from autots.evaluator.auto_ts import fake_regressor, error_correlations
 # raise ValueError("aaargh!")
 use_template = False
 use_m5 = False  # long = False
-force_univariate = True  # long = False
+force_univariate = False  # long = False
 
 # this is the template file imported:
 example_filename = "general_templateDESKTOP-JS3OJ8L.csv" # "example_export.csv"  # .csv/.json
@@ -100,7 +100,7 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble=["simple"],
+    ensemble=["simple,distance,horizontal-max"],
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,
@@ -115,6 +115,7 @@ model = AutoTS(
     model_interrupt=True,
     n_jobs=n_jobs,
     drop_most_recent=1,
+    prefill_na = 0,
     subset=None,
     verbose=verbose,
 )
@@ -151,7 +152,7 @@ start_time_for = timeit.default_timer()
 model = model.fit(
     df,
     future_regressor=future_regressor_train2d,
-    weights=weights_weekly,
+    weights="mean",
     # grouping_ids=grouping_monthly,
     # result_file='test.pickle',
     date_col='datetime' if long else None,
@@ -258,7 +259,7 @@ Edgey Cases:
 # %%
 df_wide_numeric = model.df_wide_numeric
 
-df = df_wide_numeric.tail(50).fillna(0).astype(float)
+df = df_wide_numeric.tail(100).fillna(0).astype(float)
 
 """
 PACKAGE RELEASE

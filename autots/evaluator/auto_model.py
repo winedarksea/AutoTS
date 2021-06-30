@@ -830,6 +830,7 @@ def TemplateWizard(
         'TransformationParameters',
         'Ensemble',
     ],
+    traceback: bool = False,
 ):
     """
     Take Template, returns Results.
@@ -858,6 +859,7 @@ def TemplateWizard(
         max_generations (int): info to pass to print statements
         model_interrupt (bool): if True, keyboard interrupts are caught and only break current model eval.
         template_cols (list): column names of columns used as model template
+        traceback (bool): include tracebook over just error representation
 
     Returns:
         TemplateEvalObject
@@ -1044,11 +1046,20 @@ def TemplateWizard(
                 raise KeyboardInterrupt
         except Exception as e:
             if verbose >= 0:
-                print(
-                    'Template Eval Error: {} in model {}: {}'.format(
-                        (repr(e)), template_result.model_count, model_str
+                if traceback:
+                    import traceback as tb
+                    print(
+                        'Template Eval Error: {} in model {}: {}'.format(
+                            ''.join(tb.format_exception(None, e, e.__traceback__)), template_result.model_count, model_str
+                        )
                     )
-                )
+                else:
+                    print(
+                        'Template Eval Error: {} in model {}: {}'.format(
+                            (repr(e)), template_result.model_count, model_str
+                        )
+                    )
+
             result = pd.DataFrame(
                 {
                     'ID': create_model_id(

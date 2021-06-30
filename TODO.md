@@ -20,6 +20,9 @@
 * add weights="mean"/median/min/max
 * UnivariateRegression
 * fix check_pickle error for ETS
+* fix error in Prophet with latest version
+* VisibleDeprecation warning for hidden_layers random choice in sklearn fixed
+* prefill_na option added to allow quick filling of NaNs if desired (with zeroes for say, sales forecasting)
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

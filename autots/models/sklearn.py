@@ -65,8 +65,10 @@ def rolling_x_regressor(
         )
         X = pd.concat([X, temp], axis=1).fillna(method='bfill')
 
-    if add_date_part in ['simple', 'expanded']:
-        X = pd.concat([X, date_part(df.index, method=add_date_part)], axis=1)
+    if add_date_part in ['simple', 'expanded', 'recurring']:
+        date_part_df = date_part(df.index, method=add_date_part)
+        date_part_df.index = df.index
+        X = pd.concat([X, ], axis=1)
     if holiday:
         from autots.tools.holiday import holiday_flag
 
@@ -291,13 +293,13 @@ def retrieve_regressor(
 
 def generate_regressor_params(
     model_dict: dict = {
-        'RandomForest': 0.05,
+        'RandomForest': 0.1,
         'ElasticNet': 0.05,
-        'MLP': 0.14,
-        'DecisionTree': 0.25,
+        'MLP': 0.259,
+        'DecisionTree': 0.1,
         'KNN': 0.1,
         'Adaboost': 0.14,
-        'SVM': 0.02,
+        'SVM': 0.001,  # tends to be the slowest
         'BayesianRidge': 0.08,
         'xgboost': 0.01,
         'KerasRNN': 0.05,
@@ -371,7 +373,7 @@ def generate_regressor_params(
             param_dict = {
                 "model": 'MLP',
                 "model_params": {
-                    "hidden_layer_sizes": np.random.choice(
+                    "hidden_layer_sizes": random.choices(
                         [
                             (100,),
                             (25, 15, 25),
@@ -380,9 +382,8 @@ def generate_regressor_params(
                             (32, 64, 32),
                             (32, 32, 32),
                         ],
-                        p=[0.1, 0.3, 0.3, 0.1, 0.1, 0.1],
-                        size=1,
-                    ).item(),
+                        [0.1, 0.3, 0.3, 0.1, 0.1, 0.1],
+                    )[0],
                     "max_iter": np.random.choice(
                         [250, 500, 1000], p=[0.8, 0.1, 0.1], size=1
                     ).item(),
@@ -1611,7 +1612,7 @@ class UnivariateRegression(ModelObject):
         holiday_country: str = 'US',
         verbose: int = 0,
         random_seed: int = 2020,
-        forecast_length: int = 20,
+        forecast_length: int = 7,
         regression_model: dict = {
             "model": 'Adaboost',
             "model_params": {
@@ -1649,7 +1650,7 @@ class UnivariateRegression(ModelObject):
             verbose=verbose,
             n_jobs=n_jobs,
         )
-        self.forecast_length=forecast_length,
+        self.forecast_length=forecast_length
         self.regression_model = regression_model
         self.holiday = holiday
         self.mean_rolling_periods = mean_rolling_periods
@@ -1712,102 +1713,22 @@ class UnivariateRegression(ModelObject):
         self.sktraindata = self.sktraindata.fillna(method='ffill').fillna(
             method='bfill'
         )
-        """
-        for loop for all columns:
-            slice X
-            slice and reshape Y
-        n_jobs = 1 passed (unless fully univariate!)
-        some way to store all the trained models
-        
-        add to all model locations
-        """
-        self.models = {}
-        forecast_length = self.forecast_length
-        for x_col in sktraindata.columns:
-            base = sktraindata[x_col]
+        cols = self.sktraindata.columns
+
+        def forecast_by_column(self, df, args, parallel, n_jobs, col):
+            """Run one series of ETS and return prediction."""
+            base = pd.DataFrame(self.sktraindata[col])
             Y = base.copy()
-            for curr_shift in range(1, forecast_length):
+            for curr_shift in range(1, self.forecast_length):
                 Y = pd.concat([Y, base.shift(-curr_shift)], axis=1)
-                Y.drop(index=Y.index[0:(forecast_length - 1)])
-            
-            
-        Y_all = self.sktraindata.drop(self.sktraindata.head(2).index)
-        Y_all.columns = [x for x in range(len(Y.columns))]
-        X = rolling_x_regressor(
-            base,
-            mean_rolling_periods=self.mean_rolling_periods,
-            macd_periods=self.macd_periods,
-            std_rolling_periods=self.std_rolling_periods,
-            additional_lag_periods=self.additional_lag_periods,
-            ewm_alpha=self.ewm_alpha,
-            abs_energy=self.abs_energy,
-            rolling_autocorr_periods=self.rolling_autocorr_periods,
-            add_date_part=self.add_date_part,
-            holiday=self.holiday,
-            holiday_country=self.holiday_country,
-            polynomial_degree=self.polynomial_degree,
-            window=self.window,
-        )
-        if self.regression_type == 'User':
-            X = pd.concat([X, self.regressor_train], axis=1)
+            # drop incomplete data
+            Y = Y.drop(index=Y.tail(self.forecast_length - 1).index)
+            # drop the most recent because there's no future for it
+            Y = Y.drop(index=Y.index[0])
+            Y.columns = [x for x in range(len(Y.columns))]
 
-        if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
-            self.x_transformer = self._x_transformer()
-            self.x_transformer = self.x_transformer.fit(X)
-            X = pd.DataFrame(self.x_transformer.transform(X))
-            X = X.replace([np.inf, -np.inf], 0).fillna(0)
-        """
-        Tail(1) is dropped to shift data to become forecast 1 ahead
-        and the first one is dropped because it will least accurately represent
-        rolling values
-        """
-        X = X.drop(X.tail(1).index).drop(X.head(1).index)
-
-        # retrieve model object to train
-        self.regr = retrieve_regressor(
-            regression_model=self.regression_model,
-            verbose=self.verbose,
-            verbose_bool=self.verbose_bool,
-            random_seed=self.random_seed,
-            n_jobs=self.n_jobs,
-        )
-        self.regr = self.regr.fit(X, Y)
-
-        self.fit_runtime = datetime.datetime.now() - self.startTime
-        return self
-
-    def predict(
-        self,
-        forecast_length: int,
-        future_regressor=[],
-        just_point_forecast: bool = False,
-    ):
-        """Generate forecast data immediately following dates of index supplied to .fit().
-
-        Args:
-            forecast_length (int): Number of periods of data to forecast ahead
-            regressor (numpy.Array): additional regressor
-            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
-
-        Returns:
-            Either a PredictionObject of forecasts and metadata, or
-            if just_point_forecast == True, a dataframe of point forecasts
-        """
-        predictStartTime = datetime.datetime.now()
-        index = self.create_forecast_index(forecast_length=forecast_length)
-        if self.regression_type == 'User':
-            complete_regressor = pd.concat(
-                [self.regressor_train, future_regressor], axis=0
-            )
-
-        combined_index = self.df_train.index.append(index)
-        forecast = pd.DataFrame()
-        self.sktraindata.columns = [x for x in range(len(self.sktraindata.columns))]
-
-        # forecast, 1 step ahead, then another, and so on
-        for x in range(forecast_length):
-            x_dat = rolling_x_regressor(
-                self.sktraindata,
+            X = rolling_x_regressor(
+                base,
                 mean_rolling_periods=self.mean_rolling_periods,
                 macd_periods=self.macd_periods,
                 std_rolling_periods=self.std_rolling_periods,
@@ -1819,24 +1740,115 @@ class UnivariateRegression(ModelObject):
                 holiday=self.holiday,
                 holiday_country=self.holiday_country,
                 polynomial_degree=self.polynomial_degree,
+                window=self.window,
+            )
+            if self.regression_type == 'User':
+                X = pd.concat([X, self.regressor_train], axis=1)
+
+            if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
+                self.x_transformer = self._x_transformer()
+                self.x_transformer = self.x_transformer.fit(X)
+                X = pd.DataFrame(self.x_transformer.transform(X))
+                X = X.replace([np.inf, -np.inf], 0).fillna(0)
+
+            X = X.drop(index=X.tail(self.forecast_length).index)
+            Y.index = X.index  # and just hope I got the adjustments right
+
+            # retrieve model object to train
+            if not parallel and n_jobs > 1:
+                n_jobs_passed = n_jobs
+            else:
+                n_jobs_passed = 1
+            dah_model = retrieve_regressor(
+                regression_model=self.regression_model,
+                verbose=self.verbose,
+                verbose_bool=self.verbose_bool,
+                random_seed=self.random_seed,
+                n_jobs=n_jobs_passed,
+            )
+            dah_model.fit(X, Y)
+            return {col: dah_model}
+
+        self.parallel = True
+        if self.n_jobs in [0, 1] or len(cols) < 3:
+            self.parallel = False
+        else:
+            try:
+                from joblib import Parallel, delayed
+            except Exception:
+                self.parallel = False
+        args={}
+        # joblib multiprocessing to loop through series
+        if self.parallel:
+            df_list = Parallel(n_jobs=self.n_jobs)(
+                delayed(forecast_by_column)(self,
+                    self.df_train, args, self.parallel, self.n_jobs, col
+                )
+                for (col) in cols
+            )
+            self.models = {k: v for d in df_list for k, v in d.items()}
+        else:
+            df_list = []
+            for col in cols:
+                df_list.append(forecast_by_column(self, self.df_train, args, self.parallel, self.n_jobs, col))
+            self.models = {k: v for d in df_list for k, v in d.items()}
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self,
+        forecast_length: int = None,
+        just_point_forecast: bool = False,
+        future_regressor=[],
+    ):
+        """Generate forecast data immediately following dates of index supplied to .fit().
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+                ignored here for this model, must be set in __init__ before .fit()
+            regressor (numpy.Array): additional regressor
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        index = self.create_forecast_index(forecast_length=self.forecast_length)
+        forecast = pd.DataFrame()
+        for x_col in self.sktraindata.columns:
+            base = pd.DataFrame(self.sktraindata[x_col])
+
+            x_dat = rolling_x_regressor(
+                base,
+                mean_rolling_periods=self.mean_rolling_periods,
+                macd_periods=self.macd_periods,
+                std_rolling_periods=self.std_rolling_periods,
+                additional_lag_periods=self.additional_lag_periods,
+                ewm_alpha=self.ewm_alpha,
+                abs_energy=self.abs_energy,
+                rolling_autocorr_periods=self.rolling_autocorr_periods,
+                add_date_part=self.add_date_part,
+                holiday=self.holiday,
+                holiday_country=self.holiday_country,
+                polynomial_degree=self.polynomial_degree,
+                window=self.window,
             )
             if self.regression_type == 'User':
                 x_dat = pd.concat(
-                    [x_dat, complete_regressor.head(x_dat.shape[0])], axis=1
+                    [x_dat, self.regressor_train], axis=1
                 ).fillna(0)
             if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
                 x_dat = pd.DataFrame(self.x_transformer.transform(x_dat))
                 x_dat = x_dat.replace([np.inf, -np.inf], 0).fillna(0)
+            rfPred = self.models[x_col].predict(x_dat.tail(1).values)
+            # rfPred = pd.DataFrame(rfPred).transpose()
+            # rfPred.columns = [x_col]
+            rfPred = pd.Series(rfPred.flatten())
+            rfPred.name = x_col
+            forecast = pd.concat([forecast, rfPred], axis=1)
 
-            rfPred = pd.DataFrame(self.regr.predict(x_dat.tail(1).values))
-
-            forecast = pd.concat([forecast, rfPred], axis=0, ignore_index=True)
-            self.sktraindata = pd.concat(
-                [self.sktraindata, rfPred], axis=0, ignore_index=True
-            )
-            self.sktraindata.index = combined_index[: len(self.sktraindata.index)]
-
-        forecast.columns = self.column_names
+        forecast = forecast[self.column_names]
         forecast.index = index
 
         if just_point_forecast:
@@ -1852,7 +1864,7 @@ class UnivariateRegression(ModelObject):
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(
                 model_name=self.name,
-                forecast_length=forecast_length,
+                forecast_length=self.forecast_length,
                 forecast_index=forecast.index,
                 forecast_columns=forecast.columns,
                 lower_forecast=lower_forecast,
@@ -1904,7 +1916,7 @@ class UnivariateRegression(ModelObject):
         polynomial_degree_choice = None
         x_transform_choice = random.choices(
             [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
-            [0.89, 0.05, 0.05, 0.01],
+            [1.0, 0.0, 0.0, 0.0],
         )[0]
         regression_choice = random.choices(
             [None, 'User'], [0.7, 0.3]
