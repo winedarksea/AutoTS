@@ -68,7 +68,12 @@ def rolling_x_regressor(
     if add_date_part in ['simple', 'expanded', 'recurring']:
         date_part_df = date_part(df.index, method=add_date_part)
         date_part_df.index = df.index
-        X = pd.concat([X, ], axis=1)
+        X = pd.concat(
+            [
+                X,
+            ],
+            axis=1,
+        )
     if holiday:
         from autots.tools.holiday import holiday_flag
 
@@ -86,9 +91,7 @@ def rolling_x_regressor(
     if str(window).isdigit():
         # we already have lag 1 using this
         for curr_shift in range(1, window):
-            X = pd.concat([X, df.shift(curr_shift)], axis=1).fillna(
-                method='bfill'
-            )
+            X = pd.concat([X, df.shift(curr_shift)], axis=1).fillna(method='bfill')
 
     X = X.replace([np.inf, -np.inf], np.nan)
     X = X.fillna(method='ffill').fillna(method='bfill')
@@ -783,20 +786,16 @@ class RollingRegression(ModelObject):
         std_rolling_periods_choice = random.choices(
             [None, 5, 7, 10, 30], [0.2, 0.2, 0.2, 0.2, 0.2]
         )[0]
-        max_rolling_periods_choice = random.choices(
-            [None, seasonal_int()], [0.2, 0.8]
-        )[0]
-        min_rolling_periods_choice = random.choices(
-            [None, seasonal_int()], [0.2, 0.8]
-        )[0]
+        max_rolling_periods_choice = random.choices([None, seasonal_int()], [0.2, 0.8])[
+            0
+        ]
+        min_rolling_periods_choice = random.choices([None, seasonal_int()], [0.2, 0.8])[
+            0
+        ]
         lag_periods_choice = seasonal_int() - 1
         lag_periods_choice = 2 if lag_periods_choice < 2 else lag_periods_choice
-        ewm_choice = random.choices(
-            [None, 0.2, 0.5, 0.8], [0.5, 0.15, 0.15, 0.2]
-        )[0]
-        abs_energy_choice = random.choices(
-            [True, False], [0.3, 0.7]
-        )[0]
+        ewm_choice = random.choices([None, 0.2, 0.5, 0.8], [0.5, 0.15, 0.15, 0.2])[0]
+        abs_energy_choice = random.choices([True, False], [0.3, 0.7])[0]
         rolling_autocorr_periods_choice = random.choices(
             [None, 2, 7, 12, 30], [0.8, 0.05, 0.05, 0.05, 0.05]
         )[0]
@@ -804,16 +803,12 @@ class RollingRegression(ModelObject):
             [None, 'simple', 'expanded', 'recurring'], [0.6, 0.1, 0.2, 0.1]
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
-        polynomial_degree_choice = random.choices(
-            [None, 2], [0.97, 0.03]
-        )[0]
+        polynomial_degree_choice = random.choices([None, 2], [0.97, 0.03])[0]
         x_transform_choice = random.choices(
             [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
             [0.8, 0.05, 0.05, 0.1],
         )[0]
-        regression_choice = random.choices(
-            [None, 'User'], [0.7, 0.3]
-        )[0]
+        regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
         parameter_dict = {
             'regression_model': model_choice,
             'holiday': holiday_choice,
@@ -1590,6 +1585,7 @@ class DatepartRegression(ModelObject):
         }
         return parameter_dict
 
+
 class UnivariateRegression(ModelObject):
     """Regression-framed approach to forecasting using sklearn.
     A univariate version of rolling regression: ie each series is modeled independently
@@ -1650,7 +1646,7 @@ class UnivariateRegression(ModelObject):
             verbose=verbose,
             n_jobs=n_jobs,
         )
-        self.forecast_length=forecast_length
+        self.forecast_length = forecast_length
         self.regression_model = regression_model
         self.holiday = holiday
         self.mean_rolling_periods = mean_rolling_periods
@@ -1777,12 +1773,12 @@ class UnivariateRegression(ModelObject):
                 from joblib import Parallel, delayed
             except Exception:
                 self.parallel = False
-        args={}
+        args = {}
         # joblib multiprocessing to loop through series
         if self.parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(forecast_by_column)(self,
-                    self.df_train, args, self.parallel, self.n_jobs, col
+                delayed(forecast_by_column)(
+                    self, self.df_train, args, self.parallel, self.n_jobs, col
                 )
                 for (col) in cols
             )
@@ -1790,7 +1786,11 @@ class UnivariateRegression(ModelObject):
         else:
             df_list = []
             for col in cols:
-                df_list.append(forecast_by_column(self, self.df_train, args, self.parallel, self.n_jobs, col))
+                df_list.append(
+                    forecast_by_column(
+                        self, self.df_train, args, self.parallel, self.n_jobs, col
+                    )
+                )
             self.models = {k: v for d in df_list for k, v in d.items()}
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -1835,9 +1835,7 @@ class UnivariateRegression(ModelObject):
                 window=self.window,
             )
             if self.regression_type == 'User':
-                x_dat = pd.concat(
-                    [x_dat, self.regressor_train], axis=1
-                ).fillna(0)
+                x_dat = pd.concat([x_dat, self.regressor_train], axis=1).fillna(0)
             if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
                 x_dat = pd.DataFrame(self.x_transformer.transform(x_dat))
                 x_dat = x_dat.replace([np.inf, -np.inf], 0).fillna(0)
@@ -1892,20 +1890,16 @@ class UnivariateRegression(ModelObject):
         std_rolling_periods_choice = random.choices(
             [None, 5, 7, 10, 30], [0.6, 0.1, 0.1, 0.1, 0.1]
         )[0]
-        max_rolling_periods_choice = random.choices(
-            [None, seasonal_int()], [0.5, 0.5]
-        )[0]
-        min_rolling_periods_choice = random.choices(
-            [None, seasonal_int()], [0.5, 0.5]
-        )[0]
+        max_rolling_periods_choice = random.choices([None, seasonal_int()], [0.5, 0.5])[
+            0
+        ]
+        min_rolling_periods_choice = random.choices([None, seasonal_int()], [0.5, 0.5])[
+            0
+        ]
         lag_periods_choice = seasonal_int() - 1
         lag_periods_choice = 2 if lag_periods_choice < 2 else lag_periods_choice
-        ewm_choice = random.choices(
-            [None, 0.2, 0.5, 0.8], [0.75, 0.1, 0.1, 0.05]
-        )[0]
-        abs_energy_choice = random.choices(
-            [True, False], [0.1, 0.9]
-        )[0]
+        ewm_choice = random.choices([None, 0.2, 0.5, 0.8], [0.75, 0.1, 0.1, 0.05])[0]
+        abs_energy_choice = random.choices([True, False], [0.1, 0.9])[0]
         rolling_autocorr_periods_choice = random.choices(
             [None, 2, 7, 12, 30], [0.86, 0.01, 0.01, 0.01, 0.01]
         )[0]
@@ -1918,12 +1912,8 @@ class UnivariateRegression(ModelObject):
             [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
             [1.0, 0.0, 0.0, 0.0],
         )[0]
-        regression_choice = random.choices(
-            [None, 'User'], [0.7, 0.3]
-        )[0]
-        window_choice = random.choices(
-            [None, 3, 7, 10], [0.7, 0.2, 0.05, 0.05]
-        )[0]
+        regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
+        window_choice = random.choices([None, 3, 7, 10], [0.7, 0.2, 0.05, 0.05])[0]
         parameter_dict = {
             'regression_model': model_choice,
             'holiday': holiday_choice,

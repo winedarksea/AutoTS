@@ -540,10 +540,7 @@ class ETS(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(forecast_by_column)(
-                    self.df_train, args, col
-                )
-                for (col) in cols
+                delayed(forecast_by_column)(self.df_train, args, col) for (col) in cols
             )
             forecast = pd.concat(df_list, axis=1)
         else:
@@ -1091,10 +1088,7 @@ class UnobservedComponents(ModelObject):
         # print(f"parallel is {parallel} and n_jobs is {self.n_jobs}")
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(forecast_by_column)(
-                    self.df_train, args, col
-                )
-                for (col) in cols
+                delayed(forecast_by_column)(self.df_train, args, col) for (col) in cols
             )
             forecast = pd.concat(df_list, axis=1)
         else:
@@ -1846,15 +1840,15 @@ class VAR(ModelObject):
             )
         forecast = pd.DataFrame(forecast)
         forecast.index = test_index
-        forecast.columns=self.column_names
+        forecast.columns = self.column_names
         forecast = transformer.inverse_transform(forecast)
         lower_forecast = pd.DataFrame(lower_forecast)
         lower_forecast.index = test_index
-        lower_forecast.columns=self.column_names
+        lower_forecast.columns = self.column_names
         lower_forecast = transformer.inverse_transform(lower_forecast)
         upper_forecast = pd.DataFrame(upper_forecast)
         upper_forecast.index = test_index
-        upper_forecast.columns=self.column_names
+        upper_forecast.columns = self.column_names
         upper_forecast = transformer.inverse_transform(upper_forecast)
 
         if just_point_forecast:

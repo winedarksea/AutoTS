@@ -208,7 +208,9 @@ class NumericTransformer(object):
                 if self.categorical_fillna == "ffill":
                     df_enc = df_enc.fillna(method='ffill').fillna(method='bfill')
                 df_enc = df_enc.fillna('missing_value')
-                self.cat_transformer = OrdinalEncoder(handle_unknown=self.handle_unknown, unknown_value=np.nan)
+                self.cat_transformer = OrdinalEncoder(
+                    handle_unknown=self.handle_unknown, unknown_value=np.nan
+                )
                 # the + 1 makes it compatible with remove_leading_zeroes
                 df_enc = self.cat_transformer.fit_transform(df_enc) + 1
                 # df_enc = self.cat_transformer.transform(df_enc) + 1

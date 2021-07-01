@@ -264,8 +264,7 @@ conda activate timeseries
 # for simplicity: 
 conda install anaconda
 # elsewise: 
-conda install numpy scipy
-conda install scikit-learn   # -c conda-forge is sometimes a version ahead of main channel
+conda install numpy scipy scikit-learn   # -c conda-forge is sometimes a version ahead of main channel
 pip install statsmodels     # pip is sometimes a version ahead of main conda channel
 
 conda install -c conda-forge prophet
@@ -274,14 +273,13 @@ pip install gluonts   # sometimes the dependency versioning for gluonts can be p
 pip install lightgbm
 conda update anaconda
 pip install tensorflow
-pip install tensorflow-probability
 ```
 #### Intel conda channel installation
 https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html
 ```shell
 # create the environment. Intelpy compatability is often a version or two behind latest py
 conda create -n intelpy -c intel python=3.7 intelpython3_full
-activate intelpy
+conda activate intelpy
 
 # install additional packages as desired
 conda install -c intel statsmodels lightgbm tensorflow

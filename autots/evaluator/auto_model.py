@@ -8,7 +8,12 @@ from hashlib import md5
 from autots.evaluator.metrics import PredictionEval
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
 from autots.models.ensemble import EnsembleForecast, generalize_horizontal
-from autots.models.model_list import no_params, recombination_approved, no_shared, superfast
+from autots.models.model_list import (
+    no_params,
+    recombination_approved,
+    no_shared,
+    superfast,
+)
 from itertools import zip_longest
 from autots.models.basics import (
     MotifSimulation,
@@ -1056,9 +1061,12 @@ def TemplateWizard(
             if verbose >= 0:
                 if traceback:
                     import traceback as tb
+
                     print(
                         'Template Eval Error: {} in model {}: {}'.format(
-                            ''.join(tb.format_exception(None, e, e.__traceback__)), template_result.model_count, model_str
+                            ''.join(tb.format_exception(None, e, e.__traceback__)),
+                            template_result.model_count,
+                            model_str,
                         )
                     )
                 else:

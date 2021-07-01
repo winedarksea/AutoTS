@@ -128,7 +128,7 @@ recombination_approved = [
     'WindowRegression',
     'TensorflowSTS',
     'TFPRegression',
-    'UnivariateRegression'
+    'UnivariateRegression',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [

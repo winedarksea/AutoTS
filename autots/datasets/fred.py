@@ -78,6 +78,8 @@ def get_fred_data(fredkey: str, SeriesNameDict: dict = None, long=True, **kwargs
             )
         else:
             data.name = series_name
-            fred_timeseries = fred_timeseries.merge(data, how="outer", left_index=True, right_index=True)
+            fred_timeseries = fred_timeseries.merge(
+                data, how="outer", left_index=True, right_index=True
+            )
 
     return fred_timeseries

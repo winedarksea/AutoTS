@@ -181,7 +181,7 @@ class AutoTS(object):
             self.model_list = model_lists[model_list]
         # prepare for a common Typo
         elif 'Prophet' in model_list:
-            self.model_list = ["FBProphet" if x=="Prophet" else x for x in model_list]
+            self.model_list = ["FBProphet" if x == "Prophet" else x for x in model_list]
 
         # generate template to begin with
         initial_template = str(initial_template).lower()
@@ -309,7 +309,7 @@ class AutoTS(object):
             id_col (str): name of column identifying different series.
             future_regressor (numpy.Array): single external regressor matching train.index
             weights (dict): {'colname1': 2, 'colname2': 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
-                pass the alias 'mean' as a str ie `weights='mean'` to automatically use the mean value of a series as its weight 
+                pass the alias 'mean' as a str ie `weights='mean'` to automatically use the mean value of a series as its weight
                 available aliases: mean, median, min, max
             result_file (str): results saved on each new generation. Does not include validation rounds.
                 ".csv" save model results table.
@@ -394,7 +394,6 @@ class AutoTS(object):
         self.categorical_transformer = NumericTransformer(verbose=self.verbose)
         df_wide_numeric = self.categorical_transformer.fit_transform(df_wide)
 
-
         # use "mean" to assign weight as mean
         if weights == 'mean':
             weights = df_wide_numeric.mean(axis=0).to_dict()
@@ -420,7 +419,8 @@ class AutoTS(object):
                 else:
                     print("All series_id present in weighting.")
             weights = {
-                col: (weights[col] if col in weights else 1) for col in df_wide_numeric.columns
+                col: (weights[col] if col in weights else 1)
+                for col in df_wide_numeric.columns
             }
             # handle non-numeric inputs
             weights = {
@@ -483,9 +483,7 @@ class AutoTS(object):
                 future_regressor.index = df_subset.index
             # handle any non-numeric data, crudely
             self.regr_num_trans = NumericTransformer(verbose=self.verbose)
-            future_regressor = self.regr_num_trans.fit_transform(
-                future_regressor
-            )
+            future_regressor = self.regr_num_trans.fit_transform(future_regressor)
             self.future_regressor_train = future_regressor
             future_regressor_train = future_regressor.reindex(index=df_train.index)
             future_regressor_test = future_regressor.reindex(index=df_test.index)
@@ -955,7 +953,7 @@ or otherwise increase models available."""
                     random_seed=random_seed,
                     verbose=verbose,
                     n_jobs=self.n_jobs,
-                    traceback=True
+                    traceback=True,
                 )
                 # capture results from lower-level template run
                 template_result.model_results['TotalRuntime'].fillna(
@@ -1101,9 +1099,7 @@ or otherwise increase models available."""
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
             # handle any non-numeric data, crudely
-            future_regressor = self.regr_num_trans.transform(
-                future_regressor
-            )
+            future_regressor = self.regr_num_trans.transform(future_regressor)
             # make sure training regressor fits training data index
             self.future_regressor_train = self.future_regressor_train.reindex(
                 index=self.df_wide_numeric.index

@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.evaluator package &#8212; AutoTS 0.3.1 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 0.3.2 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -167,7 +167,7 @@ I got better. -Python</p>
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.TemplateWizard">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateWizard</code><span class="sig-paren">(</span><em class="sig-param">template, df_train, df_test, weights, model_count: int = 0, ensemble: str = True, forecast_length: int = 14, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=[], future_regressor_forecast=[], holiday_country: str = 'US', startTimeStamps=None, random_seed: int = 2020, verbose: int = 0, n_jobs: int = None, validation_round: int = 0, current_generation: int = 0, max_generations: int = 0, model_interrupt: bool = False, grouping_ids=None, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble']</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateWizard" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateWizard</code><span class="sig-paren">(</span><em class="sig-param">template, df_train, df_test, weights, model_count: int = 0, ensemble: str = True, forecast_length: int = 14, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=[], future_regressor_forecast=[], holiday_country: str = 'US', startTimeStamps=None, random_seed: int = 2020, verbose: int = 0, n_jobs: int = None, validation_round: int = 0, current_generation: int = 0, max_generations: int = 0, model_interrupt: bool = False, grouping_ids=None, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], traceback: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateWizard" title="Permalink to this definition">¶</a></dt>
 <dd><p>Take Template, returns Results.</p>
 <p>There are some who call me… Tim. - Python</p>
 <dl class="field-list simple">
@@ -194,6 +194,7 @@ I got better. -Python</p>
 <li><p><strong>max_generations</strong> (<em>int</em>) – info to pass to print statements</p></li>
 <li><p><strong>model_interrupt</strong> (<em>bool</em>) – if True, keyboard interrupts are caught and only break current model eval.</p></li>
 <li><p><strong>template_cols</strong> (<em>list</em>) – column names of columns used as model template</p></li>
+<li><p><strong>traceback</strong> (<em>bool</em>) – include tracebook over just error representation</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -264,7 +265,7 @@ I got better. -Python</p>
 <p>Higher-level backbone of auto time series modeling.</p>
 <dl class="class">
 <dt id="autots.evaluator.auto_ts.AutoTS">
-<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 5</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 0</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 1}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'fast'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'even'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 20</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 1</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 2}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'fast'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'backwards'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">prefill_na: str = None</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Automate time series modeling using a genetic algorithm.</p>
 <dl class="field-list simple">
@@ -287,7 +288,8 @@ More runs = longer runtime, generally better accuracy.</p></li>
 Beware numeric aggregations like ‘mean’ will not work with non-numeric inputs.</p></li>
 <li><p><strong>na_tolerance</strong> (<em>float</em>) – 0 to 1. Series are dropped if they have more than this percent NaN. 0.95 here would allow series containing up to 95% NaN values.</p></li>
 <li><p><strong>metric_weighting</strong> (<em>dict</em>) – weights to assign to metrics, effecting how the ranking score is generated.</p></li>
-<li><p><strong>drop_most_recent</strong> (<em>int</em>) – option to drop n most recent data points. Useful, say, for monthly sales data where the current (unfinished) month is included.</p></li>
+<li><p><strong>drop_most_recent</strong> (<em>int</em>) – option to drop n most recent data points. Useful, say, for monthly sales data where the current (unfinished) month is included.
+occurs after any aggregration is applied, so will be whatever is specified by frequency, will drop n frequencies</p></li>
 <li><p><strong>drop_data_older_than_periods</strong> (<em>int</em>) – take only the n most recent timestamps</p></li>
 <li><p><strong>model_list</strong> (<em>list</em>) – str alias or list of names of model objects to use</p></li>
 <li><p><strong>transformer_list</strong> (<em>list</em>) – list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.</p></li>
@@ -305,6 +307,8 @@ If horizontal or probabilistic ensemble, then additional min per_series models a
 0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
 Useful in (unrecommended) cases where forecast_length &gt; training length.</p></li>
 <li><p><strong>remove_leading_zeroes</strong> (<em>bool</em>) – replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn’t started yet.</p></li>
+<li><p><strong>prefill_na</strong> (<em>str</em>) – value to input to fill all NaNs with. Leaving as None and allowing model interpolation is recommended.
+None, 0, ‘mean’, or ‘median’. 0 may be useful in for examples sales cases where all NaN can be assumed equal to zero.</p></li>
 <li><p><strong>model_interrupt</strong> (<em>bool</em>) – if False, KeyboardInterrupts quit entire program.
 if True, KeyboardInterrupts attempt to only quit current model.
 if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite>result_file</cite> in the event of accidental complete termination.</p></li>
@@ -380,7 +384,9 @@ the max number of each model class to include in template</p></li>
 <li><p><strong>value_col</strong> (<em>str</em>) – name of column containing the data of series.</p></li>
 <li><p><strong>id_col</strong> (<em>str</em>) – name of column identifying different series.</p></li>
 <li><p><strong>future_regressor</strong> (<em>numpy.Array</em>) – single external regressor matching train.index</p></li>
-<li><p><strong>weights</strong> (<em>dict</em>) – {‘colname1’: 2, ‘colname2’: 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.</p></li>
+<li><p><strong>weights</strong> (<em>dict</em>) – {‘colname1’: 2, ‘colname2’: 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
+pass the alias ‘mean’ as a str ie <cite>weights=’mean’</cite> to automatically use the mean value of a series as its weight
+available aliases: mean, median, min, max</p></li>
 <li><p><strong>result_file</strong> (<em>str</em>) – results saved on each new generation. Does not include validation rounds.
 “.csv” save model results table.
 “.pickle” saves full object, including ensemble information.</p></li>
