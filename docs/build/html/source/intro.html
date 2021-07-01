@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Intro &#8212; AutoTS 0.3.1 documentation</title>
+    <title>Intro &#8212; AutoTS 0.3.2 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -41,8 +41,19 @@
 <p><strong>Forecasting Model Selection for Multiple Time Series</strong></p>
 <p>AutoML for forecasting with open-source time series implementations.</p>
 <p>For other time series needs, check out the list <a class="reference external" href="https://github.com/MaxBenChrist/awesome_time_series_in_python">here</a>.</p>
-<div class="section" id="features">
-<h2>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="table-of-contents">
+<h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#features">Features</a></p></li>
+<li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#installation">Installation</a></p></li>
+<li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#basic-use">Basic Use</a></p></li>
+<li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#tips-for-speed-and-large-data">Tips for Speed and Large Data</a></p></li>
+<li><p>Extended Tutorial <a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md">GitHub</a> or <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html">Docs</a></p></li>
+<li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/production_example.py">Production Example</a></p></li>
+</ul>
+</div>
+<div class="section" id="id1">
+<h2>Features<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
 <li><p>Finds optimal time series forecasting model and data transformations by genetic programming optimization</p></li>
 <li><p>Handles univariate and multivariate/parallel time series</p></li>
@@ -78,15 +89,15 @@
 <li><p>Import and export of model templates for deployment and greater user customization</p></li>
 </ul>
 </div>
-<div class="section" id="installation">
-<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="id2">
+<h2>Installation<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h2>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>pip install autots
 </pre></div>
 </div>
-<p>This includes dependencies for basic models, but additonal packages are required for some models and methods.</p>
+<p>This includes dependencies for basic models, but <a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md#installation-and-dependency-versioning">additonal packages</a> are required for some models and methods.</p>
 </div>
-<div class="section" id="basic-use">
-<h2>Basic Use<a class="headerlink" href="#basic-use" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="id3">
+<h2>Basic Use<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h2>
 <p>Input data is expected to come in either a <em>long</em> or a <em>wide</em> format:</p>
 <ul class="simple">
 <li><p>The <em>wide</em> format is a <code class="docutils literal notranslate"><span class="pre">pandas.DataFrame</span></code> with a <code class="docutils literal notranslate"><span class="pre">pandas.DatetimeIndex</span></code> and each column a distinct series.</p></li>
@@ -143,14 +154,15 @@
 </div>
 <p>The lower-level API, in particular the large section of time series transformers in the scikit-learn style, can also be utilized independently from the AutoML framework.</p>
 <p>Check out <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html">extended_tutorial.md</a> for a more detailed guide to features!</p>
+<p>Also take a look at the <a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/production_example.py">production_example.py</a></p>
 </div>
-<div class="section" id="tips-for-speed-and-large-data">
-<h2>Tips for Speed and Large Data:<a class="headerlink" href="#tips-for-speed-and-large-data" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="id4">
+<h2>Tips for Speed and Large Data:<a class="headerlink" href="#id4" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
 <li><p>Use appropriate model lists, especially the predefined lists:</p>
 <ul>
 <li><p><code class="docutils literal notranslate"><span class="pre">superfast</span></code> (simple naive models) and <code class="docutils literal notranslate"><span class="pre">fast</span></code> (more complex but still faster models)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">fast_parallel</span></code> (a combination of <code class="docutils literal notranslate"><span class="pre">fast</span></code> and <code class="docutils literal notranslate"><span class="pre">parallel</span></code>) or <code class="docutils literal notranslate"><span class="pre">parallel</span></code>, given mave many CPU cores are available</p>
+<li><p><code class="docutils literal notranslate"><span class="pre">fast_parallel</span></code> (a combination of <code class="docutils literal notranslate"><span class="pre">fast</span></code> and <code class="docutils literal notranslate"><span class="pre">parallel</span></code>) or <code class="docutils literal notranslate"><span class="pre">parallel</span></code>, given many CPU cores are available</p>
 <ul>
 <li><p><code class="docutils literal notranslate"><span class="pre">n_jobs</span></code> usually gets pretty close with <code class="docutils literal notranslate"><span class="pre">='auto'</span></code> but adjust as necessary for the environment</p></li>
 </ul>
@@ -231,10 +243,11 @@
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Intro</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#autots">AutoTS</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#features">Features</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#basic-use">Basic Use</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#tips-for-speed-and-large-data">Tips for Speed and Large Data:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#table-of-contents">Table of Contents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id1">Features</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id2">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id3">Basic Use</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id4">Tips for Speed and Large Data:</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#how-to-contribute">How to Contribute:</a></li>
 </ul>
 </li>

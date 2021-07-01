@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>autots.datasets package &#8212; AutoTS 0.3.1 documentation</title>
+    <title>autots.datasets package &#8212; AutoTS 0.3.2 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -44,14 +44,17 @@
 and pip install fredapi</p>
 <dl class="function">
 <dt id="autots.datasets.fred.get_fred_data">
-<code class="sig-prename descclassname">autots.datasets.fred.</code><code class="sig-name descname">get_fred_data</code><span class="sig-paren">(</span><em class="sig-param">fredkey: str</em>, <em class="sig-param">SeriesNameDict: dict = {'SeriesID': 'SeriesName'}</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.fred.get_fred_data" title="Permalink to this definition">¶</a></dt>
-<dd><p>Imports Data from Federal Reserve</p>
+<code class="sig-prename descclassname">autots.datasets.fred.</code><code class="sig-name descname">get_fred_data</code><span class="sig-paren">(</span><em class="sig-param">fredkey: str</em>, <em class="sig-param">SeriesNameDict: dict = None</em>, <em class="sig-param">long=True</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.fred.get_fred_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Imports Data from Federal Reserve.
+For simplest results, make sure requested series are all of the same frequency.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>- an API key from FRED</strong> (<em>fredkey</em>) – </p></li>
-<li><p><strong>pairs of FRED Series IDs and Series Names</strong> (<em>SeriesNameDict</em><em>,</em>) – Series id must match Fred IDs, but name can be anything
-if default is use, several default samples are returned</p></li>
+<li><p><strong>fredkey</strong> (<em>str</em>) – an API key from FRED</p></li>
+<li><p><strong>SeriesNameDict</strong> (<em>dict</em>) – pairs of FRED Series IDs and Series Names like: {‘SeriesID’: ‘SeriesName’} or a list of FRED IDs.
+Series id must match Fred IDs, but name can be anything
+if None, several default series are returned</p></li>
+<li><p><strong>long</strong> (<em>bool</em>) – if True, return long style data, else return wide style data with dt index</p></li>
 </ul>
 </dd>
 </dl>

@@ -15,18 +15,16 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* Additional models to GluonTS
-* GeneralTransformer transformation_params - now handle None or empty dict
-* cleaning up of the appropriately named 'ModelMonster'
-* improving MotifSimulation
-* better error message for all models
-* enable histgradientboost regressor, left it out before thinking it wouldn't stay experimental this long
-* import_template now has slightly better `method` input style
-* allow `ensemble` parameter to be a list
-* NumericTransformer
-	* add .fit_transform method
-	* generally more options and speed improvement
-* added NumericTransformer to future_regressors, should now coerce if they have different dtypes
+* Table of Contents to Extended Tutorial/Readme.md
+* Production Example
+* add weights="mean"/median/min/max
+* UnivariateRegression
+* fix check_pickle error for ETS
+* fix error in Prophet with latest version
+* VisibleDeprecation warning for hidden_layers random choice in sklearn fixed
+* prefill_na option added to allow quick filling of NaNs if desired (with zeroes for say, sales forecasting)
+* made horizontal generalization more stable
+* fixed bug in VAR where failing on data with negatives
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

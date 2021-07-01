@@ -218,6 +218,7 @@ def HorizontalEnsemble(
         mod for mod, fcs in forecasts.items() if fcs.shape[1] == train_size[1]
     ]
     if not full_models:
+        print("No full models available for horizontal generalization!")
         full_models = available_models  # hope it doesn't need to fill
     # print(f"FULLMODEL {len(full_models)}: {full_models}")
     if prematched_series is None:

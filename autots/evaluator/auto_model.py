@@ -8,7 +8,12 @@ from hashlib import md5
 from autots.evaluator.metrics import PredictionEval
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
 from autots.models.ensemble import EnsembleForecast, generalize_horizontal
-from autots.models.model_list import no_params, recombination_approved, no_shared
+from autots.models.model_list import (
+    no_params,
+    recombination_approved,
+    no_shared,
+    superfast,
+)
 from itertools import zip_longest
 from autots.models.basics import (
     MotifSimulation,
@@ -143,6 +148,20 @@ def ModelMonster(
             random_seed=random_seed,
             verbose=verbose,
             n_jobs=n_jobs,
+            **parameters,
+        )
+        return model
+    elif model == 'UnivariateRegression':
+        from autots.models.sklearn import UnivariateRegression
+
+        model = UnivariateRegression(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            forecast_length=forecast_length,
             **parameters,
         )
         return model
@@ -658,6 +677,7 @@ def PredictWitch(
     if isinstance(template, pd.Series):
         template = pd.DataFrame(template).transpose()
     template = template.head(1)
+    full_model_created = False  # make at least one full model, horziontal only
     for index_upper, row_upper in template.iterrows():
         # if an ensemble
         if row_upper['Model'] == 'Ensemble':
@@ -750,6 +770,11 @@ def PredictWitch(
             model_str = row_upper['Model']
             parameter_dict = json.loads(row_upper['ModelParameters'])
             transformation_dict = json.loads(row_upper['TransformationParameters'])
+            # this is needed for horizontal generalization if any models failed, at least one full model on all series
+            if model_str in superfast and not full_model_created:
+                make_full_flag = True
+            else:
+                make_full_flag = False
             if (
                 horizontal_subset is not None
                 and model_str in no_shared
@@ -757,11 +782,13 @@ def PredictWitch(
                     trs not in shared_trans
                     for trs in list(transformation_dict['transformations'].values())
                 )
+                and not make_full_flag
             ):
                 df_train_low = df_train.reindex(copy=True, columns=horizontal_subset)
                 # print(f"Reducing to subset for {model_str} with {df_train_low.columns}")
             else:
                 df_train_low = df_train.copy()
+                full_model_created = True
 
             df_forecast = ModelPrediction(
                 df_train_low,
@@ -816,6 +843,7 @@ def TemplateWizard(
         'TransformationParameters',
         'Ensemble',
     ],
+    traceback: bool = False,
 ):
     """
     Take Template, returns Results.
@@ -844,6 +872,7 @@ def TemplateWizard(
         max_generations (int): info to pass to print statements
         model_interrupt (bool): if True, keyboard interrupts are caught and only break current model eval.
         template_cols (list): column names of columns used as model template
+        traceback (bool): include tracebook over just error representation
 
     Returns:
         TemplateEvalObject
@@ -1030,11 +1059,23 @@ def TemplateWizard(
                 raise KeyboardInterrupt
         except Exception as e:
             if verbose >= 0:
-                print(
-                    'Template Eval Error: {} in model {}: {}'.format(
-                        (repr(e)), template_result.model_count, model_str
+                if traceback:
+                    import traceback as tb
+
+                    print(
+                        'Template Eval Error: {} in model {}: {}'.format(
+                            ''.join(tb.format_exception(None, e, e.__traceback__)),
+                            template_result.model_count,
+                            model_str,
+                        )
                     )
-                )
+                else:
+                    print(
+                        'Template Eval Error: {} in model {}: {}'.format(
+                            (repr(e)), template_result.model_count, model_str
+                        )
+                    )
+
             result = pd.DataFrame(
                 {
                     'ID': create_model_id(

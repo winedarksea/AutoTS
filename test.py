@@ -15,23 +15,33 @@ from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor, error_correlations
 
 # raise ValueError("aaargh!")
+use_template = False
+use_m5 = False  # long = False
+force_univariate = False  # long = False
 
-example_filename = "example_export.csv"  # .csv/.json
+# this is the template file imported:
+example_filename = "general_templateDESKTOP-JS3OJ8L.csv" # "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
 df = load_monthly(long=long)
 n_jobs = 'auto'
-generations = 2
 verbose = 1
-num_validations = 1
 validation_method = "backwards"
+if use_template:
+    generations = 0
+    num_validations = 0
+else:
+    generations = 2
+    num_validations = 2
 
-"""
-df = pd.read_csv("m5_sample.gz")
-df['datetime'] = pd.DatetimeIndex(df['datetime'])
-df = df.set_index("datetime", drop=True)
-# df = df.iloc[:, 0:40]
-"""
+if use_m5:
+    long = False
+    df = pd.read_csv("m5_sample.gz")
+    df['datetime'] = pd.DatetimeIndex(df['datetime'])
+    df = df.set_index("datetime", drop=True)
+    # df = df.iloc[:, 0:40]
+if force_univariate:
+    df = df.iloc[:, 0]
 
 weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
@@ -70,9 +80,9 @@ model_list = [
 ]
 
 transformer_list = "all"  # ["SinTrend", "MinMaxScaler"]
-transformer_max_depth = 1
-model_list = 'fast'  # fast_parallel
-# model_list = ['MotifSimulation', 'LastValueNaive']
+transformer_max_depth = 3
+model_list = 'default'  # fast_parallel
+model_list = ['FBProphet', 'LastValueNaive']
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {
@@ -90,7 +100,7 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble=["simple","horizontal-max"],
+    ensemble=["simple,distance,horizontal-max"],
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,
@@ -105,6 +115,7 @@ model = AutoTS(
     model_interrupt=True,
     n_jobs=n_jobs,
     drop_most_recent=1,
+    prefill_na = 0,
     subset=None,
     verbose=verbose,
 )
@@ -134,13 +145,14 @@ future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
 )
 
 # model = model.import_results('test.pickle')
-# model = model.import_template(example_filename, method='only', enforce_model_list=True)
+if use_template:
+    model = model.import_template(example_filename, method='only', enforce_model_list=True)
 
 start_time_for = timeit.default_timer()
 model = model.fit(
     df,
     future_regressor=future_regressor_train2d,
-    weights=weights_weekly,
+    weights="mean",
     # grouping_ids=grouping_monthly,
     # result_file='test.pickle',
     date_col='datetime' if long else None,
@@ -218,7 +230,7 @@ sleep(5)
 print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 import platform
-initial_results.to_csv("general_template" + str(platform.node()) + ".csv")
+initial_results.to_csv("general_template_" + str(platform.node()) + ".csv")
 
 """
 # Import/Export
@@ -247,7 +259,7 @@ Edgey Cases:
 # %%
 df_wide_numeric = model.df_wide_numeric
 
-df = df_wide_numeric.tail(50).fillna(0).astype(float)
+df = df_wide_numeric.tail(100).fillna(0).astype(float)
 
 """
 PACKAGE RELEASE

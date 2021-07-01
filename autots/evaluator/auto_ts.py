@@ -52,6 +52,7 @@ class AutoTS(object):
         na_tolerance (float): 0 to 1. Series are dropped if they have more than this percent NaN. 0.95 here would allow series containing up to 95% NaN values.
         metric_weighting (dict): weights to assign to metrics, effecting how the ranking score is generated.
         drop_most_recent (int): option to drop n most recent data points. Useful, say, for monthly sales data where the current (unfinished) month is included.
+            occurs after any aggregration is applied, so will be whatever is specified by frequency, will drop n frequencies
         drop_data_older_than_periods (int): take only the n most recent timestamps
         model_list (list): str alias or list of names of model objects to use
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
@@ -69,6 +70,8 @@ class AutoTS(object):
             0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
             Useful in (unrecommended) cases where forecast_length > training length.
         remove_leading_zeroes (bool): replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn't started yet.
+        prefill_na (str): value to input to fill all NaNs with. Leaving as None and allowing model interpolation is recommended.
+            None, 0, 'mean', or 'median'. 0 may be useful in for examples sales cases where all NaN can be assumed equal to zero.
         model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
@@ -85,7 +88,7 @@ class AutoTS(object):
         forecast_length: int = 14,
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
-        max_generations: int = 5,
+        max_generations: int = 20,
         no_negatives: bool = False,
         constraint: float = None,
         ensemble: str = 'auto',
@@ -101,8 +104,8 @@ class AutoTS(object):
             'rmse_weighting': 2,
             'containment_weighting': 0,
             'runtime_weighting': 0,
-            'spl_weighting': 1,
-            'contour_weighting': 0,
+            'spl_weighting': 2,
+            'contour_weighting': 1,
         },
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
@@ -112,9 +115,10 @@ class AutoTS(object):
         num_validations: int = 2,
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
-        validation_method: str = 'even',
+        validation_method: str = 'backwards',
         min_allowed_train_percent: float = 0.5,
         remove_leading_zeroes: bool = False,
+        prefill_na: str = None,
         model_interrupt: bool = False,
         verbose: int = 1,
         n_jobs: int = None,
@@ -147,6 +151,7 @@ class AutoTS(object):
         self.min_allowed_train_percent = min_allowed_train_percent
         self.max_generations = max_generations
         self.remove_leading_zeroes = remove_leading_zeroes
+        self.prefill_na = prefill_na
         self.model_interrupt = model_interrupt
         self.verbose = int(verbose)
         self.n_jobs = n_jobs
@@ -174,6 +179,9 @@ class AutoTS(object):
         # convert shortcuts of model lists to actual lists of models
         if model_list in list(model_lists.keys()):
             self.model_list = model_lists[model_list]
+        # prepare for a common Typo
+        elif 'Prophet' in model_list:
+            self.model_list = ["FBProphet" if x == "Prophet" else x for x in model_list]
 
         # generate template to begin with
         initial_template = str(initial_template).lower()
@@ -301,6 +309,8 @@ class AutoTS(object):
             id_col (str): name of column identifying different series.
             future_regressor (numpy.Array): single external regressor matching train.index
             weights (dict): {'colname1': 2, 'colname2': 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
+                pass the alias 'mean' as a str ie `weights='mean'` to automatically use the mean value of a series as its weight
+                available aliases: mean, median, min, max
             result_file (str): results saved on each new generation. Does not include validation rounds.
                 ".csv" save model results table.
                 ".pickle" saves full object, including ensemble information.
@@ -372,6 +382,7 @@ class AutoTS(object):
         df_wide = df_cleanup(
             df_wide,
             frequency=self.frequency,
+            prefill_na=self.prefill_na,
             na_tolerance=self.na_tolerance,
             drop_data_older_than_periods=self.drop_data_older_than_periods,
             aggfunc=self.aggfunc,
@@ -379,33 +390,43 @@ class AutoTS(object):
             verbose=self.verbose,
         )
 
+        # handle categorical data if present
+        self.categorical_transformer = NumericTransformer(verbose=self.verbose)
+        df_wide_numeric = self.categorical_transformer.fit_transform(df_wide)
+
+        # use "mean" to assign weight as mean
+        if weights == 'mean':
+            weights = df_wide_numeric.mean(axis=0).to_dict()
+        elif weights == 'median':
+            weights = df_wide_numeric.median(axis=0).to_dict()
+        elif weights == 'min':
+            weights = df_wide_numeric.min(axis=0).to_dict()
+        elif weights == 'max':
+            weights = df_wide_numeric.max(axis=0).to_dict()
         # clean up series weighting input
         if not weighted:
-            weights = {x: 1 for x in df_wide.columns}
+            weights = {x: 1 for x in df_wide_numeric.columns}
         else:
             # handle not all weights being provided
             if self.verbose > 1:
                 key_count = 0
-                for col in df_wide.columns:
+                for col in df_wide_numeric.columns:
                     if col in weights:
                         key_count += 1
-                key_count = df_wide.shape[1] - key_count
+                key_count = df_wide_numeric.shape[1] - key_count
                 if key_count > 0:
                     print(f"{key_count} series_id not in weights. Inferring 1.")
                 else:
                     print("All series_id present in weighting.")
             weights = {
-                col: (weights[col] if col in weights else 1) for col in df_wide.columns
+                col: (weights[col] if col in weights else 1)
+                for col in df_wide_numeric.columns
             }
             # handle non-numeric inputs
             weights = {
                 key: (abs(float(weights[key])) if str(weights[key]).isdigit() else 1)
                 for key in weights
             }
-
-        # handle categorical data if present
-        self.categorical_transformer = NumericTransformer(verbose=self.verbose)
-        df_wide_numeric = self.categorical_transformer.fit_transform(df_wide)
 
         # replace any zeroes that occur prior to all non-zero values
         if self.remove_leading_zeroes:
@@ -461,9 +482,8 @@ class AutoTS(object):
             if not isinstance(future_regressor.index, pd.DatetimeIndex):
                 future_regressor.index = df_subset.index
             # handle any non-numeric data, crudely
-            future_regressor = NumericTransformer(verbose=self.verbose).fit_transform(
-                future_regressor
-            )
+            self.regr_num_trans = NumericTransformer(verbose=self.verbose)
+            future_regressor = self.regr_num_trans.fit_transform(future_regressor)
             self.future_regressor_train = future_regressor
             future_regressor_train = future_regressor.reindex(index=df_train.index)
             future_regressor_test = future_regressor.reindex(index=df_test.index)
@@ -933,6 +953,7 @@ or otherwise increase models available."""
                     random_seed=random_seed,
                     verbose=verbose,
                     n_jobs=self.n_jobs,
+                    traceback=True,
                 )
                 # capture results from lower-level template run
                 template_result.model_results['TotalRuntime'].fillna(
@@ -1078,9 +1099,7 @@ or otherwise increase models available."""
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
             # handle any non-numeric data, crudely
-            future_regressor = NumericTransformer(verbose=self.verbose).fit_transform(
-                future_regressor
-            )
+            future_regressor = self.regr_num_trans.transform(future_regressor)
             # make sure training regressor fits training data index
             self.future_regressor_train = self.future_regressor_train.reindex(
                 index=self.df_wide_numeric.index
@@ -1200,35 +1219,39 @@ or otherwise increase models available."""
             export_template = self.initial_results.model_results[self.template_cols]
             export_template = export_template.drop_duplicates()
         elif models == 'best':
-            export_template = self.validation_results.model_results
-            export_template = export_template[
-                export_template['Runs'] >= (self.num_validations + 1)
-            ]
-            ens_list = ['horizontal', 'probabilistic', 'hdist']
-            if any(x in self.ensemble for x in ens_list):
-                temp = self.initial_results.model_results
-                temp = temp[temp['Ensemble'] >= 2]
-                temp = temp[temp['Exceptions'].isna()]
-                export_template = export_template.merge(
-                    temp,
-                    how='outer',
-                    on=export_template.columns.intersection(temp.columns).to_list(),
-                )
-                export_template['Score'] = generate_score(
-                    export_template,
-                    metric_weighting=self.metric_weighting,
-                    prediction_interval=self.prediction_interval,
-                )
-            if str(max_per_model_class).isdigit():
-                export_template = (
-                    export_template.sort_values('Score', ascending=True)
-                    .groupby('Model')
-                    .head(max_per_model_class)
-                    .reset_index()
-                )
-            export_template = export_template.nsmallest(n, columns=['Score'])
-            if not include_results:
-                export_template = export_template[self.template_cols]
+            # skip to the answer if just n==1
+            if n == 1 and not include_results:
+                export_template = self.best_model
+            else:
+                export_template = self.validation_results.model_results
+                export_template = export_template[
+                    export_template['Runs'] >= (self.num_validations + 1)
+                ]
+                ens_list = ['horizontal', 'probabilistic', 'hdist']
+                if any(x in self.ensemble for x in ens_list):
+                    temp = self.initial_results.model_results
+                    temp = temp[temp['Ensemble'] >= 2]
+                    temp = temp[temp['Exceptions'].isna()]
+                    export_template = export_template.merge(
+                        temp,
+                        how='outer',
+                        on=export_template.columns.intersection(temp.columns).to_list(),
+                    )
+                    export_template['Score'] = generate_score(
+                        export_template,
+                        metric_weighting=self.metric_weighting,
+                        prediction_interval=self.prediction_interval,
+                    )
+                if str(max_per_model_class).isdigit():
+                    export_template = (
+                        export_template.sort_values('Score', ascending=True)
+                        .groupby('Model')
+                        .head(max_per_model_class)
+                        .reset_index()
+                    )
+                export_template = export_template.nsmallest(n, columns=['Score'])
+                if not include_results:
+                    export_template = export_template[self.template_cols]
         else:
             raise ValueError("`models` must be 'all' or 'best'")
         try:

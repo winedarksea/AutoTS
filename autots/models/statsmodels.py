@@ -275,7 +275,6 @@ class GLM(ModelObject):
         else:
             pool_verbose = 0
 
-        # @wrap_non_picklable_objects
         def forecast_by_column(df, X, Xf, args, col):
             """Run one series of ETS and return prediction."""
             current_series = df[col]
@@ -541,10 +540,7 @@ class ETS(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(forecast_by_column, check_pickle=False)(
-                    self.df_train, args, col
-                )
-                for (col) in cols
+                delayed(forecast_by_column)(self.df_train, args, col) for (col) in cols
             )
             forecast = pd.concat(df_list, axis=1)
         else:
@@ -1092,10 +1088,7 @@ class UnobservedComponents(ModelObject):
         # print(f"parallel is {parallel} and n_jobs is {self.n_jobs}")
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(forecast_by_column, check_pickle=False)(
-                    self.df_train, args, col
-                )
-                for (col) in cols
+                delayed(forecast_by_column)(self.df_train, args, col) for (col) in cols
             )
             forecast = pd.concat(df_list, axis=1)
         else:
@@ -1820,8 +1813,8 @@ class VAR(ModelObject):
         if (self.df_train < 0).any(axis=None):
             from autots.tools.transform import PositiveShift
 
-            transformer = PositiveShift(center_one=False).fit(self.df_train)
-            self.df_train = transformer.transform(self.df_train)
+            transformer = PositiveShift(center_one=True)
+            self.df_train = transformer.fit_transform(self.df_train)
         else:
             from autots.tools.transform import EmptyTransformer
 
@@ -1845,21 +1838,18 @@ class VAR(ModelObject):
                 y=self.df_train.values,
                 alpha=1 - self.prediction_interval,
             )
-        forecast = pd.DataFrame(
-            transformer.inverse_transform(forecast),
-            index=test_index,
-            columns=self.column_names,
-        )
-        lower_forecast = pd.DataFrame(
-            transformer.inverse_transform(lower_forecast),
-            index=test_index,
-            columns=self.column_names,
-        )
-        upper_forecast = pd.DataFrame(
-            transformer.inverse_transform(upper_forecast),
-            index=test_index,
-            columns=self.column_names,
-        )
+        forecast = pd.DataFrame(forecast)
+        forecast.index = test_index
+        forecast.columns = self.column_names
+        forecast = transformer.inverse_transform(forecast)
+        lower_forecast = pd.DataFrame(lower_forecast)
+        lower_forecast.index = test_index
+        lower_forecast.columns = self.column_names
+        lower_forecast = transformer.inverse_transform(lower_forecast)
+        upper_forecast = pd.DataFrame(upper_forecast)
+        upper_forecast.index = test_index
+        upper_forecast.columns = self.column_names
+        upper_forecast = transformer.inverse_transform(upper_forecast)
 
         if just_point_forecast:
             return forecast
