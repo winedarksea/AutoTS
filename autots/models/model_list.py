@@ -39,6 +39,7 @@ default = [
     'VECM',
     'WindowRegression',
     'DatepartRegression',
+    'UnivariateRegression',
 ]
 # fastest models at any scale
 superfast = [

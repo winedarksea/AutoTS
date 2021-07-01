@@ -24,6 +24,7 @@
 * VisibleDeprecation warning for hidden_layers random choice in sklearn fixed
 * prefill_na option added to allow quick filling of NaNs if desired (with zeroes for say, sales forecasting)
 * made horizontal generalization more stable
+* fixed bug in VAR where failing on data with negatives
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
