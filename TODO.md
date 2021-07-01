@@ -23,6 +23,7 @@
 * fix error in Prophet with latest version
 * VisibleDeprecation warning for hidden_layers random choice in sklearn fixed
 * prefill_na option added to allow quick filling of NaNs if desired (with zeroes for say, sales forecasting)
+* made horizontal generalization more stable
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
