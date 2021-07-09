@@ -85,7 +85,20 @@ class ModelObject(object):
 
 
 class PredictionObject(object):
-    """Generic class for holding forecast information."""
+    """Generic class for holding forecast information.
+
+    Attributes:
+        model_name
+        model_parameters
+        transformation_parameters
+        forecast
+        upper_forecast
+        lower_forecast
+
+    Methods:
+        long_form_results: return complete results in long form
+        total_runtime: return runtime for all model components in seconds
+    """
 
     def __init__(
         self,
@@ -130,6 +143,27 @@ class PredictionObject(object):
             return True
         else:
             return False
+
+    def long_form_results(self, id_name = "SeriesID", value_name = "Value", interval_name = 'PredictionInterval', update_datetime_name = None):
+        """Export forecasts (including upper and lower) as single 'long' format output
+
+        Returns:
+            pd.DataFrame
+        """
+        try:
+            upload = pd.melt(self.forecast, var_name=id_name, value_name=value_name, ignore_index=False)
+        except Exception:
+            raise ImportError("Requires pandas>=1.1.0")
+        upload[interval_name] = "50%"
+        upload_upper = pd.melt(self.upper_forecast, var_name=id_name, value_name=value_name, ignore_index=False)
+        upload_upper[interval_name] =  f"{round(100 - ((1- self.prediction_interval)/2) * 100, 0)}%"
+        upload_lower = pd.melt(self.lower_forecast, var_name=id_name, value_name=value_name, ignore_index=False)
+        upload_lower[interval_name] = f"{round(((1- self.prediction_interval)/2) * 100, 0)}%"
+
+        upload = pd.concat([upload, upload_upper, upload_lower], axis=0)
+        if update_datetime_name is not None:
+            upload[update_datetime_name] = datetime.datetime.utcnow()
+        return upload
 
     def total_runtime(self):
         """Combine runtimes."""

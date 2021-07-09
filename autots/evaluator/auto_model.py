@@ -501,13 +501,15 @@ def ModelPrediction(
 
 
 class TemplateEvalObject(object):
-    """Object to contain all your failures!."""
+    """Object to contain all the failures!."""
 
     def __init__(
         self,
         model_results=pd.DataFrame(),
         per_timestamp_smape=pd.DataFrame(),
         per_series_mae=pd.DataFrame(),
+        per_series_rmse=pd.DataFrame(),
+        per_series_contour=pd.DataFrame(),
         per_series_spl=pd.DataFrame(),
         per_series_rmse1=pd.DataFrame(),
         per_series_rmse2=pd.DataFrame(),
@@ -516,6 +518,8 @@ class TemplateEvalObject(object):
         self.model_results = model_results
         self.model_count = model_count
         self.per_series_mae = per_series_mae
+        self.per_series_contour = per_series_contour
+        self.per_series_rmse = per_series_rmse
         self.per_series_spl = per_series_spl
         self.per_series_rmse1 = per_series_rmse1
         self.per_series_rmse2 = per_series_rmse2
@@ -535,6 +539,12 @@ class TemplateEvalObject(object):
         ).reset_index(drop=True)
         self.per_series_mae = pd.concat(
             [self.per_series_mae, another_eval.per_series_mae], axis=0, sort=False
+        )
+        self.per_series_contour = pd.concat(
+            [self.per_series_contour, another_eval.per_series_contour], axis=0, sort=False
+        )
+        self.per_series_rmse = pd.concat(
+            [self.per_series_rmse, another_eval.per_series_rmse], axis=0, sort=False
         )
         self.per_series_spl = pd.concat(
             [self.per_series_spl, another_eval.per_series_spl], axis=0, sort=False
@@ -953,6 +963,15 @@ def TemplateWizard(
                 per_timestamp_errors=per_ts,
                 dist_n=dist_n,
             )
+            if validation_round >= 1 and verbose > 0:
+                validation_accuracy_print = (
+                    "Model {} of model {} with avg smape {}: ".format(
+                        str(template_result.model_count),
+                        model_str,
+                        model_error.avg_metrics['smape'].round(2),
+                    )
+                )
+                print(validation_accuracy_print)
             model_id = create_model_id(
                 df_forecast.model_name,
                 df_forecast.model_parameters,
@@ -1000,6 +1019,20 @@ def TemplateWizard(
                 cur_mae.index = [model_id]
                 template_result.per_series_mae = pd.concat(
                     [template_result.per_series_mae, cur_mae], axis=0
+                )
+                
+                cur_mae = model_error.per_series_metrics.loc['contour']
+                cur_mae = pd.DataFrame(cur_mae).transpose()
+                cur_mae.index = [model_id]
+                template_result.per_series_contour = pd.concat(
+                    [template_result.per_series_contour, cur_mae], axis=0
+                )
+                
+                cur_mae = model_error.per_series_metrics.loc['rmse']
+                cur_mae = pd.DataFrame(cur_mae).transpose()
+                cur_mae.index = [model_id]
+                template_result.per_series_rmse = pd.concat(
+                    [template_result.per_series_rmse, cur_mae], axis=0
                 )
             if 'probabilistic' in ensemble:
                 cur_spl = model_error.per_series_metrics.loc['spl']
@@ -1138,7 +1171,7 @@ def RandomTemplate(
     while len(template.index) < n:
         model_str = np.random.choice(model_list)
         param_dict = ModelMonster(model_str).get_new_params()
-        if n % 4 == 0:
+        if counter % 4 == 0:
             trans_dict = RandomTransform(
                 transformer_list=transformer_list,
                 transformer_max_depth=transformer_max_depth,

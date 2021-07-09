@@ -340,7 +340,6 @@ class AutoTS(object):
         no_negatives = self.no_negatives
         random_seed = self.random_seed
         holiday_country = self.holiday_country
-        ensemble = self.ensemble
         metric_weighting = self.metric_weighting
         num_validations = self.num_validations
         verbose = self.verbose
@@ -395,14 +394,15 @@ class AutoTS(object):
         df_wide_numeric = self.categorical_transformer.fit_transform(df_wide)
 
         # use "mean" to assign weight as mean
-        if weights == 'mean':
-            weights = df_wide_numeric.mean(axis=0).to_dict()
-        elif weights == 'median':
-            weights = df_wide_numeric.median(axis=0).to_dict()
-        elif weights == 'min':
-            weights = df_wide_numeric.min(axis=0).to_dict()
-        elif weights == 'max':
-            weights = df_wide_numeric.max(axis=0).to_dict()
+        if weighted:
+            if weights == 'mean':
+                weights = df_wide_numeric.mean(axis=0).to_dict()
+            elif weights == 'median':
+                weights = df_wide_numeric.median(axis=0).to_dict()
+            elif weights == 'min':
+                weights = df_wide_numeric.min(axis=0).to_dict()
+            elif weights == 'max':
+                weights = df_wide_numeric.max(axis=0).to_dict()
         # clean up series weighting input
         if not weighted:
             weights = {x: 1 for x in df_wide_numeric.columns}
@@ -436,6 +436,19 @@ class AutoTS(object):
             temp = df_wide_numeric[~temp.isna()]
             temp = temp.head(df_wide_numeric.shape[0] - 1)
             df_wide_numeric = pd.concat([temp, df_wide_numeric.tail(1)], axis=0)
+
+        # remove other ensembling types if univariate
+        if df_wide_numeric.shape[1] == 1:
+            if "simple" in self.ensemble:
+                ens_piece1 = "simple"
+            else:
+                ens_piece1 = ""
+            if "distance" in self.ensemble:
+                ens_piece2 = "distance"
+            else:
+                ens_piece2 = ""
+            self.ensemble = ens_piece1 + "," + ens_piece2
+        ensemble = self.ensemble
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()

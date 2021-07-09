@@ -16,7 +16,7 @@ from autots.evaluator.auto_ts import AutoTS
 from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.tools.shaping import long_to_wide
 
-__version__ = '0.3.2'
+__version__ = '0.3.3'
 
 TransformTS = GeneralTransformer
 

@@ -15,16 +15,8 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* Table of Contents to Extended Tutorial/Readme.md
-* Production Example
-* add weights="mean"/median/min/max
-* UnivariateRegression
-* fix check_pickle error for ETS
-* fix error in Prophet with latest version
-* VisibleDeprecation warning for hidden_layers random choice in sklearn fixed
-* prefill_na option added to allow quick filling of NaNs if desired (with zeroes for say, sales forecasting)
-* made horizontal generalization more stable
-* fixed bug in VAR where failing on data with negatives
+* Fixed horizontal ensembles running in univariate cases (they explicitly multivariate)
+* 'superfast' transformer list added
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

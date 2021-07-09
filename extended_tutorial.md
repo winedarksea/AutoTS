@@ -71,6 +71,10 @@ When working with many time series, it can be helpful to take advantage of `subs
 Subset takes advantage of weighting, more highly-weighted series are more likely to be selected. Weighting is used with multiple time series to tell the evaluator which series are most important. Series weights are assumed to all be equal to 1, values need only be passed in when a value other than 1 is desired. 
 Note for weighting, larger weights = more important.
 
+Probably the most likely thing to cause trouble is having a lot of NaN/missing data. Especially a lot of missing data in the most recent available data. 
+Using appropriate cross validation (`backwards` especially if NaN is common in older data but not recent data) can help. 
+Dropping series which are mostly missing, or using `prefill_na=0` (or other value) can also help.
+
 ### Validation and Cross Validation
 Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future. 
 With very small datasets, there may be not be enough data for cross validation, in which case `num_validations` may be set to 0. This can also speed up quick tests. 
@@ -139,6 +143,7 @@ model = model.fit(
 
 prediction = model.predict()
 forecasts_df = prediction.forecast
+# prediction.long_form_results()
 # model.best_model.to_string()
 ```
 
@@ -257,6 +262,22 @@ You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_co
 On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster/more stable compilations. 
 Linux will also require `sudo apt install build-essential` for some packages.
 
+#### Safest bet:
+```shell
+conda create -n openblas python=3.9
+conda activate openblas
+
+python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm --exists-action i
+python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily
+python -m pip install mxnet --exists-action i     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
+python -m pip install gluonts --exists-action i
+python -m pip install --upgrade numpy pandas --exists-action i  # mxnet likes to (pointlessly seeming) install old versions of numpy
+
+python -m pip install autots --exists-action i
+```
+
+#### Some conda
+
 ```shell
 conda create -n timeseries python=3.9
 conda activate timeseries
@@ -264,17 +285,17 @@ conda activate timeseries
 # for simplicity: 
 conda install anaconda
 # elsewise: 
-conda install numpy scipy scikit-learn   # -c conda-forge is sometimes a version ahead of main channel
-pip install statsmodels     # pip is sometimes a version ahead of main conda channel
+conda install numpy scipy scikit-learn statsmodels  # -c conda-forge is sometimes a version ahead of main channel
 
 conda install -c conda-forge prophet
 pip install mxnet     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
-pip install gluonts   # sometimes the dependency versioning for gluonts can be picky
-pip install lightgbm
+pip install gluonts
+pip install lightgbm tensorflow
 conda update anaconda
-pip install tensorflow
+
+pip install autots
 ```
-#### Intel conda channel installation
+#### Intel conda channel installation (fastest, also, more prone to bugs)
 https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html
 ```shell
 # create the environment. Intelpy compatability is often a version or two behind latest py
@@ -288,6 +309,8 @@ python -m pip install mxnet
 python -m pip install gluonts
 # conda install -c anaconda tornado pystan  # may be necessary for fbprophet
 python -m pip install prophet
+
+pip install autots
 
 # also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html
 # pip install intel-tensorflow-avx512  and conda install tensorflow-mkl
@@ -415,7 +438,7 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  SeasonalNaive          |              |                         |               |                 |       |              |              |               |
 |  GLS                    | statsmodels  |                         |               |                 |       | True         |              |               |
 |  GLM                    | statsmodels  |                         |               |     joblib      |       |              |              | True          |
-|  ETS                    | statsmodels  |                         |               |     joblib      |       |              |              |               |
+|  ETS - Exponential Smoothing | statsmodels  |                         |               |     joblib      |       |              |              |               |
 |  UnobservedComponents   | statsmodels  |                         |               |     joblib      |       |              |              | True          |
 |  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  VARMAX                 | statsmodels  |                         |    True       |                 |       | True         |              |               |
@@ -426,11 +449,11 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   | True         |              |               |
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              |               |
+|  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
+|  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              | True         | True          |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |
 |  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |               |
 |  TSFreshRegressor       | tsfresh, sklearn |                     |               |                 |       |              | True         |               |
-|  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              | True         | True          |
-|  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              | True         | True          |
 

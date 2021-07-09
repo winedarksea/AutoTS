@@ -278,7 +278,12 @@ class Detrend(EmptyTransformer):
             temp = self.trnd_trans.inverse_transform(temp)
             df = df - temp
         else:
-            df = df - self.trained_model.predict(X)
+            if self.model == "GLS" and df.shape[1] == 1:
+                pred = self.trained_model.predict(X)
+                pred = pred.reshape(-1, 1)
+                df = df - pred
+            else:
+                df = df - self.trained_model.predict(X)
         return df
 
     def inverse_transform(self, df):
@@ -300,7 +305,12 @@ class Detrend(EmptyTransformer):
             )
             df = df + self.trnd_trans.inverse_transform(temp)
         else:
-            df = df + self.trained_model.predict(X)
+            if self.model == "GLS" and df.shape[1] == 1:
+                pred = self.trained_model.predict(X)
+                pred = pred.reshape(-1, 1)
+                df = df + pred
+            else:
+                df = df + self.trained_model.predict(X)
         # df = df.astype(float) + self.trained_model.predict(X)
         return df
 
@@ -2115,6 +2125,13 @@ del fast_transformer_dict['DatepartRegression']
 del fast_transformer_dict['SinTrend']
 del fast_transformer_dict['FastICA']
 
+# and even more
+superfast_transformer_dict = fast_transformer_dict.copy()
+del superfast_transformer_dict['IntermittentOccurrence']
+del superfast_transformer_dict['cffilter']
+del superfast_transformer_dict['QuantileTransformer']
+del superfast_transformer_dict['PowerTransformer']
+
 # probability dictionary of FillNA methods
 na_probs = {
     'ffill': 0.1,
@@ -2137,6 +2154,8 @@ def transformer_list_to_dict(transformer_list):
         transformer_list = transformer_dict
     elif transformer_list == "fast":
         transformer_list = fast_transformer_dict
+    elif transformer_list == "superfast":
+        transformer_list = superfast_transformer_dict
 
     if isinstance(transformer_list, dict):
         transformer_prob = list(transformer_list.values())
