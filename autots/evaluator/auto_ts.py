@@ -754,6 +754,8 @@ class AutoTS(object):
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
         validation_template = validation_template[self.template_cols]
+        self.validation_train_indexes = []
+        self.validation_test_indexes = []
 
         # run validations
         if num_validations > 0:
@@ -812,6 +814,8 @@ class AutoTS(object):
                     min_allowed_train_percent=self.min_allowed_train_percent,
                     verbose=self.verbose,
                 )
+                self.validation_train_indexes.append(val_df_train)
+                self.validation_test_indexes.append(val_df_test)
                 if self.verbose >= 2:
                     print(f'Validation index is {val_df_train.index}')
 
@@ -1044,8 +1048,7 @@ or otherwise increase models available."""
         param_dict = json.loads(self.best_model.iloc[0]['ModelParameters'])
         if self.ensemble_check == 1:
             self.used_regressor_check = self._regr_param_check(param_dict)
-
-        if self.ensemble_check == 0:
+        elif self.ensemble_check == 0:
             self.used_regressor_check = False
             try:
                 reg_param = param_dict['regression_type']
@@ -1053,6 +1056,8 @@ or otherwise increase models available."""
                     self.used_regressor_check = True
             except KeyError:
                 pass
+        else:
+            print(f"Warning: ensemble_check not in [0,1]: {self.ensemble_check}")
         # clean up any remaining print statements
         sys.stdout.flush()
         return self

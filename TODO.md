@@ -17,6 +17,8 @@
 # Latest
 * Fixed horizontal ensembles running in univariate cases (they explicitly multivariate)
 * 'superfast' transformer list added
+* test on Mac for the first time, everything seems to work except lightgbm
+* include first actual unittests (from existing test.py runs)
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
