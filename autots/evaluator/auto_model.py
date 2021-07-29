@@ -1,4 +1,5 @@
 """Mid-level helper functions for AutoTS."""
+import sys
 import random
 import numpy as np
 import pandas as pd
@@ -786,13 +787,10 @@ def PredictWitch(
             else:
                 make_full_flag = False
             if (
-                horizontal_subset is not None
-                and model_str in no_shared
-                and all(
+                horizontal_subset is not None and model_str in no_shared and all(
                     trs not in shared_trans
                     for trs in list(transformation_dict['transformations'].values())
-                )
-                and not make_full_flag
+                ) and not make_full_flag
             ):
                 df_train_low = df_train.reindex(copy=True, columns=horizontal_subset)
                 # print(f"Reducing to subset for {model_str} with {df_train_low.columns}")
@@ -923,8 +921,7 @@ def TemplateWizard(
                     )
                 if verbose > 1:
                     print(
-                        base_print
-                        + " with params {} and transformations {}".format(
+                        base_print + " with params {} and transformations {}".format(
                             json.dumps(parameter_dict),
                             json.dumps(transformation_dict),
                         )
@@ -979,8 +976,8 @@ def TemplateWizard(
             )
             total_runtime = (
                 df_forecast.fit_runtime
-                + df_forecast.predict_runtime
-                + df_forecast.transformation_runtime
+                + df_forecast.predict_runtime  # noqa W503
+                + df_forecast.transformation_runtime  # noqa W503
             )
             result = pd.DataFrame(
                 {
@@ -1020,14 +1017,14 @@ def TemplateWizard(
                 template_result.per_series_mae = pd.concat(
                     [template_result.per_series_mae, cur_mae], axis=0
                 )
-                
+
                 cur_mae = model_error.per_series_metrics.loc['contour']
                 cur_mae = pd.DataFrame(cur_mae).transpose()
                 cur_mae.index = [model_id]
                 template_result.per_series_contour = pd.concat(
                     [template_result.per_series_contour, cur_mae], axis=0
                 )
-                
+
                 cur_mae = model_error.per_series_metrics.loc['rmse']
                 cur_mae = pd.DataFrame(cur_mae).transpose()
                 cur_mae.index = [model_id]
@@ -1089,6 +1086,7 @@ def TemplateWizard(
                     sort=False,
                 ).reset_index(drop=True)
             else:
+                sys.stdout.flush()
                 raise KeyboardInterrupt
         except Exception as e:
             if verbose >= 0:
@@ -1156,7 +1154,7 @@ def RandomTemplate(
         'VECM',
         'DynamicFactor',
     ],
-    transformer_list: dict = {},
+    transformer_list: dict = "fast",
     transformer_max_depth: int = 8,
 ):
     """
@@ -1168,8 +1166,13 @@ def RandomTemplate(
     n = abs(int(n))
     template = pd.DataFrame()
     counter = 0
+    n_models = len(model_list)
     while len(template.index) < n:
-        model_str = np.random.choice(model_list)
+        # this assures all models get choosen at least once
+        if counter < n_models:
+            model_str = model_list[counter]
+        else:
+            model_str = random.choices(model_list)[0]
         param_dict = ModelMonster(model_str).get_new_params()
         if counter % 4 == 0:
             trans_dict = RandomTransform(
@@ -1576,9 +1579,9 @@ def generate_score(
         )
     except KeyError:
         raise KeyError(
-            """Evaluation Metrics are missing and all models have failed, by an error in template or metrics. 
-            Usually this means you are missing required packages for the models like fbprophet or gluonts, 
-            or that the models in model_list are inappropriate for your data. 
+            """Evaluation Metrics are missing and all models have failed, by an error in template or metrics.
+            Usually this means you are missing required packages for the models like fbprophet or gluonts,
+            or that the models in model_list are inappropriate for your data.
             A new starting template may also help."""
         )
     return (

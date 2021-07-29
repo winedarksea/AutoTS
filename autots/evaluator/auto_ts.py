@@ -187,7 +187,7 @@ class AutoTS(object):
         initial_template = str(initial_template).lower()
         if initial_template == 'random':
             self.initial_template = RandomTemplate(
-                50,
+                len(self.model_list) * 6,
                 model_list=self.model_list,
                 transformer_list=self.transformer_list,
                 transformer_max_depth=self.transformer_max_depth,
@@ -274,6 +274,7 @@ class AutoTS(object):
             'TransformationParameters',
             'Ensemble',
         ]
+        self.template_cols_id = self.template_cols if "ID" in self.template_cols else ['ID'] + self.template_cols
         self.initial_results = TemplateEvalObject()
 
         if verbose > 2:
@@ -997,6 +998,10 @@ or otherwise increase models available."""
                 template_result.model_results['smape']
             except KeyError:
                 template_result.model_results['smape'] = 0
+            # rerun validation_results aggregation with new models added
+            self.validation_results = copy.copy(self.initial_results)
+            self.validation_results = validation_aggregation(self.validation_results)
+
             # use the best of these if any ran successfully
             if template_result.model_results['smape'].sum(min_count=0) > 0:
                 template_result.model_results['Score'] = generate_score(
@@ -1006,15 +1011,14 @@ or otherwise increase models available."""
                 )
                 self.best_model = template_result.model_results.sort_values(
                     by="Score", ascending=True, na_position='last'
-                ).head(1)[template_cols]
+                ).head(1)[self.template_cols_id]
                 self.ensemble_check = 1
             # else use the best of the previous
             else:
                 if self.verbose >= 0:
                     print("Horizontal ensemble failed. Using best non-horizontal.")
                 eligible_models = self.validation_results.model_results[
-                    self.validation_results.model_results['Runs']
-                    >= (num_validations + 1)
+                    self.validation_results.model_results['Runs'] >= (num_validations + 1)
                 ]
                 try:
                     self.best_model = (
@@ -1022,7 +1026,7 @@ or otherwise increase models available."""
                             by="Score", ascending=True, na_position='last'
                         )
                         .drop_duplicates(subset=self.template_cols)
-                        .head(1)[template_cols]
+                        .head(1)[self.template_cols_id]
                     )
                     self.ensemble_check = int((self.best_model['Ensemble'].iloc[0]) > 0)
                 except IndexError:
@@ -1701,28 +1705,7 @@ def error_correlations(all_result, result: str = 'corr'):
         [except_df, all_results[['ExceptionFlag']], modelstr_df, model_df, trans_df],
         axis=1,
     )
-    # test_cols = [column for column in test.columns if 'NaNZ' not in column]
-    # test = test[test_cols]
-    """
-    try:
-        from mlxtend.frequent_patterns import association_rules
-        from mlxtend.frequent_patterns import apriori
-        import re
-        freq_itemsets = apriori(test.drop('ExceptionFlag', axis=1),
-                                min_support=0.3, use_colnames=True)
-        rules = association_rules(freq_itemsets)
-        err_rules = pd.DataFrame()
-        for err in except_df.columns:
-            err = re.sub('[^a-zA-Z0-9\s]', '', err)
-            edf = rules[
-                rules['consequents'].astype(
-                    str).str.replace('[^a-zA-Z0-9\s]', '').str.contains(err)]
-            err_rules = pd.concat([err_rules, edf],
-                                     axis=0, ignore_index=True)
-        err_rules = err_rules.drop_duplicates()
-    except Exception as e:
-        print(repr(e))
-    """
+
     if result == 'corr':
         test_corr = test.corr()[except_df.columns]
         return test_corr

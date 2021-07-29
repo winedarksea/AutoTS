@@ -2197,7 +2197,7 @@ def RandomTransform(
     if fast_params:
         params_method = "fast"
         throw_away = na_prob_dict.pop('IterativeImputer', None)
-        throw_away = na_prob_dict.pop('interpolate', None)  # NOQA
+        throw_away = na_prob_dict.pop('interpolate', None)  # noqa
 
     # clean na_probs dict
     na_probabilities = list(na_prob_dict.values())

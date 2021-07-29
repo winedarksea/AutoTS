@@ -233,21 +233,38 @@ Limited functionality should exist without scikit-learn.
 	* Sklearn needed for categorical to numeric, some detrends/transformers, horizontal generalization, numerous models
 Full functionality should be maintained without statsmodels, albeit with fewer available models. 
 
+Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about installation on some systems.
+
 `pip install autots['additional']`
 ### Optional Requirements
 	holidays
-	fbprophet
+	prophet
 	gluonts (requires mxnet)
 	mxnet (mxnet-mkl, mxnet-cu91, mxnet-cu101mkl, etc.)
 	tensorflow >= 2.0.0
 	lightgbm
 	xgboost
 	psutil
-
-#### Experimental & Dev Requirements
 	tensorflow-probability
 	fredapi
-	tsfresh
+	greykite
+
+#### Safest bet for installation:
+```shell
+# create a conda or venv environment
+conda create -n openblas python=3.9
+conda activate openblas
+
+python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm --exists-action i
+
+python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily, --no-deps to pip install prophet if this fails
+python -m pip install mxnet --exists-action i     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
+python -m pip install gluonts --exists-action i
+python -m pip install greykite --exists-action i  # try running again with --no-deps if first try fails. The failing dep is often optional...
+python -m pip install --upgrade numpy pandas --exists-action i  # mxnet likes to (pointlessly seeming) install old versions of numpy
+
+python -m pip install autots --exists-action i
+```
 
 ### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
 If you are on an Intel CPU, download Anaconda or Miniconda. For AMD/ARM/etc use a venv environment and pip which will use OpenBLAS. 
@@ -261,20 +278,6 @@ You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_co
 
 On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster/more stable compilations. 
 Linux will also require `sudo apt install build-essential` for some packages.
-
-#### Safest bet:
-```shell
-conda create -n openblas python=3.9
-conda activate openblas
-
-python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm --exists-action i
-python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily
-python -m pip install mxnet --exists-action i     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
-python -m pip install gluonts --exists-action i
-python -m pip install --upgrade numpy pandas --exists-action i  # mxnet likes to (pointlessly seeming) install old versions of numpy
-
-python -m pip install autots --exists-action i
-```
 
 #### Some conda
 

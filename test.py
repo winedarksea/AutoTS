@@ -79,7 +79,7 @@ model_list = [
     'WindowRegression',
 ]
 
-transformer_list = "all"  # ["SinTrend", "MinMaxScaler"]
+transformer_list = "fast"  # ["SinTrend", "MinMaxScaler"]
 transformer_max_depth = 3
 model_list = 'default'  # fast_parallel
 model_list = ['FBProphet', 'LastValueNaive']
@@ -92,7 +92,7 @@ metric_weighting = {
     'containment_weighting': 0,
     'runtime_weighting': 0,
     'spl_weighting': 1,
-    'contour_weighting': 0,
+    'contour_weighting': 1,
 }
 
 
@@ -265,6 +265,9 @@ df = df_wide_numeric.tail(100).fillna(0).astype(float)
 PACKAGE RELEASE
 # update version in setup.py, /docs/conf.py, /autots/_init__.py
 
+set PYTHONPATH=%PYTHONPATH%;C:/Users/Colin/Documents/AutoTS
+python -m unittest discover ./tests
+
 cd <project dir>
 black ./autots -l 88 -S
 
@@ -291,7 +294,7 @@ twine upload dist/*
 Merge dev to master on GitHub and create release (include .tar.gz)
 """
 
-#%%
+# %%
 
 # Help correlate errors with parameters
 """

@@ -19,6 +19,7 @@
 * 'superfast' transformer list added
 * test on Mac for the first time, everything seems to work except lightgbm
 * include first actual unittests (from existing test.py runs)
+* slight change to random template generation to make sure all models are choosen at least once
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
