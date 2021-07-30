@@ -15,6 +15,7 @@ from autots.datasets import (
 from autots.evaluator.auto_ts import AutoTS
 from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.tools.shaping import long_to_wide
+from autots.evaluator.auto_model import PredictWitch
 
 __version__ = '0.3.3'
 
@@ -32,9 +33,5 @@ __all__ = [
     'GeneralTransformer',
     'RandomTransform',
     'long_to_wide',
+    'PredictWitch',
 ]
-
-# import logging
-# logger = logging.getLogger(__name__)
-# logger.addHandler(logging.StreamHandler())
-# logger.setLevel(logging.INFO)

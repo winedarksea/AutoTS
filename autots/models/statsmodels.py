@@ -181,7 +181,6 @@ class GLM(ModelObject):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         from statsmodels.api import GLM
-        from autots.tools.seasonal import date_part
 
         if self.regression_type == 'datepart':
             X = date_part(self.df_train.index, method='expanded').values
@@ -254,7 +253,7 @@ class GLM(ModelObject):
             forecast = pd.concat([forecast, pd.Series(current_forecast)], axis=1)
         df_forecast = pd.DataFrame(forecast)
         df_forecast.columns = self.column_names
-        
+
         # handle weird pickling errors for multiprocessing
         try:
             from joblib import wrap_non_picklable_objects
@@ -705,7 +704,7 @@ class ARIMA(ModelObject):
             from autots.tools.holiday import holiday_flag
 
             future_regressor = holiday_flag(test_index, country=self.holiday_country)
-        if self.regression_type != None:
+        if self.regression_type is not None:
             assert (
                 len(future_regressor) == forecast_length
             ), "regressor not equal to forecast length"
@@ -1286,7 +1285,7 @@ class DynamicFactor(ModelObject):
                 df.index, country=self.holiday_country
             ).values
         else:
-            if self.regression_type != None:
+            if self.regression_type is not None:
                 if (np.array(future_regressor).shape[0]) != (df.shape[0]):
                     self.regression_type = None
                 else:
@@ -1697,9 +1696,9 @@ class VARMAX(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         # make these big and it's REAL slow, and if both p and q are non zero
-        ar_choice = random.choices([0, 1, 2], [0.3, 0.5, 0.2])[0]
+        ar_choice = random.choices([0, 1, 2, 5, 7, 10], [0.5, 0.5, 0.2, 0.01, 0.01, 0.001])[0]
         if ar_choice == 0:
-            ma_choice = random.choices([1, 2], [0.8, 0.2])[0]
+            ma_choice = random.choices([1, 2, 5, 7, 10], [0.8, 0.2, 0.01, 0.01, 0.001])[0]
         else:
             ma_choice = 0
         trend_choice = random.choices(

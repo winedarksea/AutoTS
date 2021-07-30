@@ -175,6 +175,8 @@ class AutoTS(object):
             from autots.tools import cpu_count
 
             self.n_jobs = cpu_count()
+            if verbose > 0:
+                print(f"Auto-detected {n_jobs} cpus for n_jobs.")
 
         # convert shortcuts of model lists to actual lists of models
         if model_list in list(model_lists.keys()):
@@ -200,7 +202,7 @@ class AutoTS(object):
             from autots.templates.general import general_template
 
             random_template = RandomTemplate(
-                40,
+                len(self.model_list) * 4,
                 model_list=self.model_list,
                 transformer_list=self.transformer_list,
                 transformer_max_depth=self.transformer_max_depth,
@@ -1127,12 +1129,15 @@ or otherwise increase models available."""
                 index=self.df_wide_numeric.index
             )
 
+        urow = self.best_model.iloc[0]
         # allow multiple prediction intervals
         if isinstance(prediction_interval, list):
             forecast_objects = {}
             for interval in prediction_interval:
                 df_forecast = PredictWitch(
-                    self.best_model,
+                    model_name=urow['Model'],
+                    model_param_dict=urow['ModelParameters'],
+                    model_transform_dict=urow['TransformationParameters'],
                     df_train=self.df_wide_numeric,
                     forecast_length=forecast_length,
                     frequency=self.frequency,
@@ -1161,7 +1166,9 @@ or otherwise increase models available."""
             return forecast_objects
         else:
             df_forecast = PredictWitch(
-                self.best_model,
+                model_name=urow['Model'],
+                model_param_dict=urow['ModelParameters'],
+                model_transform_dict=urow['TransformationParameters'],
                 df_train=self.df_wide_numeric,
                 forecast_length=forecast_length,
                 frequency=self.frequency,
@@ -1538,9 +1545,12 @@ class AutoTSIntervals(object):
         forecast_objects = {}
         verbose = self.verbose if verbose == 'self' else verbose
 
+        urow = self.ens_templates.iloc[0]
         for interval in self.prediction_intervals:
             df_forecast = PredictWitch(
-                self.ens_templates,
+                model_name=urow['Model'],
+                model_param_dict=urow['ModelParameters'],
+                model_transform_dict=urow['TransformationParameters'],
                 df_train=self.df_wide_numeric,
                 forecast_length=self.forecast_length,
                 frequency=self.frequency,

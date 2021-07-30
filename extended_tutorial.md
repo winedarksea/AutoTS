@@ -4,6 +4,7 @@
 * [Another Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#another-example)
 * [Model Lists](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#model-lists)
 * [Deployment](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#deployment-and-template-import-export)
+* [Running Just One Model](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#running-just-one-model)
 * [Metrics](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#metrics)
 * [Installation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning)
 * [Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
@@ -164,7 +165,7 @@ On large multivariate series, `TSFreshRegressor`, `DynamicFactor` and `VARMAX` c
 Take a look at the [production_example.py](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
 
 Many models can be reverse engineered with (relative) simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package. 
-There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a `.csv` or `.json` file, then on next run only those models will be tried. 
+Following the model training, the top models can be exported to a `.csv` or `.json` file, then on next run only those models will be tried. 
 This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve. 
 One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.
 
@@ -180,6 +181,41 @@ model = AutoTS(forecast_length=forecast_length,
 			   num_validations=0, verbose=0)
 model = model.import_template(example_filename, method='only') # method='add on'
 print("Overwrite template is: {}".format(str(model.initial_template)))
+```
+
+### Running Just One Model
+While the above version of deployment, with  evolving templates and cross_validation on every run, is the recommended deployment, it is also possible to run a single fixed model. 
+
+Coming from the deeper internals of AutoTS, this function can only take the `wide` style data (there is a long_to_wide function available). 
+Data must already be fairly clean - all numerics (or np.nan). 
+There aren't as many data and param checks at this point either, so it will be more brittle and output errors may be more confusing. 
+This will run Ensembles.
+
+```python
+from AutoTS import load_daily, PredictWitch
+
+
+df = load_daily(long=False)  # long or non-numeric data won't work with this function
+df_forecast = PredictWitch(
+    model_name="AverageValueNaive",
+    model_param_dict={'method': 'Mean'},
+    model_transform_dict={
+        'fillna': 'fake_date',
+        'transformations': {'0': 'DifferencedTransformer'},
+        'transformation_params': {'0': {}}
+    },
+    df_train=df,
+    forecast_length=12,
+    frequency='D',  # no 'infer' option here
+    prediction_interval=0.9,
+    no_negatives=False,
+    # future_regressor_train=future_regressor_train2d,
+    # future_regressor_forecast=future_regressor_forecast2d,
+    random_seed=321,
+    verbose=0,
+    n_jobs="auto",
+)
+df_forecast.forecast.head(5)
 ```
 
 ### Metrics
@@ -236,7 +272,7 @@ Full functionality should be maintained without statsmodels, albeit with fewer a
 Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about installation on some systems.
 
 `pip install autots['additional']`
-### Optional Requirements
+### Optional Packages
 	holidays
 	prophet
 	gluonts (requires mxnet)
@@ -260,7 +296,7 @@ python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm -
 python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily, --no-deps to pip install prophet if this fails
 python -m pip install mxnet --exists-action i     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
 python -m pip install gluonts --exists-action i
-python -m pip install greykite --exists-action i  # try running again with --no-deps if first try fails. The failing dep is often optional...
+python -m pip install holiday-ext pmdarima dill greykite --exists-action i --no-deps
 python -m pip install --upgrade numpy pandas --exists-action i  # mxnet likes to (pointlessly seeming) install old versions of numpy
 
 python -m pip install autots --exists-action i
@@ -392,6 +428,17 @@ forecasts_df = prediction.forecast
 print(model)
 print(f"Was a model choosen that used the regressor? {model.used_regressor_check}")
 ```
+
+### A Hack for Passing in Parameters (that aren't otherwise available)
+There are a lot of parameters available here, but not always all of the options available for a particular parameter are actually used in generated templates. 
+Usually, very slow options are left out. If you are familiar with a model, you can try manualy adding those parameter values in for a run in this way... 
+To clarify, you can't usually add in entirely new parameters in this way, but you can often pass in new choices for existing parameter values.
+
+1. Run AutoTS with your desired model and export a template.
+2. Open the template in a text editor or Excel and manually change the param values to whatever you want.
+3. Run AutoTS again, this time importing the template before running .fit().
+4. There is no guarantee it will choose the model with the given params- choices are made based on validation accuracy, but it will at least run it, and if it does well, it will be incorporated into new models in that run (that's how the genetic algorithms work).
+
 
 ### Categorical Data
 Categorical data is handled, but it is handled crudely. For example, optimization metrics do not currently include any categorical accuracy metrics. 

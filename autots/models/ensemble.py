@@ -7,6 +7,9 @@ from autots.models.base import PredictionObject
 from autots.models.model_list import no_shared
 
 
+horizontal_aliases = ['horizontal', 'probabilistic']
+
+
 def BestNEnsemble(
     ensemble_params,
     forecasts_list,
@@ -406,8 +409,7 @@ def EnsembleForecast(
         )
         return ens_forecast
 
-    hlist = ['horizontal', 'probabilistic']
-    if ensemble_params['model_name'].lower().strip() in hlist:
+    if ensemble_params['model_name'].lower().strip() in horizontal_aliases:
         ens_forecast = HorizontalEnsemble(
             ensemble_params,
             forecasts_list,
@@ -549,7 +551,7 @@ def EnsembleTemplateGenerator(
         ]
         first_model = ens_per_ts.iloc[:, 0:first_bit].mean(axis=1).idxmin()
         last_model = (
-            ens_per_ts.iloc[:, first_bit : (last_bit + first_bit)].mean(axis=1).idxmin()
+            ens_per_ts.iloc[:, first_bit: (last_bit + first_bit)].mean(axis=1).idxmin()
         )
         ensemble_models = {}
         best3 = initial_results.model_results[
@@ -596,7 +598,7 @@ def EnsembleTemplateGenerator(
         ]
         first_model = ens_per_ts.iloc[:, 0:first_bit].mean(axis=1).idxmin()
         last_model = (
-            ens_per_ts.iloc[:, first_bit : (last_bit + first_bit)].mean(axis=1).idxmin()
+            ens_per_ts.iloc[:, first_bit: (last_bit + first_bit)].mean(axis=1).idxmin()
         )
         ensemble_models = {}
         best3 = initial_results.model_results[
@@ -799,12 +801,12 @@ def HorizontalTemplateGenerator(
             allowed_list = no_shared_mod_lst + lowest_score_mod + use_shared_lst
             per_series_filter = per_series[per_series.index.isin(allowed_list)]
             # first select a few of the best shared models
-                # Option A: Best overall per model type (by different metrics?)
-                # Option B: Best per different clusters...
-                    # Rank position in score for EACH series
-                        # Lowest median ranking
-                        # Lowest Quartile 1 of rankings
-                    # Normalize and then take Min, Median, or IQ1
+            # Option A: Best overall per model type (by different metrics?)
+            # Option B: Best per different clusters...
+            # Rank position in score for EACH series
+            # Lowest median ranking
+            # Lowest Quartile 1 of rankings
+            # Normalize and then take Min, Median, or IQ1
             # then choose min from series of these + no_shared
             # make sure no models are included that don't match to any series
             # ENSEMBLE and NO_SHARED (it could be or it could not be)
