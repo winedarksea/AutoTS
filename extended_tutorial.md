@@ -192,11 +192,11 @@ There aren't as many data and param checks at this point either, so it will be m
 This will run Ensembles.
 
 ```python
-from AutoTS import load_daily, PredictWitch
+from AutoTS import load_daily, model_forecast
 
 
 df = load_daily(long=False)  # long or non-numeric data won't work with this function
-df_forecast = PredictWitch(
+df_forecast = model_forecast(
     model_name="AverageValueNaive",
     model_param_dict={'method': 'Mean'},
     model_transform_dict={

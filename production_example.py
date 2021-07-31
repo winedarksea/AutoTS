@@ -1,30 +1,26 @@
-# -*- coding: utf-8 -*-
-"""
-Recommended installs: pip install pytrends fredapi yfinance
-Uses a number of live public data sources to construct an example production case.
-Some ~100 lines are just pulling in data.
-
-While stock price forecasting is shown here, time series forecasting alone is not a recommended basis for managing investments!
-
-This is a highly opinionated approach.
-Evolve = True allows the timeseries to automatically adapt to changes.
-There is a slight risk of it getting caught in suboptimal position however.
-It should probably be coupled with some basic data sanity checks.
-"""
-import os
 import datetime
-import pandas as pd
+import os
 
-
-forecast_length = 21  # number of days to forecast ahead
 fred_key = None # https://fred.stlouisfed.org/docs/api/api_key.html
+import pandas as pd
+import matplotlib.pyplot as plt  # required only for graphs
+from autots import AutoTS, load_live_daily
+
+forecast_name = "example"  # used in DB name!
+graph = True  # whether to plot a graph
+archive_table = False  # append to an archive table
+# https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects
+frequency = "D"
+forecast_length = 28  # number of periods to forecast ahead
+n_jobs = "auto"  # "auto" or set to number of CPU cores
+prediction_interval = 0.9  # sets the upper and lower forecast range by probability range. Bigger = wider
 initial_training = "auto"  # set this to True on first run, or on reset, 'auto' looks for existing template, if found, sets to False.
 evolve = True  # allow time series to progressively evolve on each run, if False, uses fixed template
 archive_templates = False  # save a copy of the model template used with a timestamp
 save_location = None  # "C:/Users/Colin/Downloads"  # directory to save templates to. Defaults to working dir
-template_filename = "autots_forecast_template.csv"
-forecast_csv_name = "autots_forecast.csv"  # or None, point forecast only is written
-
+template_filename = f"autots_forecast_template_{forecast_name}.csv"
+forecast_csv_name = None  # f"autots_forecast_{forecast_name}.csv"  # or None, point forecast only is written
+model_list = "default"
 
 if save_location is not None:
     template_filename = os.path.join(save_location, template_filename)
@@ -38,18 +34,17 @@ if initial_training == "auto":
 
 # set max generations based on settings, increase for slower but greater chance of highest accuracy
 if initial_training:
-    gens = 100
+    gens = 30
     models_to_validate = 0.2
-    # if you don't care much about upper/lower forecasts, try ensemble="horizontal-max" instead of "probabilistic-max"
-    ensemble=["simple","distance","probabilistic-max"]
+    ensemble = ["simple", "distance", "horizontal-max", "probabilistic-max"]
 elif evolve:
-    gens = 50
+    gens = 15
     models_to_validate = 0.3
-    ensemble=["probabilistic-max"]  # you can include "simple" and "distance" but they can nest, and may get huge as time goes on...
+    ensemble = ["horizontal-max", "probabilistic-max"]  # you can include "simple" and "distance" but they can nest, and may get huge as time goes on...
 else:
     gens = 0
     models_to_validate = 0.99
-    ensemble=["probabilistic-max"]
+    ensemble = ["horizontal-max", "probabilistic-max"]
 
 # only save the very best model if not evolve
 if evolve:
@@ -60,131 +55,59 @@ else:
 """
 Begin Dataset retrieval section
 """
-dataset_lists = []
 
-try:
-    if fred_key is not None:
-        from fredapi import Fred  # noqa
-        from autots.datasets.fred import get_fred_data
-
-        fred_series = ["DGS10", "T5YIE", "SP500", "DCOILWTICO", "DEXUSEU"]
-        fred_df = get_fred_data(fred_key, fred_series, long=False)
-        fred_df.index = fred_df.index.tz_localize(None)
-        dataset_lists.append(fred_df)
-except ModuleNotFoundError:
-    print("pip install fredapi (and you'll also need an api key)")
-except Exception as e:
-    print(f"FRED data failed: {repr(e)}")
-
-try:
-    import yfinance as yf
-
-    ticker = "MSFT"
-    msft = yf.Ticker(ticker)
-    # get historical market data
-    msft_hist = msft.history(period="max")
-    msft_hist = msft_hist.rename(columns=lambda x: x.lower().replace(" ", "_"))
-    msft_hist = msft_hist.rename(columns=lambda x: ticker.lower() + "_" + x)
-    msft_hist.index = msft_hist.index.tz_localize(None)
-    dataset_lists.append(msft_hist)
-except ModuleNotFoundError:
-    print("You need to: pip install yfinance")
-except Exception as e:
-    print(f"yfinance data failed: {repr(e)}")
-
-try:
-    from pytrends.request import TrendReq
-
-    pytrends = TrendReq(hl="en-US", tz=360)
-    kw_list = ["forecasting", "cycling", "cpu", "microsoft"]
-    # pytrends.build_payload(kw_list, cat=0, timeframe='today 5-y', geo='', gprop='')
-    pytrends.build_payload(kw_list, timeframe="all")
-    gtrends = pytrends.interest_over_time()
-    gtrends.index = gtrends.index.tz_localize(None)
-    gtrends.drop(columns="isPartial", inplace=True, errors="ignore")
-    dataset_lists.append(gtrends)
-except ModuleNotFoundError:
-    print("You need to: pip install pytrends")
-except Exception as e:
-    print(f"pytrends data failed: {repr(e)}")
-
-try:
-    current_date = datetime.datetime.utcnow()
-    str_end_time = current_date.strftime("%Y-%m-%d")
-    start_date = (current_date - datetime.timedelta(days=180)).strftime("%Y-%m-%d")
-    # is limited to ~1000 rows of data, ie individual earthquakes
-    eq = pd.read_csv(
-        f"https://earthquake.usgs.gov/fdsnws/event/1/query?format=csv&starttime={start_date}&endtime={str_end_time}&minmagnitude=5"
-    )
-    eq["time"] = pd.to_datetime(eq["time"], infer_datetime_format=True)
-    eq["time"] = eq["time"].dt.tz_localize(None)
-    eq.set_index("time", inplace=True)
-    global_earthquakes = eq.resample("1D").agg({"mag": "mean", "depth": "count"})
-    global_earthquakes["mag"] = global_earthquakes["mag"].fillna(5)
-    global_earthquakes = global_earthquakes.rename(
-        columns={
-            "mag": "largest_magnitude_earthquake",
-            "depth": "count_large_earthquakes",
-        }
-    )
-    dataset_lists.append(global_earthquakes)
-except Exception as e:
-    print(f"earthquake data failed: {repr(e)}")
-
-if len(dataset_lists) < 1:
-    raise ValueError("No data successfully downloaded!")
-elif len(dataset_lists) == 1:
-    df = dataset_lists[0]
-else:
-    from functools import reduce
-
-    df = reduce(
-        lambda x, y: pd.merge(x, y, left_index=True, right_index=True, how="outer"), dataset_lists
-    )
-print(f"{df.shape[1]} series downloaded.")
+df = load_live_daily(long=False, fred_key=fred_key)
 
 df = df[df.index.year > 1999]
 start_time = datetime.datetime.now()
-
-# df["datetime"] = pd.to_datetime(df["your_date_column"], infer_datetime_format=True)
-
-
-from autots import AutoTS
+# remove any data from the future
+df = df[df.index <= start_time]
+# remove series with no recent data
+min_cutoff_date = start_time - datetime.timedelta(days=180)
+most_recent_date = df.notna()[::-1].idxmax()
+drop_cols = most_recent_date[most_recent_date < min_cutoff_date].index.tolist()
+df = df.drop(columns=drop_cols)
 
 metric_weighting = {
-    'smape_weighting': 5,
-    'mae_weighting': 0,
+    'smape_weighting': 2,
+    'mae_weighting': 2,
     'rmse_weighting': 1,
     'containment_weighting': 0,
     'runtime_weighting': 0,
     'spl_weighting': 2,
-    'contour_weighting': 0,
+    'contour_weighting': 1,
 }
 
 model = AutoTS(
     forecast_length=forecast_length,
-    frequency="infer",
-    prediction_interval=0.8,
+    frequency=frequency,
+    prediction_interval=prediction_interval,
     ensemble=ensemble,
-    model_list="fast",
-    transformer_list="all",
-    transformer_max_depth=8,
+    model_list=model_list,
+    transformer_list="fast",  # "all"
+    transformer_max_depth=4,
     max_generations=gens,
     metric_weighting=metric_weighting,
-    num_validations=3,
+    aggfunc="sum",
     models_to_validate=models_to_validate,
     model_interrupt=True,
+    num_validations=2,
     validation_method="backwards",  # "seasonal 364" would be a good choice too
     constraint=2,
-    # drop_most_recent=2,  # if newest data is incomplete, also remember to increase forecast_length
-    n_jobs="auto",
+    drop_most_recent=1,  # if newest data is incomplete, also remember to increase forecast_length
+    # no_negatives=True,
+    # subset=100,
+    # prefill_na=0,
+    # remove_leading_zeroes=True,
+    n_jobs=n_jobs,
+    verbose=1,
 )
-    
 
 if not initial_training:
-    model.import_template(template_filename, method = "only")
+    model.import_template(template_filename, method="only")  # "addon"
+
 model = model.fit(
-    df
+    df,
 )
 
 prediction = model.predict()
@@ -193,7 +116,7 @@ prediction = model.predict()
 print(model)
 
 # point forecasts dataframe
-forecasts_df = prediction.forecast
+forecasts_df = prediction.forecast.fillna(0).round(0)
 if forecast_csv_name is not None:
     forecasts_df.to_csv(forecast_csv_name)
 
@@ -203,6 +126,7 @@ forecasts_lower_df = prediction.lower_forecast
 # accuracy of all tried model results
 model_results = model.results()
 
+# save a template of best models
 if initial_training or evolve:
     model.export_template(
         template_filename, models="best", n=n_export, max_per_model_class=5
@@ -213,11 +137,15 @@ if initial_training or evolve:
             arc_file, models="best", n=1
         )
 
-col = df.columns[1]
-plot_df = pd.DataFrame({
-    col : df.tail(forecast_length * 4).fillna(method="ffill")[col],
-    'up_forecast': forecasts_upper_df[col],
-    'low_forecast': forecasts_lower_df[col],
-    'forecast': forecasts_df[col],
+# df.groupby("Product").count()["DailyQuantity"].sort_values(ascending=False).head()
+if graph:
+    col = model.df_wide_numeric.columns[1]  # change column here
+    col = "APRA308232C"  # APRH100033, APRH100060,
+    plot_df = pd.DataFrame({
+        col: model.df_wide_numeric[col],
+        'up_forecast': forecasts_upper_df[col],
+        'low_forecast': forecasts_lower_df[col],
+        'forecast': forecasts_df[col],
     })
-plot_df.plot()
+    fig, ax = plt.subplots(dpi=300, figsize=(8, 6))
+    plot_df[plot_df.index.year >= 2021].plot(ax=ax)

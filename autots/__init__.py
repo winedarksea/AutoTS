@@ -10,12 +10,13 @@ from autots.datasets import (
     load_yearly,
     load_weekly,
     load_weekdays,
+    load_live_daily,
 )
 
 from autots.evaluator.auto_ts import AutoTS
 from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.tools.shaping import long_to_wide
-from autots.evaluator.auto_model import PredictWitch
+from autots.evaluator.auto_model import model_forecast
 
 __version__ = '0.3.3'
 
@@ -28,10 +29,11 @@ __all__ = [
     'load_hourly',
     'load_weekly',
     'load_weekdays',
+    'load_live_daily',
     'AutoTS',
     'TransformTS',
     'GeneralTransformer',
     'RandomTransform',
     'long_to_wide',
-    'PredictWitch',
+    'model_forecast',
 ]

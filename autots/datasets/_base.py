@@ -1,5 +1,8 @@
 """Loading example datasets."""
 from os.path import dirname, join
+import datetime
+import io
+import requests
 import pandas as pd
 
 
@@ -136,8 +139,6 @@ def load_traffic_hourly(long: bool = True):
         )
         return df_long
 
-    return df_long
-
 
 def load_hourly(long: bool = True):
     """Traffic data from the MN DOT via the UCI data repository."""
@@ -204,3 +205,154 @@ def load_weekdays(long: bool = False, categorical: bool = True, periods: int = 1
         return df_wide.reset_index()
     else:
         return df_wide
+
+
+def load_live_daily(long: bool = False,
+                    fred_key: str = None,
+                    fred_series: list = ["DGS10", "T5YIE", "SP500", "DCOILWTICO", "DEXUSEU"],
+                    tickers: list = ["MSFT"],
+                    trends_list: list = ["forecasting", "cycling", "cpu", "microsoft"],
+                    weather_data_types: list = ["AWND", "WSF2"],
+                    weather_stations: list = ["USW00094846", "USW00014925"],
+                    weather_years: int = 10,
+                    london_air_stations: list = ['CT3', 'SK8'],
+                    london_air_species: str = "PM25",
+                    london_air_days: int = 180,
+                    earthquake_days: int = 180,
+                    earthquake_min_magnitude: int = 5,
+                    ):
+    """Generates a dataframe of data up to the present day.
+
+    Args:
+        long (bool): whether to return in long format or wide
+        fred_key (str): https://fred.stlouisfed.org/docs/api/api_key.html
+        fred_series (list): list of FRED series IDs. This requires fredapi package
+        tickers (list): list of stock tickers, requires yfinance
+        trends (list): list of search keywords, requires pytrends.
+        weather_data_types (list): from NCEI NOAA api data types
+        weather_stations (list): from NCEI NOAA api station ids
+        london_air_stations (list): londonair.org.uk source station IDs
+        london_species (str): what measurement to pull from London Air. Not all stations have all metrics.\
+        earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov
+    """
+    dataset_lists = []
+    current_date = datetime.datetime.utcnow()
+
+    try:
+        if fred_key is not None:
+            from fredapi import Fred  # noqa
+            from autots.datasets.fred import get_fred_data
+
+            fred_df = get_fred_data(fred_key, fred_series, long=False)
+            fred_df.index = fred_df.index.tz_localize(None)
+            dataset_lists.append(fred_df)
+    except ModuleNotFoundError:
+        print("pip install fredapi (and you'll also need an api key)")
+    except Exception as e:
+        print(f"FRED data failed: {repr(e)}")
+
+    for ticker in tickers:
+        try:
+            import yfinance as yf
+
+            msft = yf.Ticker(ticker)
+            # get historical market data
+            msft_hist = msft.history(period="max")
+            msft_hist = msft_hist.rename(columns=lambda x: x.lower().replace(" ", "_"))
+            msft_hist = msft_hist.rename(columns=lambda x: ticker.lower() + "_" + x)
+            msft_hist.index = msft_hist.index.tz_localize(None)
+            dataset_lists.append(msft_hist)
+        except ModuleNotFoundError:
+            print("You need to: pip install yfinance")
+        except Exception as e:
+            print(f"yfinance data failed: {repr(e)}")
+
+    try:
+        from pytrends.request import TrendReq
+
+        pytrends = TrendReq(hl="en-US", tz=360)
+        # pytrends.build_payload(kw_list, cat=0, timeframe='today 5-y', geo='', gprop='')
+        pytrends.build_payload(trends_list, timeframe="all")
+        gtrends = pytrends.interest_over_time()
+        gtrends.index = gtrends.index.tz_localize(None)
+        gtrends.drop(columns="isPartial", inplace=True, errors="ignore")
+        dataset_lists.append(gtrends)
+    except ImportError:
+        print("You need to: pip install pytrends")
+    except Exception as e:
+        print(f"pytrends data failed: {repr(e)}")
+
+    str_end_time = current_date.strftime("%Y-%m-%d")
+    start_date = (current_date - datetime.timedelta(days=360 * weather_years)).strftime("%Y-%m-%d")
+    for wstation in weather_stations:
+        try:
+            wbase = "https://www.ncei.noaa.gov/access/services/data/v1/?dataset=daily-summaries"
+            wargs = f"&dataTypes={','.join(weather_data_types)}&stations={wstation}"
+            wargs = wargs + f"&startDate={start_date}&endDate={str_end_time}&boundingBox=90,-180,-90,180&units=standard&format=csv"
+            wdf = pd.read_csv(wbase + wargs)
+            wdf['DATE'] = pd.to_datetime(wdf['DATE'], infer_datetime_format=True)
+            wdf = wdf.set_index('DATE').drop(columns=['STATION'])
+            wdf.rename(columns=lambda x: wstation + "_" + x, inplace=True)
+            dataset_lists.append(wdf)
+        except Exception as e:
+            print(f"weather data failed: {repr(e)}")
+
+    str_end_time = current_date.strftime("%d-%b-%Y")
+    start_date = (current_date - datetime.timedelta(days=london_air_days)).strftime("%d-%b-%Y")
+    for asite in london_air_stations:
+        try:
+            # abase = "http://api.erg.ic.ac.uk/AirQuality/Data/Site/Wide/"
+            # aargs = "SiteCode=CT8/StartDate=2021-07-01/EndDate=2021-07-30/csv"
+            abase = 'https://www.londonair.org.uk/london/asp/downloadsite.asp'
+            aargs = f"?site={asite}&species1={london_air_species}m&species2=&species3=&species4=&species5=&species6=&start={start_date}&end={str_end_time}&res=6&period=daily&units=ugm3"
+            s = requests.get(abase + aargs).content
+            adf = pd.read_csv(io.StringIO(s.decode('utf-8')))
+            acol = adf['Site'].iloc[0] + "_" + adf['Species'].iloc[0]
+            adf['Datetime'] = pd.to_datetime(adf['ReadingDateTime'], dayfirst=True)
+            adf[acol] = adf['Value']
+            dataset_lists.append(adf[['Datetime', acol]].set_index("Datetime"))
+            # "/Data/Traffic/Site/SiteCode={SiteCode}/StartDate={StartDate}/EndDate={EndDate}/Json"
+        except Exception as e:
+            print(f"London Air data failed: {repr(e)}")
+
+    try:
+        str_end_time = current_date.strftime("%Y-%m-%d")
+        start_date = (current_date - datetime.timedelta(days=earthquake_days)).strftime("%Y-%m-%d")
+        # is limited to ~1000 rows of data, ie individual earthquakes
+        ebase = "https://earthquake.usgs.gov/fdsnws/event/1/query?"
+        eargs = f"format=csv&starttime={start_date}&endtime={str_end_time}&minmagnitude={earthquake_min_magnitude}"
+        eq = pd.read_csv(ebase + eargs)
+        eq["time"] = pd.to_datetime(eq["time"], infer_datetime_format=True)
+        eq["time"] = eq["time"].dt.tz_localize(None)
+        eq.set_index("time", inplace=True)
+        global_earthquakes = eq.resample("1D").agg({"mag": "mean", "depth": "count"})
+        global_earthquakes["mag"] = global_earthquakes["mag"].fillna(earthquake_min_magnitude)
+        global_earthquakes = global_earthquakes.rename(
+            columns={
+                "mag": "largest_magnitude_earthquake",
+                "depth": "count_large_earthquakes",
+            }
+        )
+        dataset_lists.append(global_earthquakes)
+    except Exception as e:
+        print(f"earthquake data failed: {repr(e)}")
+
+    if len(dataset_lists) < 1:
+        raise ValueError("No data successfully downloaded!")
+    elif len(dataset_lists) == 1:
+        df = dataset_lists[0]
+    else:
+        from functools import reduce
+
+        df = reduce(
+            lambda x, y: pd.merge(x, y, left_index=True, right_index=True, how="outer"), dataset_lists
+        )
+    print(f"{df.shape[1]} series downloaded.")
+
+    if not long:
+        return df
+    else:
+        df_long = df.reset_index(drop=False).melt(
+            id_vars=['datetime'], var_name='series_id', value_name='value'
+        )
+        return df_long

@@ -53,7 +53,7 @@ Input data is expected to come in either a *long* or a *wide* format:
 - For *long* data, the column name for each of these is passed to .fit() as `date_col`, `id_col`, and `value_col`. No parameters are needed for *wide* data.
 
 ```python
-# also: _hourly, _daily, _weekly, or _yearly
+# also load: _hourly, _daily, _weekly, _yearly, or _live_daily
 from autots.datasets import load_monthly
 
 # sample datasets can be used in either of the long or wide import shapes

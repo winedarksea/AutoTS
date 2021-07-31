@@ -20,7 +20,7 @@ from autots.evaluator.auto_model import (
     TemplateWizard,
     unpack_ensemble_models,
     generate_score,
-    PredictWitch,
+    model_forecast,
     validation_aggregation,
 )
 from autots.models.ensemble import (
@@ -176,7 +176,7 @@ class AutoTS(object):
 
             self.n_jobs = cpu_count()
             if verbose > 0:
-                print(f"Auto-detected {n_jobs} cpus for n_jobs.")
+                print(f"Auto-detected {self.n_jobs} cpus for n_jobs.")
 
         # convert shortcuts of model lists to actual lists of models
         if model_list in list(model_lists.keys()):
@@ -1134,7 +1134,7 @@ or otherwise increase models available."""
         if isinstance(prediction_interval, list):
             forecast_objects = {}
             for interval in prediction_interval:
-                df_forecast = PredictWitch(
+                df_forecast = model_forecast(
                     model_name=urow['Model'],
                     model_param_dict=urow['ModelParameters'],
                     model_transform_dict=urow['TransformationParameters'],
@@ -1165,7 +1165,7 @@ or otherwise increase models available."""
                 forecast_objects[interval] = df_forecast
             return forecast_objects
         else:
-            df_forecast = PredictWitch(
+            df_forecast = model_forecast(
                 model_name=urow['Model'],
                 model_param_dict=urow['ModelParameters'],
                 model_transform_dict=urow['TransformationParameters'],
@@ -1547,7 +1547,7 @@ class AutoTSIntervals(object):
 
         urow = self.ens_templates.iloc[0]
         for interval in self.prediction_intervals:
-            df_forecast = PredictWitch(
+            df_forecast = model_forecast(
                 model_name=urow['Model'],
                 model_param_dict=urow['ModelParameters'],
                 model_transform_dict=urow['TransformationParameters'],

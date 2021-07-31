@@ -633,7 +633,7 @@ def unpack_ensemble_models(
     return template
 
 
-def PredictWitch(
+def model_forecast(
     model_name,
     model_param_dict,
     model_transform_dict,
@@ -738,7 +738,7 @@ def PredictWitch(
                     horizontal_subset = [
                         ser for ser, mod in all_series.items() if mod == test_mod
                     ]
-                df_forecast = PredictWitch(
+                df_forecast = model_forecast(
                     model_name=row['Model'],
                     model_param_dict=row['ModelParameters'],
                     model_transform_dict=row['TransformationParameters'],
@@ -949,7 +949,7 @@ def TemplateWizard(
                     )
                 else:
                     print(base_print)
-            df_forecast = PredictWitch(
+            df_forecast = model_forecast(
                 model_name=row['Model'],
                 model_param_dict=row['ModelParameters'],
                 model_transform_dict=row['TransformationParameters'],

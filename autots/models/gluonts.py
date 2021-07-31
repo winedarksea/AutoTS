@@ -4,8 +4,9 @@ GluonTS
 Excellent models, released by Amazon, scale well.
 Except it is really the only thing I use that runs mxnet, and it takes a while to train these guys...
 """
+import logging
+import random
 import datetime
-import numpy as np
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 
@@ -110,6 +111,12 @@ class GluonTS(ModelObject):
 
         if int(self.verbose) > 1:
             print(f"Gluon Frequency is {gluon_freq}")
+        if int(self.verbose) < 1:
+            try:
+                logging.getLogger().disabled = True
+                logging.getLogger("mxnet").addFilter(lambda record: False)
+            except Exception:
+                pass
 
         if str(self.context_length).replace('.', '').isdigit():
             self.gluon_context_length = int(float(self.context_length))
@@ -369,7 +376,6 @@ class GluonTS(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        import random
 
         gluon_model_choice = random.choices(
             [

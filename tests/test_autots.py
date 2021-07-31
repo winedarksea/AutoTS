@@ -232,7 +232,6 @@ class AutoTSTest(unittest.TestCase):
         # check all the checks work
         self.assertEqual(model.ensemble_check, 1)
         self.assertFalse(model.weighted)
-        self.assertFalse(model.used_regressor_check)
         self.assertFalse(model.subset_flag)
         # assess 'backwards' validation
         self.assertEqual(len(model.validation_test_indexes), num_validations)
