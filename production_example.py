@@ -68,6 +68,14 @@ most_recent_date = df.notna()[::-1].idxmax()
 drop_cols = most_recent_date[most_recent_date < min_cutoff_date].index.tolist()
 df = df.drop(columns=drop_cols)
 
+regr_train, regr_fcst = create_lagged_regressor(
+    df,
+    forecast_length=forecast_length,
+    summarize=None,
+    backfill = 'datepartregression',
+    fill_na='ffill'
+)
+
 metric_weighting = {
     'smape_weighting': 2,
     'mae_weighting': 2,
@@ -108,9 +116,10 @@ if not initial_training:
 
 model = model.fit(
     df,
+    future_regressor=regr_train,
 )
 
-prediction = model.predict()
+prediction = model.predict(future_regressor=regr_fcst)
 
 # Print the details of the best model
 print(model)

@@ -488,7 +488,7 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  SeasonalNaive          |              |                         |               |                 |       |              |              |               |
 |  GLS                    | statsmodels  |                         |               |                 |       | True         |              |               |
 |  GLM                    | statsmodels  |                         |               |     joblib      |       |              |              | True          |
-|  ETS - Exponential Smoothing | statsmodels  |                         |               |     joblib      |       |              |              |               |
+|  ETS - Exponential Smoothing | statsmodels  |                    |               |     joblib      |       |              |              |               |
 |  UnobservedComponents   | statsmodels  |                         |               |     joblib      |       |              |              | True          |
 |  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  VARMAX                 | statsmodels  |                         |    True       |                 |       | True         |              |               |
