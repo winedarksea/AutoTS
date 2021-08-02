@@ -1,11 +1,24 @@
+# -*- coding: utf-8 -*-
+"""
+Recommended installs: pip install pytrends fredapi yfinance
+Uses a number of live public data sources to construct an example production case.
+
+While stock price forecasting is shown here, time series forecasting alone is not a recommended basis for managing investments!
+
+This is a highly opinionated approach.
+evolve = True allows the timeseries to automatically adapt to changes.
+
+There is a slight risk of it getting caught in suboptimal position however.
+It should probably be coupled with some basic data sanity checks.
+"""
 import datetime
 import os
 
-fred_key = None # https://fred.stlouisfed.org/docs/api/api_key.html
 import pandas as pd
 import matplotlib.pyplot as plt  # required only for graphs
-from autots import AutoTS, load_live_daily
+from autots import AutoTS, load_live_daily, create_lagged_regressor
 
+fred_key = "93873d40f10c20fe6f6e75b1ad0aed4d"  # https://fred.stlouisfed.org/docs/api/api_key.html
 forecast_name = "example"  # used in DB name!
 graph = True  # whether to plot a graph
 archive_table = False  # append to an archive table
@@ -53,7 +66,7 @@ else:
     n_export = 1  # wouldn't be a bad idea to do > 1, allowing some future adaptability
 
 """
-Begin Dataset retrieval section
+Begin dataset retrieval
 """
 
 df = load_live_daily(long=False, fred_key=fred_key)
@@ -72,9 +85,16 @@ regr_train, regr_fcst = create_lagged_regressor(
     df,
     forecast_length=forecast_length,
     summarize=None,
-    backfill = 'datepartregression',
+    backfill='datepartregression',
     fill_na='ffill'
 )
+
+# remove the first forecast_length rows (because those are lost in regressor)
+df = df.iloc[forecast_length:]
+
+"""
+Begin modeling
+"""
 
 metric_weighting = {
     'smape_weighting': 2,
@@ -124,6 +144,10 @@ prediction = model.predict(future_regressor=regr_fcst)
 # Print the details of the best model
 print(model)
 
+"""
+Process results
+"""
+
 # point forecasts dataframe
 forecasts_df = prediction.forecast.fillna(0).round(0)
 if forecast_csv_name is not None:
@@ -146,10 +170,8 @@ if initial_training or evolve:
             arc_file, models="best", n=1
         )
 
-# df.groupby("Product").count()["DailyQuantity"].sort_values(ascending=False).head()
 if graph:
-    col = model.df_wide_numeric.columns[1]  # change column here
-    col = "APRA308232C"  # APRH100033, APRH100060,
+    col = model.df_wide_numeric.columns[-1]  # change column here
     plot_df = pd.DataFrame({
         col: model.df_wide_numeric[col],
         'up_forecast': forecasts_upper_df[col],

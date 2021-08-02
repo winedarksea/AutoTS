@@ -3,22 +3,23 @@ from autots.tools.impute import FillNA
 
 
 def create_lagged_regressor(df,
-                        forecast_length: int,
-                        summarize: str = None,
-                        backfill: str = "bfill",
-                        n_jobs: str = "auto",
-                        fill_na: str = 'ffill',
-                        ):
+                            forecast_length: int,
+                            summarize: str = None,
+                            backfill: str = "bfill",
+                            n_jobs: str = "auto",
+                            fill_na: str = 'ffill',
+                            ):
     """Create a regressor of features lagged by forecast length.
     Useful to some models that don't otherwise use such information.
-    
+
     It is recommended that the .head(forecast_length) of both regressor_train and the df for training are dropped.
+    `df = df.iloc[forecast_length:]`
 
     Args:
         df (pd.DataFrame): training data
         forecast_length (int): length of forecasts, to shift data by
         summarize (str): options to summarize the features, if large:
-            'pca', 'median', 'mean'
+            'pca', 'median', 'mean', 'mean+std'
         backfill (str): method to deal with the NaNs created by shifting
             "bfill"- backfill with last values
             "ETS" -backfill with ETS backwards forecast
@@ -38,17 +39,17 @@ def create_lagged_regressor(df,
     dates = df.index
 
     if summarize is None:
-        pass    
+        pass
     elif summarize == 'mean':
         df = df.mean(axis=1).to_frame()
     elif summarize == 'median':
         df = df.median(axis=1).to_frame()
     elif summarize == 'pca':
         from sklearn.decomposition import PCA
-        
+
         df = FillNA(df, method=fill_na)
         df = pd.DataFrame(PCA(n_components='mle').fit_transform(df), index=dates)
-    else:
+    elif summarize == 'mean+std':
         df = pd.concat([df.mean(axis=1).to_frame(), df.std(axis=1).to_frame()], axis=1)
         df.columns = [0, 1]
 
@@ -78,7 +79,7 @@ def create_lagged_regressor(df,
             model_transform_dict={
                 'fillna': 'fake_date',
                 'transformations': {'0': 'ClipOutliers'},
-                'transformation_params': {'0': {'method': 'clip', 'std_threshold': 3}} # 'fillna': 'null'
+                'transformation_params': {'0': {'method': 'clip', 'std_threshold': 3}}
             },
             df_train=df_train,
             forecast_length=forecast_length,
@@ -91,30 +92,3 @@ def create_lagged_regressor(df,
         add_on.index = regressor_train.head(forecast_length).index
         regressor_train = pd.concat([add_on, regressor_train.tail(df.shape[0] - forecast_length)])
     return regressor_train, regressor_forecast
-
-
-import unittest
-from autots import create_lagged_regressor, load_daily
-
-class test_create_lagged_regressor(unittest.TestCase):
-    def test_create_regressor(self):
-        df = load_daily(long=False)
-        forecast_length = 5
-        regr, fcst = create_lagged_regressor(df,
-                                forecast_length=forecast_length,
-                                summarize=None,
-                                backfill = 'bfill',
-                                fill_na='ffill')
-
-        self.assertEqual(regr.shape, df.shape)
-        self.assertEqual(fcst.shape[0], forecast_length)
-        
-        regr, fcst = create_lagged_regressor(df,
-                                forecast_length=forecast_length,
-                                summarize=None,
-                                backfill = 'DatepartRegression',
-                                fill_na='mean')
-
-        self.assertEqual(regr.shape, df.shape)
-        self.assertEqual(fcst.shape[0], forecast_length)
-        

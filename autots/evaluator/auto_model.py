@@ -839,6 +839,7 @@ def model_forecast(
             n_jobs=n_jobs,
         )
 
+        sys.stdout.flush()
         return df_forecast
 
 
@@ -910,7 +911,7 @@ def TemplateWizard(
     template_result = TemplateEvalObject()
     template_result.model_count = model_count
     if isinstance(template, pd.Series):
-        template = pd.DataFrame(template).transpose()
+        template = template.to_frame()
     # template = unpack_ensemble_models(template, template_cols, keep_ensemble = False)
 
     for index, row in template.iterrows():
@@ -919,7 +920,6 @@ def TemplateWizard(
             parameter_dict = json.loads(row['ModelParameters'])
             transformation_dict = json.loads(row['TransformationParameters'])
             ensemble_input = row['Ensemble']
-            current_template = pd.DataFrame(row).transpose()
             template_result.model_count += 1
             if verbose > 0:
                 if validation_round >= 1:
