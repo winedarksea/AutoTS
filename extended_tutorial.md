@@ -206,7 +206,7 @@ df_forecast = model_forecast(
     },
     df_train=df,
     forecast_length=12,
-    frequency='D',  # no 'infer' option here
+    frequency='infer',
     prediction_interval=0.9,
     no_negatives=False,
     # future_regressor_train=future_regressor_train2d,
@@ -501,6 +501,7 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              |               |
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 |  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              | True         | True          |
+|  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |               |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |

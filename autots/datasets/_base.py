@@ -260,7 +260,10 @@ def load_live_daily(long: bool = False,
             msft_hist = msft.history(period="max")
             msft_hist = msft_hist.rename(columns=lambda x: x.lower().replace(" ", "_"))
             msft_hist = msft_hist.rename(columns=lambda x: ticker.lower() + "_" + x)
-            msft_hist.index = msft_hist.index.tz_localize(None)
+            try:
+                msft_hist.index = msft_hist.index.tz_localize(None)
+            except Exception:
+                pass
             dataset_lists.append(msft_hist)
         except ModuleNotFoundError:
             print("You need to: pip install yfinance")

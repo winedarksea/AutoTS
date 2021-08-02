@@ -23,6 +23,8 @@
 * cleaned up PredictWitch -> model_forecast() a bit so that users can use it to run single models from parameters directly
 * added load_live_daily() example data and spruced up production_example.py
 * tried in vain to make a quiet verbosity option for GluonTS
+* added create_lagged_regressor
+* added Greykite model
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

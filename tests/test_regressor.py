@@ -21,7 +21,6 @@ class test_create_lagged_regressor(unittest.TestCase):
         self.assertFalse(regr.isna().any().any())
         self.assertFalse(fcst.isna().any().any())
         self.assertTrue((df.index == regr.index).all())
-        self.assertTrue((fcst.reset_index(drop=True) == df.tail(forecast_length).reset_index(drop=True)).all().all())
 
         regr, fcst = create_lagged_regressor(
             df,

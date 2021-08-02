@@ -1,9 +1,12 @@
 import pandas as pd
 from autots.tools.impute import FillNA
+from autots.tools.shaping import infer_frequency
 
 
 def create_lagged_regressor(df,
                             forecast_length: int,
+                            frequency: str = "infer",
+                            scale: bool = True,
                             summarize: str = None,
                             backfill: str = "bfill",
                             n_jobs: str = "auto",
@@ -18,6 +21,8 @@ def create_lagged_regressor(df,
     Args:
         df (pd.DataFrame): training data
         forecast_length (int): length of forecasts, to shift data by
+        frequency (str): the ever necessary frequency for datetime things. Default 'infer'
+        scale (bool): if True, use the StandardScaler to standardize the features
         summarize (str): options to summarize the features, if large:
             'pca', 'median', 'mean', 'mean+std'
         backfill (str): method to deal with the NaNs created by shifting
@@ -30,6 +35,8 @@ def create_lagged_regressor(df,
         regressor_train, regressor_forecast
     """
     model_flag = False
+    if frequency == "infer":
+        frequency = infer_frequency(df)
     if not isinstance(df.index, pd.DatetimeIndex):
         raise ValueError("df must be a 'wide' dataframe with a pd.DatetimeIndex.")
     if isinstance(summarize, str):
@@ -37,6 +44,14 @@ def create_lagged_regressor(df,
     if isinstance(backfill, str):
         backfill = backfill.lower()
     dates = df.index
+    df_cols = df.columns
+
+    if scale:
+        from sklearn.preprocessing import StandardScaler
+
+        scaler = StandardScaler()
+        df = pd.DataFrame(scaler.fit_transform(df),
+                          index=dates, columns=df_cols)
 
     if summarize is None:
         pass
@@ -55,7 +70,8 @@ def create_lagged_regressor(df,
 
     df = FillNA(df, method=fill_na)
     regressor_forecast = df.tail(forecast_length)
-    regressor_forecast.index = pd.date_range(dates[-1] + dates.freq, periods=forecast_length, freq=dates.freq)
+    # also dates.shift(forecast_length)[-forecast_length:]
+    regressor_forecast.index = pd.date_range(dates[-1], periods=(forecast_length + 1), freq=frequency)[1:]
     regressor_train = df.shift(forecast_length)
     if backfill == "ets":
         model_flag = True
@@ -83,7 +99,7 @@ def create_lagged_regressor(df,
             },
             df_train=df_train,
             forecast_length=forecast_length,
-            frequency=dates.freq,
+            frequency=frequency,
             random_seed=321,
             verbose=0,
             n_jobs=n_jobs,

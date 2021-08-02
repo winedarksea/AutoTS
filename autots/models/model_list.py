@@ -22,6 +22,7 @@ all_models = [
     'ComponentAnalysis',
     'DatepartRegression',
     "UnivariateRegression",
+    "Greykite",
 ]
 default = [
     'ZeroesNaive',
@@ -72,6 +73,7 @@ parallel = [
     'GLM',
     'UnobservedComponents',
     'MotifSimulation',
+    "Greykite",
 ]
 # models that should be fast given many CPU cores
 fast_parallel = list(set(parallel + fast))
@@ -125,10 +127,11 @@ recombination_approved = [
     'GluonTS',
     'RollingRegression',
     'VAR',
-    'WindowRegression',
+    # 'WindowRegression',
     'TensorflowSTS',
     'TFPRegression',
     'UnivariateRegression',
+    "Greykite",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -143,7 +146,8 @@ no_shared = [
     'UnobservedComponents',
     'TensorflowSTS',
     "GLS",
-    "UnivariateRegression"
+    "UnivariateRegression",
+    "Greykite",
     # 'MotifSimulation',
     # 'DatepartRegression',
 ]
@@ -159,6 +163,7 @@ regressor = [
     'WindowRegression',
     'VAR',
     'DatepartRegression',
+    "Greykite",
     # "UnivariateRegression",
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))

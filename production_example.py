@@ -91,6 +91,7 @@ regr_train, regr_fcst = create_lagged_regressor(
 
 # remove the first forecast_length rows (because those are lost in regressor)
 df = df.iloc[forecast_length:]
+regr_train = regr_train.iloc[forecast_length:]
 
 """
 Begin modeling

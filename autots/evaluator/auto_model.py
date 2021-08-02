@@ -9,6 +9,7 @@ from hashlib import md5
 from autots.evaluator.metrics import PredictionEval
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
 from autots.models.ensemble import EnsembleForecast, generalize_horizontal, horizontal_aliases
+from autots.tools.shaping import infer_frequency
 from autots.models.model_list import (
     no_params,
     recombination_approved,
@@ -381,6 +382,20 @@ def ModelMonster(
         )
 
         return model
+    elif model == 'Greykite':
+        from autots.models.greykite import Greykite
+
+        model = Greykite(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+
+        return model
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)
@@ -695,6 +710,8 @@ def model_forecast(
         model_param_dict = json.loads(model_param_dict)
     if isinstance(model_transform_dict, str):
         model_transform_dict = json.loads(model_transform_dict)
+    if frequency == "infer":
+        frequency = infer_frequency(df_train)
     # handle "auto" n_jobs to an integer of local count
     if n_jobs == 'auto':
         from autots.tools import cpu_count
