@@ -1,6 +1,7 @@
 """Informal testing script."""
 from time import sleep
 import timeit
+import platform
 import numpy as np
 import pandas as pd
 from autots.datasets import (
@@ -23,8 +24,8 @@ force_univariate = False  # long = False
 example_filename = "general_templateDESKTOP-JS3OJ8L.csv" # "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
-df = load_monthly(long=long)
-n_jobs = 'auto'
+df = load_daily(long=long)
+n_jobs = "auto"
 verbose = 1
 validation_method = "backwards"
 if use_template:
@@ -82,7 +83,7 @@ model_list = [
 transformer_list = "fast"  # ["SinTrend", "MinMaxScaler"]
 transformer_max_depth = 3
 model_list = 'default'  # fast_parallel
-model_list = ['FBProphet', 'LastValueNaive']
+model_list = ["AverageValueNaive", "GLM", "GLS", "FBProphet"]
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {
@@ -100,7 +101,7 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble=["simple,distance,horizontal-max"],
+    ensemble=["simple", "distance", "horizontal-max", "horizontal-min"],
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,
@@ -115,7 +116,7 @@ model = AutoTS(
     model_interrupt=True,
     n_jobs=n_jobs,
     drop_most_recent=1,
-    prefill_na = 0,
+    prefill_na=0,
     subset=None,
     verbose=verbose,
 )
@@ -161,58 +162,6 @@ model = model.fit(
 )
 elapsed_for = timeit.default_timer() - start_time_for
 
-
-"""
-del model
-model = AutoTS(
-    forecast_length=forecast_length,
-    frequency='infer',
-    prediction_interval=0.9,
-    ensemble=None,
-    constraint=None,
-    max_generations=generations,
-    num_validations=num_validations,
-    validation_method=validation_method,
-    model_list=model_list,
-    transformer_list=transformer_list,
-    transformer_max_depth=transformer_max_depth,
-    initial_template='General+Random',
-    metric_weighting=metric_weighting,
-    models_to_validate=0.1,
-    max_per_model_class=None,
-    model_interrupt=True,
-    n_jobs=None,
-    drop_most_recent=0,
-    verbose=verbose,
-)
-# model = model.import_template(example_filename, method='only')
-import time
-
-time.sleep(30)
-import joblib
-
-with joblib.parallel_backend("loky", n_jobs=n_jobs):
-    start_time_cxt = timeit.default_timer()
-    model = model.fit(
-        df,
-        future_regressor=future_regressor_train2d,
-        # grouping_ids=grouping_monthly,
-        # result_file='test.pickle',
-        date_col='datetime' if long else None,
-        value_col='value' if long else None,
-        id_col='series_id' if long else None,
-    )
-    elapsed_cxt = timeit.default_timer() - start_time_cxt
-print(f"With Context {elapsed_cxt}\nWithout Context {elapsed_for}")
-"""
-
-"""
-prediction_ints = model.predict(
-    future_regressor=future_regressor_forecast2d,
-    prediction_interval=[0.99, 0.5],
-    verbose=0,
-)
-"""
 prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=0)
 # point forecasts dataframe
 forecasts_df = prediction.forecast
@@ -220,6 +169,11 @@ forecasts_df = prediction.forecast
 initial_results = model.results()
 # validation results
 validation_results = model.results("validation")
+
+prediction.plot(model.df_wide_numeric,
+                series=model.df_wide_numeric.columns[0],
+                remove_zeroes=False,
+                start_date="2019-01-01")
 
 initial_results['TransformationRuntime'] = initial_results['TransformationRuntime'].dt.total_seconds()
 initial_results['FitRuntime'] = initial_results['FitRuntime'].dt.total_seconds()
@@ -229,7 +183,7 @@ initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_secon
 sleep(5)
 print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
-import platform
+
 initial_results.to_csv("general_template_" + str(platform.node()) + ".csv")
 
 """
@@ -305,34 +259,4 @@ if (~initial_results['Exceptions'].isna()).sum() > 0:
     test_corr = error_correlations(
         initial_results[cols], result='corr'
     )  # result='poly corr'
-"""
-"""
-prediction_intervals = [0.99, 0.67]
-model_list = 'superfast'  # ['FBProphet', 'VAR', 'AverageValueNaive']
-from autots.evaluator.auto_ts import AutoTSIntervals
-
-intervalModel = AutoTSIntervals().fit(
-    prediction_intervals=prediction_intervals,
-    import_template=None,
-    forecast_length=forecast_length,
-    df=df,
-    max_generations=1,
-    num_validations=2,
-    import_results='test.pickle',
-    result_file='testProb.pickle',
-    validation_method='seasonal 12',
-    models_to_validate=0.2,
-    interval_models_to_validate=50,
-    date_col='datetime',
-    value_col='value',
-    id_col='series_id',
-    model_list=model_list,
-    future_regressor=[],
-    constraint=2,
-    no_negatives=True,
-    remove_leading_zeroes=True,
-    random_seed=2020,
-)  # weights, future_regressor, metrics
-intervalForecasts = intervalModel.predict()
-intervalForecasts[0.99].upper_forecast
 """

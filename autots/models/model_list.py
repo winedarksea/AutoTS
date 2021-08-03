@@ -50,7 +50,7 @@ superfast = [
     'GLS',
     'SeasonalNaive',
 ]
-# relatively fast at any scale
+# relatively fast
 fast = [
     'ZeroesNaive',
     'LastValueNaive',
@@ -58,12 +58,14 @@ fast = [
     'GLS',
     'GLM',
     'ETS',
-    'WindowRegression',
-    'GluonTS',
+    # 'WindowRegression',
+    # 'GluonTS',
     'VAR',
     'SeasonalNaive',
     'VECM',
     'ComponentAnalysis',
+    'DatepartRegression',
+    'UnivariateRegression',
 ]
 # models that can scale well if many CPU cores are available
 parallel = [
@@ -185,3 +187,7 @@ model_lists = {
     "gpu": gpu,
     "regressor": regressor,
 }
+
+
+def auto_model_list(n_jobs, n_series, frequency):
+    pass

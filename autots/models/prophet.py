@@ -202,14 +202,13 @@ class FBProphet(ModelObject):
                     forecast_length=forecast_length, future_regressor=future_regressor)
                 for col in cols
             )
-            complete = list(map(list, zip(*df_list)))
         else:
             df_list = []
             for col in cols:
                 df_list.append(seek_the_oracle(self.df_train, args, col,
                                                forecast_length=forecast_length,
                                                future_regressor=future_regressor))
-            complete = list(map(list, zip(*df_list)))
+        complete = list(map(list, zip(*df_list)))
         forecast = pd.concat(complete[0], axis=1)
         forecast.index = test_index
         forecast = forecast[self.column_names]

@@ -27,6 +27,7 @@
 * added Greykite model (additional regressors not working yet)
 * fixed regressors bug in Prophet
 * added a simple plot method to PredictionObject
+* fix for deprecation warning in GLS
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

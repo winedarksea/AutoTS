@@ -57,18 +57,19 @@ Input data is expected to come in either a *long* or a *wide* format:
 from autots.datasets import load_monthly
 
 # sample datasets can be used in either of the long or wide import shapes
-long = True
-df = load_monthly(long=long)
+long = False
+df = load_daily(long=long)
 
 from autots import AutoTS
 
 model = AutoTS(
-    forecast_length=3,
+    forecast_length=21,
     frequency='infer',
     prediction_interval=0.9,
     ensemble=None,
     model_list="default",
 	transformer_list="fast",
+	drop_most_recent=1,
     max_generations=5,
     num_validations=2,
     validation_method="backwards"
@@ -84,8 +85,7 @@ prediction = model.predict()
 # plot a sample
 prediction.plot(model.df_wide_numeric,
                 series=model.df_wide_numeric.columns[0],
-                remove_zeroes=True,
-                start_date="2020-01-01")
+                start_date="2019-01-01")
 # Print the details of the best model
 print(model)
 
