@@ -28,6 +28,7 @@ from autots.models.ensemble import (
     HorizontalTemplateGenerator,
 )
 from autots.models.model_list import model_lists
+from autots.tools import cpu_count
 
 
 class AutoTS(object):
@@ -172,11 +173,13 @@ class AutoTS(object):
             self.seasonal_val_periods = int(''.join(val_list))
 
         if self.n_jobs == 'auto':
-            from autots.tools import cpu_count
-
             self.n_jobs = cpu_count()
             if verbose > 0:
                 print(f"Auto-detected {self.n_jobs} cpus for n_jobs.")
+        elif str(self.n_jobs).isdigit():
+            self.n_jobs = int(self.n_jobs)
+            if self.n_jobs < 0:
+                self.n_jobs = cpu_count() + 1 - self.n_jobs
 
         # convert shortcuts of model lists to actual lists of models
         if model_list in list(model_lists.keys()):

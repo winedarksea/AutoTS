@@ -173,11 +173,13 @@ if initial_training or evolve:
 
 if graph:
     col = model.df_wide_numeric.columns[-1]  # change column here
+    col = "eurjpy=x_close"
     plot_df = pd.DataFrame({
         col: model.df_wide_numeric[col],
         'up_forecast': forecasts_upper_df[col],
         'low_forecast': forecasts_lower_df[col],
         'forecast': forecasts_df[col],
     })
+    # plot_df[plot_df == 0] = np.nan
     fig, ax = plt.subplots(dpi=300, figsize=(8, 6))
     plot_df[plot_df.index.year >= 2021].plot(ax=ax)

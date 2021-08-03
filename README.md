@@ -67,7 +67,7 @@ model = AutoTS(
     frequency='infer',
     prediction_interval=0.9,
     ensemble=None,
-    model_list="superfast",
+    model_list="default",
 	transformer_list="fast",
     max_generations=5,
     num_validations=2,
@@ -81,6 +81,11 @@ model = model.fit(
 )
 
 prediction = model.predict()
+# plot a sample
+prediction.plot(model.df_wide_numeric,
+                series=model.df_wide_numeric.columns[0],
+                remove_zeroes=True,
+                start_date="2020-01-01")
 # Print the details of the best model
 print(model)
 

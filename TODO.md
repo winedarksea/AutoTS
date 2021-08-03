@@ -24,7 +24,9 @@
 * added load_live_daily() example data and spruced up production_example.py
 * tried in vain to make a quiet verbosity option for GluonTS
 * added create_lagged_regressor
-* added Greykite model
+* added Greykite model (additional regressors not working yet)
+* fixed regressors bug in Prophet
+* added a simple plot method to PredictionObject
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

@@ -26,6 +26,7 @@ def seek_the_oracle(df, col, forecast_length, freq, prediction_interval=0.9,
                     regressors=None, verbose=0,
                     inner_n_jobs=1, **kwargs
                     ):
+    """Internal. For loop or parallel version of Greykite."""
     inner_df = pd.DataFrame({
         'ts': df.index,
         'y': df[col].values,
@@ -237,7 +238,7 @@ class Greykite(ModelObject):
         """Return dict of new parameters for parameter tuning."""
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         regression_list = [None, 'User']
-        regression_probability = [0.7, 0.3]
+        regression_probability = [0.8, 0.2]
         regression_choice = random.choices(
             regression_list, regression_probability
         )[0]

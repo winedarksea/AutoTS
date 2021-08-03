@@ -28,7 +28,6 @@ def seek_the_oracle(df, args, series, forecast_length, future_regressor):
     current_series = current_series.rename(columns={series: 'y'})
     current_series['ds'] = current_series.index
     m = Prophet(interval_width=args['prediction_interval'])
-    print("MADE IT TO CHECKPOINT 2")
     if args['holiday']:
         m.add_country_holidays(country_name=args['holiday_country'])
     if args['regression_type'] == 'User':
@@ -39,7 +38,6 @@ def seek_the_oracle(df, args, series, forecast_length, future_regressor):
     future = m.make_future_dataframe(periods=forecast_length)
     if args['regression_type'] == 'User':
         if future_regressor.ndim > 1:
-            print("MADE IT TO CHECKPOINT 3")
             # a = args['dimensionality_reducer'].transform(future_regressor)
             if future_regressor.shape[1] > 1:
                 ft_regr = future_regressor.mean(axis=1).to_frame().merge(future_regressor.std(axis=1).to_frame(), left_index=True, right_index=True)
@@ -50,11 +48,9 @@ def seek_the_oracle(df, args, series, forecast_length, future_regressor):
             regr.index.name = 'ds'
             regr.reset_index(drop=False, inplace=True)
             future = future.merge(regr, on="ds", how='left')
-            print(future.tail())
         else:
             a = np.append(args['regressor_train'], future_regressor.values)
             future[args['regressor_name']] = a
-    print("MADE IT TO CHECKPOINT 4")
     fcst = m.predict(future)
     fcst = fcst.tail(forecast_length)  # remove the backcast
     forecast = fcst['yhat']
@@ -120,10 +116,6 @@ class FBProphet(ModelObject):
         self.regressor_train = None
         self.dimensionality_reducer = None
         if self.regression_type == 'User':
-            """
-            print("the shape of the input is: {}".format(str(((np.array(future_regressor).shape[0])))))
-            print("the shape of the training data is: {}".format(str(df.shape[0])))
-            """
             if future_regressor.shape[0] != df.shape[0]:
                 self.regression_type = None
             else:
@@ -152,7 +144,6 @@ class FBProphet(ModelObject):
                     random_two = "n9032380gflljWfu8233koWQop3"
                     random_one = "prophet_staging_regressor"
                     self.regressor_name = [random_one if random_one not in df.columns else random_two]
-        print("MADE IT TO CHECKPOINT 1")
         self.df_train = df
 
         self.fit_runtime = datetime.datetime.now() - self.startTime

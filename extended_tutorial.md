@@ -296,7 +296,7 @@ python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm -
 python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily, --no-deps to pip install prophet if this fails
 python -m pip install mxnet --exists-action i     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
 python -m pip install gluonts --exists-action i
-python -m pip install holiday-ext pmdarima dill greykite --exists-action i --no-deps
+python -m pip install holidays-ext pmdarima dill greykite --exists-action i --no-deps
 python -m pip install --upgrade numpy pandas --exists-action i  # mxnet likes to (pointlessly seeming) install old versions of numpy
 
 python -m pip install autots --exists-action i
