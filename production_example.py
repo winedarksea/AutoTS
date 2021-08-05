@@ -21,7 +21,6 @@ from autots import AutoTS, load_live_daily, create_lagged_regressor
 fred_key = None  # https://fred.stlouisfed.org/docs/api/api_key.html
 forecast_name = "example"  # used in DB name!
 graph = True  # whether to plot a graph
-archive_table = False  # append to an archive table
 # https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects
 frequency = "D"
 forecast_length = 28  # number of periods to forecast ahead
@@ -150,7 +149,7 @@ Process results
 """
 
 # point forecasts dataframe
-forecasts_df = prediction.forecast.fillna(0).round(0)
+forecasts_df = prediction.forecast  # .fillna(0).round(0)
 if forecast_csv_name is not None:
     forecasts_df.to_csv(forecast_csv_name)
 
@@ -173,7 +172,6 @@ if initial_training or evolve:
 
 if graph:
     col = model.df_wide_numeric.columns[-1]  # change column here
-    col = "eurjpy=x_close"
     plot_df = pd.DataFrame({
         col: model.df_wide_numeric[col],
         'up_forecast': forecasts_upper_df[col],
