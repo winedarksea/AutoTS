@@ -551,7 +551,7 @@ def EnsembleTemplateGenerator(
         ]
         first_model = ens_per_ts.iloc[:, 0:first_bit].mean(axis=1).idxmin()
         last_model = (
-            ens_per_ts.iloc[:, first_bit: (last_bit + first_bit)].mean(axis=1).idxmin()
+            ens_per_ts.iloc[:, first_bit : (last_bit + first_bit)].mean(axis=1).idxmin()
         )
         ensemble_models = {}
         best3 = initial_results.model_results[
@@ -598,7 +598,7 @@ def EnsembleTemplateGenerator(
         ]
         first_model = ens_per_ts.iloc[:, 0:first_bit].mean(axis=1).idxmin()
         last_model = (
-            ens_per_ts.iloc[:, first_bit: (last_bit + first_bit)].mean(axis=1).idxmin()
+            ens_per_ts.iloc[:, first_bit : (last_bit + first_bit)].mean(axis=1).idxmin()
         )
         ensemble_models = {}
         best3 = initial_results.model_results[
@@ -788,7 +788,9 @@ def HorizontalTemplateGenerator(
             no_shared_select = model_results['Model'].isin(no_shared)
             shared_mod_lst = model_results[~no_shared_select]['ID'].tolist()
             no_shared_mod_lst = model_results[no_shared_select]['ID'].tolist()
-            lowest_score_mod = [model_results.iloc[model_results['Score'].idxmin()]['ID']]
+            lowest_score_mod = [
+                model_results.iloc[model_results['Score'].idxmin()]['ID']
+            ]
             per_series[per_series.index.isin(shared_mod_lst)]
             # remove those where idxmin is in no_shared
             shared_maxes = per_series.idxmin().isin(shared_mod_lst)
@@ -796,7 +798,9 @@ def HorizontalTemplateGenerator(
             per_series_shareds = per_series.filter(shr_mx_cols, axis=1)
             # select best n shared models (NEEDS improvement)
             n_md = 5
-            use_shared_lst = per_series_shareds.median(axis=1).nsmallest(n_md).index.tolist()
+            use_shared_lst = (
+                per_series_shareds.median(axis=1).nsmallest(n_md).index.tolist()
+            )
             # combine all of the above as allowed mods
             allowed_list = no_shared_mod_lst + lowest_score_mod + use_shared_lst
             per_series_filter = per_series[per_series.index.isin(allowed_list)]

@@ -3,15 +3,16 @@ from autots.tools.impute import FillNA
 from autots.tools.shaping import infer_frequency
 
 
-def create_lagged_regressor(df,
-                            forecast_length: int,
-                            frequency: str = "infer",
-                            scale: bool = True,
-                            summarize: str = None,
-                            backfill: str = "bfill",
-                            n_jobs: str = "auto",
-                            fill_na: str = 'ffill',
-                            ):
+def create_lagged_regressor(
+    df,
+    forecast_length: int,
+    frequency: str = "infer",
+    scale: bool = True,
+    summarize: str = None,
+    backfill: str = "bfill",
+    n_jobs: str = "auto",
+    fill_na: str = 'ffill',
+):
     """Create a regressor of features lagged by forecast length.
     Useful to some models that don't otherwise use such information.
 
@@ -50,8 +51,7 @@ def create_lagged_regressor(df,
         from sklearn.preprocessing import StandardScaler
 
         scaler = StandardScaler()
-        df = pd.DataFrame(scaler.fit_transform(df),
-                          index=dates, columns=df_cols)
+        df = pd.DataFrame(scaler.fit_transform(df), index=dates, columns=df_cols)
 
     if summarize is None:
         pass
@@ -71,7 +71,9 @@ def create_lagged_regressor(df,
     df = FillNA(df, method=fill_na)
     regressor_forecast = df.tail(forecast_length)
     # also dates.shift(forecast_length)[-forecast_length:]
-    regressor_forecast.index = pd.date_range(dates[-1], periods=(forecast_length + 1), freq=frequency)[1:]
+    regressor_forecast.index = pd.date_range(
+        dates[-1], periods=(forecast_length + 1), freq=frequency
+    )[1:]
     regressor_train = df.shift(forecast_length)
     if backfill == "ets":
         model_flag = True
@@ -95,7 +97,7 @@ def create_lagged_regressor(df,
             model_transform_dict={
                 'fillna': 'fake_date',
                 'transformations': {'0': 'ClipOutliers'},
-                'transformation_params': {'0': {'method': 'clip', 'std_threshold': 3}}
+                'transformation_params': {'0': {'method': 'clip', 'std_threshold': 3}},
             },
             df_train=df_train,
             forecast_length=forecast_length,
@@ -106,5 +108,7 @@ def create_lagged_regressor(df,
         )
         add_on = df_forecast.forecast.iloc[::-1]
         add_on.index = regressor_train.head(forecast_length).index
-        regressor_train = pd.concat([add_on, regressor_train.tail(df.shape[0] - forecast_length)])
+        regressor_train = pd.concat(
+            [add_on, regressor_train.tail(df.shape[0] - forecast_length)]
+        )
     return regressor_train, regressor_forecast

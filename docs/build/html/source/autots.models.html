@@ -3,8 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" />
-    <title>autots.models package &#8212; AutoTS 0.3.2 documentation</title>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>autots.models package &#8212; AutoTS 0.3.3 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -32,12 +33,12 @@
 
           <div class="body" role="main">
             
-  <div class="section" id="autots-models-package">
+  <section id="autots-models-package">
 <h1>autots.models package<a class="headerlink" href="#autots-models-package" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="submodules">
+<section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
-</div>
-<div class="section" id="module-autots.models.base">
+</section>
+<section id="module-autots.models.base">
 <span id="autots-models-base-module"></span><h2>autots.models.base module<a class="headerlink" href="#module-autots.models.base" title="Permalink to this headline">¶</a></h2>
 <p>Base model information</p>
 <p>&#64;author: Colin</p>
@@ -97,16 +98,87 @@
 <em class="property">class </em><code class="sig-prename descclassname">autots.models.base.</code><code class="sig-name descname">PredictionObject</code><span class="sig-paren">(</span><em class="sig-param">model_name: str = 'Uninitiated'</em>, <em class="sig-param">forecast_length: int = 0</em>, <em class="sig-param">forecast_index=nan</em>, <em class="sig-param">forecast_columns=nan</em>, <em class="sig-param">lower_forecast=nan</em>, <em class="sig-param">forecast=nan</em>, <em class="sig-param">upper_forecast=nan</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">predict_runtime=datetime.timedelta(0)</em>, <em class="sig-param">fit_runtime=datetime.timedelta(0)</em>, <em class="sig-param">model_parameters={}</em>, <em class="sig-param">transformation_parameters={}</em>, <em class="sig-param">transformation_runtime=datetime.timedelta(0)</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Generic class for holding forecast information.</p>
+<dl class="attribute">
+<dt id="autots.models.base.PredictionObject.model_name">
+<code class="sig-name descname">model_name</code><a class="headerlink" href="#autots.models.base.PredictionObject.model_name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.base.PredictionObject.model_parameters">
+<code class="sig-name descname">model_parameters</code><a class="headerlink" href="#autots.models.base.PredictionObject.model_parameters" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.base.PredictionObject.transformation_parameters">
+<code class="sig-name descname">transformation_parameters</code><a class="headerlink" href="#autots.models.base.PredictionObject.transformation_parameters" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.base.PredictionObject.forecast">
+<code class="sig-name descname">forecast</code><a class="headerlink" href="#autots.models.base.PredictionObject.forecast" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.base.PredictionObject.upper_forecast">
+<code class="sig-name descname">upper_forecast</code><a class="headerlink" href="#autots.models.base.PredictionObject.upper_forecast" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.base.PredictionObject.lower_forecast">
+<code class="sig-name descname">lower_forecast</code><a class="headerlink" href="#autots.models.base.PredictionObject.lower_forecast" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.base.PredictionObject.long_form_results">
+<code class="sig-name descname">long_form_results</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.long_form_results" title="Permalink to this definition">¶</a></dt>
+<dd><p>return complete results in long form</p>
+</dd></dl>
+
 <dl class="method">
 <dt id="autots.models.base.PredictionObject.total_runtime">
 <code class="sig-name descname">total_runtime</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.total_runtime" title="Permalink to this definition">¶</a></dt>
+<dd><p>return runtime for all model components in seconds</p>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">long_form_results</code><span class="sig-paren">(</span><em class="sig-param">id_name='SeriesID'</em>, <em class="sig-param">value_name='Value'</em>, <em class="sig-param">interval_name='PredictionInterval'</em>, <em class="sig-param">update_datetime_name=None</em><span class="sig-paren">)</span></dt>
+<dd><p>Export forecasts (including upper and lower) as single ‘long’ format output</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.base.PredictionObject.plot">
+<code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">df_wide=None</em>, <em class="sig-param">series: str = None</em>, <em class="sig-param">ax=None</em>, <em class="sig-param">remove_zeroes: bool = False</em>, <em class="sig-param">start_date: str = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.plot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate an example plot of one series.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df_wide</strong> (<em>str</em>) – historic data for plotting actuals</p></li>
+<li><p><strong>series</strong> (<em>str</em>) – column name of series to plot. Random if None.</p></li>
+<li><p><strong>ax</strong> – matplotlib axes to pass through to pd.plot()</p></li>
+<li><p><strong>remove_zeroes</strong> (<em>bool</em>) – if True, don’t plot any zeroes</p></li>
+<li><p><strong>start_date</strong> (<em>str</em>) – Y-m-d string to remove all data before</p></li>
+<li><p><strong>passed to pd.DataFrame.plot</strong><strong>(</strong><strong>)</strong> (<em>**kwargs</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">total_runtime</code><span class="sig-paren">(</span><span class="sig-paren">)</span></dt>
 <dd><p>Combine runtimes.</p>
 </dd></dl>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.models.basics">
+</section>
+<section id="module-autots.models.basics">
 <span id="autots-models-basics-module"></span><h2>autots.models.basics module<a class="headerlink" href="#module-autots.models.basics" title="Permalink to this headline">¶</a></h2>
 <p>Naives and Others Requiring No Additional Packages Beyond Numpy and Pandas</p>
 <dl class="class">
@@ -414,8 +486,8 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.models.dnn">
+</section>
+<section id="module-autots.models.dnn">
 <span id="autots-models-dnn-module"></span><h2>autots.models.dnn module<a class="headerlink" href="#module-autots.models.dnn" title="Permalink to this headline">¶</a></h2>
 <p>Neural Nets.</p>
 <dl class="class">
@@ -452,8 +524,8 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.models.ensemble">
+</section>
+<section id="module-autots.models.ensemble">
 <span id="autots-models-ensemble-module"></span><h2>autots.models.ensemble module<a class="headerlink" href="#module-autots.models.ensemble" title="Permalink to this headline">¶</a></h2>
 <p>Tools for generating and forecasting with ensembles of models.</p>
 <dl class="function">
@@ -537,8 +609,8 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Summarize time series data. For now just df.describe().</p>
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.models.gluonts">
+</section>
+<section id="module-autots.models.gluonts">
 <span id="autots-models-gluonts-module"></span><h2>autots.models.gluonts module<a class="headerlink" href="#module-autots.models.gluonts" title="Permalink to this headline">¶</a></h2>
 <p>GluonTS</p>
 <p>Excellent models, released by Amazon, scale well.
@@ -607,12 +679,86 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.models.model_list">
+</section>
+<section id="module-autots.models.greykite">
+<span id="autots-models-greykite-module"></span><h2>autots.models.greykite module<a class="headerlink" href="#module-autots.models.greykite" title="Permalink to this headline">¶</a></h2>
+<p>Greykite.</p>
+<dl class="class">
+<dt id="autots.models.greykite.Greykite">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.greykite.</code><code class="sig-name descname">Greykite</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'Greykite'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">growth: str = None</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.greykite.Greykite" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>holiday</strong> (<em>bool</em>) – If true, include holidays</p></li>
+<li><p><strong>regression_type</strong> (<em>str</em>) – type of regression (None, ‘User’)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.greykite.Greykite.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.greykite.Greykite.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.greykite.Greykite.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.greykite.Greykite.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.greykite.Greykite.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.greykite.Greykite.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.greykite.Greykite.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.greykite.Greykite.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.greykite.seek_the_oracle">
+<code class="sig-prename descclassname">autots.models.greykite.</code><code class="sig-name descname">seek_the_oracle</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">col</em>, <em class="sig-param">forecast_length</em>, <em class="sig-param">freq</em>, <em class="sig-param">prediction_interval=0.9</em>, <em class="sig-param">model_template='silverkite'</em>, <em class="sig-param">growth=None</em>, <em class="sig-param">holiday=True</em>, <em class="sig-param">holiday_country='UnitedStates'</em>, <em class="sig-param">regressors=None</em>, <em class="sig-param">verbose=0</em>, <em class="sig-param">inner_n_jobs=1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.greykite.seek_the_oracle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Internal. For loop or parallel version of Greykite.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.models.model_list">
 <span id="autots-models-model-list-module"></span><h2>autots.models.model_list module<a class="headerlink" href="#module-autots.models.model_list" title="Permalink to this headline">¶</a></h2>
 <p>Lists of models grouped by aspects.</p>
-</div>
-<div class="section" id="module-autots.models.prophet">
+<dl class="function">
+<dt id="autots.models.model_list.auto_model_list">
+<code class="sig-prename descclassname">autots.models.model_list.</code><code class="sig-name descname">auto_model_list</code><span class="sig-paren">(</span><em class="sig-param">n_jobs</em>, <em class="sig-param">n_series</em>, <em class="sig-param">frequency</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.model_list.auto_model_list" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-autots.models.prophet">
 <span id="autots-models-prophet-module"></span><h2>autots.models.prophet module<a class="headerlink" href="#module-autots.models.prophet" title="Permalink to this headline">¶</a></h2>
 <p>Facebook’s Prophet</p>
 <p>Since Prophet install can be finicky on Windows, it will be an optional dependency.</p>
@@ -678,8 +824,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.models.sklearn">
+<dl class="function">
+<dt id="autots.models.prophet.seek_the_oracle">
+<code class="sig-prename descclassname">autots.models.prophet.</code><code class="sig-name descname">seek_the_oracle</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">args</em>, <em class="sig-param">series</em>, <em class="sig-param">forecast_length</em>, <em class="sig-param">future_regressor</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.seek_the_oracle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prophet for for loop or parallel.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.models.sklearn">
 <span id="autots-models-sklearn-module"></span><h2>autots.models.sklearn module<a class="headerlink" href="#module-autots.models.sklearn" title="Permalink to this headline">¶</a></h2>
 <p>Sklearn dependent models</p>
 <p>Decision Tree, Elastic Net,  Random Forest, MLPRegressor, KNN, Adaboost</p>
@@ -1025,8 +1177,8 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Convert a dataset into slices with history and y forecast.</p>
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.models.statsmodels">
+</section>
+<section id="module-autots.models.statsmodels">
 <span id="autots-models-statsmodels-module"></span><h2>autots.models.statsmodels module<a class="headerlink" href="#module-autots.models.statsmodels" title="Permalink to this headline">¶</a></h2>
 <p>Statsmodels based forecasting models.</p>
 <dl class="class">
@@ -1572,8 +1724,13 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.models.tfp">
+<dl class="function">
+<dt id="autots.models.statsmodels.arima_seek_the_oracle">
+<code class="sig-prename descclassname">autots.models.statsmodels.</code><code class="sig-name descname">arima_seek_the_oracle</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">args</em>, <em class="sig-param">series</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.arima_seek_the_oracle" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-autots.models.tfp">
 <span id="autots-models-tfp-module"></span><h2>autots.models.tfp module<a class="headerlink" href="#module-autots.models.tfp" title="Permalink to this headline">¶</a></h2>
 <dl class="class">
 <dt id="autots.models.tfp.TFPRegression">
@@ -1727,8 +1884,8 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.models.tsfresh">
+</section>
+<section id="module-autots.models.tsfresh">
 <span id="autots-models-tsfresh-module"></span><h2>autots.models.tsfresh module<a class="headerlink" href="#module-autots.models.tsfresh" title="Permalink to this headline">¶</a></h2>
 <p>tsfresh - automated feature extraction</p>
 <p>n_jobs&gt;1 causes Windows issues, sometimes maybe</p>
@@ -1792,12 +1949,12 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.models">
+</section>
+<section id="module-autots.models">
 <span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots.models" title="Permalink to this headline">¶</a></h2>
 <p>Model Models</p>
-</div>
-</div>
+</section>
+</section>
 
 
           </div>

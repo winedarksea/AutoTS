@@ -8,7 +8,11 @@ import json
 from hashlib import md5
 from autots.evaluator.metrics import PredictionEval
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
-from autots.models.ensemble import EnsembleForecast, generalize_horizontal, horizontal_aliases
+from autots.models.ensemble import (
+    EnsembleForecast,
+    generalize_horizontal,
+    horizontal_aliases,
+)
 from autots.tools.shaping import infer_frequency
 from autots.models.model_list import (
     no_params,
@@ -557,7 +561,9 @@ class TemplateEvalObject(object):
             [self.per_series_mae, another_eval.per_series_mae], axis=0, sort=False
         )
         self.per_series_contour = pd.concat(
-            [self.per_series_contour, another_eval.per_series_contour], axis=0, sort=False
+            [self.per_series_contour, another_eval.per_series_contour],
+            axis=0,
+            sort=False,
         )
         self.per_series_rmse = pd.concat(
             [self.per_series_rmse, another_eval.per_series_rmse], axis=0, sort=False
@@ -727,13 +733,18 @@ def model_forecast(
         forecasts = {}
         upper_forecasts = {}
         lower_forecasts = {}
-        horizontal_flag = 2 if model_param_dict['model_name'].lower() in horizontal_aliases else 1
-        template = pd.DataFrame({
-            'Model': model_name,
-            'ModelParameters': json.dumps(model_param_dict),
-            'TransformationParameters': json.dumps(model_transform_dict),
-            'Ensemble': horizontal_flag,
-        }, index=[0])
+        horizontal_flag = (
+            2 if model_param_dict['model_name'].lower() in horizontal_aliases else 1
+        )
+        template = pd.DataFrame(
+            {
+                'Model': model_name,
+                'ModelParameters': json.dumps(model_param_dict),
+                'TransformationParameters': json.dumps(model_transform_dict),
+                'Ensemble': horizontal_flag,
+            },
+            index=[0],
+        )
         ens_template = unpack_ensemble_models(
             template, template_cols, keep_ensemble=False, recursive=False
         )
@@ -825,10 +836,13 @@ def model_forecast(
         else:
             make_full_flag = False
         if (
-            horizontal_subset is not None and model_name in no_shared and all(
+            horizontal_subset is not None
+            and model_name in no_shared
+            and all(
                 trs not in shared_trans
                 for trs in list(model_transform_dict['transformations'].values())
-            ) and not make_full_flag
+            )
+            and not make_full_flag
         ):
             df_train_low = df_train.reindex(copy=True, columns=horizontal_subset)
             # print(f"Reducing to subset for {model_name} with {df_train_low.columns}")
@@ -959,7 +973,8 @@ def TemplateWizard(
                     )
                 if verbose > 1:
                     print(
-                        base_print + " with params {} and transformations {}".format(
+                        base_print
+                        + " with params {} and transformations {}".format(
                             json.dumps(parameter_dict),
                             json.dumps(transformation_dict),
                         )

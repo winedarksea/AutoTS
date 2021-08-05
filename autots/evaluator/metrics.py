@@ -21,8 +21,8 @@ def smape(actual, forecast):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         smape = (
-            np.nansum(
-                (abs(forecast - actual) / (abs(forecast) + abs(actual))), axis=0) * 200
+            np.nansum((abs(forecast - actual) / (abs(forecast) + abs(actual))), axis=0)
+            * 200
         ) / np.count_nonzero(~np.isnan(actual), axis=0)
     return smape
 
@@ -99,7 +99,8 @@ def containment(lower_forecast, upper_forecast, actual):
         result = (
             np.count_nonzero(
                 (upper_forecast >= actual) & (lower_forecast <= actual), axis=0
-            ) / actual.shape[0]
+            )
+            / actual.shape[0]
         )
     return result
 
@@ -178,7 +179,9 @@ def PredictionEval(
     df_train = np.array(df_train)
     # make sure the series_weights are passed correctly to metrics
     if len(series_weights) != F.shape[1]:
-        series_weights = {col: series_weights[col] for col in PredictionObject.forecast.columns}
+        series_weights = {
+            col: series_weights[col] for col in PredictionObject.forecast.columns
+        }
 
     errors = EvalObject(model_name=PredictionObject.model_name)
 
@@ -193,7 +196,8 @@ def PredictionEval(
                 F=upper_forecast,
                 df_train=df_train,
                 quantile=PredictionObject.prediction_interval,
-            ) + SPL(
+            )
+            + SPL(
                 A=A,
                 F=lower_forecast,
                 df_train=df_train,

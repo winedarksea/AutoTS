@@ -279,7 +279,11 @@ class AutoTS(object):
             'TransformationParameters',
             'Ensemble',
         ]
-        self.template_cols_id = self.template_cols if "ID" in self.template_cols else ['ID'] + self.template_cols
+        self.template_cols_id = (
+            self.template_cols
+            if "ID" in self.template_cols
+            else ['ID'] + self.template_cols
+        )
         self.initial_results = TemplateEvalObject()
 
         if verbose > 2:
@@ -1023,7 +1027,8 @@ or otherwise increase models available."""
                 if self.verbose >= 0:
                     print("Horizontal ensemble failed. Using best non-horizontal.")
                 eligible_models = self.validation_results.model_results[
-                    self.validation_results.model_results['Runs'] >= (num_validations + 1)
+                    self.validation_results.model_results['Runs']
+                    >= (num_validations + 1)
                 ]
                 try:
                     self.best_model = (

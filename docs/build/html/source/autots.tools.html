@@ -3,8 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" />
-    <title>autots.tools package &#8212; AutoTS 0.3.2 documentation</title>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>autots.tools package &#8212; AutoTS 0.3.3 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -31,12 +32,12 @@
 
           <div class="body" role="main">
             
-  <div class="section" id="autots-tools-package">
+  <section id="autots-tools-package">
 <h1>autots.tools package<a class="headerlink" href="#autots-tools-package" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="submodules">
+<section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
-</div>
-<div class="section" id="module-autots.tools.cpu_count">
+</section>
+<section id="module-autots.tools.cpu_count">
 <span id="autots-tools-cpu-count-module"></span><h2>autots.tools.cpu_count module<a class="headerlink" href="#module-autots.tools.cpu_count" title="Permalink to this headline">¶</a></h2>
 <p>CPU counter for multiprocesing.</p>
 <dl class="function">
@@ -53,8 +54,8 @@
 <p>Runs best with psutil installed, fallsback to mkl, then os core count/2</p>
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.tools.hierarchial">
+</section>
+<section id="module-autots.tools.hierarchial">
 <span id="autots-tools-hierarchial-module"></span><h2>autots.tools.hierarchial module<a class="headerlink" href="#module-autots.tools.hierarchial" title="Permalink to this headline">¶</a></h2>
 <dl class="class">
 <dt id="autots.tools.hierarchial.hierarchial">
@@ -90,8 +91,8 @@
 
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.tools.holiday">
+</section>
+<section id="module-autots.tools.holiday">
 <span id="autots-tools-holiday-module"></span><h2>autots.tools.holiday module<a class="headerlink" href="#module-autots.tools.holiday" title="Permalink to this headline">¶</a></h2>
 <p>Manage holiday features.</p>
 <dl class="function">
@@ -111,8 +112,8 @@
 </dl>
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.tools.impute">
+</section>
+<section id="module-autots.tools.impute">
 <span id="autots-tools-impute-module"></span><h2>autots.tools.impute module<a class="headerlink" href="#module-autots.tools.impute" title="Permalink to this headline">¶</a></h2>
 <p>Fill NA.</p>
 <dl class="function">
@@ -190,8 +191,8 @@ also most <cite>method</cite> values of pd.DataFrame.interpolate()</p></li>
 <dd><p>Fill NaN with mean of last window values.</p>
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.tools.probabilistic">
+</section>
+<section id="module-autots.tools.probabilistic">
 <span id="autots-tools-probabilistic-module"></span><h2>autots.tools.probabilistic module<a class="headerlink" href="#module-autots.tools.probabilistic" title="Permalink to this headline">¶</a></h2>
 <p>Point to Probabilistic</p>
 <dl class="function">
@@ -282,8 +283,8 @@ It will be sensitive to the transformations of the data.</p>
 <code class="sig-prename descclassname">autots.tools.probabilistic.</code><code class="sig-name descname">percentileofscore_appliable</code><span class="sig-paren">(</span><em class="sig-param">x</em>, <em class="sig-param">a</em>, <em class="sig-param">kind='rank'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.probabilistic.percentileofscore_appliable" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
-</div>
-<div class="section" id="module-autots.tools.profile">
+</section>
+<section id="module-autots.tools.profile">
 <span id="autots-tools-profile-module"></span><h2>autots.tools.profile module<a class="headerlink" href="#module-autots.tools.profile" title="Permalink to this headline">¶</a></h2>
 <p>Profiling</p>
 <dl class="function">
@@ -293,8 +294,40 @@ It will be sensitive to the transformations of the data.</p>
 <p>Output: a pd DataFrame of column per time series, with rows which are statistics</p>
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.tools.seasonal">
+</section>
+<section id="module-autots.tools.regressor">
+<span id="autots-tools-regressor-module"></span><h2>autots.tools.regressor module<a class="headerlink" href="#module-autots.tools.regressor" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="autots.tools.regressor.create_lagged_regressor">
+<code class="sig-prename descclassname">autots.tools.regressor.</code><code class="sig-name descname">create_lagged_regressor</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">forecast_length: int</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">scale: bool = True</em>, <em class="sig-param">summarize: str = None</em>, <em class="sig-param">backfill: str = 'bfill'</em>, <em class="sig-param">n_jobs: str = 'auto'</em>, <em class="sig-param">fill_na: str = 'ffill'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.regressor.create_lagged_regressor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a regressor of features lagged by forecast length.
+Useful to some models that don’t otherwise use such information.</p>
+<p>It is recommended that the .head(forecast_length) of both regressor_train and the df for training are dropped.
+<cite>df = df.iloc[forecast_length:]</cite></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – training data</p></li>
+<li><p><strong>forecast_length</strong> (<em>int</em>) – length of forecasts, to shift data by</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – the ever necessary frequency for datetime things. Default ‘infer’</p></li>
+<li><p><strong>scale</strong> (<em>bool</em>) – if True, use the StandardScaler to standardize the features</p></li>
+<li><p><strong>summarize</strong> (<em>str</em>) – options to summarize the features, if large:
+‘pca’, ‘median’, ‘mean’, ‘mean+std’</p></li>
+<li><p><strong>backfill</strong> (<em>str</em>) – method to deal with the NaNs created by shifting
+“bfill”- backfill with last values
+“ETS” -backfill with ETS backwards forecast
+“DatepartRegression” - backfill with DatepartRegression</p></li>
+<li><p><strong>fill_na</strong> (<em>str</em>) – method to prefill NAs in data, same methods as available elsewhere</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>regressor_train, regressor_forecast</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.seasonal">
 <span id="autots-tools-seasonal-module"></span><h2>autots.tools.seasonal module<a class="headerlink" href="#module-autots.tools.seasonal" title="Permalink to this headline">¶</a></h2>
 <p>seasonal</p>
 <p>&#64;author: Colin</p>
@@ -324,8 +357,8 @@ recurring - all features that should commonly repeat without aging</p></li>
 <dd><p>Generate a random integer of typical seasonalities.</p>
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.tools.shaping">
+</section>
+<section id="module-autots.tools.shaping">
 <span id="autots-tools-shaping-module"></span><h2>autots.tools.shaping module<a class="headerlink" href="#module-autots.tools.shaping" title="Permalink to this headline">¶</a></h2>
 <p>Reshape data.</p>
 <dl class="class">
@@ -414,6 +447,12 @@ If new categorical series or levels are present in .transform() it won’t work!
 </dd></dl>
 
 <dl class="function">
+<dt id="autots.tools.shaping.infer_frequency">
+<code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">infer_frequency</code><span class="sig-paren">(</span><em class="sig-param">df_wide</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.infer_frequency" title="Permalink to this definition">¶</a></dt>
+<dd><p>Infer the frequency in a slightly more robust way.</p>
+</dd></dl>
+
+<dl class="function">
 <dt id="autots.tools.shaping.long_to_wide">
 <code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">long_to_wide</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = 'datetime'</em>, <em class="sig-param">value_col: str = 'value'</em>, <em class="sig-param">id_col: str = 'series_id'</em>, <em class="sig-param">aggfunc: str = 'first'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.long_to_wide" title="Permalink to this definition">¶</a></dt>
 <dd><p>Take long data and convert into wide, cleaner data.</p>
@@ -478,8 +517,8 @@ note this includes NaNs in current configuration</p>
 </dl>
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.tools.transform">
+</section>
+<section id="module-autots.tools.transform">
 <span id="autots-tools-transform-module"></span><h2>autots.tools.transform module<a class="headerlink" href="#module-autots.tools.transform" title="Permalink to this headline">¶</a></h2>
 <p>Preprocessing data methods.</p>
 <dl class="class">
@@ -1741,12 +1780,12 @@ Inverse transformed values returned will also not return as ‘exactly’ equals
 <dd><p>Convert various possibilities to dict.</p>
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.tools">
+</section>
+<section id="module-autots.tools">
 <span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots.tools" title="Permalink to this headline">¶</a></h2>
 <p>Basic utilities.</p>
-</div>
-</div>
+</section>
+</section>
 
 
           </div>

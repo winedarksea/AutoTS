@@ -207,20 +207,21 @@ def load_weekdays(long: bool = False, categorical: bool = True, periods: int = 1
         return df_wide
 
 
-def load_live_daily(long: bool = False,
-                    fred_key: str = None,
-                    fred_series: list = ["DGS10", "T5YIE", "SP500", "DCOILWTICO", "DEXUSEU"],
-                    tickers: list = ["MSFT"],
-                    trends_list: list = ["forecasting", "cycling", "cpu", "microsoft"],
-                    weather_data_types: list = ["AWND", "WSF2"],
-                    weather_stations: list = ["USW00094846", "USW00014925"],
-                    weather_years: int = 10,
-                    london_air_stations: list = ['CT3', 'SK8'],
-                    london_air_species: str = "PM25",
-                    london_air_days: int = 180,
-                    earthquake_days: int = 180,
-                    earthquake_min_magnitude: int = 5,
-                    ):
+def load_live_daily(
+    long: bool = False,
+    fred_key: str = None,
+    fred_series: list = ["DGS10", "T5YIE", "SP500", "DCOILWTICO", "DEXUSEU"],
+    tickers: list = ["MSFT"],
+    trends_list: list = ["forecasting", "cycling", "cpu", "microsoft"],
+    weather_data_types: list = ["AWND", "WSF2"],
+    weather_stations: list = ["USW00094846", "USW00014925"],
+    weather_years: int = 10,
+    london_air_stations: list = ['CT3', 'SK8'],
+    london_air_species: str = "PM25",
+    london_air_days: int = 180,
+    earthquake_days: int = 180,
+    earthquake_min_magnitude: int = 5,
+):
     """Generates a dataframe of data up to the present day.
 
     Args:
@@ -286,12 +287,17 @@ def load_live_daily(long: bool = False,
         print(f"pytrends data failed: {repr(e)}")
 
     str_end_time = current_date.strftime("%Y-%m-%d")
-    start_date = (current_date - datetime.timedelta(days=360 * weather_years)).strftime("%Y-%m-%d")
+    start_date = (current_date - datetime.timedelta(days=360 * weather_years)).strftime(
+        "%Y-%m-%d"
+    )
     for wstation in weather_stations:
         try:
             wbase = "https://www.ncei.noaa.gov/access/services/data/v1/?dataset=daily-summaries"
             wargs = f"&dataTypes={','.join(weather_data_types)}&stations={wstation}"
-            wargs = wargs + f"&startDate={start_date}&endDate={str_end_time}&boundingBox=90,-180,-90,180&units=standard&format=csv"
+            wargs = (
+                wargs
+                + f"&startDate={start_date}&endDate={str_end_time}&boundingBox=90,-180,-90,180&units=standard&format=csv"
+            )
             wdf = pd.read_csv(wbase + wargs)
             wdf['DATE'] = pd.to_datetime(wdf['DATE'], infer_datetime_format=True)
             wdf = wdf.set_index('DATE').drop(columns=['STATION'])
@@ -301,7 +307,9 @@ def load_live_daily(long: bool = False,
             print(f"weather data failed: {repr(e)}")
 
     str_end_time = current_date.strftime("%d-%b-%Y")
-    start_date = (current_date - datetime.timedelta(days=london_air_days)).strftime("%d-%b-%Y")
+    start_date = (current_date - datetime.timedelta(days=london_air_days)).strftime(
+        "%d-%b-%Y"
+    )
     for asite in london_air_stations:
         try:
             # abase = "http://api.erg.ic.ac.uk/AirQuality/Data/Site/Wide/"
@@ -320,7 +328,9 @@ def load_live_daily(long: bool = False,
 
     try:
         str_end_time = current_date.strftime("%Y-%m-%d")
-        start_date = (current_date - datetime.timedelta(days=earthquake_days)).strftime("%Y-%m-%d")
+        start_date = (current_date - datetime.timedelta(days=earthquake_days)).strftime(
+            "%Y-%m-%d"
+        )
         # is limited to ~1000 rows of data, ie individual earthquakes
         ebase = "https://earthquake.usgs.gov/fdsnws/event/1/query?"
         eargs = f"format=csv&starttime={start_date}&endtime={str_end_time}&minmagnitude={earthquake_min_magnitude}"
@@ -329,7 +339,9 @@ def load_live_daily(long: bool = False,
         eq["time"] = eq["time"].dt.tz_localize(None)
         eq.set_index("time", inplace=True)
         global_earthquakes = eq.resample("1D").agg({"mag": "mean", "depth": "count"})
-        global_earthquakes["mag"] = global_earthquakes["mag"].fillna(earthquake_min_magnitude)
+        global_earthquakes["mag"] = global_earthquakes["mag"].fillna(
+            earthquake_min_magnitude
+        )
         global_earthquakes = global_earthquakes.rename(
             columns={
                 "mag": "largest_magnitude_earthquake",
@@ -348,7 +360,8 @@ def load_live_daily(long: bool = False,
         from functools import reduce
 
         df = reduce(
-            lambda x, y: pd.merge(x, y, left_index=True, right_index=True, how="outer"), dataset_lists
+            lambda x, y: pd.merge(x, y, left_index=True, right_index=True, how="outer"),
+            dataset_lists,
         )
     print(f"{df.shape[1]} series downloaded.")
 

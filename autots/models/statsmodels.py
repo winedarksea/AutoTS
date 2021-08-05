@@ -12,6 +12,7 @@ try:
 except Exception:
     pass
 
+
 class GLS(ModelObject):
     """Simple linear regression from statsmodels
 
@@ -585,9 +586,7 @@ def arima_seek_the_oracle(df, args, series):
                 steps=args['forecast_length'], exog=args['exog']
             )
         else:
-            outer_forecasts = maModel.get_forecast(
-                steps=args['forecast_length']
-            )
+            outer_forecasts = maModel.get_forecast(steps=args['forecast_length'])
         outer_forecasts_df = outer_forecasts.conf_int(alpha=args['alpha'])
         cforecast = outer_forecasts.summary_frame()['mean']
         clower_forecast = outer_forecasts_df.iloc[:, 0]
@@ -1612,9 +1611,13 @@ class VARMAX(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         # make these big and it's REAL slow, and if both p and q are non zero
-        ar_choice = random.choices([0, 1, 2, 5, 7, 10], [0.5, 0.5, 0.2, 0.01, 0.01, 0.001])[0]
+        ar_choice = random.choices(
+            [0, 1, 2, 5, 7, 10], [0.5, 0.5, 0.2, 0.01, 0.01, 0.001]
+        )[0]
         if ar_choice == 0:
-            ma_choice = random.choices([1, 2, 5, 7, 10], [0.8, 0.2, 0.01, 0.01, 0.001])[0]
+            ma_choice = random.choices([1, 2, 5, 7, 10], [0.8, 0.2, 0.01, 0.01, 0.001])[
+                0
+            ]
         else:
             ma_choice = 0
         trend_choice = random.choices(

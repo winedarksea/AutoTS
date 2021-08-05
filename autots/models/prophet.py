@@ -40,7 +40,15 @@ def seek_the_oracle(df, args, series, forecast_length, future_regressor):
         if future_regressor.ndim > 1:
             # a = args['dimensionality_reducer'].transform(future_regressor)
             if future_regressor.shape[1] > 1:
-                ft_regr = future_regressor.mean(axis=1).to_frame().merge(future_regressor.std(axis=1).to_frame(), left_index=True, right_index=True)
+                ft_regr = (
+                    future_regressor.mean(axis=1)
+                    .to_frame()
+                    .merge(
+                        future_regressor.std(axis=1).to_frame(),
+                        left_index=True,
+                        right_index=True,
+                    )
+                )
             else:
                 ft_regr = future_regressor.copy()
             ft_regr.columns = args['regressor_train'].columns
@@ -121,11 +129,17 @@ class FBProphet(ModelObject):
             else:
                 if future_regressor.ndim > 1:
                     if future_regressor.shape[1] > 1:
-                        regr = pd.concat([df.mean(axis=1).to_frame(), df.std(axis=1).to_frame()], axis=1)
+                        regr = pd.concat(
+                            [df.mean(axis=1).to_frame(), df.std(axis=1).to_frame()],
+                            axis=1,
+                        )
                         regr.columns = [0, 1]
                     else:
                         regr = future_regressor
-                    regr.columns = [str(colr) if colr not in df.columns else str(colr) + "xxxxx" for colr in regr.columns]
+                    regr.columns = [
+                        str(colr) if colr not in df.columns else str(colr) + "xxxxx"
+                        for colr in regr.columns
+                    ]
                     self.regressor_train = regr
                     self.regressor_name = regr.columns.tolist()
                     """
@@ -143,7 +157,9 @@ class FBProphet(ModelObject):
                     # this is a hack to utilize regressors with a name unlikely to exist
                     random_two = "n9032380gflljWfu8233koWQop3"
                     random_one = "prophet_staging_regressor"
-                    self.regressor_name = [random_one if random_one not in df.columns else random_two]
+                    self.regressor_name = [
+                        random_one if random_one not in df.columns else random_two
+                    ]
         self.df_train = df
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -198,16 +214,26 @@ class FBProphet(ModelObject):
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
                 delayed(seek_the_oracle)(
-                    df=self.df_train, args=args, series=col,
-                    forecast_length=forecast_length, future_regressor=future_regressor)
+                    df=self.df_train,
+                    args=args,
+                    series=col,
+                    forecast_length=forecast_length,
+                    future_regressor=future_regressor,
+                )
                 for col in cols
             )
         else:
             df_list = []
             for col in cols:
-                df_list.append(seek_the_oracle(self.df_train, args, col,
-                                               forecast_length=forecast_length,
-                                               future_regressor=future_regressor))
+                df_list.append(
+                    seek_the_oracle(
+                        self.df_train,
+                        args,
+                        col,
+                        forecast_length=forecast_length,
+                        future_regressor=future_regressor,
+                    )
+                )
         complete = list(map(list, zip(*df_list)))
         forecast = pd.concat(complete[0], axis=1)
         forecast.index = test_index

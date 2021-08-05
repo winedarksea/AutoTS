@@ -24,7 +24,7 @@ force_univariate = False  # long = False
 example_filename = "general_templateDESKTOP-JS3OJ8L.csv" # "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
-df = load_daily(long=long)
+df = load_weekly(long=long)
 n_jobs = "auto"
 verbose = 1
 validation_method = "backwards"
@@ -82,8 +82,8 @@ model_list = [
 
 transformer_list = "fast"  # ["SinTrend", "MinMaxScaler"]
 transformer_max_depth = 3
-model_list = 'default'  # fast_parallel
-model_list = ["AverageValueNaive", "GLM", "GLS", "FBProphet"]
+model_list = 'superfast'  # fast_parallel
+# model_list = ["AverageValueNaive", "GLM", "GLS", "FBProphet"]
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {

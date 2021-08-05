@@ -18,7 +18,7 @@ import pandas as pd
 import matplotlib.pyplot as plt  # required only for graphs
 from autots import AutoTS, load_live_daily, create_lagged_regressor
 
-fred_key = "93873d40f10c20fe6f6e75b1ad0aed4d"  # https://fred.stlouisfed.org/docs/api/api_key.html
+fred_key = None  # https://fred.stlouisfed.org/docs/api/api_key.html
 forecast_name = "example"  # used in DB name!
 graph = True  # whether to plot a graph
 archive_table = False  # append to an archive table

@@ -11,29 +11,46 @@ try:
     from greykite.framework.templates.forecaster import Forecaster
     from greykite.framework.templates.model_templates import ModelTemplateEnum
     from greykite.framework.templates.autogen.forecast_config import ComputationParam
-    from greykite.algo.forecast.silverkite.constants.silverkite_holiday import SilverkiteHoliday
-    from greykite.framework.templates.autogen.forecast_config import ModelComponentsParam
+    from greykite.algo.forecast.silverkite.constants.silverkite_holiday import (
+        SilverkiteHoliday,
+    )
+    from greykite.framework.templates.autogen.forecast_config import (
+        ModelComponentsParam,
+    )
 except Exception:
     _has_greykite = False
 else:
     _has_greykite = True
 
 
-def seek_the_oracle(df, col, forecast_length, freq, prediction_interval=0.9,
-                    model_template='silverkite',
-                    growth=None,
-                    holiday=True, holiday_country="UnitedStates",
-                    regressors=None, verbose=0,
-                    inner_n_jobs=1, **kwargs
-                    ):
+def seek_the_oracle(
+    df,
+    col,
+    forecast_length,
+    freq,
+    prediction_interval=0.9,
+    model_template='silverkite',
+    growth=None,
+    holiday=True,
+    holiday_country="UnitedStates",
+    regressors=None,
+    verbose=0,
+    inner_n_jobs=1,
+    **kwargs
+):
     """Internal. For loop or parallel version of Greykite."""
-    inner_df = pd.DataFrame({
-        'ts': df.index,
-        'y': df[col].values,
-    })
+    inner_df = pd.DataFrame(
+        {
+            'ts': df.index,
+            'y': df[col].values,
+        }
+    )
     if regressors is not None:
         inner_regr = regressors.copy()
-        new_names = ['rrrr' + str(x) if x in inner_df.columns else str(x) for x in inner_regr.columns]
+        new_names = [
+            'rrrr' + str(x) if x in inner_df.columns else str(x)
+            for x in inner_regr.columns
+        ]
         inner_regr.columns = new_names
         inner_regr.index.name = 'ts'
         inner_regr.reset_index(drop=False, inplace=True)
@@ -48,23 +65,20 @@ def seek_the_oracle(df, col, forecast_length, freq, prediction_interval=0.9,
     forecaster = Forecaster()  # Creates forecasts and stores the result
     if regressors is not None:
         model_components = ModelComponentsParam(
-            growth=growth,
-            regressors={
-                "regressor_cols": new_names
-            })
+            growth=growth, regressors={"regressor_cols": new_names}
+        )
     else:
         model_components = ModelComponentsParam(
             growth=growth,  # 'linear', 'quadratic', 'sqrt'
         )
-    computation = ComputationParam(
-        n_jobs=inner_n_jobs,
-        verbose=verbose
-    )
+    computation = ComputationParam(n_jobs=inner_n_jobs, verbose=verbose)
     if holiday:  # also 'auto'
         model_components.events = {
             # These holidays as well as their pre/post dates are modeled as individual events.
             "holidays_to_model_separately": SilverkiteHoliday.ALL_HOLIDAYS_IN_COUNTRIES,  # all holidays in "holiday_lookup_countries"
-            "holiday_lookup_countries": [holiday_country],  # only look up holidays in the United States
+            "holiday_lookup_countries": [
+                holiday_country
+            ],  # only look up holidays in the United States
             "holiday_pre_num_days": 1,  # also mark the 1 days before a holiday as holiday
             "holiday_post_num_days": 1,  # also mark the 1 days after a holiday as holiday
         }
@@ -182,25 +196,37 @@ class Greykite(ModelObject):
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
                 delayed(seek_the_oracle)(
-                    self.df_train, col, forecast_length, freq=self.frequency,
+                    self.df_train,
+                    col,
+                    forecast_length,
+                    freq=self.frequency,
                     prediction_interval=self.prediction_interval,
-                    growth=dict(growth_term=self.growth), holiday=self.holiday,
+                    growth=dict(growth_term=self.growth),
+                    holiday=self.holiday,
                     holiday_country=self.holiday_country,
                     regressors=regressors,
-                    inner_n_jobs=self.n_jobs)
+                    inner_n_jobs=self.n_jobs,
+                )
                 for col in cols
             )
             complete = pd.concat(df_list)
         else:
             df_list = []
             for col in cols:
-                df_list.append(seek_the_oracle(
-                    self.df_train, col, forecast_length, freq=self.frequency,
-                    prediction_interval=self.prediction_interval,
-                    growth=dict(growth_term=self.growth), holiday=self.holiday,
-                    holiday_country=self.holiday_country,
-                    regressors=regressors,
-                    inner_n_jobs=self.n_jobs))
+                df_list.append(
+                    seek_the_oracle(
+                        self.df_train,
+                        col,
+                        forecast_length,
+                        freq=self.frequency,
+                        prediction_interval=self.prediction_interval,
+                        growth=dict(growth_term=self.growth),
+                        holiday=self.holiday,
+                        holiday_country=self.holiday_country,
+                        regressors=regressors,
+                        inner_n_jobs=self.n_jobs,
+                    )
+                )
             complete = pd.concat(df_list)
 
         forecast = complete.pivot_table(
@@ -239,12 +265,9 @@ class Greykite(ModelObject):
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         regression_list = [None, 'User']
         regression_probability = [0.8, 0.2]
-        regression_choice = random.choices(
-            regression_list, regression_probability
-        )[0]
+        regression_choice = random.choices(regression_list, regression_probability)[0]
         growth_choice = random.choices(
-            [None, 'linear', 'quadratic', 'sqrt'],
-            [0.3, 0.3, 0.1, 0.1]
+            [None, 'linear', 'quadratic', 'sqrt'], [0.3, 0.3, 0.1, 0.1]
         )[0]
 
         parameter_dict = {

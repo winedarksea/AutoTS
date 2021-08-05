@@ -54,13 +54,11 @@ Input data is expected to come in either a *long* or a *wide* format:
 
 ```python
 # also load: _hourly, _daily, _weekly, _yearly, or _live_daily
-from autots.datasets import load_monthly
+from autots import AutoTS, load_daily
 
 # sample datasets can be used in either of the long or wide import shapes
 long = False
 df = load_daily(long=long)
-
-from autots import AutoTS
 
 model = AutoTS(
     forecast_length=21,
@@ -68,9 +66,9 @@ model = AutoTS(
     prediction_interval=0.9,
     ensemble=None,
     model_list="default",
-	transformer_list="fast",
-	drop_most_recent=1,
-    max_generations=5,
+    transformer_list="fast",
+    drop_most_recent=1,
+    max_generations=4,
     num_validations=2,
     validation_method="backwards"
 )
