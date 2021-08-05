@@ -20,7 +20,7 @@ from autots.evaluator.auto_model import (
     TemplateWizard,
     unpack_ensemble_models,
     generate_score,
-    PredictWitch,
+    model_forecast,
     validation_aggregation,
 )
 from autots.models.ensemble import (
@@ -28,6 +28,7 @@ from autots.models.ensemble import (
     HorizontalTemplateGenerator,
 )
 from autots.models.model_list import model_lists
+from autots.tools import cpu_count
 
 
 class AutoTS(object):
@@ -172,9 +173,13 @@ class AutoTS(object):
             self.seasonal_val_periods = int(''.join(val_list))
 
         if self.n_jobs == 'auto':
-            from autots.tools import cpu_count
-
             self.n_jobs = cpu_count()
+            if verbose > 0:
+                print(f"Auto-detected {self.n_jobs} cpus for n_jobs.")
+        elif str(self.n_jobs).isdigit():
+            self.n_jobs = int(self.n_jobs)
+            if self.n_jobs < 0:
+                self.n_jobs = cpu_count() + 1 - self.n_jobs
 
         # convert shortcuts of model lists to actual lists of models
         if model_list in list(model_lists.keys()):
@@ -187,7 +192,7 @@ class AutoTS(object):
         initial_template = str(initial_template).lower()
         if initial_template == 'random':
             self.initial_template = RandomTemplate(
-                50,
+                len(self.model_list) * 6,
                 model_list=self.model_list,
                 transformer_list=self.transformer_list,
                 transformer_max_depth=self.transformer_max_depth,
@@ -200,7 +205,7 @@ class AutoTS(object):
             from autots.templates.general import general_template
 
             random_template = RandomTemplate(
-                40,
+                len(self.model_list) * 4,
                 model_list=self.model_list,
                 transformer_list=self.transformer_list,
                 transformer_max_depth=self.transformer_max_depth,
@@ -274,6 +279,11 @@ class AutoTS(object):
             'TransformationParameters',
             'Ensemble',
         ]
+        self.template_cols_id = (
+            self.template_cols
+            if "ID" in self.template_cols
+            else ['ID'] + self.template_cols
+        )
         self.initial_results = TemplateEvalObject()
 
         if verbose > 2:
@@ -340,7 +350,6 @@ class AutoTS(object):
         no_negatives = self.no_negatives
         random_seed = self.random_seed
         holiday_country = self.holiday_country
-        ensemble = self.ensemble
         metric_weighting = self.metric_weighting
         num_validations = self.num_validations
         verbose = self.verbose
@@ -395,14 +404,15 @@ class AutoTS(object):
         df_wide_numeric = self.categorical_transformer.fit_transform(df_wide)
 
         # use "mean" to assign weight as mean
-        if weights == 'mean':
-            weights = df_wide_numeric.mean(axis=0).to_dict()
-        elif weights == 'median':
-            weights = df_wide_numeric.median(axis=0).to_dict()
-        elif weights == 'min':
-            weights = df_wide_numeric.min(axis=0).to_dict()
-        elif weights == 'max':
-            weights = df_wide_numeric.max(axis=0).to_dict()
+        if weighted:
+            if weights == 'mean':
+                weights = df_wide_numeric.mean(axis=0).to_dict()
+            elif weights == 'median':
+                weights = df_wide_numeric.median(axis=0).to_dict()
+            elif weights == 'min':
+                weights = df_wide_numeric.min(axis=0).to_dict()
+            elif weights == 'max':
+                weights = df_wide_numeric.max(axis=0).to_dict()
         # clean up series weighting input
         if not weighted:
             weights = {x: 1 for x in df_wide_numeric.columns}
@@ -436,6 +446,19 @@ class AutoTS(object):
             temp = df_wide_numeric[~temp.isna()]
             temp = temp.head(df_wide_numeric.shape[0] - 1)
             df_wide_numeric = pd.concat([temp, df_wide_numeric.tail(1)], axis=0)
+
+        # remove other ensembling types if univariate
+        if df_wide_numeric.shape[1] == 1:
+            if "simple" in self.ensemble:
+                ens_piece1 = "simple"
+            else:
+                ens_piece1 = ""
+            if "distance" in self.ensemble:
+                ens_piece2 = "distance"
+            else:
+                ens_piece2 = ""
+            self.ensemble = ens_piece1 + "," + ens_piece2
+        ensemble = self.ensemble
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
@@ -741,6 +764,8 @@ class AutoTS(object):
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
         validation_template = validation_template[self.template_cols]
+        self.validation_train_indexes = []
+        self.validation_test_indexes = []
 
         # run validations
         if num_validations > 0:
@@ -799,6 +824,8 @@ class AutoTS(object):
                     min_allowed_train_percent=self.min_allowed_train_percent,
                     verbose=self.verbose,
                 )
+                self.validation_train_indexes.append(val_df_train)
+                self.validation_test_indexes.append(val_df_test)
                 if self.verbose >= 2:
                     print(f'Validation index is {val_df_train.index}')
 
@@ -980,6 +1007,10 @@ or otherwise increase models available."""
                 template_result.model_results['smape']
             except KeyError:
                 template_result.model_results['smape'] = 0
+            # rerun validation_results aggregation with new models added
+            self.validation_results = copy.copy(self.initial_results)
+            self.validation_results = validation_aggregation(self.validation_results)
+
             # use the best of these if any ran successfully
             if template_result.model_results['smape'].sum(min_count=0) > 0:
                 template_result.model_results['Score'] = generate_score(
@@ -989,7 +1020,7 @@ or otherwise increase models available."""
                 )
                 self.best_model = template_result.model_results.sort_values(
                     by="Score", ascending=True, na_position='last'
-                ).head(1)[template_cols]
+                ).head(1)[self.template_cols_id]
                 self.ensemble_check = 1
             # else use the best of the previous
             else:
@@ -1005,7 +1036,7 @@ or otherwise increase models available."""
                             by="Score", ascending=True, na_position='last'
                         )
                         .drop_duplicates(subset=self.template_cols)
-                        .head(1)[template_cols]
+                        .head(1)[self.template_cols_id]
                     )
                     self.ensemble_check = int((self.best_model['Ensemble'].iloc[0]) > 0)
                 except IndexError:
@@ -1031,8 +1062,7 @@ or otherwise increase models available."""
         param_dict = json.loads(self.best_model.iloc[0]['ModelParameters'])
         if self.ensemble_check == 1:
             self.used_regressor_check = self._regr_param_check(param_dict)
-
-        if self.ensemble_check == 0:
+        elif self.ensemble_check == 0:
             self.used_regressor_check = False
             try:
                 reg_param = param_dict['regression_type']
@@ -1040,6 +1070,8 @@ or otherwise increase models available."""
                     self.used_regressor_check = True
             except KeyError:
                 pass
+        else:
+            print(f"Warning: ensemble_check not in [0,1]: {self.ensemble_check}")
         # clean up any remaining print statements
         sys.stdout.flush()
         return self
@@ -1105,12 +1137,15 @@ or otherwise increase models available."""
                 index=self.df_wide_numeric.index
             )
 
+        urow = self.best_model.iloc[0]
         # allow multiple prediction intervals
         if isinstance(prediction_interval, list):
             forecast_objects = {}
             for interval in prediction_interval:
-                df_forecast = PredictWitch(
-                    self.best_model,
+                df_forecast = model_forecast(
+                    model_name=urow['Model'],
+                    model_param_dict=urow['ModelParameters'],
+                    model_transform_dict=urow['TransformationParameters'],
                     df_train=self.df_wide_numeric,
                     forecast_length=forecast_length,
                     frequency=self.frequency,
@@ -1138,8 +1173,10 @@ or otherwise increase models available."""
                 forecast_objects[interval] = df_forecast
             return forecast_objects
         else:
-            df_forecast = PredictWitch(
-                self.best_model,
+            df_forecast = model_forecast(
+                model_name=urow['Model'],
+                model_param_dict=urow['ModelParameters'],
+                model_transform_dict=urow['TransformationParameters'],
                 df_train=self.df_wide_numeric,
                 forecast_length=forecast_length,
                 frequency=self.frequency,
@@ -1516,9 +1553,12 @@ class AutoTSIntervals(object):
         forecast_objects = {}
         verbose = self.verbose if verbose == 'self' else verbose
 
+        urow = self.ens_templates.iloc[0]
         for interval in self.prediction_intervals:
-            df_forecast = PredictWitch(
-                self.ens_templates,
+            df_forecast = model_forecast(
+                model_name=urow['Model'],
+                model_param_dict=urow['ModelParameters'],
+                model_transform_dict=urow['TransformationParameters'],
                 df_train=self.df_wide_numeric,
                 forecast_length=self.forecast_length,
                 frequency=self.frequency,
@@ -1683,28 +1723,7 @@ def error_correlations(all_result, result: str = 'corr'):
         [except_df, all_results[['ExceptionFlag']], modelstr_df, model_df, trans_df],
         axis=1,
     )
-    # test_cols = [column for column in test.columns if 'NaNZ' not in column]
-    # test = test[test_cols]
-    """
-    try:
-        from mlxtend.frequent_patterns import association_rules
-        from mlxtend.frequent_patterns import apriori
-        import re
-        freq_itemsets = apriori(test.drop('ExceptionFlag', axis=1),
-                                min_support=0.3, use_colnames=True)
-        rules = association_rules(freq_itemsets)
-        err_rules = pd.DataFrame()
-        for err in except_df.columns:
-            err = re.sub('[^a-zA-Z0-9\s]', '', err)
-            edf = rules[
-                rules['consequents'].astype(
-                    str).str.replace('[^a-zA-Z0-9\s]', '').str.contains(err)]
-            err_rules = pd.concat([err_rules, edf],
-                                     axis=0, ignore_index=True)
-        err_rules = err_rules.drop_duplicates()
-    except Exception as e:
-        print(repr(e))
-    """
+
     if result == 'corr':
         test_corr = test.corr()[except_df.columns]
         return test_corr

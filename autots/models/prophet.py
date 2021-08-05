@@ -22,6 +22,54 @@ else:
     _has_prophet = True
 
 
+def seek_the_oracle(df, args, series, forecast_length, future_regressor):
+    """Prophet for for loop or parallel."""
+    current_series = df[series].to_frame().copy()
+    current_series = current_series.rename(columns={series: 'y'})
+    current_series['ds'] = current_series.index
+    m = Prophet(interval_width=args['prediction_interval'])
+    if args['holiday']:
+        m.add_country_holidays(country_name=args['holiday_country'])
+    if args['regression_type'] == 'User':
+        current_series = pd.concat([current_series, args['regressor_train']], axis=1)
+        for nme in args['regressor_name']:
+            m.add_regressor(nme)
+    m = m.fit(current_series)
+    future = m.make_future_dataframe(periods=forecast_length)
+    if args['regression_type'] == 'User':
+        if future_regressor.ndim > 1:
+            # a = args['dimensionality_reducer'].transform(future_regressor)
+            if future_regressor.shape[1] > 1:
+                ft_regr = (
+                    future_regressor.mean(axis=1)
+                    .to_frame()
+                    .merge(
+                        future_regressor.std(axis=1).to_frame(),
+                        left_index=True,
+                        right_index=True,
+                    )
+                )
+            else:
+                ft_regr = future_regressor.copy()
+            ft_regr.columns = args['regressor_train'].columns
+            regr = pd.concat([args['regressor_train'], ft_regr])
+            regr.index.name = 'ds'
+            regr.reset_index(drop=False, inplace=True)
+            future = future.merge(regr, on="ds", how='left')
+        else:
+            a = np.append(args['regressor_train'], future_regressor.values)
+            future[args['regressor_name']] = a
+    fcst = m.predict(future)
+    fcst = fcst.tail(forecast_length)  # remove the backcast
+    forecast = fcst['yhat']
+    forecast.name = series
+    lower_forecast = fcst['yhat_lower']
+    lower_forecast.name = series
+    upper_forecast = fcst['yhat_upper']
+    upper_forecast.name = series
+    return (forecast, lower_forecast, upper_forecast)
+
+
 class FBProphet(ModelObject):
     """Facebook's Prophet
 
@@ -61,6 +109,7 @@ class FBProphet(ModelObject):
             n_jobs=n_jobs,
         )
         self.holiday = holiday
+        self.regressor_name = []
 
     def fit(self, df, future_regressor=[]):
         """Train algorithm given data supplied.
@@ -75,14 +124,25 @@ class FBProphet(ModelObject):
         self.regressor_train = None
         self.dimensionality_reducer = None
         if self.regression_type == 'User':
-            """
-            print("the shape of the input is: {}".format(str(((np.array(future_regressor).shape[0])))))
-            print("the shape of the training data is: {}".format(str(df.shape[0])))
-            """
-            if (np.array(future_regressor).shape[0]) != (df.shape[0]):
+            if future_regressor.shape[0] != df.shape[0]:
                 self.regression_type = None
             else:
                 if future_regressor.ndim > 1:
+                    if future_regressor.shape[1] > 1:
+                        regr = pd.concat(
+                            [df.mean(axis=1).to_frame(), df.std(axis=1).to_frame()],
+                            axis=1,
+                        )
+                        regr.columns = [0, 1]
+                    else:
+                        regr = future_regressor
+                    regr.columns = [
+                        str(colr) if colr not in df.columns else str(colr) + "xxxxx"
+                        for colr in regr.columns
+                    ]
+                    self.regressor_train = regr
+                    self.regressor_name = regr.columns.tolist()
+                    """
                     from sklearn.decomposition import PCA
 
                     self.dimensionality_reducer = PCA(n_components=1).fit(
@@ -91,13 +151,15 @@ class FBProphet(ModelObject):
                     self.regressor_train = self.dimensionality_reducer.transform(
                         future_regressor
                     )
+                    """
                 else:
                     self.regressor_train = future_regressor.copy()
-
-        # this is a hack to utilize regressors with a name unlikely to exist
-        random_two = "n9032380gflljWfu8233koWQop3"
-        random_one = "nJIOVxgQ0vZGC7nx_"
-        self.regressor_name = random_one if random_one not in df.columns else random_two
+                    # this is a hack to utilize regressors with a name unlikely to exist
+                    random_two = "n9032380gflljWfu8233koWQop3"
+                    random_one = "prophet_staging_regressor"
+                    self.regressor_name = [
+                        random_one if random_one not in df.columns else random_two
+                    ]
         self.df_train = df
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -128,71 +190,6 @@ class FBProphet(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         if self.verbose <= 0:
             logging.getLogger('fbprophet').setLevel(logging.WARNING)
-        if self.regression_type == 'User':
-            self.df_train[self.regressor_name] = self.regressor_train
-
-        """
-        forecast = pd.DataFrame()
-        lower_forecast = pd.DataFrame()
-        upper_forecast = pd.DataFrame()
-        for series in self.df_train.columns:
-            current_series = self.df_train.copy()
-            current_series['y'] = current_series[series]
-            current_series['ds'] = current_series.index
-            m = Prophet(interval_width=self.prediction_interval)
-            if self.holiday:
-                m.add_country_holidays(country_name=self.holiday_country)
-            if self.regression_type == 'User':
-                m.add_regressor(self.regressor_name)
-            m = m.fit(current_series)
-            future = m.make_future_dataframe(periods=forecast_length)
-            if self.regression_type == 'User':
-                if future_regressor.ndim > 1:
-                    a = self.dimensionality_reducer.transform(future_regressor)
-                    a = np.append(self.regressor_train, a)
-                else:
-                    a = np.append(self.regressor_train, future_regressor.values)
-                future[self.regressor_name] = a
-            fcst = m.predict(future)
-            fcst = fcst.tail(forecast_length)  # remove the backcast
-            forecast = pd.concat([forecast, fcst['yhat']], axis=1)
-            lower_forecast = pd.concat([lower_forecast, fcst['yhat_lower']], axis=1)
-            upper_forecast = pd.concat([upper_forecast, fcst['yhat_upper']], axis=1)
-        forecast.columns = self.column_names
-        forecast.index = test_index
-        lower_forecast.columns = self.column_names
-        lower_forecast.index = test_index
-        upper_forecast.columns = self.column_names
-        upper_forecast.index = test_index
-        """
-
-        def seek_the_oracle(df, args, series):
-            current_series = pd.DataFrame(df[series].copy())
-            current_series = current_series.rename(columns={series: 'y'})
-            current_series['ds'] = current_series.index
-            m = Prophet(interval_width=args['prediction_interval'])
-            if args['holiday']:
-                m.add_country_holidays(country_name=args['holiday_country'])
-            if args['regression_type'] == 'User':
-                m.add_regressor(args['regressor_name'])
-            m = m.fit(current_series)
-            future = m.make_future_dataframe(periods=forecast_length)
-            if args['regression_type'] == 'User':
-                if future_regressor.ndim > 1:
-                    a = args['dimensionality_reducer'].transform(future_regressor)
-                    a = np.append(args['regressor_train'], a)
-                else:
-                    a = np.append(args['regressor_train'], future_regressor.values)
-                future[args['regressor_name']] = a
-            fcst = m.predict(future)
-            fcst = fcst.tail(forecast_length)  # remove the backcast
-            forecast = fcst['yhat']
-            forecast.name = series
-            lower_forecast = fcst['yhat_lower']
-            lower_forecast.name = series
-            upper_forecast = fcst['yhat_upper']
-            upper_forecast.name = series
-            return (forecast, lower_forecast, upper_forecast)
 
         args = {
             'holiday': self.holiday,
@@ -216,15 +213,28 @@ class FBProphet(ModelObject):
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
-                delayed(seek_the_oracle)(df=self.df_train, args=args, series=col)
+                delayed(seek_the_oracle)(
+                    df=self.df_train,
+                    args=args,
+                    series=col,
+                    forecast_length=forecast_length,
+                    future_regressor=future_regressor,
+                )
                 for col in cols
             )
-            complete = list(map(list, zip(*df_list)))
         else:
             df_list = []
             for col in cols:
-                df_list.append(seek_the_oracle(self.df_train, args, col))
-            complete = list(map(list, zip(*df_list)))
+                df_list.append(
+                    seek_the_oracle(
+                        self.df_train,
+                        args,
+                        col,
+                        forecast_length=forecast_length,
+                        future_regressor=future_regressor,
+                    )
+                )
+        complete = list(map(list, zip(*df_list)))
         forecast = pd.concat(complete[0], axis=1)
         forecast.index = test_index
         forecast = forecast[self.column_names]
@@ -257,7 +267,7 @@ class FBProphet(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        holiday_choice = np.random.choice(a=[True, False], size=1, p=[0.8, 0.2]).item()
+        holiday_choice = np.random.choice(a=[True, False], size=1, p=[0.5, 0.5]).item()
         regression_list = [None, 'User']
         regression_probability = [0.8, 0.2]
         regression_choice = np.random.choice(

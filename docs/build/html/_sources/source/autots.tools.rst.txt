@@ -52,6 +52,14 @@ autots.tools.profile module
    :undoc-members:
    :show-inheritance:
 
+autots.tools.regressor module
+-----------------------------
+
+.. automodule:: autots.tools.regressor
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.seasonal module
 ----------------------------
 
@@ -75,7 +83,6 @@ autots.tools.transform module
    :members:
    :undoc-members:
    :show-inheritance:
-
 
 Module contents
 ---------------

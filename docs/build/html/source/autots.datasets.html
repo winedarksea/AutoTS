@@ -3,8 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" />
-    <title>autots.datasets package &#8212; AutoTS 0.3.2 documentation</title>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>autots.datasets package &#8212; AutoTS 0.3.3 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -32,12 +33,12 @@
 
           <div class="body" role="main">
             
-  <div class="section" id="autots-datasets-package">
+  <section id="autots-datasets-package">
 <h1>autots.datasets package<a class="headerlink" href="#autots-datasets-package" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="submodules">
+<section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
-</div>
-<div class="section" id="module-autots.datasets.fred">
+</section>
+<section id="module-autots.datasets.fred">
 <span id="autots-datasets-fred-module"></span><h2>autots.datasets.fred module<a class="headerlink" href="#module-autots.datasets.fred" title="Permalink to this headline">¶</a></h2>
 <p>FRED (Federal Reserve Economic Data) Data Import</p>
 <p>requires API key from FRED
@@ -60,8 +61,8 @@ if None, several default series are returned</p></li>
 </dl>
 </dd></dl>
 
-</div>
-<div class="section" id="module-autots.datasets">
+</section>
+<section id="module-autots.datasets">
 <span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots.datasets" title="Permalink to this headline">¶</a></h2>
 <p>Tools for Importing Sample Data</p>
 <dl class="function">
@@ -116,8 +117,29 @@ if False, return a Series with dt index</p></li>
 </dl>
 </dd></dl>
 
-</div>
-</div>
+<dl class="function">
+<dt id="autots.datasets.load_live_daily">
+<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_live_daily</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False, fred_key: str = None, fred_series: list = ['DGS10', 'T5YIE', 'SP500', 'DCOILWTICO', 'DEXUSEU'], tickers: list = ['MSFT'], trends_list: list = ['forecasting', 'cycling', 'cpu', 'microsoft'], weather_data_types: list = ['AWND', 'WSF2'], weather_stations: list = ['USW00094846', 'USW00014925'], weather_years: int = 10, london_air_stations: list = ['CT3', 'SK8'], london_air_species: str = 'PM25', london_air_days: int = 180, earthquake_days: int = 180, earthquake_min_magnitude: int = 5</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_live_daily" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates a dataframe of data up to the present day.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>long</strong> (<em>bool</em>) – whether to return in long format or wide</p></li>
+<li><p><strong>fred_key</strong> (<em>str</em>) – <a class="reference external" href="https://fred.stlouisfed.org/docs/api/api_key.html">https://fred.stlouisfed.org/docs/api/api_key.html</a></p></li>
+<li><p><strong>fred_series</strong> (<em>list</em>) – list of FRED series IDs. This requires fredapi package</p></li>
+<li><p><strong>tickers</strong> (<em>list</em>) – list of stock tickers, requires yfinance</p></li>
+<li><p><strong>trends</strong> (<em>list</em>) – list of search keywords, requires pytrends.</p></li>
+<li><p><strong>weather_data_types</strong> (<em>list</em>) – from NCEI NOAA api data types</p></li>
+<li><p><strong>weather_stations</strong> (<em>list</em>) – from NCEI NOAA api station ids</p></li>
+<li><p><strong>london_air_stations</strong> (<em>list</em>) – londonair.org.uk source station IDs</p></li>
+<li><p><strong>london_species</strong> (<em>str</em>) – what measurement to pull from London Air. Not all stations have all metrics.        earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
 
 
           </div>

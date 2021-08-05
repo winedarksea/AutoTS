@@ -3,6 +3,18 @@ import numpy as np
 import pandas as pd
 
 
+def infer_frequency(df_wide):
+    """Infer the frequency in a slightly more robust way."""
+    frequency = pd.infer_freq(df_wide.index, warn=True)
+    if frequency is None:
+        # hack to get around data which has a few oddities
+        frequency = pd.infer_freq(df_wide.tail(10).index, warn=True)
+    if frequency is None:
+        # hack to get around data which has a few oddities
+        frequency = pd.infer_freq(df_wide.head(10).index, warn=True)
+    return frequency
+
+
 def df_cleanup(
     df_wide,
     frequency: str = "infer",
@@ -36,17 +48,11 @@ def df_cleanup(
 
     # infer frequency
     if frequency == 'infer':
-        frequency = pd.infer_freq(df_wide.index, warn=True)
-        if frequency is None:
-            # hack to get around data which has a few oddities
-            frequency = pd.infer_freq(df_wide.tail(10).index, warn=True)
-        if frequency is None:
-            # hack to get around data which has a few oddities
-            frequency = pd.infer_freq(df_wide.head(10).index, warn=True)
+        frequency = infer_frequency(df_wide)
         if verbose > 0:
             print("Inferred frequency is: {}".format(str(frequency)))
-    if (frequency is None) and (verbose >= 0):
-        print("Frequency is 'None'! Input frequency not recognized.")
+        if (frequency is None) and (verbose >= 0):
+            print("Frequency is 'None'! Input frequency not recognized.")
 
     # fill missing dates in index with NaN, resample to freq as necessary
     try:

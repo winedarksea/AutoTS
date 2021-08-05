@@ -3,8 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" />
-    <title>Intro &#8212; AutoTS 0.3.2 documentation</title>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>Intro &#8212; AutoTS 0.3.3 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -32,16 +33,16 @@
 
           <div class="body" role="main">
             
-  <div class="section" id="intro">
+  <section id="intro">
 <h1>Intro<a class="headerlink" href="#intro" title="Permalink to this headline">¶</a></h1>
-</div>
-<div class="section" id="autots">
+</section>
+<section id="autots">
 <h1>AutoTS<a class="headerlink" href="#autots" title="Permalink to this headline">¶</a></h1>
 <p><span class="raw-html-m2r"><img src="/img/autots_logo.png" width="400" height="184" title="AutoTS Logo"></span></p>
 <p><strong>Forecasting Model Selection for Multiple Time Series</strong></p>
 <p>AutoML for forecasting with open-source time series implementations.</p>
 <p>For other time series needs, check out the list <a class="reference external" href="https://github.com/MaxBenChrist/awesome_time_series_in_python">here</a>.</p>
-<div class="section" id="table-of-contents">
+<section id="table-of-contents">
 <h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
 <li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#features">Features</a></p></li>
@@ -51,8 +52,8 @@
 <li><p>Extended Tutorial <a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md">GitHub</a> or <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html">Docs</a></p></li>
 <li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/production_example.py">Production Example</a></p></li>
 </ul>
-</div>
-<div class="section" id="id1">
+</section>
+<section id="id1">
 <h2>Features<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
 <li><p>Finds optimal time series forecasting model and data transformations by genetic programming optimization</p></li>
@@ -88,15 +89,15 @@
 <li><p>Option to use one or a combination of metrics for model selection</p></li>
 <li><p>Import and export of model templates for deployment and greater user customization</p></li>
 </ul>
-</div>
-<div class="section" id="id2">
+</section>
+<section id="id2">
 <h2>Installation<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h2>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>pip install autots
 </pre></div>
 </div>
 <p>This includes dependencies for basic models, but <a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md#installation-and-dependency-versioning">additonal packages</a> are required for some models and methods.</p>
-</div>
-<div class="section" id="id3">
+</section>
+<section id="id3">
 <h2>Basic Use<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h2>
 <p>Input data is expected to come in either a <em>long</em> or a <em>wide</em> format:</p>
 <ul class="simple">
@@ -110,23 +111,22 @@
 </li>
 <li><p>For <em>long</em> data, the column name for each of these is passed to .fit() as <code class="docutils literal notranslate"><span class="pre">date_col</span></code>, <code class="docutils literal notranslate"><span class="pre">id_col</span></code>, and <code class="docutils literal notranslate"><span class="pre">value_col</span></code>. No parameters are needed for <em>wide</em> data.</p></li>
 </ul>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># also: _hourly, _daily, _weekly, or _yearly</span>
-<span class="kn">from</span> <span class="nn">autots.datasets</span> <span class="kn">import</span> <span class="n">load_monthly</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># also load: _hourly, _daily, _weekly, _yearly, or _live_daily</span>
+<span class="kn">from</span> <span class="nn">autots</span> <span class="kn">import</span> <span class="n">AutoTS</span><span class="p">,</span> <span class="n">load_daily</span>
 
 <span class="c1"># sample datasets can be used in either of the long or wide import shapes</span>
-<span class="n">long</span> <span class="o">=</span> <span class="kc">True</span>
-<span class="n">df</span> <span class="o">=</span> <span class="n">load_monthly</span><span class="p">(</span><span class="n">long</span><span class="o">=</span><span class="n">long</span><span class="p">)</span>
-
-<span class="kn">from</span> <span class="nn">autots</span> <span class="kn">import</span> <span class="n">AutoTS</span>
+<span class="n">long</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">load_daily</span><span class="p">(</span><span class="n">long</span><span class="o">=</span><span class="n">long</span><span class="p">)</span>
 
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span>
-    <span class="n">forecast_length</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+    <span class="n">forecast_length</span><span class="o">=</span><span class="mi">21</span><span class="p">,</span>
     <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
     <span class="n">prediction_interval</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>
     <span class="n">ensemble</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-    <span class="n">model_list</span><span class="o">=</span><span class="s2">&quot;superfast&quot;</span><span class="p">,</span>
+    <span class="n">model_list</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">,</span>
     <span class="n">transformer_list</span><span class="o">=</span><span class="s2">&quot;fast&quot;</span><span class="p">,</span>
-    <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">drop_most_recent</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">max_generations</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
     <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
     <span class="n">validation_method</span><span class="o">=</span><span class="s2">&quot;backwards&quot;</span>
 <span class="p">)</span>
@@ -138,6 +138,10 @@
 <span class="p">)</span>
 
 <span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">()</span>
+<span class="c1"># plot a sample</span>
+<span class="n">prediction</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">df_wide_numeric</span><span class="p">,</span>
+                <span class="n">series</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">df_wide_numeric</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;2019-01-01&quot;</span><span class="p">)</span>
 <span class="c1"># Print the details of the best model</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
 
@@ -155,8 +159,8 @@
 <p>The lower-level API, in particular the large section of time series transformers in the scikit-learn style, can also be utilized independently from the AutoML framework.</p>
 <p>Check out <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html">extended_tutorial.md</a> for a more detailed guide to features!</p>
 <p>Also take a look at the <a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/production_example.py">production_example.py</a></p>
-</div>
-<div class="section" id="id4">
+</section>
+<section id="id4">
 <h2>Tips for Speed and Large Data:<a class="headerlink" href="#id4" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
 <li><p>Use appropriate model lists, especially the predefined lists:</p>
@@ -191,8 +195,8 @@
 </ul>
 </li>
 </ul>
-</div>
-<div class="section" id="how-to-contribute">
+</section>
+<section id="how-to-contribute">
 <h2>How to Contribute:<a class="headerlink" href="#how-to-contribute" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
 <li><p>Give feedback on where you find the documentation confusing</p></li>
@@ -206,8 +210,8 @@
 <li><p>And, of course, contributing to the codebase directly on GitHub!</p></li>
 </ul>
 <p><em>Also known as Project CATS (Catlin’s Automated Time Series) hence the logo.</em></p>
-</div>
-</div>
+</section>
+</section>
 
 
           </div>

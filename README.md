@@ -53,23 +53,22 @@ Input data is expected to come in either a *long* or a *wide* format:
 - For *long* data, the column name for each of these is passed to .fit() as `date_col`, `id_col`, and `value_col`. No parameters are needed for *wide* data.
 
 ```python
-# also: _hourly, _daily, _weekly, or _yearly
-from autots.datasets import load_monthly
+# also load: _hourly, _daily, _weekly, _yearly, or _live_daily
+from autots import AutoTS, load_daily
 
 # sample datasets can be used in either of the long or wide import shapes
-long = True
-df = load_monthly(long=long)
-
-from autots import AutoTS
+long = False
+df = load_daily(long=long)
 
 model = AutoTS(
-    forecast_length=3,
+    forecast_length=21,
     frequency='infer',
     prediction_interval=0.9,
     ensemble=None,
-    model_list="superfast",
-	transformer_list="fast",
-    max_generations=5,
+    model_list="default",
+    transformer_list="fast",
+    drop_most_recent=1,
+    max_generations=4,
     num_validations=2,
     validation_method="backwards"
 )
@@ -81,6 +80,10 @@ model = model.fit(
 )
 
 prediction = model.predict()
+# plot a sample
+prediction.plot(model.df_wide_numeric,
+                series=model.df_wide_numeric.columns[0],
+                start_date="2019-01-01")
 # Print the details of the best model
 print(model)
 

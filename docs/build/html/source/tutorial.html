@@ -3,8 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" />
-    <title>Tutorial &#8212; AutoTS 0.3.2 documentation</title>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>Tutorial &#8212; AutoTS 0.3.3 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -32,9 +33,9 @@
 
           <div class="body" role="main">
             
-  <div class="section" id="tutorial">
+  <section id="tutorial">
 <h1>Tutorial<a class="headerlink" href="#tutorial" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="table-of-contents">
+<section id="table-of-contents">
 <h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#a-simple-example">A Simple Example</a></p></li>
@@ -42,14 +43,15 @@
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#another-example">Another Example</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#model-lists">Model Lists</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#deployment-and-template-import-export">Deployment</a></p></li>
+<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#running-just-one-model">Running Just One Model</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#metrics">Metrics</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning">Installation</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice">Caveats</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information">Adding Regressors</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#models">Models</a></p></li>
 </ul>
-</div>
-<div class="section" id="extended-tutorial">
+</section>
+<section id="extended-tutorial">
 <h2>Extended Tutorial<a class="headerlink" href="#extended-tutorial" title="Permalink to this headline">¶</a></h2>
 <p>There are a number of ways to get a more accurate time series model. AutoTS takes care of a few of these:</p>
 <ol class="arabic simple">
@@ -57,8 +59,8 @@
 <li><p>Trying an assortment of different algorithms</p></li>
 <li><p>Trying an assortment of hyperparameters for each algorithm</p></li>
 </ol>
-</div>
-<div class="section" id="underlying-process">
+</section>
+<section id="underlying-process">
 <h2>Underlying Process<a class="headerlink" href="#underlying-process" title="Permalink to this headline">¶</a></h2>
 <p>AutoTS works in the following way at present:</p>
 <ul class="simple">
@@ -71,7 +73,7 @@
 <li><p>If used, horizontal ensembling uses the validation data to choose the best model for each series.</p></li>
 <li><p>The best model or ensemble in validation is selected as best_model and used in the <code class="docutils literal notranslate"><span class="pre">.predict()</span></code> method to generate forecasts.</p></li>
 </ul>
-<div class="section" id="id1">
+<section id="id1">
 <h3>A simple example<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># also: _hourly, _daily, _weekly, or _yearly</span>
 <span class="kn">from</span> <span class="nn">autots.datasets</span> <span class="kn">import</span> <span class="n">load_monthly</span>
@@ -93,13 +95,13 @@
 <span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
 </pre></div>
 </div>
-<div class="section" id="import-of-data">
+<section id="import-of-data">
 <h4>Import of data<a class="headerlink" href="#import-of-data" title="Permalink to this headline">¶</a></h4>
 <p>There are two shapes/styles of <code class="docutils literal notranslate"><span class="pre">pandas.DataFrame</span></code> which are accepted.
 The first is <em>long</em> data, like that out of an aggregated sales-transaction table containing three columns identified to <code class="docutils literal notranslate"><span class="pre">.fit()</span></code> as <code class="docutils literal notranslate"><span class="pre">date_col</span> <span class="pre">{pd.Datetime},</span> <span class="pre">value_col</span> <span class="pre">{the</span> <span class="pre">numeric</span> <span class="pre">or</span> <span class="pre">categorical</span> <span class="pre">data</span> <span class="pre">of</span> <span class="pre">interest},</span> <span class="pre">and</span> <span class="pre">id_col</span> <span class="pre">{id</span> <span class="pre">string,</span> <span class="pre">if</span> <span class="pre">multiple</span> <span class="pre">series</span> <span class="pre">are</span> <span class="pre">provided}</span></code>.
 Alternatively, the data may be in a <em>wide</em> format where the index is a <code class="docutils literal notranslate"><span class="pre">pandas.DatetimeIndex</span></code>, and each column is a distinct data series.</p>
-</div>
-<div class="section" id="you-can-tailor-the-process-in-a-few-ways">
+</section>
+<section id="you-can-tailor-the-process-in-a-few-ways">
 <h4>You can tailor the process in a few ways…<a class="headerlink" href="#you-can-tailor-the-process-in-a-few-ways" title="Permalink to this headline">¶</a></h4>
 <p>The simplest way to improve accuracy is to increase the number of generations <code class="docutils literal notranslate"><span class="pre">max_generations=15</span></code>. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.</p>
 <p>Another approach that may improve accuracy is to set <code class="docutils literal notranslate"><span class="pre">ensemble='all'</span></code>. Ensemble parameter expects a single string, and can for example be <code class="docutils literal notranslate"><span class="pre">'simple,dist'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'horizontal'</span></code>. As this means storing more details of every model, this takes more time and memory.</p>
@@ -111,9 +113,12 @@ A similar function is <code class="docutils literal notranslate"><span class="pr
 <p>When working with many time series, it can be helpful to take advantage of <code class="docutils literal notranslate"><span class="pre">subset=100</span></code>. Subset specifies the interger number of time series to test models on, and can be useful with many related time series (1000’s of customer’s sales). Usually the best model on a 100 related time series is very close to that tested on many thousands (or more) of series.</p>
 <p>Subset takes advantage of weighting, more highly-weighted series are more likely to be selected. Weighting is used with multiple time series to tell the evaluator which series are most important. Series weights are assumed to all be equal to 1, values need only be passed in when a value other than 1 is desired.
 Note for weighting, larger weights = more important.</p>
-</div>
-</div>
-<div class="section" id="id2">
+<p>Probably the most likely thing to cause trouble is having a lot of NaN/missing data. Especially a lot of missing data in the most recent available data.
+Using appropriate cross validation (<code class="docutils literal notranslate"><span class="pre">backwards</span></code> especially if NaN is common in older data but not recent data) can help.
+Dropping series which are mostly missing, or using <code class="docutils literal notranslate"><span class="pre">prefill_na=0</span></code> (or other value) can also help.</p>
+</section>
+</section>
+<section id="id2">
 <h3>Validation and Cross Validation<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h3>
 <p>Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future.
 With very small datasets, there may be not be enough data for cross validation, in which case <code class="docutils literal notranslate"><span class="pre">num_validations</span></code> may be set to 0. This can also speed up quick tests.</p>
@@ -131,8 +136,8 @@ However, increasing this value above, say, <code class="docutils literal notrans
 <p>While NaN values are handled, model selection will suffer if any series have large numbers of NaN values in any of the generated train/test splits.
 Most commonly, this may occur where some series have a very long history, while others in the same dataset only have very recent data.
 In these cases, avoid the <code class="docutils literal notranslate"><span class="pre">even</span></code> cross validation and use one of the other validation methods.</p>
-</div>
-<div class="section" id="id3">
+</section>
+<section id="id3">
 <h3>Another Example:<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h3>
 <p>Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting.
 Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. These additional series carry information to models such as <code class="docutils literal notranslate"><span class="pre">RollingRegression</span></code>, <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code>, and <code class="docutils literal notranslate"><span class="pre">VECM</span></code>.</p>
@@ -174,6 +179,7 @@ Here weather data is included - winter and road construction being the major inf
 
 <span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">()</span>
 <span class="n">forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="o">.</span><span class="n">forecast</span>
+<span class="c1"># prediction.long_form_results()</span>
 <span class="c1"># model.best_model.to_string()</span>
 </pre></div>
 </div>
@@ -182,19 +188,19 @@ Here weather data is included - winter and road construction being the major inf
 <span class="n">lower_forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="o">.</span><span class="n">lower_forecast</span>
 </pre></div>
 </div>
-</div>
-<div class="section" id="id4">
+</section>
+<section id="id4">
 <h3>Model Lists<a class="headerlink" href="#id4" title="Permalink to this headline">¶</a></h3>
 <p>By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of <code class="docutils literal notranslate"><span class="pre">'probabilistic',</span> <span class="pre">'multivariate',</span> <span class="pre">'fast',</span> <span class="pre">'superfast',</span> <span class="pre">or</span> <span class="pre">'all'</span></code>.</p>
 <p>A table of all available models is available further below.</p>
 <p>On large multivariate series, <code class="docutils literal notranslate"><span class="pre">TSFreshRegressor</span></code>, <code class="docutils literal notranslate"><span class="pre">DynamicFactor</span></code> and <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code> can be impractically slow.</p>
-</div>
-</div>
-<div class="section" id="deployment-and-template-import-export">
+</section>
+</section>
+<section id="deployment-and-template-import-export">
 <h2>Deployment and Template Import/Export<a class="headerlink" href="#deployment-and-template-import-export" title="Permalink to this headline">¶</a></h2>
 <p>Take a look at the <a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/production_example.py">production_example.py</a></p>
 <p>Many models can be reverse engineered with (relative) simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package.
-There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a <code class="docutils literal notranslate"><span class="pre">.csv</span></code> or <code class="docutils literal notranslate"><span class="pre">.json</span></code> file, then on next run only those models will be tried.
+Following the model training, the top models can be exported to a <code class="docutils literal notranslate"><span class="pre">.csv</span></code> or <code class="docutils literal notranslate"><span class="pre">.json</span></code> file, then on next run only those models will be tried.
 This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve.
 One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># after fitting an AutoTS model</span>
@@ -210,8 +216,42 @@ One thing to note is that, as AutoTS is still under development, template format
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Overwrite template is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">initial_template</span><span class="p">)))</span>
 </pre></div>
 </div>
-<div class="section" id="id5">
-<h3>Metrics<a class="headerlink" href="#id5" title="Permalink to this headline">¶</a></h3>
+<section id="id5">
+<h3>Running Just One Model<a class="headerlink" href="#id5" title="Permalink to this headline">¶</a></h3>
+<p>While the above version of deployment, with  evolving templates and cross_validation on every run, is the recommended deployment, it is also possible to run a single fixed model.</p>
+<p>Coming from the deeper internals of AutoTS, this function can only take the <code class="docutils literal notranslate"><span class="pre">wide</span></code> style data (there is a long_to_wide function available).
+Data must already be fairly clean - all numerics (or np.nan).
+There aren’t as many data and param checks at this point either, so it will be more brittle and output errors may be more confusing.
+This will run Ensembles.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">AutoTS</span> <span class="kn">import</span> <span class="n">load_daily</span><span class="p">,</span> <span class="n">model_forecast</span>
+
+
+<span class="n">df</span> <span class="o">=</span> <span class="n">load_daily</span><span class="p">(</span><span class="n">long</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># long or non-numeric data won&#39;t work with this function</span>
+<span class="n">df_forecast</span> <span class="o">=</span> <span class="n">model_forecast</span><span class="p">(</span>
+    <span class="n">model_name</span><span class="o">=</span><span class="s2">&quot;AverageValueNaive&quot;</span><span class="p">,</span>
+    <span class="n">model_param_dict</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="s1">&#39;Mean&#39;</span><span class="p">},</span>
+    <span class="n">model_transform_dict</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;fillna&#39;</span><span class="p">:</span> <span class="s1">&#39;fake_date&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;transformations&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;0&#39;</span><span class="p">:</span> <span class="s1">&#39;DifferencedTransformer&#39;</span><span class="p">},</span>
+        <span class="s1">&#39;transformation_params&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;0&#39;</span><span class="p">:</span> <span class="p">{}}</span>
+    <span class="p">},</span>
+    <span class="n">df_train</span><span class="o">=</span><span class="n">df</span><span class="p">,</span>
+    <span class="n">forecast_length</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span>
+    <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
+    <span class="n">prediction_interval</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>
+    <span class="n">no_negatives</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="c1"># future_regressor_train=future_regressor_train2d,</span>
+    <span class="c1"># future_regressor_forecast=future_regressor_forecast2d,</span>
+    <span class="n">random_seed</span><span class="o">=</span><span class="mi">321</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+    <span class="n">n_jobs</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">df_forecast</span><span class="o">.</span><span class="n">forecast</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="id6">
+<h3>Metrics<a class="headerlink" href="#id6" title="Permalink to this headline">¶</a></h3>
 <p>There are a number of available metrics, all combined together into a ‘Score’ which evaluates the best model. The ‘Score’ that compares models can easily be adjusted by passing through custom metric weights dictionary.
 Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers.
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series.</p>
@@ -239,12 +279,12 @@ This weighting is not to be confused with series weighting, which effects how eq
 <p><code class="docutils literal notranslate"><span class="pre">Containment</span></code> measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL.</p>
 <p><code class="docutils literal notranslate"><span class="pre">Contour</span></code> is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but <em>not</em> the magnitude of that difference. Does not work with forecast_length=1.</p>
 <p>The contour metric is useful as it encourages ‘wavy’ forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they “don’t look like they are trying hard enough” to some managers, and using contour favors non-flat forecasts that (to many) look like a more serious model.</p>
-</div>
-</div>
-<div class="section" id="installation-and-dependency-versioning">
+</section>
+</section>
+<section id="installation-and-dependency-versioning">
 <h2>Installation and Dependency Versioning<a class="headerlink" href="#installation-and-dependency-versioning" title="Permalink to this headline">¶</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">autots</span></code></p>
-<div class="section" id="requirements">
+<section id="requirements">
 <h3>Requirements:<a class="headerlink" href="#requirements" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>Python &gt;= 3.6
 numpy
@@ -261,30 +301,44 @@ Limited functionality should exist without scikit-learn.</p>
 </pre></div>
 </div>
 <p>Full functionality should be maintained without statsmodels, albeit with fewer available models.</p>
+<p>Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about installation on some systems.</p>
 <p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">autots['additional']</span></code></p>
-</div>
-<div class="section" id="optional-requirements">
-<h3>Optional Requirements<a class="headerlink" href="#optional-requirements" title="Permalink to this headline">¶</a></h3>
+</section>
+<section id="optional-packages">
+<h3>Optional Packages<a class="headerlink" href="#optional-packages" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>holidays
-fbprophet
+prophet
 gluonts (requires mxnet)
 mxnet (mxnet-mkl, mxnet-cu91, mxnet-cu101mkl, etc.)
 tensorflow &gt;= 2.0.0
 lightgbm
 xgboost
 psutil
-</pre></div>
-</div>
-<div class="section" id="experimental-dev-requirements">
-<h4>Experimental &amp; Dev Requirements<a class="headerlink" href="#experimental-dev-requirements" title="Permalink to this headline">¶</a></h4>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>tensorflow-probability
+tensorflow-probability
 fredapi
-tsfresh
+greykite
 </pre></div>
 </div>
+<section id="safest-bet-for-installation">
+<h4>Safest bet for installation:<a class="headerlink" href="#safest-bet-for-installation" title="Permalink to this headline">¶</a></h4>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a conda or venv environment</span>
+conda create -n openblas <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9
+conda activate openblas
+
+python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm --exists-action i
+
+python -m pip install pystan prophet --exists-action i  <span class="c1"># conda-forge option below works more easily, --no-deps to pip install prophet if this fails</span>
+python -m pip install mxnet --exists-action i     <span class="c1"># check the mxnet documentation for more install options, also try pip install mxnet --no-deps</span>
+python -m pip install gluonts --exists-action i
+python -m pip install holidays-ext pmdarima dill greykite --exists-action i --no-deps
+python -m pip install --upgrade numpy pandas --exists-action i  <span class="c1"># mxnet likes to (pointlessly seeming) install old versions of numpy</span>
+
+python -m pip install autots --exists-action i
+</pre></div>
 </div>
-</div>
-<div class="section" id="hardware-acceleration-with-intel-cpu-and-nvidia-gpu-for-ubuntu-windows">
+</section>
+</section>
+<section id="hardware-acceleration-with-intel-cpu-and-nvidia-gpu-for-ubuntu-windows">
 <h3>Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows<a class="headerlink" href="#hardware-acceleration-with-intel-cpu-and-nvidia-gpu-for-ubuntu-windows" title="Permalink to this headline">¶</a></h3>
 <p>If you are on an Intel CPU, download Anaconda or Miniconda. For AMD/ARM/etc use a venv environment and pip which will use OpenBLAS.
 Intel MKL is included with <code class="docutils literal notranslate"><span class="pre">anaconda</span></code> and offers significant performance gain for Intel CPUs. Use of the Intel conda channel sometimes is necessary.</p>
@@ -293,25 +347,28 @@ Intel MKL is included with <code class="docutils literal notranslate"><span clas
 <p>You can check if your system is using mkl, OpenBLAS, or none with <code class="docutils literal notranslate"><span class="pre">numpy.show_config()</span></code>. Generally recommended that you double-check this after installing new packages to make sure you haven’t broken the LINPACK connection.</p>
 <p>On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas <em>may</em> install faster/more stable compilations.
 Linux will also require <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">apt</span> <span class="pre">install</span> <span class="pre">build-essential</span></code> for some packages.</p>
+<section id="some-conda">
+<h4>Some conda<a class="headerlink" href="#some-conda" title="Permalink to this headline">¶</a></h4>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>conda create -n timeseries <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9
 conda activate timeseries
 
 <span class="c1"># for simplicity:</span>
 conda install anaconda
 <span class="c1"># elsewise:</span>
-conda install numpy scipy scikit-learn   <span class="c1"># -c conda-forge is sometimes a version ahead of main channel</span>
-pip install statsmodels     <span class="c1"># pip is sometimes a version ahead of main conda channel</span>
+conda install numpy scipy scikit-learn statsmodels  <span class="c1"># -c conda-forge is sometimes a version ahead of main channel</span>
 
 conda install -c conda-forge prophet
 pip install mxnet     <span class="c1"># check the mxnet documentation for more install options, also try pip install mxnet --no-deps</span>
-pip install gluonts   <span class="c1"># sometimes the dependency versioning for gluonts can be picky</span>
-pip install lightgbm
+pip install gluonts
+pip install lightgbm tensorflow
 conda update anaconda
-pip install tensorflow
+
+pip install autots
 </pre></div>
 </div>
-<div class="section" id="intel-conda-channel-installation">
-<h4>Intel conda channel installation<a class="headerlink" href="#intel-conda-channel-installation" title="Permalink to this headline">¶</a></h4>
+</section>
+<section id="intel-conda-channel-installation-fastest-also-more-prone-to-bugs">
+<h4>Intel conda channel installation (fastest, also, more prone to bugs)<a class="headerlink" href="#intel-conda-channel-installation-fastest-also-more-prone-to-bugs" title="Permalink to this headline">¶</a></h4>
 <p><a class="reference external" href="https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html">https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html</a></p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create the environment. Intelpy compatability is often a version or two behind latest py</span>
 conda create -n intelpy -c intel <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.7 intelpython3_full
@@ -325,38 +382,40 @@ python -m pip install gluonts
 <span class="c1"># conda install -c anaconda tornado pystan  # may be necessary for fbprophet</span>
 python -m pip install prophet
 
+pip install autots
+
 <span class="c1"># also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html</span>
 <span class="c1"># pip install intel-tensorflow-avx512  and conda install tensorflow-mkl</span>
 <span class="c1"># MKL_NUM_THREADS, USE_DAAL4PY_SKLEARN=1</span>
 </pre></div>
 </div>
-</div>
-</div>
-</div>
-<div class="section" id="caveats-and-advice">
+</section>
+</section>
+</section>
+<section id="caveats-and-advice">
 <h2>Caveats and Advice<a class="headerlink" href="#caveats-and-advice" title="Permalink to this headline">¶</a></h2>
-<div class="section" id="series-ids-really-need-to-be-unique-or-column-names-need-to-be-all-unique-in-wide-data">
+<section id="series-ids-really-need-to-be-unique-or-column-names-need-to-be-all-unique-in-wide-data">
 <h3>Series IDs really need to be unique (or column names need to be all unique in wide data)<a class="headerlink" href="#series-ids-really-need-to-be-unique-or-column-names-need-to-be-all-unique-in-wide-data" title="Permalink to this headline">¶</a></h3>
 <p>Pretty much as it says, if this isn’t true, some odd things may happen that shouldn’t.</p>
 <p>Also if using the model Prophet models, you can’t have any columns named ‘ds’</p>
-</div>
-<div class="section" id="short-training-history">
+</section>
+<section id="short-training-history">
 <h3>Short Training History<a class="headerlink" href="#short-training-history" title="Permalink to this headline">¶</a></h3>
 <p>How much data is ‘too little’ depends on the seasonality and volatility of the data.
 Minimal training data most greatly impacts the ability to do proper cross validation. Set <code class="docutils literal notranslate"><span class="pre">num_validations=0</span></code> in such cases.
 Since ensembles are based on the test dataset, it would also be wise to set <code class="docutils literal notranslate"><span class="pre">ensemble=None</span></code> if <code class="docutils literal notranslate"><span class="pre">num_validations=0</span></code>.</p>
-</div>
-<div class="section" id="too-much-training-data">
+</section>
+<section id="too-much-training-data">
 <h3>Too much training data.<a class="headerlink" href="#too-much-training-data" title="Permalink to this headline">¶</a></h3>
 <p>Too much data is already handled to some extent by the <code class="docutils literal notranslate"><span class="pre">Slice</span></code> Transformer.
 That said, large datasets will be slower and more memory intensive, for high frequency data (say hourly) it can often be advisable to roll that up to a higher level (daily, hourly, etc.).
 Rollup can be accomplished by specifying the frequency = your rollup frequency, and then setting the <code class="docutils literal notranslate"><span class="pre">agg_func=np.sum</span></code> or ‘mean’ or other appropriate statistic.</p>
-</div>
-<div class="section" id="lots-of-nan-in-data">
+</section>
+<section id="lots-of-nan-in-data">
 <h3>Lots of NaN in data<a class="headerlink" href="#lots-of-nan-in-data" title="Permalink to this headline">¶</a></h3>
 <p>Various NaN filling techniques are tested in the transformation. Rolling up data to a less-frequent frequency may also help deal with NaNs.</p>
-</div>
-<div class="section" id="adding-regressors-and-other-information">
+</section>
+<section id="adding-regressors-and-other-information">
 <h3>Adding regressors and other information<a class="headerlink" href="#adding-regressors-and-other-information" title="Permalink to this headline">¶</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">future_</span></code> regressor, to make it clear this is data that will be know with high certainy about the future.
 Such data about the future is rare, one example might be number of stores that will be (planned to be) open each given day in the future when forecast sales.
@@ -407,20 +466,32 @@ To prevent forecast accuracy for considering these additional series too heavily
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Was a model choosen that used the regressor? </span><span class="si">{</span><span class="n">model</span><span class="o">.</span><span class="n">used_regressor_check</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
-</div>
-<div class="section" id="categorical-data">
+</section>
+<section id="a-hack-for-passing-in-parameters-that-aren-t-otherwise-available">
+<h3>A Hack for Passing in Parameters (that aren’t otherwise available)<a class="headerlink" href="#a-hack-for-passing-in-parameters-that-aren-t-otherwise-available" title="Permalink to this headline">¶</a></h3>
+<p>There are a lot of parameters available here, but not always all of the options available for a particular parameter are actually used in generated templates.
+Usually, very slow options are left out. If you are familiar with a model, you can try manualy adding those parameter values in for a run in this way…
+To clarify, you can’t usually add in entirely new parameters in this way, but you can often pass in new choices for existing parameter values.</p>
+<ol class="arabic simple">
+<li><p>Run AutoTS with your desired model and export a template.</p></li>
+<li><p>Open the template in a text editor or Excel and manually change the param values to whatever you want.</p></li>
+<li><p>Run AutoTS again, this time importing the template before running .fit().</p></li>
+<li><p>There is no guarantee it will choose the model with the given params- choices are made based on validation accuracy, but it will at least run it, and if it does well, it will be incorporated into new models in that run (that’s how the genetic algorithms work).</p></li>
+</ol>
+</section>
+<section id="categorical-data">
 <h3>Categorical Data<a class="headerlink" href="#categorical-data" title="Permalink to this headline">¶</a></h3>
 <p>Categorical data is handled, but it is handled crudely. For example, optimization metrics do not currently include any categorical accuracy metrics.
 For categorical data that has a meaningful order (ie ‘low’, ‘medium’, ‘high’) it is best for the user to encode that data before passing it in,
 thus properly capturing the relative sequence (ie ‘low’=1, ‘medium’=2, ‘high’=3).</p>
-</div>
-<div class="section" id="custom-and-unusual-frequencies">
+</section>
+<section id="custom-and-unusual-frequencies">
 <h3>Custom and Unusual Frequencies<a class="headerlink" href="#custom-and-unusual-frequencies" title="Permalink to this headline">¶</a></h3>
 <p>Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: <a class="reference external" href="https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects">https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects</a>
 Some models will support a more limited range of frequencies.</p>
-</div>
-</div>
-<div class="section" id="using-the-transformers-independently">
+</section>
+</section>
+<section id="using-the-transformers-independently">
 <h2>Using the Transformers independently<a class="headerlink" href="#using-the-transformers-independently" title="Permalink to this headline">¶</a></h2>
 <p>The transformers expect data only in the <code class="docutils literal notranslate"><span class="pre">wide</span></code> shape with ascending date.
 The simplest way to access them is through the <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/autots.tools.html#autots.tools.transform.GeneralTransformer">GeneralTransformer</a>.
@@ -447,9 +518,9 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <span class="n">df_inv_return</span> <span class="o">=</span> <span class="n">trans</span><span class="o">.</span><span class="n">inverse_transform</span><span class="p">(</span><span class="n">df_trans</span><span class="p">,</span> <span class="n">trans_method</span><span class="o">=</span><span class="s2">&quot;original&quot;</span><span class="p">)</span>  <span class="c1"># forecast for future data</span>
 </pre></div>
 </div>
-</div>
-<div class="section" id="id6">
-<h2>Models<a class="headerlink" href="#id6" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="id7">
+<h2>Models<a class="headerlink" href="#id7" title="Permalink to this headline">¶</a></h2>
 <table class="docutils align-default">
 <colgroup>
 <col style="width: 11%" />
@@ -535,7 +606,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>ETS</p></td>
+<tr class="row-even"><td><p>ETS - Exponential Smoothing</p></td>
 <td><p>statsmodels</p></td>
 <td></td>
 <td></td>
@@ -645,7 +716,37 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>MotifSimulation</p></td>
+<tr class="row-odd"><td><p>DatepartRegression</p></td>
+<td><p>sklearn</p></td>
+<td><p>lightgbm, tensorflow</p></td>
+<td></td>
+<td><p>sklearn</p></td>
+<td><p>some</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+</tr>
+<tr class="row-even"><td><p>UnivariateRegression</p></td>
+<td><p>sklearn</p></td>
+<td><p>lightgbm, tensorflow</p></td>
+<td></td>
+<td><p>sklearn</p></td>
+<td><p>some</p></td>
+<td></td>
+<td><p>True</p></td>
+<td><p>True</p></td>
+</tr>
+<tr class="row-odd"><td><p>Greykite</p></td>
+<td><p>greykite</p></td>
+<td></td>
+<td><p>True</p></td>
+<td><p>joblib</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>MotifSimulation</p></td>
 <td><p>sklearn.metrics.pairwise</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -655,7 +756,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>TensorflowSTS</p></td>
+<tr class="row-odd"><td><p>TensorflowSTS</p></td>
 <td><p>tensorflow_probability</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -665,7 +766,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>TFPRegression</p></td>
+<tr class="row-even"><td><p>TFPRegression</p></td>
 <td><p>tensorflow_probability</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -675,7 +776,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>ComponentAnalysis</p></td>
+<tr class="row-odd"><td><p>ComponentAnalysis</p></td>
 <td><p>sklearn</p></td>
 <td></td>
 <td></td>
@@ -685,7 +786,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>TSFreshRegressor</p></td>
+<tr class="row-even"><td><p>TSFreshRegressor</p></td>
 <td><p>tsfresh, sklearn</p></td>
 <td></td>
 <td></td>
@@ -695,30 +796,10 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>DatepartRegression</p></td>
-<td><p>sklearn</p></td>
-<td><p>lightgbm, tensorflow</p></td>
-<td></td>
-<td><p>sklearn</p></td>
-<td><p>some</p></td>
-<td></td>
-<td><p>True</p></td>
-<td><p>True</p></td>
-</tr>
-<tr class="row-odd"><td><p>UnivariateRegression</p></td>
-<td><p>sklearn</p></td>
-<td><p>lightgbm, tensorflow</p></td>
-<td></td>
-<td><p>sklearn</p></td>
-<td><p>some</p></td>
-<td></td>
-<td><p>True</p></td>
-<td><p>True</p></td>
-</tr>
 </tbody>
 </table>
-</div>
-</div>
+</section>
+</section>
 
 
           </div>
@@ -762,7 +843,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <li class="toctree-l2"><a class="reference internal" href="#installation-and-dependency-versioning">Installation and Dependency Versioning</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#caveats-and-advice">Caveats and Advice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#using-the-transformers-independently">Using the Transformers independently</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#id6">Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id7">Models</a></li>
 </ul>
 </li>
 </ul>

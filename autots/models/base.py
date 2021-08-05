@@ -85,7 +85,20 @@ class ModelObject(object):
 
 
 class PredictionObject(object):
-    """Generic class for holding forecast information."""
+    """Generic class for holding forecast information.
+
+    Attributes:
+        model_name
+        model_parameters
+        transformation_parameters
+        forecast
+        upper_forecast
+        lower_forecast
+
+    Methods:
+        long_form_results: return complete results in long form
+        total_runtime: return runtime for all model components in seconds
+    """
 
     def __init__(
         self,
@@ -131,6 +144,101 @@ class PredictionObject(object):
         else:
             return False
 
+    def long_form_results(
+        self,
+        id_name="SeriesID",
+        value_name="Value",
+        interval_name='PredictionInterval',
+        update_datetime_name=None,
+    ):
+        """Export forecasts (including upper and lower) as single 'long' format output
+
+        Returns:
+            pd.DataFrame
+        """
+        try:
+            upload = pd.melt(
+                self.forecast,
+                var_name=id_name,
+                value_name=value_name,
+                ignore_index=False,
+            )
+        except Exception:
+            raise ImportError("Requires pandas>=1.1.0")
+        upload[interval_name] = "50%"
+        upload_upper = pd.melt(
+            self.upper_forecast,
+            var_name=id_name,
+            value_name=value_name,
+            ignore_index=False,
+        )
+        upload_upper[
+            interval_name
+        ] = f"{round(100 - ((1- self.prediction_interval)/2) * 100, 0)}%"
+        upload_lower = pd.melt(
+            self.lower_forecast,
+            var_name=id_name,
+            value_name=value_name,
+            ignore_index=False,
+        )
+        upload_lower[
+            interval_name
+        ] = f"{round(((1- self.prediction_interval)/2) * 100, 0)}%"
+
+        upload = pd.concat([upload, upload_upper, upload_lower], axis=0)
+        if update_datetime_name is not None:
+            upload[update_datetime_name] = datetime.datetime.utcnow()
+        return upload
+
     def total_runtime(self):
         """Combine runtimes."""
         return self.fit_runtime + self.predict_runtime + self.transformation_runtime
+
+    def plot(
+        self,
+        df_wide=None,
+        series: str = None,
+        ax=None,
+        remove_zeroes: bool = False,
+        start_date: str = None,
+        **kwargs,
+    ):
+        """Generate an example plot of one series.
+
+        Args:
+            df_wide (str): historic data for plotting actuals
+            series (str): column name of series to plot. Random if None.
+            ax: matplotlib axes to pass through to pd.plot()
+            remove_zeroes (bool): if True, don't plot any zeroes
+            start_date (str): Y-m-d string to remove all data before
+            **kwargs passed to pd.DataFrame.plot()
+        """
+        if series is None:
+            import random
+
+            series = random.choice(self.forecast.columns)
+
+        if df_wide is not None:
+            plot_df = pd.DataFrame(
+                {
+                    series: df_wide[series],
+                    'up_forecast': self.upper_forecast[series],
+                    'low_forecast': self.lower_forecast[series],
+                    'forecast': self.forecast[series],
+                }
+            )
+        else:
+            plot_df = pd.DataFrame(
+                {
+                    'up_forecast': self.upper_forecast[series],
+                    'low_forecast': self.lower_forecast[series],
+                    'forecast': self.forecast[series],
+                }
+            )
+        if remove_zeroes:
+            plot_df[plot_df == 0] = np.nan
+
+        if start_date is not None:
+            plot_df[plot_df.index >= start_date].plot(**kwargs)
+        else:
+            plot_df.plot(**kwargs)

@@ -7,6 +7,11 @@ from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.seasonal import date_part, seasonal_int
 
+try:
+    from statsmodels.tsa.statespace.sarimax import SARIMAX
+except Exception:
+    pass
+
 
 class GLS(ModelObject):
     """Simple linear regression from statsmodels
@@ -46,7 +51,8 @@ class GLS(ModelObject):
 
         df = self.basic_profile(df)
         self.df_train = df
-        self.model = GLS(df.values, (df.index.astype(int).values), missing='drop').fit()
+        Xf = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
+        self.model = GLS(df.values, Xf, missing='drop').fit()
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -66,7 +72,8 @@ class GLS(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
-        forecast = self.model.predict(index.astype(int).values)
+        Xf = pd.to_numeric(index, errors='coerce', downcast='integer').values
+        forecast = self.model.predict(Xf)
         df = pd.DataFrame(forecast, columns=self.column_names, index=index)
         if just_point_forecast:
             return df
@@ -181,7 +188,6 @@ class GLM(ModelObject):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         from statsmodels.api import GLM
-        from autots.tools.seasonal import date_part
 
         if self.regression_type == 'datepart':
             X = date_part(self.df_train.index, method='expanded').values
@@ -213,56 +219,7 @@ class GLM(ModelObject):
             if future_regressor.ndim == 1:
                 future_regressor = np.array(future_regressor).reshape(-1, 1)
             Xf = np.concatenate((Xf.reshape(-1, 1), future_regressor), axis=1)
-        """
-        forecast = pd.DataFrame()
-        for y in self.df_train.columns:
-            current_series = self.df_train[y]
-            if str(self.family).lower() == 'poisson':
-                from statsmodels.genmod.families.family import Poisson
 
-                model = GLM(
-                    current_series.values, X, family=Poisson(), missing='drop'
-                ).fit(disp=self.verbose)
-            elif str(self.family).lower() == 'binomial':
-                from statsmodels.genmod.families.family import Binomial
-
-                model = GLM(
-                    current_series.values, X, family=Binomial(), missing='drop'
-                ).fit(disp=self.verbose)
-            elif str(self.family).lower() == 'negativebinomial':
-                from statsmodels.genmod.families.family import NegativeBinomial
-
-                model = GLM(
-                    current_series.values, X, family=NegativeBinomial(), missing='drop'
-                ).fit(disp=self.verbose)
-            elif str(self.family).lower() == 'tweedie':
-                from statsmodels.genmod.families.family import Tweedie
-
-                model = GLM(
-                    current_series.values, X, family=Tweedie(), missing='drop'
-                ).fit(disp=self.verbose)
-            elif str(self.family).lower() == 'gamma':
-                from statsmodels.genmod.families.family import Gamma
-
-                model = GLM(
-                    current_series.values, X, family=Gamma(), missing='drop'
-                ).fit(disp=self.verbose)
-            else:
-                self.family = 'Gaussian'
-                model = GLM(current_series.values, X, missing='drop').fit()
-            current_forecast = model.predict((Xf))
-            forecast = pd.concat([forecast, pd.Series(current_forecast)], axis=1)
-        df_forecast = pd.DataFrame(forecast)
-        df_forecast.columns = self.column_names
-        
-        # handle weird pickling errors for multiprocessing
-        try:
-            from joblib import wrap_non_picklable_objects
-        except Exception:
-            def wrap_non_picklable_objects(ob):
-                return ob
-            parallel = False
-        """
         parallel = True
         cols = self.df_train.columns.tolist()
         df = self.df_train
@@ -610,6 +567,46 @@ class ETS(ModelObject):
         return parameter_dict
 
 
+def arima_seek_the_oracle(df, args, series):
+    current_series = df[series]
+    try:
+        if args['regression_type'] in ["User", "Holiday"]:
+            maModel = SARIMAX(
+                current_series,
+                order=args['order'],
+                freq=args['frequency'],
+                exog=args['regressor_train'],
+            ).fit(maxiter=600, disp=args['verbose'])
+        else:
+            maModel = SARIMAX(
+                current_series, order=args['order'], freq=args['frequency']
+            ).fit(maxiter=400, disp=args['verbose'])
+        if args['regression_type'] in ["User", "Holiday"]:
+            outer_forecasts = maModel.get_forecast(
+                steps=args['forecast_length'], exog=args['exog']
+            )
+        else:
+            outer_forecasts = maModel.get_forecast(steps=args['forecast_length'])
+        outer_forecasts_df = outer_forecasts.conf_int(alpha=args['alpha'])
+        cforecast = outer_forecasts.summary_frame()['mean']
+        clower_forecast = outer_forecasts_df.iloc[:, 0]
+        cupper_forecast = outer_forecasts_df.iloc[:, 1]
+    except Exception:
+        cforecast = pd.Series(
+            np.zeros((args['forecast_length'],)), index=args['test_index']
+        )
+        clower_forecast = pd.Series(
+            np.zeros((args['forecast_length'],)), index=args['test_index']
+        )
+        cupper_forecast = pd.Series(
+            np.zeros((args['forecast_length'],)), index=args['test_index']
+        )
+    cforecast.name = current_series.name
+    clower_forecast.name = current_series.name
+    cupper_forecast.name = current_series.name
+    return (cforecast, clower_forecast, cupper_forecast)
+
+
 class ARIMA(ModelObject):
     """ARIMA from Statsmodels.
 
@@ -696,8 +693,6 @@ class ARIMA(ModelObject):
             if just_point_forecast == True, a dataframe of point forecasts
         """
         predictStartTime = datetime.datetime.now()
-        # from statsmodels.tsa.arima_model import ARIMA
-        from statsmodels.tsa.statespace.sarimax import SARIMAX
 
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         alpha = 1 - self.prediction_interval
@@ -705,7 +700,7 @@ class ARIMA(ModelObject):
             from autots.tools.holiday import holiday_flag
 
             future_regressor = holiday_flag(test_index, country=self.holiday_country)
-        if self.regression_type != None:
+        if self.regression_type is not None:
             assert (
                 len(future_regressor) == forecast_length
             ), "regressor not equal to forecast length"
@@ -716,87 +711,6 @@ class ARIMA(ModelObject):
                 exog = future_regressor.values
         else:
             exog = None
-        """
-        forecast = []
-        upper_forecast = []
-        lower_forecast = []
-        for series in self.df_train.columns:
-            current_series = self.df_train[series]
-            try:
-                if self.regression_type in ["User", "Holiday"]:
-                    maModel = SARIMAX(
-                        current_series,
-                        order=self.order,
-                        freq=self.frequency,
-                        exog=self.regressor_train,
-                    ).fit(maxiter=600)
-                else:
-                    maModel = SARIMAX(
-                        current_series, order=self.order, freq=self.frequency
-                    ).fit(maxiter=400, disp=self.verbose)
-                if self.regression_type in ["User", "Holiday"]:
-                    outer_forecasts = maModel.get_forecast(steps=forecast_length, exog=exog)
-                else:
-                    outer_forecasts = maModel.get_forecast(steps=forecast_length)
-                outer_forecasts_df = outer_forecasts.conf_int(alpha=alpha)
-                cforecast = outer_forecasts.summary_frame()['mean']
-                clower_forecast = outer_forecasts_df.iloc[:, 0]
-                cupper_forecast = outer_forecasts_df.iloc[:, 1]
-            except Exception:
-                cforecast = pd.Series(np.zeros((forecast_length,)))
-                clower_forecast = pd.Series(np.zeros((forecast_length,)))
-                cupper_forecast = pd.Series(np.zeros((forecast_length,)))
-            cforecast.name = current_series.name
-            clower_forecast.name = current_series.name
-            cupper_forecast.name = current_series.name
-            forecast.append(cforecast)
-            lower_forecast.append(clower_forecast)
-            upper_forecast.append(cupper_forecast)
-        forecast = pd.concat(forecast, axis=1)
-        lower_forecast = pd.concat(lower_forecast, axis=1)
-        upper_forecast = pd.concat(upper_forecast, axis=1)
-        """
-
-        def seek_the_oracle(df, args, series):
-            current_series = df[series]
-            try:
-                if args['regression_type'] in ["User", "Holiday"]:
-                    maModel = SARIMAX(
-                        current_series,
-                        order=args['order'],
-                        freq=args['frequency'],
-                        exog=args['regressor_train'],
-                    ).fit(maxiter=600, disp=args['verbose'])
-                else:
-                    maModel = SARIMAX(
-                        current_series, order=args['order'], freq=args['frequency']
-                    ).fit(maxiter=400, disp=args['verbose'])
-                if args['regression_type'] in ["User", "Holiday"]:
-                    outer_forecasts = maModel.get_forecast(
-                        steps=args['forecast_length'], exog=args['exog']
-                    )
-                else:
-                    outer_forecasts = maModel.get_forecast(
-                        steps=args['forecast_length']
-                    )
-                outer_forecasts_df = outer_forecasts.conf_int(alpha=args['alpha'])
-                cforecast = outer_forecasts.summary_frame()['mean']
-                clower_forecast = outer_forecasts_df.iloc[:, 0]
-                cupper_forecast = outer_forecasts_df.iloc[:, 1]
-            except Exception:
-                cforecast = pd.Series(
-                    np.zeros((args['forecast_length'],)), index=args['test_index']
-                )
-                clower_forecast = pd.Series(
-                    np.zeros((args['forecast_length'],)), index=args['test_index']
-                )
-                cupper_forecast = pd.Series(
-                    np.zeros((args['forecast_length'],)), index=args['test_index']
-                )
-            cforecast.name = current_series.name
-            clower_forecast.name = current_series.name
-            cupper_forecast.name = current_series.name
-            return (cforecast, clower_forecast, cupper_forecast)
 
         args = {
             'order': self.order,
@@ -822,14 +736,14 @@ class ARIMA(ModelObject):
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
-                delayed(seek_the_oracle)(df=self.df_train, args=args, series=col)
+                delayed(arima_seek_the_oracle)(df=self.df_train, args=args, series=col)
                 for col in cols
             )
             complete = list(map(list, zip(*df_list)))
         else:
             df_list = []
             for col in cols:
-                df_list.append(seek_the_oracle(self.df_train, args, col))
+                df_list.append(arima_seek_the_oracle(self.df_train, args, col))
             complete = list(map(list, zip(*df_list)))
         forecast = pd.concat(complete[0], axis=1)
         lower_forecast = pd.concat(complete[1], axis=1)
@@ -1286,7 +1200,7 @@ class DynamicFactor(ModelObject):
                 df.index, country=self.holiday_country
             ).values
         else:
-            if self.regression_type != None:
+            if self.regression_type is not None:
                 if (np.array(future_regressor).shape[0]) != (df.shape[0]):
                     self.regression_type = None
                 else:
@@ -1697,9 +1611,13 @@ class VARMAX(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         # make these big and it's REAL slow, and if both p and q are non zero
-        ar_choice = random.choices([0, 1, 2], [0.3, 0.5, 0.2])[0]
+        ar_choice = random.choices(
+            [0, 1, 2, 5, 7, 10], [0.5, 0.5, 0.2, 0.01, 0.01, 0.001]
+        )[0]
         if ar_choice == 0:
-            ma_choice = random.choices([1, 2], [0.8, 0.2])[0]
+            ma_choice = random.choices([1, 2, 5, 7, 10], [0.8, 0.2, 0.01, 0.01, 0.001])[
+                0
+            ]
         else:
             ma_choice = 0
         trend_choice = random.choices(

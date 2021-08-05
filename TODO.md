@@ -15,16 +15,19 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* Table of Contents to Extended Tutorial/Readme.md
-* Production Example
-* add weights="mean"/median/min/max
-* UnivariateRegression
-* fix check_pickle error for ETS
-* fix error in Prophet with latest version
-* VisibleDeprecation warning for hidden_layers random choice in sklearn fixed
-* prefill_na option added to allow quick filling of NaNs if desired (with zeroes for say, sales forecasting)
-* made horizontal generalization more stable
-* fixed bug in VAR where failing on data with negatives
+* Fixed horizontal ensembles running in univariate cases (they are explicitly multivariate)
+* 'superfast' transformer list added
+* test on Mac for the first time, everything seems to work except lightgbm
+* include first actual unittests (from existing test.py runs)
+* slight change to random template generation to make sure all models are choosen at least once
+* cleaned up PredictWitch -> model_forecast() a bit so that users can use it to run single models from parameters directly
+* added load_live_daily() example data and spruced up production_example.py
+* tried in vain to make a quiet verbosity option for GluonTS
+* added create_lagged_regressor
+* added Greykite model (additional regressors not working yet)
+* fixed regressors bug in Prophet
+* added a simple plot method to PredictionObject
+* fix for deprecation warning in GLS
 
 # Known Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

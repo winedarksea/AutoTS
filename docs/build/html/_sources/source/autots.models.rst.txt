@@ -44,6 +44,14 @@ autots.models.gluonts module
    :undoc-members:
    :show-inheritance:
 
+autots.models.greykite module
+-----------------------------
+
+.. automodule:: autots.models.greykite
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.models.model\_list module
 --------------------------------
 
@@ -91,7 +99,6 @@ autots.models.tsfresh module
    :members:
    :undoc-members:
    :show-inheritance:
-
 
 Module contents
 ---------------

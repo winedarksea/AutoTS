@@ -3,8 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" />
-    <title>autots package &#8212; AutoTS 0.3.2 documentation</title>
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>autots package &#8212; AutoTS 0.3.3 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -32,9 +33,9 @@
 
           <div class="body" role="main">
             
-  <div class="section" id="autots-package">
+  <section id="autots-package">
 <h1>autots package<a class="headerlink" href="#autots-package" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="subpackages">
+<section id="subpackages">
 <h2>Subpackages<a class="headerlink" href="#subpackages" title="Permalink to this headline">¶</a></h2>
 <div class="toctree-wrapper compound">
 <ul>
@@ -59,6 +60,7 @@
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.dnn">autots.models.dnn module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.ensemble">autots.models.ensemble module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.gluonts">autots.models.gluonts module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.greykite">autots.models.greykite module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.model_list">autots.models.model_list module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.prophet">autots.models.prophet module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.sklearn">autots.models.sklearn module</a></li>
@@ -82,6 +84,7 @@
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.impute">autots.tools.impute module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.probabilistic">autots.tools.probabilistic module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.profile">autots.tools.profile module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.regressor">autots.tools.regressor module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.seasonal">autots.tools.seasonal module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.shaping">autots.tools.shaping module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.transform">autots.tools.transform module</a></li>
@@ -90,8 +93,8 @@
 </li>
 </ul>
 </div>
-</div>
-<div class="section" id="module-autots">
+</section>
+<section id="module-autots">
 <span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots" title="Permalink to this headline">¶</a></h2>
 <p>Automated Time Series Model Selection for Python</p>
 <p><a class="reference external" href="https://github.com/winedarksea/AutoTS">https://github.com/winedarksea/AutoTS</a></p>
@@ -142,6 +145,27 @@
 if False, return a Series with dt index</p></li>
 <li><p><strong>categorical</strong> (<em>bool</em>) – if True, return str/object, else return int</p></li>
 <li><p><strong>periods</strong> (<em>int</em>) – number of periods, ie length of data to generate</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.load_live_daily">
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">load_live_daily</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False, fred_key: str = None, fred_series: list = ['DGS10', 'T5YIE', 'SP500', 'DCOILWTICO', 'DEXUSEU'], tickers: list = ['MSFT'], trends_list: list = ['forecasting', 'cycling', 'cpu', 'microsoft'], weather_data_types: list = ['AWND', 'WSF2'], weather_stations: list = ['USW00094846', 'USW00014925'], weather_years: int = 10, london_air_stations: list = ['CT3', 'SK8'], london_air_species: str = 'PM25', london_air_days: int = 180, earthquake_days: int = 180, earthquake_min_magnitude: int = 5</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.load_live_daily" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates a dataframe of data up to the present day.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>long</strong> (<em>bool</em>) – whether to return in long format or wide</p></li>
+<li><p><strong>fred_key</strong> (<em>str</em>) – <a class="reference external" href="https://fred.stlouisfed.org/docs/api/api_key.html">https://fred.stlouisfed.org/docs/api/api_key.html</a></p></li>
+<li><p><strong>fred_series</strong> (<em>list</em>) – list of FRED series IDs. This requires fredapi package</p></li>
+<li><p><strong>tickers</strong> (<em>list</em>) – list of stock tickers, requires yfinance</p></li>
+<li><p><strong>trends</strong> (<em>list</em>) – list of search keywords, requires pytrends.</p></li>
+<li><p><strong>weather_data_types</strong> (<em>list</em>) – from NCEI NOAA api data types</p></li>
+<li><p><strong>weather_stations</strong> (<em>list</em>) – from NCEI NOAA api station ids</p></li>
+<li><p><strong>london_air_stations</strong> (<em>list</em>) – londonair.org.uk source station IDs</p></li>
+<li><p><strong>london_species</strong> (<em>str</em>) – what measurement to pull from London Air. Not all stations have all metrics.        earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov</p></li>
 </ul>
 </dd>
 </dl>
@@ -539,8 +563,76 @@ if categorical data is provided, <cite>aggfunc=’first’</cite> is recommended
 </dl>
 </dd></dl>
 
-</div>
-</div>
+<dl class="function">
+<dt id="autots.model_forecast">
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">model_forecast</code><span class="sig-paren">(</span><em class="sig-param">model_name, model_param_dict, model_transform_dict, df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=[], future_regressor_forecast=[], holiday_country: str = 'US', startTimeStamps=None, grouping_ids=None, random_seed: int = 2020, verbose: int = 0, n_jobs: int = 'auto', template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], horizontal_subset: list = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.model_forecast" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes numeric data, returns numeric forecasts.</p>
+<p>Only one model (albeit potentially an ensemble)!
+Horizontal ensembles can not be nested, other ensemble types can be.</p>
+<p>Well, she turned me into a newt.
+A newt?
+I got better. -Python</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model_name</strong> (<em>str</em>) – a string to be direct to the appropriate model, used in ModelMonster</p></li>
+<li><p><strong>model_param_dict</strong> (<em>dict</em>) – dictionary of parameters to be passed into the model.</p></li>
+<li><p><strong>model_transform_dict</strong> (<em>dict</em>) – a dictionary of fillNA and transformation methods to be used
+pass an empty dictionary if no transformations are desired.</p></li>
+<li><p><strong>df_train</strong> (<em>pandas.DataFrame</em>) – numeric training dataset of DatetimeIndex and series as cols</p></li>
+<li><p><strong>forecast_length</strong> (<em>int</em>) – number of periods to forecast</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – str representing frequency alias of time series</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – width of errors (note: rarely do the intervals accurately match the % asked for…)</p></li>
+<li><p><strong>no_negatives</strong> (<em>bool</em>) – whether to force all forecasts to be &gt; 0</p></li>
+<li><p><strong>constraint</strong> (<em>float</em>) – when not None, use this value * data st dev above max or below min for constraining forecast values.</p></li>
+<li><p><strong>future_regressor_train</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching train data</p></li>
+<li><p><strong>future_regressor_forecast</strong> (<em>pd.Series</em>) – with datetime index, of known in advance data, section matching test data</p></li>
+<li><p><strong>holiday_country</strong> (<em>str</em>) – passed through to holiday package, used by a few models as 0/1 regressor.</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em>) – number of CPUs to use when available.</p></li>
+<li><p><strong>template_cols</strong> (<em>list</em>) – column names of columns used as model template</p></li>
+<li><p><strong>horizontal_subset</strong> (<em>list</em>) – columns of df_train to use for forecast, meant for internal use for horizontal ensembling</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Prediction from AutoTS model object</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="autots.models.html#autots.models.base.PredictionObject" title="autots.models.base.PredictionObject">PredictionObject</a> (autots.PredictionObject)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.create_lagged_regressor">
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">create_lagged_regressor</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">forecast_length: int</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">scale: bool = True</em>, <em class="sig-param">summarize: str = None</em>, <em class="sig-param">backfill: str = 'bfill'</em>, <em class="sig-param">n_jobs: str = 'auto'</em>, <em class="sig-param">fill_na: str = 'ffill'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.create_lagged_regressor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a regressor of features lagged by forecast length.
+Useful to some models that don’t otherwise use such information.</p>
+<p>It is recommended that the .head(forecast_length) of both regressor_train and the df for training are dropped.
+<cite>df = df.iloc[forecast_length:]</cite></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – training data</p></li>
+<li><p><strong>forecast_length</strong> (<em>int</em>) – length of forecasts, to shift data by</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – the ever necessary frequency for datetime things. Default ‘infer’</p></li>
+<li><p><strong>scale</strong> (<em>bool</em>) – if True, use the StandardScaler to standardize the features</p></li>
+<li><p><strong>summarize</strong> (<em>str</em>) – options to summarize the features, if large:
+‘pca’, ‘median’, ‘mean’, ‘mean+std’</p></li>
+<li><p><strong>backfill</strong> (<em>str</em>) – method to deal with the NaNs created by shifting
+“bfill”- backfill with last values
+“ETS” -backfill with ETS backwards forecast
+“DatepartRegression” - backfill with DatepartRegression</p></li>
+<li><p><strong>fill_na</strong> (<em>str</em>) – method to prefill NAs in data, same methods as available elsewhere</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>regressor_train, regressor_forecast</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
 
 
           </div>

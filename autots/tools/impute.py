@@ -162,5 +162,5 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
         return df
 
     else:
-        print("FillNA method not known, returning original")
+        print(f"FillNA method `{str(method)}` not known, returning original")
         return df

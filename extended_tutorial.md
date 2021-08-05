@@ -4,6 +4,7 @@
 * [Another Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#another-example)
 * [Model Lists](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#model-lists)
 * [Deployment](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#deployment-and-template-import-export)
+* [Running Just One Model](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#running-just-one-model)
 * [Metrics](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#metrics)
 * [Installation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning)
 * [Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
@@ -70,6 +71,10 @@ When working with many time series, it can be helpful to take advantage of `subs
 
 Subset takes advantage of weighting, more highly-weighted series are more likely to be selected. Weighting is used with multiple time series to tell the evaluator which series are most important. Series weights are assumed to all be equal to 1, values need only be passed in when a value other than 1 is desired. 
 Note for weighting, larger weights = more important.
+
+Probably the most likely thing to cause trouble is having a lot of NaN/missing data. Especially a lot of missing data in the most recent available data. 
+Using appropriate cross validation (`backwards` especially if NaN is common in older data but not recent data) can help. 
+Dropping series which are mostly missing, or using `prefill_na=0` (or other value) can also help.
 
 ### Validation and Cross Validation
 Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future. 
@@ -139,6 +144,7 @@ model = model.fit(
 
 prediction = model.predict()
 forecasts_df = prediction.forecast
+# prediction.long_form_results()
 # model.best_model.to_string()
 ```
 
@@ -159,7 +165,7 @@ On large multivariate series, `TSFreshRegressor`, `DynamicFactor` and `VARMAX` c
 Take a look at the [production_example.py](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
 
 Many models can be reverse engineered with (relative) simplicity outside of AutoTS by placing the choosen parameters into Statsmodels or other underlying package. 
-There are some advantages to deploying within AutoTS using a reduced starting template. Following the model training, the top models can be exported to a `.csv` or `.json` file, then on next run only those models will be tried. 
+Following the model training, the top models can be exported to a `.csv` or `.json` file, then on next run only those models will be tried. 
 This allows for improved fault tolerance (by relying not on one, but several possible models and underlying packages), and some flexibility in switching models as the time series evolve. 
 One thing to note is that, as AutoTS is still under development, template formats are likely to change and be incompatible with future package versions.
 
@@ -175,6 +181,41 @@ model = AutoTS(forecast_length=forecast_length,
 			   num_validations=0, verbose=0)
 model = model.import_template(example_filename, method='only') # method='add on'
 print("Overwrite template is: {}".format(str(model.initial_template)))
+```
+
+### Running Just One Model
+While the above version of deployment, with  evolving templates and cross_validation on every run, is the recommended deployment, it is also possible to run a single fixed model. 
+
+Coming from the deeper internals of AutoTS, this function can only take the `wide` style data (there is a long_to_wide function available). 
+Data must already be fairly clean - all numerics (or np.nan). 
+There aren't as many data and param checks at this point either, so it will be more brittle and output errors may be more confusing. 
+This will run Ensembles.
+
+```python
+from AutoTS import load_daily, model_forecast
+
+
+df = load_daily(long=False)  # long or non-numeric data won't work with this function
+df_forecast = model_forecast(
+    model_name="AverageValueNaive",
+    model_param_dict={'method': 'Mean'},
+    model_transform_dict={
+        'fillna': 'fake_date',
+        'transformations': {'0': 'DifferencedTransformer'},
+        'transformation_params': {'0': {}}
+    },
+    df_train=df,
+    forecast_length=12,
+    frequency='infer',
+    prediction_interval=0.9,
+    no_negatives=False,
+    # future_regressor_train=future_regressor_train2d,
+    # future_regressor_forecast=future_regressor_forecast2d,
+    random_seed=321,
+    verbose=0,
+    n_jobs="auto",
+)
+df_forecast.forecast.head(5)
 ```
 
 ### Metrics
@@ -228,21 +269,38 @@ Limited functionality should exist without scikit-learn.
 	* Sklearn needed for categorical to numeric, some detrends/transformers, horizontal generalization, numerous models
 Full functionality should be maintained without statsmodels, albeit with fewer available models. 
 
+Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about installation on some systems.
+
 `pip install autots['additional']`
-### Optional Requirements
+### Optional Packages
 	holidays
-	fbprophet
+	prophet
 	gluonts (requires mxnet)
 	mxnet (mxnet-mkl, mxnet-cu91, mxnet-cu101mkl, etc.)
 	tensorflow >= 2.0.0
 	lightgbm
 	xgboost
 	psutil
-
-#### Experimental & Dev Requirements
 	tensorflow-probability
 	fredapi
-	tsfresh
+	greykite
+
+#### Safest bet for installation:
+```shell
+# create a conda or venv environment
+conda create -n openblas python=3.9
+conda activate openblas
+
+python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm --exists-action i
+
+python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily, --no-deps to pip install prophet if this fails
+python -m pip install mxnet --exists-action i     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
+python -m pip install gluonts --exists-action i
+python -m pip install holidays-ext pmdarima dill greykite --exists-action i --no-deps
+python -m pip install --upgrade numpy pandas --exists-action i  # mxnet likes to (pointlessly seeming) install old versions of numpy
+
+python -m pip install autots --exists-action i
+```
 
 ### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
 If you are on an Intel CPU, download Anaconda or Miniconda. For AMD/ARM/etc use a venv environment and pip which will use OpenBLAS. 
@@ -257,6 +315,8 @@ You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_co
 On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster/more stable compilations. 
 Linux will also require `sudo apt install build-essential` for some packages.
 
+#### Some conda
+
 ```shell
 conda create -n timeseries python=3.9
 conda activate timeseries
@@ -264,17 +324,17 @@ conda activate timeseries
 # for simplicity: 
 conda install anaconda
 # elsewise: 
-conda install numpy scipy scikit-learn   # -c conda-forge is sometimes a version ahead of main channel
-pip install statsmodels     # pip is sometimes a version ahead of main conda channel
+conda install numpy scipy scikit-learn statsmodels  # -c conda-forge is sometimes a version ahead of main channel
 
 conda install -c conda-forge prophet
 pip install mxnet     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
-pip install gluonts   # sometimes the dependency versioning for gluonts can be picky
-pip install lightgbm
+pip install gluonts
+pip install lightgbm tensorflow
 conda update anaconda
-pip install tensorflow
+
+pip install autots
 ```
-#### Intel conda channel installation
+#### Intel conda channel installation (fastest, also, more prone to bugs)
 https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html
 ```shell
 # create the environment. Intelpy compatability is often a version or two behind latest py
@@ -288,6 +348,8 @@ python -m pip install mxnet
 python -m pip install gluonts
 # conda install -c anaconda tornado pystan  # may be necessary for fbprophet
 python -m pip install prophet
+
+pip install autots
 
 # also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html
 # pip install intel-tensorflow-avx512  and conda install tensorflow-mkl
@@ -367,6 +429,17 @@ print(model)
 print(f"Was a model choosen that used the regressor? {model.used_regressor_check}")
 ```
 
+### A Hack for Passing in Parameters (that aren't otherwise available)
+There are a lot of parameters available here, but not always all of the options available for a particular parameter are actually used in generated templates. 
+Usually, very slow options are left out. If you are familiar with a model, you can try manualy adding those parameter values in for a run in this way... 
+To clarify, you can't usually add in entirely new parameters in this way, but you can often pass in new choices for existing parameter values.
+
+1. Run AutoTS with your desired model and export a template.
+2. Open the template in a text editor or Excel and manually change the param values to whatever you want.
+3. Run AutoTS again, this time importing the template before running .fit().
+4. There is no guarantee it will choose the model with the given params- choices are made based on validation accuracy, but it will at least run it, and if it does well, it will be incorporated into new models in that run (that's how the genetic algorithms work).
+
+
 ### Categorical Data
 Categorical data is handled, but it is handled crudely. For example, optimization metrics do not currently include any categorical accuracy metrics. 
 For categorical data that has a meaningful order (ie 'low', 'medium', 'high') it is best for the user to encode that data before passing it in, 
@@ -415,7 +488,7 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  SeasonalNaive          |              |                         |               |                 |       |              |              |               |
 |  GLS                    | statsmodels  |                         |               |                 |       | True         |              |               |
 |  GLM                    | statsmodels  |                         |               |     joblib      |       |              |              | True          |
-|  ETS                    | statsmodels  |                         |               |     joblib      |       |              |              |               |
+|  ETS - Exponential Smoothing | statsmodels  |                    |               |     joblib      |       |              |              |               |
 |  UnobservedComponents   | statsmodels  |                         |               |     joblib      |       |              |              | True          |
 |  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  VARMAX                 | statsmodels  |                         |    True       |                 |       | True         |              |               |
@@ -426,11 +499,12 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   | True         |              |               |
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              |               |
+|  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
+|  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              | True         | True          |
+|  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |               |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |
 |  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |               |
 |  TSFreshRegressor       | tsfresh, sklearn |                     |               |                 |       |              | True         |               |
-|  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              | True         | True          |
-|  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              | True         | True          |
 

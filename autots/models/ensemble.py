@@ -4,6 +4,10 @@ import numpy as np
 import pandas as pd
 import json
 from autots.models.base import PredictionObject
+from autots.models.model_list import no_shared
+
+
+horizontal_aliases = ['horizontal', 'probabilistic']
 
 
 def BestNEnsemble(
@@ -405,8 +409,7 @@ def EnsembleForecast(
         )
         return ens_forecast
 
-    hlist = ['horizontal', 'probabilistic']
-    if ensemble_params['model_name'].lower().strip() in hlist:
+    if ensemble_params['model_name'].lower().strip() in horizontal_aliases:
         ens_forecast = HorizontalEnsemble(
             ensemble_params,
             forecasts_list,
@@ -743,7 +746,7 @@ def HorizontalTemplateGenerator(
             ensemble_templates = pd.concat(
                 [ensemble_templates, best5_params], axis=0, ignore_index=True
             )
-        elif 'hdist' in ensemble and not subset_flag:
+        if 'hdist' in ensemble and not subset_flag:
             mods_per_series = per_series.idxmin()
             mods_per_series2 = per_series2.idxmin()
             mods = pd.concat([mods_per_series, mods_per_series2]).unique()
@@ -780,7 +783,75 @@ def HorizontalTemplateGenerator(
             ensemble_templates = pd.concat(
                 [ensemble_templates, best5_params], axis=0, ignore_index=True
             )
-        else:
+        if ('horizontal' in ensemble) or ('probabilistic' in ensemble):
+            # first generate lists of models by ID that are in shared and no_shared
+            no_shared_select = model_results['Model'].isin(no_shared)
+            shared_mod_lst = model_results[~no_shared_select]['ID'].tolist()
+            no_shared_mod_lst = model_results[no_shared_select]['ID'].tolist()
+            lowest_score_mod = [
+                model_results.iloc[model_results['Score'].idxmin()]['ID']
+            ]
+            per_series[per_series.index.isin(shared_mod_lst)]
+            # remove those where idxmin is in no_shared
+            shared_maxes = per_series.idxmin().isin(shared_mod_lst)
+            shr_mx_cols = shared_maxes[shared_maxes].index
+            per_series_shareds = per_series.filter(shr_mx_cols, axis=1)
+            # select best n shared models (NEEDS improvement)
+            n_md = 5
+            use_shared_lst = (
+                per_series_shareds.median(axis=1).nsmallest(n_md).index.tolist()
+            )
+            # combine all of the above as allowed mods
+            allowed_list = no_shared_mod_lst + lowest_score_mod + use_shared_lst
+            per_series_filter = per_series[per_series.index.isin(allowed_list)]
+            # first select a few of the best shared models
+            # Option A: Best overall per model type (by different metrics?)
+            # Option B: Best per different clusters...
+            # Rank position in score for EACH series
+            # Lowest median ranking
+            # Lowest Quartile 1 of rankings
+            # Normalize and then take Min, Median, or IQ1
+            # then choose min from series of these + no_shared
+            # make sure no models are included that don't match to any series
+            # ENSEMBLE and NO_SHARED (it could be or it could not be)
+            # need to TEST cases where all columns are either shared or no_shared!
+            # concern: choose lots of models, slower to run initial
+            mods_per_series = per_series_filter.idxmin()
+            mods = mods_per_series.unique()
+            ensemble_models = {}
+            best5 = model_results[
+                model_results['ID'].isin(mods.tolist())
+            ].drop_duplicates(
+                subset=['Model', 'ModelParameters', 'TransformationParameters']
+            )
+            for index, row in best5.iterrows():
+                temp_dict = {
+                    'Model': row['Model'],
+                    'ModelParameters': row['ModelParameters'],
+                    'TransformationParameters': row['TransformationParameters'],
+                }
+                ensemble_models[row['ID']] = temp_dict
+            nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
+            metric = 'TAX' if 'horizontal' in ensemble else 'SPL'
+            best5_params = {
+                'Model': 'Ensemble',
+                'ModelParameters': json.dumps(
+                    {
+                        'model_name': nomen,
+                        'model_count': mods.shape[0],
+                        'model_metric': metric,
+                        'models': ensemble_models,
+                        'series': mods_per_series.to_dict(),
+                    }
+                ),
+                'TransformationParameters': '{}',
+                'Ensemble': 2,
+            }
+            best5_params = pd.DataFrame(best5_params, index=[0])
+            ensemble_templates = pd.concat(
+                [ensemble_templates, best5_params], axis=0, ignore_index=True
+            )
+        if ('horizontal-min' in ensemble) or ('probabilistic-min' in ensemble):
             mods = pd.Series()
             per_series_des = per_series.copy()
             n_models = 15

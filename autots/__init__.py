@@ -10,13 +10,16 @@ from autots.datasets import (
     load_yearly,
     load_weekly,
     load_weekdays,
+    load_live_daily,
 )
 
 from autots.evaluator.auto_ts import AutoTS
 from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.tools.shaping import long_to_wide
+from autots.tools.regressor import create_lagged_regressor
+from autots.evaluator.auto_model import model_forecast
 
-__version__ = '0.3.2'
+__version__ = '0.3.3'
 
 TransformTS = GeneralTransformer
 
@@ -27,14 +30,12 @@ __all__ = [
     'load_hourly',
     'load_weekly',
     'load_weekdays',
+    'load_live_daily',
     'AutoTS',
     'TransformTS',
     'GeneralTransformer',
     'RandomTransform',
     'long_to_wide',
+    'model_forecast',
+    'create_lagged_regressor',
 ]
-
-# import logging
-# logger = logging.getLogger(__name__)
-# logger.addHandler(logging.StreamHandler())
-# logger.setLevel(logging.INFO)

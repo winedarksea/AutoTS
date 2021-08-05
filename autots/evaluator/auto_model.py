@@ -1,4 +1,5 @@
 """Mid-level helper functions for AutoTS."""
+import sys
 import random
 import numpy as np
 import pandas as pd
@@ -7,7 +8,12 @@ import json
 from hashlib import md5
 from autots.evaluator.metrics import PredictionEval
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
-from autots.models.ensemble import EnsembleForecast, generalize_horizontal
+from autots.models.ensemble import (
+    EnsembleForecast,
+    generalize_horizontal,
+    horizontal_aliases,
+)
+from autots.tools.shaping import infer_frequency
 from autots.models.model_list import (
     no_params,
     recombination_approved,
@@ -380,6 +386,20 @@ def ModelMonster(
         )
 
         return model
+    elif model == 'Greykite':
+        from autots.models.greykite import Greykite
+
+        model = Greykite(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+
+        return model
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)
@@ -501,13 +521,15 @@ def ModelPrediction(
 
 
 class TemplateEvalObject(object):
-    """Object to contain all your failures!."""
+    """Object to contain all the failures!."""
 
     def __init__(
         self,
         model_results=pd.DataFrame(),
         per_timestamp_smape=pd.DataFrame(),
         per_series_mae=pd.DataFrame(),
+        per_series_rmse=pd.DataFrame(),
+        per_series_contour=pd.DataFrame(),
         per_series_spl=pd.DataFrame(),
         per_series_rmse1=pd.DataFrame(),
         per_series_rmse2=pd.DataFrame(),
@@ -516,6 +538,8 @@ class TemplateEvalObject(object):
         self.model_results = model_results
         self.model_count = model_count
         self.per_series_mae = per_series_mae
+        self.per_series_contour = per_series_contour
+        self.per_series_rmse = per_series_rmse
         self.per_series_spl = per_series_spl
         self.per_series_rmse1 = per_series_rmse1
         self.per_series_rmse2 = per_series_rmse2
@@ -535,6 +559,14 @@ class TemplateEvalObject(object):
         ).reset_index(drop=True)
         self.per_series_mae = pd.concat(
             [self.per_series_mae, another_eval.per_series_mae], axis=0, sort=False
+        )
+        self.per_series_contour = pd.concat(
+            [self.per_series_contour, another_eval.per_series_contour],
+            axis=0,
+            sort=False,
+        )
+        self.per_series_rmse = pd.concat(
+            [self.per_series_rmse, another_eval.per_series_rmse], axis=0, sort=False
         )
         self.per_series_spl = pd.concat(
             [self.per_series_spl, another_eval.per_series_spl], axis=0, sort=False
@@ -622,8 +654,10 @@ def unpack_ensemble_models(
     return template
 
 
-def PredictWitch(
-    template,
+def model_forecast(
+    model_name,
+    model_param_dict,
+    model_transform_dict,
     df_train,
     forecast_length: int,
     frequency: str = 'infer',
@@ -637,7 +671,7 @@ def PredictWitch(
     grouping_ids=None,
     random_seed: int = 2020,
     verbose: int = 0,
-    n_jobs: int = None,
+    n_jobs: int = "auto",
     template_cols: list = [
         'Model',
         'ModelParameters',
@@ -649,16 +683,19 @@ def PredictWitch(
     """Takes numeric data, returns numeric forecasts.
 
     Only one model (albeit potentially an ensemble)!
+    Horizontal ensembles can not be nested, other ensemble types can be.
 
     Well, she turned me into a newt.
     A newt?
     I got better. -Python
 
     Args:
+        model_name (str): a string to be direct to the appropriate model, used in ModelMonster
+        model_param_dict (dict): dictionary of parameters to be passed into the model.
+        model_transform_dict (dict): a dictionary of fillNA and transformation methods to be used
+            pass an empty dictionary if no transformations are desired.
         df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
         forecast_length (int): number of periods to forecast
-        transformation_dict (dict): a dictionary of outlier, fillNA, and transformation methods to be used
-        model_str (str): a string to be direct to the appropriate model, used in ModelMonster
         frequency (str): str representing frequency alias of time series
         prediction_interval (float): width of errors (note: rarely do the intervals accurately match the % asked for...)
         no_negatives (bool): whether to force all forecasts to be > 0
@@ -666,151 +703,175 @@ def PredictWitch(
         future_regressor_train (pd.Series): with datetime index, of known in advance data, section matching train data
         future_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.
-        startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
+        n_jobs (int): number of CPUs to use when available.
         template_cols (list): column names of columns used as model template
-        horizontal_subset (list): columns of df_train to use for forecast, meant for horizontal ensembling
+        horizontal_subset (list): columns of df_train to use for forecast, meant for internal use for horizontal ensembling
 
     Returns:
-        PredictionObject (autots.PredictionObject): Prediction from AutoTS model object):
+        PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
     """
-
-    if isinstance(template, pd.Series):
-        template = pd.DataFrame(template).transpose()
-    template = template.head(1)
     full_model_created = False  # make at least one full model, horziontal only
-    for index_upper, row_upper in template.iterrows():
-        # if an ensemble
-        if row_upper['Model'] == 'Ensemble':
-            forecasts_list = []
-            forecasts_runtime = {}
-            forecasts = {}
-            upper_forecasts = {}
-            lower_forecasts = {}
-            ens_model_str = row_upper['Model']
-            ens_params = json.loads(row_upper['ModelParameters'])
-            ens_template = unpack_ensemble_models(
-                template, template_cols, keep_ensemble=False, recursive=False
+    # handle JSON inputs of the dicts
+    if isinstance(model_param_dict, str):
+        model_param_dict = json.loads(model_param_dict)
+    if isinstance(model_transform_dict, str):
+        model_transform_dict = json.loads(model_transform_dict)
+    if frequency == "infer":
+        frequency = infer_frequency(df_train)
+    # handle "auto" n_jobs to an integer of local count
+    if n_jobs == 'auto':
+        from autots.tools import cpu_count
+
+        n_jobs = cpu_count()
+        if verbose > 0:
+            print(f"Auto-detected {n_jobs} cpus for n_jobs.")
+
+    # if an ensemble
+    if model_name == 'Ensemble':
+        forecasts_list = []
+        forecasts_runtime = {}
+        forecasts = {}
+        upper_forecasts = {}
+        lower_forecasts = {}
+        horizontal_flag = (
+            2 if model_param_dict['model_name'].lower() in horizontal_aliases else 1
+        )
+        template = pd.DataFrame(
+            {
+                'Model': model_name,
+                'ModelParameters': json.dumps(model_param_dict),
+                'TransformationParameters': json.dumps(model_transform_dict),
+                'Ensemble': horizontal_flag,
+            },
+            index=[0],
+        )
+        ens_template = unpack_ensemble_models(
+            template, template_cols, keep_ensemble=False, recursive=False
+        )
+        # horizontal generalization
+        if horizontal_flag == 2:
+            available_models = list(model_param_dict['models'].keys())
+            known_matches = model_param_dict['series']
+            all_series = generalize_horizontal(
+                df_train, known_matches, available_models
             )
-            # horizontal generalization
-            if str(row_upper['Ensemble']) == '2':
-                available_models = list(ens_params['models'].keys())
-                known_matches = ens_params['series']
-                all_series = generalize_horizontal(
-                    df_train, known_matches, available_models
-                )
-            else:
-                all_series = None
-            total_ens = ens_template.shape[0]
-            for index, row in ens_template.iterrows():
-                # recursive recursion!
-                try:
-                    if all_series is not None:
-                        test_mod = row['ID']
-                        horizontal_subset = [
-                            ser for ser, mod in all_series.items() if mod == test_mod
-                        ]
-                    df_forecast = PredictWitch(
-                        row,
-                        df_train=df_train,
-                        forecast_length=forecast_length,
-                        frequency=frequency,
-                        prediction_interval=prediction_interval,
-                        no_negatives=no_negatives,
-                        constraint=constraint,
-                        future_regressor_train=future_regressor_train,
-                        future_regressor_forecast=future_regressor_forecast,
-                        holiday_country=holiday_country,
-                        startTimeStamps=startTimeStamps,
-                        grouping_ids=grouping_ids,
-                        random_seed=random_seed,
-                        verbose=verbose,
-                        n_jobs=n_jobs,
-                        template_cols=template_cols,
-                        horizontal_subset=horizontal_subset,
-                    )
-                    model_id = create_model_id(
-                        df_forecast.model_name,
-                        df_forecast.model_parameters,
-                        df_forecast.transformation_parameters,
-                    )
-                    total_runtime = (
-                        df_forecast.fit_runtime
-                        + df_forecast.predict_runtime
-                        + df_forecast.transformation_runtime
-                    )
-                    forecasts_list.extend([model_id])
-                    forecasts_runtime[model_id] = total_runtime
-                    forecasts[model_id] = df_forecast.forecast
-                    upper_forecasts[model_id] = df_forecast.upper_forecast
-                    lower_forecasts[model_id] = df_forecast.lower_forecast
-                    # print(f"{ens_params['model_name']} with shape {df_forecast.forecast.shape}")
-                    if verbose >= 2:
-                        p = f"Ensemble {ens_params['model_name']} component {index + 1} of {total_ens} succeeded"
-                        print(p)
-                except Exception as e:
-                    # currently this leaves no key/value for models that fail
-                    if verbose >= 1:  # 1
-                        p = f"FAILED: Ensemble {ens_params['model_name']} component {index} of {total_ens} with error: {repr(e)}"
-                        print(p)
-            ens_forecast = EnsembleForecast(
-                ens_model_str,
-                ens_params,
-                forecasts_list=forecasts_list,
-                forecasts=forecasts,
-                lower_forecasts=lower_forecasts,
-                upper_forecasts=upper_forecasts,
-                forecasts_runtime=forecasts_runtime,
-                prediction_interval=prediction_interval,
-                df_train=df_train,
-                prematched_series=all_series,
-            )
-            return ens_forecast
-        # if not an ensemble
         else:
-            model_str = row_upper['Model']
-            parameter_dict = json.loads(row_upper['ModelParameters'])
-            transformation_dict = json.loads(row_upper['TransformationParameters'])
-            # this is needed for horizontal generalization if any models failed, at least one full model on all series
-            if model_str in superfast and not full_model_created:
-                make_full_flag = True
-            else:
-                make_full_flag = False
-            if (
-                horizontal_subset is not None
-                and model_str in no_shared
-                and all(
-                    trs not in shared_trans
-                    for trs in list(transformation_dict['transformations'].values())
+            all_series = None
+        total_ens = ens_template.shape[0]
+        for index, row in ens_template.iterrows():
+            # recursive recursion!
+            try:
+                if all_series is not None:
+                    test_mod = row['ID']
+                    horizontal_subset = [
+                        ser for ser, mod in all_series.items() if mod == test_mod
+                    ]
+                df_forecast = model_forecast(
+                    model_name=row['Model'],
+                    model_param_dict=row['ModelParameters'],
+                    model_transform_dict=row['TransformationParameters'],
+                    df_train=df_train,
+                    forecast_length=forecast_length,
+                    frequency=frequency,
+                    prediction_interval=prediction_interval,
+                    no_negatives=no_negatives,
+                    constraint=constraint,
+                    future_regressor_train=future_regressor_train,
+                    future_regressor_forecast=future_regressor_forecast,
+                    holiday_country=holiday_country,
+                    startTimeStamps=startTimeStamps,
+                    grouping_ids=grouping_ids,
+                    random_seed=random_seed,
+                    verbose=verbose,
+                    n_jobs=n_jobs,
+                    template_cols=template_cols,
+                    horizontal_subset=horizontal_subset,
                 )
-                and not make_full_flag
-            ):
-                df_train_low = df_train.reindex(copy=True, columns=horizontal_subset)
-                # print(f"Reducing to subset for {model_str} with {df_train_low.columns}")
-            else:
-                df_train_low = df_train.copy()
-                full_model_created = True
+                model_id = create_model_id(
+                    df_forecast.model_name,
+                    df_forecast.model_parameters,
+                    df_forecast.transformation_parameters,
+                )
+                total_runtime = (
+                    df_forecast.fit_runtime
+                    + df_forecast.predict_runtime
+                    + df_forecast.transformation_runtime
+                )
+                forecasts_list.extend([model_id])
+                forecasts_runtime[model_id] = total_runtime
+                forecasts[model_id] = df_forecast.forecast
+                upper_forecasts[model_id] = df_forecast.upper_forecast
+                lower_forecasts[model_id] = df_forecast.lower_forecast
+                # print(f"{model_param_dict['model_name']} with shape {df_forecast.forecast.shape}")
+                if verbose >= 2:
+                    p = f"Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} succeeded"
+                    print(p)
+            except Exception as e:
+                # currently this leaves no key/value for models that fail
+                if verbose >= 1:  # 1
+                    p = f"FAILED: Ensemble {model_param_dict['model_name']} component {index} of {total_ens} with error: {repr(e)}"
+                    print(p)
+        ens_forecast = EnsembleForecast(
+            model_name,
+            model_param_dict,
+            forecasts_list=forecasts_list,
+            forecasts=forecasts,
+            lower_forecasts=lower_forecasts,
+            upper_forecasts=upper_forecasts,
+            forecasts_runtime=forecasts_runtime,
+            prediction_interval=prediction_interval,
+            df_train=df_train,
+            prematched_series=all_series,
+        )
+        return ens_forecast
+    # if not an ensemble
+    else:
+        # model_str = row_upper['Model']
+        # parameter_dict = json.loads(row_upper['ModelParameters'])
+        # transformation_dict = json.loads(row_upper['TransformationParameters'])
 
-            df_forecast = ModelPrediction(
-                df_train_low,
-                forecast_length,
-                transformation_dict,
-                model_str,
-                parameter_dict,
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                no_negatives=no_negatives,
-                constraint=constraint,
-                future_regressor_train=future_regressor_train,
-                future_regressor_forecast=future_regressor_forecast,
-                grouping_ids=grouping_ids,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-                startTimeStamps=startTimeStamps,
-                n_jobs=n_jobs,
+        # this is needed for horizontal generalization if any models failed, at least one full model on all series
+        if model_name in superfast and not full_model_created:
+            make_full_flag = True
+        else:
+            make_full_flag = False
+        if (
+            horizontal_subset is not None
+            and model_name in no_shared
+            and all(
+                trs not in shared_trans
+                for trs in list(model_transform_dict['transformations'].values())
             )
+            and not make_full_flag
+        ):
+            df_train_low = df_train.reindex(copy=True, columns=horizontal_subset)
+            # print(f"Reducing to subset for {model_name} with {df_train_low.columns}")
+        else:
+            df_train_low = df_train.copy()
+            full_model_created = True
 
-            return df_forecast
+        df_forecast = ModelPrediction(
+            df_train_low,
+            forecast_length,
+            model_transform_dict,
+            model_name,
+            model_param_dict,
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            no_negatives=no_negatives,
+            constraint=constraint,
+            future_regressor_train=future_regressor_train,
+            future_regressor_forecast=future_regressor_forecast,
+            grouping_ids=grouping_ids,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            startTimeStamps=startTimeStamps,
+            n_jobs=n_jobs,
+        )
+
+        sys.stdout.flush()
+        return df_forecast
 
 
 def TemplateWizard(
@@ -881,7 +942,7 @@ def TemplateWizard(
     template_result = TemplateEvalObject()
     template_result.model_count = model_count
     if isinstance(template, pd.Series):
-        template = pd.DataFrame(template).transpose()
+        template = template.to_frame()
     # template = unpack_ensemble_models(template, template_cols, keep_ensemble = False)
 
     for index, row in template.iterrows():
@@ -890,7 +951,6 @@ def TemplateWizard(
             parameter_dict = json.loads(row['ModelParameters'])
             transformation_dict = json.loads(row['TransformationParameters'])
             ensemble_input = row['Ensemble']
-            current_template = pd.DataFrame(row).transpose()
             template_result.model_count += 1
             if verbose > 0:
                 if validation_round >= 1:
@@ -921,8 +981,10 @@ def TemplateWizard(
                     )
                 else:
                     print(base_print)
-            df_forecast = PredictWitch(
-                current_template,
+            df_forecast = model_forecast(
+                model_name=row['Model'],
+                model_param_dict=row['ModelParameters'],
+                model_transform_dict=row['TransformationParameters'],
                 df_train=df_train,
                 forecast_length=forecast_length,
                 frequency=frequency,
@@ -932,8 +994,6 @@ def TemplateWizard(
                 future_regressor_train=future_regressor_train,
                 future_regressor_forecast=future_regressor_forecast,
                 holiday_country=holiday_country,
-                startTimeStamps=startTimeStamps,
-                grouping_ids=grouping_ids,
                 random_seed=random_seed,
                 verbose=verbose,
                 n_jobs=n_jobs,
@@ -953,6 +1013,15 @@ def TemplateWizard(
                 per_timestamp_errors=per_ts,
                 dist_n=dist_n,
             )
+            if validation_round >= 1 and verbose > 0:
+                validation_accuracy_print = (
+                    "Model {} of model {} with avg smape {}: ".format(
+                        str(template_result.model_count),
+                        model_str,
+                        model_error.avg_metrics['smape'].round(2),
+                    )
+                )
+                print(validation_accuracy_print)
             model_id = create_model_id(
                 df_forecast.model_name,
                 df_forecast.model_parameters,
@@ -960,8 +1029,8 @@ def TemplateWizard(
             )
             total_runtime = (
                 df_forecast.fit_runtime
-                + df_forecast.predict_runtime
-                + df_forecast.transformation_runtime
+                + df_forecast.predict_runtime  # noqa W503
+                + df_forecast.transformation_runtime  # noqa W503
             )
             result = pd.DataFrame(
                 {
@@ -1000,6 +1069,20 @@ def TemplateWizard(
                 cur_mae.index = [model_id]
                 template_result.per_series_mae = pd.concat(
                     [template_result.per_series_mae, cur_mae], axis=0
+                )
+
+                cur_mae = model_error.per_series_metrics.loc['contour']
+                cur_mae = pd.DataFrame(cur_mae).transpose()
+                cur_mae.index = [model_id]
+                template_result.per_series_contour = pd.concat(
+                    [template_result.per_series_contour, cur_mae], axis=0
+                )
+
+                cur_mae = model_error.per_series_metrics.loc['rmse']
+                cur_mae = pd.DataFrame(cur_mae).transpose()
+                cur_mae.index = [model_id]
+                template_result.per_series_rmse = pd.concat(
+                    [template_result.per_series_rmse, cur_mae], axis=0
                 )
             if 'probabilistic' in ensemble:
                 cur_spl = model_error.per_series_metrics.loc['spl']
@@ -1056,6 +1139,7 @@ def TemplateWizard(
                     sort=False,
                 ).reset_index(drop=True)
             else:
+                sys.stdout.flush()
                 raise KeyboardInterrupt
         except Exception as e:
             if verbose >= 0:
@@ -1123,7 +1207,7 @@ def RandomTemplate(
         'VECM',
         'DynamicFactor',
     ],
-    transformer_list: dict = {},
+    transformer_list: dict = "fast",
     transformer_max_depth: int = 8,
 ):
     """
@@ -1135,10 +1219,15 @@ def RandomTemplate(
     n = abs(int(n))
     template = pd.DataFrame()
     counter = 0
+    n_models = len(model_list)
     while len(template.index) < n:
-        model_str = np.random.choice(model_list)
+        # this assures all models get choosen at least once
+        if counter < n_models:
+            model_str = model_list[counter]
+        else:
+            model_str = random.choices(model_list)[0]
         param_dict = ModelMonster(model_str).get_new_params()
-        if n % 4 == 0:
+        if counter % 4 == 0:
             trans_dict = RandomTransform(
                 transformer_list=transformer_list,
                 transformer_max_depth=transformer_max_depth,
@@ -1543,9 +1632,9 @@ def generate_score(
         )
     except KeyError:
         raise KeyError(
-            """Evaluation Metrics are missing and all models have failed, by an error in template or metrics. 
-            Usually this means you are missing required packages for the models like fbprophet or gluonts, 
-            or that the models in model_list are inappropriate for your data. 
+            """Evaluation Metrics are missing and all models have failed, by an error in template or metrics.
+            Usually this means you are missing required packages for the models like fbprophet or gluonts,
+            or that the models in model_list are inappropriate for your data.
             A new starting template may also help."""
         )
     return (
