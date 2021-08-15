@@ -12,10 +12,6 @@
 * [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#models)
 
 ## Extended Tutorial
-There are a number of ways to get a more accurate time series model. AutoTS takes care of a few of these:
-1. Pretransforming the data optimally for each model
-2. Trying an assortment of different algorithms
-3. Trying an assortment of hyperparameters for each algorithm
 
 ## Underlying Process
 AutoTS works in the following way at present:
@@ -76,20 +72,29 @@ Probably the most likely thing to cause trouble is having a lot of NaN/missing d
 Using appropriate cross validation (`backwards` especially if NaN is common in older data but not recent data) can help. 
 Dropping series which are mostly missing, or using `prefill_na=0` (or other value) can also help.
 
-### Validation and Cross Validation
-Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future. 
-With very small datasets, there may be not be enough data for cross validation, in which case `num_validations` may be set to 0. This can also speed up quick tests. 
+### What to Worry About
+There are some basic things to beware of that can commonly lead to poor results:
 
+1. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be choosen. Think carefully about the validation methods, which is discussed in the next section.
+2. Bad data in the most recent data. This is extremely common in 'live' data, for example sales data - the most recent records will represent an incomplete time, or not all orders are invoiced in the database, or one of countless other reasons. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. `drop_most_recent` can help handle this.
+
+### Validation and Cross Validation
 Cross validation helps assure that the optimal model is stable over the dynamics of a time series. 
 Cross validation can be tricky in time series data due to the necessity of preventing data leakage from future data points. 
-Here, two methods of cross validation are in place, `'even'` and '`backwards'`.
+
+Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future. 
+With very small datasets, there may be not be enough data for cross validation, in which case `num_validations` may be set to 0. This can also speed up quick tests. 
+In general, the safest approach is to have as many validations as possible, as long as there is sufficient data for it. 
+
+Here are the available methods:
+
+**Backwards** cross validation is the safest method and works backwards from the most recent data. First the most recent forecast_length samples are taken, then the next most recent forecast_length samples, and so on. This makes it more ideal for smaller or fast-changing datasets. 
 
 **Even** cross validation slices the data into equal chunks. For example, `num_validations=3` would split the data into equal, progressive thirds (less the original validation sample). The final validation results would then include four pieces, the results on the three cross validation samples as well as the original validation sample. 
 
-**Backwards** cross validation works backwards from the most recent data. First the most recent forecast_length samples are taken, then the next most recent forecast_length samples, and so on. This makes it more ideal for smaller or fast-changing datasets. 
-
-**Seasonal** validation is supplied as `'seasonal n'` ie `'seasonal 364'`. It trains on the most recent data as usual, then valdations are `n` periods back from the datetime of the forecast would be. 
-For example with daily data, forecasting for a month ahead, and `n=364`, the first test might be on May 2020, with validation on June 2019 and June 2018, the final forecast then of June 2020.
+**Seasonal** validation is supplied as `'seasonal n'` ie `'seasonal 364'`. This is a variation on `backwards` validation and offers the best performance of all validation methods if an appropriate period is supplied. 
+It trains on the most recent data as usual, then valdations are `n` periods back from the datetime of the forecast would be. 
+For example with daily data, forecasting for a month ahead, and `n=364`, the first test might be on May 2021, with validation on June 2020 and June 2019, the final forecast then of June 2021. 
 
 Only a subset of models are taken from initial validation to cross validation. The number of models is set such as `models_to_validate=10`. 
 If a float in 0 to 1 is provided, it is treated as a % of models to select. 
@@ -188,7 +193,6 @@ While the above version of deployment, with  evolving templates and cross_valida
 
 Coming from the deeper internals of AutoTS, this function can only take the `wide` style data (there is a long_to_wide function available). 
 Data must already be fairly clean - all numerics (or np.nan). 
-There aren't as many data and param checks at this point either, so it will be more brittle and output errors may be more confusing. 
 This will run Ensembles.
 
 ```python
@@ -200,7 +204,7 @@ df_forecast = model_forecast(
     model_name="AverageValueNaive",
     model_param_dict={'method': 'Mean'},
     model_transform_dict={
-        'fillna': 'fake_date',
+        'fillna': 'mean',
         'transformations': {'0': 'DifferencedTransformer'},
         'transformation_params': {'0': {}}
     },
@@ -220,7 +224,7 @@ df_forecast.forecast.head(5)
 
 ### Metrics
 There are a number of available metrics, all combined together into a 'Score' which evaluates the best model. The 'Score' that compares models can easily be adjusted by passing through custom metric weights dictionary. 
-Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers. 
+Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights must be numbers greater than or equal to 0.
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series. 
 ```python
 metric_weighting = {
@@ -239,9 +243,7 @@ model = AutoTS(
 	metric_weighting=metric_weighting,
 )
 ```		
-It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE. 
-			
-**Warning**: weights are not fully balanced 1 - 1 - 1. As such it is usually best to place your favorite metric an order of magnitude or more above the others. 
+It is best to usually use several metrics. Often the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE. 
 
 `sMAPE` is generally the most versatile metric across multiple series, but doesn't handle forecasts with lots of zeroes well. 
 

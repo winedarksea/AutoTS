@@ -5,6 +5,7 @@ import random
 import copy
 import json
 import sys
+import time
 
 from autots.tools.shaping import (
     long_to_wide,
@@ -167,19 +168,24 @@ class AutoTS(object):
         if self.forecast_length == 1:
             if metric_weighting['contour_weighting'] > 0:
                 print("Contour metric does not work with forecast_length == 1")
+        # check metric weights are valid
+        if min(self.metric_weighting.values()) < 0:
+            raise ValueError(f"Metric weightings must be numbers >= 0. Current weightings: {self.metric_weighting}")
 
         if 'seasonal' in self.validation_method:
             val_list = [x for x in str(self.validation_method) if x.isdigit()]
             self.seasonal_val_periods = int(''.join(val_list))
 
         if self.n_jobs == 'auto':
-            self.n_jobs = cpu_count()
+            self.n_jobs = int(cpu_count() * 0.75)
             if verbose > 0:
                 print(f"Auto-detected {self.n_jobs} cpus for n_jobs.")
         elif str(self.n_jobs).isdigit():
             self.n_jobs = int(self.n_jobs)
             if self.n_jobs < 0:
                 self.n_jobs = cpu_count() + 1 - self.n_jobs
+        if self.n_jobs == 0:
+            self.n_jobs = 1
 
         # convert shortcuts of model lists to actual lists of models
         if model_list in list(model_lists.keys()):
@@ -402,6 +408,16 @@ class AutoTS(object):
         # handle categorical data if present
         self.categorical_transformer = NumericTransformer(verbose=self.verbose)
         df_wide_numeric = self.categorical_transformer.fit_transform(df_wide)
+
+        # check that column names are unique:
+        if not df_wide_numeric.columns.is_unique:
+            # maybe should make this an actual error in the future
+            print("Warning: column/series names are not unique. Unique column names are highly recommended for wide data!")
+            time.sleep(3)  # give the message a chance to be seen
+        if len(future_regressor) > 0:
+            if future_regressor.shape[0] != df_wide_numeric.shape[0]:
+                print("future_regressor row count does not match length of training data")
+                time.sleep(2)
 
         # use "mean" to assign weight as mean
         if weighted:

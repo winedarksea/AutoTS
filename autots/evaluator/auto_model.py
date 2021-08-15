@@ -1555,7 +1555,16 @@ def validation_aggregation(validation_results):
 def generate_score(
     model_results, metric_weighting: dict = {}, prediction_interval: float = 0.9
 ):
-    """Generate score based on relative accuracies."""
+    """Generate score based on relative accuracies.
+    
+    SMAPE - smaller is better
+    MAE - smaller is better
+    RMSE -  smaller is better
+    SPL - smaller is better
+    Contour - bigger is better
+    Containment - bigger is better
+    Runtime - smaller is better
+    """
     try:
         smape_weighting = metric_weighting['smape_weighting']
     except KeyError:
@@ -1607,10 +1616,30 @@ def generate_score(
     # generate minimizing scores, where smaller = better accuracy
     try:
         model_results = model_results.replace([np.inf, -np.inf], np.nan)
+        # handle NaN in scores...
         # model_results = model_results.fillna(value=model_results.max(axis=0))
+
+        # metric preprocessing
+        runtime = model_results['TotalRuntimeSeconds'] + 120
+        # where smaller is better, are always >=0, beware divide by zero
+        smape_scaler = model_results['smape_weighted'][model_results['smape_weighted'] != 0].min()
+        smape_score = model_results['smape_weighted'] / smape_scaler
+        mae_scaler = model_results['mae_weighted'][model_results['mae_weighted'] != 0].min()
+        mae_score = model_results['mae_weighted'] / mae_scaler
+        rmse_scaler = model_results['rmse_weighted'][model_results['rmse_weighted'] != 0].min()
+        rmse_score = model_results['rmse_weighted'] / rmse_scaler
+        spl_scaler = model_results['spl_weighted'][model_results['spl_weighted'] != 0].min()
+        spl_score = model_results['spl_weighted'] / spl_scaler
+        runtime_scaler = runtime[runtime != 0].min()
+        runtime_score = runtime / runtime_scaler
+        # these have values in the range 0 to 1
+        contour_score = (2 - model_results['contour_weighted']) * smape_score.median()
+        containment_score = (1 + abs(prediction_interval - model_results['containment_weighted'])) * smape_score.median()
+
+        """
         smape_score = model_results['smape_weighted'] / (
             model_results['smape_weighted'].min(skipna=True) + 1
-        )  # smaller better
+        )
         rmse_scaler = model_results['rmse_weighted'].median(skipna=True)
         rmse_scaler = 1 if rmse_scaler == 0 else rmse_scaler
         rmse_score = model_results['rmse_weighted'] / rmse_scaler
@@ -1618,9 +1647,9 @@ def generate_score(
         mae_scaler = 1 if mae_scaler == 0 else mae_scaler
         mae_score = model_results['mae_weighted'] / mae_scaler
         containment_score = (
-            abs(prediction_interval - model_results['containment'])
+            abs(prediction_interval - model_results['containment_weighted'])
         ) + 1  # from 1 to 2, smaller better
-        runtime = model_results['TotalRuntimeSeconds'] + 120
+
         runtime_score = runtime / (runtime.min(skipna=True))  # smaller better
         spl_score = model_results['spl_weighted'] / (
             model_results['spl_weighted'].min(skipna=True) + 1
@@ -1630,6 +1659,7 @@ def generate_score(
             .replace([np.inf, -np.inf, np.nan], 10)
             .clip(upper=10)
         )
+        """
     except KeyError:
         raise KeyError(
             """Evaluation Metrics are missing and all models have failed, by an error in template or metrics.

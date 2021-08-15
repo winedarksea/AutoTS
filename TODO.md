@@ -16,8 +16,11 @@
 
 # Latest
 * slight improvements to joblib parallelized models (not copying the full df)
+* additonal parameter checks
+* made "auto" cpu_count even more conservative
+* improved 'Score' generation. It should now be more equally weighted across metrics.
 
-# Known Errors: 
+# Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
 VECM does not recognize exog to predict
 ARIMA with User or Holiday ValueError('Can only compare identically-labeled DataFrame objects',)
