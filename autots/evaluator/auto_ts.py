@@ -21,6 +21,7 @@ from autots.evaluator.auto_model import (
     TemplateWizard,
     unpack_ensemble_models,
     generate_score,
+    generate_score_per_series,
     model_forecast,
     validation_aggregation,
 )
@@ -169,8 +170,11 @@ class AutoTS(object):
             if metric_weighting['contour_weighting'] > 0:
                 print("Contour metric does not work with forecast_length == 1")
         # check metric weights are valid
-        if min(self.metric_weighting.values()) < 0:
+        metric_weighting_values = self.metric_weighting.values()
+        if min(metric_weighting_values) < 0:
             raise ValueError(f"Metric weightings must be numbers >= 0. Current weightings: {self.metric_weighting}")
+        elif sum(metric_weighting_values) == 0:
+            raise ValueError("Sum of metric_weightings is 0, one or more values must be > 0")
 
         if 'seasonal' in self.validation_method:
             val_list = [x for x in str(self.validation_method) if x.isdigit()]
@@ -904,11 +908,12 @@ or otherwise increase models available."""
             ensemble_templates = pd.DataFrame()
             try:
                 if 'horizontal' in ensemble:
-                    per_series = self.initial_results.per_series_mae.copy()
+                    per_series = generate_score_per_series(self.initial_results, metric_weighting)
+                    # per_series = self.initial_results.per_series_mae.copy()
                     # select only those models which were validated
-                    temp = per_series.mean(axis=1).groupby(level=0).count()
-                    temp = temp[temp >= (num_validations + 1)]
-                    per_series = per_series[per_series.index.isin(temp.index)]
+                    series_sel = per_series.mean(axis=1).groupby(level=0).count()
+                    series_sel = series_sel[series_sel >= (num_validations + 1)]
+                    per_series = per_series[per_series.index.isin(series_sel.index)]
                     # this .mean() should assure all series get a value
                     # as long as they worked in at least one validation
                     per_series = per_series.groupby(level=0).mean()
@@ -951,6 +956,7 @@ or otherwise increase models available."""
             except Exception as e:
                 if self.verbose >= 0:
                     print(f"Ensembling Error: {e}")
+                    time.sleep(5)
             try:
                 if 'probabilistic' in ensemble:
                     per_series = self.initial_results.per_series_spl.copy()
@@ -1027,8 +1033,9 @@ or otherwise increase models available."""
             self.validation_results = copy.copy(self.initial_results)
             self.validation_results = validation_aggregation(self.validation_results)
 
-            # use the best of these if any ran successfully
-            if template_result.model_results['smape'].sum(min_count=0) > 0:
+            # use the best of these ensembles if any ran successfully
+            # if template_result.model_results['smape'].sum(min_count=0) > 0:
+            if template_result.model_results['Exceptions'].isna().any():
                 template_result.model_results['Score'] = generate_score(
                     template_result.model_results,
                     metric_weighting=metric_weighting,
@@ -1042,6 +1049,7 @@ or otherwise increase models available."""
             else:
                 if self.verbose >= 0:
                     print("Horizontal ensemble failed. Using best non-horizontal.")
+                    time.sleep(3)
                 eligible_models = self.validation_results.model_results[
                     self.validation_results.model_results['Runs']
                     >= (num_validations + 1)

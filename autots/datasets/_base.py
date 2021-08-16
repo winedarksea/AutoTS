@@ -213,7 +213,7 @@ def load_live_daily(
     fred_series: list = ["DGS10", "T5YIE", "SP500", "DCOILWTICO", "DEXUSEU"],
     tickers: list = ["MSFT"],
     trends_list: list = ["forecasting", "cycling", "cpu", "microsoft"],
-    weather_data_types: list = ["AWND", "WSF2"],
+    weather_data_types: list = ["AWND", "WSF2", "TAVG"],
     weather_stations: list = ["USW00094846", "USW00014925"],
     weather_years: int = 10,
     london_air_stations: list = ['CT3', 'SK8'],
@@ -230,7 +230,8 @@ def load_live_daily(
         fred_series (list): list of FRED series IDs. This requires fredapi package
         tickers (list): list of stock tickers, requires yfinance
         trends (list): list of search keywords, requires pytrends.
-        weather_data_types (list): from NCEI NOAA api data types
+        weather_data_types (list): from NCEI NOAA api data types, GHCN Daily Weather Elements
+            PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG
         weather_stations (list): from NCEI NOAA api station ids
         london_air_stations (list): londonair.org.uk source station IDs
         london_species (str): what measurement to pull from London Air. Not all stations have all metrics.\

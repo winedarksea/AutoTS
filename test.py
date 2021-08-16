@@ -21,10 +21,10 @@ use_m5 = False  # long = False
 force_univariate = False  # long = False
 
 # this is the template file imported:
-example_filename = "general_templateDESKTOP-JS3OJ8L.csv" # "example_export.csv"  # .csv/.json
+example_filename = "general_templateDESKTOP-JS3OJ8L.csv"  # "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
-df = load_weekly(long=long)
+df = load_daily(long=long)
 n_jobs = "auto"
 verbose = 1
 validation_method = "backwards"

@@ -19,6 +19,8 @@
 * additonal parameter checks
 * made "auto" cpu_count even more conservative
 * improved 'Score' generation. It should now be more equally weighted across metrics.
+* fixed potential bug for horizontal ensemble selection if perfect forecasts were delivered
+* Horizontal ensembles now chosen by combination of multiple metrics and metric_weighting (mae, rmse, spl, contour)
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

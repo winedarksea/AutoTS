@@ -231,10 +231,10 @@ metric_weighting = {
 	'smape_weighting' : 10,
 	'mae_weighting' : 1,
 	'rmse_weighting' : 5,
-	'containment_weighting' : 1,
+	'containment_weighting' : 0,
 	'runtime_weighting' : 0,
 	'spl_weighting': 1,
-	'contour_weighting': 0,
+	'contour_weighting': 1,
 }
 
 model = AutoTS(
@@ -244,6 +244,8 @@ model = AutoTS(
 )
 ```		
 It is best to usually use several metrics. Often the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE. 
+
+*Horizontal* style ensembles use `metric_weighting` for series selection, but only the values passed for `mae, rmse, contour, spl`. If all of these are 0, mae is used for selection. 
 
 `sMAPE` is generally the most versatile metric across multiple series, but doesn't handle forecasts with lots of zeroes well. 
 

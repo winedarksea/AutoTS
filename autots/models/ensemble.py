@@ -727,7 +727,7 @@ def HorizontalTemplateGenerator(
                 }
                 ensemble_models[row['ID']] = temp_dict
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
-            metric = 'MAE' if 'horizontal' in ensemble else 'SPL'
+            metric = 'Score-max' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
@@ -832,7 +832,7 @@ def HorizontalTemplateGenerator(
                 }
                 ensemble_models[row['ID']] = temp_dict
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
-            metric = 'TAX' if 'horizontal' in ensemble else 'SPL'
+            metric = 'Score' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
@@ -895,7 +895,7 @@ def HorizontalTemplateGenerator(
                 }
                 ensemble_models[row['ID']] = temp_dict
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
-            metric = 'MAE' if 'horizontal' in ensemble else 'SPL'
+            metric = 'Score-min' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(

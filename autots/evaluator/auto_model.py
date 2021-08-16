@@ -874,6 +874,13 @@ def model_forecast(
         return df_forecast
 
 
+def _ps_metric(per_series_metrics, metric, model_id):
+    cur_mae = per_series_metrics.loc[metric]
+    cur_mae = pd.DataFrame(cur_mae).transpose()
+    cur_mae.index = [model_id]
+    return cur_mae
+
+
 def TemplateWizard(
     template,
     df_train,
@@ -1063,34 +1070,26 @@ def TemplateWizard(
                 ignore_index=True,
                 sort=False,
             ).reset_index(drop=True)
-            if 'horizontal' in ensemble:
-                cur_mae = model_error.per_series_metrics.loc['mae']
-                cur_mae = pd.DataFrame(cur_mae).transpose()
-                cur_mae.index = [model_id]
+
+            if 'horizontal' in ensemble or 'probabilistic' in ensemble:
+                ps_metric = model_error.per_series_metrics
                 template_result.per_series_mae = pd.concat(
-                    [template_result.per_series_mae, cur_mae], axis=0
+                    [template_result.per_series_mae,
+                     _ps_metric(ps_metric, 'mae', model_id)], axis=0
                 )
-
-                cur_mae = model_error.per_series_metrics.loc['contour']
-                cur_mae = pd.DataFrame(cur_mae).transpose()
-                cur_mae.index = [model_id]
                 template_result.per_series_contour = pd.concat(
-                    [template_result.per_series_contour, cur_mae], axis=0
+                    [template_result.per_series_contour,
+                     _ps_metric(ps_metric, 'contour', model_id)], axis=0
+                )
+                template_result.per_series_rmse = pd.concat(
+                    [template_result.per_series_rmse,
+                     _ps_metric(ps_metric, 'rmse', model_id)], axis=0
+                )
+                template_result.per_series_spl = pd.concat(
+                    [template_result.per_series_spl,
+                     _ps_metric(ps_metric, 'spl', model_id)], axis=0
                 )
 
-                cur_mae = model_error.per_series_metrics.loc['rmse']
-                cur_mae = pd.DataFrame(cur_mae).transpose()
-                cur_mae.index = [model_id]
-                template_result.per_series_rmse = pd.concat(
-                    [template_result.per_series_rmse, cur_mae], axis=0
-                )
-            if 'probabilistic' in ensemble:
-                cur_spl = model_error.per_series_metrics.loc['spl']
-                cur_spl = pd.DataFrame(cur_spl).transpose()
-                cur_spl.index = [model_id]
-                template_result.per_series_spl = pd.concat(
-                    [template_result.per_series_spl, cur_spl], axis=0
-                )
             if 'distance' in ensemble:
                 cur_smape = model_error.per_timestamp.loc['weighted_smape']
                 cur_smape = pd.DataFrame(cur_smape).transpose()
@@ -1556,43 +1555,22 @@ def generate_score(
     model_results, metric_weighting: dict = {}, prediction_interval: float = 0.9
 ):
     """Generate score based on relative accuracies.
-    
+
     SMAPE - smaller is better
     MAE - smaller is better
     RMSE -  smaller is better
     SPL - smaller is better
-    Contour - bigger is better
-    Containment - bigger is better
+    Contour - bigger is better (is 0 to 1)
+    Containment - bigger is better (is 0 to 1)
     Runtime - smaller is better
     """
-    try:
-        smape_weighting = metric_weighting['smape_weighting']
-    except KeyError:
-        smape_weighting = 1
-    try:
-        mae_weighting = metric_weighting['mae_weighting']
-    except KeyError:
-        mae_weighting = 0
-    try:
-        rmse_weighting = metric_weighting['rmse_weighting']
-    except KeyError:
-        rmse_weighting = 0
-    try:
-        containment_weighting = metric_weighting['containment_weighting']
-    except KeyError:
-        containment_weighting = 0
-    try:
-        runtime_weighting = metric_weighting['runtime_weighting'] * 0.1
-    except KeyError:
-        runtime_weighting = 0
-    try:
-        spl_weighting = metric_weighting['spl_weighting']
-    except KeyError:
-        spl_weighting = 0
-    try:
-        contour_weighting = metric_weighting['contour_weighting']
-    except KeyError:
-        contour_weighting = 0
+    smape_weighting = metric_weighting.get('smape_weighting', 0)
+    mae_weighting = metric_weighting.get('mae_weighting', 0)
+    rmse_weighting = metric_weighting.get('rmse_weighting', 0)
+    containment_weighting = metric_weighting.get('containment_weighting', 0)
+    runtime_weighting = metric_weighting.get('runtime_weighting', 0)
+    spl_weighting = metric_weighting.get('spl_weighting', 0)
+    contour_weighting = metric_weighting.get('contour_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         if 'TotalRuntime' in model_results.columns:
@@ -1632,34 +1610,12 @@ def generate_score(
         spl_score = model_results['spl_weighted'] / spl_scaler
         runtime_scaler = runtime[runtime != 0].min()
         runtime_score = runtime / runtime_scaler
+        # this scales it into a similar range as SMAPE
+        runtime_score = runtime_score * (smape_score.median() / runtime_score.median())
         # these have values in the range 0 to 1
         contour_score = (2 - model_results['contour_weighted']) * smape_score.median()
         containment_score = (1 + abs(prediction_interval - model_results['containment_weighted'])) * smape_score.median()
 
-        """
-        smape_score = model_results['smape_weighted'] / (
-            model_results['smape_weighted'].min(skipna=True) + 1
-        )
-        rmse_scaler = model_results['rmse_weighted'].median(skipna=True)
-        rmse_scaler = 1 if rmse_scaler == 0 else rmse_scaler
-        rmse_score = model_results['rmse_weighted'] / rmse_scaler
-        mae_scaler = model_results['mae_weighted'].median(skipna=True)
-        mae_scaler = 1 if mae_scaler == 0 else mae_scaler
-        mae_score = model_results['mae_weighted'] / mae_scaler
-        containment_score = (
-            abs(prediction_interval - model_results['containment_weighted'])
-        ) + 1  # from 1 to 2, smaller better
-
-        runtime_score = runtime / (runtime.min(skipna=True))  # smaller better
-        spl_score = model_results['spl_weighted'] / (
-            model_results['spl_weighted'].min(skipna=True) + 1
-        )  # smaller better
-        contour_score = (
-            (1 / (model_results['contour_weighted']))
-            .replace([np.inf, -np.inf, np.nan], 10)
-            .clip(upper=10)
-        )
-        """
     except KeyError:
         raise KeyError(
             """Evaluation Metrics are missing and all models have failed, by an error in template or metrics.
@@ -1667,7 +1623,7 @@ def generate_score(
             or that the models in model_list are inappropriate for your data.
             A new starting template may also help."""
         )
-    return (
+    score_series = (
         (smape_score * smape_weighting)
         + (mae_score * mae_weighting)
         + (rmse_score * rmse_weighting)
@@ -1676,3 +1632,36 @@ def generate_score(
         + (spl_score * spl_weighting)
         + (contour_score * contour_weighting)
     )
+    return score_series
+
+
+def generate_score_per_series(results_object, metric_weighting):
+    """Score generation on per_series_metrics for ensembles."""
+    mae_weighting = metric_weighting.get('mae_weighting', 0)
+    rmse_weighting = metric_weighting.get('rmse_weighting', 0)
+    spl_weighting = metric_weighting.get('spl_weighting', 0)
+    contour_weighting = metric_weighting.get('contour_weighting', 0)
+    if sum([mae_weighting, rmse_weighting, contour_weighting, spl_weighting]) == 0:
+        mae_weighting = 1
+
+    mae_scaler = results_object.per_series_mae[results_object.per_series_mae != 0].min()
+    mae_score = results_object.per_series_mae / mae_scaler
+    overall_score = mae_score * mae_weighting
+    if rmse_weighting > 0:
+        rmse_scaler = results_object.per_series_rmse[results_object.per_series_rmse != 0].min()
+        rmse_score = results_object.per_series_rmse / rmse_scaler
+        overall_score = overall_score + (rmse_score * rmse_weighting)
+    if spl_weighting > 0:
+        spl_scaler = results_object.per_series_spl[results_object.per_series_spl != 0].min()
+        spl_score = results_object.per_series_spl / spl_scaler
+        overall_score = overall_score + (spl_score * spl_weighting)
+    if contour_weighting > 0:
+        contour_score = (2 - results_object.per_series_contour) * mae_score.median()
+        # handle nan
+        if contour_score.isna().all().all():
+            print("NaN in Contour in generate_score_per_series")
+            if overall_score.sum().sum() == 0:
+                overall_score = mae_score
+        else:
+            overall_score = overall_score + (contour_score * contour_weighting)
+    return overall_score
