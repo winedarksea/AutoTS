@@ -551,7 +551,7 @@ def EnsembleTemplateGenerator(
         ]
         first_model = ens_per_ts.iloc[:, 0:first_bit].mean(axis=1).idxmin()
         last_model = (
-            ens_per_ts.iloc[:, first_bit : (last_bit + first_bit)].mean(axis=1).idxmin()
+            ens_per_ts.iloc[:, first_bit: (last_bit + first_bit)].mean(axis=1).idxmin()
         )
         ensemble_models = {}
         best3 = initial_results.model_results[
@@ -598,7 +598,7 @@ def EnsembleTemplateGenerator(
         ]
         first_model = ens_per_ts.iloc[:, 0:first_bit].mean(axis=1).idxmin()
         last_model = (
-            ens_per_ts.iloc[:, first_bit : (last_bit + first_bit)].mean(axis=1).idxmin()
+            ens_per_ts.iloc[:, first_bit: (last_bit + first_bit)].mean(axis=1).idxmin()
         )
         ensemble_models = {}
         best3 = initial_results.model_results[
@@ -713,19 +713,11 @@ def HorizontalTemplateGenerator(
         if ('horizontal-max' in ensemble) or ('probabilistic-max' in ensemble):
             mods_per_series = per_series.idxmin()
             mods = mods_per_series.unique()
-            ensemble_models = {}
             best5 = model_results[
                 model_results['ID'].isin(mods.tolist())
             ].drop_duplicates(
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
-            )
-            for index, row in best5.iterrows():
-                temp_dict = {
-                    'Model': row['Model'],
-                    'ModelParameters': row['ModelParameters'],
-                    'TransformationParameters': row['TransformationParameters'],
-                }
-                ensemble_models[row['ID']] = temp_dict
+            ).set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
             metric = 'Score-max' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
@@ -735,7 +727,7 @@ def HorizontalTemplateGenerator(
                         'model_name': nomen,
                         'model_count': mods.shape[0],
                         'model_metric': metric,
-                        'models': ensemble_models,
+                        'models': best5.to_dict(orient='index'),
                         'series': mods_per_series.to_dict(),
                     }
                 ),
@@ -750,19 +742,11 @@ def HorizontalTemplateGenerator(
             mods_per_series = per_series.idxmin()
             mods_per_series2 = per_series2.idxmin()
             mods = pd.concat([mods_per_series, mods_per_series2]).unique()
-            ensemble_models = {}
             best5 = model_results[
                 model_results['ID'].isin(mods.tolist())
             ].drop_duplicates(
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
-            )
-            for index, row in best5.iterrows():
-                temp_dict = {
-                    'Model': row['Model'],
-                    'ModelParameters': row['ModelParameters'],
-                    'TransformationParameters': row['TransformationParameters'],
-                }
-                ensemble_models[row['ID']] = temp_dict
+            ).set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
             nomen = 'hdist'
             best5_params = {
                 'Model': 'Ensemble',
@@ -770,7 +754,7 @@ def HorizontalTemplateGenerator(
                     {
                         'model_name': nomen,
                         'model_count': mods.shape[0],
-                        'models': ensemble_models,
+                        'models': best5.to_dict(orient='index'),
                         'dis_frac': 0.3,
                         'series1': mods_per_series.to_dict(),
                         'series2': mods_per_series2.to_dict(),
@@ -818,19 +802,11 @@ def HorizontalTemplateGenerator(
             # concern: choose lots of models, slower to run initial
             mods_per_series = per_series_filter.idxmin()
             mods = mods_per_series.unique()
-            ensemble_models = {}
             best5 = model_results[
                 model_results['ID'].isin(mods.tolist())
             ].drop_duplicates(
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
-            )
-            for index, row in best5.iterrows():
-                temp_dict = {
-                    'Model': row['Model'],
-                    'ModelParameters': row['ModelParameters'],
-                    'TransformationParameters': row['TransformationParameters'],
-                }
-                ensemble_models[row['ID']] = temp_dict
+            ).set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
             metric = 'Score' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
@@ -840,7 +816,7 @@ def HorizontalTemplateGenerator(
                         'model_name': nomen,
                         'model_count': mods.shape[0],
                         'model_metric': metric,
-                        'models': ensemble_models,
+                        'models': best5.to_dict(orient='index'),
                         'series': mods_per_series.to_dict(),
                     }
                 ),
@@ -881,19 +857,11 @@ def HorizontalTemplateGenerator(
                     per_series_des = per_series.copy().drop(mods.index, axis=0)
 
             mods_per_series = per_series.loc[mods.index].idxmin()
-            ensemble_models = {}
             best5 = model_results[
                 model_results['ID'].isin(mods_per_series.unique().tolist())
             ].drop_duplicates(
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
-            )
-            for index, row in best5.iterrows():
-                temp_dict = {
-                    'Model': row['Model'],
-                    'ModelParameters': row['ModelParameters'],
-                    'TransformationParameters': row['TransformationParameters'],
-                }
-                ensemble_models[row['ID']] = temp_dict
+            ).set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
             metric = 'Score-min' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
@@ -903,7 +871,7 @@ def HorizontalTemplateGenerator(
                         'model_name': nomen,
                         'model_count': mods_per_series.unique().shape[0],
                         'model_metric': metric,
-                        'models': ensemble_models,
+                        'models': best5.to_dict(orient='index'),
                         'series': mods_per_series.to_dict(),
                     }
                 ),
@@ -915,3 +883,59 @@ def HorizontalTemplateGenerator(
                 [ensemble_templates, best5_params], axis=0, ignore_index=True
             )
     return ensemble_templates
+
+
+def generate_mosaic_template(initial_results, full_mae_ids, num_validations, col_names, full_mae_errors, **kwargs):
+    """Generate an ensemble template from results."""
+    total_vals = num_validations + 1
+    local_results = initial_results.copy()
+    # sort by runtime then drop duplicates on metric results
+    local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
+    local_results.drop_duplicates(subset=['ValidationRound', 'smape', 'mae', 'spl'], inplace=True)
+    # remove slow models... tbd
+    # select only models run through all validations
+    run_count = local_results[['Model', 'ID']].groupby("ID").count()
+    models_to_use = run_count[run_count['Model'] == total_vals].index.tolist()
+    # begin figuring out which are the min models for each point
+    id_array = np.array([y for y in sorted(full_mae_ids) if y in models_to_use])
+    errors_array = np.array([x for y, x in sorted(zip(full_mae_ids, full_mae_errors), key=lambda pair: pair[0]) if y in models_to_use])
+    slice_points = np.arange(0, errors_array.shape[0], step=total_vals)
+    id_sliced = id_array[slice_points]
+    best_points = np.add.reduceat(errors_array, slice_points, axis=0).argmin(axis=0)
+    model_id_array = pd.DataFrame(np.take(id_sliced, best_points), columns=col_names)
+    used_models = pd.unique(model_id_array.values.flatten())
+    used_models_results = local_results[["ID", "Model", "ModelParameters", "TransformationParameters"]].drop_duplicates(subset='ID')
+    used_models_results = used_models_results[used_models_results['ID'].isin(used_models)].set_index("ID")
+
+    ensemble_params = {
+        'Model': 'Ensemble',
+        'ModelParameters': json.dumps(
+            {
+                'model_name': "Mosaic",
+                'model_count': id_sliced.shape[0],
+                'model_metric': "MAE",
+                'models': used_models_results.to_dict(orient='index'),
+                'series': model_id_array.to_dict(orient='dict'),
+            }
+        ),
+        'TransformationParameters': '{}',
+        'Ensemble': 2,
+    }
+    ensemble_template = pd.DataFrame(ensemble_params, index=[0])
+    return ensemble_template
+
+
+def MosaicEnsemble(
+    ensemble_params,
+    forecasts_list,
+    forecasts,
+    lower_forecasts,
+    upper_forecasts,
+    forecasts_runtime,
+    prediction_interval,
+    df_train=None,
+    prematched_series: dict = None,
+):
+    # need to generalize
+    # work with no_shared
+    pass

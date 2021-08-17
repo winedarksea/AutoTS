@@ -504,8 +504,8 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              |               |
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
-|  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              | True         | True          |
-|  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |               |
+|  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
+|  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |   *           |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |
