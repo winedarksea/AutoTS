@@ -11,9 +11,10 @@ evolve = True allows the timeseries to automatically adapt to changes.
 There is a slight risk of it getting caught in suboptimal position however.
 It should probably be coupled with some basic data sanity checks.
 """
+import json
 import datetime
 import os
-
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt  # required only for graphs
 from autots import AutoTS, load_live_daily, create_lagged_regressor
@@ -178,6 +179,21 @@ if graph:
         'low_forecast': forecasts_lower_df[col],
         'forecast': forecasts_df[col],
     })
-    # plot_df[plot_df == 0] = np.nan
+    plot_df[plot_df == 0] = np.nan
+    plot_df.interpolate(method="cubic", inplace=True)
     fig, ax = plt.subplots(dpi=300, figsize=(8, 6))
     plot_df[plot_df.index.year >= 2021].plot(ax=ax)
+
+    if model.best_model['Ensemble'].iloc[0] == 2:
+        series = model.horizontal_to_df()
+
+        fig, ax = plt.subplots(figsize=(6, 4.5))
+        cmap = plt.get_cmap('tab10')  # 'Pastel1, 'cividis', 'coolwarm', 'spectral'
+        names = series['Model'].unique()
+        colors = dict(zip(names, cmap(np.linspace(0, 1, len(names)))))
+        grouped = series.groupby('Model')
+        for key, group in grouped:
+            group.plot(ax=ax, kind='scatter', x='log(Mean)', y='log(Volatility)', label=key, color=colors[key].reshape(1, -1))
+        plt.title("Horizontal Ensemble: models choosen by series")
+        plt.show()
+        # plt.savefig("horizontal.png", dpi=300)

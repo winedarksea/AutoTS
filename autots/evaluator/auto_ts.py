@@ -1407,6 +1407,37 @@ or otherwise increase models available."""
             self.initial_results = self.initial_results.concat(new_obj)
         return self
 
+    def horizontal_to_df(self):
+        """helper function for plotting."""
+        if self.best_model.empty:
+            raise ValueError("No best_model. AutoTS .fit() needs to be run.")
+        if self.best_model['Ensemble'].iloc[0] != 2:
+            raise ValueError("Only works on horizontal ensemble type models.")
+        series = json.loads(self.best_model['ModelParameters'].iloc[0])['series']
+        series = pd.DataFrame.from_dict(series, orient="index").reset_index(drop=False)
+        series.columns = ['Series', 'ID']
+        series = series.merge(self.results()[['ID', "Model"]].drop_duplicates(), on="ID")
+        series = series.merge(self.df_wide_numeric.std().to_frame(), right_index=True, left_on="Series")
+        series = series.merge(self.df_wide_numeric.mean().to_frame(), right_index=True, left_on="Series")
+        series.columns = ["Series", "ID", 'Model', "Volatility", "Mean"]
+        return series
+
+    def plot_horizontal(self, max_series: int = 20, **kwargs):
+        """Simple plot to visualize assigned series: models.
+
+        Args:
+            max_series (int): max number of points to plot
+            **kwargs passed to pandas.plot()
+        """
+        series = self.horizontal_to_df()
+        # remove some data to prevent overcrowding the graph, if necessary
+        max_series = series.shape[0] if series.shape[0] < max_series else max_series
+        series = series.sample(max_series, replace=False)
+        # sklearn.preprocessing.normalizer also might work
+        series[['log(Volatility)', 'log(Mean)']] = np.log(series[['Volatility', 'Mean']])
+        # plot
+        series.set_index(['Model', 'log(Mean)']).unstack('Model')['log(Volatility)'].plot(style='o', **kwargs)
+
 
 class AutoTSIntervals(object):
     """Autots looped to test multiple prediction intervals. Experimental.

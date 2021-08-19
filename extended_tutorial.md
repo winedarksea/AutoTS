@@ -131,7 +131,7 @@ model = AutoTS(
     forecast_length=49,
     frequency='infer',
     prediction_interval=0.95,
-    ensemble='simple',
+    ensemble=['simple', 'horizontal-min'],
     max_generations=5,
     num_validations=2,
     validation_method='seasonal 168',
@@ -151,6 +151,9 @@ prediction = model.predict()
 forecasts_df = prediction.forecast
 # prediction.long_form_results()
 # model.best_model.to_string()
+
+if model.best_model['Ensemble'].iloc[0] == 2:
+    model.plot_horizontal()
 ```
 
 Probabilistic forecasts are *available* for all models, but in many cases are just data-based estimates in lieu of model estimates. 
@@ -228,11 +231,11 @@ Higher weighting increases the importance of that metric, while 0 removes that m
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series. 
 ```python
 metric_weighting = {
-	'smape_weighting' : 10,
-	'mae_weighting' : 1,
-	'rmse_weighting' : 5,
-	'containment_weighting' : 0,
-	'runtime_weighting' : 0,
+	'smape_weighting': 10,
+	'mae_weighting': 1,
+	'rmse_weighting': 5,
+	'containment_weighting': 0,
+	'runtime_weighting': 0,
 	'spl_weighting': 1,
 	'contour_weighting': 1,
 }
