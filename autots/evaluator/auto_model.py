@@ -12,6 +12,7 @@ from autots.models.ensemble import (
     EnsembleForecast,
     generalize_horizontal,
     horizontal_aliases,
+    parse_horizontal,
 )
 from autots.tools.shaping import infer_frequency
 from autots.models.model_list import (
@@ -773,9 +774,8 @@ def model_forecast(
             try:
                 if all_series is not None:
                     test_mod = row['ID']
-                    horizontal_subset = [
-                        ser for ser, mod in all_series.items() if mod == test_mod
-                    ]
+                    horizontal_subset = parse_horizontal(all_series, model_id=test_mod)
+
                 df_forecast = model_forecast(
                     model_name=row['Model'],
                     model_param_dict=row['ModelParameters'],

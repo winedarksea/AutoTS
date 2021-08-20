@@ -91,7 +91,7 @@ class AutoTS(object):
         forecast_length: int = 14,
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
-        max_generations: int = 20,
+        max_generations: int = 10,
         no_negatives: bool = False,
         constraint: float = None,
         ensemble: str = 'auto',
@@ -522,6 +522,8 @@ class AutoTS(object):
         try:
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
+            if future_regressor.empty:
+                raise ValueError("regressor empty")
             if not isinstance(future_regressor.index, pd.DatetimeIndex):
                 future_regressor.index = df_subset.index
             # handle any non-numeric data, crudely
@@ -1415,6 +1417,10 @@ or otherwise increase models available."""
             raise ValueError("Only works on horizontal ensemble type models.")
         series = json.loads(self.best_model['ModelParameters'].iloc[0])['series']
         series = pd.DataFrame.from_dict(series, orient="index").reset_index(drop=False)
+        if series.shape[1] > 2:
+            # for mosaic style ensembles, choose the mode model id
+            series.set_index(series.columns[0], inplace=True)
+            series = series.mode(axis=1)[0].to_frame().reset_index(drop=False)
         series.columns = ['Series', 'ID']
         series = series.merge(self.results()[['ID', "Model"]].drop_duplicates(), on="ID")
         series = series.merge(self.df_wide_numeric.std().to_frame(), right_index=True, left_on="Series")
@@ -1424,6 +1430,8 @@ or otherwise increase models available."""
 
     def plot_horizontal(self, max_series: int = 20, **kwargs):
         """Simple plot to visualize assigned series: models.
+
+        Note that for 'mosiac' ensembles, it only plots the type of the most common model_id for that series, or the first if all are mode.
 
         Args:
             max_series (int): max number of points to plot

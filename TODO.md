@@ -21,6 +21,10 @@
 * improved 'Score' generation. It should now be more equally weighted across metrics.
 * fixed potential bug for horizontal ensemble selection if perfect forecasts were delivered
 * Horizontal ensembles now chosen by combination of multiple metrics and metric_weighting (mae, rmse, spl, contour)
+* re-weighted fillna probabilities for random choice
+* addressed a few deprecation warnings
+* new plot_horizontal() function for AutoTS to quickly visual horizontal ensembles
+* Probabilistic and HDist ensembles are now deprecated (they can still be run by model_forecast but not by AutoTS class)
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

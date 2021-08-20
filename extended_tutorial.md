@@ -260,6 +260,47 @@ It is best to usually use several metrics. Often the best sMAPE model, for examp
 
 The contour metric is useful as it encourages 'wavy' forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they "don't look like they are trying hard enough" to some managers, and using contour favors non-flat forecasts that (to many) look like a more serious model.
 
+### Ensembles
+Ensemble methods are specified by the `ensemble=` parameter. It can be either a list or a comma-separated string.
+
+`simple` style ensembles (labeled 'BestN' in templates) are the most recognizable form of ensemble and are the simple average of the specified models, here usally 3 or 5 models. 
+`distance` style ensembles are two models spliced together. The first model forecasts the first fraction of forecast period, the second model the latter half. There is no overlap of the models. 
+Both `simple` and `distance` style models are constructed on the first evaluation set of data, and run through validation along with all other models selected for validation. 
+Both of these can also be recursive in depth, containing ensembles of ensembles. This recursive ensembling can happen when ensembles are imported from a starting template - they work just fine, but may get rather slow, having lots of models. 
+
+`horizontal` ensembles are the type of ensembles for which this package was originally created. 
+With this, each series gets its own model. This avoids the 'one size does not fit all' problem when many time series are in a datset. 
+In the interest of efficiency, univariate models are only run on the series they are needed for. 
+Models not in the `no_shared` list may make horizontal ensembling very slow at scale - as they have to be run for every series, even if they are only used for one. 
+`horizontal-max` chooses the best series for every model. `horizontal` and `horizontal-min` attempt to reduce the number of slow models chosen while still maintaining as much accuracy as possble. 
+A feature called `horizontal_generalization` allows the use of `subset` and makes these ensembles fault tolerant. 
+If you see a message `no full models available`, however, that means this generalization may fail. Including at least one of the `superfast` or a model not in `no_shared` models usually prevents this. 
+These ensembles are choosen based on per series accuracy on `mae, rmse, contour, spl`, weighted as specified in `metric_weighting`.
+`horizontal` ensembles can contain recursive depths of `simple` and `distance` style ensembles but `horizontal` ensembles cannot be nested. 
+
+`mosaic` enembles are an extension of `horizontal` ensembles, but with a specific model choosen for each series *and* for each forecast period. 
+As this means the maximum number of models can be `number of series * forecast_length`, this obviously may get quite slow. 
+Theoretically, this style of ensembling offers the highest accuracy. 
+However, `mosaic` models only utilize MAE for model selection, and as such upper and lower forecast performance may be poor. 
+
+One thing you can do with `mosaic` ensembles if you only care about the accuracy of one forecast point, but want to run a forecast for the full forecast length, you can convert the mosaic to horizontal for just that forecast period. 
+```python
+import json
+from autots.models.ensemble import mosaic_to_horizontal, model_forecast
+
+# assuming model is from AutoTS.fit() with a mosaic as best_model
+model_params_init = json.loads(model.best_model['ModelParameters'].iloc[0])
+model_params = mosaic_to_horizontal(model_params_init, forecast_period=0)
+result = model_forecast(
+	model_name="Ensemble",
+	model_param_dict=model_params,
+	model_transform_dict={},
+	df_train=model.df_wide_numeric,
+	forecast_length=model.forecast_length,
+)
+result.forecast
+```
+
 ## Installation and Dependency Versioning
 `pip install autots`
 ### Requirements:
