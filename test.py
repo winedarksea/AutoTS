@@ -116,7 +116,7 @@ model = AutoTS(
     model_interrupt=True,
     n_jobs=n_jobs,
     drop_most_recent=1,
-    prefill_na=0,
+    # prefill_na=0,
     subset=None,
     verbose=verbose,
 )

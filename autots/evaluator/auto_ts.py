@@ -77,6 +77,8 @@ class AutoTS(object):
         remove_leading_zeroes (bool): replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn't started yet.
         prefill_na (str): value to input to fill all NaNs with. Leaving as None and allowing model interpolation is recommended.
             None, 0, 'mean', or 'median'. 0 may be useful in for examples sales cases where all NaN can be assumed equal to zero.
+        introduce_na (bool): whether to force last values in one training validation to be NaN. Helps make more robust models.
+            defaults to None, which is as True if any NaN in tail of training data.
         model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
@@ -124,6 +126,7 @@ class AutoTS(object):
         min_allowed_train_percent: float = 0.5,
         remove_leading_zeroes: bool = False,
         prefill_na: str = None,
+        introduce_na: bool = None,
         model_interrupt: bool = False,
         verbose: int = 1,
         n_jobs: int = None,
@@ -157,6 +160,7 @@ class AutoTS(object):
         self.max_generations = max_generations
         self.remove_leading_zeroes = remove_leading_zeroes
         self.prefill_na = prefill_na
+        self.introduce_na = introduce_na
         self.model_interrupt = model_interrupt
         self.verbose = int(verbose)
         self.n_jobs = n_jobs
@@ -485,6 +489,9 @@ class AutoTS(object):
                 ens_piece3 = ""
             self.ensemble = ens_piece1 + "," + ens_piece2 + "," + ens_piece3
         ensemble = self.ensemble
+
+        # check if NaN in last row
+        nan_tail = df_wide_numeric.tail(1).isna().sum(axis=1).iloc[0] > 0
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
@@ -873,6 +880,12 @@ class AutoTS(object):
                 except Exception:
                     val_future_regressor_train = []
                     val_future_regressor_test = []
+
+                # force NaN for robustness
+                if self.introduce_na or (self.introduce_na is None and nan_tail):
+                    nan_frac = val_df_train.shape[1] / num_validations
+                    int(nan_frac * y), int(nan_frac * (y + 1))
+                    val_df_train.iloc[-1, int(nan_frac * y): int(nan_frac * (y + 1))] = np.nan
 
                 # run validation template on current slice
                 template_result = TemplateWizard(
