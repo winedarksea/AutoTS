@@ -28,6 +28,7 @@ from autots.evaluator.auto_model import (
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
     HorizontalTemplateGenerator,
+    generate_mosaic_template
 )
 from autots.models.model_list import model_lists
 from autots.tools import cpu_count
@@ -50,6 +51,7 @@ class AutoTS(object):
         random_seed (int): random seed allows (slightly) more consistent results.
         holiday_country (str): passed through to Holidays package for some models.
         subset (int): maximum number of series to evaluate at once. Useful to speed evaluation when many series are input.
+            takes a new subset of columns on each validation, unless mosaic ensembling, in which case columns are the same in each validation
         aggfunc (str): if data is to be rolled up to a higher frequency (daily -> monthly) or duplicate timestamps are included. Default 'first' removes duplicates, for rollup try 'mean' or np.sum.
             Beware numeric aggregations like 'mean' will not work with non-numeric inputs.
         na_tolerance (float): 0 to 1. Series are dropped if they have more than this percent NaN. 0.95 here would allow series containing up to 95% NaN values.
@@ -137,7 +139,7 @@ class AutoTS(object):
         self.random_seed = random_seed
         self.holiday_country = holiday_country
         if isinstance(ensemble, list):
-            ensemble = ",".join(ensemble)
+            ensemble = str(",".join(ensemble)).lower()
         self.ensemble = str(ensemble).lower()
         self.subset = subset
         self.na_tolerance = na_tolerance
@@ -477,7 +479,11 @@ class AutoTS(object):
                 ens_piece2 = "distance"
             else:
                 ens_piece2 = ""
-            self.ensemble = ens_piece1 + "," + ens_piece2
+            if "mosaic" in self.ensemble:
+                ens_piece3 = "mosaic"
+            else:
+                ens_piece3 = ""
+            self.ensemble = ens_piece1 + "," + ens_piece2 + "," + ens_piece3
         ensemble = self.ensemble
 
         self.df_wide_numeric = df_wide_numeric
@@ -825,11 +831,16 @@ class AutoTS(object):
 
                 # subset series (if used) and take a new train/test split
                 if self.subset_flag:
+                    # mosaic can't handle different cols in each validation
+                    if "mosaic" in self.ensemble:
+                        rand_st = random_seed
+                    else:
+                        rand_st = (random_seed + y + 1)
                     df_subset = subset_series(
                         current_slice,
                         list((weights.get(i)) for i in current_slice.columns),
                         n=self.subset,
-                        random_state=(random_seed + y + 1),
+                        random_state=rand_st,
                     )
                     if self.verbose > 1:
                         print(f'{y + 1} subset is of: {df_subset.columns}')
@@ -909,7 +920,7 @@ or otherwise increase models available."""
         if any(x in ensemble for x in ens_list):
             ensemble_templates = pd.DataFrame()
             try:
-                if 'horizontal' in ensemble:
+                if 'horizontal' in ensemble or 'probabilistic' in ensemble:
                     per_series = generate_score_per_series(self.initial_results, metric_weighting=metric_weighting, total_validations=(num_validations + 1))
                     # select only those models which were validated
                     # series_sel = per_series.mean(axis=1).groupby(level=0).count()
@@ -933,27 +944,20 @@ or otherwise increase models available."""
                     print(f"Horizontal Ensembling Error: {repr(e)}")
                     time.sleep(5)
             try:
-                if 'probabilistic' in ensemble:
-                    per_series = self.initial_results.per_series_spl.copy()
-                    temp = per_series.mean(axis=1).groupby(level=0).count()
-                    temp = temp[temp >= (num_validations + 1)]
-                    per_series = per_series[per_series.index.isin(temp.index)]
-                    per_series = per_series.groupby(level=0).mean()
-                    ens_templates = HorizontalTemplateGenerator(
-                        per_series,
-                        model_results=self.initial_results.model_results,
-                        forecast_length=forecast_length,
-                        ensemble=ensemble.replace('horizontal', ' ').replace(
-                            'hdist', ' '
-                        ),
-                        subset_flag=self.subset_flag,
+                if 'mosaic' in ensemble:
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=self.initial_results.full_mae_errors,
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
             except Exception as e:
                 if self.verbose >= 0:
-                    print(f"Ensembling Error: {e}")
+                    print(f"Mosaic Ensembling Error: {e}")
             try:
                 # test on initial test split to make sure they work
                 template_result = TemplateWizard(
@@ -1427,6 +1431,19 @@ or otherwise increase models available."""
         series = series.merge(self.df_wide_numeric.mean().to_frame(), right_index=True, left_on="Series")
         series.columns = ["Series", "ID", 'Model', "Volatility", "Mean"]
         return series
+
+    def mosaic_to_df(self):
+        """Helper function to create a readable df of models in mosaic."""
+        if self.best_model.empty:
+            raise ValueError("No best_model. AutoTS .fit() needs to be run.")
+        if self.best_model['Ensemble'].iloc[0] != 2:
+            raise ValueError("Only works on horizontal ensemble type models.")
+        ModelParameters = json.loads(self.best_model['ModelParameters'].iloc[0])
+        if str(ModelParameters['model_name']).lower() != 'mosaic':
+            raise ValueError("Only works on mosaic ensembles.")
+        series = pd.DataFrame.from_dict(ModelParameters['series'])
+        lookup = {k: v['Model'] for k, v in ModelParameters['models'].items()}
+        return series.replace(lookup)
 
     def plot_horizontal(self, max_series: int = 20, **kwargs):
         """Simple plot to visualize assigned series: models.

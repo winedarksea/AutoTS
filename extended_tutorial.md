@@ -75,8 +75,8 @@ Dropping series which are mostly missing, or using `prefill_na=0` (or other valu
 ### What to Worry About
 There are some basic things to beware of that can commonly lead to poor results:
 
-1. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be choosen. Think carefully about the validation methods, which is discussed in the next section.
-2. Bad data in the most recent data. This is extremely common in 'live' data, for example sales data - the most recent records will represent an incomplete time, or not all orders are invoiced in the database, or one of countless other reasons. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. `drop_most_recent` can help handle this.
+1. Bad data (sudden drops or missing values) in the most recent data is the single most common cause of bad forecasts here. This is extremely common in 'live' data, for example sales data - the most recent records will represent an incomplete time, or not all orders are invoiced in the database, or one of countless other reasons. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. `drop_most_recent` can help handle this. Manually filling the most recent NaN values may also help. 
+2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be choosen. Think carefully about the validation methods, which is discussed in the next section.
 
 ### Validation and Cross Validation
 Cross validation helps assure that the optimal model is stable over the dynamics of a time series. 
@@ -282,6 +282,7 @@ These ensembles are choosen based on per series accuracy on `mae, rmse, contour,
 As this means the maximum number of models can be `number of series * forecast_length`, this obviously may get quite slow. 
 Theoretically, this style of ensembling offers the highest accuracy. 
 However, `mosaic` models only utilize MAE for model selection, and as such upper and lower forecast performance may be poor. 
+They are also more prone to over-fitting, so use this with more validations and more stable data. 
 
 One thing you can do with `mosaic` ensembles if you only care about the accuracy of one forecast point, but want to run a forecast for the full forecast length, you can convert the mosaic to horizontal for just that forecast period. 
 ```python

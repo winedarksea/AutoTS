@@ -49,15 +49,16 @@ if initial_training == "auto":
 if initial_training:
     gens = 30
     models_to_validate = 0.2
-    ensemble = ["simple", "distance", "horizontal-max", "probabilistic-max"]
+    ensemble = ["simple", "distance", "horizontal-max", "horizontal-min"]  # "mosaic"
 elif evolve:
     gens = 15
     models_to_validate = 0.3
-    ensemble = ["horizontal-max", "probabilistic-max"]  # you can include "simple" and "distance" but they can nest, and may get huge as time goes on...
+    # you can include "simple" and "distance" but they can nest, and may get huge as time goes on...
+    ensemble = ["horizontal-max", "horizontal-min"]  # "mosaic"
 else:
     gens = 0
     models_to_validate = 0.99
-    ensemble = ["horizontal-max", "probabilistic-max"]
+    ensemble = ["horizontal-max", "horizontal-min"]  # "mosaic"
 
 # only save the very best model if not evolve
 if evolve:
@@ -171,6 +172,8 @@ if initial_training or evolve:
             arc_file, models="best", n=1
         )
 
+model_parameters = json.loads(model.best_model['ModelParameters'].iloc[0])
+
 if graph:
     col = model.df_wide_numeric.columns[-1]  # change column here
     plot_df = pd.DataFrame({
@@ -197,3 +200,7 @@ if graph:
         plt.title("Horizontal Ensemble: models choosen by series")
         plt.show()
         # plt.savefig("horizontal.png", dpi=300)
+
+        if str(model_parameters['model_name']).lower() == 'mosaic':
+            mosaic_df = model.mosaic_to_df()
+            print(mosaic_df[mosaic_df.columns[0:5]].head(5))

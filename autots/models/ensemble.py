@@ -66,6 +66,7 @@ def BestNEnsemble(
     prediction_interval,
 ):
     """Generate mean forecast for ensemble of models."""
+    startTime = datetime.datetime.now()
     # id_list = list(ensemble_params['models'].keys())
     # does it handle missing models well?
     # model_indexes = [x for x in forecasts.keys() if x in id_list]
@@ -104,7 +105,7 @@ def BestNEnsemble(
         forecast=ens_df,
         upper_forecast=ens_df_upper,
         prediction_interval=prediction_interval,
-        predict_runtime=datetime.timedelta(0),
+        predict_runtime=datetime.datetime.now() - startTime,
         fit_runtime=ens_runtime,
         model_parameters=ensemble_params,
     )
@@ -325,6 +326,7 @@ def HorizontalEnsemble(
     prematched_series: dict = None,
 ):
     """Generate forecast for per_series ensembling."""
+    startTime = datetime.datetime.now()
     # this is meant to fill in any failures
     available_models = list(forecasts.keys())
     train_size = df_train.shape
@@ -355,7 +357,7 @@ def HorizontalEnsemble(
             c_fore = forecasts[mod_id][series]
             forecast_df = pd.concat([forecast_df, c_fore], axis=1)
         except Exception as e:
-            print(f"Horizontal ensemble unable to add model {repr(e)}")
+            print(f"Horizontal ensemble unable to add model {mod_id} {repr(e)}")
         # upper
         c_fore = upper_forecasts[mod_id][series]
         u_forecast_df = pd.concat([u_forecast_df, c_fore], axis=1)
@@ -363,9 +365,9 @@ def HorizontalEnsemble(
         c_fore = lower_forecasts[mod_id][series]
         l_forecast_df = pd.concat([l_forecast_df, c_fore], axis=1)
     # make sure columns align to original
-    forecast_df.reindex(columns=org_idx)
-    u_forecast_df.reindex(columns=org_idx)
-    l_forecast_df.reindex(columns=org_idx)
+    forecast_df = forecast_df.reindex(columns=org_idx)
+    u_forecast_df = u_forecast_df.reindex(columns=org_idx)
+    l_forecast_df = l_forecast_df.reindex(columns=org_idx)
     # combine runtimes
     try:
         ens_runtime = sum(list(forecasts_runtime.values()), datetime.timedelta())
@@ -381,7 +383,7 @@ def HorizontalEnsemble(
         forecast=forecast_df,
         upper_forecast=u_forecast_df,
         prediction_interval=prediction_interval,
-        predict_runtime=datetime.timedelta(0),
+        predict_runtime=datetime.datetime.now() - startTime,
         fit_runtime=ens_runtime,
         model_parameters=ensemble_params,
     )
@@ -1092,50 +1094,67 @@ def MosaicEnsemble(
     df_train=None,
     prematched_series: dict = None,
 ):
-    """Generate forecast for mosaic ensembling."""
+    """Generate forecast for mosaic ensembling.
+
+    Args:
+        prematched_series (dict): from outer horizontal generalization, possibly different than params
+    """
     # work with forecast_lengths longer or shorter than provided by template
 
     # this is meant to fill in any failures
+    startTime = datetime.datetime.now()
     available_models = list(forecasts.keys())
     train_size = df_train.shape
-    # print(f"running inner generalization with training size: {train_size}")
     full_models = [
         mod for mod, fcs in forecasts.items() if fcs.shape[1] == train_size[1]
     ]
     if not full_models:
         print("No full models available for mosaic generalization.")
         full_models = available_models  # hope it doesn't need to fill
-    # print(f"FULLMODEL {len(full_models)}: {full_models}")
     if prematched_series is None:
         prematched_series = ensemble_params['series']
     all_series = generalize_horizontal(
         df_train, prematched_series, available_models, full_models
     )
-    # print(f"ALLSERIES {len(all_series.keys())}: {all_series}")
 
     org_idx = df_train.columns
 
-    forecast_df, u_forecast_df, l_forecast_df = (
-        pd.DataFrame(),
-        pd.DataFrame(),
-        pd.DataFrame(),
+    final = pd.DataFrame.from_dict(all_series)
+    final.index.name = "forecast_period"
+    melted = pd.melt(
+        final,
+        var_name="series_id",
+        value_name="model_id",
+        ignore_index=False,
+    ).reset_index(drop=False)
+    melted["forecast_period"] = melted["forecast_period"].astype(int)
+
+    fore, u_fore, l_fore = [], [], []
+    for row in melted.itertuples():
+        fore.append(forecasts[row[3]][row[2]].iloc[row[1]])
+        u_fore.append(upper_forecasts[row[3]][row[2]].iloc[row[1]])
+        l_fore.append(lower_forecasts[row[3]][row[2]].iloc[row[1]])
+    melted['forecast'] = fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted['upper_forecast'] = u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted['lower_forecast'] = l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+
+    sample_idx = forecasts[next(iter(forecasts))].index
+    forecast_df = melted.pivot(
+        values="forecast", columns="series_id", index="forecast_period"
     )
-    for series, mod_id in all_series.items():
-        try:
-            c_fore = forecasts[mod_id][series]
-            forecast_df = pd.concat([forecast_df, c_fore], axis=1)
-        except Exception as e:
-            print(f"Horizontal ensemble unable to add model {repr(e)}")
-        # upper
-        c_fore = upper_forecasts[mod_id][series]
-        u_forecast_df = pd.concat([u_forecast_df, c_fore], axis=1)
-        # lower
-        c_fore = lower_forecasts[mod_id][series]
-        l_forecast_df = pd.concat([l_forecast_df, c_fore], axis=1)
+    forecast_df.index = sample_idx
+    u_forecast_df = melted.pivot(
+        values="upper_forecast", columns="series_id", index="forecast_period"
+    )
+    u_forecast_df.index = sample_idx
+    l_forecast_df = melted.pivot(
+        values="lower_forecast", columns="series_id", index="forecast_period"
+    )
+    l_forecast_df.index = sample_idx.index = sample_idx
     # make sure columns align to original
-    forecast_df.reindex(columns=org_idx)
-    u_forecast_df.reindex(columns=org_idx)
-    l_forecast_df.reindex(columns=org_idx)
+    forecast_df = forecast_df.reindex(columns=org_idx)
+    u_forecast_df = u_forecast_df.reindex(columns=org_idx)
+    l_forecast_df = l_forecast_df.reindex(columns=org_idx)
     # combine runtimes
     try:
         ens_runtime = sum(list(forecasts_runtime.values()), datetime.timedelta())
@@ -1144,14 +1163,14 @@ def MosaicEnsemble(
 
     ens_result = PredictionObject(
         model_name="Ensemble",
-        forecast_length=len(forecast_df.index),
+        forecast_length=len(sample_idx),
         forecast_index=forecast_df.index,
         forecast_columns=forecast_df.columns,
         lower_forecast=l_forecast_df,
         forecast=forecast_df,
         upper_forecast=u_forecast_df,
         prediction_interval=prediction_interval,
-        predict_runtime=datetime.timedelta(0),
+        predict_runtime=datetime.datetime.now() - startTime,
         fit_runtime=ens_runtime,
         model_parameters=ensemble_params,
     )

@@ -24,7 +24,7 @@ force_univariate = False  # long = False
 example_filename = "general_templateDESKTOP-JS3OJ8L.csv"  # "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
-df = load_daily(long=long)
+df = load_monthly(long=long)
 n_jobs = "auto"
 verbose = 1
 validation_method = "backwards"
@@ -83,7 +83,7 @@ model_list = [
 transformer_list = "fast"  # ["SinTrend", "MinMaxScaler"]
 transformer_max_depth = 3
 model_list = 'superfast'  # fast_parallel
-# model_list = ["AverageValueNaive", "GLM", "GLS", "FBProphet"]
+# model_list = ["AverageValueNaive", "GLM", "FBProphet"]
 # model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
 
 metric_weighting = {
@@ -101,7 +101,7 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency='infer',
     prediction_interval=0.9,
-    ensemble=["simple", "distance", "horizontal-max", "horizontal-min"],
+    ensemble=["simple", "distance", "horizontal-max", "horizontal-min", "mosaic"],
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,
@@ -160,6 +160,7 @@ model = model.fit(
     value_col='value' if long else None,
     id_col='series_id' if long else None,
 )
+
 elapsed_for = timeit.default_timer() - start_time_for
 
 prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=0)
@@ -185,6 +186,9 @@ print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 
 initial_results.to_csv("general_template_" + str(platform.node()) + ".csv")
+
+if model.best_model['Ensemble'].iloc[0] == 2:
+    model.plot_horizontal()
 
 """
 # Import/Export
