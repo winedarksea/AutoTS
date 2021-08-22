@@ -9,6 +9,7 @@ from autots.tools.seasonal import date_part, seasonal_int
 
 try:
     from statsmodels.tsa.statespace.sarimax import SARIMAX
+    from statsmodels.api import GLM as SM_GLM
 except Exception:
     pass
 
@@ -111,6 +112,50 @@ class GLS(ModelObject):
         return {}
 
 
+def glm_forecast_by_column(current_series, X, Xf, args, col):
+    """Run one series of GLM and return prediction."""
+    series_name = current_series.name
+    family = args['family']
+    verbose = args['verbose']
+    if str(family).lower() == 'poisson':
+        from statsmodels.genmod.families.family import Poisson
+
+        model = SM_GLM(current_series.values, X, family=Poisson(), missing='drop').fit(
+            disp=verbose
+        )
+    elif str(family).lower() == 'binomial':
+        from statsmodels.genmod.families.family import Binomial
+
+        model = SM_GLM(current_series.values, X, family=Binomial(), missing='drop').fit(
+            disp=verbose
+        )
+    elif str(family).lower() == 'negativebinomial':
+        from statsmodels.genmod.families.family import NegativeBinomial
+
+        model = SM_GLM(
+            current_series.values, X, family=NegativeBinomial(), missing='drop'
+        ).fit(disp=verbose)
+    elif str(family).lower() == 'tweedie':
+        from statsmodels.genmod.families.family import Tweedie
+
+        model = SM_GLM(current_series.values, X, family=Tweedie(), missing='drop').fit(
+            disp=verbose
+        )
+    elif str(family).lower() == 'gamma':
+        from statsmodels.genmod.families.family import Gamma
+
+        model = SM_GLM(current_series.values, X, family=Gamma(), missing='drop').fit(
+            disp=verbose
+        )
+    else:
+        family = 'Gaussian'
+        model = SM_GLM(current_series.values, X, missing='drop').fit(disp=verbose)
+    Pred = model.predict((Xf))
+    Pred = pd.Series(Pred)
+    Pred.name = series_name
+    return Pred
+
+
 class GLM(ModelObject):
     """Simple linear regression from statsmodels
 
@@ -187,7 +232,6 @@ class GLM(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
-        from statsmodels.api import GLM
 
         if self.regression_type == 'datepart':
             X = date_part(self.df_train.index, method='expanded').values
@@ -232,50 +276,6 @@ class GLM(ModelObject):
         else:
             pool_verbose = 0
 
-        def forecast_by_column(df, X, Xf, args, col):
-            """Run one series of ETS and return prediction."""
-            current_series = df[col]
-            series_name = current_series.name
-            family = args['family']
-            verbose = args['verbose']
-            if str(family).lower() == 'poisson':
-                from statsmodels.genmod.families.family import Poisson
-
-                model = GLM(
-                    current_series.values, X, family=Poisson(), missing='drop'
-                ).fit(disp=verbose)
-            elif str(family).lower() == 'binomial':
-                from statsmodels.genmod.families.family import Binomial
-
-                model = GLM(
-                    current_series.values, X, family=Binomial(), missing='drop'
-                ).fit(disp=verbose)
-            elif str(family).lower() == 'negativebinomial':
-                from statsmodels.genmod.families.family import NegativeBinomial
-
-                model = GLM(
-                    current_series.values, X, family=NegativeBinomial(), missing='drop'
-                ).fit(disp=verbose)
-            elif str(family).lower() == 'tweedie':
-                from statsmodels.genmod.families.family import Tweedie
-
-                model = GLM(
-                    current_series.values, X, family=Tweedie(), missing='drop'
-                ).fit(disp=verbose)
-            elif str(family).lower() == 'gamma':
-                from statsmodels.genmod.families.family import Gamma
-
-                model = GLM(
-                    current_series.values, X, family=Gamma(), missing='drop'
-                ).fit(disp=verbose)
-            else:
-                family = 'Gaussian'
-                model = GLM(current_series.values, X, missing='drop').fit(disp=verbose)
-            Pred = model.predict((Xf))
-            Pred = pd.Series(Pred)
-            Pred.name = series_name
-            return Pred
-
         if self.n_jobs in [0, 1] or len(cols) < 4:
             parallel = False
         else:
@@ -286,14 +286,16 @@ class GLM(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose)(
-                delayed(forecast_by_column)(df=df, X=X, Xf=Xf, args=args, col=col)
+                delayed(glm_forecast_by_column)(
+                    current_series=df[col], X=X, Xf=Xf, args=args, col=col
+                )
                 for col in cols
             )
             df_forecast = pd.concat(df_list, axis=1)
         else:
             df_list = []
             for col in cols:
-                df_list.append(forecast_by_column(df, X, Xf, args, col))
+                df_list.append(glm_forecast_by_column(df[col], X, Xf, args, col))
             df_forecast = pd.concat(df_list, axis=1)
         df_forecast.index = test_index
 
@@ -447,9 +449,8 @@ class ETS(ModelObject):
             'verbose': self.verbose,
         }
 
-        def forecast_by_column(df, args, col):
+        def ets_forecast_by_column(current_series, args, col):
             """Run one series of ETS and return prediction."""
-            current_series = df[col]
             series_name = current_series.name
             try:
                 # handle statsmodels 0.13 method changes
@@ -497,13 +498,14 @@ class ETS(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(forecast_by_column)(self.df_train, args, col) for (col) in cols
+                delayed(ets_forecast_by_column)(self.df_train[col], args, col)
+                for (col) in cols
             )
             forecast = pd.concat(df_list, axis=1)
         else:
             df_list = []
             for col in cols:
-                df_list.append(forecast_by_column(self.df_train, args, col))
+                df_list.append(ets_forecast_by_column(self.df_train[col], args, col))
             forecast = pd.concat(df_list, axis=1)
         if just_point_forecast:
             return forecast
@@ -567,8 +569,7 @@ class ETS(ModelObject):
         return parameter_dict
 
 
-def arima_seek_the_oracle(df, args, series):
-    current_series = df[series]
+def arima_seek_the_oracle(current_series, args, series):
     try:
         if args['regression_type'] in ["User", "Holiday"]:
             maModel = SARIMAX(
@@ -736,14 +737,16 @@ class ARIMA(ModelObject):
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
-                delayed(arima_seek_the_oracle)(df=self.df_train, args=args, series=col)
+                delayed(arima_seek_the_oracle)(
+                    current_series=self.df_train[col], args=args, series=col
+                )
                 for col in cols
             )
             complete = list(map(list, zip(*df_list)))
         else:
             df_list = []
             for col in cols:
-                df_list.append(arima_seek_the_oracle(self.df_train, args, col))
+                df_list.append(arima_seek_the_oracle(self.df_train[col], args, col))
             complete = list(map(list, zip(*df_list)))
         forecast = pd.concat(complete[0], axis=1)
         lower_forecast = pd.concat(complete[1], axis=1)
@@ -940,9 +943,8 @@ class UnobservedComponents(ModelObject):
             'future_regressor': future_regressor,
         }
 
-        def forecast_by_column(df, args, col):
-            """Run one series of ETS and return prediction."""
-            current_series = df[col]
+        def forecast_by_column(current_series, args, col):
+            """Run one series of Unobserved Components and return prediction."""
             series_name = current_series.name
             test_index = args['test_index']
             try:
@@ -1002,55 +1004,15 @@ class UnobservedComponents(ModelObject):
         # print(f"parallel is {parallel} and n_jobs is {self.n_jobs}")
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(forecast_by_column)(self.df_train, args, col) for (col) in cols
+                delayed(forecast_by_column)(self.df_train[col], args, col)
+                for (col) in cols
             )
             forecast = pd.concat(df_list, axis=1)
         else:
             df_list = []
             for col in cols:
-                df_list.append(forecast_by_column(self.df_train, args, col))
+                df_list.append(forecast_by_column(self.df_train[col], args, col))
             forecast = pd.concat(df_list, axis=1)
-        """
-        forecast = pd.DataFrame()
-        for series in self.df_train.columns:
-            current_series = self.df_train[series].copy()
-            try:
-                if self.regression_type in ["User", "Holiday"]:
-                    maModel = UnobservedComponents(
-                        current_series,
-                        freq=self.frequency,
-                        exog=self.regressor_train,
-                        level=self.level,
-                        trend=self.trend,
-                        cycle=self.cycle,
-                        damped_cycle=self.damped_cycle,
-                        irregular=self.irregular,
-                        stochastic_cycle=self.stochastic_cycle,
-                        stochastic_level=self.stochastic_level,
-                        stochastic_trend=self.stochastic_trend,
-                    ).fit(disp=self.verbose_bool)
-                    maPred = maModel.predict(
-                        start=test_index[0], end=test_index[-1], exog=future_regressor
-                    )
-                else:
-                    maModel = UnobservedComponents(
-                        current_series,
-                        freq=self.frequency,
-                        level=self.level,
-                        trend=self.trend,
-                        cycle=self.cycle,
-                        damped_cycle=self.damped_cycle,
-                        irregular=self.irregular,
-                        stochastic_cycle=self.stochastic_cycle,
-                        stochastic_level=self.stochastic_level,
-                        stochastic_trend=self.stochastic_trend,
-                    ).fit(disp=self.verbose_bool)
-                    maPred = maModel.predict(start=test_index[0], end=test_index[-1])
-            except Exception:
-                maPred = pd.Series((np.zeros((forecast_length,))), index=test_index)
-            forecast = pd.concat([forecast, maPred], axis=1)
-        forecast.columns = self.column_names
-        """
 
         if just_point_forecast:
             return forecast

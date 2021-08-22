@@ -132,7 +132,7 @@ def contour(A, F):
 
 
 class EvalObject(object):
-    """Object to contain all your failures!."""
+    """Object to contain all the failures!."""
 
     def __init__(
         self,
@@ -141,12 +141,14 @@ class EvalObject(object):
         per_timestamp=np.nan,
         avg_metrics=np.nan,
         avg_metrics_weighted=np.nan,
+        full_mae_error=None,
     ):
         self.model_name = model_name
         self.per_series_metrics = per_series_metrics
         self.per_timestamp = per_timestamp
         self.avg_metrics = avg_metrics
         self.avg_metrics_weighted = avg_metrics_weighted
+        self.full_mae_error = full_mae_error
 
 
 def PredictionEval(
@@ -155,6 +157,7 @@ def PredictionEval(
     series_weights: dict,
     df_train=None,
     per_timestamp_errors: bool = False,
+    full_mae_error: bool = False,
     dist_n: int = None,
 ):
     """Evalute prediction against test actual.
@@ -169,6 +172,7 @@ def PredictionEval(
             if None, actuals are used instead. Suboptimal.
         per_timestamp (bool): whether to calculate and return per timestamp direction errors
         dist_n (int): if not None, calculates two part rmse on head(n) and tail(remainder) of forecast.
+        full_mae_error (bool): if True, return all MAE values for all series and timestamps
     """
     A = np.array(actual)
     F = np.array(PredictionObject.forecast)
@@ -219,11 +223,7 @@ def PredictionEval(
         )
         per_timestamp = pd.DataFrame({'weighted_smape': smape_cons}).transpose()
         errors.per_timestamp = per_timestamp
-    """
-    'mae': np.nanmean(abs(actual - PredictionObject.forecast), axis=1),
-    'rmse': np.sqrt(np.nanmean(((actual - PredictionObject.forecast) ** 2),axis=1)),
-    'containment':np.count_nonzero((PredictionObject.upper_forecast > actual) & (PredictionObject.lower_forecast < actual), axis=1)/actual.shape[1]
-    """
+
     # this weighting won't work well if entire metrics are NaN
     # but results should still be comparable
     errors.avg_metrics_weighted = (per_series * series_weights).sum(
@@ -231,14 +231,8 @@ def PredictionEval(
     ) / sum(series_weights.values())
     errors.avg_metrics = per_series.mean(axis=1, skipna=True)
 
-    if str(dist_n).isdigit():
-        per_series_d = pd.DataFrame(
-            {
-                'rmse1': rmse(A[:dist_n], F[:dist_n]),
-                'rmse2': rmse(A[dist_n:], F[dist_n:]),
-            }
-        ).transpose()
-        per_series_d.columns = actual.columns
-        per_series = pd.concat([per_series, per_series_d], axis=0)
+    if full_mae_error:
+        errors.full_mae_errors = abs(A - F)
+
     errors.per_series_metrics = per_series
     return errors

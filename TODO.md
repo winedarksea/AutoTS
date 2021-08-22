@@ -15,21 +15,20 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* Fixed horizontal ensembles running in univariate cases (they are explicitly multivariate)
-* 'superfast' transformer list added
-* test on Mac for the first time, everything seems to work except lightgbm
-* include first actual unittests (from existing test.py runs)
-* slight change to random template generation to make sure all models are choosen at least once
-* cleaned up PredictWitch -> model_forecast() a bit so that users can use it to run single models from parameters directly
-* added load_live_daily() example data and spruced up production_example.py
-* tried in vain to make a quiet verbosity option for GluonTS
-* added create_lagged_regressor
-* added Greykite model (additional regressors not working yet)
-* fixed regressors bug in Prophet
-* added a simple plot method to PredictionObject
-* fix for deprecation warning in GLS
+* improvements to joblib parallelized models (not copying the full df)
+* additonal parameter checks
+* made "auto" cpu_count even more conservative
+* improved 'Score' generation. It should now be more equally weighted across metrics.
+* fixed potential bug for horizontal ensemble selection if perfect forecasts were delivered
+* Horizontal ensembles now chosen by combination of multiple metrics and metric_weighting (mae, rmse, spl, contour)
+* re-weighted fillna probabilities for random choice
+* addressed a few deprecation warnings
+* new plot_horizontal() function for AutoTS to quickly visual horizontal ensembles
+* Probabilistic and HDist ensembles are now deprecated (they can still be run by model_forecast but not by AutoTS class)
+* new introduce_na parameter which makes series more robust to the last values being NaN in final but never in any validation
+* Mosaic Ensembles! These can offer major improvements to MAE, but are also less stable than horizontal ensembles.
 
-# Known Errors: 
+# Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
 VECM does not recognize exog to predict
 ARIMA with User or Holiday ValueError('Can only compare identically-labeled DataFrame objects',)

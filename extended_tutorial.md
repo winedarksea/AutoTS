@@ -12,10 +12,6 @@
 * [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#models)
 
 ## Extended Tutorial
-There are a number of ways to get a more accurate time series model. AutoTS takes care of a few of these:
-1. Pretransforming the data optimally for each model
-2. Trying an assortment of different algorithms
-3. Trying an assortment of hyperparameters for each algorithm
 
 ## Underlying Process
 AutoTS works in the following way at present:
@@ -76,20 +72,29 @@ Probably the most likely thing to cause trouble is having a lot of NaN/missing d
 Using appropriate cross validation (`backwards` especially if NaN is common in older data but not recent data) can help. 
 Dropping series which are mostly missing, or using `prefill_na=0` (or other value) can also help.
 
-### Validation and Cross Validation
-Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future. 
-With very small datasets, there may be not be enough data for cross validation, in which case `num_validations` may be set to 0. This can also speed up quick tests. 
+### What to Worry About
+There are some basic things to beware of that can commonly lead to poor results:
 
+1. Bad data (sudden drops or missing values) in the most recent data is the single most common cause of bad forecasts here. This is extremely common in 'live' data, for example sales data - the most recent records will represent an incomplete time, or not all orders are invoiced in the database, or one of countless other reasons. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. `drop_most_recent` can help handle this. Manually filling the most recent NaN values may also help. 
+2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be choosen. Think carefully about the validation methods, which is discussed in the next section.
+
+### Validation and Cross Validation
 Cross validation helps assure that the optimal model is stable over the dynamics of a time series. 
 Cross validation can be tricky in time series data due to the necessity of preventing data leakage from future data points. 
-Here, two methods of cross validation are in place, `'even'` and '`backwards'`.
+
+Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future. 
+With very small datasets, there may be not be enough data for cross validation, in which case `num_validations` may be set to 0. This can also speed up quick tests. 
+In general, the safest approach is to have as many validations as possible, as long as there is sufficient data for it. 
+
+Here are the available methods:
+
+**Backwards** cross validation is the safest method and works backwards from the most recent data. First the most recent forecast_length samples are taken, then the next most recent forecast_length samples, and so on. This makes it more ideal for smaller or fast-changing datasets. 
 
 **Even** cross validation slices the data into equal chunks. For example, `num_validations=3` would split the data into equal, progressive thirds (less the original validation sample). The final validation results would then include four pieces, the results on the three cross validation samples as well as the original validation sample. 
 
-**Backwards** cross validation works backwards from the most recent data. First the most recent forecast_length samples are taken, then the next most recent forecast_length samples, and so on. This makes it more ideal for smaller or fast-changing datasets. 
-
-**Seasonal** validation is supplied as `'seasonal n'` ie `'seasonal 364'`. It trains on the most recent data as usual, then valdations are `n` periods back from the datetime of the forecast would be. 
-For example with daily data, forecasting for a month ahead, and `n=364`, the first test might be on May 2020, with validation on June 2019 and June 2018, the final forecast then of June 2020.
+**Seasonal** validation is supplied as `'seasonal n'` ie `'seasonal 364'`. This is a variation on `backwards` validation and offers the best performance of all validation methods if an appropriate period is supplied. 
+It trains on the most recent data as usual, then valdations are `n` periods back from the datetime of the forecast would be. 
+For example with daily data, forecasting for a month ahead, and `n=364`, the first test might be on May 2021, with validation on June 2020 and June 2019, the final forecast then of June 2021. 
 
 Only a subset of models are taken from initial validation to cross validation. The number of models is set such as `models_to_validate=10`. 
 If a float in 0 to 1 is provided, it is treated as a % of models to select. 
@@ -126,7 +131,7 @@ model = AutoTS(
     forecast_length=49,
     frequency='infer',
     prediction_interval=0.95,
-    ensemble='simple',
+    ensemble=['simple', 'horizontal-min'],
     max_generations=5,
     num_validations=2,
     validation_method='seasonal 168',
@@ -146,6 +151,9 @@ prediction = model.predict()
 forecasts_df = prediction.forecast
 # prediction.long_form_results()
 # model.best_model.to_string()
+
+if model.best_model['Ensemble'].iloc[0] == 2:
+    model.plot_horizontal()
 ```
 
 Probabilistic forecasts are *available* for all models, but in many cases are just data-based estimates in lieu of model estimates. 
@@ -188,7 +196,6 @@ While the above version of deployment, with  evolving templates and cross_valida
 
 Coming from the deeper internals of AutoTS, this function can only take the `wide` style data (there is a long_to_wide function available). 
 Data must already be fairly clean - all numerics (or np.nan). 
-There aren't as many data and param checks at this point either, so it will be more brittle and output errors may be more confusing. 
 This will run Ensembles.
 
 ```python
@@ -200,7 +207,7 @@ df_forecast = model_forecast(
     model_name="AverageValueNaive",
     model_param_dict={'method': 'Mean'},
     model_transform_dict={
-        'fillna': 'fake_date',
+        'fillna': 'mean',
         'transformations': {'0': 'DifferencedTransformer'},
         'transformation_params': {'0': {}}
     },
@@ -220,17 +227,17 @@ df_forecast.forecast.head(5)
 
 ### Metrics
 There are a number of available metrics, all combined together into a 'Score' which evaluates the best model. The 'Score' that compares models can easily be adjusted by passing through custom metric weights dictionary. 
-Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers. 
+Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights must be numbers greater than or equal to 0.
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series. 
 ```python
 metric_weighting = {
-	'smape_weighting' : 10,
-	'mae_weighting' : 1,
-	'rmse_weighting' : 5,
-	'containment_weighting' : 1,
-	'runtime_weighting' : 0,
+	'smape_weighting': 10,
+	'mae_weighting': 1,
+	'rmse_weighting': 5,
+	'containment_weighting': 0,
+	'runtime_weighting': 0,
 	'spl_weighting': 1,
-	'contour_weighting': 0,
+	'contour_weighting': 1,
 }
 
 model = AutoTS(
@@ -239,9 +246,9 @@ model = AutoTS(
 	metric_weighting=metric_weighting,
 )
 ```		
-It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE. 
-			
-**Warning**: weights are not fully balanced 1 - 1 - 1. As such it is usually best to place your favorite metric an order of magnitude or more above the others. 
+It is best to usually use several metrics. Often the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE. 
+
+*Horizontal* style ensembles use `metric_weighting` for series selection, but only the values passed for `mae, rmse, contour, spl`. If all of these are 0, mae is used for selection. 
 
 `sMAPE` is generally the most versatile metric across multiple series, but doesn't handle forecasts with lots of zeroes well. 
 
@@ -252,6 +259,48 @@ It is wise to usually use several metrics. I often find the best sMAPE model, fo
 `Contour` is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. Does not work with forecast_length=1. 
 
 The contour metric is useful as it encourages 'wavy' forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they "don't look like they are trying hard enough" to some managers, and using contour favors non-flat forecasts that (to many) look like a more serious model.
+
+### Ensembles
+Ensemble methods are specified by the `ensemble=` parameter. It can be either a list or a comma-separated string.
+
+`simple` style ensembles (labeled 'BestN' in templates) are the most recognizable form of ensemble and are the simple average of the specified models, here usally 3 or 5 models. 
+`distance` style ensembles are two models spliced together. The first model forecasts the first fraction of forecast period, the second model the latter half. There is no overlap of the models. 
+Both `simple` and `distance` style models are constructed on the first evaluation set of data, and run through validation along with all other models selected for validation. 
+Both of these can also be recursive in depth, containing ensembles of ensembles. This recursive ensembling can happen when ensembles are imported from a starting template - they work just fine, but may get rather slow, having lots of models. 
+
+`horizontal` ensembles are the type of ensembles for which this package was originally created. 
+With this, each series gets its own model. This avoids the 'one size does not fit all' problem when many time series are in a datset. 
+In the interest of efficiency, univariate models are only run on the series they are needed for. 
+Models not in the `no_shared` list may make horizontal ensembling very slow at scale - as they have to be run for every series, even if they are only used for one. 
+`horizontal-max` chooses the best series for every model. `horizontal` and `horizontal-min` attempt to reduce the number of slow models chosen while still maintaining as much accuracy as possble. 
+A feature called `horizontal_generalization` allows the use of `subset` and makes these ensembles fault tolerant. 
+If you see a message `no full models available`, however, that means this generalization may fail. Including at least one of the `superfast` or a model not in `no_shared` models usually prevents this. 
+These ensembles are choosen based on per series accuracy on `mae, rmse, contour, spl`, weighted as specified in `metric_weighting`.
+`horizontal` ensembles can contain recursive depths of `simple` and `distance` style ensembles but `horizontal` ensembles cannot be nested. 
+
+`mosaic` enembles are an extension of `horizontal` ensembles, but with a specific model choosen for each series *and* for each forecast period. 
+As this means the maximum number of models can be `number of series * forecast_length`, this obviously may get quite slow. 
+Theoretically, this style of ensembling offers the highest accuracy. 
+However, `mosaic` models only utilize MAE for model selection, and as such upper and lower forecast performance may be poor. 
+They are also more prone to over-fitting, so use this with more validations and more stable data. 
+
+One thing you can do with `mosaic` ensembles if you only care about the accuracy of one forecast point, but want to run a forecast for the full forecast length, you can convert the mosaic to horizontal for just that forecast period. 
+```python
+import json
+from autots.models.ensemble import mosaic_to_horizontal, model_forecast
+
+# assuming model is from AutoTS.fit() with a mosaic as best_model
+model_params_init = json.loads(model.best_model['ModelParameters'].iloc[0])
+model_params = mosaic_to_horizontal(model_params_init, forecast_period=0)
+result = model_forecast(
+	model_name="Ensemble",
+	model_param_dict=model_params,
+	model_transform_dict={},
+	df_train=model.df_wide_numeric,
+	forecast_length=model.forecast_length,
+)
+result.forecast
+```
 
 ## Installation and Dependency Versioning
 `pip install autots`
@@ -500,8 +549,8 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              |               |
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
-|  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              | True         | True          |
-|  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |               |
+|  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
+|  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |   *           |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |

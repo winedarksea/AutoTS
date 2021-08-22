@@ -10,6 +10,54 @@ from autots.models.model_list import no_shared
 horizontal_aliases = ['horizontal', 'probabilistic']
 
 
+def summarize_series(df):
+    """Summarize time series data. For now just df.describe()."""
+    df_sum = df.describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
+    return df_sum
+
+
+def mosaic_or_horizontal(all_series: dict):
+    """Take a mosaic or horizontal model and return series or models.
+
+    Args:
+        all_series (dict): dict of series: model (or list of models)
+    """
+    first_value = all_series[next(iter(all_series))]
+    if isinstance(first_value, dict):
+        return "mosaic"
+    else:
+        return "horizontal"
+
+
+def parse_horizontal(all_series: dict, model_id: str = None, series_id: str = None):
+    """Take a mosaic or horizontal model and return series or models.
+
+    Args:
+        all_series (dict): dict of series: model (or list of models)
+        model_id (str): name of model to find series for
+        series_id (str): name of series to find models for
+
+    Returns:
+        list
+    """
+    if model_id is None and series_id is None:
+        raise ValueError(
+            "either series_id or model_id must be specified in parse_horizontal."
+        )
+
+    if mosaic_or_horizontal(all_series) == 'mosaic':
+        if model_id is not None:
+            return [ser for ser, mod in all_series.items() if model_id in mod.values()]
+        else:
+            return list(set(all_series[series_id].values()))
+    else:
+        if model_id is not None:
+            return [ser for ser, mod in all_series.items() if mod == model_id]
+        else:
+            # list(set([mod for ser, mod in all_series.items() if ser == series_id]))
+            return [all_series[series_id]]
+
+
 def BestNEnsemble(
     ensemble_params,
     forecasts_list,
@@ -20,6 +68,7 @@ def BestNEnsemble(
     prediction_interval,
 ):
     """Generate mean forecast for ensemble of models."""
+    startTime = datetime.datetime.now()
     # id_list = list(ensemble_params['models'].keys())
     # does it handle missing models well?
     # model_indexes = [x for x in forecasts.keys() if x in id_list]
@@ -58,7 +107,7 @@ def BestNEnsemble(
         forecast=ens_df,
         upper_forecast=ens_df_upper,
         prediction_interval=prediction_interval,
-        predict_runtime=datetime.timedelta(0),
+        predict_runtime=datetime.datetime.now() - startTime,
         fit_runtime=ens_runtime,
         model_parameters=ensemble_params,
     )
@@ -128,12 +177,6 @@ def DistEnsemble(
     return ens_result_obj
 
 
-def summarize_series(df):
-    """Summarize time series data. For now just df.describe()."""
-    df_sum = df.describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
-    return df_sum
-
-
 def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
     """
     CLassify unknown series with the appropriate model for horizontal ensembling.
@@ -167,6 +210,69 @@ def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
     return final
 
 
+def mosaic_classifier(df_train, known):
+    """CLassify unknown series with the appropriate model for mosaic ensembles."""
+    known.index.name = "forecast_period"
+    upload = pd.melt(
+        known,
+        var_name="series_id",
+        value_name="model_id",
+        ignore_index=False,
+    ).reset_index(drop=False)
+    upload['forecast_period'] = upload['forecast_period'].astype(int)
+    missing_cols = df_train.columns[
+        ~df_train.columns.isin(upload['series_id'].unique())
+    ]
+    if not missing_cols.empty:
+        forecast_p = np.arange(upload['forecast_period'].max() + 1)
+        p_full = np.tile(forecast_p, len(missing_cols))
+        missing_rows = pd.DataFrame(
+            {
+                'forecast_period': p_full,
+                'series_id': np.repeat(missing_cols.values, len(forecast_p)),
+                'model_id': np.nan,
+            },
+            index=None if len(p_full) > 1 else [0],
+        )
+        upload = pd.concat([upload, missing_rows])
+    X = (
+        summarize_series(df_train)
+        .transpose()
+        .merge(upload, left_index=True, right_on="series_id")
+    )
+    X.set_index("series_id", inplace=True)  # .drop(columns=['series_id'], inplace=True)
+    to_predict = X[X['model_id'].isna()].drop(columns=['model_id'])
+    X = X[~X['model_id'].isna()]
+    Y = X['model_id']
+    Xf = X.drop(columns=['model_id'])
+    # from sklearn.linear_model import RidgeClassifier
+    # from sklearn.naive_bayes import GaussianNB
+    from sklearn.ensemble import RandomForestClassifier
+
+    clf = RandomForestClassifier()
+    clf.fit(Xf, Y)
+    predicted = clf.predict(to_predict)
+    result = pd.concat(
+        [to_predict.reset_index(drop=False), pd.Series(predicted, name="model_id")],
+        axis=1,
+    )
+    cols_needed = ['model_id', 'series_id', 'forecast_period']
+    final = pd.concat(
+        [X.reset_index(drop=False)[cols_needed], result[cols_needed]], sort=True, axis=0
+    )
+    final['forecast_period'] = final['forecast_period'].astype(str)
+    final = final.pivot(values="model_id", columns="series_id", index="forecast_period")
+    try:
+        final = final[df_train.columns]
+        if final.isna().to_numpy().sum() > 0:
+            raise KeyError("NaN in mosaic generalization")
+    except KeyError as e:
+        raise ValueError(
+            f"mosaic_classifier failed to generalize for all columns: {repr(e)}"
+        )
+    return final
+
+
 def generalize_horizontal(
     df_train, known_matches: dict, available_models: list, full_models: list = None
 ):
@@ -180,26 +286,48 @@ def generalize_horizontal(
     """
     org_idx = df_train.columns
     org_list = org_idx.tolist()
-    # remove any unavailable models or unnecessary series
+    # remove any unnecessary series
     known_matches = {ser: mod for ser, mod in known_matches.items() if ser in org_list}
-    k = {ser: mod for ser, mod in known_matches.items() if mod in available_models}
-    # check if any series are missing from model list
-    if not k:
-        raise ValueError("Horizontal template has no models matching this data!")
-    if len(set(org_list) - set(list(k.keys()))) > 0:
-        # filter down to only models available for all
-        # print(f"Models not available: {[ser for ser, mod in known_matches.items() if mod not in available_models]}")
-        # print(f"Series not available: {[ser for ser in df_train.columns if ser not in list(known_matches.keys())]}")
-        if full_models is not None:
-            k2 = {ser: mod for ser, mod in k.items() if mod in full_models}
+    # here split for mosiac or horizontal
+    if mosaic_or_horizontal(known_matches) == "mosaic":
+        # make it a dataframe
+        mosaicy = pd.DataFrame.from_dict(known_matches)
+        # remove unavailable models
+        mosaicy = pd.DataFrame(mosaicy[mosaicy.isin(available_models)])
+        # so we can fill some missing by just using a forward fill, should be good enough
+        mosaicy.fillna(method='ffill', limit=3, inplace=True)
+        mosaicy.fillna(method='bfill', limit=2, inplace=True)
+        if mosaicy.isna().any().any() or mosaicy.shape[1] != df_train.shape[1]:
+            if full_models is not None:
+                k2 = pd.DataFrame(mosaicy[mosaicy.isin(full_models)])
+            else:
+                k2 = mosaicy.copy()
+            final = mosaic_classifier(df_train, known=k2)
+            return final.to_dict()
         else:
-            k2 = k.copy()
-        all_series_part = horizontal_classifier(df_train, k2)
-        # since this only has "full", overwrite with known that includes more
-        all_series = {**all_series_part, **k}
+            return known_matches
+
     else:
-        all_series = known_matches
-    return all_series
+        # remove any unavailable models
+        k = {ser: mod for ser, mod in known_matches.items() if mod in available_models}
+        # check if any series are missing from model list
+        if not k:
+            raise ValueError("Horizontal template has no models matching this data!")
+        # test if generalization is needed
+        if len(set(org_list) - set(list(k.keys()))) > 0:
+            # filter down to only models available for all
+            # print(f"Models not available: {[ser for ser, mod in known_matches.items() if mod not in available_models]}")
+            # print(f"Series not available: {[ser for ser in df_train.columns if ser not in list(known_matches.keys())]}")
+            if full_models is not None:
+                k2 = {ser: mod for ser, mod in k.items() if mod in full_models}
+            else:
+                k2 = k.copy()
+            all_series_part = horizontal_classifier(df_train, k2)
+            # since this only has "full", overwrite with known that includes more
+            all_series = {**all_series_part, **k}
+        else:
+            all_series = known_matches
+        return all_series
 
 
 def HorizontalEnsemble(
@@ -214,6 +342,7 @@ def HorizontalEnsemble(
     prematched_series: dict = None,
 ):
     """Generate forecast for per_series ensembling."""
+    startTime = datetime.datetime.now()
     # this is meant to fill in any failures
     available_models = list(forecasts.keys())
     train_size = df_train.shape
@@ -244,7 +373,7 @@ def HorizontalEnsemble(
             c_fore = forecasts[mod_id][series]
             forecast_df = pd.concat([forecast_df, c_fore], axis=1)
         except Exception as e:
-            print(f"Horizontal ensemble unable to add model {repr(e)}")
+            print(f"Horizontal ensemble unable to add model {mod_id} {repr(e)}")
         # upper
         c_fore = upper_forecasts[mod_id][series]
         u_forecast_df = pd.concat([u_forecast_df, c_fore], axis=1)
@@ -252,13 +381,14 @@ def HorizontalEnsemble(
         c_fore = lower_forecasts[mod_id][series]
         l_forecast_df = pd.concat([l_forecast_df, c_fore], axis=1)
     # make sure columns align to original
-    forecast_df.reindex(columns=org_idx)
-    u_forecast_df.reindex(columns=org_idx)
-    l_forecast_df.reindex(columns=org_idx)
+    forecast_df = forecast_df.reindex(columns=org_idx)
+    u_forecast_df = u_forecast_df.reindex(columns=org_idx)
+    l_forecast_df = l_forecast_df.reindex(columns=org_idx)
     # combine runtimes
-    ens_runtime = datetime.timedelta(0)
-    for idx, x in forecasts_runtime.items():
-        ens_runtime = ens_runtime + x
+    try:
+        ens_runtime = sum(list(forecasts_runtime.values()), datetime.timedelta())
+    except Exception:
+        ens_runtime = datetime.timedelta(0)
 
     ens_result = PredictionObject(
         model_name="Ensemble",
@@ -269,7 +399,7 @@ def HorizontalEnsemble(
         forecast=forecast_df,
         upper_forecast=u_forecast_df,
         prediction_interval=prediction_interval,
-        predict_runtime=datetime.timedelta(0),
+        predict_runtime=datetime.datetime.now() - startTime,
         fit_runtime=ens_runtime,
         model_parameters=ensemble_params,
     )
@@ -384,8 +514,10 @@ def EnsembleForecast(
     prematched_series: dict = None,
 ):
     """Return PredictionObject for given ensemble method."""
+    ens_model_name = ensemble_params['model_name'].lower().strip()
+
     s3list = ['best3', 'best3horizontal', 'bestn']
-    if ensemble_params['model_name'].lower().strip() in s3list:
+    if ens_model_name in s3list:
         ens_forecast = BestNEnsemble(
             ensemble_params,
             forecasts_list,
@@ -397,7 +529,7 @@ def EnsembleForecast(
         )
         return ens_forecast
 
-    if ensemble_params['model_name'].lower().strip() == 'dist':
+    elif ens_model_name == 'dist':
         ens_forecast = DistEnsemble(
             ensemble_params,
             forecasts_list,
@@ -409,7 +541,7 @@ def EnsembleForecast(
         )
         return ens_forecast
 
-    if ensemble_params['model_name'].lower().strip() in horizontal_aliases:
+    elif ens_model_name in horizontal_aliases:
         ens_forecast = HorizontalEnsemble(
             ensemble_params,
             forecasts_list,
@@ -423,7 +555,21 @@ def EnsembleForecast(
         )
         return ens_forecast
 
-    if ensemble_params['model_name'].lower().strip() == 'hdist':
+    elif ens_model_name == "mosaic":
+        ens_forecast = MosaicEnsemble(
+            ensemble_params,
+            forecasts_list,
+            forecasts,
+            lower_forecasts,
+            upper_forecasts,
+            forecasts_runtime,
+            prediction_interval,
+            df_train=df_train,
+            prematched_series=prematched_series,
+        )
+        return ens_forecast
+
+    elif ens_model_name == 'hdist':
         ens_forecast = HDistEnsemble(
             ensemble_params,
             forecasts_list,
@@ -434,6 +580,9 @@ def EnsembleForecast(
             prediction_interval,
         )
         return ens_forecast
+
+    else:
+        raise ValueError("Ensemble model type not recognized.")
 
 
 def EnsembleTemplateGenerator(
@@ -713,21 +862,17 @@ def HorizontalTemplateGenerator(
         if ('horizontal-max' in ensemble) or ('probabilistic-max' in ensemble):
             mods_per_series = per_series.idxmin()
             mods = mods_per_series.unique()
-            ensemble_models = {}
-            best5 = model_results[
-                model_results['ID'].isin(mods.tolist())
-            ].drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters']
+            best5 = (
+                model_results[model_results['ID'].isin(mods.tolist())]
+                .drop_duplicates(
+                    subset=['Model', 'ModelParameters', 'TransformationParameters']
+                )
+                .set_index("ID")[
+                    ['Model', 'ModelParameters', 'TransformationParameters']
+                ]
             )
-            for index, row in best5.iterrows():
-                temp_dict = {
-                    'Model': row['Model'],
-                    'ModelParameters': row['ModelParameters'],
-                    'TransformationParameters': row['TransformationParameters'],
-                }
-                ensemble_models[row['ID']] = temp_dict
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
-            metric = 'MAE' if 'horizontal' in ensemble else 'SPL'
+            metric = 'Score-max' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
@@ -735,7 +880,7 @@ def HorizontalTemplateGenerator(
                         'model_name': nomen,
                         'model_count': mods.shape[0],
                         'model_metric': metric,
-                        'models': ensemble_models,
+                        'models': best5.to_dict(orient='index'),
                         'series': mods_per_series.to_dict(),
                     }
                 ),
@@ -750,19 +895,15 @@ def HorizontalTemplateGenerator(
             mods_per_series = per_series.idxmin()
             mods_per_series2 = per_series2.idxmin()
             mods = pd.concat([mods_per_series, mods_per_series2]).unique()
-            ensemble_models = {}
-            best5 = model_results[
-                model_results['ID'].isin(mods.tolist())
-            ].drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters']
+            best5 = (
+                model_results[model_results['ID'].isin(mods.tolist())]
+                .drop_duplicates(
+                    subset=['Model', 'ModelParameters', 'TransformationParameters']
+                )
+                .set_index("ID")[
+                    ['Model', 'ModelParameters', 'TransformationParameters']
+                ]
             )
-            for index, row in best5.iterrows():
-                temp_dict = {
-                    'Model': row['Model'],
-                    'ModelParameters': row['ModelParameters'],
-                    'TransformationParameters': row['TransformationParameters'],
-                }
-                ensemble_models[row['ID']] = temp_dict
             nomen = 'hdist'
             best5_params = {
                 'Model': 'Ensemble',
@@ -770,7 +911,7 @@ def HorizontalTemplateGenerator(
                     {
                         'model_name': nomen,
                         'model_count': mods.shape[0],
-                        'models': ensemble_models,
+                        'models': best5.to_dict(orient='index'),
                         'dis_frac': 0.3,
                         'series1': mods_per_series.to_dict(),
                         'series2': mods_per_series2.to_dict(),
@@ -818,21 +959,17 @@ def HorizontalTemplateGenerator(
             # concern: choose lots of models, slower to run initial
             mods_per_series = per_series_filter.idxmin()
             mods = mods_per_series.unique()
-            ensemble_models = {}
-            best5 = model_results[
-                model_results['ID'].isin(mods.tolist())
-            ].drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters']
+            best5 = (
+                model_results[model_results['ID'].isin(mods.tolist())]
+                .drop_duplicates(
+                    subset=['Model', 'ModelParameters', 'TransformationParameters']
+                )
+                .set_index("ID")[
+                    ['Model', 'ModelParameters', 'TransformationParameters']
+                ]
             )
-            for index, row in best5.iterrows():
-                temp_dict = {
-                    'Model': row['Model'],
-                    'ModelParameters': row['ModelParameters'],
-                    'TransformationParameters': row['TransformationParameters'],
-                }
-                ensemble_models[row['ID']] = temp_dict
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
-            metric = 'TAX' if 'horizontal' in ensemble else 'SPL'
+            metric = 'Score' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
@@ -840,7 +977,7 @@ def HorizontalTemplateGenerator(
                         'model_name': nomen,
                         'model_count': mods.shape[0],
                         'model_metric': metric,
-                        'models': ensemble_models,
+                        'models': best5.to_dict(orient='index'),
                         'series': mods_per_series.to_dict(),
                     }
                 ),
@@ -881,21 +1018,19 @@ def HorizontalTemplateGenerator(
                     per_series_des = per_series.copy().drop(mods.index, axis=0)
 
             mods_per_series = per_series.loc[mods.index].idxmin()
-            ensemble_models = {}
-            best5 = model_results[
-                model_results['ID'].isin(mods_per_series.unique().tolist())
-            ].drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters']
+            best5 = (
+                model_results[
+                    model_results['ID'].isin(mods_per_series.unique().tolist())
+                ]
+                .drop_duplicates(
+                    subset=['Model', 'ModelParameters', 'TransformationParameters']
+                )
+                .set_index("ID")[
+                    ['Model', 'ModelParameters', 'TransformationParameters']
+                ]
             )
-            for index, row in best5.iterrows():
-                temp_dict = {
-                    'Model': row['Model'],
-                    'ModelParameters': row['ModelParameters'],
-                    'TransformationParameters': row['TransformationParameters'],
-                }
-                ensemble_models[row['ID']] = temp_dict
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
-            metric = 'MAE' if 'horizontal' in ensemble else 'SPL'
+            metric = 'Score-min' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
                 'Model': 'Ensemble',
                 'ModelParameters': json.dumps(
@@ -903,7 +1038,7 @@ def HorizontalTemplateGenerator(
                         'model_name': nomen,
                         'model_count': mods_per_series.unique().shape[0],
                         'model_metric': metric,
-                        'models': ensemble_models,
+                        'models': best5.to_dict(orient='index'),
                         'series': mods_per_series.to_dict(),
                     }
                 ),
@@ -915,3 +1050,186 @@ def HorizontalTemplateGenerator(
                 [ensemble_templates, best5_params], axis=0, ignore_index=True
             )
     return ensemble_templates
+
+
+def generate_mosaic_template(
+    initial_results, full_mae_ids, num_validations, col_names, full_mae_errors, **kwargs
+):
+    """Generate an ensemble template from results."""
+    total_vals = num_validations + 1
+    local_results = initial_results.copy()
+    # sort by runtime then drop duplicates on metric results
+    local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
+    local_results.drop_duplicates(
+        subset=['ValidationRound', 'smape', 'mae', 'spl'], inplace=True
+    )
+    # remove slow models... tbd
+    # select only models run through all validations
+    run_count = local_results[['Model', 'ID']].groupby("ID").count()
+    models_to_use = run_count[run_count['Model'] == total_vals].index.tolist()
+    # begin figuring out which are the min models for each point
+    id_array = np.array([y for y in sorted(full_mae_ids) if y in models_to_use])
+    errors_array = np.array(
+        [
+            x
+            for y, x in sorted(
+                zip(full_mae_ids, full_mae_errors), key=lambda pair: pair[0]
+            )
+            if y in models_to_use
+        ]
+    )
+    slice_points = np.arange(0, errors_array.shape[0], step=total_vals)
+    id_sliced = id_array[slice_points]
+    best_points = np.add.reduceat(errors_array, slice_points, axis=0).argmin(axis=0)
+    model_id_array = pd.DataFrame(np.take(id_sliced, best_points), columns=col_names)
+    used_models = pd.unique(model_id_array.values.flatten())
+    used_models_results = local_results[
+        ["ID", "Model", "ModelParameters", "TransformationParameters"]
+    ].drop_duplicates(subset='ID')
+    used_models_results = used_models_results[
+        used_models_results['ID'].isin(used_models)
+    ].set_index("ID")
+
+    ensemble_params = {
+        'Model': 'Ensemble',
+        'ModelParameters': json.dumps(
+            {
+                'model_name': "Mosaic",
+                'model_count': id_sliced.shape[0],
+                'model_metric': "MAE",
+                'models': used_models_results.to_dict(orient='index'),
+                'series': model_id_array.to_dict(orient='dict'),
+            }
+        ),
+        'TransformationParameters': '{}',
+        'Ensemble': 2,
+    }
+    ensemble_template = pd.DataFrame(ensemble_params, index=[0])
+    return ensemble_template
+
+
+def mosaic_to_horizontal(ModelParameters, forecast_period: int = 0):
+    """Take a mosaic template and pull a single forecast step as a horizontal model.
+
+    Args:
+        ModelParameters (dict): the json.loads() of the ModelParameters of a mosaic ensemble template
+        forecast_period (int): when to choose the model, starting with 0
+            where 0 would be the first forecast datestamp, 1 would be the second, and so on
+            must be less than forecast_length that the model was trained on.
+    Returs:
+        ModelParameters (dict)
+    """
+    if str(ModelParameters['model_name']).lower() != "mosaic":
+        raise ValueError("Input parameters are not recognized as a mosaic ensemble.")
+    all_models = ModelParameters['series']
+    result = {k: v[str(forecast_period)] for k, v in all_models.items()}
+    model_result = {
+        k: v for k, v in ModelParameters['models'].items() if k in result.values()
+    }
+    return {
+        'model_name': "horizontal",
+        'model_count': len(model_result),
+        "model_metric": "mosaic_conversion",
+        'models': model_result,
+        'series': result,
+    }
+
+
+def MosaicEnsemble(
+    ensemble_params,
+    forecasts_list,
+    forecasts,
+    lower_forecasts,
+    upper_forecasts,
+    forecasts_runtime,
+    prediction_interval,
+    df_train=None,
+    prematched_series: dict = None,
+):
+    """Generate forecast for mosaic ensembling.
+
+    Args:
+        prematched_series (dict): from outer horizontal generalization, possibly different than params
+    """
+    # work with forecast_lengths longer or shorter than provided by template
+
+    # this is meant to fill in any failures
+    startTime = datetime.datetime.now()
+    available_models = list(forecasts.keys())
+    train_size = df_train.shape
+    full_models = [
+        mod for mod, fcs in forecasts.items() if fcs.shape[1] == train_size[1]
+    ]
+    if not full_models:
+        print("No full models available for mosaic generalization.")
+        full_models = available_models  # hope it doesn't need to fill
+    if prematched_series is None:
+        prematched_series = ensemble_params['series']
+    all_series = generalize_horizontal(
+        df_train, prematched_series, available_models, full_models
+    )
+
+    org_idx = df_train.columns
+
+    final = pd.DataFrame.from_dict(all_series)
+    final.index.name = "forecast_period"
+    melted = pd.melt(
+        final,
+        var_name="series_id",
+        value_name="model_id",
+        ignore_index=False,
+    ).reset_index(drop=False)
+    melted["forecast_period"] = melted["forecast_period"].astype(int)
+
+    fore, u_fore, l_fore = [], [], []
+    for row in melted.itertuples():
+        fore.append(forecasts[row[3]][row[2]].iloc[row[1]])
+        u_fore.append(upper_forecasts[row[3]][row[2]].iloc[row[1]])
+        l_fore.append(lower_forecasts[row[3]][row[2]].iloc[row[1]])
+    melted[
+        'forecast'
+    ] = fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted[
+        'upper_forecast'
+    ] = u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted[
+        'lower_forecast'
+    ] = l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+
+    sample_idx = forecasts[next(iter(forecasts))].index
+    forecast_df = melted.pivot(
+        values="forecast", columns="series_id", index="forecast_period"
+    )
+    forecast_df.index = sample_idx
+    u_forecast_df = melted.pivot(
+        values="upper_forecast", columns="series_id", index="forecast_period"
+    )
+    u_forecast_df.index = sample_idx
+    l_forecast_df = melted.pivot(
+        values="lower_forecast", columns="series_id", index="forecast_period"
+    )
+    l_forecast_df.index = sample_idx.index = sample_idx
+    # make sure columns align to original
+    forecast_df = forecast_df.reindex(columns=org_idx)
+    u_forecast_df = u_forecast_df.reindex(columns=org_idx)
+    l_forecast_df = l_forecast_df.reindex(columns=org_idx)
+    # combine runtimes
+    try:
+        ens_runtime = sum(list(forecasts_runtime.values()), datetime.timedelta())
+    except Exception:
+        ens_runtime = datetime.timedelta(0)
+
+    ens_result = PredictionObject(
+        model_name="Ensemble",
+        forecast_length=len(sample_idx),
+        forecast_index=forecast_df.index,
+        forecast_columns=forecast_df.columns,
+        lower_forecast=l_forecast_df,
+        forecast=forecast_df,
+        upper_forecast=u_forecast_df,
+        prediction_interval=prediction_interval,
+        predict_runtime=datetime.datetime.now() - startTime,
+        fit_runtime=ens_runtime,
+        model_parameters=ensemble_params,
+    )
+    return ens_result

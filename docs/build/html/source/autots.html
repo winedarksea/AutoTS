@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots package &#8212; AutoTS 0.3.3 documentation</title>
+    <title>autots package &#8212; AutoTS 0.3.4 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -152,7 +152,7 @@ if False, return a Series with dt index</p></li>
 
 <dl class="function">
 <dt id="autots.load_live_daily">
-<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">load_live_daily</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False, fred_key: str = None, fred_series: list = ['DGS10', 'T5YIE', 'SP500', 'DCOILWTICO', 'DEXUSEU'], tickers: list = ['MSFT'], trends_list: list = ['forecasting', 'cycling', 'cpu', 'microsoft'], weather_data_types: list = ['AWND', 'WSF2'], weather_stations: list = ['USW00094846', 'USW00014925'], weather_years: int = 10, london_air_stations: list = ['CT3', 'SK8'], london_air_species: str = 'PM25', london_air_days: int = 180, earthquake_days: int = 180, earthquake_min_magnitude: int = 5</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.load_live_daily" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">load_live_daily</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False, fred_key: str = None, fred_series: list = ['DGS10', 'T5YIE', 'SP500', 'DCOILWTICO', 'DEXUSEU'], tickers: list = ['MSFT'], trends_list: list = ['forecasting', 'cycling', 'cpu', 'microsoft'], weather_data_types: list = ['AWND', 'WSF2', 'TAVG'], weather_stations: list = ['USW00094846', 'USW00014925'], weather_years: int = 10, london_air_stations: list = ['CT3', 'SK8'], london_air_species: str = 'PM25', london_air_days: int = 180, earthquake_days: int = 180, earthquake_min_magnitude: int = 5</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.load_live_daily" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates a dataframe of data up to the present day.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -162,7 +162,8 @@ if False, return a Series with dt index</p></li>
 <li><p><strong>fred_series</strong> (<em>list</em>) – list of FRED series IDs. This requires fredapi package</p></li>
 <li><p><strong>tickers</strong> (<em>list</em>) – list of stock tickers, requires yfinance</p></li>
 <li><p><strong>trends</strong> (<em>list</em>) – list of search keywords, requires pytrends.</p></li>
-<li><p><strong>weather_data_types</strong> (<em>list</em>) – from NCEI NOAA api data types</p></li>
+<li><p><strong>weather_data_types</strong> (<em>list</em>) – from NCEI NOAA api data types, GHCN Daily Weather Elements
+PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG</p></li>
 <li><p><strong>weather_stations</strong> (<em>list</em>) – from NCEI NOAA api station ids</p></li>
 <li><p><strong>london_air_stations</strong> (<em>list</em>) – londonair.org.uk source station IDs</p></li>
 <li><p><strong>london_species</strong> (<em>str</em>) – what measurement to pull from London Air. Not all stations have all metrics.        earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov</p></li>
@@ -173,7 +174,7 @@ if False, return a Series with dt index</p></li>
 
 <dl class="class">
 <dt id="autots.AutoTS">
-<em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 20</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 1</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 2}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'fast'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'backwards'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">prefill_na: str = None</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 10</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 1</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 2}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'fast'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'backwards'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">prefill_na: str = None</em>, <em class="sig-param">introduce_na: bool = None</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Automate time series modeling using a genetic algorithm.</p>
 <dl class="field-list simple">
@@ -187,11 +188,12 @@ More runs = longer runtime, generally better accuracy.</p></li>
 <li><p><strong>no_negatives</strong> (<em>bool</em>) – if True, all negative predictions are rounded up to 0.</p></li>
 <li><p><strong>constraint</strong> (<em>float</em>) – when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.</p></li>
 <li><p><strong>ensemble</strong> (<em>str</em>) – None or list or comma-separated string containing:
-‘auto’, ‘simple’, ‘distance’, ‘horizontal-max’, ‘probabilistic-max’, “hdist”</p></li>
+‘auto’, ‘simple’, ‘distance’, ‘horizontal’, ‘horizontal-min’, ‘horizontal-max’, “mosaic”</p></li>
 <li><p><strong>initial_template</strong> (<em>str</em>) – ‘Random’ - randomly generates starting template, ‘General’ uses template included in package, ‘General+Random’ - both of previous. Also can be overriden with self.import_template()</p></li>
 <li><p><strong>random_seed</strong> (<em>int</em>) – random seed allows (slightly) more consistent results.</p></li>
 <li><p><strong>holiday_country</strong> (<em>str</em>) – passed through to Holidays package for some models.</p></li>
-<li><p><strong>subset</strong> (<em>int</em>) – maximum number of series to evaluate at once. Useful to speed evaluation when many series are input.</p></li>
+<li><p><strong>subset</strong> (<em>int</em>) – maximum number of series to evaluate at once. Useful to speed evaluation when many series are input.
+takes a new subset of columns on each validation, unless mosaic ensembling, in which case columns are the same in each validation</p></li>
 <li><p><strong>aggfunc</strong> (<em>str</em>) – if data is to be rolled up to a higher frequency (daily -&gt; monthly) or duplicate timestamps are included. Default ‘first’ removes duplicates, for rollup try ‘mean’ or np.sum.
 Beware numeric aggregations like ‘mean’ will not work with non-numeric inputs.</p></li>
 <li><p><strong>na_tolerance</strong> (<em>float</em>) – 0 to 1. Series are dropped if they have more than this percent NaN. 0.95 here would allow series containing up to 95% NaN values.</p></li>
@@ -217,6 +219,8 @@ Useful in (unrecommended) cases where forecast_length &gt; training length.</p><
 <li><p><strong>remove_leading_zeroes</strong> (<em>bool</em>) – replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn’t started yet.</p></li>
 <li><p><strong>prefill_na</strong> (<em>str</em>) – value to input to fill all NaNs with. Leaving as None and allowing model interpolation is recommended.
 None, 0, ‘mean’, or ‘median’. 0 may be useful in for examples sales cases where all NaN can be assumed equal to zero.</p></li>
+<li><p><strong>introduce_na</strong> (<em>bool</em>) – whether to force last values in one training validation to be NaN. Helps make more robust models.
+defaults to None, which is as True if any NaN in tail of training data.</p></li>
 <li><p><strong>model_interrupt</strong> (<em>bool</em>) – if False, KeyboardInterrupts quit entire program.
 if True, KeyboardInterrupts attempt to only quit current model.
 if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite>result_file</cite> in the event of accidental complete termination.</p></li>
@@ -306,6 +310,12 @@ used in 0.2.x but not 0.3.x+ versions. retained for potential future use</p></li
 </dd></dl>
 
 <dl class="method">
+<dt id="autots.AutoTS.horizontal_to_df">
+<code class="sig-name descname">horizontal_to_df</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.horizontal_to_df" title="Permalink to this definition">¶</a></dt>
+<dd><p>helper function for plotting.</p>
+</dd></dl>
+
+<dl class="method">
 <dt id="autots.AutoTS.import_results">
 <code class="sig-name descname">import_results</code><span class="sig-paren">(</span><em class="sig-param">filename</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.import_results" title="Permalink to this definition">¶</a></dt>
 <dd><p>Add results from another run on the same data.</p>
@@ -324,6 +334,27 @@ Must be done before the AutoTS object is .fit().</p>
 <li><p><strong>filename</strong> (<em>str</em>) – file location (or a pd.DataFrame already loaded)</p></li>
 <li><p><strong>method</strong> (<em>str</em>) – ‘add_on’ or ‘only’ - “add_on” keeps <cite>initial_template</cite> generated in init. “only” uses only this template.</p></li>
 <li><p><strong>enforce_model_list</strong> (<em>bool</em>) – if True, remove model types not in model_list</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.AutoTS.mosaic_to_df">
+<code class="sig-name descname">mosaic_to_df</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.mosaic_to_df" title="Permalink to this definition">¶</a></dt>
+<dd><p>Helper function to create a readable df of models in mosaic.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.AutoTS.plot_horizontal">
+<code class="sig-name descname">plot_horizontal</code><span class="sig-paren">(</span><em class="sig-param">max_series: int = 20</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.plot_horizontal" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simple plot to visualize assigned series: models.</p>
+<p>Note that for ‘mosiac’ ensembles, it only plots the type of the most common model_id for that series, or the first if all are mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>max_series</strong> (<em>int</em>) – max number of points to plot</p></li>
+<li><p><strong>passed to pandas.plot</strong><strong>(</strong><strong>)</strong> (<em>**kwargs</em>) – </p></li>
 </ul>
 </dd>
 </dl>
@@ -530,7 +561,7 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 
 <dl class="function">
 <dt id="autots.RandomTransform">
-<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.1</em>, <em class="sig-param">'QuantileTransformer': 0.1</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.05</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.1</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.08</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'DatepartRegression': 0.02</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.05</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.05</em>, <em class="sig-param">'Slice': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.1</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.1</em>, <em class="sig-param">'rolling_mean_24': 0.099</em>, <em class="sig-param">'IterativeImputer': 0.1</em>, <em class="sig-param">'mean': 0.1</em>, <em class="sig-param">'zero': 0.1</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.1</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.1}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.RandomTransform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.1</em>, <em class="sig-param">'QuantileTransformer': 0.1</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.05</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.1</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.08</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'DatepartRegression': 0.02</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.05</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.05</em>, <em class="sig-param">'Slice': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.6</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.2</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.1</em>, <em class="sig-param">'mean': 0.05</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.05</em>, <em class="sig-param">None: 0.01</em>, <em class="sig-param">'interpolate': 0.6}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.RandomTransform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a dict of randomly choosen transformation selections.</p>
 <p>DatepartRegression is used as a signal that slow parameters are allowed.</p>
 </dd></dl>

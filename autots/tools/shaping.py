@@ -375,4 +375,4 @@ def simple_train_test_split(
         print("One or more series is 90% or more NaN in this train split")
     if (verbose >= 0) and ((test.isnull().sum(axis=0) / test.shape[0]).max() > 0.9):
         print("One or more series is 90% or more NaN in this test split")
-    return train, test
+    return train.copy(), test.copy()

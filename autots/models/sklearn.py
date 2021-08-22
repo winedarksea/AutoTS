@@ -438,7 +438,7 @@ def generate_regressor_params(
                         p=[0.2, 0.3, 0.1, 0.2, 0.2],
                         size=1,
                     ).item(),
-                    "hidden_layer_sizes": np.random.choice(
+                    "hidden_layer_sizes": random.choices(
                         [
                             (100,),
                             (32,),
@@ -447,9 +447,8 @@ def generate_regressor_params(
                             (32, 64, 32),
                             (32, 32, 32),
                         ],
-                        p=[0.1, 0.1, 0.1, 0.1, 0.1, 0.5],
-                        size=1,
-                    ).item(),
+                        [0.1, 0.3, 0.3, 0.1, 0.1, 0.1],
+                    )[0],
                     "rnn_type": np.random.choice(
                         ['LSTM', 'GRU'], p=[0.7, 0.3], size=1
                     ).item(),

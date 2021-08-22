@@ -98,6 +98,7 @@ class PredictionObject(object):
     Methods:
         long_form_results: return complete results in long form
         total_runtime: return runtime for all model components in seconds
+        plot
     """
 
     def __init__(
@@ -152,6 +153,12 @@ class PredictionObject(object):
         update_datetime_name=None,
     ):
         """Export forecasts (including upper and lower) as single 'long' format output
+
+        Args:
+            id_name (str): name of column containing ids
+            value_name (str): name of column containing numeric values
+            interval_name (str): name of column telling you what is upper/lower
+            update_datetime_name (str): if not None, adds column with current timestamp and this name
 
         Returns:
             pd.DataFrame

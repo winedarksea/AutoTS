@@ -5,6 +5,7 @@ import random
 import copy
 import json
 import sys
+import time
 
 from autots.tools.shaping import (
     long_to_wide,
@@ -20,12 +21,14 @@ from autots.evaluator.auto_model import (
     TemplateWizard,
     unpack_ensemble_models,
     generate_score,
+    generate_score_per_series,
     model_forecast,
     validation_aggregation,
 )
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
     HorizontalTemplateGenerator,
+    generate_mosaic_template,
 )
 from autots.models.model_list import model_lists
 from autots.tools import cpu_count
@@ -43,11 +46,12 @@ class AutoTS(object):
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.
         ensemble (str): None or list or comma-separated string containing:
-            'auto', 'simple', 'distance', 'horizontal-max', 'probabilistic-max', "hdist"
+            'auto', 'simple', 'distance', 'horizontal', 'horizontal-min', 'horizontal-max', "mosaic"
         initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
         random_seed (int): random seed allows (slightly) more consistent results.
         holiday_country (str): passed through to Holidays package for some models.
         subset (int): maximum number of series to evaluate at once. Useful to speed evaluation when many series are input.
+            takes a new subset of columns on each validation, unless mosaic ensembling, in which case columns are the same in each validation
         aggfunc (str): if data is to be rolled up to a higher frequency (daily -> monthly) or duplicate timestamps are included. Default 'first' removes duplicates, for rollup try 'mean' or np.sum.
             Beware numeric aggregations like 'mean' will not work with non-numeric inputs.
         na_tolerance (float): 0 to 1. Series are dropped if they have more than this percent NaN. 0.95 here would allow series containing up to 95% NaN values.
@@ -73,6 +77,8 @@ class AutoTS(object):
         remove_leading_zeroes (bool): replace leading zeroes with NaN. Useful in data where initial zeroes mean data collection hasn't started yet.
         prefill_na (str): value to input to fill all NaNs with. Leaving as None and allowing model interpolation is recommended.
             None, 0, 'mean', or 'median'. 0 may be useful in for examples sales cases where all NaN can be assumed equal to zero.
+        introduce_na (bool): whether to force last values in one training validation to be NaN. Helps make more robust models.
+            defaults to None, which is as True if any NaN in tail of training data. Will not introduce NaN to all series if subset is used.
         model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
@@ -89,7 +95,7 @@ class AutoTS(object):
         forecast_length: int = 14,
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
-        max_generations: int = 20,
+        max_generations: int = 10,
         no_negatives: bool = False,
         constraint: float = None,
         ensemble: str = 'auto',
@@ -120,6 +126,7 @@ class AutoTS(object):
         min_allowed_train_percent: float = 0.5,
         remove_leading_zeroes: bool = False,
         prefill_na: str = None,
+        introduce_na: bool = None,
         model_interrupt: bool = False,
         verbose: int = 1,
         n_jobs: int = None,
@@ -135,7 +142,7 @@ class AutoTS(object):
         self.random_seed = random_seed
         self.holiday_country = holiday_country
         if isinstance(ensemble, list):
-            ensemble = ",".join(ensemble)
+            ensemble = str(",".join(ensemble)).lower()
         self.ensemble = str(ensemble).lower()
         self.subset = subset
         self.na_tolerance = na_tolerance
@@ -153,6 +160,7 @@ class AutoTS(object):
         self.max_generations = max_generations
         self.remove_leading_zeroes = remove_leading_zeroes
         self.prefill_na = prefill_na
+        self.introduce_na = introduce_na
         self.model_interrupt = model_interrupt
         self.verbose = int(verbose)
         self.n_jobs = n_jobs
@@ -167,19 +175,31 @@ class AutoTS(object):
         if self.forecast_length == 1:
             if metric_weighting['contour_weighting'] > 0:
                 print("Contour metric does not work with forecast_length == 1")
+        # check metric weights are valid
+        metric_weighting_values = self.metric_weighting.values()
+        if min(metric_weighting_values) < 0:
+            raise ValueError(
+                f"Metric weightings must be numbers >= 0. Current weightings: {self.metric_weighting}"
+            )
+        elif sum(metric_weighting_values) == 0:
+            raise ValueError(
+                "Sum of metric_weightings is 0, one or more values must be > 0"
+            )
 
         if 'seasonal' in self.validation_method:
             val_list = [x for x in str(self.validation_method) if x.isdigit()]
             self.seasonal_val_periods = int(''.join(val_list))
 
         if self.n_jobs == 'auto':
-            self.n_jobs = cpu_count()
+            self.n_jobs = int(cpu_count() * 0.75)
             if verbose > 0:
                 print(f"Auto-detected {self.n_jobs} cpus for n_jobs.")
         elif str(self.n_jobs).isdigit():
             self.n_jobs = int(self.n_jobs)
             if self.n_jobs < 0:
                 self.n_jobs = cpu_count() + 1 - self.n_jobs
+        if self.n_jobs == 0:
+            self.n_jobs = 1
 
         # convert shortcuts of model lists to actual lists of models
         if model_list in list(model_lists.keys()):
@@ -403,6 +423,20 @@ class AutoTS(object):
         self.categorical_transformer = NumericTransformer(verbose=self.verbose)
         df_wide_numeric = self.categorical_transformer.fit_transform(df_wide)
 
+        # check that column names are unique:
+        if not df_wide_numeric.columns.is_unique:
+            # maybe should make this an actual error in the future
+            print(
+                "Warning: column/series names are not unique. Unique column names are highly recommended for wide data!"
+            )
+            time.sleep(3)  # give the message a chance to be seen
+        if len(future_regressor) > 0:
+            if future_regressor.shape[0] != df_wide_numeric.shape[0]:
+                print(
+                    "future_regressor row count does not match length of training data"
+                )
+                time.sleep(2)
+
         # use "mean" to assign weight as mean
         if weighted:
             if weights == 'mean':
@@ -457,8 +491,15 @@ class AutoTS(object):
                 ens_piece2 = "distance"
             else:
                 ens_piece2 = ""
-            self.ensemble = ens_piece1 + "," + ens_piece2
+            if "mosaic" in self.ensemble:
+                ens_piece3 = "mosaic"
+            else:
+                ens_piece3 = ""
+            self.ensemble = ens_piece1 + "," + ens_piece2 + "," + ens_piece3
         ensemble = self.ensemble
+
+        # check if NaN in last row
+        nan_tail = df_wide_numeric.tail(1).isna().sum(axis=1).iloc[0] > 0
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
@@ -502,6 +543,8 @@ class AutoTS(object):
         try:
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
+            if future_regressor.empty:
+                raise ValueError("regressor empty")
             if not isinstance(future_regressor.index, pd.DatetimeIndex):
                 future_regressor.index = df_subset.index
             # handle any non-numeric data, crudely
@@ -803,11 +846,16 @@ class AutoTS(object):
 
                 # subset series (if used) and take a new train/test split
                 if self.subset_flag:
+                    # mosaic can't handle different cols in each validation
+                    if "mosaic" in self.ensemble:
+                        rand_st = random_seed
+                    else:
+                        rand_st = random_seed + y + 1
                     df_subset = subset_series(
                         current_slice,
                         list((weights.get(i)) for i in current_slice.columns),
                         n=self.subset,
-                        random_state=(random_seed + y + 1),
+                        random_state=rand_st,
                     )
                     if self.verbose > 1:
                         print(f'{y + 1} subset is of: {df_subset.columns}')
@@ -840,6 +888,14 @@ class AutoTS(object):
                 except Exception:
                     val_future_regressor_train = []
                     val_future_regressor_test = []
+
+                # force NaN for robustness
+                if self.introduce_na or (self.introduce_na is None and nan_tail):
+                    nan_frac = val_df_train.shape[1] / num_validations
+                    int(nan_frac * y), int(nan_frac * (y + 1))
+                    val_df_train.iloc[
+                        -1, int(nan_frac * y) : int(nan_frac * (y + 1))
+                    ] = np.nan
 
                 # run validation template on current slice
                 template_result = TemplateWizard(
@@ -883,19 +939,21 @@ Try increasing models_to_validate, max_per_model_class
 or otherwise increase models available."""
 
         # Construct horizontal style ensembles
-        ens_list = ['horizontal', 'probabilistic', 'hdist']
+        ens_list = ['horizontal', 'probabilistic', 'hdist', 'mosaic']
         if any(x in ensemble for x in ens_list):
             ensemble_templates = pd.DataFrame()
             try:
-                if 'horizontal' in ensemble:
-                    per_series = self.initial_results.per_series_mae.copy()
+                if 'horizontal' in ensemble or 'probabilistic' in ensemble:
+                    per_series = generate_score_per_series(
+                        self.initial_results,
+                        metric_weighting=metric_weighting,
+                        total_validations=(num_validations + 1),
+                    )
                     # select only those models which were validated
-                    temp = per_series.mean(axis=1).groupby(level=0).count()
-                    temp = temp[temp >= (num_validations + 1)]
-                    per_series = per_series[per_series.index.isin(temp.index)]
-                    # this .mean() should assure all series get a value
-                    # as long as they worked in at least one validation
-                    per_series = per_series.groupby(level=0).mean()
+                    # series_sel = per_series.mean(axis=1).groupby(level=0).count()
+                    # series_sel = series_sel[series_sel >= (num_validations + 1)]
+                    # per_series = per_series[per_series.index.isin(series_sel.index)]
+                    # per_series = per_series.groupby(level=0).mean()
                     ens_templates = HorizontalTemplateGenerator(
                         per_series,
                         model_results=self.initial_results.model_results,
@@ -908,55 +966,25 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
-                if 'hdist' in ensemble:
-                    per_series = self.initial_results.per_series_rmse1.copy()
-                    temp = per_series.mean(axis=1).groupby(level=0).count()
-                    temp = temp[temp >= (num_validations + 1)]
-                    per_series = per_series[per_series.index.isin(temp.index)]
-                    per_series = per_series.groupby(level=0).mean()
-                    per_series2 = self.initial_results.per_series_rmse2.copy()
-                    temp = per_series2.mean(axis=1).groupby(level=0).count()
-                    temp = temp[temp >= (num_validations + 1)]
-                    per_series2 = per_series2[per_series2.index.isin(temp.index)]
-                    per_series2 = per_series2.groupby(level=0).mean()
-                    ens_templates = HorizontalTemplateGenerator(
-                        per_series,
-                        model_results=self.initial_results.model_results,
-                        forecast_length=forecast_length,
-                        ensemble=ensemble.replace('horizontal', ' ').replace(
-                            'probabilistic', ' '
-                        ),
-                        subset_flag=self.subset_flag,
-                        per_series2=per_series2,
-                    )
-                    ensemble_templates = pd.concat(
-                        [ensemble_templates, ens_templates], axis=0
-                    )
             except Exception as e:
                 if self.verbose >= 0:
-                    print(f"Ensembling Error: {e}")
+                    print(f"Horizontal Ensembling Error: {repr(e)}")
+                    time.sleep(5)
             try:
-                if 'probabilistic' in ensemble:
-                    per_series = self.initial_results.per_series_spl.copy()
-                    temp = per_series.mean(axis=1).groupby(level=0).count()
-                    temp = temp[temp >= (num_validations + 1)]
-                    per_series = per_series[per_series.index.isin(temp.index)]
-                    per_series = per_series.groupby(level=0).mean()
-                    ens_templates = HorizontalTemplateGenerator(
-                        per_series,
-                        model_results=self.initial_results.model_results,
-                        forecast_length=forecast_length,
-                        ensemble=ensemble.replace('horizontal', ' ').replace(
-                            'hdist', ' '
-                        ),
-                        subset_flag=self.subset_flag,
+                if 'mosaic' in ensemble:
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=self.initial_results.full_mae_errors,
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
             except Exception as e:
                 if self.verbose >= 0:
-                    print(f"Ensembling Error: {e}")
+                    print(f"Mosaic Ensembling Error: {e}")
             try:
                 # test on initial test split to make sure they work
                 template_result = TemplateWizard(
@@ -1011,8 +1039,12 @@ or otherwise increase models available."""
             self.validation_results = copy.copy(self.initial_results)
             self.validation_results = validation_aggregation(self.validation_results)
 
-            # use the best of these if any ran successfully
-            if template_result.model_results['smape'].sum(min_count=0) > 0:
+            # use the best of these ensembles if any ran successfully
+            try:
+                horz_flag = template_result.model_results['Exceptions'].isna().any()
+            except Exception:
+                horz_flag = False
+            if not template_result.model_results.empty and horz_flag:
                 template_result.model_results['Score'] = generate_score(
                     template_result.model_results,
                     metric_weighting=metric_weighting,
@@ -1026,6 +1058,7 @@ or otherwise increase models available."""
             else:
                 if self.verbose >= 0:
                     print("Horizontal ensemble failed. Using best non-horizontal.")
+                    time.sleep(3)
                 eligible_models = self.validation_results.model_results[
                     self.validation_results.model_results['Runs']
                     >= (num_validations + 1)
@@ -1264,7 +1297,7 @@ or otherwise increase models available."""
                 export_template = export_template[
                     export_template['Runs'] >= (self.num_validations + 1)
                 ]
-                ens_list = ['horizontal', 'probabilistic', 'hdist']
+                ens_list = ['horizontal', 'probabilistic', 'hdist', "mosaic"]
                 if any(x in self.ensemble for x in ens_list):
                     temp = self.initial_results.model_results
                     temp = temp[temp['Ensemble'] >= 2]
@@ -1406,6 +1439,66 @@ or otherwise increase models available."""
                 raise ValueError("import type not recognized.")
             self.initial_results = self.initial_results.concat(new_obj)
         return self
+
+    def horizontal_to_df(self):
+        """helper function for plotting."""
+        if self.best_model.empty:
+            raise ValueError("No best_model. AutoTS .fit() needs to be run.")
+        if self.best_model['Ensemble'].iloc[0] != 2:
+            raise ValueError("Only works on horizontal ensemble type models.")
+        series = json.loads(self.best_model['ModelParameters'].iloc[0])['series']
+        series = pd.DataFrame.from_dict(series, orient="index").reset_index(drop=False)
+        if series.shape[1] > 2:
+            # for mosaic style ensembles, choose the mode model id
+            series.set_index(series.columns[0], inplace=True)
+            series = series.mode(axis=1)[0].to_frame().reset_index(drop=False)
+        series.columns = ['Series', 'ID']
+        series = series.merge(
+            self.results()[['ID', "Model"]].drop_duplicates(), on="ID"
+        )
+        series = series.merge(
+            self.df_wide_numeric.std().to_frame(), right_index=True, left_on="Series"
+        )
+        series = series.merge(
+            self.df_wide_numeric.mean().to_frame(), right_index=True, left_on="Series"
+        )
+        series.columns = ["Series", "ID", 'Model', "Volatility", "Mean"]
+        return series
+
+    def mosaic_to_df(self):
+        """Helper function to create a readable df of models in mosaic."""
+        if self.best_model.empty:
+            raise ValueError("No best_model. AutoTS .fit() needs to be run.")
+        if self.best_model['Ensemble'].iloc[0] != 2:
+            raise ValueError("Only works on horizontal ensemble type models.")
+        ModelParameters = json.loads(self.best_model['ModelParameters'].iloc[0])
+        if str(ModelParameters['model_name']).lower() != 'mosaic':
+            raise ValueError("Only works on mosaic ensembles.")
+        series = pd.DataFrame.from_dict(ModelParameters['series'])
+        lookup = {k: v['Model'] for k, v in ModelParameters['models'].items()}
+        return series.replace(lookup)
+
+    def plot_horizontal(self, max_series: int = 20, **kwargs):
+        """Simple plot to visualize assigned series: models.
+
+        Note that for 'mosiac' ensembles, it only plots the type of the most common model_id for that series, or the first if all are mode.
+
+        Args:
+            max_series (int): max number of points to plot
+            **kwargs passed to pandas.plot()
+        """
+        series = self.horizontal_to_df()
+        # remove some data to prevent overcrowding the graph, if necessary
+        max_series = series.shape[0] if series.shape[0] < max_series else max_series
+        series = series.sample(max_series, replace=False)
+        # sklearn.preprocessing.normalizer also might work
+        series[['log(Volatility)', 'log(Mean)']] = np.log(
+            series[['Volatility', 'Mean']]
+        )
+        # plot
+        series.set_index(['Model', 'log(Mean)']).unstack('Model')[
+            'log(Volatility)'
+        ].plot(style='o', **kwargs)
 
 
 class AutoTSIntervals(object):

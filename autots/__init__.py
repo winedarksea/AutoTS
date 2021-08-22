@@ -19,7 +19,7 @@ from autots.tools.shaping import long_to_wide
 from autots.tools.regressor import create_lagged_regressor
 from autots.evaluator.auto_model import model_forecast
 
-__version__ = '0.3.3'
+__version__ = '0.3.4'
 
 TransformTS = GeneralTransformer
 

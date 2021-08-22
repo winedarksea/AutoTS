@@ -102,7 +102,9 @@ def date_part(DTindex, method: str = 'simple'):
                     "quarter_end": (DTindex.is_quarter_end).astype(int),
                     'year_end': (DTindex.is_year_end).astype(int),
                     'daysinmonth': DTindex.daysinmonth,
-                    'epoch': DTindex.astype(int),
+                    'epoch': pd.to_numeric(
+                        DTindex, errors='coerce', downcast='integer'
+                    ).values,
                 }
             )
             date_part_df = pd.concat([date_part_df, date_part_df2], axis=1)

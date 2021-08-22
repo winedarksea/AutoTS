@@ -24,7 +24,8 @@ else:
 
 
 def seek_the_oracle(
-    df,
+    df_index,
+    series,
     col,
     forecast_length,
     freq,
@@ -41,8 +42,8 @@ def seek_the_oracle(
     """Internal. For loop or parallel version of Greykite."""
     inner_df = pd.DataFrame(
         {
-            'ts': df.index,
-            'y': df[col].values,
+            'ts': df_index,
+            'y': series,
         }
     )
     if regressors is not None:
@@ -196,7 +197,8 @@ class Greykite(ModelObject):
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
                 delayed(seek_the_oracle)(
-                    self.df_train,
+                    self.df_train.index,
+                    self.df_train[col],
                     col,
                     forecast_length,
                     freq=self.frequency,
@@ -215,7 +217,8 @@ class Greykite(ModelObject):
             for col in cols:
                 df_list.append(
                     seek_the_oracle(
-                        self.df_train,
+                        self.df_train.index,
+                        self.df_train[col],
                         col,
                         forecast_length,
                         freq=self.frequency,

@@ -158,7 +158,7 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
     elif method in df_interpolate:
         return df.interpolate(method=method, order=5).fillna(method='bfill')
 
-    elif method is None:
+    elif method is None or method == 'None':
         return df
 
     else:

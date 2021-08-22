@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.models package &#8212; AutoTS 0.3.3 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.3.4 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -141,19 +141,32 @@
 </dd></dl>
 
 <dl class="method">
+<dt id="autots.models.base.PredictionObject.plot">
+<code class="sig-name descname">plot</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.plot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
 <dt>
 <code class="sig-name descname">long_form_results</code><span class="sig-paren">(</span><em class="sig-param">id_name='SeriesID'</em>, <em class="sig-param">value_name='Value'</em>, <em class="sig-param">interval_name='PredictionInterval'</em>, <em class="sig-param">update_datetime_name=None</em><span class="sig-paren">)</span></dt>
 <dd><p>Export forecasts (including upper and lower) as single ‘long’ format output</p>
 <dl class="field-list simple">
-<dt class="field-odd">Returns</dt>
-<dd class="field-odd"><p>pd.DataFrame</p>
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>id_name</strong> (<em>str</em>) – name of column containing ids</p></li>
+<li><p><strong>value_name</strong> (<em>str</em>) – name of column containing numeric values</p></li>
+<li><p><strong>interval_name</strong> (<em>str</em>) – name of column telling you what is upper/lower</p></li>
+<li><p><strong>update_datetime_name</strong> (<em>str</em>) – if not None, adds column with current timestamp and this name</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>pd.DataFrame</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="method">
-<dt id="autots.models.base.PredictionObject.plot">
-<code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">df_wide=None</em>, <em class="sig-param">series: str = None</em>, <em class="sig-param">ax=None</em>, <em class="sig-param">remove_zeroes: bool = False</em>, <em class="sig-param">start_date: str = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.plot" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">df_wide=None</em>, <em class="sig-param">series: str = None</em>, <em class="sig-param">ax=None</em>, <em class="sig-param">remove_zeroes: bool = False</em>, <em class="sig-param">start_date: str = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span></dt>
 <dd><p>Generate an example plot of one series.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -571,6 +584,17 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd></dl>
 
 <dl class="function">
+<dt id="autots.models.ensemble.MosaicEnsemble">
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">MosaicEnsemble</code><span class="sig-paren">(</span><em class="sig-param">ensemble_params</em>, <em class="sig-param">forecasts_list</em>, <em class="sig-param">forecasts</em>, <em class="sig-param">lower_forecasts</em>, <em class="sig-param">upper_forecasts</em>, <em class="sig-param">forecasts_runtime</em>, <em class="sig-param">prediction_interval</em>, <em class="sig-param">df_train=None</em>, <em class="sig-param">prematched_series: dict = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.MosaicEnsemble" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate forecast for mosaic ensembling.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>prematched_series</strong> (<em>dict</em>) – from outer horizontal generalization, possibly different than params</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
 <dt id="autots.models.ensemble.generalize_horizontal">
 <code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">generalize_horizontal</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">known_matches: dict</em>, <em class="sig-param">available_models: list</em>, <em class="sig-param">full_models: list = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.generalize_horizontal" title="Permalink to this definition">¶</a></dt>
 <dd><p>generalize a horizontal model trained on a subset of all series</p>
@@ -587,6 +611,12 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd></dl>
 
 <dl class="function">
+<dt id="autots.models.ensemble.generate_mosaic_template">
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">generate_mosaic_template</code><span class="sig-paren">(</span><em class="sig-param">initial_results</em>, <em class="sig-param">full_mae_ids</em>, <em class="sig-param">num_validations</em>, <em class="sig-param">col_names</em>, <em class="sig-param">full_mae_errors</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.generate_mosaic_template" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate an ensemble template from results.</p>
+</dd></dl>
+
+<dl class="function">
 <dt id="autots.models.ensemble.horizontal_classifier">
 <code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">horizontal_classifier</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">known: dict</em>, <em class="sig-param">method: str = 'whatever'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.horizontal_classifier" title="Permalink to this definition">¶</a></dt>
 <dd><p>CLassify unknown series with the appropriate model for horizontal ensembling.</p>
@@ -599,6 +629,61 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p>dict.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.ensemble.mosaic_classifier">
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">mosaic_classifier</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">known</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.mosaic_classifier" title="Permalink to this definition">¶</a></dt>
+<dd><p>CLassify unknown series with the appropriate model for mosaic ensembles.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.ensemble.mosaic_or_horizontal">
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">mosaic_or_horizontal</code><span class="sig-paren">(</span><em class="sig-param">all_series: dict</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.mosaic_or_horizontal" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take a mosaic or horizontal model and return series or models.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>all_series</strong> (<em>dict</em>) – dict of series: model (or list of models)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.ensemble.mosaic_to_horizontal">
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">mosaic_to_horizontal</code><span class="sig-paren">(</span><em class="sig-param">ModelParameters</em>, <em class="sig-param">forecast_period: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.mosaic_to_horizontal" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take a mosaic template and pull a single forecast step as a horizontal model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ModelParameters</strong> (<em>dict</em>) – the json.loads() of the ModelParameters of a mosaic ensemble template</p></li>
+<li><p><strong>forecast_period</strong> (<em>int</em>) – when to choose the model, starting with 0
+where 0 would be the first forecast datestamp, 1 would be the second, and so on
+must be less than forecast_length that the model was trained on.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Returs:</dt><dd><p>ModelParameters (dict)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.ensemble.parse_horizontal">
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">parse_horizontal</code><span class="sig-paren">(</span><em class="sig-param">all_series: dict</em>, <em class="sig-param">model_id: str = None</em>, <em class="sig-param">series_id: str = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.parse_horizontal" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take a mosaic or horizontal model and return series or models.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>all_series</strong> (<em>dict</em>) – dict of series: model (or list of models)</p></li>
+<li><p><strong>model_id</strong> (<em>str</em>) – name of model to find series for</p></li>
+<li><p><strong>series_id</strong> (<em>str</em>) – name of series to find models for</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>list</p>
 </dd>
 </dl>
 </dd></dl>
@@ -744,7 +829,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="function">
 <dt id="autots.models.greykite.seek_the_oracle">
-<code class="sig-prename descclassname">autots.models.greykite.</code><code class="sig-name descname">seek_the_oracle</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">col</em>, <em class="sig-param">forecast_length</em>, <em class="sig-param">freq</em>, <em class="sig-param">prediction_interval=0.9</em>, <em class="sig-param">model_template='silverkite'</em>, <em class="sig-param">growth=None</em>, <em class="sig-param">holiday=True</em>, <em class="sig-param">holiday_country='UnitedStates'</em>, <em class="sig-param">regressors=None</em>, <em class="sig-param">verbose=0</em>, <em class="sig-param">inner_n_jobs=1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.greykite.seek_the_oracle" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.greykite.</code><code class="sig-name descname">seek_the_oracle</code><span class="sig-paren">(</span><em class="sig-param">df_index</em>, <em class="sig-param">series</em>, <em class="sig-param">col</em>, <em class="sig-param">forecast_length</em>, <em class="sig-param">freq</em>, <em class="sig-param">prediction_interval=0.9</em>, <em class="sig-param">model_template='silverkite'</em>, <em class="sig-param">growth=None</em>, <em class="sig-param">holiday=True</em>, <em class="sig-param">holiday_country='UnitedStates'</em>, <em class="sig-param">regressors=None</em>, <em class="sig-param">verbose=0</em>, <em class="sig-param">inner_n_jobs=1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.greykite.seek_the_oracle" title="Permalink to this definition">¶</a></dt>
 <dd><p>Internal. For loop or parallel version of Greykite.</p>
 </dd></dl>
 
@@ -826,7 +911,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="function">
 <dt id="autots.models.prophet.seek_the_oracle">
-<code class="sig-prename descclassname">autots.models.prophet.</code><code class="sig-name descname">seek_the_oracle</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">args</em>, <em class="sig-param">series</em>, <em class="sig-param">forecast_length</em>, <em class="sig-param">future_regressor</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.seek_the_oracle" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.prophet.</code><code class="sig-name descname">seek_the_oracle</code><span class="sig-paren">(</span><em class="sig-param">current_series</em>, <em class="sig-param">args</em>, <em class="sig-param">series</em>, <em class="sig-param">forecast_length</em>, <em class="sig-param">future_regressor</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.seek_the_oracle" title="Permalink to this definition">¶</a></dt>
 <dd><p>Prophet for for loop or parallel.</p>
 </dd></dl>
 
@@ -1726,8 +1811,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="function">
 <dt id="autots.models.statsmodels.arima_seek_the_oracle">
-<code class="sig-prename descclassname">autots.models.statsmodels.</code><code class="sig-name descname">arima_seek_the_oracle</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">args</em>, <em class="sig-param">series</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.arima_seek_the_oracle" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.statsmodels.</code><code class="sig-name descname">arima_seek_the_oracle</code><span class="sig-paren">(</span><em class="sig-param">current_series</em>, <em class="sig-param">args</em>, <em class="sig-param">series</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.arima_seek_the_oracle" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.statsmodels.glm_forecast_by_column">
+<code class="sig-prename descclassname">autots.models.statsmodels.</code><code class="sig-name descname">glm_forecast_by_column</code><span class="sig-paren">(</span><em class="sig-param">current_series</em>, <em class="sig-param">X</em>, <em class="sig-param">Xf</em>, <em class="sig-param">args</em>, <em class="sig-param">col</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.glm_forecast_by_column" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run one series of GLM and return prediction.</p>
+</dd></dl>
 
 </section>
 <section id="module-autots.models.tfp">

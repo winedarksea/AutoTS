@@ -245,9 +245,17 @@ class AutoTSTest(unittest.TestCase):
         self.assertEqual(len(template_dict['models'].keys()), template_dict['model_count'])
         # test that actually the best model (or nearly) was chosen
         self.assertGreater(validation_results['Score'].quantile(0.05), best_model_result['Score'].iloc[0])
-
-
-
+        # test metrics
+        self.assertTrue(initial_results['Score'].min() > 0)
+        self.assertTrue(initial_results['mae'].min() >= 0)
+        self.assertTrue(initial_results['smape'].min() >= 0)
+        self.assertTrue(initial_results['rmse'].min() >= 0)
+        self.assertTrue(initial_results['contour'].min() >= 0)
+        self.assertTrue(initial_results['containment'].min() >= 0)
+        self.assertTrue(initial_results['TotalRuntimeSeconds'].min() >= 0)
+        self.assertTrue(initial_results['spl'].min() >= 0)
+        self.assertTrue(initial_results['contour'].min() <= 1)
+        self.assertTrue(initial_results['containment'].min() <= 1)
 
         # test all same on univariate input, non-horizontal, with regressor, and different frequency, with forecast_length = 1 !
 

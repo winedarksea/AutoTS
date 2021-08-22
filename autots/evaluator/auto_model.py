@@ -12,6 +12,7 @@ from autots.models.ensemble import (
     EnsembleForecast,
     generalize_horizontal,
     horizontal_aliases,
+    parse_horizontal,
 )
 from autots.tools.shaping import infer_frequency
 from autots.models.model_list import (
@@ -521,7 +522,13 @@ def ModelPrediction(
 
 
 class TemplateEvalObject(object):
-    """Object to contain all the failures!."""
+    """Object to contain all the failures!.
+
+    Attributes:
+        full_mae_ids (list): list of model_ids corresponding to full_mae_errors
+        full_mae_errors (list): list of numpy arrays of shape (rows, columns) appended in order of validation
+            only provided for 'mosaic' ensembling
+    """
 
     def __init__(
         self,
@@ -544,6 +551,8 @@ class TemplateEvalObject(object):
         self.per_series_rmse1 = per_series_rmse1
         self.per_series_rmse2 = per_series_rmse2
         self.per_timestamp_smape = per_timestamp_smape
+        self.full_mae_ids = []
+        self.full_mae_errors = []
 
     def __repr__(self):
         """Print."""
@@ -582,6 +591,8 @@ class TemplateEvalObject(object):
             axis=0,
             sort=False,
         )
+        self.full_mae_errors.extend(another_eval.full_mae_errors)
+        self.full_mae_ids.extend(another_eval.full_mae_ids)
         self.model_count = self.model_count + another_eval.model_count
         return self
 
@@ -763,9 +774,8 @@ def model_forecast(
             try:
                 if all_series is not None:
                     test_mod = row['ID']
-                    horizontal_subset = [
-                        ser for ser, mod in all_series.items() if mod == test_mod
-                    ]
+                    horizontal_subset = parse_horizontal(all_series, model_id=test_mod)
+
                 df_forecast = model_forecast(
                     model_name=row['Model'],
                     model_param_dict=row['ModelParameters'],
@@ -872,6 +882,13 @@ def model_forecast(
 
         sys.stdout.flush()
         return df_forecast
+
+
+def _ps_metric(per_series_metrics, metric, model_id):
+    cur_mae = per_series_metrics.loc[metric]
+    cur_mae = pd.DataFrame(cur_mae).transpose()
+    cur_mae.index = [model_id]
+    return cur_mae
 
 
 def TemplateWizard(
@@ -1001,17 +1018,14 @@ def TemplateWizard(
             )
 
             per_ts = True if 'distance' in ensemble else False
-            if 'hdist' in ensemble:
-                dist_n = int(np.ceil(0.3 * forecast_length))
-            else:
-                dist_n = None
+            full_mae = True if "mosaic" in ensemble else False
             model_error = PredictionEval(
                 df_forecast,
                 df_test,
                 series_weights=weights,
                 df_train=df_train,
                 per_timestamp_errors=per_ts,
-                dist_n=dist_n,
+                full_mae_error=full_mae,
             )
             if validation_round >= 1 and verbose > 0:
                 validation_accuracy_print = (
@@ -1063,34 +1077,38 @@ def TemplateWizard(
                 ignore_index=True,
                 sort=False,
             ).reset_index(drop=True)
-            if 'horizontal' in ensemble:
-                cur_mae = model_error.per_series_metrics.loc['mae']
-                cur_mae = pd.DataFrame(cur_mae).transpose()
-                cur_mae.index = [model_id]
+
+            if 'horizontal' in ensemble or 'probabilistic' in ensemble:
+                ps_metric = model_error.per_series_metrics
                 template_result.per_series_mae = pd.concat(
-                    [template_result.per_series_mae, cur_mae], axis=0
+                    [
+                        template_result.per_series_mae,
+                        _ps_metric(ps_metric, 'mae', model_id),
+                    ],
+                    axis=0,
                 )
-
-                cur_mae = model_error.per_series_metrics.loc['contour']
-                cur_mae = pd.DataFrame(cur_mae).transpose()
-                cur_mae.index = [model_id]
                 template_result.per_series_contour = pd.concat(
-                    [template_result.per_series_contour, cur_mae], axis=0
+                    [
+                        template_result.per_series_contour,
+                        _ps_metric(ps_metric, 'contour', model_id),
+                    ],
+                    axis=0,
+                )
+                template_result.per_series_rmse = pd.concat(
+                    [
+                        template_result.per_series_rmse,
+                        _ps_metric(ps_metric, 'rmse', model_id),
+                    ],
+                    axis=0,
+                )
+                template_result.per_series_spl = pd.concat(
+                    [
+                        template_result.per_series_spl,
+                        _ps_metric(ps_metric, 'spl', model_id),
+                    ],
+                    axis=0,
                 )
 
-                cur_mae = model_error.per_series_metrics.loc['rmse']
-                cur_mae = pd.DataFrame(cur_mae).transpose()
-                cur_mae.index = [model_id]
-                template_result.per_series_rmse = pd.concat(
-                    [template_result.per_series_rmse, cur_mae], axis=0
-                )
-            if 'probabilistic' in ensemble:
-                cur_spl = model_error.per_series_metrics.loc['spl']
-                cur_spl = pd.DataFrame(cur_spl).transpose()
-                cur_spl.index = [model_id]
-                template_result.per_series_spl = pd.concat(
-                    [template_result.per_series_spl, cur_spl], axis=0
-                )
             if 'distance' in ensemble:
                 cur_smape = model_error.per_timestamp.loc['weighted_smape']
                 cur_smape = pd.DataFrame(cur_smape).transpose()
@@ -1098,19 +1116,10 @@ def TemplateWizard(
                 template_result.per_timestamp_smape = pd.concat(
                     [template_result.per_timestamp_smape, cur_smape], axis=0
                 )
-            if 'hdist' in ensemble:
-                cur_rmse1 = model_error.per_series_metrics.loc['rmse1']
-                cur_rmse2 = model_error.per_series_metrics.loc['rmse2']
-                cur_rmse1 = pd.DataFrame(cur_rmse1).transpose()
-                cur_rmse2 = pd.DataFrame(cur_rmse2).transpose()
-                cur_rmse1.index = [model_id]
-                cur_rmse2.index = [model_id]
-                template_result.per_series_rmse1 = pd.concat(
-                    [template_result.per_series_rmse1, cur_rmse1], axis=0
-                )
-                template_result.per_series_rmse2 = pd.concat(
-                    [template_result.per_series_rmse2, cur_rmse2], axis=0
-                )
+            if 'mosaic' in ensemble:
+                template_result.full_mae_errors.extend([model_error.full_mae_errors])
+                template_result.full_mae_ids.extend([model_id])
+
         except KeyboardInterrupt:
             if model_interrupt:
                 result = pd.DataFrame(
@@ -1555,35 +1564,23 @@ def validation_aggregation(validation_results):
 def generate_score(
     model_results, metric_weighting: dict = {}, prediction_interval: float = 0.9
 ):
-    """Generate score based on relative accuracies."""
-    try:
-        smape_weighting = metric_weighting['smape_weighting']
-    except KeyError:
-        smape_weighting = 1
-    try:
-        mae_weighting = metric_weighting['mae_weighting']
-    except KeyError:
-        mae_weighting = 0
-    try:
-        rmse_weighting = metric_weighting['rmse_weighting']
-    except KeyError:
-        rmse_weighting = 0
-    try:
-        containment_weighting = metric_weighting['containment_weighting']
-    except KeyError:
-        containment_weighting = 0
-    try:
-        runtime_weighting = metric_weighting['runtime_weighting'] * 0.1
-    except KeyError:
-        runtime_weighting = 0
-    try:
-        spl_weighting = metric_weighting['spl_weighting']
-    except KeyError:
-        spl_weighting = 0
-    try:
-        contour_weighting = metric_weighting['contour_weighting']
-    except KeyError:
-        contour_weighting = 0
+    """Generate score based on relative accuracies.
+
+    SMAPE - smaller is better
+    MAE - smaller is better
+    RMSE -  smaller is better
+    SPL - smaller is better
+    Contour - bigger is better (is 0 to 1)
+    Containment - bigger is better (is 0 to 1)
+    Runtime - smaller is better
+    """
+    smape_weighting = metric_weighting.get('smape_weighting', 0)
+    mae_weighting = metric_weighting.get('mae_weighting', 0)
+    rmse_weighting = metric_weighting.get('rmse_weighting', 0)
+    containment_weighting = metric_weighting.get('containment_weighting', 0)
+    runtime_weighting = metric_weighting.get('runtime_weighting', 0)
+    spl_weighting = metric_weighting.get('spl_weighting', 0)
+    contour_weighting = metric_weighting.get('contour_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         if 'TotalRuntime' in model_results.columns:
@@ -1607,42 +1604,106 @@ def generate_score(
     # generate minimizing scores, where smaller = better accuracy
     try:
         model_results = model_results.replace([np.inf, -np.inf], np.nan)
+        # handle NaN in scores...
         # model_results = model_results.fillna(value=model_results.max(axis=0))
-        smape_score = model_results['smape_weighted'] / (
-            model_results['smape_weighted'].min(skipna=True) + 1
-        )  # smaller better
-        rmse_scaler = model_results['rmse_weighted'].median(skipna=True)
-        rmse_scaler = 1 if rmse_scaler == 0 else rmse_scaler
-        rmse_score = model_results['rmse_weighted'] / rmse_scaler
-        mae_scaler = model_results['mae_weighted'].median(skipna=True)
-        mae_scaler = 1 if mae_scaler == 0 else mae_scaler
-        mae_score = model_results['mae_weighted'] / mae_scaler
-        containment_score = (
-            abs(prediction_interval - model_results['containment'])
-        ) + 1  # from 1 to 2, smaller better
-        runtime = model_results['TotalRuntimeSeconds'] + 120
-        runtime_score = runtime / (runtime.min(skipna=True))  # smaller better
-        spl_score = model_results['spl_weighted'] / (
-            model_results['spl_weighted'].min(skipna=True) + 1
-        )  # smaller better
-        contour_score = (
-            (1 / (model_results['contour_weighted']))
-            .replace([np.inf, -np.inf, np.nan], 10)
-            .clip(upper=10)
-        )
-    except KeyError:
+
+        # where smaller is better, are always >=0, beware divide by zero
+        smape_scaler = model_results['smape_weighted'][
+            model_results['smape_weighted'] != 0
+        ].min()
+        smape_score = model_results['smape_weighted'] / smape_scaler
+        overall_score = smape_score * smape_weighting
+        if mae_weighting != 0:
+            mae_scaler = model_results['mae_weighted'][
+                model_results['mae_weighted'] != 0
+            ].min()
+            mae_score = model_results['mae_weighted'] / mae_scaler
+            overall_score = overall_score + (mae_score * mae_weighting)
+        if rmse_weighting > 0:
+            rmse_scaler = model_results['rmse_weighted'][
+                model_results['rmse_weighted'] != 0
+            ].min()
+            rmse_score = model_results['rmse_weighted'] / rmse_scaler
+            overall_score = overall_score + (rmse_score * rmse_weighting)
+        if spl_weighting > 0:
+            spl_scaler = model_results['spl_weighted'][
+                model_results['spl_weighted'] != 0
+            ].min()
+            spl_score = model_results['spl_weighted'] / spl_scaler
+            overall_score = overall_score + (spl_score * spl_weighting)
+        if runtime_weighting > 0:
+            runtime = model_results['TotalRuntimeSeconds'] + 120
+            runtime_scaler = runtime[runtime != 0].min()
+            runtime_score = runtime / runtime_scaler
+            # this scales it into a similar range as SMAPE
+            runtime_score = runtime_score * (
+                smape_score.median() / runtime_score.median()
+            )
+            overall_score = overall_score + (runtime_score * runtime_weighting)
+        # these have values in the range 0 to 1
+        if contour_weighting > 0:
+            contour_score = (
+                2 - model_results['contour_weighted']
+            ) * smape_score.median()
+            overall_score = overall_score + (contour_score * contour_weighting)
+        if containment_weighting > 0:
+            containment_score = (
+                1 + abs(prediction_interval - model_results['containment_weighted'])
+            ) * smape_score.median()
+            overall_score = overall_score + (containment_score * containment_weighting)
+
+    except Exception as e:
         raise KeyError(
-            """Evaluation Metrics are missing and all models have failed, by an error in template or metrics.
+            f"""Evaluation Metrics are missing and all models have failed, by an error in template or metrics.
             Usually this means you are missing required packages for the models like fbprophet or gluonts,
             or that the models in model_list are inappropriate for your data.
-            A new starting template may also help."""
+            A new starting template may also help. {repr(e)}"""
         )
-    return (
-        (smape_score * smape_weighting)
-        + (mae_score * mae_weighting)
-        + (rmse_score * rmse_weighting)
-        + (containment_score * containment_weighting)
-        + (runtime_score * runtime_weighting)
-        + (spl_score * spl_weighting)
-        + (contour_score * contour_weighting)
+
+    return overall_score
+
+
+def generate_score_per_series(results_object, metric_weighting, total_validations):
+    """Score generation on per_series_metrics for ensembles."""
+    mae_weighting = metric_weighting.get('mae_weighting', 0)
+    rmse_weighting = metric_weighting.get('rmse_weighting', 0)
+    spl_weighting = metric_weighting.get('spl_weighting', 0)
+    contour_weighting = metric_weighting.get('contour_weighting', 0)
+    if sum([mae_weighting, rmse_weighting, contour_weighting, spl_weighting]) == 0:
+        mae_weighting = 1
+
+    mae_scaler = results_object.per_series_mae[results_object.per_series_mae != 0].min()
+    mae_score = results_object.per_series_mae / mae_scaler
+    overall_score = mae_score * mae_weighting
+    if rmse_weighting > 0:
+        rmse_scaler = results_object.per_series_rmse[
+            results_object.per_series_rmse != 0
+        ].min()
+        rmse_score = results_object.per_series_rmse / rmse_scaler
+        overall_score = overall_score + (rmse_score * rmse_weighting)
+    if spl_weighting > 0:
+        spl_scaler = results_object.per_series_spl[
+            results_object.per_series_spl != 0
+        ].min()
+        spl_score = results_object.per_series_spl / spl_scaler
+        overall_score = overall_score + (spl_score * spl_weighting)
+    if contour_weighting > 0:
+        contour_score = (2 - results_object.per_series_contour) * mae_score.median()
+        # handle nan
+        if contour_score.isna().all().all():
+            print("NaN in Contour in generate_score_per_series")
+            if overall_score.sum().sum() == 0:
+                overall_score = mae_score
+        else:
+            overall_score = overall_score + (contour_score * contour_weighting)
+    # remove basic duplicates
+    local_results = results_object.model_results.copy()
+    local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
+    local_results.drop_duplicates(
+        subset=['ValidationRound', 'smape', 'mae', 'spl'], keep="first", inplace=True
     )
+    # select only models run through all validations
+    run_count = local_results[['Model', 'ID']].groupby("ID").count()
+    models_to_use = run_count[run_count['Model'] >= total_validations].index.tolist()
+    overall_score = overall_score[overall_score.index.isin(models_to_use)]
+    return overall_score

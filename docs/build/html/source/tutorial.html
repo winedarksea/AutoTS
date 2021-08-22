@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Tutorial &#8212; AutoTS 0.3.3 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.3.4 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -53,12 +53,6 @@
 </section>
 <section id="extended-tutorial">
 <h2>Extended Tutorial<a class="headerlink" href="#extended-tutorial" title="Permalink to this headline">¶</a></h2>
-<p>There are a number of ways to get a more accurate time series model. AutoTS takes care of a few of these:</p>
-<ol class="arabic simple">
-<li><p>Pretransforming the data optimally for each model</p></li>
-<li><p>Trying an assortment of different algorithms</p></li>
-<li><p>Trying an assortment of hyperparameters for each algorithm</p></li>
-</ol>
 </section>
 <section id="underlying-process">
 <h2>Underlying Process<a class="headerlink" href="#underlying-process" title="Permalink to this headline">¶</a></h2>
@@ -118,17 +112,27 @@ Using appropriate cross validation (<code class="docutils literal notranslate"><
 Dropping series which are mostly missing, or using <code class="docutils literal notranslate"><span class="pre">prefill_na=0</span></code> (or other value) can also help.</p>
 </section>
 </section>
+<section id="what-to-worry-about">
+<h3>What to Worry About<a class="headerlink" href="#what-to-worry-about" title="Permalink to this headline">¶</a></h3>
+<p>There are some basic things to beware of that can commonly lead to poor results:</p>
+<ol class="arabic simple">
+<li><p>Bad data (sudden drops or missing values) in the most recent data is the single most common cause of bad forecasts here. This is extremely common in ‘live’ data, for example sales data - the most recent records will represent an incomplete time, or not all orders are invoiced in the database, or one of countless other reasons. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. <code class="docutils literal notranslate"><span class="pre">drop_most_recent</span></code> can help handle this. Manually filling the most recent NaN values may also help.</p></li>
+<li><p>Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don’t accurately represent the series, a poor model may be choosen. Think carefully about the validation methods, which is discussed in the next section.</p></li>
+</ol>
+</section>
 <section id="id2">
 <h3>Validation and Cross Validation<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h3>
-<p>Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future.
-With very small datasets, there may be not be enough data for cross validation, in which case <code class="docutils literal notranslate"><span class="pre">num_validations</span></code> may be set to 0. This can also speed up quick tests.</p>
 <p>Cross validation helps assure that the optimal model is stable over the dynamics of a time series.
-Cross validation can be tricky in time series data due to the necessity of preventing data leakage from future data points.
-Here, two methods of cross validation are in place, <code class="docutils literal notranslate"><span class="pre">'even'</span></code> and ‘<code class="docutils literal notranslate"><span class="pre">backwards'</span></code>.</p>
+Cross validation can be tricky in time series data due to the necessity of preventing data leakage from future data points.</p>
+<p>Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future.
+With very small datasets, there may be not be enough data for cross validation, in which case <code class="docutils literal notranslate"><span class="pre">num_validations</span></code> may be set to 0. This can also speed up quick tests.
+In general, the safest approach is to have as many validations as possible, as long as there is sufficient data for it.</p>
+<p>Here are the available methods:</p>
+<p><strong>Backwards</strong> cross validation is the safest method and works backwards from the most recent data. First the most recent forecast_length samples are taken, then the next most recent forecast_length samples, and so on. This makes it more ideal for smaller or fast-changing datasets.</p>
 <p><strong>Even</strong> cross validation slices the data into equal chunks. For example, <code class="docutils literal notranslate"><span class="pre">num_validations=3</span></code> would split the data into equal, progressive thirds (less the original validation sample). The final validation results would then include four pieces, the results on the three cross validation samples as well as the original validation sample.</p>
-<p><strong>Backwards</strong> cross validation works backwards from the most recent data. First the most recent forecast_length samples are taken, then the next most recent forecast_length samples, and so on. This makes it more ideal for smaller or fast-changing datasets.</p>
-<p><strong>Seasonal</strong> validation is supplied as <code class="docutils literal notranslate"><span class="pre">'seasonal</span> <span class="pre">n'</span></code> ie <code class="docutils literal notranslate"><span class="pre">'seasonal</span> <span class="pre">364'</span></code>. It trains on the most recent data as usual, then valdations are <code class="docutils literal notranslate"><span class="pre">n</span></code> periods back from the datetime of the forecast would be.
-For example with daily data, forecasting for a month ahead, and <code class="docutils literal notranslate"><span class="pre">n=364</span></code>, the first test might be on May 2020, with validation on June 2019 and June 2018, the final forecast then of June 2020.</p>
+<p><strong>Seasonal</strong> validation is supplied as <code class="docutils literal notranslate"><span class="pre">'seasonal</span> <span class="pre">n'</span></code> ie <code class="docutils literal notranslate"><span class="pre">'seasonal</span> <span class="pre">364'</span></code>. This is a variation on <code class="docutils literal notranslate"><span class="pre">backwards</span></code> validation and offers the best performance of all validation methods if an appropriate period is supplied.
+It trains on the most recent data as usual, then valdations are <code class="docutils literal notranslate"><span class="pre">n</span></code> periods back from the datetime of the forecast would be.
+For example with daily data, forecasting for a month ahead, and <code class="docutils literal notranslate"><span class="pre">n=364</span></code>, the first test might be on May 2021, with validation on June 2020 and June 2019, the final forecast then of June 2021.</p>
 <p>Only a subset of models are taken from initial validation to cross validation. The number of models is set such as <code class="docutils literal notranslate"><span class="pre">models_to_validate=10</span></code>.
 If a float in 0 to 1 is provided, it is treated as a % of models to select.
 If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter.
@@ -161,7 +165,7 @@ Here weather data is included - winter and road construction being the major inf
     <span class="n">forecast_length</span><span class="o">=</span><span class="mi">49</span><span class="p">,</span>
     <span class="n">frequency</span><span class="o">=</span><span class="s1">&#39;infer&#39;</span><span class="p">,</span>
     <span class="n">prediction_interval</span><span class="o">=</span><span class="mf">0.95</span><span class="p">,</span>
-    <span class="n">ensemble</span><span class="o">=</span><span class="s1">&#39;simple&#39;</span><span class="p">,</span>
+    <span class="n">ensemble</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;simple&#39;</span><span class="p">,</span> <span class="s1">&#39;horizontal-min&#39;</span><span class="p">],</span>
     <span class="n">max_generations</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
     <span class="n">num_validations</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
     <span class="n">validation_method</span><span class="o">=</span><span class="s1">&#39;seasonal 168&#39;</span><span class="p">,</span>
@@ -181,6 +185,9 @@ Here weather data is included - winter and road construction being the major inf
 <span class="n">forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="o">.</span><span class="n">forecast</span>
 <span class="c1"># prediction.long_form_results()</span>
 <span class="c1"># model.best_model.to_string()</span>
+
+<span class="k">if</span> <span class="n">model</span><span class="o">.</span><span class="n">best_model</span><span class="p">[</span><span class="s1">&#39;Ensemble&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">plot_horizontal</span><span class="p">()</span>
 </pre></div>
 </div>
 <p>Probabilistic forecasts are <em>available</em> for all models, but in many cases are just data-based estimates in lieu of model estimates.</p>
@@ -221,7 +228,6 @@ One thing to note is that, as AutoTS is still under development, template format
 <p>While the above version of deployment, with  evolving templates and cross_validation on every run, is the recommended deployment, it is also possible to run a single fixed model.</p>
 <p>Coming from the deeper internals of AutoTS, this function can only take the <code class="docutils literal notranslate"><span class="pre">wide</span></code> style data (there is a long_to_wide function available).
 Data must already be fairly clean - all numerics (or np.nan).
-There aren’t as many data and param checks at this point either, so it will be more brittle and output errors may be more confusing.
 This will run Ensembles.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">AutoTS</span> <span class="kn">import</span> <span class="n">load_daily</span><span class="p">,</span> <span class="n">model_forecast</span>
 
@@ -231,7 +237,7 @@ This will run Ensembles.</p>
     <span class="n">model_name</span><span class="o">=</span><span class="s2">&quot;AverageValueNaive&quot;</span><span class="p">,</span>
     <span class="n">model_param_dict</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="s1">&#39;Mean&#39;</span><span class="p">},</span>
     <span class="n">model_transform_dict</span><span class="o">=</span><span class="p">{</span>
-        <span class="s1">&#39;fillna&#39;</span><span class="p">:</span> <span class="s1">&#39;fake_date&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;fillna&#39;</span><span class="p">:</span> <span class="s1">&#39;mean&#39;</span><span class="p">,</span>
         <span class="s1">&#39;transformations&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;0&#39;</span><span class="p">:</span> <span class="s1">&#39;DifferencedTransformer&#39;</span><span class="p">},</span>
         <span class="s1">&#39;transformation_params&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;0&#39;</span><span class="p">:</span> <span class="p">{}}</span>
     <span class="p">},</span>
@@ -253,16 +259,16 @@ This will run Ensembles.</p>
 <section id="id6">
 <h3>Metrics<a class="headerlink" href="#id6" title="Permalink to this headline">¶</a></h3>
 <p>There are a number of available metrics, all combined together into a ‘Score’ which evaluates the best model. The ‘Score’ that compares models can easily be adjusted by passing through custom metric weights dictionary.
-Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights should be 0 or positive numbers, and can be floats as well as integers.
+Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights must be numbers greater than or equal to 0.
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">metric_weighting</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s1">&#39;smape_weighting&#39;</span> <span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-    <span class="s1">&#39;mae_weighting&#39;</span> <span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-    <span class="s1">&#39;rmse_weighting&#39;</span> <span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
-    <span class="s1">&#39;containment_weighting&#39;</span> <span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-    <span class="s1">&#39;runtime_weighting&#39;</span> <span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="s1">&#39;smape_weighting&#39;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="s1">&#39;mae_weighting&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="s1">&#39;rmse_weighting&#39;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="s1">&#39;containment_weighting&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="s1">&#39;runtime_weighting&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
     <span class="s1">&#39;spl_weighting&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-    <span class="s1">&#39;contour_weighting&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="s1">&#39;contour_weighting&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
 <span class="p">}</span>
 
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span>
@@ -272,13 +278,52 @@ This weighting is not to be confused with series weighting, which effects how eq
 <span class="p">)</span>
 </pre></div>
 </div>
-<p>It is wise to usually use several metrics. I often find the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE.</p>
-<p><strong>Warning</strong>: weights are not fully balanced 1 - 1 - 1. As such it is usually best to place your favorite metric an order of magnitude or more above the others.</p>
+<p>It is best to usually use several metrics. Often the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE.</p>
+<p><em>Horizontal</em> style ensembles use <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code> for series selection, but only the values passed for <code class="docutils literal notranslate"><span class="pre">mae,</span> <span class="pre">rmse,</span> <span class="pre">contour,</span> <span class="pre">spl</span></code>. If all of these are 0, mae is used for selection.</p>
 <p><code class="docutils literal notranslate"><span class="pre">sMAPE</span></code> is generally the most versatile metric across multiple series, but doesn’t handle forecasts with lots of zeroes well.</p>
 <p><code class="docutils literal notranslate"><span class="pre">SPL</span></code> is <em>Scaled Pinball Loss</em> and is the optimal metric for assessing upper/lower quantile forecast accuracies.</p>
 <p><code class="docutils literal notranslate"><span class="pre">Containment</span></code> measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL.</p>
 <p><code class="docutils literal notranslate"><span class="pre">Contour</span></code> is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but <em>not</em> the magnitude of that difference. Does not work with forecast_length=1.</p>
 <p>The contour metric is useful as it encourages ‘wavy’ forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they “don’t look like they are trying hard enough” to some managers, and using contour favors non-flat forecasts that (to many) look like a more serious model.</p>
+</section>
+<section id="ensembles">
+<h3>Ensembles<a class="headerlink" href="#ensembles" title="Permalink to this headline">¶</a></h3>
+<p>Ensemble methods are specified by the <code class="docutils literal notranslate"><span class="pre">ensemble=</span></code> parameter. It can be either a list or a comma-separated string.</p>
+<p><code class="docutils literal notranslate"><span class="pre">simple</span></code> style ensembles (labeled ‘BestN’ in templates) are the most recognizable form of ensemble and are the simple average of the specified models, here usally 3 or 5 models.
+<code class="docutils literal notranslate"><span class="pre">distance</span></code> style ensembles are two models spliced together. The first model forecasts the first fraction of forecast period, the second model the latter half. There is no overlap of the models.
+Both <code class="docutils literal notranslate"><span class="pre">simple</span></code> and <code class="docutils literal notranslate"><span class="pre">distance</span></code> style models are constructed on the first evaluation set of data, and run through validation along with all other models selected for validation.
+Both of these can also be recursive in depth, containing ensembles of ensembles. This recursive ensembling can happen when ensembles are imported from a starting template - they work just fine, but may get rather slow, having lots of models.</p>
+<p><code class="docutils literal notranslate"><span class="pre">horizontal</span></code> ensembles are the type of ensembles for which this package was originally created.
+With this, each series gets its own model. This avoids the ‘one size does not fit all’ problem when many time series are in a datset.
+In the interest of efficiency, univariate models are only run on the series they are needed for.
+Models not in the <code class="docutils literal notranslate"><span class="pre">no_shared</span></code> list may make horizontal ensembling very slow at scale - as they have to be run for every series, even if they are only used for one.
+<code class="docutils literal notranslate"><span class="pre">horizontal-max</span></code> chooses the best series for every model. <code class="docutils literal notranslate"><span class="pre">horizontal</span></code> and <code class="docutils literal notranslate"><span class="pre">horizontal-min</span></code> attempt to reduce the number of slow models chosen while still maintaining as much accuracy as possble.
+A feature called <code class="docutils literal notranslate"><span class="pre">horizontal_generalization</span></code> allows the use of <code class="docutils literal notranslate"><span class="pre">subset</span></code> and makes these ensembles fault tolerant.
+If you see a message <code class="docutils literal notranslate"><span class="pre">no</span> <span class="pre">full</span> <span class="pre">models</span> <span class="pre">available</span></code>, however, that means this generalization may fail. Including at least one of the <code class="docutils literal notranslate"><span class="pre">superfast</span></code> or a model not in <code class="docutils literal notranslate"><span class="pre">no_shared</span></code> models usually prevents this.
+These ensembles are choosen based on per series accuracy on <code class="docutils literal notranslate"><span class="pre">mae,</span> <span class="pre">rmse,</span> <span class="pre">contour,</span> <span class="pre">spl</span></code>, weighted as specified in <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code>.
+<code class="docutils literal notranslate"><span class="pre">horizontal</span></code> ensembles can contain recursive depths of <code class="docutils literal notranslate"><span class="pre">simple</span></code> and <code class="docutils literal notranslate"><span class="pre">distance</span></code> style ensembles but <code class="docutils literal notranslate"><span class="pre">horizontal</span></code> ensembles cannot be nested.</p>
+<p><code class="docutils literal notranslate"><span class="pre">mosaic</span></code> enembles are an extension of <code class="docutils literal notranslate"><span class="pre">horizontal</span></code> ensembles, but with a specific model choosen for each series <em>and</em> for each forecast period.
+As this means the maximum number of models can be <code class="docutils literal notranslate"><span class="pre">number</span> <span class="pre">of</span> <span class="pre">series</span> <span class="pre">*</span> <span class="pre">forecast_length</span></code>, this obviously may get quite slow.
+Theoretically, this style of ensembling offers the highest accuracy.
+However, <code class="docutils literal notranslate"><span class="pre">mosaic</span></code> models only utilize MAE for model selection, and as such upper and lower forecast performance may be poor.
+They are also more prone to over-fitting, so use this with more validations and more stable data.</p>
+<p>One thing you can do with <code class="docutils literal notranslate"><span class="pre">mosaic</span></code> ensembles if you only care about the accuracy of one forecast point, but want to run a forecast for the full forecast length, you can convert the mosaic to horizontal for just that forecast period.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">from</span> <span class="nn">autots.models.ensemble</span> <span class="kn">import</span> <span class="n">mosaic_to_horizontal</span><span class="p">,</span> <span class="n">model_forecast</span>
+
+<span class="c1"># assuming model is from AutoTS.fit() with a mosaic as best_model</span>
+<span class="n">model_params_init</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">best_model</span><span class="p">[</span><span class="s1">&#39;ModelParameters&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">model_params</span> <span class="o">=</span> <span class="n">mosaic_to_horizontal</span><span class="p">(</span><span class="n">model_params_init</span><span class="p">,</span> <span class="n">forecast_period</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">model_forecast</span><span class="p">(</span>
+    <span class="n">model_name</span><span class="o">=</span><span class="s2">&quot;Ensemble&quot;</span><span class="p">,</span>
+    <span class="n">model_param_dict</span><span class="o">=</span><span class="n">model_params</span><span class="p">,</span>
+    <span class="n">model_transform_dict</span><span class="o">=</span><span class="p">{},</span>
+    <span class="n">df_train</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">df_wide_numeric</span><span class="p">,</span>
+    <span class="n">forecast_length</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">forecast_length</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">result</span><span class="o">.</span><span class="n">forecast</span>
+</pre></div>
+</div>
 </section>
 </section>
 <section id="installation-and-dependency-versioning">
@@ -733,7 +778,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>sklearn</p></td>
 <td><p>some</p></td>
 <td></td>
-<td><p>True</p></td>
+<td></td>
 <td><p>True</p></td>
 </tr>
 <tr class="row-odd"><td><p>Greykite</p></td>
@@ -744,7 +789,10 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td></td>
 <td></td>
 <td><p>True</p></td>
-<td></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
 </tr>
 <tr class="row-even"><td><p>MotifSimulation</p></td>
 <td><p>sklearn.metrics.pairwise</p></td>

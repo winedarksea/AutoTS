@@ -2134,17 +2134,17 @@ del superfast_transformer_dict['PowerTransformer']
 
 # probability dictionary of FillNA methods
 na_probs = {
-    'ffill': 0.1,
+    'ffill': 0.6,
     'fake_date': 0.1,
-    'rolling_mean': 0.1,
-    'rolling_mean_24': 0.099,
+    'rolling_mean': 0.2,
+    'rolling_mean_24': 0.1,
     'IterativeImputer': 0.1,
-    'mean': 0.1,
-    'zero': 0.1,
+    'mean': 0.05,
+    'zero': 0.05,
     'ffill_mean_biased': 0.1,
-    'median': 0.1,
-    None: 0.001,
-    "interpolate": 0.1,
+    'median': 0.05,
+    None: 0.01,
+    "interpolate": 0.6,
 }
 
 

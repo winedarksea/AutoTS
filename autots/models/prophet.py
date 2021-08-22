@@ -22,9 +22,8 @@ else:
     _has_prophet = True
 
 
-def seek_the_oracle(df, args, series, forecast_length, future_regressor):
+def seek_the_oracle(current_series, args, series, forecast_length, future_regressor):
     """Prophet for for loop or parallel."""
-    current_series = df[series].to_frame().copy()
     current_series = current_series.rename(columns={series: 'y'})
     current_series['ds'] = current_series.index
     m = Prophet(interval_width=args['prediction_interval'])
@@ -214,7 +213,7 @@ class FBProphet(ModelObject):
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
                 delayed(seek_the_oracle)(
-                    df=self.df_train,
+                    current_series=self.df_train[col].to_frame(),
                     args=args,
                     series=col,
                     forecast_length=forecast_length,
@@ -227,7 +226,7 @@ class FBProphet(ModelObject):
             for col in cols:
                 df_list.append(
                     seek_the_oracle(
-                        self.df_train,
+                        self.df_train[col].to_frame(),
                         args,
                         col,
                         forecast_length=forecast_length,
