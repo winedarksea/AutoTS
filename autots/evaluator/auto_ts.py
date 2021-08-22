@@ -28,7 +28,7 @@ from autots.evaluator.auto_model import (
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
     HorizontalTemplateGenerator,
-    generate_mosaic_template
+    generate_mosaic_template,
 )
 from autots.models.model_list import model_lists
 from autots.tools import cpu_count
@@ -78,7 +78,7 @@ class AutoTS(object):
         prefill_na (str): value to input to fill all NaNs with. Leaving as None and allowing model interpolation is recommended.
             None, 0, 'mean', or 'median'. 0 may be useful in for examples sales cases where all NaN can be assumed equal to zero.
         introduce_na (bool): whether to force last values in one training validation to be NaN. Helps make more robust models.
-            defaults to None, which is as True if any NaN in tail of training data.
+            defaults to None, which is as True if any NaN in tail of training data. Will not introduce NaN to all series if subset is used.
         model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
@@ -178,9 +178,13 @@ class AutoTS(object):
         # check metric weights are valid
         metric_weighting_values = self.metric_weighting.values()
         if min(metric_weighting_values) < 0:
-            raise ValueError(f"Metric weightings must be numbers >= 0. Current weightings: {self.metric_weighting}")
+            raise ValueError(
+                f"Metric weightings must be numbers >= 0. Current weightings: {self.metric_weighting}"
+            )
         elif sum(metric_weighting_values) == 0:
-            raise ValueError("Sum of metric_weightings is 0, one or more values must be > 0")
+            raise ValueError(
+                "Sum of metric_weightings is 0, one or more values must be > 0"
+            )
 
         if 'seasonal' in self.validation_method:
             val_list = [x for x in str(self.validation_method) if x.isdigit()]
@@ -422,11 +426,15 @@ class AutoTS(object):
         # check that column names are unique:
         if not df_wide_numeric.columns.is_unique:
             # maybe should make this an actual error in the future
-            print("Warning: column/series names are not unique. Unique column names are highly recommended for wide data!")
+            print(
+                "Warning: column/series names are not unique. Unique column names are highly recommended for wide data!"
+            )
             time.sleep(3)  # give the message a chance to be seen
         if len(future_regressor) > 0:
             if future_regressor.shape[0] != df_wide_numeric.shape[0]:
-                print("future_regressor row count does not match length of training data")
+                print(
+                    "future_regressor row count does not match length of training data"
+                )
                 time.sleep(2)
 
         # use "mean" to assign weight as mean
@@ -842,7 +850,7 @@ class AutoTS(object):
                     if "mosaic" in self.ensemble:
                         rand_st = random_seed
                     else:
-                        rand_st = (random_seed + y + 1)
+                        rand_st = random_seed + y + 1
                     df_subset = subset_series(
                         current_slice,
                         list((weights.get(i)) for i in current_slice.columns),
@@ -885,7 +893,9 @@ class AutoTS(object):
                 if self.introduce_na or (self.introduce_na is None and nan_tail):
                     nan_frac = val_df_train.shape[1] / num_validations
                     int(nan_frac * y), int(nan_frac * (y + 1))
-                    val_df_train.iloc[-1, int(nan_frac * y): int(nan_frac * (y + 1))] = np.nan
+                    val_df_train.iloc[
+                        -1, int(nan_frac * y) : int(nan_frac * (y + 1))
+                    ] = np.nan
 
                 # run validation template on current slice
                 template_result = TemplateWizard(
@@ -934,7 +944,11 @@ or otherwise increase models available."""
             ensemble_templates = pd.DataFrame()
             try:
                 if 'horizontal' in ensemble or 'probabilistic' in ensemble:
-                    per_series = generate_score_per_series(self.initial_results, metric_weighting=metric_weighting, total_validations=(num_validations + 1))
+                    per_series = generate_score_per_series(
+                        self.initial_results,
+                        metric_weighting=metric_weighting,
+                        total_validations=(num_validations + 1),
+                    )
                     # select only those models which were validated
                     # series_sel = per_series.mean(axis=1).groupby(level=0).count()
                     # series_sel = series_sel[series_sel >= (num_validations + 1)]
@@ -1439,9 +1453,15 @@ or otherwise increase models available."""
             series.set_index(series.columns[0], inplace=True)
             series = series.mode(axis=1)[0].to_frame().reset_index(drop=False)
         series.columns = ['Series', 'ID']
-        series = series.merge(self.results()[['ID', "Model"]].drop_duplicates(), on="ID")
-        series = series.merge(self.df_wide_numeric.std().to_frame(), right_index=True, left_on="Series")
-        series = series.merge(self.df_wide_numeric.mean().to_frame(), right_index=True, left_on="Series")
+        series = series.merge(
+            self.results()[['ID', "Model"]].drop_duplicates(), on="ID"
+        )
+        series = series.merge(
+            self.df_wide_numeric.std().to_frame(), right_index=True, left_on="Series"
+        )
+        series = series.merge(
+            self.df_wide_numeric.mean().to_frame(), right_index=True, left_on="Series"
+        )
         series.columns = ["Series", "ID", 'Model', "Volatility", "Mean"]
         return series
 
@@ -1472,9 +1492,13 @@ or otherwise increase models available."""
         max_series = series.shape[0] if series.shape[0] < max_series else max_series
         series = series.sample(max_series, replace=False)
         # sklearn.preprocessing.normalizer also might work
-        series[['log(Volatility)', 'log(Mean)']] = np.log(series[['Volatility', 'Mean']])
+        series[['log(Volatility)', 'log(Mean)']] = np.log(
+            series[['Volatility', 'Mean']]
+        )
         # plot
-        series.set_index(['Model', 'log(Mean)']).unstack('Model')['log(Volatility)'].plot(style='o', **kwargs)
+        series.set_index(['Model', 'log(Mean)']).unstack('Model')[
+            'log(Volatility)'
+        ].plot(style='o', **kwargs)
 
 
 class AutoTSIntervals(object):

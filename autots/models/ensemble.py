@@ -41,7 +41,9 @@ def parse_horizontal(all_series: dict, model_id: str = None, series_id: str = No
         list
     """
     if model_id is None and series_id is None:
-        raise ValueError("either series_id or model_id must be specified in parse_horizontal.")
+        raise ValueError(
+            "either series_id or model_id must be specified in parse_horizontal."
+        )
 
     if mosaic_or_horizontal(all_series) == 'mosaic':
         if model_id is not None:
@@ -218,17 +220,26 @@ def mosaic_classifier(df_train, known):
         ignore_index=False,
     ).reset_index(drop=False)
     upload['forecast_period'] = upload['forecast_period'].astype(int)
-    missing_cols = df_train.columns[~df_train.columns.isin(upload['series_id'].unique())]
+    missing_cols = df_train.columns[
+        ~df_train.columns.isin(upload['series_id'].unique())
+    ]
     if not missing_cols.empty:
         forecast_p = np.arange(upload['forecast_period'].max() + 1)
         p_full = np.tile(forecast_p, len(missing_cols))
-        missing_rows = pd.DataFrame({
-            'forecast_period': p_full,
-            'series_id': np.repeat(missing_cols.values, len(forecast_p)),
-            'model_id': np.nan,
-        }, index=None if len(p_full) > 1 else [0])
+        missing_rows = pd.DataFrame(
+            {
+                'forecast_period': p_full,
+                'series_id': np.repeat(missing_cols.values, len(forecast_p)),
+                'model_id': np.nan,
+            },
+            index=None if len(p_full) > 1 else [0],
+        )
         upload = pd.concat([upload, missing_rows])
-    X = summarize_series(df_train).transpose().merge(upload, left_index=True, right_on="series_id")
+    X = (
+        summarize_series(df_train)
+        .transpose()
+        .merge(upload, left_index=True, right_on="series_id")
+    )
     X.set_index("series_id", inplace=True)  # .drop(columns=['series_id'], inplace=True)
     to_predict = X[X['model_id'].isna()].drop(columns=['model_id'])
     X = X[~X['model_id'].isna()]
@@ -241,19 +252,24 @@ def mosaic_classifier(df_train, known):
     clf = RandomForestClassifier()
     clf.fit(Xf, Y)
     predicted = clf.predict(to_predict)
-    result = pd.concat([to_predict.reset_index(drop=False), pd.Series(predicted, name="model_id")], axis=1)
-    cols_needed = ['model_id', 'series_id', 'forecast_period']
-    final = pd.concat([X.reset_index(drop=False)[cols_needed], result[cols_needed]], sort=True, axis=0)
-    final['forecast_period'] = final['forecast_period'].astype(str)
-    final = final.pivot(
-        values="model_id", columns="series_id", index="forecast_period"
+    result = pd.concat(
+        [to_predict.reset_index(drop=False), pd.Series(predicted, name="model_id")],
+        axis=1,
     )
+    cols_needed = ['model_id', 'series_id', 'forecast_period']
+    final = pd.concat(
+        [X.reset_index(drop=False)[cols_needed], result[cols_needed]], sort=True, axis=0
+    )
+    final['forecast_period'] = final['forecast_period'].astype(str)
+    final = final.pivot(values="model_id", columns="series_id", index="forecast_period")
     try:
         final = final[df_train.columns]
         if final.isna().to_numpy().sum() > 0:
             raise KeyError("NaN in mosaic generalization")
     except KeyError as e:
-        raise ValueError(f"mosaic_classifier failed to generalize for all columns: {repr(e)}")
+        raise ValueError(
+            f"mosaic_classifier failed to generalize for all columns: {repr(e)}"
+        )
     return final
 
 
@@ -684,7 +700,7 @@ def EnsembleTemplateGenerator(
         ]
         first_model = ens_per_ts.iloc[:, 0:first_bit].mean(axis=1).idxmin()
         last_model = (
-            ens_per_ts.iloc[:, first_bit: (last_bit + first_bit)].mean(axis=1).idxmin()
+            ens_per_ts.iloc[:, first_bit : (last_bit + first_bit)].mean(axis=1).idxmin()
         )
         ensemble_models = {}
         best3 = initial_results.model_results[
@@ -731,7 +747,7 @@ def EnsembleTemplateGenerator(
         ]
         first_model = ens_per_ts.iloc[:, 0:first_bit].mean(axis=1).idxmin()
         last_model = (
-            ens_per_ts.iloc[:, first_bit: (last_bit + first_bit)].mean(axis=1).idxmin()
+            ens_per_ts.iloc[:, first_bit : (last_bit + first_bit)].mean(axis=1).idxmin()
         )
         ensemble_models = {}
         best3 = initial_results.model_results[
@@ -846,11 +862,15 @@ def HorizontalTemplateGenerator(
         if ('horizontal-max' in ensemble) or ('probabilistic-max' in ensemble):
             mods_per_series = per_series.idxmin()
             mods = mods_per_series.unique()
-            best5 = model_results[
-                model_results['ID'].isin(mods.tolist())
-            ].drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters']
-            ).set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+            best5 = (
+                model_results[model_results['ID'].isin(mods.tolist())]
+                .drop_duplicates(
+                    subset=['Model', 'ModelParameters', 'TransformationParameters']
+                )
+                .set_index("ID")[
+                    ['Model', 'ModelParameters', 'TransformationParameters']
+                ]
+            )
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
             metric = 'Score-max' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
@@ -875,11 +895,15 @@ def HorizontalTemplateGenerator(
             mods_per_series = per_series.idxmin()
             mods_per_series2 = per_series2.idxmin()
             mods = pd.concat([mods_per_series, mods_per_series2]).unique()
-            best5 = model_results[
-                model_results['ID'].isin(mods.tolist())
-            ].drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters']
-            ).set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+            best5 = (
+                model_results[model_results['ID'].isin(mods.tolist())]
+                .drop_duplicates(
+                    subset=['Model', 'ModelParameters', 'TransformationParameters']
+                )
+                .set_index("ID")[
+                    ['Model', 'ModelParameters', 'TransformationParameters']
+                ]
+            )
             nomen = 'hdist'
             best5_params = {
                 'Model': 'Ensemble',
@@ -935,11 +959,15 @@ def HorizontalTemplateGenerator(
             # concern: choose lots of models, slower to run initial
             mods_per_series = per_series_filter.idxmin()
             mods = mods_per_series.unique()
-            best5 = model_results[
-                model_results['ID'].isin(mods.tolist())
-            ].drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters']
-            ).set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+            best5 = (
+                model_results[model_results['ID'].isin(mods.tolist())]
+                .drop_duplicates(
+                    subset=['Model', 'ModelParameters', 'TransformationParameters']
+                )
+                .set_index("ID")[
+                    ['Model', 'ModelParameters', 'TransformationParameters']
+                ]
+            )
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
             metric = 'Score' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
@@ -990,11 +1018,17 @@ def HorizontalTemplateGenerator(
                     per_series_des = per_series.copy().drop(mods.index, axis=0)
 
             mods_per_series = per_series.loc[mods.index].idxmin()
-            best5 = model_results[
-                model_results['ID'].isin(mods_per_series.unique().tolist())
-            ].drop_duplicates(
-                subset=['Model', 'ModelParameters', 'TransformationParameters']
-            ).set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+            best5 = (
+                model_results[
+                    model_results['ID'].isin(mods_per_series.unique().tolist())
+                ]
+                .drop_duplicates(
+                    subset=['Model', 'ModelParameters', 'TransformationParameters']
+                )
+                .set_index("ID")[
+                    ['Model', 'ModelParameters', 'TransformationParameters']
+                ]
+            )
             nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
             metric = 'Score-min' if 'horizontal' in ensemble else 'SPL'
             best5_params = {
@@ -1018,27 +1052,43 @@ def HorizontalTemplateGenerator(
     return ensemble_templates
 
 
-def generate_mosaic_template(initial_results, full_mae_ids, num_validations, col_names, full_mae_errors, **kwargs):
+def generate_mosaic_template(
+    initial_results, full_mae_ids, num_validations, col_names, full_mae_errors, **kwargs
+):
     """Generate an ensemble template from results."""
     total_vals = num_validations + 1
     local_results = initial_results.copy()
     # sort by runtime then drop duplicates on metric results
     local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
-    local_results.drop_duplicates(subset=['ValidationRound', 'smape', 'mae', 'spl'], inplace=True)
+    local_results.drop_duplicates(
+        subset=['ValidationRound', 'smape', 'mae', 'spl'], inplace=True
+    )
     # remove slow models... tbd
     # select only models run through all validations
     run_count = local_results[['Model', 'ID']].groupby("ID").count()
     models_to_use = run_count[run_count['Model'] == total_vals].index.tolist()
     # begin figuring out which are the min models for each point
     id_array = np.array([y for y in sorted(full_mae_ids) if y in models_to_use])
-    errors_array = np.array([x for y, x in sorted(zip(full_mae_ids, full_mae_errors), key=lambda pair: pair[0]) if y in models_to_use])
+    errors_array = np.array(
+        [
+            x
+            for y, x in sorted(
+                zip(full_mae_ids, full_mae_errors), key=lambda pair: pair[0]
+            )
+            if y in models_to_use
+        ]
+    )
     slice_points = np.arange(0, errors_array.shape[0], step=total_vals)
     id_sliced = id_array[slice_points]
     best_points = np.add.reduceat(errors_array, slice_points, axis=0).argmin(axis=0)
     model_id_array = pd.DataFrame(np.take(id_sliced, best_points), columns=col_names)
     used_models = pd.unique(model_id_array.values.flatten())
-    used_models_results = local_results[["ID", "Model", "ModelParameters", "TransformationParameters"]].drop_duplicates(subset='ID')
-    used_models_results = used_models_results[used_models_results['ID'].isin(used_models)].set_index("ID")
+    used_models_results = local_results[
+        ["ID", "Model", "ModelParameters", "TransformationParameters"]
+    ].drop_duplicates(subset='ID')
+    used_models_results = used_models_results[
+        used_models_results['ID'].isin(used_models)
+    ].set_index("ID")
 
     ensemble_params = {
         'Model': 'Ensemble',
@@ -1073,13 +1123,15 @@ def mosaic_to_horizontal(ModelParameters, forecast_period: int = 0):
         raise ValueError("Input parameters are not recognized as a mosaic ensemble.")
     all_models = ModelParameters['series']
     result = {k: v[str(forecast_period)] for k, v in all_models.items()}
-    model_result = {k: v for k, v in ModelParameters['models'].items() if k in result.values()}
+    model_result = {
+        k: v for k, v in ModelParameters['models'].items() if k in result.values()
+    }
     return {
         'model_name': "horizontal",
         'model_count': len(model_result),
         "model_metric": "mosaic_conversion",
         'models': model_result,
-        'series': result
+        'series': result,
     }
 
 
@@ -1134,9 +1186,15 @@ def MosaicEnsemble(
         fore.append(forecasts[row[3]][row[2]].iloc[row[1]])
         u_fore.append(upper_forecasts[row[3]][row[2]].iloc[row[1]])
         l_fore.append(lower_forecasts[row[3]][row[2]].iloc[row[1]])
-    melted['forecast'] = fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    melted['upper_forecast'] = u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
-    melted['lower_forecast'] = l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted[
+        'forecast'
+    ] = fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted[
+        'upper_forecast'
+    ] = u_fore  # [upper_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
+    melted[
+        'lower_forecast'
+    ] = l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
 
     sample_idx = forecasts[next(iter(forecasts))].index
     forecast_df = melted.pivot(

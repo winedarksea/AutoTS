@@ -120,15 +120,15 @@ def glm_forecast_by_column(current_series, X, Xf, args, col):
     if str(family).lower() == 'poisson':
         from statsmodels.genmod.families.family import Poisson
 
-        model = SM_GLM(
-            current_series.values, X, family=Poisson(), missing='drop'
-        ).fit(disp=verbose)
+        model = SM_GLM(current_series.values, X, family=Poisson(), missing='drop').fit(
+            disp=verbose
+        )
     elif str(family).lower() == 'binomial':
         from statsmodels.genmod.families.family import Binomial
 
-        model = SM_GLM(
-            current_series.values, X, family=Binomial(), missing='drop'
-        ).fit(disp=verbose)
+        model = SM_GLM(current_series.values, X, family=Binomial(), missing='drop').fit(
+            disp=verbose
+        )
     elif str(family).lower() == 'negativebinomial':
         from statsmodels.genmod.families.family import NegativeBinomial
 
@@ -138,15 +138,15 @@ def glm_forecast_by_column(current_series, X, Xf, args, col):
     elif str(family).lower() == 'tweedie':
         from statsmodels.genmod.families.family import Tweedie
 
-        model = SM_GLM(
-            current_series.values, X, family=Tweedie(), missing='drop'
-        ).fit(disp=verbose)
+        model = SM_GLM(current_series.values, X, family=Tweedie(), missing='drop').fit(
+            disp=verbose
+        )
     elif str(family).lower() == 'gamma':
         from statsmodels.genmod.families.family import Gamma
 
-        model = SM_GLM(
-            current_series.values, X, family=Gamma(), missing='drop'
-        ).fit(disp=verbose)
+        model = SM_GLM(current_series.values, X, family=Gamma(), missing='drop').fit(
+            disp=verbose
+        )
     else:
         family = 'Gaussian'
         model = SM_GLM(current_series.values, X, missing='drop').fit(disp=verbose)
@@ -286,7 +286,9 @@ class GLM(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose)(
-                delayed(glm_forecast_by_column)(current_series=df[col], X=X, Xf=Xf, args=args, col=col)
+                delayed(glm_forecast_by_column)(
+                    current_series=df[col], X=X, Xf=Xf, args=args, col=col
+                )
                 for col in cols
             )
             df_forecast = pd.concat(df_list, axis=1)
@@ -496,7 +498,8 @@ class ETS(ModelObject):
         # joblib multiprocessing to loop through series
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(ets_forecast_by_column)(self.df_train[col], args, col) for (col) in cols
+                delayed(ets_forecast_by_column)(self.df_train[col], args, col)
+                for (col) in cols
             )
             forecast = pd.concat(df_list, axis=1)
         else:
@@ -734,7 +737,9 @@ class ARIMA(ModelObject):
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
-                delayed(arima_seek_the_oracle)(current_series=self.df_train[col], args=args, series=col)
+                delayed(arima_seek_the_oracle)(
+                    current_series=self.df_train[col], args=args, series=col
+                )
                 for col in cols
             )
             complete = list(map(list, zip(*df_list)))
@@ -999,7 +1004,8 @@ class UnobservedComponents(ModelObject):
         # print(f"parallel is {parallel} and n_jobs is {self.n_jobs}")
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(forecast_by_column)(self.df_train[col], args, col) for (col) in cols
+                delayed(forecast_by_column)(self.df_train[col], args, col)
+                for (col) in cols
             )
             forecast = pd.concat(df_list, axis=1)
         else:

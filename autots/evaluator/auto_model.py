@@ -523,7 +523,7 @@ def ModelPrediction(
 
 class TemplateEvalObject(object):
     """Object to contain all the failures!.
-    
+
     Attributes:
         full_mae_ids (list): list of model_ids corresponding to full_mae_errors
         full_mae_errors (list): list of numpy arrays of shape (rows, columns) appended in order of validation
@@ -1081,20 +1081,32 @@ def TemplateWizard(
             if 'horizontal' in ensemble or 'probabilistic' in ensemble:
                 ps_metric = model_error.per_series_metrics
                 template_result.per_series_mae = pd.concat(
-                    [template_result.per_series_mae,
-                     _ps_metric(ps_metric, 'mae', model_id)], axis=0
+                    [
+                        template_result.per_series_mae,
+                        _ps_metric(ps_metric, 'mae', model_id),
+                    ],
+                    axis=0,
                 )
                 template_result.per_series_contour = pd.concat(
-                    [template_result.per_series_contour,
-                     _ps_metric(ps_metric, 'contour', model_id)], axis=0
+                    [
+                        template_result.per_series_contour,
+                        _ps_metric(ps_metric, 'contour', model_id),
+                    ],
+                    axis=0,
                 )
                 template_result.per_series_rmse = pd.concat(
-                    [template_result.per_series_rmse,
-                     _ps_metric(ps_metric, 'rmse', model_id)], axis=0
+                    [
+                        template_result.per_series_rmse,
+                        _ps_metric(ps_metric, 'rmse', model_id),
+                    ],
+                    axis=0,
                 )
                 template_result.per_series_spl = pd.concat(
-                    [template_result.per_series_spl,
-                     _ps_metric(ps_metric, 'spl', model_id)], axis=0
+                    [
+                        template_result.per_series_spl,
+                        _ps_metric(ps_metric, 'spl', model_id),
+                    ],
+                    axis=0,
                 )
 
             if 'distance' in ensemble:
@@ -1596,19 +1608,27 @@ def generate_score(
         # model_results = model_results.fillna(value=model_results.max(axis=0))
 
         # where smaller is better, are always >=0, beware divide by zero
-        smape_scaler = model_results['smape_weighted'][model_results['smape_weighted'] != 0].min()
+        smape_scaler = model_results['smape_weighted'][
+            model_results['smape_weighted'] != 0
+        ].min()
         smape_score = model_results['smape_weighted'] / smape_scaler
         overall_score = smape_score * smape_weighting
         if mae_weighting != 0:
-            mae_scaler = model_results['mae_weighted'][model_results['mae_weighted'] != 0].min()
+            mae_scaler = model_results['mae_weighted'][
+                model_results['mae_weighted'] != 0
+            ].min()
             mae_score = model_results['mae_weighted'] / mae_scaler
             overall_score = overall_score + (mae_score * mae_weighting)
         if rmse_weighting > 0:
-            rmse_scaler = model_results['rmse_weighted'][model_results['rmse_weighted'] != 0].min()
+            rmse_scaler = model_results['rmse_weighted'][
+                model_results['rmse_weighted'] != 0
+            ].min()
             rmse_score = model_results['rmse_weighted'] / rmse_scaler
             overall_score = overall_score + (rmse_score * rmse_weighting)
         if spl_weighting > 0:
-            spl_scaler = model_results['spl_weighted'][model_results['spl_weighted'] != 0].min()
+            spl_scaler = model_results['spl_weighted'][
+                model_results['spl_weighted'] != 0
+            ].min()
             spl_score = model_results['spl_weighted'] / spl_scaler
             overall_score = overall_score + (spl_score * spl_weighting)
         if runtime_weighting > 0:
@@ -1616,14 +1636,20 @@ def generate_score(
             runtime_scaler = runtime[runtime != 0].min()
             runtime_score = runtime / runtime_scaler
             # this scales it into a similar range as SMAPE
-            runtime_score = runtime_score * (smape_score.median() / runtime_score.median())
+            runtime_score = runtime_score * (
+                smape_score.median() / runtime_score.median()
+            )
             overall_score = overall_score + (runtime_score * runtime_weighting)
         # these have values in the range 0 to 1
         if contour_weighting > 0:
-            contour_score = (2 - model_results['contour_weighted']) * smape_score.median()
+            contour_score = (
+                2 - model_results['contour_weighted']
+            ) * smape_score.median()
             overall_score = overall_score + (contour_score * contour_weighting)
         if containment_weighting > 0:
-            containment_score = (1 + abs(prediction_interval - model_results['containment_weighted'])) * smape_score.median()
+            containment_score = (
+                1 + abs(prediction_interval - model_results['containment_weighted'])
+            ) * smape_score.median()
             overall_score = overall_score + (containment_score * containment_weighting)
 
     except Exception as e:
@@ -1650,11 +1676,15 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
     mae_score = results_object.per_series_mae / mae_scaler
     overall_score = mae_score * mae_weighting
     if rmse_weighting > 0:
-        rmse_scaler = results_object.per_series_rmse[results_object.per_series_rmse != 0].min()
+        rmse_scaler = results_object.per_series_rmse[
+            results_object.per_series_rmse != 0
+        ].min()
         rmse_score = results_object.per_series_rmse / rmse_scaler
         overall_score = overall_score + (rmse_score * rmse_weighting)
     if spl_weighting > 0:
-        spl_scaler = results_object.per_series_spl[results_object.per_series_spl != 0].min()
+        spl_scaler = results_object.per_series_spl[
+            results_object.per_series_spl != 0
+        ].min()
         spl_score = results_object.per_series_spl / spl_scaler
         overall_score = overall_score + (spl_score * spl_weighting)
     if contour_weighting > 0:
@@ -1669,7 +1699,9 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
     # remove basic duplicates
     local_results = results_object.model_results.copy()
     local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
-    local_results.drop_duplicates(subset=['ValidationRound', 'smape', 'mae', 'spl'], keep="first", inplace=True)
+    local_results.drop_duplicates(
+        subset=['ValidationRound', 'smape', 'mae', 'spl'], keep="first", inplace=True
+    )
     # select only models run through all validations
     run_count = local_results[['Model', 'ID']].groupby("ID").count()
     models_to_use = run_count[run_count['Model'] >= total_validations].index.tolist()
