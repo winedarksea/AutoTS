@@ -1,15 +1,16 @@
 ## Table of Contents
-* [A Simple Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#a-simple-example)
-* [Validation and Cross Validation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#validation-and-cross-validation)
-* [Another Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#another-example)
-* [Model Lists](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#model-lists)
+* [A Simple Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id1)
+* [Validation and Cross Validation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id2)
+* [Another Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id3)
+* [Model Lists](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id4)
 * [Deployment](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#deployment-and-template-import-export)
-* [Running Just One Model](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#running-just-one-model)
-* [Metrics](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#metrics)
+* [Running Just One Model](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id5)
+* [Metrics](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id6)
+* [Ensembles](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#ensembles)
 * [Installation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning)
 * [Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
 * [Adding Regressors](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information)
-* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#models)
+* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id7)
 
 ## Extended Tutorial
 
@@ -283,6 +284,7 @@ As this means the maximum number of models can be `number of series * forecast_l
 Theoretically, this style of ensembling offers the highest accuracy. 
 However, `mosaic` models only utilize MAE for model selection, and as such upper and lower forecast performance may be poor. 
 They are also more prone to over-fitting, so use this with more validations and more stable data. 
+Unlike `horizontal` ensembles, which only work on multivariate datasets, `mosaic` can be run on a single time series. 
 
 One thing you can do with `mosaic` ensembles if you only care about the accuracy of one forecast point, but want to run a forecast for the full forecast length, you can convert the mosaic to horizontal for just that forecast period. 
 ```python

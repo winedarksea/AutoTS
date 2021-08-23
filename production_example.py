@@ -189,6 +189,10 @@ if graph:
 
     if model.best_model['Ensemble'].iloc[0] == 2:
         series = model.horizontal_to_df()
+        series = series.sample(25, replace=False)
+        series[['log(Volatility)', 'log(Mean)']] = np.log(
+            series[['Volatility', 'Mean']]
+        )
 
         fig, ax = plt.subplots(figsize=(6, 4.5))
         cmap = plt.get_cmap('tab10')  # 'Pastel1, 'cividis', 'coolwarm', 'spectral'
