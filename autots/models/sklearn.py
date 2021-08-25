@@ -783,29 +783,29 @@ class RollingRegression(ModelObject):
         else:
             macd_periods_choice = None
         std_rolling_periods_choice = random.choices(
-            [None, 5, 7, 10, 30], [0.2, 0.2, 0.2, 0.2, 0.2]
+            [None, 5, 7, 10, 30], [0.6, 0.1, 0.1, 0.1, 0.1]
         )[0]
-        max_rolling_periods_choice = random.choices([None, seasonal_int()], [0.2, 0.8])[
+        max_rolling_periods_choice = random.choices([None, seasonal_int()], [0.5, 0.5])[
             0
         ]
-        min_rolling_periods_choice = random.choices([None, seasonal_int()], [0.2, 0.8])[
+        min_rolling_periods_choice = random.choices([None, seasonal_int()], [0.5, 0.5])[
             0
         ]
         lag_periods_choice = seasonal_int() - 1
         lag_periods_choice = 2 if lag_periods_choice < 2 else lag_periods_choice
-        ewm_choice = random.choices([None, 0.2, 0.5, 0.8], [0.5, 0.15, 0.15, 0.2])[0]
+        ewm_choice = random.choices([None, 0.2, 0.5, 0.8], [0.7, 0.1, 0.1, 0.1])[0]
         abs_energy_choice = random.choices([True, False], [0.3, 0.7])[0]
         rolling_autocorr_periods_choice = random.choices(
             [None, 2, 7, 12, 30], [0.8, 0.05, 0.05, 0.05, 0.05]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring'], [0.6, 0.1, 0.2, 0.1]
+            [None, 'simple', 'expanded', 'recurring'], [0.7, 0.1, 0.1, 0.1]
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
-        polynomial_degree_choice = random.choices([None, 2], [0.97, 0.03])[0]
+        polynomial_degree_choice = random.choices([None, 2], [0.99, 0.01])[0]
         x_transform_choice = random.choices(
             [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
-            [0.8, 0.05, 0.05, 0.1],
+            [0.85, 0.05, 0.05, 0.05],
         )[0]
         regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
         parameter_dict = {
@@ -1775,7 +1775,7 @@ class UnivariateRegression(ModelObject):
         args = {}
         # joblib multiprocessing to loop through series
         if self.parallel:
-            df_list = Parallel(n_jobs=self.n_jobs)(
+            df_list = Parallel(n_jobs=(self.n_jobs - 1))(
                 delayed(forecast_by_column)(
                     self, self.df_train, args, self.parallel, self.n_jobs, col
                 )

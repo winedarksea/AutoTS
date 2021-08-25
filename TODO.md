@@ -15,6 +15,9 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
+* New Transfromer ScipyFilter
+* New models Univariate and MultivariateMotif
+* 'midhinge' to AverageValueNaive
 
 
 # Errors: 

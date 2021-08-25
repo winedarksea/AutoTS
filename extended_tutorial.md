@@ -539,7 +539,7 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  SeasonalNaive          |              |                         |               |                 |       |              |              |               |
 |  GLS                    | statsmodels  |                         |               |                 |       | True         |              |               |
 |  GLM                    | statsmodels  |                         |               |     joblib      |       |              |              | True          |
-|  ETS - Exponential Smoothing | statsmodels  |                    |               |     joblib      |       |              |              |               |
+| ETS - Exponential Smoothing | statsmodels  |                    |               |     joblib      |       |              |              |               |
 |  UnobservedComponents   | statsmodels  |                         |               |     joblib      |       |              |              | True          |
 |  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  VARMAX                 | statsmodels  |                         |    True       |                 |       | True         |              |               |
@@ -552,10 +552,10 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              |               |
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 |  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
+| UnivariateMotif/MultivariateMotif | scipy.distaince.cdist |      |    True       |     joblib      |       | *            |              |               |
 |  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |   *           |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |
 |  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |               |
 |  TSFreshRegressor       | tsfresh, sklearn |                     |               |                 |       |              | True         |               |
-

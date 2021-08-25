@@ -23,6 +23,8 @@ all_models = [
     'DatepartRegression',
     "UnivariateRegression",
     "Greykite",
+    'UnivariateMotif',
+    'MultivariateMotif',
 ]
 default = [
     'ZeroesNaive',
@@ -41,6 +43,7 @@ default = [
     'WindowRegression',
     'DatepartRegression',
     'UnivariateRegression',
+    'UnivariateMotif',
 ]
 # fastest models at any scale
 superfast = [
@@ -74,12 +77,13 @@ parallel = [
     'ARIMA',
     'GLM',
     'UnobservedComponents',
-    'MotifSimulation',
+    # 'MotifSimulation',
     "Greykite",
+    'UnivariateMotif',
+    'MultivariateMotif',
 ]
 # models that should be fast given many CPU cores
 fast_parallel = list(set(parallel + fast))
-fast_parallel.remove('MotifSimulation')
 # models that are explicitly not production ready
 experimental = [
     'MotifSimulation',
@@ -97,10 +101,12 @@ probabilistic = [
     'GluonTS',
     'FBProphet',
     'AverageValueNaive',
-    'MotifSimulation',
+    # 'MotifSimulation',
     'VARMAX',
     'DynamicFactor',
     'VAR',
+    'UnivariateMotif',
+    "MultivariateMotif",
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -112,6 +118,7 @@ multivariate = [
     'WindowRegression',
     'VAR',
     'ComponentAnalysis',
+    "MultivariateMotif",
 ]
 # USED IN AUTO_MODEL, models with no parameters
 no_params = ['ZeroesNaive', 'LastValueNaive', 'GLS']
@@ -134,6 +141,8 @@ recombination_approved = [
     'TFPRegression',
     'UnivariateRegression',
     "Greykite",
+    'UnivariateMotif',
+    "MultivariateMotif",
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -150,6 +159,7 @@ no_shared = [
     "GLS",
     "UnivariateRegression",
     "Greykite",
+    'UnivariateMotif',
     # 'MotifSimulation',
     # 'DatepartRegression',
 ]

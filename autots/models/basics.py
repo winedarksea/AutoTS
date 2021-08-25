@@ -1,6 +1,7 @@
 """
 Naives and Others Requiring No Additional Packages Beyond Numpy and Pandas
 """
+import random
 import datetime
 import numpy as np
 import pandas as pd
@@ -8,6 +9,11 @@ from autots.models.base import ModelObject, PredictionObject
 from autots.tools import seasonal_int
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 
+# optional requirement
+try:
+    from scipy.spatial.distance import cdist
+except Exception:
+    pass
 
 class ZeroesNaive(ModelObject):
     """Naive forecasting predicting a dataframe of zeroes (0's)
@@ -133,7 +139,7 @@ class LastValueNaive(ModelObject):
             df (pandas.DataFrame): Datetime Indexed
         """
         df = self.basic_profile(df)
-        self.last_values = df.tail(1).values
+        self.last_values = df.tail(1).to_numpy()
         # self.df_train = df
         self.lower, self.upper = historic_quantile(
             df, prediction_interval=self.prediction_interval
@@ -231,14 +237,20 @@ class AverageValueNaive(ModelObject):
             df (pandas.DataFrame): Datetime Indexed
         """
         df = self.basic_profile(df)
-        if str(self.method).lower() == 'median':
-            self.average_values = df.median(axis=0).values
-        if str(self.method).lower() == 'mean':
-            self.average_values = df.mean(axis=0).values
-        if str(self.method).lower() == 'mode':
+        method = str(self.method).lower()
+        if method == 'median':
+            self.average_values = df.median(axis=0).to_numpy()
+        elif method == 'mean':
+            self.average_values = df.mean(axis=0).to_numpy()
+        elif method == 'mode':
             self.average_values = (
-                df.mode(axis=0).iloc[0].fillna(df.median(axis=0)).values
+                df.mode(axis=0).iloc[0].fillna(df.median(axis=0)).to_numpy()
             )
+        elif method == "midhinge":
+            results = df.to_numpy()
+            q1 = np.nanquantile(results, q=0.25, axis=0)
+            q2 = np.nanquantile(results, q=0.75, axis=0)
+            self.average_values = (q1 + q2) / 2
         self.fit_runtime = datetime.datetime.now() - self.startTime
         self.lower, self.upper = historic_quantile(
             df, prediction_interval=self.prediction_interval
@@ -288,9 +300,9 @@ class AverageValueNaive(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
-        method_choice = np.random.choice(
-            a=['Median', 'Mean', 'Mode'], size=1, p=[0.3, 0.6, 0.1]
-        ).item()
+        method_choice = random.choices(
+            ["Mean", "Median", "Mode", "Midhinge"], [0.5, 0.3, 0.1, 0.1]
+        )[0]
         return {'method': method_choice}
 
     def get_params(self):
@@ -457,14 +469,10 @@ class SeasonalNaive(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         lag_1_choice = seasonal_int()
-        lag_2_choice = np.random.choice(
-            a=['None', seasonal_int(include_one=True)], size=1, p=[0.3, 0.7]
-        ).item()
+        lag_2_choice = random.choices([None, seasonal_int(include_one=True)], [0.3, 0.7])[0]
         if str(lag_2_choice) == str(lag_1_choice):
             lag_2_choice = 1
-        method_choice = np.random.choice(
-            a=['Mean', 'Median', 'LastValue'], size=1, p=[0.4, 0.2, 0.4]
-        ).item()
+        method_choice = random.choices(['Mean', 'Median', 'LastValue'], [0.4, 0.2, 0.4])[0]
         return {'method': method_choice, 'lag_1': lag_1_choice, 'lag_2': lag_2_choice}
 
     def get_params(self):
@@ -549,22 +557,8 @@ class MotifSimulation(ModelObject):
             self.max_motifs = 10
             self.max_motifs_n = 10
 
-        # convert strings of phrase length into int lengths
-        if str(self.phrase_len).isdigit():
-            self.phrase_n = int(self.phrase_len)
-        elif self.phrase_len == '10thN':
-            self.phrase_n = int(np.floor((df.shape[0]) / 10))
-        elif self.phrase_len == '100thN':
-            self.phrase_n = int(np.floor((df.shape[0]) / 100))
-        elif self.phrase_len == '1000thN':
-            self.phrase_n = int(np.floor((df.shape[0]) / 1000))
-        else:
-            self.phrase_len = '20thN'
-            self.phrase_n = int(np.floor((df.shape[0]) / 20))
-        if (self.phrase_n > df.shape[0]) or (self.phrase_n <= 1):
-            # raise ValueError("phrase_len is inappropriate for the length of training data provided")
-            self.phrase_n = 3
-            self.phrase_len = 3
+        self.phrase_n = int(self.phrase_len)
+
         # df = df_wide[df_wide.columns[0:3]].fillna(0).astype(float)
         df = self.basic_profile(df)
         """
@@ -671,36 +665,21 @@ class MotifSimulation(ModelObject):
         if shared:
             comparative = pd.DataFrame(
                 pairwise_distances(
-                    motif_vecs.values,
-                    last_motif.transpose().values,
+                    motif_vecs.to_numpy(),
+                    last_motif.transpose().to_numpy(),
                     metric=distance_metric,
                 )
             )
             comparative.index = motif_vecs.index
             comparative.columns = last_motif.columns
         if not shared:
-            """
-            comparative = pd.DataFrame()
-            for column in last_motif.columns:
-                x = motif_vecs[motif_vecs.index.get_level_values(0) == column]
-                y = last_motif[column].values.reshape(1, -1)
-                current_comparative = pd.DataFrame(
-                    pairwise_distances(x.values, y, metric=distance_metric)
-                )
-                current_comparative.index = x.index
-                current_comparative.columns = [column]
-                comparative = pd.concat(
-                    [comparative, current_comparative], axis=0, sort=True
-                )
-            comparative = comparative.groupby(level=[0, 1]).sum(min_count=0)
-            """
 
             def create_comparative(motif_vecs, last_motif, args, col):
                 distance_metric = args["distance_metric"]
                 x = motif_vecs[motif_vecs.index.get_level_values(0) == col]
-                y = last_motif[col].values.reshape(1, -1)
+                y = last_motif[col].to_numpy().reshape(1, -1)
                 current_comparative = pd.DataFrame(
-                    pairwise_distances(x.values, y, metric=distance_metric)
+                    pairwise_distances(x.to_numpy(), y, metric=distance_metric)
                 )
                 current_comparative.index = x.index
                 current_comparative.columns = [col]
@@ -729,7 +708,7 @@ class MotifSimulation(ModelObject):
         # comparative is a df of motifs (in index) with their value to each series (per column)
         if recency_weighting != 0:
             rec_weights = np.repeat(
-                ((comparative.index.get_level_values(1)) / df.shape[0]).values.reshape(
+                ((comparative.index.get_level_values(1)) / df.shape[0]).to_numpy().reshape(
                     -1, 1
                 )
                 * recency_weighting,
@@ -737,96 +716,6 @@ class MotifSimulation(ModelObject):
                 axis=1,
             )
             comparative = comparative.add(rec_weights, fill_value=0)
-
-        # elapsed_2nd = timeit.default_timer() - start_time_2nd
-        # start_time_3rd = timeit.default_timer()
-
-        """
-        upper_forecasts = pd.DataFrame()
-        forecasts = pd.DataFrame()
-        lower_forecasts = pd.DataFrame()
-        for col in comparative.columns:
-            # comparative.idxmax()
-            vals = comparative[col].sort_values(ascending=False)
-            if not shared:
-                vals = vals[vals.index.get_level_values(0) == col]
-            # vals = vals[vals > cutoff_threshold]
-            # if vals.shape[0] < cutoff_minimum:
-            vals = comparative[col].sort_values(ascending=False)
-            if not shared:
-                vals = vals[vals.index.get_level_values(0) == col]
-            vals = vals.head(cutoff_minimum)
-
-            pos_forecasts = pd.DataFrame()
-            for val_index, val_value in vals.items():
-                sec_start = val_index[1] + phrase_n
-                if comparison in ['magnitude_pct_change', 'magnitude_pct_change_sign']:
-                    current_pos = original_df[val_index[0]].iloc[sec_start + 1 :]
-                else:
-                    current_pos = df[val_index[0]].iloc[sec_start:]
-                pos_forecasts = pd.concat(
-                    [pos_forecasts, current_pos.reset_index(drop=True)],
-                    axis=1,
-                    sort=False,
-                )
-
-            thresh = int(np.ceil(pos_forecasts.shape[1] * na_threshold))
-            if point_method == 'mean':
-                current_forecast = pos_forecasts.mean(axis=1)
-            elif point_method == 'sign_biased_mean':
-                axis_means = pos_forecasts.mean(axis=0)
-                if axis_means.mean() > 0:
-                    pos_forecasts = pos_forecasts[
-                        pos_forecasts.columns[~(axis_means < 0)]
-                    ]
-                else:
-                    pos_forecasts = pos_forecasts[
-                        pos_forecasts.columns[~(axis_means > 0)]
-                    ]
-                current_forecast = pos_forecasts.mean(axis=1)
-            elif point_method == 'sample':
-                current_forecast = pos_forecasts.sample(
-                    n=1, axis=1, weights=vals.values
-                )
-            else:
-                point_method = 'median'
-                current_forecast = pos_forecasts.median(axis=1)
-            # current_forecast.columns = [col]
-            forecasts = pd.concat([forecasts, current_forecast], axis=1, sort=False)
-
-            if point_method == 'sample':
-                n_samples = int(np.ceil(pos_forecasts.shape[1] / 2))
-                current_forecast = (
-                    pos_forecasts.sample(n=n_samples, axis=1, weights=vals.values)
-                    .dropna(thresh=thresh, axis=0)
-                    .quantile(
-                        q=[
-                            (1 - (prediction_interval * 1.1)),
-                            (prediction_interval * 1.1),
-                        ],
-                        axis=1,
-                    )
-                    .transpose()
-                )
-            else:
-                current_forecast = (
-                    pos_forecasts.dropna(thresh=thresh, axis=0)
-                    .quantile(
-                        q=[(1 - prediction_interval), prediction_interval], axis=1
-                    )
-                    .transpose()
-                )
-            # current_forecast.columns = [col, col]
-            lower_forecasts = pd.concat(
-                [lower_forecasts, current_forecast.iloc[:, 0]], axis=1, sort=False
-            )
-            upper_forecasts = pd.concat(
-                [upper_forecasts, current_forecast.iloc[:, 1]], axis=1, sort=False
-            )
-        forecasts.columns = comparative.columns
-        lower_forecasts.columns = comparative.columns
-        upper_forecasts.columns = comparative.columns
-        """
 
         def seek_the_oracle(comparative, args, col):
             # comparative.idxmax()
@@ -877,10 +766,6 @@ class MotifSimulation(ModelObject):
                         pos_forecasts.columns[~(axis_means > 0)]
                     ]
                 current_forecast = pos_forecasts.mean(axis=1)
-            elif point_method == 'sample':
-                current_forecast = pos_forecasts.sample(
-                    n=1, axis=1, weights=vals.values
-                )
             else:
                 point_method = 'median'
                 current_forecast = pos_forecasts.median(axis=1)
@@ -888,28 +773,13 @@ class MotifSimulation(ModelObject):
             forecast = current_forecast.copy()
             forecast.name = col
 
-            if point_method == 'sample':
-                n_samples = int(np.ceil(pos_forecasts.shape[1] / 2))
-                current_forecast = (
-                    pos_forecasts.sample(n=n_samples, axis=1, weights=vals.values)
-                    .dropna(thresh=thresh, axis=0)
-                    .quantile(
-                        q=[
-                            (1 - (prediction_interval * 1.1)),
-                            (prediction_interval * 1.1),
-                        ],
-                        axis=1,
-                    )
-                    .transpose()
+            current_forecast = (
+                pos_forecasts.dropna(thresh=thresh, axis=0)
+                .quantile(
+                    q=[(1 - prediction_interval), prediction_interval], axis=1
                 )
-            else:
-                current_forecast = (
-                    pos_forecasts.dropna(thresh=thresh, axis=0)
-                    .quantile(
-                        q=[(1 - prediction_interval), prediction_interval], axis=1
-                    )
-                    .transpose()
-                )
+                .transpose()
+            )
 
             lower_forecast = pd.Series(current_forecast.iloc[:, 0], name=col)
             upper_forecast = pd.Series(current_forecast.iloc[:, 1], name=col)
@@ -1069,8 +939,8 @@ class MotifSimulation(ModelObject):
             p=[0.2, 0.1, 0.4, 0.2, 0.1],
         ).item()
         phrase_len_choice = np.random.choice(
-            a=[5, 10, 15, 20, 30, 90, 360, '10thN', '100thN', '1000thN', '20thN'],
-            p=[0.2, 0.2, 0.1, 0.25, 0.1, 0.1, 0.05, 0.0, 0.0, 0.0, 0.0],
+            a=[5, 10, 15, 20, 30, 90, 360],
+            p=[0.2, 0.2, 0.1, 0.25, 0.1, 0.1, 0.05],
             size=1,
         ).item()
         shared_choice = np.random.choice(a=[True, False], size=1, p=[0.05, 0.95]).item()
@@ -1130,9 +1000,9 @@ class MotifSimulation(ModelObject):
             a=[5, 10, 20, 50, 100, 200, 500], size=1, p=[0, 0, 0.2, 0.2, 0.4, 0.1, 0.1]
         ).item()
         point_method_choice = np.random.choice(
-            a=['median', 'sample', 'mean', 'sign_biased_mean'],
+            a=['median', 'mean', 'sign_biased_mean'],
             size=1,
-            p=[0.59, 0.01, 0.3, 0.1],
+            p=[0.59, 0.3, 0.1],
         ).item()
 
         return {
@@ -1142,7 +1012,6 @@ class MotifSimulation(ModelObject):
             'distance_metric': distance_metric_choice,
             'max_motifs': max_motifs_choice,
             'recency_weighting': recency_weighting_choice,
-            # 'cutoff_threshold': cutoff_threshold_choice,
             'cutoff_minimum': cutoff_minimum_choice,
             'point_method': point_method_choice,
         }
@@ -1162,9 +1031,239 @@ class MotifSimulation(ModelObject):
         }
 
 
-"""
-model = MotifSimulation()
-model = model.fit(df_wide.fillna(0)[df_wide.columns[0:5]].astype(float))
-prediction = model.predict(forecast_length = 14)
-prediction.forecast
-"""
+def looped_motif(Xa, Xb, name, r_arr=None, window=10, distance_metric="minkowski", k=10, point_method="mean", prediction_interval=0.9):
+    """inner function for Motif model."""
+    if r_arr is None:
+        y = Xa[:, window:]
+        Xa = Xa[:, :window]
+    else:
+        y = Xa[r_arr, window:]
+        Xa = Xa[r_arr, :window]
+
+    # model = NearestNeighbors(n_neighbors=10, algorithm='auto', metric='minkowski', n_jobs=1)
+    # model.fit(Xa)
+    # model.kneighbors(Xb)
+
+    A = cdist(Xa, Xb, metric = distance_metric)
+    # lowest values
+    idx = np.argpartition(A, k, axis=0)[:k].flatten()
+    # distances for weighted mean
+    results = y[idx]
+    if point_method == "weighted_mean":
+        weights = A[idx].flatten()
+        if weights.sum() == 0:
+            weights = None
+        forecast = np.average(results, axis=0, weights=weights)
+    elif point_method == "mean":
+        forecast = np.nanmean(results, axis=0)
+    elif point_method == "median":
+        forecast = np.nanmedian(results, axis=0)
+    elif point_method == "midhinge":
+        q1 = np.nanquantile(results, q=0.25, axis=0)
+        q2 = np.nanquantile(results, q=0.75, axis=0)
+        forecast = (q1 + q2) / 2
+
+    pred_int = (1 - prediction_interval) / 2
+    upper_forecast = np.nanquantile(results, q=(1 - pred_int), axis=0)
+    lower_forecast = np.nanquantile(results, q=pred_int, axis=0)
+    forecast = pd.Series(forecast)
+    forecast.name = name
+    upper_forecast = pd.Series(upper_forecast)
+    upper_forecast.name = name
+    lower_forecast = pd.Series(lower_forecast)
+    lower_forecast.name = name
+    return (forecast, upper_forecast, lower_forecast)
+
+
+class Motif(ModelObject):
+    """Forecasts using a nearest neighbors type model adapted for probabilistic time series.
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+    """
+
+    def __init__(
+        self,
+        name: str = "Motif",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        holiday_country: str = 'US',
+        random_seed: int = 2020,
+        verbose: int = 0,
+        n_jobs: int = 1,
+        window: int = 5,
+        point_method: str = "weighted_mean",
+        distance_metric: str = "minkowski",
+        k: int = 10,
+        max_windows: int = 5000,
+        multivariate: bool = False,
+        **kwargs
+    ):
+        ModelObject.__init__(
+            self,
+            "MultivariateMotif" if multivariate else "UnivariateMotif",
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+        )
+        self.window = window
+        self.point_method = point_method
+        self.distance_metric = distance_metric
+        self.k = k
+        self.max_windows = max_windows
+        self.multivariate = multivariate
+
+    def fit(self, df, future_regressor=[]):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        df = self.basic_profile(df)
+        self.df = df
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=[], just_point_forecast=False
+    ):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        # keep this at top so it breaks quickly if missing version
+        x = np.lib.stride_tricks.sliding_window_view(self.df.to_numpy(), self.window + forecast_length, axis=0)
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+
+        # subsample windows if needed
+        r_arr = None
+        if self.max_windows is not None:
+            if self.multivariate:
+                X_size = x.shape[0]
+            else:
+                X_size = x.shape[0] * x.shape[1]
+            if self.max_windows < X_size:
+                r_arr = np.random.default_rng(self.random_seed).integers(0, X_size, size=self.max_windows)
+    
+        self.parallel = True
+        if self.n_jobs in [0, 1] or self.df.shape[1] < 5:
+            self.parallel = False
+        else:
+            try:
+                from joblib import Parallel, delayed
+            except Exception:
+                self.parallel = False
+    
+        # joblib multiprocessing to loop through series
+        if self.parallel:
+            df_list = Parallel(n_jobs=(self.n_jobs - 1))(
+                delayed(looped_motif)(
+                        Xa=x.reshape(-1, x.shape[-1]) if self.multivariate else x[:, i],
+                        Xb=self.df.iloc[-self.window:, i].to_numpy().reshape(1, -1),
+                        name=self.df.columns[i],
+                        r_arr=r_arr, window=self.window,
+                        distance_metric=self.distance_metric, k=self.k,
+                        point_method=self.point_method, prediction_interval=self.prediction_interval,
+                    )
+                for i in range(self.df.shape[1])
+            )
+        else:
+            df_list = []
+            for i in range(self.df.shape[1]):
+                df_list.append(
+                    looped_motif(
+                        Xa=x.reshape(-1, x.shape[-1]) if self.multivariate else x[:, i],
+                        Xb=self.df.iloc[-self.window:, i].to_numpy().reshape(1, -1),
+                        name=self.df.columns[i],
+                        r_arr=r_arr, window=self.window,
+                        distance_metric=self.distance_metric, k=self.k,
+                        point_method=self.point_method, prediction_interval=self.prediction_interval,
+                    )
+                )
+        complete = list(map(list, zip(*df_list)))
+        forecast = pd.concat(complete[0], axis=1)
+        forecast.index = test_index
+        lower_forecast = pd.concat(complete[1], axis=1)
+        lower_forecast.index = test_index
+        upper_forecast = pd.concat(complete[2], axis=1)
+        upper_forecast.index = test_index
+        if just_point_forecast:
+            return forecast
+        else:
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=forecast.index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast,
+                forecast=forecast,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Returns dict of new parameters for parameter tuning"""
+        metric_list = [
+                    'braycurtis',
+                    'canberra',
+                    'chebyshev',
+                    'cityblock',
+                    'correlation',
+                    'cosine',
+                    'dice',
+                    'euclidean',
+                    'hamming',
+                    'jaccard',
+                    'jensenshannon',
+                    'kulsinski',
+                    'mahalanobis',
+                    'matching',
+                    'minkowski',
+                    'rogerstanimoto',
+                    'russellrao',
+                    # 'seuclidean',
+                    'sokalmichener',
+                    'sokalsneath',
+                    'sqeuclidean',
+                    'yule',
+        ]
+        return {
+            "window": random.choices(
+                [5, 7, 10, 15, 30], [0.2, 0.1, 0.5, 0.1, 0.1]
+            )[0],
+            "point_method": random.choices(["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2])[0],
+            "distance_metric": random.choice(metric_list),
+            "k": random.choices(
+                [5, 10, 15, 20, 100], [0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0],
+            "max_windows": random.choices([None, 10000], [0.2, 0.8])[0],
+            }
+
+    def get_params(self):
+        """Return dict of current parameters"""
+        return {
+            "window": self.window,
+            "point_method": self.point_method,
+            "distance_metric": self.distance_metric,
+            "k": self.k,
+            "max_windows": self.max_windows,
+            }

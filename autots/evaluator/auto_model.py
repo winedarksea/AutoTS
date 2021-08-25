@@ -28,6 +28,7 @@ from autots.models.basics import (
     AverageValueNaive,
     SeasonalNaive,
     ZeroesNaive,
+    Motif
 )
 from autots.models.statsmodels import (
     GLS,
@@ -400,6 +401,28 @@ def ModelMonster(
             **parameters,
         )
 
+        return model
+    elif model == 'MultivariateMotif':
+        model = Motif(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            multivariate=True,
+            **parameters,
+        )
+        return model
+    elif model == 'UnivariateMotif':
+        model = Motif(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            multivariate=False,
+            **parameters,
+        )
         return model
     else:
         raise AttributeError(
