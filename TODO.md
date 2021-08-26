@@ -17,7 +17,9 @@
 # Latest
 * New Transfromer ScipyFilter
 * New models Univariate and MultivariateMotif
-* 'midhinge' to AverageValueNaive
+* 'midhinge' and "weighted_mean" to AverageValueNaive
+* Add passing regressors to WindowRegression and made more efficient window generation
+* more plotting methods: plot_horizontal_transformers
 
 
 # Errors: 

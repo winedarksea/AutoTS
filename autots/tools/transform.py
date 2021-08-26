@@ -1690,7 +1690,7 @@ class ScipyFilter(EmptyTransformer):
                     # "ellip",
                     # "bessel",
                 ],
-                [0.1, 0.2, 0.2],
+                [0.1, 0.2, 0.2, 0.1],
                 k=1,
         )[0]
         # analog_choice = bool(random.randint(0, 1))
@@ -2253,8 +2253,8 @@ def get_transformer_params(transformer: str = "EmptyTransformer", method: str = 
 transformer_dict = {
     None: 0.0,
     'MinMaxScaler': 0.05,
-    'PowerTransformer': 0.1,
-    'QuantileTransformer': 0.1,
+    'PowerTransformer': 0.05,
+    'QuantileTransformer': 0.05,
     'MaxAbsScaler': 0.05,
     'StandardScaler': 0.04,
     'RobustScaler': 0.05,
@@ -2271,7 +2271,7 @@ transformer_dict = {
     'Log': 0.01,
     'IntermittentOccurrence': 0.01,
     # 'SeasonalDifference7': 0.0,  # old
-    'SeasonalDifference': 0.08,
+    'SeasonalDifference': 0.1,
     # 'SeasonalDifference28': 0.0,  # old
     'cffilter': 0.01,
     'bkfilter': 0.05,
@@ -2282,7 +2282,7 @@ transformer_dict = {
     "Discretize": 0.05,
     "CenterLastValue": 0.01,
     "Round": 0.05,
-    "Slice": 0.01,
+    "Slice": 0.02,
     "ScipyFilter": 0.02,
 }
 # remove any slow transformers

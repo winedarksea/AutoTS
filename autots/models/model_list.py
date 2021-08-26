@@ -66,7 +66,7 @@ fast = [
     'VAR',
     'SeasonalNaive',
     'VECM',
-    'ComponentAnalysis',
+    # 'ComponentAnalysis',
     'DatepartRegression',
     'UnivariateRegression',
 ]

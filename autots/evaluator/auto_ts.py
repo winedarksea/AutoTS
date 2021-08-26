@@ -1192,6 +1192,7 @@ or otherwise increase models available."""
                     grouping_ids=self.grouping_ids,
                     random_seed=self.random_seed,
                     verbose=verbose,
+                    n_jobs=self.n_jobs,
                     template_cols=self.template_cols,
                 )
                 # convert categorical back to numeric
@@ -1223,6 +1224,7 @@ or otherwise increase models available."""
                 grouping_ids=self.grouping_ids,
                 random_seed=self.random_seed,
                 verbose=verbose,
+                n_jobs=self.n_jobs,
                 template_cols=self.template_cols,
             )
             # convert categorical back to numeric
@@ -1446,7 +1448,8 @@ or otherwise increase models available."""
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
         if self.best_model['Ensemble'].iloc[0] != 2:
             raise ValueError("Only works on horizontal ensemble type models.")
-        series = json.loads(self.best_model['ModelParameters'].iloc[0])['series']
+        ModelParameters = json.loads(self.best_model['ModelParameters'].iloc[0])
+        series = ModelParameters['series']
         series = pd.DataFrame.from_dict(series, orient="index").reset_index(drop=False)
         if series.shape[1] > 2:
             # for mosaic style ensembles, choose the mode model id
@@ -1463,6 +1466,9 @@ or otherwise increase models available."""
             self.df_wide_numeric.mean().to_frame(), right_index=True, left_on="Series"
         )
         series.columns = ["Series", "ID", 'Model', "Volatility", "Mean"]
+        series['Transformers'] = series['ID'].copy()
+        lookup = {k: ",".join(json.loads(v.get('TransformationParameters', '{}')).get('transformations', {}).values()) for k, v in ModelParameters['models'].items()}
+        series['Transformers'] = series['Transformers'].replace(lookup).replace("", "None")
         return series
 
     def mosaic_to_df(self):
@@ -1499,6 +1505,34 @@ or otherwise increase models available."""
         series.set_index(['Model', 'log(Mean)']).unstack('Model')[
             'log(Volatility)'
         ].plot(style='o', **kwargs)
+
+    def plot_horizontal_transformers(self, color_list=None, **kwargs):
+        """Simple plot to visualize transformers used.
+        Note this doesn't capture transformers nested in simple ensembles.
+
+        Args:
+            color_list = list of colors to *sample* for bar colors. Can be names or hex.
+            **kwargs passed to pandas.plot()
+        """
+        series = self.horizontal_to_df()
+        transformers = pd.Series(",".join(series['Transformers']).split(",")).value_counts()
+        if color_list is None:
+            color_list = colors_list
+        colors = random.sample(color_list, transformers.shape[0])
+        # plot
+        transformers.plot(kind='bar', color=colors, **kwargs)
+
+
+colors_list = [
+    '#FF00FF', '#7FFFD4', '#00FFFF', '#F5DEB3', '#FF6347',
+    '#8B008B', '#696969', '#FFC0CB', '#C71585', '#008080',
+    '#663399', '#32CD32', '#66CDAA', '#A9A9A9', '#2F4F4F',
+    '#FFDEAD', '#800000', '#FDF5E6', '#F5F5F5', '#F0FFF0',
+    '#87CEEB', '#A52A2A', '#90EE90', '#7FFF00', '#E9967A',
+    '#1E90FF', '#FFF0F5', '#ADD8E6', '#008B8B', '#FFF5EE',
+    '#00FA9A', '#9370DB', '#4682B4', '#006400', '#AFEEEE',
+    '#CD853F', '#9400D3', '#EE82EE', '#00008B', '#4B0082',
+]
 
 
 class AutoTSIntervals(object):

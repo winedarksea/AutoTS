@@ -251,6 +251,12 @@ class AverageValueNaive(ModelObject):
             q1 = np.nanquantile(results, q=0.25, axis=0)
             q2 = np.nanquantile(results, q=0.75, axis=0)
             self.average_values = (q1 + q2) / 2
+        elif method in ["weighted_mean", "exp_weighted_mean"]:
+            weights = pd.to_numeric(df.index)
+            weights = weights - weights.min()
+            if method == "exp_weighted_mean":
+                weights = (weights / weights[weights != 0].min()) ** 2
+            self.average_values = np.average(df.to_numpy(), axis=0, weights=weights)
         self.fit_runtime = datetime.datetime.now() - self.startTime
         self.lower, self.upper = historic_quantile(
             df, prediction_interval=self.prediction_interval
@@ -301,7 +307,7 @@ class AverageValueNaive(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
         method_choice = random.choices(
-            ["Mean", "Median", "Mode", "Midhinge"], [0.5, 0.3, 0.1, 0.1]
+            ["Mean", "Median", "Mode", "Midhinge", "Weighted_Mean", "Exp_Weighted_Mean"], [0.3, 0.3, 0.01, 0.1, 0.4, 0.1]
         )[0]
         return {'method': method_choice}
 
@@ -1152,9 +1158,9 @@ class Motif(ModelObject):
         r_arr = None
         if self.max_windows is not None:
             if self.multivariate:
-                X_size = x.shape[0]
-            else:
                 X_size = x.shape[0] * x.shape[1]
+            else:
+                X_size = x.shape[0]
             if self.max_windows < X_size:
                 r_arr = np.random.default_rng(self.random_seed).integers(0, X_size, size=self.max_windows)
     
@@ -1255,7 +1261,7 @@ class Motif(ModelObject):
             "k": random.choices(
                 [5, 10, 15, 20, 100], [0.2, 0.5, 0.1, 0.1, 0.1]
             )[0],
-            "max_windows": random.choices([None, 10000], [0.2, 0.8])[0],
+            "max_windows": random.choices([None, 1000, 10000], [0.01, 0.1, 0.8])[0],
             }
 
     def get_params(self):

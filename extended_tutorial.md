@@ -76,8 +76,8 @@ Dropping series which are mostly missing, or using `prefill_na=0` (or other valu
 ### What to Worry About
 There are some basic things to beware of that can commonly lead to poor results:
 
-1. Bad data (sudden drops or missing values) in the most recent data is the single most common cause of bad forecasts here. This is extremely common in 'live' data, for example sales data - the most recent records will represent an incomplete time, or not all orders are invoiced in the database, or one of countless other reasons. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. `drop_most_recent` can help handle this. Manually filling the most recent NaN values may also help. 
-2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be choosen. Think carefully about the validation methods, which is discussed in the next section.
+1. Bad data (sudden drops or missing values) in the most recent data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. 
+2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be choosen. Choose a good method and as many validations as possible. 
 
 ### Validation and Cross Validation
 Cross validation helps assure that the optimal model is stable over the dynamics of a time series. 
@@ -308,7 +308,7 @@ result.forecast
 `pip install autots`
 ### Requirements:
 	Python >= 3.6
-	numpy
+	numpy >= 1.20 (Sliding Window in Motif and WindowRegression)
 	pandas
 	sklearn 	>= 0.20.0
 				>= 0.23.0 (PoissonReg)

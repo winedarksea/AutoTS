@@ -852,64 +852,99 @@ class RollingRegression(ModelObject):
 def window_maker(
     df,
     window_size: int = 10,
-    input_dim: str = 'multivariate',
+    input_dim: str = 'univariate',
     normalize_window: bool = False,
-    shuffle: bool = True,
+    shuffle: bool = False,
     output_dim: str = 'forecast_length',
     forecast_length: int = 1,
     max_windows: int = 5000,
+    regression_type: str = None,
+    future_regressor=None,
+    random_seed: int = 1234,
 ):
     """Convert a dataset into slices with history and y forecast."""
     if output_dim == '1step':
         forecast_length = 1
     phrase_n = forecast_length + window_size
-    max_pos_wind = df.shape[0] - phrase_n + 1
-    max_pos_wind = max_windows if max_pos_wind > max_windows else max_pos_wind
-    if max_pos_wind == max_windows:
-        numbers = np.random.choice(
-            (df.shape[0] - phrase_n), size=max_pos_wind, replace=False
-        )
-        if not shuffle:
-            numbers = np.sort(numbers)
-    else:
-        numbers = np.array(range(max_pos_wind))
-        if shuffle:
-            np.random.shuffle(numbers)
+    try:
+        if input_dim == "multivariate":
+            raise ValueError("input_dim=`multivariate` not supported this way.")
+        x = np.lib.stride_tricks.sliding_window_view(df.to_numpy(), phrase_n, axis=0)
+        x = x.reshape(-1, x.shape[-1]) 
+        Y = x[:, window_size:]
+        X = x[:, :window_size]
+        r_arr = None
+        if max_windows is not None:
+            X_size = x.shape[0]
+            if max_windows < X_size:
+                r_arr = np.random.default_rng(random_seed).integers(0, X_size, size=max_windows)
+                Y = Y[r_arr]
+                X = X[r_arr]
+        if normalize_window:
+            X = X / X.sum(axis=1).reshape(-1, 1)
+        # regressors
+        if str(regression_type).lower() == "user":
+            if isinstance(future_regressor, pd.DataFrame):
+                regr_arr = np.repeat(future_regressor.reindex(df.index).to_numpy()[(phrase_n - 1):], df.shape[1], axis=0)
+                if r_arr is not None:
+                    regr_arr = regr_arr[r_arr]
+                X = np.concatenate([X, regr_arr], axis=1)
 
-    X = pd.DataFrame()
-    Y = pd.DataFrame()
-    for z in numbers:
-        if input_dim == 'univariate':
-            rand_slice = df.iloc[
-                z : (z + phrase_n),
-            ]
-            rand_slice = (
-                rand_slice.reset_index(drop=True)
-                .transpose()
-                .set_index(np.repeat(z, (df.shape[1],)), append=True)
+    except Exception as e:
+        print(f"New numpy version of Window Regression failed {e}.")
+        if str(regression_type).lower() == "user":
+            if input_dim == "multivariate":
+                raise ValueError("input_dim=`multivariate` and regression_type=`user` cannot be combined.")
+            else:
+                raise ValueError("WindowRegression regression_type='user' requires numpy >= 1.20")
+        max_pos_wind = df.shape[0] - phrase_n + 1
+        max_pos_wind = max_windows if max_pos_wind > max_windows else max_pos_wind
+        if max_pos_wind == max_windows:
+            numbers = np.random.default_rng(random_seed).choice(
+                (df.shape[0] - phrase_n), size=max_pos_wind, replace=False
             )
-            cX = rand_slice.iloc[:, 0:(window_size)]
-            cY = rand_slice.iloc[:, window_size:]
+            if not shuffle:
+                numbers = np.sort(numbers)
         else:
-            cX = df.iloc[
-                z : (z + window_size),
-            ]
-            cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
-            cY = df.iloc[
-                (z + window_size) : (z + phrase_n),
-            ]
-            cY = pd.DataFrame(cY.stack().reset_index(drop=True)).transpose()
-        X = pd.concat([X, cX], axis=0)
-        Y = pd.concat([Y, cY], axis=0)
-    if normalize_window:
-        X = X.div(X.sum(axis=1), axis=0)
+            numbers = np.array(range(max_pos_wind))
+            if shuffle:
+                np.random.shuffle(numbers)
+
+        X = pd.DataFrame()
+        Y = pd.DataFrame()
+        for z in numbers:
+            if input_dim == 'univariate':
+                rand_slice = df.iloc[
+                    z : (z + phrase_n),
+                ]
+                rand_slice = (
+                    rand_slice.reset_index(drop=True)
+                    .transpose()
+                    .set_index(np.repeat(z, (df.shape[1],)), append=True)
+                )
+                cX = rand_slice.iloc[:, 0:(window_size)]
+                cY = rand_slice.iloc[:, window_size:]
+            else:
+                cX = df.iloc[
+                    z : (z + window_size),
+                ]
+                cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
+                cY = df.iloc[
+                    (z + window_size) : (z + phrase_n),
+                ]
+                cY = pd.DataFrame(cY.stack().reset_index(drop=True)).transpose()
+            X = pd.concat([X, cX], axis=0)
+            Y = pd.concat([Y, cY], axis=0)
+        if normalize_window:
+            X = X.div(X.sum(axis=1), axis=0)
+
     return X, Y
 
 
 def last_window(
     df,
     window_size: int = 10,
-    input_dim: str = 'multivariate',
+    input_dim: str = 'univariate',
     normalize_window: bool = False,
 ):
     z = df.shape[0] - window_size
@@ -939,8 +974,6 @@ class WindowRegression(ModelObject):
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
-        # transfer_learning: str = None,
-        # transfer_learning_transformation: dict = None,
         # regression_type: str = None,
     """
 
@@ -950,7 +983,7 @@ class WindowRegression(ModelObject):
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
         holiday_country: str = 'US',
-        random_seed: int = 2020,
+        random_seed: int = 2022,
         verbose: int = 0,
         window_size: int = 10,
         regression_model: dict = {
@@ -962,12 +995,13 @@ class WindowRegression(ModelObject):
                 'learning_rate': 1.0,
             },
         },
-        input_dim: str = 'multivariate',
-        output_dim: str = '1step',
+        input_dim: str = 'univariate',
+        output_dim: str = 'forecast_length',
         normalize_window: bool = False,
-        shuffle: bool = True,
+        shuffle: bool = False,
         forecast_length: int = 1,
         max_windows: int = 5000,
+        regression_type: str = None,
         n_jobs: int = -1,
         **kwargs,
     ):
@@ -978,6 +1012,7 @@ class WindowRegression(ModelObject):
             prediction_interval,
             holiday_country=holiday_country,
             random_seed=random_seed,
+            regression_type=regression_type,
             verbose=verbose,
             n_jobs=n_jobs,
         )
@@ -996,6 +1031,8 @@ class WindowRegression(ModelObject):
         Args:
             df (pandas.DataFrame): Datetime Indexed
         """
+        if (df.shape[1] * self.forecast_length) > 200 and self.input_dim == "multivariate":
+            raise ValueError("Scale exceeds recommendation for input_dim == `multivariate`")
         df = self.basic_profile(df)
         self.df_train = df
         X, Y = window_maker(
@@ -1007,6 +1044,9 @@ class WindowRegression(ModelObject):
             output_dim=self.output_dim,
             forecast_length=self.forecast_length,
             max_windows=self.max_windows,
+            regression_type=self.regression_type,
+            future_regressor=future_regressor,
+            random_seed=self.random_seed,
         )
         self.regr = retrieve_regressor(
             regression_model=self.regression_model,
@@ -1037,15 +1077,6 @@ class WindowRegression(ModelObject):
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
-        """
-        A VALUE IS BEING DROPPED FROM Y!
-        for forecast:
-        output_dim = 1
-        don't forget to normalize if used
-        collapse an output_dim into a forecastdf
-        
-        if univariate and 1, transpose
-        """
         if int(forecast_length) > int(self.forecast_length):
             print("Regression must be refit to change forecast length!")
         predictStartTime = datetime.datetime.now()
@@ -1062,6 +1093,11 @@ class WindowRegression(ModelObject):
                     input_dim=self.input_dim,
                     normalize_window=self.normalize_window,
                 )
+                if str(self.regression_type).lower() == "user":
+                    blasted_thing = future_regressor.iloc[x].to_frame().transpose()
+                    tmerg = pd.concat([blasted_thing]* 10, axis=0)
+                    tmerg.index = pred.index
+                    pred = pd.concat([pred, tmerg], axis=1)
                 rfPred = pd.DataFrame(self.regr.predict(pred))
                 if self.input_dim == 'univariate':
                     rfPred = pd.DataFrame(rfPred).transpose()
@@ -1079,9 +1115,12 @@ class WindowRegression(ModelObject):
                 input_dim=self.input_dim,
                 normalize_window=self.normalize_window,
             )
+            if str(self.regression_type).lower() == "user":
+                tmerg = future_regressor.tail(1).loc[future_regressor.tail(1).index.repeat(pred.shape[0])]
+                tmerg.index = pred.index
+                pred = pd.concat([pred, tmerg], axis=1)
             cY = pd.DataFrame(self.regr.predict(pred))
             if self.input_dim == 'multivariate':
-                # cY = Y.tail(1)
                 cY.index = ['values']
                 cY.columns = np.tile(self.column_names, reps=self.forecast_length)
                 cY = cY.transpose().reset_index()
@@ -1090,7 +1129,6 @@ class WindowRegression(ModelObject):
                 )
                 cY = pd.pivot_table(cY, index='timestep', columns='index')
             else:
-                # cY = Y.tail(df.shape[1])
                 cY = cY.transpose()
             df = cY
 
@@ -1129,68 +1167,43 @@ class WindowRegression(ModelObject):
         ).item()
         model_choice = generate_regressor_params()
         input_dim_choice = np.random.choice(
-            ['multivariate', 'univariate'], p=[0.3, 0.7], size=1
+            ['multivariate', 'univariate'], p=[0.1, 0.9], size=1
         ).item()
         if input_dim_choice == "multivariate":
             output_dim_choice = "1step"
+            regression_type_choice = None
         else:
-            output_dim_choice = np.random.choice(
-                ['forecast_length', '1step'], size=1
-            ).item()
+            output_dim_choice = random.choice(
+                ['forecast_length', '1step'],
+            )
+            regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[0]
         normalize_window_choice = np.random.choice(
             a=[True, False], size=1, p=[0.05, 0.95]
         ).item()
-        shuffle_choice = np.random.choice(a=[True, False], size=1).item()
         max_windows_choice = np.random.choice(
             a=[5000, 1000, 50000], size=1, p=[0.95, 0.04, 0.01]
         ).item()
         return {
             'window_size': window_size_choice,
-            'regression_model': model_choice,
             'input_dim': input_dim_choice,
             'output_dim': output_dim_choice,
             'normalize_window': normalize_window_choice,
-            'shuffle': shuffle_choice,
             'max_windows': max_windows_choice,
+            'regression_type': regression_type_choice,
+            'regression_model': model_choice,
         }
 
     def get_params(self):
         """Return dict of current parameters."""
         return {
             'window_size': self.window_size,
-            'regression_model': self.regression_model,
             'input_dim': self.input_dim,
             'output_dim': self.output_dim,
             'normalize_window': self.normalize_window,
-            'shuffle': self.shuffle,
             'max_windows': self.max_windows,
+            'regression_type': self.regression_type,
+            'regression_model': self.regression_model,
         }
-
-
-"""
-window_size: int = 10,
-input_dim: str = 'multivariate',
-output_dim: str = forecast_len, '1step'
-normalize_window: bool = False, -rowwise, that is
-regression_type: str = None
-
-max number of windows to make...
-forecast_length is passed into init
-shuffle or not
-
-df = df_wide_numeric.fillna(0).astype(float)
-window_size = 10
-input_dim = 'univariate'
-input_dim = 'multivariate'
-output_dim = 'forecast_length'
-max_windows = 5000
-
-for forecast:
-    just last window
-    output_dim = 1
-    don't forget to normalize if used
-    collapse an output_dim into a forecast df
-"""
 
 
 class ComponentAnalysis(ModelObject):
