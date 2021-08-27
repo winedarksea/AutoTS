@@ -117,35 +117,31 @@ def retrieve_regressor(
     n_jobs: int = 1,
 ):
     """Convert a model param dict to model object for regression frameworks."""
-    if regression_model['model'] == 'ElasticNet':
+    model_class = regression_model['model']
+    model_param_dict = regression_model.get("model_params", {})
+    if model_class == 'ElasticNet':
         from sklearn.linear_model import MultiTaskElasticNet
 
-        regr = MultiTaskElasticNet(alpha=1.0, random_state=random_seed)
+        regr = MultiTaskElasticNet(alpha=1.0, random_state=random_seed, **model_param_dict)
         return regr
-    elif regression_model['model'] == 'DecisionTree':
+    elif model_class == 'DecisionTree':
         from sklearn.tree import DecisionTreeRegressor
 
         regr = DecisionTreeRegressor(
-            max_depth=regression_model["model_params"]['max_depth'],
-            min_samples_split=regression_model["model_params"]['min_samples_split'],
             random_state=random_seed,
+            **model_param_dict
         )
         return regr
-    elif regression_model['model'] == 'MLP':
+    elif model_class == 'MLP':
         from sklearn.neural_network import MLPRegressor
 
         regr = MLPRegressor(
-            hidden_layer_sizes=regression_model["model_params"]['hidden_layer_sizes'],
-            max_iter=regression_model["model_params"]['max_iter'],
-            activation=regression_model["model_params"]['activation'],
-            solver=regression_model["model_params"]['solver'],
-            early_stopping=regression_model["model_params"]['early_stopping'],
-            learning_rate_init=regression_model["model_params"]['learning_rate_init'],
             random_state=random_seed,
             verbose=verbose_bool,
+            **model_param_dict
         )
         return regr
-    elif regression_model['model'] == 'KerasRNN':
+    elif model_class == 'KerasRNN':
         from autots.models.dnn import KerasRNN
 
         regr = KerasRNN(
@@ -160,19 +156,18 @@ def retrieve_regressor(
             rnn_type=regression_model["model_params"]['rnn_type'],
         )
         return regr
-    elif regression_model['model'] == 'KNN':
-        from sklearn.multioutput import MultiOutputRegressor
+    elif model_class == 'KNN':
+        from sklearn.multioutput import RegressorChain
         from sklearn.neighbors import KNeighborsRegressor
 
-        regr = MultiOutputRegressor(
+        regr = RegressorChain(
             KNeighborsRegressor(
-                n_neighbors=regression_model["model_params"]['n_neighbors'],
-                weights=regression_model["model_params"]['weights'],
+                n_jobs=n_jobs,
+                **model_param_dict
             ),
-            n_jobs=n_jobs,
         )
         return regr
-    elif regression_model['model'] == 'HistGradientBoost':
+    elif model_class == 'HistGradientBoost':
         from sklearn.multioutput import MultiOutputRegressor
 
         try:
@@ -183,34 +178,28 @@ def retrieve_regressor(
 
         regr = MultiOutputRegressor(
             HistGradientBoostingRegressor(
-                loss=regression_model["model_params"]['loss'],
-                learning_rate=regression_model["model_params"]['learning_rate'],
                 max_iter=200,
                 verbose=int(verbose_bool),
                 random_state=random_seed,
+                **model_param_dict
             )
         )
         return regr
-    elif regression_model['model'] == 'LightGBM':
-        from sklearn.multioutput import MultiOutputRegressor
+    elif model_class == 'LightGBM':
+        from sklearn.multioutput import RegressorChain
         from lightgbm import LGBMRegressor
 
-        regr = MultiOutputRegressor(
+        regr = RegressorChain(
             LGBMRegressor(
-                objective=regression_model["model_params"]['objective'],
-                learning_rate=regression_model["model_params"]['learning_rate'],
-                boosting_type=regression_model["model_params"]['boosting_type'],
-                num_leaves=regression_model["model_params"]['num_leaves'],
-                max_depth=regression_model["model_params"]['max_depth'],
-                n_estimators=regression_model["model_params"]['n_estimators'],
                 verbose=int(verbose_bool),
                 random_state=random_seed,
                 n_jobs=n_jobs,
+                **model_param_dict
             )
         )
         return regr
-    elif regression_model['model'] == 'Adaboost':
-        from sklearn.multioutput import MultiOutputRegressor
+    elif model_class == 'Adaboost':
+        from sklearn.multioutput import MultiOutputRegressor, RegressorChain
         from sklearn.ensemble import AdaBoostRegressor
 
         if regression_model["model_params"]['base_estimator'] == 'SVR':
@@ -244,52 +233,56 @@ def retrieve_regressor(
             )
             return regr
         else:
-            regr = MultiOutputRegressor(
+            regr = RegressorChain(
                 AdaBoostRegressor(
-                    n_estimators=regression_model["model_params"]['n_estimators'],
-                    loss=regression_model["model_params"]['loss'],
-                    learning_rate=regression_model["model_params"]['learning_rate'],
-                    random_state=random_seed,
+                    random_state=random_seed, **model_param_dict
                 ),
-                n_jobs=n_jobs,
             )
             return regr
-    elif regression_model['model'] == 'xgboost':
+    elif model_class == 'xgboost':
         import xgboost as xgb
         from sklearn.multioutput import MultiOutputRegressor
 
         regr = MultiOutputRegressor(
             xgb.XGBRegressor(
-                objective=regression_model["model_params"]['objective'],
-                eta=regression_model["model_params"]['eta'],
-                min_child_weight=regression_model["model_params"]['min_child_weight'],
-                max_depth=regression_model["model_params"]['max_depth'],
-                subsample=regression_model["model_params"]['subsample'],
-                verbosity=verbose,
+                verbosity=verbose, **model_param_dict
             ),
             n_jobs=n_jobs,
         )
         return regr
-    elif regression_model['model'] == 'SVM':
+    elif model_class == 'SVM':
         from sklearn.multioutput import MultiOutputRegressor
-        from sklearn.svm import SVR
+        from sklearn.svm import LinearSVR
 
         regr = MultiOutputRegressor(
-            SVR(kernel='rbf', gamma='scale', verbose=verbose_bool)
+            LinearSVR(verbose=verbose_bool, **model_param_dict),
+            n_jobs=n_jobs,
         )
         return regr
-    elif regression_model['model'] == 'BayesianRidge':
-        from sklearn.multioutput import MultiOutputRegressor
+    elif model_class == 'BayesianRidge':
+        from sklearn.multioutput import RegressorChain
         from sklearn.linear_model import BayesianRidge
 
-        regr = MultiOutputRegressor(BayesianRidge(), n_jobs=n_jobs)
+        regr = RegressorChain(BayesianRidge(**model_param_dict))
         return regr
+    elif model_class == "ExtraTrees":
+        from sklearn.ensemble import ExtraTreesRegressor
+        
+        regr = ExtraTreesRegressor(n_jobs=n_jobs,
+                                   random_state=random_seed
+                                   **model_param_dict)
+    elif model_class == "RadiusNeighbors":
+        from sklearn.neighbors import RadiusNeighborsRegressor
+        
+        regr = RadiusNeighborsRegressor(n_jobs=n_jobs, **model_param_dict)
     else:
         regression_model['model'] = 'RandomForest'
         from sklearn.ensemble import RandomForestRegressor
 
         regr = RandomForestRegressor(
-            random_state=random_seed, n_estimators=1000, verbose=verbose, n_jobs=n_jobs
+            random_state=random_seed, n_estimators=1000,
+            verbose=verbose, n_jobs=n_jobs,
+            **model_param_dict
         )
         return regr
 
@@ -298,16 +291,18 @@ def generate_regressor_params(
     model_dict: dict = {
         'RandomForest': 0.1,
         'ElasticNet': 0.05,
-        'MLP': 0.259,
+        'MLP': 0.25,
         'DecisionTree': 0.1,
         'KNN': 0.1,
-        'Adaboost': 0.14,
+        'Adaboost': 0.05,
         'SVM': 0.001,  # tends to be the slowest
         'BayesianRidge': 0.08,
         'xgboost': 0.01,
         'KerasRNN': 0.05,
         'HistGradientBoost': 0.01,
         'LightGBM': 0.1,
+        'ExtraTrees': 0.03,
+        'RadiusNeighbors': 0.03,
     },
 ):
     """Generate new parameters for input to regressor."""
@@ -487,7 +482,7 @@ def generate_regressor_params(
                         a=[-1, 5, 10], p=[0.6, 0.1, 0.3], size=1
                     ).item(),
                     "boosting_type": np.random.choice(
-                        a=['gbdt', 'rf', 'dart', 'goss'], p=[0.5, 0.2, 0.1, 0.2], size=1
+                        a=['gbdt', 'rf', 'dart', 'goss'], p=[0.6, 0, 0.2, 0.2], size=1
                     ).item(),
                     "n_estimators": np.random.choice(
                         a=[100, 250, 50, 500], p=[0.6, 0.099, 0.3, 0.0010], size=1
@@ -881,7 +876,8 @@ def window_maker(
                 Y = Y[r_arr]
                 X = X[r_arr]
         if normalize_window:
-            X = X / X.sum(axis=1).reshape(-1, 1)
+            div_sum = np.nansum(X, axis=1).reshape(-1, 1)
+            X = X / np.where(div_sum == 0, 1, div_sum)
         # regressors
         if str(regression_type).lower() == "user":
             if isinstance(future_regressor, pd.DataFrame):
@@ -889,6 +885,8 @@ def window_maker(
                 if r_arr is not None:
                     regr_arr = regr_arr[r_arr]
                 X = np.concatenate([X, regr_arr], axis=1)
+        if Y.shape[1] == 1:
+            Y = Y.ravel()
 
     except Exception as e:
         print(f"New numpy version of Window Regression failed {e}.")
@@ -1100,7 +1098,7 @@ class WindowRegression(ModelObject):
                     pred = pd.concat([pred, tmerg], axis=1)
                 rfPred = pd.DataFrame(self.regr.predict(pred))
                 if self.input_dim == 'univariate':
-                    rfPred = pd.DataFrame(rfPred).transpose()
+                    rfPred = rfPred.transpose()
                 forecast = pd.concat([forecast, rfPred], axis=0, ignore_index=True)
                 self.last_window = pd.concat(
                     [self.last_window, rfPred], axis=0, ignore_index=True
@@ -1162,13 +1160,13 @@ class WindowRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        window_size_choice = np.random.choice(
-            [5, 10, 20, seasonal_int()], size=1
-        ).item()
+        window_size_choice = random.choice(
+            [5, 10, 20, seasonal_int()]
+        )
         model_choice = generate_regressor_params()
-        input_dim_choice = np.random.choice(
-            ['multivariate', 'univariate'], p=[0.1, 0.9], size=1
-        ).item()
+        input_dim_choice = random.choices(
+            ['multivariate', 'univariate'], [0.1, 0.9]
+        )[0]
         if input_dim_choice == "multivariate":
             output_dim_choice = "1step"
             regression_type_choice = None
@@ -1177,12 +1175,12 @@ class WindowRegression(ModelObject):
                 ['forecast_length', '1step'],
             )
             regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[0]
-        normalize_window_choice = np.random.choice(
-            a=[True, False], size=1, p=[0.05, 0.95]
-        ).item()
-        max_windows_choice = np.random.choice(
-            a=[5000, 1000, 50000], size=1, p=[0.95, 0.04, 0.01]
-        ).item()
+        normalize_window_choice = random.choices(
+            [True, False], [0.05, 0.95]
+        )[0]
+        max_windows_choice = random.choices(
+            [5000, 1000, 50000], [0.85, 0.05, 0.1]
+        )[0]
         return {
             'window_size': window_size_choice,
             'input_dim': input_dim_choice,

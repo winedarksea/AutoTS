@@ -20,6 +20,8 @@
 * 'midhinge' and "weighted_mean" to AverageValueNaive
 * Add passing regressors to WindowRegression and made more efficient window generation
 * more plotting methods: plot_horizontal_transformers
+* for most -Regression type models, `model_params` is now treated as kwargs and can accept any args for that model
+* ExtraTrees and RadiusRegressor to -Regression type models
 
 
 # Errors: 
