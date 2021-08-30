@@ -230,8 +230,8 @@ class Detrend(EmptyTransformer):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
-        Y = df.values
-        X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
+        Y = df.to_numpy()
+        X = pd.to_numeric(df.index, errors='coerce', downcast='integer').to_numpy()
         if self.model == 'GLS':
             from statsmodels.regression.linear_model import GLS
 
@@ -242,7 +242,7 @@ class Detrend(EmptyTransformer):
                 self.trnd_trans = PositiveShift(
                     log=False, center_one=True, squared=False
                 )
-                Y = pd.DataFrame(self.trnd_trans.fit_transform(df)).values
+                Y = pd.DataFrame(self.trnd_trans.fit_transform(df)).to_numpy()
             X = X.reshape((-1, 1))
             self.trained_model.fit(X, Y)
         self.shape = df.shape
@@ -1646,6 +1646,183 @@ class CenterLastValue(EmptyTransformer):
         return self.transform(df)
 
 
+class ScipyFilter(EmptyTransformer):
+    """Irreversible filters from Scipy
+
+    Args:
+        method (str): "hilbert", "wiener", "savgol_filter", "butter", "cheby1", "cheby2", "ellip", "bessel",
+        method_args (list): passed to filter as appropriate
+    """
+
+    def __init__(self, method: str = 'bkfilter', method_args: list = None, **kwargs):
+        super().__init__(name="StatsmodelsFilter")
+        self.method = method
+        self.method_args = method_args
+
+    def fit(self, df):
+        """Fits filter.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self
+
+    def fit_transform(self, df):
+        """Fit and Return Detrended DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+    @staticmethod
+    def get_new_params(method: str = 'random'):
+        method = random.choices(
+            [
+                "hilbert",
+                "wiener",
+                "savgol_filter",
+                "butter",
+                # "cheby1",
+                # "cheby2",
+                # "ellip",
+                # "bessel",
+            ],
+            [0.1, 0.2, 0.2, 0.1],
+            k=1,
+        )[0]
+        # analog_choice = bool(random.randint(0, 1))
+        analog_choice = False
+        xn = random.randint(1, 99)
+        btype = random.choice(["lowpass", "highpass"])  #  "bandpass", "bandstop"
+        if method in ['wiener', 'hilbert']:
+            method_args = None
+        elif method == "savgol_filter":
+            method_args = [random.randrange(5, 11, 2), random.randint(1, 3)]
+        elif method in ["butter", "bessel"]:
+            if btype in ["bandpass", "bandstop"]:
+                Wn = [xn / 100, random.randint(1, 99) / 100]
+            else:
+                Wn = xn / 100 if not analog_choice else xn
+            method_args = [
+                random.randint(1, 5),
+                Wn,
+                btype,
+                analog_choice,
+            ]
+        elif method in ["cheby1", "cheby2"]:
+            if btype in ["bandpass", "bandstop"]:
+                Wn = [xn / 100, random.randint(1, 99) / 100]
+            else:
+                Wn = xn / 100 if not analog_choice else xn
+            method_args = [
+                random.randint(1, 5),
+                random.randint(1, 10),
+                Wn,
+                btype,
+                analog_choice,
+            ]
+        elif method in ["ellip"]:
+            if btype in ["bandpass", "bandstop"]:
+                Wn = [xn / 100, random.randint(1, 99) / 100]
+            else:
+                Wn = xn / 100 if not analog_choice else xn
+            method_args = [
+                random.randint(1, 5),
+                random.randint(1, 10),
+                random.randint(1, 10),
+                Wn,
+                btype,
+                analog_choice,
+            ]
+        return {
+            "method": method,
+            "method_args": method_args,
+        }
+
+    def transform(self, df):
+        """Return detrended data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+
+        if self.method == 'hilbert':
+            from scipy.signal import hilbert
+
+            test = pd.DataFrame(hilbert(df.values), columns=df.columns, index=df.index)
+            return np.abs(test)
+        elif self.method == 'wiener':
+            from scipy.signal import wiener
+
+            return pd.DataFrame(wiener(df.values), columns=df.columns, index=df.index)
+        elif self.method == 'savgol_filter':
+            from scipy.signal import savgol_filter
+
+            # args = [5, 2]
+            return pd.DataFrame(
+                savgol_filter(df.values, *self.method_args, axis=0, mode='nearest'),
+                columns=df.columns,
+                index=df.index,
+            )
+        elif self.method == 'butter':
+            from scipy.signal import butter, sosfiltfilt
+
+            # args = [4, 0.125]
+            # [4, 100, 'lowpass'], [1, 0.125, "highpass"]
+            sos = butter(*self.method_args, output='sos')
+            return pd.DataFrame(
+                sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
+            )
+        elif self.method == "cheby1":
+            from scipy.signal import cheby1, sosfiltfilt
+
+            # args = [4, 5, 100, 'lowpass', True]
+            # args = [10, 1, 15, 'highpass']
+            sos = cheby1(*self.method_args, output='sos')
+            return pd.DataFrame(
+                sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
+            )
+        elif self.method == "cheby2":
+            from scipy.signal import cheby2, sosfiltfilt
+
+            # args = [4, 40, 100, 'lowpass', True]
+            # args = [12, 20, 17, 'highpass']
+            sos = cheby2(*self.method_args, output='sos')
+            return pd.DataFrame(
+                sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
+            )
+        elif self.method == "ellip":
+            from scipy.signal import ellip, sosfiltfilt
+
+            # args = [4, 5, 40, 100, 'lowpass', True]
+            # args = [8, 1, 100, 17, 'highpass']
+            sos = ellip(*self.method_args, output='sos')
+            return pd.DataFrame(
+                sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
+            )
+        elif self.method == "bessel":
+            from scipy.signal import bessel, sosfiltfilt
+
+            # args = [4, 100, 'lowpass', True]
+            # args = [3, 10, 'highpass']
+            sos = bessel(*self.method_args, output='sos')
+            return pd.DataFrame(
+                sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
+            )
+        else:
+            raise ValueError(f"ScipyFilter method {self.method} not found.")
+
+    def inverse_transform(self, df):
+        """Return data to original form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     'None': EmptyTransformer(),
@@ -1690,6 +1867,7 @@ have_params = {
     'Round': Round,
     'Slice': Slice,
     'Detrend': Detrend,
+    'ScipyFilter': ScipyFilter,
 }
 # where will results will vary if not all series are included together
 shared_trans = ['PCA', 'FastICA']
@@ -1762,6 +1940,7 @@ class GeneralTransformer(object):
             'ClipOutliers' - remove outliers
             'Discretize' - bin or round data into groups
             'DatepartRegression' - move a trend trained on datetime index
+            "ScipyFilter" - filter data (lose information but smoother!) from scipy
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -2088,8 +2267,8 @@ def get_transformer_params(transformer: str = "EmptyTransformer", method: str = 
 transformer_dict = {
     None: 0.0,
     'MinMaxScaler': 0.05,
-    'PowerTransformer': 0.1,
-    'QuantileTransformer': 0.1,
+    'PowerTransformer': 0.05,
+    'QuantileTransformer': 0.05,
     'MaxAbsScaler': 0.05,
     'StandardScaler': 0.04,
     'RobustScaler': 0.05,
@@ -2106,7 +2285,7 @@ transformer_dict = {
     'Log': 0.01,
     'IntermittentOccurrence': 0.01,
     # 'SeasonalDifference7': 0.0,  # old
-    'SeasonalDifference': 0.08,
+    'SeasonalDifference': 0.1,
     # 'SeasonalDifference28': 0.0,  # old
     'cffilter': 0.01,
     'bkfilter': 0.05,
@@ -2117,13 +2296,15 @@ transformer_dict = {
     "Discretize": 0.05,
     "CenterLastValue": 0.01,
     "Round": 0.05,
-    "Slice": 0.01,
+    "Slice": 0.02,
+    "ScipyFilter": 0.02,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
 del fast_transformer_dict['DatepartRegression']
 del fast_transformer_dict['SinTrend']
 del fast_transformer_dict['FastICA']
+del fast_transformer_dict['ScipyFilter']
 
 # and even more
 superfast_transformer_dict = fast_transformer_dict.copy()

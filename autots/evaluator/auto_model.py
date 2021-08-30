@@ -28,6 +28,7 @@ from autots.models.basics import (
     AverageValueNaive,
     SeasonalNaive,
     ZeroesNaive,
+    Motif,
 )
 from autots.models.statsmodels import (
     GLS,
@@ -400,6 +401,28 @@ def ModelMonster(
             **parameters,
         )
 
+        return model
+    elif model == 'MultivariateMotif':
+        model = Motif(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            multivariate=True,
+            **parameters,
+        )
+        return model
+    elif model == 'UnivariateMotif':
+        model = Motif(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            multivariate=False,
+            **parameters,
+        )
         return model
     else:
         raise AttributeError(
@@ -1061,6 +1084,7 @@ def TemplateWizard(
                     'Ensemble': ensemble_input,
                     'Exceptions': np.nan,
                     'Runs': 1,
+                    'Generation': current_generation,
                     'ValidationRound': validation_round,
                 },
                 index=[0],
@@ -1137,6 +1161,7 @@ def TemplateWizard(
                         'TotalRuntime': datetime.timedelta(0),
                         'Exceptions': "KeyboardInterrupt by user",
                         'Runs': 1,
+                        'Generation': current_generation,
                         'ValidationRound': validation_round,
                     },
                     index=[0],
@@ -1184,6 +1209,7 @@ def TemplateWizard(
                     'TotalRuntime': datetime.timedelta(0),
                     'Exceptions': repr(e),
                     'Runs': 1,
+                    'Generation': current_generation,
                     'ValidationRound': validation_round,
                 },
                 index=[0],
@@ -1698,12 +1724,17 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
             overall_score = overall_score + (contour_score * contour_weighting)
     # remove basic duplicates
     local_results = results_object.model_results.copy()
+    local_results = local_results[local_results['Exceptions'].isna()]
     local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
     local_results.drop_duplicates(
         subset=['ValidationRound', 'smape', 'mae', 'spl'], keep="first", inplace=True
     )
     # select only models run through all validations
+    # run_count = temp.groupby(level=0).count().mean(axis=1)
+    # models_to_use = run_count[run_count >= total_validations].index.tolist()
     run_count = local_results[['Model', 'ID']].groupby("ID").count()
     models_to_use = run_count[run_count['Model'] >= total_validations].index.tolist()
     overall_score = overall_score[overall_score.index.isin(models_to_use)]
+    # take the average score across validations
+    overall_score = overall_score.groupby(level=0).mean()
     return overall_score

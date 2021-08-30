@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Intro &#8212; AutoTS 0.3.4 documentation</title>
+    <title>Intro &#8212; AutoTS 0.3.5 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -183,6 +183,7 @@
 <li><p>Set <code class="docutils literal notranslate"><span class="pre">model_interrupt=True</span></code> which passes over the current model when a <code class="docutils literal notranslate"><span class="pre">KeyboardInterrupt</span></code> ie <code class="docutils literal notranslate"><span class="pre">crtl+c</span></code> is pressed (although if the interrupt falls between generations it will stop the entire training).</p></li>
 <li><p>Use the <code class="docutils literal notranslate"><span class="pre">result_file</span></code> method of <code class="docutils literal notranslate"><span class="pre">.fit()</span></code> which will save progress after each generation - helpful to save progress if a long training is being done. Use <code class="docutils literal notranslate"><span class="pre">import_results</span></code> to recover.</p></li>
 <li><p>While Transformations are pretty fast, setting <code class="docutils literal notranslate"><span class="pre">transformer_max_depth</span></code> to a lower number (say, 2) will increase speed. Also utilize <code class="docutils literal notranslate"><span class="pre">transformer_list</span></code>.</p></li>
+<li><p>Check out <a class="reference external" href="https://github.com/winedarksea/AutoTS/discussions/76">this example</a> of using AutoTS with pandas UDF.</p></li>
 <li><p>Ensembles are obviously slower to predict because they run many models, ‘distance’ models 2x slower, and ‘simple’ models 3x-5x slower.</p>
 <ul>
 <li><p><code class="docutils literal notranslate"><span class="pre">ensemble='horizontal-max'</span></code> with <code class="docutils literal notranslate"><span class="pre">model_list='no_shared_fast'</span></code> can scale relatively well given many cpu cores because each model is only run on the series it is needed for.</p></li>

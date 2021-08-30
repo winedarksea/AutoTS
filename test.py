@@ -2,7 +2,6 @@
 from time import sleep
 import timeit
 import platform
-import numpy as np
 import pandas as pd
 from autots.datasets import (
     load_daily,
@@ -13,7 +12,8 @@ from autots.datasets import (
     load_weekdays,
 )
 from autots import AutoTS
-from autots.evaluator.auto_ts import fake_regressor, error_correlations
+from autots.evaluator.auto_ts import fake_regressor
+import matplotlib.pyplot as plt
 
 # raise ValueError("aaargh!")
 use_template = False
@@ -21,7 +21,7 @@ use_m5 = False  # long = False
 force_univariate = False  # long = False
 
 # this is the template file imported:
-example_filename = "general_templateDESKTOP-JS3OJ8L.csv"  # "example_export.csv"  # .csv/.json
+example_filename = "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
 df = load_monthly(long=long)
@@ -32,7 +32,7 @@ if use_template:
     generations = 0
     num_validations = 0
 else:
-    generations = 2
+    generations = 5
     num_validations = 2
 
 if use_m5:
@@ -80,11 +80,10 @@ model_list = [
     'WindowRegression',
 ]
 
-transformer_list = "fast"  # ["SinTrend", "MinMaxScaler"]
+transformer_list = "all"  # ["ScipyFilter"]
 transformer_max_depth = 3
 model_list = 'superfast'  # fast_parallel
-# model_list = ["AverageValueNaive", "GLM", "FBProphet"]
-# model_list = ['ARIMA', 'ETS', 'FBProphet', 'LastValueNaive', 'GLM']
+# model_list = ["LastValueNaive", "WindowRegression", "UnivariateRegression", "RollingRegression"]
 
 metric_weighting = {
     'smape_weighting': 3,
@@ -163,7 +162,7 @@ model = model.fit(
 
 elapsed_for = timeit.default_timer() - start_time_for
 
-prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=0)
+prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=1)
 # point forecasts dataframe
 forecasts_df = prediction.forecast
 # accuracy of all tried model results (not including cross validation)
@@ -187,8 +186,20 @@ print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 
 initial_results.to_csv("general_template_" + str(platform.node()) + ".csv")
 
+plt.show()
+model.plot_generation_loss()
+
 if model.best_model['Ensemble'].iloc[0] == 2:
+    plt.show()
+    model.plot_horizontal_transformers(method="fillna")
+    plt.show()
+    model.plot_horizontal_transformers()
+    plt.show()
     model.plot_horizontal()
+    plt.show()
+    if 'mosaic' in model.best_model['ModelParameters'].iloc[0].lower():
+        mosaic_df = model.mosaic_to_df()
+        print(mosaic_df[mosaic_df.columns[0:5]].head(5))
 
 """
 # Import/Export

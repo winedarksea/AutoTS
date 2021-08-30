@@ -117,35 +117,28 @@ def retrieve_regressor(
     n_jobs: int = 1,
 ):
     """Convert a model param dict to model object for regression frameworks."""
-    if regression_model['model'] == 'ElasticNet':
+    model_class = regression_model['model']
+    model_param_dict = regression_model.get("model_params", {})
+    if model_class == 'ElasticNet':
         from sklearn.linear_model import MultiTaskElasticNet
 
-        regr = MultiTaskElasticNet(alpha=1.0, random_state=random_seed)
-        return regr
-    elif regression_model['model'] == 'DecisionTree':
-        from sklearn.tree import DecisionTreeRegressor
-
-        regr = DecisionTreeRegressor(
-            max_depth=regression_model["model_params"]['max_depth'],
-            min_samples_split=regression_model["model_params"]['min_samples_split'],
-            random_state=random_seed,
+        regr = MultiTaskElasticNet(
+            alpha=1.0, random_state=random_seed, **model_param_dict
         )
         return regr
-    elif regression_model['model'] == 'MLP':
+    elif model_class == 'DecisionTree':
+        from sklearn.tree import DecisionTreeRegressor
+
+        regr = DecisionTreeRegressor(random_state=random_seed, **model_param_dict)
+        return regr
+    elif model_class == 'MLP':
         from sklearn.neural_network import MLPRegressor
 
         regr = MLPRegressor(
-            hidden_layer_sizes=regression_model["model_params"]['hidden_layer_sizes'],
-            max_iter=regression_model["model_params"]['max_iter'],
-            activation=regression_model["model_params"]['activation'],
-            solver=regression_model["model_params"]['solver'],
-            early_stopping=regression_model["model_params"]['early_stopping'],
-            learning_rate_init=regression_model["model_params"]['learning_rate_init'],
-            random_state=random_seed,
-            verbose=verbose_bool,
+            random_state=random_seed, verbose=verbose_bool, **model_param_dict
         )
         return regr
-    elif regression_model['model'] == 'KerasRNN':
+    elif model_class == 'KerasRNN':
         from autots.models.dnn import KerasRNN
 
         regr = KerasRNN(
@@ -160,19 +153,16 @@ def retrieve_regressor(
             rnn_type=regression_model["model_params"]['rnn_type'],
         )
         return regr
-    elif regression_model['model'] == 'KNN':
+    elif model_class == 'KNN':
         from sklearn.multioutput import MultiOutputRegressor
         from sklearn.neighbors import KNeighborsRegressor
 
         regr = MultiOutputRegressor(
-            KNeighborsRegressor(
-                n_neighbors=regression_model["model_params"]['n_neighbors'],
-                weights=regression_model["model_params"]['weights'],
-            ),
+            KNeighborsRegressor(**model_param_dict),
             n_jobs=n_jobs,
         )
         return regr
-    elif regression_model['model'] == 'HistGradientBoost':
+    elif model_class == 'HistGradientBoost':
         from sklearn.multioutput import MultiOutputRegressor
 
         try:
@@ -183,33 +173,27 @@ def retrieve_regressor(
 
         regr = MultiOutputRegressor(
             HistGradientBoostingRegressor(
-                loss=regression_model["model_params"]['loss'],
-                learning_rate=regression_model["model_params"]['learning_rate'],
                 max_iter=200,
                 verbose=int(verbose_bool),
                 random_state=random_seed,
+                **model_param_dict,
             )
         )
         return regr
-    elif regression_model['model'] == 'LightGBM':
-        from sklearn.multioutput import MultiOutputRegressor
+    elif model_class == 'LightGBM':
+        from sklearn.multioutput import RegressorChain
         from lightgbm import LGBMRegressor
 
-        regr = MultiOutputRegressor(
+        regr = RegressorChain(
             LGBMRegressor(
-                objective=regression_model["model_params"]['objective'],
-                learning_rate=regression_model["model_params"]['learning_rate'],
-                boosting_type=regression_model["model_params"]['boosting_type'],
-                num_leaves=regression_model["model_params"]['num_leaves'],
-                max_depth=regression_model["model_params"]['max_depth'],
-                n_estimators=regression_model["model_params"]['n_estimators'],
                 verbose=int(verbose_bool),
                 random_state=random_seed,
                 n_jobs=n_jobs,
+                **model_param_dict,
             )
         )
         return regr
-    elif regression_model['model'] == 'Adaboost':
+    elif model_class == 'Adaboost':
         from sklearn.multioutput import MultiOutputRegressor
         from sklearn.ensemble import AdaBoostRegressor
 
@@ -245,51 +229,55 @@ def retrieve_regressor(
             return regr
         else:
             regr = MultiOutputRegressor(
-                AdaBoostRegressor(
-                    n_estimators=regression_model["model_params"]['n_estimators'],
-                    loss=regression_model["model_params"]['loss'],
-                    learning_rate=regression_model["model_params"]['learning_rate'],
-                    random_state=random_seed,
-                ),
+                AdaBoostRegressor(random_state=random_seed, **model_param_dict),
                 n_jobs=n_jobs,
             )
             return regr
-    elif regression_model['model'] == 'xgboost':
+    elif model_class == 'xgboost':
         import xgboost as xgb
         from sklearn.multioutput import MultiOutputRegressor
 
         regr = MultiOutputRegressor(
-            xgb.XGBRegressor(
-                objective=regression_model["model_params"]['objective'],
-                eta=regression_model["model_params"]['eta'],
-                min_child_weight=regression_model["model_params"]['min_child_weight'],
-                max_depth=regression_model["model_params"]['max_depth'],
-                subsample=regression_model["model_params"]['subsample'],
-                verbosity=verbose,
-            ),
+            xgb.XGBRegressor(verbosity=verbose, **model_param_dict),
             n_jobs=n_jobs,
         )
         return regr
-    elif regression_model['model'] == 'SVM':
+    elif model_class == 'SVM':
         from sklearn.multioutput import MultiOutputRegressor
-        from sklearn.svm import SVR
+        from sklearn.svm import LinearSVR
 
         regr = MultiOutputRegressor(
-            SVR(kernel='rbf', gamma='scale', verbose=verbose_bool)
+            LinearSVR(verbose=verbose_bool, **model_param_dict),
+            n_jobs=n_jobs,
         )
         return regr
-    elif regression_model['model'] == 'BayesianRidge':
-        from sklearn.multioutput import MultiOutputRegressor
+    elif model_class == 'BayesianRidge':
+        from sklearn.multioutput import RegressorChain
         from sklearn.linear_model import BayesianRidge
 
-        regr = MultiOutputRegressor(BayesianRidge(), n_jobs=n_jobs)
+        regr = RegressorChain(BayesianRidge(**model_param_dict))
+        return regr
+    elif model_class == "ExtraTrees":
+        from sklearn.ensemble import ExtraTreesRegressor
+
+        return ExtraTreesRegressor(
+            n_jobs=n_jobs, random_state=random_seed, **model_param_dict
+        )
+    elif model_class == "RadiusNeighbors":
+        from sklearn.neighbors import RadiusNeighborsRegressor
+
+        regr = RadiusNeighborsRegressor(n_jobs=n_jobs, **model_param_dict)
         return regr
     else:
         regression_model['model'] = 'RandomForest'
         from sklearn.ensemble import RandomForestRegressor
 
         regr = RandomForestRegressor(
-            random_state=random_seed, n_estimators=1000, verbose=verbose, n_jobs=n_jobs
+            random_state=random_seed,
+            n_estimators=1000,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **model_param_dict,
         )
         return regr
 
@@ -298,16 +286,18 @@ def generate_regressor_params(
     model_dict: dict = {
         'RandomForest': 0.1,
         'ElasticNet': 0.05,
-        'MLP': 0.259,
+        'MLP': 0.25,
         'DecisionTree': 0.1,
         'KNN': 0.1,
-        'Adaboost': 0.14,
+        'Adaboost': 0.05,
         'SVM': 0.001,  # tends to be the slowest
         'BayesianRidge': 0.08,
         'xgboost': 0.01,
         'KerasRNN': 0.05,
         'HistGradientBoost': 0.01,
         'LightGBM': 0.1,
+        'ExtraTrees': 0.03,
+        'RadiusNeighbors': 0.03,
     },
 ):
     """Generate new parameters for input to regressor."""
@@ -487,7 +477,7 @@ def generate_regressor_params(
                         a=[-1, 5, 10], p=[0.6, 0.1, 0.3], size=1
                     ).item(),
                     "boosting_type": np.random.choice(
-                        a=['gbdt', 'rf', 'dart', 'goss'], p=[0.5, 0.2, 0.1, 0.2], size=1
+                        a=['gbdt', 'rf', 'dart', 'goss'], p=[0.6, 0, 0.2, 0.2], size=1
                     ).item(),
                     "n_estimators": np.random.choice(
                         a=[100, 250, 50, 500], p=[0.6, 0.099, 0.3, 0.0010], size=1
@@ -783,29 +773,29 @@ class RollingRegression(ModelObject):
         else:
             macd_periods_choice = None
         std_rolling_periods_choice = random.choices(
-            [None, 5, 7, 10, 30], [0.2, 0.2, 0.2, 0.2, 0.2]
+            [None, 5, 7, 10, 30], [0.6, 0.1, 0.1, 0.1, 0.1]
         )[0]
-        max_rolling_periods_choice = random.choices([None, seasonal_int()], [0.2, 0.8])[
+        max_rolling_periods_choice = random.choices([None, seasonal_int()], [0.5, 0.5])[
             0
         ]
-        min_rolling_periods_choice = random.choices([None, seasonal_int()], [0.2, 0.8])[
+        min_rolling_periods_choice = random.choices([None, seasonal_int()], [0.5, 0.5])[
             0
         ]
         lag_periods_choice = seasonal_int() - 1
         lag_periods_choice = 2 if lag_periods_choice < 2 else lag_periods_choice
-        ewm_choice = random.choices([None, 0.2, 0.5, 0.8], [0.5, 0.15, 0.15, 0.2])[0]
+        ewm_choice = random.choices([None, 0.2, 0.5, 0.8], [0.7, 0.1, 0.1, 0.1])[0]
         abs_energy_choice = random.choices([True, False], [0.3, 0.7])[0]
         rolling_autocorr_periods_choice = random.choices(
             [None, 2, 7, 12, 30], [0.8, 0.05, 0.05, 0.05, 0.05]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring'], [0.6, 0.1, 0.2, 0.1]
+            [None, 'simple', 'expanded', 'recurring'], [0.7, 0.1, 0.1, 0.1]
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
-        polynomial_degree_choice = random.choices([None, 2], [0.97, 0.03])[0]
+        polynomial_degree_choice = random.choices([None, 2], [0.99, 0.01])[0]
         x_transform_choice = random.choices(
             [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
-            [0.8, 0.05, 0.05, 0.1],
+            [0.85, 0.05, 0.05, 0.05],
         )[0]
         regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
         parameter_dict = {
@@ -852,64 +842,112 @@ class RollingRegression(ModelObject):
 def window_maker(
     df,
     window_size: int = 10,
-    input_dim: str = 'multivariate',
+    input_dim: str = 'univariate',
     normalize_window: bool = False,
-    shuffle: bool = True,
+    shuffle: bool = False,
     output_dim: str = 'forecast_length',
     forecast_length: int = 1,
     max_windows: int = 5000,
+    regression_type: str = None,
+    future_regressor=None,
+    random_seed: int = 1234,
 ):
     """Convert a dataset into slices with history and y forecast."""
     if output_dim == '1step':
         forecast_length = 1
     phrase_n = forecast_length + window_size
-    max_pos_wind = df.shape[0] - phrase_n + 1
-    max_pos_wind = max_windows if max_pos_wind > max_windows else max_pos_wind
-    if max_pos_wind == max_windows:
-        numbers = np.random.choice(
-            (df.shape[0] - phrase_n), size=max_pos_wind, replace=False
-        )
-        if not shuffle:
-            numbers = np.sort(numbers)
-    else:
-        numbers = np.array(range(max_pos_wind))
-        if shuffle:
-            np.random.shuffle(numbers)
+    try:
+        if input_dim == "multivariate":
+            raise ValueError("input_dim=`multivariate` not supported this way.")
+        x = np.lib.stride_tricks.sliding_window_view(df.to_numpy(), phrase_n, axis=0)
+        x = x.reshape(-1, x.shape[-1])
+        Y = x[:, window_size:]
+        X = x[:, :window_size]
+        r_arr = None
+        if max_windows is not None:
+            X_size = x.shape[0]
+            if max_windows < X_size:
+                r_arr = np.random.default_rng(random_seed).integers(
+                    0, X_size, size=max_windows
+                )
+                Y = Y[r_arr]
+                X = X[r_arr]
+        if normalize_window:
+            div_sum = np.nansum(X, axis=1).reshape(-1, 1)
+            X = X / np.where(div_sum == 0, 1, div_sum)
+        # regressors
+        if str(regression_type).lower() == "user":
+            if isinstance(future_regressor, pd.DataFrame):
+                regr_arr = np.repeat(
+                    future_regressor.reindex(df.index).to_numpy()[(phrase_n - 1) :],
+                    df.shape[1],
+                    axis=0,
+                )
+                if r_arr is not None:
+                    regr_arr = regr_arr[r_arr]
+                X = np.concatenate([X, regr_arr], axis=1)
+        if Y.shape[1] == 1:
+            Y = Y.ravel()
 
-    X = pd.DataFrame()
-    Y = pd.DataFrame()
-    for z in numbers:
-        if input_dim == 'univariate':
-            rand_slice = df.iloc[
-                z : (z + phrase_n),
-            ]
-            rand_slice = (
-                rand_slice.reset_index(drop=True)
-                .transpose()
-                .set_index(np.repeat(z, (df.shape[1],)), append=True)
+    except Exception as e:
+        # print(f"New numpy version of Window Regression failed {e}.")
+        if str(regression_type).lower() == "user":
+            if input_dim == "multivariate":
+                raise ValueError(
+                    "input_dim=`multivariate` and regression_type=`user` cannot be combined."
+                )
+            else:
+                raise ValueError(
+                    "WindowRegression regression_type='user' requires numpy >= 1.20"
+                )
+        max_pos_wind = df.shape[0] - phrase_n + 1
+        max_pos_wind = max_windows if max_pos_wind > max_windows else max_pos_wind
+        if max_pos_wind == max_windows:
+            numbers = np.random.default_rng(random_seed).choice(
+                (df.shape[0] - phrase_n), size=max_pos_wind, replace=False
             )
-            cX = rand_slice.iloc[:, 0:(window_size)]
-            cY = rand_slice.iloc[:, window_size:]
+            if not shuffle:
+                numbers = np.sort(numbers)
         else:
-            cX = df.iloc[
-                z : (z + window_size),
-            ]
-            cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
-            cY = df.iloc[
-                (z + window_size) : (z + phrase_n),
-            ]
-            cY = pd.DataFrame(cY.stack().reset_index(drop=True)).transpose()
-        X = pd.concat([X, cX], axis=0)
-        Y = pd.concat([Y, cY], axis=0)
-    if normalize_window:
-        X = X.div(X.sum(axis=1), axis=0)
+            numbers = np.array(range(max_pos_wind))
+            if shuffle:
+                np.random.shuffle(numbers)
+
+        X = pd.DataFrame()
+        Y = pd.DataFrame()
+        for z in numbers:
+            if input_dim == 'univariate':
+                rand_slice = df.iloc[
+                    z : (z + phrase_n),
+                ]
+                rand_slice = (
+                    rand_slice.reset_index(drop=True)
+                    .transpose()
+                    .set_index(np.repeat(z, (df.shape[1],)), append=True)
+                )
+                cX = rand_slice.iloc[:, 0:(window_size)]
+                cY = rand_slice.iloc[:, window_size:]
+            else:
+                cX = df.iloc[
+                    z : (z + window_size),
+                ]
+                cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
+                cY = df.iloc[
+                    (z + window_size) : (z + phrase_n),
+                ]
+                cY = pd.DataFrame(cY.stack().reset_index(drop=True)).transpose()
+            X = pd.concat([X, cX], axis=0)
+            Y = pd.concat([Y, cY], axis=0)
+        if normalize_window:
+            X = X.div(X.sum(axis=1), axis=0)
+
     return X, Y
 
 
 def last_window(
     df,
     window_size: int = 10,
-    input_dim: str = 'multivariate',
+    input_dim: str = 'univariate',
     normalize_window: bool = False,
 ):
     z = df.shape[0] - window_size
@@ -939,8 +977,6 @@ class WindowRegression(ModelObject):
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
-        # transfer_learning: str = None,
-        # transfer_learning_transformation: dict = None,
         # regression_type: str = None,
     """
 
@@ -950,7 +986,7 @@ class WindowRegression(ModelObject):
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
         holiday_country: str = 'US',
-        random_seed: int = 2020,
+        random_seed: int = 2022,
         verbose: int = 0,
         window_size: int = 10,
         regression_model: dict = {
@@ -962,12 +998,13 @@ class WindowRegression(ModelObject):
                 'learning_rate': 1.0,
             },
         },
-        input_dim: str = 'multivariate',
-        output_dim: str = '1step',
+        input_dim: str = 'univariate',
+        output_dim: str = 'forecast_length',
         normalize_window: bool = False,
-        shuffle: bool = True,
+        shuffle: bool = False,
         forecast_length: int = 1,
         max_windows: int = 5000,
+        regression_type: str = None,
         n_jobs: int = -1,
         **kwargs,
     ):
@@ -978,6 +1015,7 @@ class WindowRegression(ModelObject):
             prediction_interval,
             holiday_country=holiday_country,
             random_seed=random_seed,
+            regression_type=regression_type,
             verbose=verbose,
             n_jobs=n_jobs,
         )
@@ -996,6 +1034,12 @@ class WindowRegression(ModelObject):
         Args:
             df (pandas.DataFrame): Datetime Indexed
         """
+        if (
+            df.shape[1] * self.forecast_length
+        ) > 200 and self.input_dim == "multivariate":
+            raise ValueError(
+                "Scale exceeds recommendation for input_dim == `multivariate`"
+            )
         df = self.basic_profile(df)
         self.df_train = df
         X, Y = window_maker(
@@ -1007,6 +1051,9 @@ class WindowRegression(ModelObject):
             output_dim=self.output_dim,
             forecast_length=self.forecast_length,
             max_windows=self.max_windows,
+            regression_type=self.regression_type,
+            future_regressor=future_regressor,
+            random_seed=self.random_seed,
         )
         self.regr = retrieve_regressor(
             regression_model=self.regression_model,
@@ -1037,15 +1084,6 @@ class WindowRegression(ModelObject):
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
-        """
-        A VALUE IS BEING DROPPED FROM Y!
-        for forecast:
-        output_dim = 1
-        don't forget to normalize if used
-        collapse an output_dim into a forecastdf
-        
-        if univariate and 1, transpose
-        """
         if int(forecast_length) > int(self.forecast_length):
             print("Regression must be refit to change forecast length!")
         predictStartTime = datetime.datetime.now()
@@ -1062,14 +1100,19 @@ class WindowRegression(ModelObject):
                     input_dim=self.input_dim,
                     normalize_window=self.normalize_window,
                 )
+                if str(self.regression_type).lower() == "user":
+                    blasted_thing = future_regressor.iloc[x].to_frame().transpose()
+                    tmerg = pd.concat([blasted_thing] * pred.shape[0], axis=0)
+                    tmerg.index = pred.index
+                    pred = pd.concat([pred, tmerg], axis=1, ignore_index=True)
                 rfPred = pd.DataFrame(self.regr.predict(pred))
                 if self.input_dim == 'univariate':
-                    rfPred = pd.DataFrame(rfPred).transpose()
+                    rfPred = rfPred.transpose()
+                    rfPred.columns = self.last_window.columns
                 forecast = pd.concat([forecast, rfPred], axis=0, ignore_index=True)
                 self.last_window = pd.concat(
                     [self.last_window, rfPred], axis=0, ignore_index=True
                 )
-                # self.sktraindata.index = combined_index[:len(self.sktraindata.index)]
             df = forecast
 
         else:
@@ -1079,9 +1122,14 @@ class WindowRegression(ModelObject):
                 input_dim=self.input_dim,
                 normalize_window=self.normalize_window,
             )
+            if str(self.regression_type).lower() == "user":
+                tmerg = future_regressor.tail(1).loc[
+                    future_regressor.tail(1).index.repeat(pred.shape[0])
+                ]
+                tmerg.index = pred.index
+                pred = pd.concat([pred, tmerg], axis=1)
             cY = pd.DataFrame(self.regr.predict(pred))
             if self.input_dim == 'multivariate':
-                # cY = Y.tail(1)
                 cY.index = ['values']
                 cY.columns = np.tile(self.column_names, reps=self.forecast_length)
                 cY = cY.transpose().reset_index()
@@ -1090,7 +1138,6 @@ class WindowRegression(ModelObject):
                 )
                 cY = pd.pivot_table(cY, index='timestep', columns='index')
             else:
-                # cY = Y.tail(df.shape[1])
                 cY = cY.transpose()
             df = cY
 
@@ -1124,73 +1171,44 @@ class WindowRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        window_size_choice = np.random.choice(
-            [5, 10, 20, seasonal_int()], size=1
-        ).item()
+        window_size_choice = random.choice([5, 10, 20, seasonal_int()])
         model_choice = generate_regressor_params()
-        input_dim_choice = np.random.choice(
-            ['multivariate', 'univariate'], p=[0.3, 0.7], size=1
-        ).item()
+        input_dim_choice = random.choices(['multivariate', 'univariate'], [0.01, 0.99])[
+            0
+        ]
         if input_dim_choice == "multivariate":
             output_dim_choice = "1step"
+            regression_type_choice = None
         else:
-            output_dim_choice = np.random.choice(
-                ['forecast_length', '1step'], size=1
-            ).item()
-        normalize_window_choice = np.random.choice(
-            a=[True, False], size=1, p=[0.05, 0.95]
-        ).item()
-        shuffle_choice = np.random.choice(a=[True, False], size=1).item()
-        max_windows_choice = np.random.choice(
-            a=[5000, 1000, 50000], size=1, p=[0.95, 0.04, 0.01]
-        ).item()
+            output_dim_choice = random.choice(
+                ['forecast_length', '1step'],
+            )
+            regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[
+                0
+            ]
+        normalize_window_choice = random.choices([True, False], [0.05, 0.95])[0]
+        max_windows_choice = random.choices([5000, 1000, 50000], [0.85, 0.05, 0.1])[0]
         return {
             'window_size': window_size_choice,
-            'regression_model': model_choice,
             'input_dim': input_dim_choice,
             'output_dim': output_dim_choice,
             'normalize_window': normalize_window_choice,
-            'shuffle': shuffle_choice,
             'max_windows': max_windows_choice,
+            'regression_type': regression_type_choice,
+            'regression_model': model_choice,
         }
 
     def get_params(self):
         """Return dict of current parameters."""
         return {
             'window_size': self.window_size,
-            'regression_model': self.regression_model,
             'input_dim': self.input_dim,
             'output_dim': self.output_dim,
             'normalize_window': self.normalize_window,
-            'shuffle': self.shuffle,
             'max_windows': self.max_windows,
+            'regression_type': self.regression_type,
+            'regression_model': self.regression_model,
         }
-
-
-"""
-window_size: int = 10,
-input_dim: str = 'multivariate',
-output_dim: str = forecast_len, '1step'
-normalize_window: bool = False, -rowwise, that is
-regression_type: str = None
-
-max number of windows to make...
-forecast_length is passed into init
-shuffle or not
-
-df = df_wide_numeric.fillna(0).astype(float)
-window_size = 10
-input_dim = 'univariate'
-input_dim = 'multivariate'
-output_dim = 'forecast_length'
-max_windows = 5000
-
-for forecast:
-    just last window
-    output_dim = 1
-    don't forget to normalize if used
-    collapse an output_dim into a forecast df
-"""
 
 
 class ComponentAnalysis(ModelObject):
@@ -1710,7 +1728,7 @@ class UnivariateRegression(ModelObject):
         )
         cols = self.sktraindata.columns
 
-        def forecast_by_column(self, df, args, parallel, n_jobs, col):
+        def forecast_by_column(self, args, parallel, n_jobs, col):
             """Run one series of ETS and return prediction."""
             base = pd.DataFrame(self.sktraindata[col])
             Y = base.copy()
@@ -1775,10 +1793,8 @@ class UnivariateRegression(ModelObject):
         args = {}
         # joblib multiprocessing to loop through series
         if self.parallel:
-            df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(forecast_by_column)(
-                    self, self.df_train, args, self.parallel, self.n_jobs, col
-                )
+            df_list = Parallel(n_jobs=(self.n_jobs - 1))(
+                delayed(forecast_by_column)(self, args, self.parallel, self.n_jobs, col)
                 for (col) in cols
             )
             self.models = {k: v for d in df_list for k, v in d.items()}
@@ -1786,9 +1802,7 @@ class UnivariateRegression(ModelObject):
             df_list = []
             for col in cols:
                 df_list.append(
-                    forecast_by_column(
-                        self, self.df_train, args, self.parallel, self.n_jobs, col
-                    )
+                    forecast_by_column(self, args, self.parallel, self.n_jobs, col)
                 )
             self.models = {k: v for d in df_list for k, v in d.items()}
         self.fit_runtime = datetime.datetime.now() - self.startTime

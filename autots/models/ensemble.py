@@ -296,7 +296,7 @@ def generalize_horizontal(
         mosaicy = pd.DataFrame(mosaicy[mosaicy.isin(available_models)])
         # so we can fill some missing by just using a forward fill, should be good enough
         mosaicy.fillna(method='ffill', limit=3, inplace=True)
-        mosaicy.fillna(method='bfill', limit=2, inplace=True)
+        mosaicy.fillna(method='bfill', limit=3, inplace=True)
         if mosaicy.isna().any().any() or mosaicy.shape[1] != df_train.shape[1]:
             if full_models is not None:
                 k2 = pd.DataFrame(mosaicy[mosaicy.isin(full_models)])
@@ -344,7 +344,7 @@ def HorizontalEnsemble(
     """Generate forecast for per_series ensembling."""
     startTime = datetime.datetime.now()
     # this is meant to fill in any failures
-    available_models = list(forecasts.keys())
+    available_models = [mod for mod, fcs in forecasts.items() if fcs.shape[0] > 0]
     train_size = df_train.shape
     # print(f"running inner generalization with training size: {train_size}")
     full_models = [
@@ -1155,7 +1155,7 @@ def MosaicEnsemble(
 
     # this is meant to fill in any failures
     startTime = datetime.datetime.now()
-    available_models = list(forecasts.keys())
+    available_models = [mod for mod, fcs in forecasts.items() if fcs.shape[0] > 0]
     train_size = df_train.shape
     full_models = [
         mod for mod, fcs in forecasts.items() if fcs.shape[1] == train_size[1]
@@ -1166,7 +1166,10 @@ def MosaicEnsemble(
     if prematched_series is None:
         prematched_series = ensemble_params['series']
     all_series = generalize_horizontal(
-        df_train, prematched_series, available_models, full_models
+        df_train,
+        prematched_series,
+        available_models=available_models,
+        full_models=full_models,
     )
 
     org_idx = df_train.columns
@@ -1182,10 +1185,16 @@ def MosaicEnsemble(
     melted["forecast_period"] = melted["forecast_period"].astype(int)
 
     fore, u_fore, l_fore = [], [], []
-    for row in melted.itertuples():
-        fore.append(forecasts[row[3]][row[2]].iloc[row[1]])
-        u_fore.append(upper_forecasts[row[3]][row[2]].iloc[row[1]])
-        l_fore.append(lower_forecasts[row[3]][row[2]].iloc[row[1]])
+    row = (0, "Unknown", "Unknown", "Unknown")
+    try:
+        for row in melted.itertuples():
+            fore.append(forecasts[row[3]][row[2]].iloc[row[1]])
+            u_fore.append(upper_forecasts[row[3]][row[2]].iloc[row[1]])
+            l_fore.append(lower_forecasts[row[3]][row[2]].iloc[row[1]])
+    except Exception as e:
+        raise ValueError(
+            f"Mosaic Ensemble failed on model {row[3]} series {row[2]} and period {row[1]} due to missing model: {e}"
+        )
     melted[
         'forecast'
     ] = fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]

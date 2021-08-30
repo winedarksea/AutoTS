@@ -1,15 +1,16 @@
 ## Table of Contents
-* [A Simple Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#a-simple-example)
-* [Validation and Cross Validation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#validation-and-cross-validation)
-* [Another Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#another-example)
-* [Model Lists](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#model-lists)
+* [A Simple Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id1)
+* [Validation and Cross Validation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id2)
+* [Another Example](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id3)
+* [Model Lists](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id4)
 * [Deployment](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#deployment-and-template-import-export)
-* [Running Just One Model](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#running-just-one-model)
-* [Metrics](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#metrics)
+* [Running Just One Model](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id5)
+* [Metrics](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id6)
+* [Ensembles](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#ensembles)
 * [Installation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning)
 * [Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
 * [Adding Regressors](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information)
-* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#models)
+* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id7)
 
 ## Extended Tutorial
 
@@ -75,8 +76,8 @@ Dropping series which are mostly missing, or using `prefill_na=0` (or other valu
 ### What to Worry About
 There are some basic things to beware of that can commonly lead to poor results:
 
-1. Bad data (sudden drops or missing values) in the most recent data is the single most common cause of bad forecasts here. This is extremely common in 'live' data, for example sales data - the most recent records will represent an incomplete time, or not all orders are invoiced in the database, or one of countless other reasons. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. `drop_most_recent` can help handle this. Manually filling the most recent NaN values may also help. 
-2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be choosen. Think carefully about the validation methods, which is discussed in the next section.
+1. Bad data (sudden drops or missing values) in the most recent data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. 
+2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be choosen. Choose a good method and as many validations as possible. 
 
 ### Validation and Cross Validation
 Cross validation helps assure that the optimal model is stable over the dynamics of a time series. 
@@ -283,6 +284,7 @@ As this means the maximum number of models can be `number of series * forecast_l
 Theoretically, this style of ensembling offers the highest accuracy. 
 However, `mosaic` models only utilize MAE for model selection, and as such upper and lower forecast performance may be poor. 
 They are also more prone to over-fitting, so use this with more validations and more stable data. 
+Unlike `horizontal` ensembles, which only work on multivariate datasets, `mosaic` can be run on a single time series. 
 
 One thing you can do with `mosaic` ensembles if you only care about the accuracy of one forecast point, but want to run a forecast for the full forecast length, you can convert the mosaic to horizontal for just that forecast period. 
 ```python
@@ -306,7 +308,7 @@ result.forecast
 `pip install autots`
 ### Requirements:
 	Python >= 3.6
-	numpy
+	numpy >= 1.20 (Sliding Window in Motif and WindowRegression)
 	pandas
 	sklearn 	>= 0.20.0
 				>= 0.23.0 (PoissonReg)
@@ -537,7 +539,7 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  SeasonalNaive          |              |                         |               |                 |       |              |              |               |
 |  GLS                    | statsmodels  |                         |               |                 |       | True         |              |               |
 |  GLM                    | statsmodels  |                         |               |     joblib      |       |              |              | True          |
-|  ETS - Exponential Smoothing | statsmodels  |                    |               |     joblib      |       |              |              |               |
+| ETS - Exponential Smoothing | statsmodels  |                    |               |     joblib      |       |              |              |               |
 |  UnobservedComponents   | statsmodels  |                         |               |     joblib      |       |              |              | True          |
 |  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  VARMAX                 | statsmodels  |                         |    True       |                 |       | True         |              |               |
@@ -550,10 +552,10 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              |               |
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 |  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
+| UnivariateMotif/MultivariateMotif | scipy.distaince.cdist |      |    True       |     joblib      |       | *            |              |               |
 |  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |   *           |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |
 |  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |               |
 |  TSFreshRegressor       | tsfresh, sklearn |                     |               |                 |       |              | True         |               |
-
