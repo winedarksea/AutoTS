@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Tutorial &#8212; AutoTS 0.3.4 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.3.5 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -38,17 +38,18 @@
 <section id="table-of-contents">
 <h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
-<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#a-simple-example">A Simple Example</a></p></li>
-<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#validation-and-cross-validation">Validation and Cross Validation</a></p></li>
-<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#another-example">Another Example</a></p></li>
-<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#model-lists">Model Lists</a></p></li>
+<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id1">A Simple Example</a></p></li>
+<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id2">Validation and Cross Validation</a></p></li>
+<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id3">Another Example</a></p></li>
+<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id4">Model Lists</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#deployment-and-template-import-export">Deployment</a></p></li>
-<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#running-just-one-model">Running Just One Model</a></p></li>
-<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#metrics">Metrics</a></p></li>
+<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id5">Running Just One Model</a></p></li>
+<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id6">Metrics</a></p></li>
+<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#ensembles">Ensembles</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning">Installation</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice">Caveats</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information">Adding Regressors</a></p></li>
-<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#models">Models</a></p></li>
+<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id7">Models</a></p></li>
 </ul>
 </section>
 <section id="extended-tutorial">
@@ -116,8 +117,8 @@ Dropping series which are mostly missing, or using <code class="docutils literal
 <h3>What to Worry About<a class="headerlink" href="#what-to-worry-about" title="Permalink to this headline">¶</a></h3>
 <p>There are some basic things to beware of that can commonly lead to poor results:</p>
 <ol class="arabic simple">
-<li><p>Bad data (sudden drops or missing values) in the most recent data is the single most common cause of bad forecasts here. This is extremely common in ‘live’ data, for example sales data - the most recent records will represent an incomplete time, or not all orders are invoiced in the database, or one of countless other reasons. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. <code class="docutils literal notranslate"><span class="pre">drop_most_recent</span></code> can help handle this. Manually filling the most recent NaN values may also help.</p></li>
-<li><p>Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don’t accurately represent the series, a poor model may be choosen. Think carefully about the validation methods, which is discussed in the next section.</p></li>
+<li><p>Bad data (sudden drops or missing values) in the most recent data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts.</p></li>
+<li><p>Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don’t accurately represent the series, a poor model may be choosen. Choose a good method and as many validations as possible.</p></li>
 </ol>
 </section>
 <section id="id2">
@@ -286,8 +287,8 @@ This weighting is not to be confused with series weighting, which effects how eq
 <p><code class="docutils literal notranslate"><span class="pre">Contour</span></code> is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but <em>not</em> the magnitude of that difference. Does not work with forecast_length=1.</p>
 <p>The contour metric is useful as it encourages ‘wavy’ forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they “don’t look like they are trying hard enough” to some managers, and using contour favors non-flat forecasts that (to many) look like a more serious model.</p>
 </section>
-<section id="ensembles">
-<h3>Ensembles<a class="headerlink" href="#ensembles" title="Permalink to this headline">¶</a></h3>
+<section id="id7">
+<h3>Ensembles<a class="headerlink" href="#id7" title="Permalink to this headline">¶</a></h3>
 <p>Ensemble methods are specified by the <code class="docutils literal notranslate"><span class="pre">ensemble=</span></code> parameter. It can be either a list or a comma-separated string.</p>
 <p><code class="docutils literal notranslate"><span class="pre">simple</span></code> style ensembles (labeled ‘BestN’ in templates) are the most recognizable form of ensemble and are the simple average of the specified models, here usally 3 or 5 models.
 <code class="docutils literal notranslate"><span class="pre">distance</span></code> style ensembles are two models spliced together. The first model forecasts the first fraction of forecast period, the second model the latter half. There is no overlap of the models.
@@ -306,7 +307,8 @@ These ensembles are choosen based on per series accuracy on <code class="docutil
 As this means the maximum number of models can be <code class="docutils literal notranslate"><span class="pre">number</span> <span class="pre">of</span> <span class="pre">series</span> <span class="pre">*</span> <span class="pre">forecast_length</span></code>, this obviously may get quite slow.
 Theoretically, this style of ensembling offers the highest accuracy.
 However, <code class="docutils literal notranslate"><span class="pre">mosaic</span></code> models only utilize MAE for model selection, and as such upper and lower forecast performance may be poor.
-They are also more prone to over-fitting, so use this with more validations and more stable data.</p>
+They are also more prone to over-fitting, so use this with more validations and more stable data.
+Unlike <code class="docutils literal notranslate"><span class="pre">horizontal</span></code> ensembles, which only work on multivariate datasets, <code class="docutils literal notranslate"><span class="pre">mosaic</span></code> can be run on a single time series.</p>
 <p>One thing you can do with <code class="docutils literal notranslate"><span class="pre">mosaic</span></code> ensembles if you only care about the accuracy of one forecast point, but want to run a forecast for the full forecast length, you can convert the mosaic to horizontal for just that forecast period.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">from</span> <span class="nn">autots.models.ensemble</span> <span class="kn">import</span> <span class="n">mosaic_to_horizontal</span><span class="p">,</span> <span class="n">model_forecast</span>
@@ -332,7 +334,7 @@ They are also more prone to over-fitting, so use this with more validations and 
 <section id="requirements">
 <h3>Requirements:<a class="headerlink" href="#requirements" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>Python &gt;= 3.6
-numpy
+numpy &gt;= 1.20 (Sliding Window in Motif and WindowRegression)
 pandas
 sklearn     &gt;= 0.20.0
             &gt;= 0.23.0 (PoissonReg)
@@ -564,8 +566,8 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 </pre></div>
 </div>
 </section>
-<section id="id7">
-<h2>Models<a class="headerlink" href="#id7" title="Permalink to this headline">¶</a></h2>
+<section id="id8">
+<h2>Models<a class="headerlink" href="#id8" title="Permalink to this headline">¶</a></h2>
 <table class="docutils align-default">
 <colgroup>
 <col style="width: 11%" />
@@ -781,7 +783,20 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>Greykite</p></td>
+<tr class="row-odd"><td><p>UnivariateMotif/MultivariateMotif</p></td>
+<td><p>scipy.distaince.cdist</p></td>
+<td></td>
+<td><p>True</p></td>
+<td><p>joblib</p></td>
+<td></td>
+<td><ul class="simple">
+<li></li>
+</ul>
+</td>
+<td></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>Greykite</p></td>
 <td><p>greykite</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -794,7 +809,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 </ul>
 </td>
 </tr>
-<tr class="row-even"><td><p>MotifSimulation</p></td>
+<tr class="row-odd"><td><p>MotifSimulation</p></td>
 <td><p>sklearn.metrics.pairwise</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -804,7 +819,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>TensorflowSTS</p></td>
+<tr class="row-even"><td><p>TensorflowSTS</p></td>
 <td><p>tensorflow_probability</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -814,7 +829,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>TFPRegression</p></td>
+<tr class="row-odd"><td><p>TFPRegression</p></td>
 <td><p>tensorflow_probability</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -824,7 +839,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>ComponentAnalysis</p></td>
+<tr class="row-even"><td><p>ComponentAnalysis</p></td>
 <td><p>sklearn</p></td>
 <td></td>
 <td></td>
@@ -834,7 +849,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>TSFreshRegressor</p></td>
+<tr class="row-odd"><td><p>TSFreshRegressor</p></td>
 <td><p>tsfresh, sklearn</p></td>
 <td></td>
 <td></td>
@@ -891,7 +906,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <li class="toctree-l2"><a class="reference internal" href="#installation-and-dependency-versioning">Installation and Dependency Versioning</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#caveats-and-advice">Caveats and Advice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#using-the-transformers-independently">Using the Transformers independently</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#id7">Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id8">Models</a></li>
 </ul>
 </li>
 </ul>

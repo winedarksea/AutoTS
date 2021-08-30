@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.evaluator package &#8212; AutoTS 0.3.4 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 0.3.5 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -351,7 +351,7 @@ Useful in (unrecommended) cases where forecast_length &gt; training length.</p><
 <li><p><strong>prefill_na</strong> (<em>str</em>) – value to input to fill all NaNs with. Leaving as None and allowing model interpolation is recommended.
 None, 0, ‘mean’, or ‘median’. 0 may be useful in for examples sales cases where all NaN can be assumed equal to zero.</p></li>
 <li><p><strong>introduce_na</strong> (<em>bool</em>) – whether to force last values in one training validation to be NaN. Helps make more robust models.
-defaults to None, which is as True if any NaN in tail of training data.</p></li>
+defaults to None, which is as True if any NaN in tail of training data. Will not introduce NaN to all series if subset is used.</p></li>
 <li><p><strong>model_interrupt</strong> (<em>bool</em>) – if False, KeyboardInterrupts quit entire program.
 if True, KeyboardInterrupts attempt to only quit current model.
 if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite>result_file</cite> in the event of accidental complete termination.</p></li>
@@ -381,6 +381,31 @@ if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite
 </dd>
 </dl>
 </dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">fit, predict</code></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">export_template, import_template, import_results</code></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">results, failure_rate</code></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">horizontal_to_df, mosaic_to_df</code></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">plot_horizontal, plot_horizontal_transformers, plot_generation_loss</code></dt>
+<dd></dd></dl>
 
 <dl class="method">
 <dt id="autots.evaluator.auto_ts.AutoTS.export_template">
@@ -477,6 +502,19 @@ Must be done before the AutoTS object is .fit().</p>
 </dd></dl>
 
 <dl class="method">
+<dt id="autots.evaluator.auto_ts.AutoTS.plot_generation_loss">
+<code class="sig-name descname">plot_generation_loss</code><span class="sig-paren">(</span><em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.plot_generation_loss" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plot improvement in accuracy over generations.
+Note: this is only “one size fits all” accuracy and
+doesn’t account for the benefits seen for ensembling.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>passed to pd.DataFrame.plot</strong><strong>(</strong><strong>)</strong> (<em>**kwargs</em>) – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
 <dt id="autots.evaluator.auto_ts.AutoTS.plot_horizontal">
 <code class="sig-name descname">plot_horizontal</code><span class="sig-paren">(</span><em class="sig-param">max_series: int = 20</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.plot_horizontal" title="Permalink to this definition">¶</a></dt>
 <dd><p>Simple plot to visualize assigned series: models.</p>
@@ -485,6 +523,22 @@ Must be done before the AutoTS object is .fit().</p>
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>max_series</strong> (<em>int</em>) – max number of points to plot</p></li>
+<li><p><strong>passed to pandas.plot</strong><strong>(</strong><strong>)</strong> (<em>**kwargs</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.evaluator.auto_ts.AutoTS.plot_horizontal_transformers">
+<code class="sig-name descname">plot_horizontal_transformers</code><span class="sig-paren">(</span><em class="sig-param">method='transformers'</em>, <em class="sig-param">color_list=None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.plot_horizontal_transformers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simple plot to visualize transformers used.
+Note this doesn’t capture transformers nested in simple ensembles.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>method</strong> (<em>str</em>) – ‘fillna’ or ‘transformers’ - which to plot</p></li>
+<li><p><strong>= list of colors to sample for bar colors. Can be names</strong><strong> or </strong><strong>hex.</strong> (<em>color_list</em>) – </p></li>
 <li><p><strong>passed to pandas.plot</strong><strong>(</strong><strong>)</strong> (<em>**kwargs</em>) – </p></li>
 </ul>
 </dd>

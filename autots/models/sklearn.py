@@ -122,23 +122,20 @@ def retrieve_regressor(
     if model_class == 'ElasticNet':
         from sklearn.linear_model import MultiTaskElasticNet
 
-        regr = MultiTaskElasticNet(alpha=1.0, random_state=random_seed, **model_param_dict)
+        regr = MultiTaskElasticNet(
+            alpha=1.0, random_state=random_seed, **model_param_dict
+        )
         return regr
     elif model_class == 'DecisionTree':
         from sklearn.tree import DecisionTreeRegressor
 
-        regr = DecisionTreeRegressor(
-            random_state=random_seed,
-            **model_param_dict
-        )
+        regr = DecisionTreeRegressor(random_state=random_seed, **model_param_dict)
         return regr
     elif model_class == 'MLP':
         from sklearn.neural_network import MLPRegressor
 
         regr = MLPRegressor(
-            random_state=random_seed,
-            verbose=verbose_bool,
-            **model_param_dict
+            random_state=random_seed, verbose=verbose_bool, **model_param_dict
         )
         return regr
     elif model_class == 'KerasRNN':
@@ -161,9 +158,7 @@ def retrieve_regressor(
         from sklearn.neighbors import KNeighborsRegressor
 
         regr = MultiOutputRegressor(
-            KNeighborsRegressor(
-                **model_param_dict
-            ),
+            KNeighborsRegressor(**model_param_dict),
             n_jobs=n_jobs,
         )
         return regr
@@ -181,7 +176,7 @@ def retrieve_regressor(
                 max_iter=200,
                 verbose=int(verbose_bool),
                 random_state=random_seed,
-                **model_param_dict
+                **model_param_dict,
             )
         )
         return regr
@@ -194,7 +189,7 @@ def retrieve_regressor(
                 verbose=int(verbose_bool),
                 random_state=random_seed,
                 n_jobs=n_jobs,
-                **model_param_dict
+                **model_param_dict,
             )
         )
         return regr
@@ -234,9 +229,7 @@ def retrieve_regressor(
             return regr
         else:
             regr = MultiOutputRegressor(
-                AdaBoostRegressor(
-                    random_state=random_seed, **model_param_dict
-                ),
+                AdaBoostRegressor(random_state=random_seed, **model_param_dict),
                 n_jobs=n_jobs,
             )
             return regr
@@ -245,9 +238,7 @@ def retrieve_regressor(
         from sklearn.multioutput import MultiOutputRegressor
 
         regr = MultiOutputRegressor(
-            xgb.XGBRegressor(
-                verbosity=verbose, **model_param_dict
-            ),
+            xgb.XGBRegressor(verbosity=verbose, **model_param_dict),
             n_jobs=n_jobs,
         )
         return regr
@@ -268,13 +259,13 @@ def retrieve_regressor(
         return regr
     elif model_class == "ExtraTrees":
         from sklearn.ensemble import ExtraTreesRegressor
-        
-        return ExtraTreesRegressor(n_jobs=n_jobs,
-                                   random_state=random_seed,
-                                   **model_param_dict)
+
+        return ExtraTreesRegressor(
+            n_jobs=n_jobs, random_state=random_seed, **model_param_dict
+        )
     elif model_class == "RadiusNeighbors":
         from sklearn.neighbors import RadiusNeighborsRegressor
-        
+
         regr = RadiusNeighborsRegressor(n_jobs=n_jobs, **model_param_dict)
         return regr
     else:
@@ -282,9 +273,11 @@ def retrieve_regressor(
         from sklearn.ensemble import RandomForestRegressor
 
         regr = RandomForestRegressor(
-            random_state=random_seed, n_estimators=1000,
-            verbose=verbose, n_jobs=n_jobs,
-            **model_param_dict
+            random_state=random_seed,
+            n_estimators=1000,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **model_param_dict,
         )
         return regr
 
@@ -867,14 +860,16 @@ def window_maker(
         if input_dim == "multivariate":
             raise ValueError("input_dim=`multivariate` not supported this way.")
         x = np.lib.stride_tricks.sliding_window_view(df.to_numpy(), phrase_n, axis=0)
-        x = x.reshape(-1, x.shape[-1]) 
+        x = x.reshape(-1, x.shape[-1])
         Y = x[:, window_size:]
         X = x[:, :window_size]
         r_arr = None
         if max_windows is not None:
             X_size = x.shape[0]
             if max_windows < X_size:
-                r_arr = np.random.default_rng(random_seed).integers(0, X_size, size=max_windows)
+                r_arr = np.random.default_rng(random_seed).integers(
+                    0, X_size, size=max_windows
+                )
                 Y = Y[r_arr]
                 X = X[r_arr]
         if normalize_window:
@@ -883,7 +878,11 @@ def window_maker(
         # regressors
         if str(regression_type).lower() == "user":
             if isinstance(future_regressor, pd.DataFrame):
-                regr_arr = np.repeat(future_regressor.reindex(df.index).to_numpy()[(phrase_n - 1):], df.shape[1], axis=0)
+                regr_arr = np.repeat(
+                    future_regressor.reindex(df.index).to_numpy()[(phrase_n - 1) :],
+                    df.shape[1],
+                    axis=0,
+                )
                 if r_arr is not None:
                     regr_arr = regr_arr[r_arr]
                 X = np.concatenate([X, regr_arr], axis=1)
@@ -894,9 +893,13 @@ def window_maker(
         # print(f"New numpy version of Window Regression failed {e}.")
         if str(regression_type).lower() == "user":
             if input_dim == "multivariate":
-                raise ValueError("input_dim=`multivariate` and regression_type=`user` cannot be combined.")
+                raise ValueError(
+                    "input_dim=`multivariate` and regression_type=`user` cannot be combined."
+                )
             else:
-                raise ValueError("WindowRegression regression_type='user' requires numpy >= 1.20")
+                raise ValueError(
+                    "WindowRegression regression_type='user' requires numpy >= 1.20"
+                )
         max_pos_wind = df.shape[0] - phrase_n + 1
         max_pos_wind = max_windows if max_pos_wind > max_windows else max_pos_wind
         if max_pos_wind == max_windows:
@@ -1031,8 +1034,12 @@ class WindowRegression(ModelObject):
         Args:
             df (pandas.DataFrame): Datetime Indexed
         """
-        if (df.shape[1] * self.forecast_length) > 200 and self.input_dim == "multivariate":
-            raise ValueError("Scale exceeds recommendation for input_dim == `multivariate`")
+        if (
+            df.shape[1] * self.forecast_length
+        ) > 200 and self.input_dim == "multivariate":
+            raise ValueError(
+                "Scale exceeds recommendation for input_dim == `multivariate`"
+            )
         df = self.basic_profile(df)
         self.df_train = df
         X, Y = window_maker(
@@ -1116,7 +1123,9 @@ class WindowRegression(ModelObject):
                 normalize_window=self.normalize_window,
             )
             if str(self.regression_type).lower() == "user":
-                tmerg = future_regressor.tail(1).loc[future_regressor.tail(1).index.repeat(pred.shape[0])]
+                tmerg = future_regressor.tail(1).loc[
+                    future_regressor.tail(1).index.repeat(pred.shape[0])
+                ]
                 tmerg.index = pred.index
                 pred = pd.concat([pred, tmerg], axis=1)
             cY = pd.DataFrame(self.regr.predict(pred))
@@ -1162,13 +1171,11 @@ class WindowRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        window_size_choice = random.choice(
-            [5, 10, 20, seasonal_int()]
-        )
+        window_size_choice = random.choice([5, 10, 20, seasonal_int()])
         model_choice = generate_regressor_params()
-        input_dim_choice = random.choices(
-            ['multivariate', 'univariate'], [0.01, 0.99]
-        )[0]
+        input_dim_choice = random.choices(['multivariate', 'univariate'], [0.01, 0.99])[
+            0
+        ]
         if input_dim_choice == "multivariate":
             output_dim_choice = "1step"
             regression_type_choice = None
@@ -1176,13 +1183,11 @@ class WindowRegression(ModelObject):
             output_dim_choice = random.choice(
                 ['forecast_length', '1step'],
             )
-            regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[0]
-        normalize_window_choice = random.choices(
-            [True, False], [0.05, 0.95]
-        )[0]
-        max_windows_choice = random.choices(
-            [5000, 1000, 50000], [0.85, 0.05, 0.1]
-        )[0]
+            regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[
+                0
+            ]
+        normalize_window_choice = random.choices([True, False], [0.05, 0.95])[0]
+        max_windows_choice = random.choices([5000, 1000, 50000], [0.85, 0.05, 0.1])[0]
         return {
             'window_size': window_size_choice,
             'input_dim': input_dim_choice,
@@ -1789,9 +1794,7 @@ class UnivariateRegression(ModelObject):
         # joblib multiprocessing to loop through series
         if self.parallel:
             df_list = Parallel(n_jobs=(self.n_jobs - 1))(
-                delayed(forecast_by_column)(
-                    self, args, self.parallel, self.n_jobs, col
-                )
+                delayed(forecast_by_column)(self, args, self.parallel, self.n_jobs, col)
                 for (col) in cols
             )
             self.models = {k: v for d in df_list for k, v in d.items()}
@@ -1799,9 +1802,7 @@ class UnivariateRegression(ModelObject):
             df_list = []
             for col in cols:
                 df_list.append(
-                    forecast_by_column(
-                        self, args, self.parallel, self.n_jobs, col
-                    )
+                    forecast_by_column(self, args, self.parallel, self.n_jobs, col)
                 )
             self.models = {k: v for d in df_list for k, v in d.items()}
         self.fit_runtime = datetime.datetime.now() - self.startTime

@@ -1654,8 +1654,7 @@ class ScipyFilter(EmptyTransformer):
         method_args (list): passed to filter as appropriate
     """
 
-    def __init__(self, method: str = 'bkfilter',
-                 method_args: list = None, **kwargs):
+    def __init__(self, method: str = 'bkfilter', method_args: list = None, **kwargs):
         super().__init__(name="StatsmodelsFilter")
         self.method = method
         self.method_args = method_args
@@ -1680,23 +1679,23 @@ class ScipyFilter(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = 'random'):
         method = random.choices(
-                [
-                    "hilbert",
-                    "wiener",
-                    "savgol_filter",
-                    "butter",
-                    # "cheby1",
-                    # "cheby2",
-                    # "ellip",
-                    # "bessel",
-                ],
-                [0.1, 0.2, 0.2, 0.1],
-                k=1,
+            [
+                "hilbert",
+                "wiener",
+                "savgol_filter",
+                "butter",
+                # "cheby1",
+                # "cheby2",
+                # "ellip",
+                # "bessel",
+            ],
+            [0.1, 0.2, 0.2, 0.1],
+            k=1,
         )[0]
         # analog_choice = bool(random.randint(0, 1))
         analog_choice = False
         xn = random.randint(1, 99)
-        btype = random.choice(["lowpass", "highpass"]) #  "bandpass", "bandstop"
+        btype = random.choice(["lowpass", "highpass"])  #  "bandpass", "bandstop"
         if method in ['wiener', 'hilbert']:
             method_args = None
         elif method == "savgol_filter":
@@ -1760,46 +1759,61 @@ class ScipyFilter(EmptyTransformer):
             return pd.DataFrame(wiener(df.values), columns=df.columns, index=df.index)
         elif self.method == 'savgol_filter':
             from scipy.signal import savgol_filter
-            
+
             # args = [5, 2]
-            return pd.DataFrame(savgol_filter(df.values, *self.method_args, axis=0, mode='nearest'), columns=df.columns, index=df.index)
+            return pd.DataFrame(
+                savgol_filter(df.values, *self.method_args, axis=0, mode='nearest'),
+                columns=df.columns,
+                index=df.index,
+            )
         elif self.method == 'butter':
             from scipy.signal import butter, sosfiltfilt
-    
+
             # args = [4, 0.125]
             # [4, 100, 'lowpass'], [1, 0.125, "highpass"]
             sos = butter(*self.method_args, output='sos')
-            return pd.DataFrame(sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index)
+            return pd.DataFrame(
+                sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
+            )
         elif self.method == "cheby1":
             from scipy.signal import cheby1, sosfiltfilt
-    
+
             # args = [4, 5, 100, 'lowpass', True]
             # args = [10, 1, 15, 'highpass']
             sos = cheby1(*self.method_args, output='sos')
-            return pd.DataFrame(sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index)
+            return pd.DataFrame(
+                sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
+            )
         elif self.method == "cheby2":
             from scipy.signal import cheby2, sosfiltfilt
-    
+
             # args = [4, 40, 100, 'lowpass', True]
             # args = [12, 20, 17, 'highpass']
             sos = cheby2(*self.method_args, output='sos')
-            return pd.DataFrame(sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index)
+            return pd.DataFrame(
+                sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
+            )
         elif self.method == "ellip":
             from scipy.signal import ellip, sosfiltfilt
-    
+
             # args = [4, 5, 40, 100, 'lowpass', True]
             # args = [8, 1, 100, 17, 'highpass']
             sos = ellip(*self.method_args, output='sos')
-            return pd.DataFrame(sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index)
+            return pd.DataFrame(
+                sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
+            )
         elif self.method == "bessel":
             from scipy.signal import bessel, sosfiltfilt
-    
+
             # args = [4, 100, 'lowpass', True]
             # args = [3, 10, 'highpass']
             sos = bessel(*self.method_args, output='sos')
-            return pd.DataFrame(sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index)
+            return pd.DataFrame(
+                sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
+            )
         else:
             raise ValueError(f"ScipyFilter method {self.method} not found.")
+
     def inverse_transform(self, df):
         """Return data to original form.
 

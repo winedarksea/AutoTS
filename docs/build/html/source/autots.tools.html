@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.tools package &#8212; AutoTS 0.3.4 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.3.5 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -1082,7 +1082,8 @@ most of the interpolate methods from pandas.interpolate</p>
 ‘Slice’ - use only recent records
 ‘ClipOutliers’ - remove outliers
 ‘Discretize’ - bin or round data into groups
-‘DatepartRegression’ - move a trend trained on datetime index</p>
+‘DatepartRegression’ - move a trend trained on datetime index
+“ScipyFilter” - filter data (lose information but smoother!) from scipy</p>
 </p></li>
 <li><p><strong>transformation_params</strong> (<em>dict</em>) – params of transformers {0: {}, 1: {‘model’: ‘Poisson’}, …}
 pass through dictionary of empty dictionaries to utilize defaults</p></li>
@@ -1345,7 +1346,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="function">
 <dt id="autots.tools.transform.RandomTransform">
-<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.1</em>, <em class="sig-param">'QuantileTransformer': 0.1</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.05</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.1</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.08</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'DatepartRegression': 0.02</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.05</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.05</em>, <em class="sig-param">'Slice': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.6</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.2</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.1</em>, <em class="sig-param">'mean': 0.05</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.05</em>, <em class="sig-param">None: 0.01</em>, <em class="sig-param">'interpolate': 0.6}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.05</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.05</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.1</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'DatepartRegression': 0.02</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.05</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.05</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.6</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.2</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.1</em>, <em class="sig-param">'mean': 0.05</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.05</em>, <em class="sig-param">None: 0.01</em>, <em class="sig-param">'interpolate': 0.6}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a dict of randomly choosen transformation selections.</p>
 <p>DatepartRegression is used as a signal that slow parameters are allowed.</p>
 </dd></dl>
@@ -1473,6 +1474,71 @@ Inverse transformed values returned will also not return as ‘exactly’ equals
 <dt id="autots.tools.transform.Round.transform">
 <code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Round.transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return changed data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.ScipyFilter">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">ScipyFilter</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'bkfilter'</em>, <em class="sig-param">method_args: list = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.ScipyFilter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
+<p>Irreversible filters from Scipy</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>method</strong> (<em>str</em>) – “hilbert”, “wiener”, “savgol_filter”, “butter”, “cheby1”, “cheby2”, “ellip”, “bessel”,</p></li>
+<li><p><strong>method_args</strong> (<em>list</em>) – passed to filter as appropriate</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.tools.transform.ScipyFilter.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.ScipyFilter.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits filter.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.ScipyFilter.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.ScipyFilter.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit and Return Detrended DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.ScipyFilter.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.ScipyFilter.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate new random parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.ScipyFilter.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.ScipyFilter.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data to original form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.ScipyFilter.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.ScipyFilter.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return detrended data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>

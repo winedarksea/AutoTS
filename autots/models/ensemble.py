@@ -344,9 +344,7 @@ def HorizontalEnsemble(
     """Generate forecast for per_series ensembling."""
     startTime = datetime.datetime.now()
     # this is meant to fill in any failures
-    available_models = [
-        mod for mod, fcs in forecasts.items() if fcs.shape[0] > 0
-    ]
+    available_models = [mod for mod, fcs in forecasts.items() if fcs.shape[0] > 0]
     train_size = df_train.shape
     # print(f"running inner generalization with training size: {train_size}")
     full_models = [
@@ -1157,9 +1155,7 @@ def MosaicEnsemble(
 
     # this is meant to fill in any failures
     startTime = datetime.datetime.now()
-    available_models = [
-        mod for mod, fcs in forecasts.items() if fcs.shape[0] > 0
-    ]
+    available_models = [mod for mod, fcs in forecasts.items() if fcs.shape[0] > 0]
     train_size = df_train.shape
     full_models = [
         mod for mod, fcs in forecasts.items() if fcs.shape[1] == train_size[1]
@@ -1170,7 +1166,10 @@ def MosaicEnsemble(
     if prematched_series is None:
         prematched_series = ensemble_params['series']
     all_series = generalize_horizontal(
-        df_train, prematched_series, available_models=available_models, full_models=full_models,
+        df_train,
+        prematched_series,
+        available_models=available_models,
+        full_models=full_models,
     )
 
     org_idx = df_train.columns
@@ -1193,7 +1192,9 @@ def MosaicEnsemble(
             u_fore.append(upper_forecasts[row[3]][row[2]].iloc[row[1]])
             l_fore.append(lower_forecasts[row[3]][row[2]].iloc[row[1]])
     except Exception as e:
-        raise ValueError(f"Mosaic Ensemble failed on model {row[3]} series {row[2]} and period {row[1]} due to missing model: {e}")
+        raise ValueError(
+            f"Mosaic Ensemble failed on model {row[3]} series {row[2]} and period {row[1]} due to missing model: {e}"
+        )
     melted[
         'forecast'
     ] = fore  # [forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]

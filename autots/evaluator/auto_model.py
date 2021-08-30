@@ -28,7 +28,7 @@ from autots.models.basics import (
     AverageValueNaive,
     SeasonalNaive,
     ZeroesNaive,
-    Motif
+    Motif,
 )
 from autots.models.statsmodels import (
     GLS,

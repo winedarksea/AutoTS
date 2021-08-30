@@ -1484,7 +1484,9 @@ or otherwise increase models available."""
             except Exception:
                 lookup[k] = "None"
                 na_lookup[k] = "None"
-        series['Transformers'] = series['Transformers'].replace(lookup).replace("", "None")
+        series['Transformers'] = (
+            series['Transformers'].replace(lookup).replace("", "None")
+        )
         series['FillNA'] = series['FillNA'].replace(na_lookup).replace("", "None")
         return series
 
@@ -1523,7 +1525,9 @@ or otherwise increase models available."""
             'log(Volatility)'
         ].plot(style='o', **kwargs)
 
-    def plot_horizontal_transformers(self, method="transformers", color_list=None, **kwargs):
+    def plot_horizontal_transformers(
+        self, method="transformers", color_list=None, **kwargs
+    ):
         """Simple plot to visualize transformers used.
         Note this doesn't capture transformers nested in simple ensembles.
 
@@ -1536,7 +1540,9 @@ or otherwise increase models available."""
         if str(method).lower() == "fillna":
             transformers = series['FillNA'].value_counts()
         else:
-            transformers = pd.Series(",".join(series['Transformers']).split(",")).value_counts()
+            transformers = pd.Series(
+                ",".join(series['Transformers']).split(",")
+            ).value_counts()
         if color_list is None:
             color_list = colors_list
         colors = random.sample(color_list, transformers.shape[0])
@@ -1552,22 +1558,55 @@ or otherwise increase models available."""
             **kwargs passed to pd.DataFrame.plot()
         """
         for_gens = self.initial_results.model_results[
-            (self.initial_results.model_results['ValidationRound'] == 0) &
-            (self.initial_results.model_results['Ensemble'] < 1)]
-        for_gens.groupby("Generation")['Score'].min().cummin().plot(ylabel="Lowest Score", **kwargs)
-
-
+            (self.initial_results.model_results['ValidationRound'] == 0)
+            & (self.initial_results.model_results['Ensemble'] < 1)
+        ]
+        for_gens.groupby("Generation")['Score'].min().cummin().plot(
+            ylabel="Lowest Score", **kwargs
+        )
 
 
 colors_list = [
-    '#FF00FF', '#7FFFD4', '#00FFFF', '#F5DEB3', '#FF6347',
-    '#8B008B', '#696969', '#FFC0CB', '#C71585', '#008080',
-    '#663399', '#32CD32', '#66CDAA', '#A9A9A9', '#2F4F4F',
-    '#FFDEAD', '#800000', '#FDF5E6', '#F5F5F5', '#F0FFF0',
-    '#87CEEB', '#A52A2A', '#90EE90', '#7FFF00', '#E9967A',
-    '#1E90FF', '#FFF0F5', '#ADD8E6', '#008B8B', '#FFF5EE',
-    '#00FA9A', '#9370DB', '#4682B4', '#006400', '#AFEEEE',
-    '#CD853F', '#9400D3', '#EE82EE', '#00008B', '#4B0082',
+    '#FF00FF',
+    '#7FFFD4',
+    '#00FFFF',
+    '#F5DEB3',
+    '#FF6347',
+    '#8B008B',
+    '#696969',
+    '#FFC0CB',
+    '#C71585',
+    '#008080',
+    '#663399',
+    '#32CD32',
+    '#66CDAA',
+    '#A9A9A9',
+    '#2F4F4F',
+    '#FFDEAD',
+    '#800000',
+    '#FDF5E6',
+    '#F5F5F5',
+    '#F0FFF0',
+    '#87CEEB',
+    '#A52A2A',
+    '#90EE90',
+    '#7FFF00',
+    '#E9967A',
+    '#1E90FF',
+    '#FFF0F5',
+    '#ADD8E6',
+    '#008B8B',
+    '#FFF5EE',
+    '#00FA9A',
+    '#9370DB',
+    '#4682B4',
+    '#006400',
+    '#AFEEEE',
+    '#CD853F',
+    '#9400D3',
+    '#EE82EE',
+    '#00008B',
+    '#4B0082',
 ]
 
 

@@ -15,6 +15,7 @@ try:
 except Exception:
     pass
 
+
 class ZeroesNaive(ModelObject):
     """Naive forecasting predicting a dataframe of zeroes (0's)
 
@@ -307,7 +308,15 @@ class AverageValueNaive(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
         method_choice = random.choices(
-            ["Mean", "Median", "Mode", "Midhinge", "Weighted_Mean", "Exp_Weighted_Mean"], [0.3, 0.3, 0.01, 0.1, 0.4, 0.1]
+            [
+                "Mean",
+                "Median",
+                "Mode",
+                "Midhinge",
+                "Weighted_Mean",
+                "Exp_Weighted_Mean",
+            ],
+            [0.3, 0.3, 0.01, 0.1, 0.4, 0.1],
         )[0]
         return {'method': method_choice}
 
@@ -475,10 +484,14 @@ class SeasonalNaive(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         lag_1_choice = seasonal_int()
-        lag_2_choice = random.choices([None, seasonal_int(include_one=True)], [0.3, 0.7])[0]
+        lag_2_choice = random.choices(
+            [None, seasonal_int(include_one=True)], [0.3, 0.7]
+        )[0]
         if str(lag_2_choice) == str(lag_1_choice):
             lag_2_choice = 1
-        method_choice = random.choices(['Mean', 'Median', 'LastValue'], [0.4, 0.2, 0.4])[0]
+        method_choice = random.choices(
+            ['Mean', 'Median', 'LastValue'], [0.4, 0.2, 0.4]
+        )[0]
         return {'method': method_choice, 'lag_1': lag_1_choice, 'lag_2': lag_2_choice}
 
     def get_params(self):
@@ -714,9 +727,9 @@ class MotifSimulation(ModelObject):
         # comparative is a df of motifs (in index) with their value to each series (per column)
         if recency_weighting != 0:
             rec_weights = np.repeat(
-                ((comparative.index.get_level_values(1)) / df.shape[0]).to_numpy().reshape(
-                    -1, 1
-                )
+                ((comparative.index.get_level_values(1)) / df.shape[0])
+                .to_numpy()
+                .reshape(-1, 1)
                 * recency_weighting,
                 len(comparative.columns),
                 axis=1,
@@ -781,9 +794,7 @@ class MotifSimulation(ModelObject):
 
             current_forecast = (
                 pos_forecasts.dropna(thresh=thresh, axis=0)
-                .quantile(
-                    q=[(1 - prediction_interval), prediction_interval], axis=1
-                )
+                .quantile(q=[(1 - prediction_interval), prediction_interval], axis=1)
                 .transpose()
             )
 
@@ -1037,7 +1048,17 @@ class MotifSimulation(ModelObject):
         }
 
 
-def looped_motif(Xa, Xb, name, r_arr=None, window=10, distance_metric="minkowski", k=10, point_method="mean", prediction_interval=0.9):
+def looped_motif(
+    Xa,
+    Xb,
+    name,
+    r_arr=None,
+    window=10,
+    distance_metric="minkowski",
+    k=10,
+    point_method="mean",
+    prediction_interval=0.9,
+):
     """inner function for Motif model."""
     if r_arr is None:
         y = Xa[:, window:]
@@ -1050,7 +1071,7 @@ def looped_motif(Xa, Xb, name, r_arr=None, window=10, distance_metric="minkowski
     # model.fit(Xa)
     # model.kneighbors(Xb)
 
-    A = cdist(Xa, Xb, metric = distance_metric)
+    A = cdist(Xa, Xb, metric=distance_metric)
     # lowest values
     idx = np.argpartition(A, k, axis=0)[:k].flatten()
     # distances for weighted mean
@@ -1151,7 +1172,9 @@ class Motif(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         # keep this at top so it breaks quickly if missing version
-        x = np.lib.stride_tricks.sliding_window_view(self.df.to_numpy(), self.window + forecast_length, axis=0)
+        x = np.lib.stride_tricks.sliding_window_view(
+            self.df.to_numpy(), self.window + forecast_length, axis=0
+        )
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
         # subsample windows if needed
@@ -1162,8 +1185,10 @@ class Motif(ModelObject):
             else:
                 X_size = x.shape[0]
             if self.max_windows < X_size:
-                r_arr = np.random.default_rng(self.random_seed).integers(0, X_size, size=self.max_windows)
-    
+                r_arr = np.random.default_rng(self.random_seed).integers(
+                    0, X_size, size=self.max_windows
+                )
+
         self.parallel = True
         if self.n_jobs in [0, 1] or self.df.shape[1] < 5:
             self.parallel = False
@@ -1172,18 +1197,21 @@ class Motif(ModelObject):
                 from joblib import Parallel, delayed
             except Exception:
                 self.parallel = False
-    
+
         # joblib multiprocessing to loop through series
         if self.parallel:
             df_list = Parallel(n_jobs=(self.n_jobs - 1))(
                 delayed(looped_motif)(
-                        Xa=x.reshape(-1, x.shape[-1]) if self.multivariate else x[:, i],
-                        Xb=self.df.iloc[-self.window:, i].to_numpy().reshape(1, -1),
-                        name=self.df.columns[i],
-                        r_arr=r_arr, window=self.window,
-                        distance_metric=self.distance_metric, k=self.k,
-                        point_method=self.point_method, prediction_interval=self.prediction_interval,
-                    )
+                    Xa=x.reshape(-1, x.shape[-1]) if self.multivariate else x[:, i],
+                    Xb=self.df.iloc[-self.window :, i].to_numpy().reshape(1, -1),
+                    name=self.df.columns[i],
+                    r_arr=r_arr,
+                    window=self.window,
+                    distance_metric=self.distance_metric,
+                    k=self.k,
+                    point_method=self.point_method,
+                    prediction_interval=self.prediction_interval,
+                )
                 for i in range(self.df.shape[1])
             )
         else:
@@ -1192,11 +1220,14 @@ class Motif(ModelObject):
                 df_list.append(
                     looped_motif(
                         Xa=x.reshape(-1, x.shape[-1]) if self.multivariate else x[:, i],
-                        Xb=self.df.iloc[-self.window:, i].to_numpy().reshape(1, -1),
+                        Xb=self.df.iloc[-self.window :, i].to_numpy().reshape(1, -1),
                         name=self.df.columns[i],
-                        r_arr=r_arr, window=self.window,
-                        distance_metric=self.distance_metric, k=self.k,
-                        point_method=self.point_method, prediction_interval=self.prediction_interval,
+                        r_arr=r_arr,
+                        window=self.window,
+                        distance_metric=self.distance_metric,
+                        k=self.k,
+                        point_method=self.point_method,
+                        prediction_interval=self.prediction_interval,
                     )
                 )
         complete = list(map(list, zip(*df_list)))
@@ -1229,40 +1260,38 @@ class Motif(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
         metric_list = [
-                    'braycurtis',
-                    'canberra',
-                    'chebyshev',
-                    'cityblock',
-                    'correlation',
-                    'cosine',
-                    'dice',
-                    'euclidean',
-                    'hamming',
-                    'jaccard',
-                    'jensenshannon',
-                    'kulsinski',
-                    'mahalanobis',
-                    'matching',
-                    'minkowski',
-                    'rogerstanimoto',
-                    'russellrao',
-                    # 'seuclidean',
-                    'sokalmichener',
-                    'sokalsneath',
-                    'sqeuclidean',
-                    'yule',
+            'braycurtis',
+            'canberra',
+            'chebyshev',
+            'cityblock',
+            'correlation',
+            'cosine',
+            'dice',
+            'euclidean',
+            'hamming',
+            'jaccard',
+            'jensenshannon',
+            'kulsinski',
+            'mahalanobis',
+            'matching',
+            'minkowski',
+            'rogerstanimoto',
+            'russellrao',
+            # 'seuclidean',
+            'sokalmichener',
+            'sokalsneath',
+            'sqeuclidean',
+            'yule',
         ]
         return {
-            "window": random.choices(
-                [5, 7, 10, 15, 30], [0.2, 0.1, 0.5, 0.1, 0.1]
+            "window": random.choices([5, 7, 10, 15, 30], [0.2, 0.1, 0.5, 0.1, 0.1])[0],
+            "point_method": random.choices(
+                ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
             )[0],
-            "point_method": random.choices(["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2])[0],
             "distance_metric": random.choice(metric_list),
-            "k": random.choices(
-                [5, 10, 15, 20, 100], [0.2, 0.5, 0.1, 0.1, 0.1]
-            )[0],
+            "k": random.choices([5, 10, 15, 20, 100], [0.2, 0.5, 0.1, 0.1, 0.1])[0],
             "max_windows": random.choices([None, 1000, 10000], [0.01, 0.1, 0.8])[0],
-            }
+        }
 
     def get_params(self):
         """Return dict of current parameters"""
@@ -1272,4 +1301,4 @@ class Motif(ModelObject):
             "distance_metric": self.distance_metric,
             "k": self.k,
             "max_windows": self.max_windows,
-            }
+        }
