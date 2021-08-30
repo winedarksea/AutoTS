@@ -88,6 +88,13 @@ class AutoTS(object):
     Attributes:
         best_model (pandas.DataFrame): DataFrame containing template for the best ranked model
         regression_check (bool): If True, the best_model uses an input 'User' future_regressor
+
+    Methods:
+        fit, predict
+        export_template, import_template, import_results
+        results, failure_rate
+        horizontal_to_df, mosaic_to_df
+        plot_horizontal, plot_horizontal_transformers, plot_generation_loss
     """
 
     def __init__(
@@ -499,7 +506,7 @@ class AutoTS(object):
         ensemble = self.ensemble
 
         # check if NaN in last row
-        nan_tail = df_wide_numeric.tail(1).isna().sum(axis=1).iloc[0] > 0
+        self._nan_tail = df_wide_numeric.tail(1).isna().sum(axis=1).iloc[0] > 0
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
@@ -705,6 +712,7 @@ class AutoTS(object):
                     model_interrupt=self.model_interrupt,
                     grouping_ids=self.grouping_ids,
                     random_seed=random_seed,
+                    current_generation=(current_generation + 1),
                     verbose=verbose,
                     n_jobs=self.n_jobs,
                 )
@@ -890,9 +898,8 @@ class AutoTS(object):
                     val_future_regressor_test = []
 
                 # force NaN for robustness
-                if self.introduce_na or (self.introduce_na is None and nan_tail):
+                if self.introduce_na or (self.introduce_na is None and self._nan_tail):
                     nan_frac = val_df_train.shape[1] / num_validations
-                    int(nan_frac * y), int(nan_frac * (y + 1))
                     val_df_train.iloc[
                         -1, int(nan_frac * y) : int(nan_frac * (y + 1))
                     ] = np.nan
@@ -903,7 +910,6 @@ class AutoTS(object):
                     df_train=val_df_train,
                     df_test=val_df_test,
                     weights=current_weights,
-                    # model_count=model_count,
                     forecast_length=forecast_length,
                     frequency=frequency,
                     prediction_interval=prediction_interval,
@@ -1467,8 +1473,19 @@ or otherwise increase models available."""
         )
         series.columns = ["Series", "ID", 'Model', "Volatility", "Mean"]
         series['Transformers'] = series['ID'].copy()
-        lookup = {k: ",".join(json.loads(v.get('TransformationParameters', '{}')).get('transformations', {}).values()) for k, v in ModelParameters['models'].items()}
+        series['FillNA'] = series['ID'].copy()
+        lookup = {}
+        na_lookup = {}
+        for k, v in ModelParameters['models'].items():
+            try:
+                trans_params = json.loads(v.get('TransformationParameters', '{}'))
+                lookup[k] = ",".join(trans_params.get('transformations', {}).values())
+                na_lookup[k] = trans_params.get('fillna', '')
+            except Exception:
+                lookup[k] = "None"
+                na_lookup[k] = "None"
         series['Transformers'] = series['Transformers'].replace(lookup).replace("", "None")
+        series['FillNA'] = series['FillNA'].replace(na_lookup).replace("", "None")
         return series
 
     def mosaic_to_df(self):
@@ -1506,21 +1523,40 @@ or otherwise increase models available."""
             'log(Volatility)'
         ].plot(style='o', **kwargs)
 
-    def plot_horizontal_transformers(self, color_list=None, **kwargs):
+    def plot_horizontal_transformers(self, method="transformers", color_list=None, **kwargs):
         """Simple plot to visualize transformers used.
         Note this doesn't capture transformers nested in simple ensembles.
 
         Args:
+            method (str): 'fillna' or 'transformers' - which to plot
             color_list = list of colors to *sample* for bar colors. Can be names or hex.
             **kwargs passed to pandas.plot()
         """
         series = self.horizontal_to_df()
-        transformers = pd.Series(",".join(series['Transformers']).split(",")).value_counts()
+        if str(method).lower() == "fillna":
+            transformers = series['FillNA'].value_counts()
+        else:
+            transformers = pd.Series(",".join(series['Transformers']).split(",")).value_counts()
         if color_list is None:
             color_list = colors_list
         colors = random.sample(color_list, transformers.shape[0])
         # plot
         transformers.plot(kind='bar', color=colors, **kwargs)
+
+    def plot_generation_loss(self, **kwargs):
+        """Plot improvement in accuracy over generations.
+        Note: this is only "one size fits all" accuracy and
+        doesn't account for the benefits seen for ensembling.
+
+        Args:
+            **kwargs passed to pd.DataFrame.plot()
+        """
+        for_gens = self.initial_results.model_results[
+            (self.initial_results.model_results['ValidationRound'] == 0) &
+            (self.initial_results.model_results['Ensemble'] < 1)]
+        for_gens.groupby("Generation")['Score'].min().cummin().plot(ylabel="Lowest Score", **kwargs)
+
+
 
 
 colors_list = [

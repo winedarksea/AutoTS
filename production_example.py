@@ -49,16 +49,16 @@ if initial_training == "auto":
 if initial_training:
     gens = 30
     models_to_validate = 0.2
-    ensemble = ["simple", "distance", "horizontal-max", "horizontal-min", "mosaic"]
+    ensemble = ["simple", "distance", "horizontal-max", "horizontal-min"]
 elif evolve:
     gens = 15
     models_to_validate = 0.3
     # you can include "simple" and "distance" but they can nest, and may get huge as time goes on...
-    ensemble = ["horizontal-max", "horizontal-min", "mosaic"]
+    ensemble = ["horizontal-max", "horizontal-min"]
 else:
     gens = 0
     models_to_validate = 0.99
-    ensemble = ["horizontal-max", "horizontal-min", "mosaic"]
+    ensemble = ["horizontal-max", "horizontal-min"]
 
 # only save the very best model if not evolve
 if evolve:

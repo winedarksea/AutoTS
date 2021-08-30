@@ -157,14 +157,14 @@ def retrieve_regressor(
         )
         return regr
     elif model_class == 'KNN':
-        from sklearn.multioutput import RegressorChain
+        from sklearn.multioutput import MultiOutputRegressor
         from sklearn.neighbors import KNeighborsRegressor
 
-        regr = RegressorChain(
+        regr = MultiOutputRegressor(
             KNeighborsRegressor(
-                n_jobs=n_jobs,
                 **model_param_dict
             ),
+            n_jobs=n_jobs,
         )
         return regr
     elif model_class == 'HistGradientBoost':
@@ -199,7 +199,7 @@ def retrieve_regressor(
         )
         return regr
     elif model_class == 'Adaboost':
-        from sklearn.multioutput import MultiOutputRegressor, RegressorChain
+        from sklearn.multioutput import MultiOutputRegressor
         from sklearn.ensemble import AdaBoostRegressor
 
         if regression_model["model_params"]['base_estimator'] == 'SVR':
@@ -233,10 +233,11 @@ def retrieve_regressor(
             )
             return regr
         else:
-            regr = RegressorChain(
+            regr = MultiOutputRegressor(
                 AdaBoostRegressor(
                     random_state=random_seed, **model_param_dict
                 ),
+                n_jobs=n_jobs,
             )
             return regr
     elif model_class == 'xgboost':
@@ -268,13 +269,14 @@ def retrieve_regressor(
     elif model_class == "ExtraTrees":
         from sklearn.ensemble import ExtraTreesRegressor
         
-        regr = ExtraTreesRegressor(n_jobs=n_jobs,
-                                   random_state=random_seed
+        return ExtraTreesRegressor(n_jobs=n_jobs,
+                                   random_state=random_seed,
                                    **model_param_dict)
     elif model_class == "RadiusNeighbors":
         from sklearn.neighbors import RadiusNeighborsRegressor
         
         regr = RadiusNeighborsRegressor(n_jobs=n_jobs, **model_param_dict)
+        return regr
     else:
         regression_model['model'] = 'RandomForest'
         from sklearn.ensemble import RandomForestRegressor
@@ -889,7 +891,7 @@ def window_maker(
             Y = Y.ravel()
 
     except Exception as e:
-        print(f"New numpy version of Window Regression failed {e}.")
+        # print(f"New numpy version of Window Regression failed {e}.")
         if str(regression_type).lower() == "user":
             if input_dim == "multivariate":
                 raise ValueError("input_dim=`multivariate` and regression_type=`user` cannot be combined.")
@@ -1093,17 +1095,17 @@ class WindowRegression(ModelObject):
                 )
                 if str(self.regression_type).lower() == "user":
                     blasted_thing = future_regressor.iloc[x].to_frame().transpose()
-                    tmerg = pd.concat([blasted_thing]* 10, axis=0)
+                    tmerg = pd.concat([blasted_thing] * pred.shape[0], axis=0)
                     tmerg.index = pred.index
-                    pred = pd.concat([pred, tmerg], axis=1)
+                    pred = pd.concat([pred, tmerg], axis=1, ignore_index=True)
                 rfPred = pd.DataFrame(self.regr.predict(pred))
                 if self.input_dim == 'univariate':
                     rfPred = rfPred.transpose()
+                    rfPred.columns = self.last_window.columns
                 forecast = pd.concat([forecast, rfPred], axis=0, ignore_index=True)
                 self.last_window = pd.concat(
                     [self.last_window, rfPred], axis=0, ignore_index=True
                 )
-                # self.sktraindata.index = combined_index[:len(self.sktraindata.index)]
             df = forecast
 
         else:
@@ -1165,7 +1167,7 @@ class WindowRegression(ModelObject):
         )
         model_choice = generate_regressor_params()
         input_dim_choice = random.choices(
-            ['multivariate', 'univariate'], [0.1, 0.9]
+            ['multivariate', 'univariate'], [0.01, 0.99]
         )[0]
         if input_dim_choice == "multivariate":
             output_dim_choice = "1step"
@@ -1721,7 +1723,7 @@ class UnivariateRegression(ModelObject):
         )
         cols = self.sktraindata.columns
 
-        def forecast_by_column(self, df, args, parallel, n_jobs, col):
+        def forecast_by_column(self, args, parallel, n_jobs, col):
             """Run one series of ETS and return prediction."""
             base = pd.DataFrame(self.sktraindata[col])
             Y = base.copy()
@@ -1788,7 +1790,7 @@ class UnivariateRegression(ModelObject):
         if self.parallel:
             df_list = Parallel(n_jobs=(self.n_jobs - 1))(
                 delayed(forecast_by_column)(
-                    self, self.df_train, args, self.parallel, self.n_jobs, col
+                    self, args, self.parallel, self.n_jobs, col
                 )
                 for (col) in cols
             )
@@ -1798,7 +1800,7 @@ class UnivariateRegression(ModelObject):
             for col in cols:
                 df_list.append(
                     forecast_by_column(
-                        self, self.df_train, args, self.parallel, self.n_jobs, col
+                        self, args, self.parallel, self.n_jobs, col
                     )
                 )
             self.models = {k: v for d in df_list for k, v in d.items()}

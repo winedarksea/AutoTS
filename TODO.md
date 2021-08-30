@@ -22,6 +22,7 @@
 * more plotting methods: plot_horizontal_transformers
 * for most -Regression type models, `model_params` is now treated as kwargs and can accept any args for that model
 * ExtraTrees and RadiusRegressor to -Regression type models
+* 'Generation' now tracked in results table, plus plotting method for generation loss
 
 
 # Errors: 
