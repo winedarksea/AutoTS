@@ -89,6 +89,7 @@ class AutoTSTest(unittest.TestCase):
         forecasts_df = prediction.forecast
         initial_results = model.results()
         validation_results = model.results("validation")
+        back_forecast = model.back_forecast(n_splits=2, verbose=0).forecast
 
         validated_count = (validation_results['Runs'] == (num_validations + 1)).sum()
 
@@ -142,6 +143,8 @@ class AutoTSTest(unittest.TestCase):
         self.assertEqual(len(template_dict['models'].keys()), template_dict['model_count'])
         # test that actually the best model (or nearly) was chosen
         self.assertGreater(validation_results['Score'].quantile(0.05), best_model_result['Score'].iloc[0])
+        # test back_forecast
+        self.assertEquals(back_forecast.index, df.index, msg="Back forecasting failed to have equivalent index to train.")
 
         # a
         # b

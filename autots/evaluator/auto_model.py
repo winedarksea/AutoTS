@@ -1,6 +1,7 @@
 """Mid-level helper functions for AutoTS."""
 import sys
 import random
+from math import ceil
 import numpy as np
 import pandas as pd
 import datetime
@@ -1738,3 +1739,100 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
     # take the average score across validations
     overall_score = overall_score.groupby(level=0).mean()
     return overall_score
+
+
+def back_forecast(df, model_name, model_param_dict, model_transform_dict,
+                  future_regressor_train=None,
+                  n_splits: int = "auto", forecast_length=14,
+                  frequency="infer", prediction_interval=0.9, no_negatives=False,
+                  constraint=None, holiday_country="US",
+                  random_seed=123, n_jobs="auto", verbose=0,
+                  ):
+    """Create forecasts for the historical training data, ie. backcast or back forecast.
+
+    This actually forecasts on historical data, these are not fit model values as are often returned by other packages.
+    As such, this will be slower, but more representative of real world model performance.
+    There may be jumps in data between chunks.
+
+    Args are same as for model_forecast except...
+    n_splits(int): how many pieces to split data into. Pass 2 for fastest, or "auto" for best accuracy
+
+    Returns a standard prediction object (access .forecast, .lower_forecast, .upper_forecast)
+    """
+    max_chunk = int(ceil(df.index.shape[0] / forecast_length))
+    if not str(n_splits).isdigit():
+        n_splits = max_chunk
+    elif n_splits > max_chunk or n_splits < 2:
+        n_splits = max_chunk
+    else:
+        n_splits = int(n_splits)
+
+    chunk_size = df.index.shape[0] / n_splits
+    b_forecast, b_forecast_up, b_forecast_low = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+    for n in range(n_splits):
+        int_idx = int(n * chunk_size)
+        int_idx_1 = int((n + 1) * chunk_size)
+        inner_forecast_length = int_idx_1 - int_idx
+        # flip to forecast backwards for the first split
+        if n == 0:
+            df_split = df.iloc[int_idx_1:].copy()
+            df_split = df_split.iloc[::-1]
+            df_split.index = df_split.index[::-1]
+            result_idx = df.iloc[0: int_idx_1].index
+        else:
+            df_split = df.iloc[0: int_idx].copy()
+        # handle appropriate regressors
+        if future_regressor_train is not None and future_regressor_train != []:
+            if n == 0:
+                split_regr = future_regressor_train.reindex(df_split.index.iloc[::-1])
+                split_regr_future = future_regressor_train.reindex(result_idx)
+            else:
+                split_regr = future_regressor_train.reindex(df_split.index)
+                split_regr_future = future_regressor_train.reindex(df.index[int_idx: int_idx_1])
+        else:
+            split_regr = []
+            split_regr_future = []
+
+        df_forecast = model_forecast(
+            model_name=model_name,
+            model_param_dict=model_param_dict,
+            model_transform_dict=model_transform_dict,
+            df_train=df_split,
+            forecast_length=inner_forecast_length,
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            no_negatives=no_negatives,
+            constraint=constraint,
+            future_regressor_train=split_regr,
+            future_regressor_forecast=split_regr_future,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+        )
+        b_forecast = pd.concat([b_forecast, df_forecast.forecast])
+        b_forecast_up = pd.concat([b_forecast_up, df_forecast.upper_forecast])
+        b_forecast_low = pd.concat([b_forecast_low, df_forecast.lower_forecast])
+        # handle index being wrong for the flipped forecast which comes first
+        if n == 0:
+            b_forecast = b_forecast.iloc[::-1]
+            b_forecast_up = b_forecast_up.iloc[::-1]
+            b_forecast_low = b_forecast_low.iloc[::-1]
+            b_forecast.index = result_idx
+            b_forecast_up.index = result_idx
+            b_forecast_low.index = result_idx
+
+    df_forecast.forecast = b_forecast
+    df_forecast.upper_forecast = b_forecast_up
+    df_forecast.lower_forecast = b_forecast_low
+    return df_forecast
+
+
+def remove_leading_zeros(df):
+    """Accepts wide dataframe, returns dataframe with zeroes preceeding any non-zero value as NaN."""
+    # keep the last row unaltered to keep metrics happier if all zeroes
+    temp = df.head(df.shape[0] - 1)
+    temp = temp.abs().cumsum(axis=0).replace(0, np.nan)
+    temp = df[~temp.isna()]
+    temp = temp.head(df.shape[0] - 1)
+    return pd.concat([temp, df.tail(1)], axis=0)

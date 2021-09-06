@@ -24,6 +24,8 @@ from autots.evaluator.auto_model import (
     generate_score_per_series,
     model_forecast,
     validation_aggregation,
+    back_forecast,
+    remove_leading_zeros
 )
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
@@ -312,6 +314,9 @@ class AutoTS(object):
             else ['ID'] + self.template_cols
         )
         self.initial_results = TemplateEvalObject()
+        self.best_model_name = ""
+        self.best_model_params = ""
+        self.best_model_transformation_params = ""
 
         if verbose > 2:
             print('"Hello. Would you like to destroy some evil today?" - Sanderson')
@@ -322,7 +327,7 @@ class AutoTS(object):
             return "Uninitiated AutoTS object"
         else:
             try:
-                return f"Initiated AutoTS object with best model: \n{self.best_model['Model'].iloc[0]}\n{self.best_model['TransformationParameters'].iloc[0]}\n{self.best_model['ModelParameters'].iloc[0]}"
+                return f"Initiated AutoTS object with best model: \n{self.best_model_name}\n{self.best_model_transformation_params}\n{self.best_model_params}"
             except Exception:
                 return "Initiated AutoTS object"
 
@@ -481,12 +486,7 @@ class AutoTS(object):
 
         # replace any zeroes that occur prior to all non-zero values
         if self.remove_leading_zeroes:
-            # keep the last row unaltered to keep metrics happier if all zeroes
-            temp = df_wide_numeric.head(df_wide_numeric.shape[0] - 1)
-            temp = temp.abs().cumsum(axis=0).replace(0, np.nan)
-            temp = df_wide_numeric[~temp.isna()]
-            temp = temp.head(df_wide_numeric.shape[0] - 1)
-            df_wide_numeric = pd.concat([temp, df_wide_numeric.tail(1)], axis=0)
+            df_wide_numeric = remove_leading_zeros(df_wide_numeric)
 
         # remove other ensembling types if univariate
         if df_wide_numeric.shape[1] == 1:
@@ -1096,6 +1096,10 @@ or otherwise increase models available."""
                 self.ensemble_check = int((self.best_model['Ensemble'].iloc[0]) > 0)
             except IndexError:
                 raise ValueError(error_msg_template)
+        # give a more convenient dict option
+        self.best_model_name = self.best_model['Model'].iloc[0]
+        self.best_model_params = json.loads(self.best_model['ModelParameters'].iloc[0])
+        self.best_model_transformation_params = json.loads(self.best_model['TransformationParameters'].iloc[0])
 
         # set flags to check if regressors or ensemble used in final model.
         param_dict = json.loads(self.best_model.iloc[0]['ModelParameters'])
@@ -1330,6 +1334,7 @@ or otherwise increase models available."""
                 export_template = export_template.nsmallest(n, columns=['Score'])
                 if not include_results:
                     export_template = export_template[self.template_cols]
+                    export_template = pd.concat([self.best_model, export_template]).drop_duplicates()
         else:
             raise ValueError("`models` must be 'all' or 'best'")
         try:
@@ -1448,13 +1453,47 @@ or otherwise increase models available."""
             self.initial_results = self.initial_results.concat(new_obj)
         return self
 
+    def back_forecast(self, column=None, n_splits: int = 3, verbose: int = 0):
+        """Create forecasts for the historical training data, ie. backcast or back forecast.
+
+        This actually forecasts on historical data, these are not fit model values as are often returned by other packages.
+        As such, this will be slower, but more representative of real world model performance.
+        There may be jumps in data between chunks.
+
+        Args are same as for model_forecast except...
+        n_splits(int): how many pieces to split data into. Pass 2 for fastest, or "auto" for best accuracy
+        column (str): if to run on only one column, pass column name. Faster than full.
+
+        Returns a standard prediction object (access .forecast, .lower_forecast, .upper_forecast)
+        """
+        if self.best_model.empty:
+            raise ValueError("No best_model. AutoTS .fit() needs to be run.")
+        if column is not None:
+            input_df = pd.DataFrame(self.df_wide_numeric[column])
+        else:
+            input_df = self.df_wide_numeric
+        result = back_forecast(
+            df=input_df,
+            model_name=self.best_model_name,
+            model_param_dict=self.best_model_params,
+            model_transform_dict=self.best_model_transformation_params,
+            future_regressor_train=self.future_regressor_train,
+            n_splits=n_splits, forecast_length=self.forecast_length,
+            frequency=self.frequency, prediction_interval=self.prediction_interval,
+            no_negatives=self.no_negatives,
+            constraint=self.constraint, holiday_country=self.holiday_country,
+            random_seed=self.random_seed,
+            n_jobs=self.n_jobs, verbose=verbose,
+        )
+        return result
+
     def horizontal_to_df(self):
         """helper function for plotting."""
         if self.best_model.empty:
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
         if self.best_model['Ensemble'].iloc[0] != 2:
             raise ValueError("Only works on horizontal ensemble type models.")
-        ModelParameters = json.loads(self.best_model['ModelParameters'].iloc[0])
+        ModelParameters = self.best_model_params
         series = ModelParameters['series']
         series = pd.DataFrame.from_dict(series, orient="index").reset_index(drop=False)
         if series.shape[1] > 2:
@@ -1496,7 +1535,7 @@ or otherwise increase models available."""
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
         if self.best_model['Ensemble'].iloc[0] != 2:
             raise ValueError("Only works on horizontal ensemble type models.")
-        ModelParameters = json.loads(self.best_model['ModelParameters'].iloc[0])
+        ModelParameters = self.best_model_params
         if str(ModelParameters['model_name']).lower() != 'mosaic':
             raise ValueError("Only works on mosaic ensembles.")
         series = pd.DataFrame.from_dict(ModelParameters['series'])
@@ -1564,6 +1603,27 @@ or otherwise increase models available."""
         for_gens.groupby("Generation")['Score'].min().cummin().plot(
             ylabel="Lowest Score", **kwargs
         )
+
+    def plot_backforecast(self, series=None, n_splits: int = 3, start_date=None, **kwargs):
+        """Plot the historical data and fit forecast on historic.
+
+        Args:
+            series (str or list): column names of time series
+            n_splits (int or str): "auto", number > 2, higher more accurate but slower
+            **kwargs passed to pd.DataFrame.plot()
+        """
+        if series is None:
+            series = random.choice(self.df_wide_numeric.columns)
+        b_df = self.back_forecast(column=series, n_splits=n_splits, verbose=0).forecast
+        b_df = b_df.rename(columns=lambda x: x + "_forecast")
+        plot_df = pd.concat([
+            pd.DataFrame(self.df_wide_numeric[series]),
+            b_df,
+        ], axis=1)
+        if start_date is not None:
+            plot_df = plot_df[plot_df.index >= start_date]
+        plot_df = remove_leading_zeros(plot_df)
+        plot_df.plot(**kwargs)
 
 
 colors_list = [

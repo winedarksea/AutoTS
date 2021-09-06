@@ -12,26 +12,26 @@ def fill_zero(df):
 def fill_forward(df):
     """Fill NaN with previous values."""
     df = df.fillna(method='ffill')
-    df = df.fillna(method='bfill')
+    df = df.fillna(method='bfill').fillna(0)
     return df
 
 
 def fill_mean(df):
     """Fill NaN with mean."""
-    df = df.fillna(df.mean().to_dict())
+    df = df.fillna(df.mean().fillna(0).to_dict())
     return df
 
 
 def fill_median(df):
     """Fill NaN with median."""
-    df = df.fillna(df.median().to_dict())
+    df = df.fillna(df.median().fillna(0).to_dict())
     return df
 
 
 def rolling_mean(df, window: int = 10):
     """Fill NaN with mean of last window values."""
     df = df.fillna(df.rolling(window=window, min_periods=1).mean()).fillna(
-        df.mean().to_dict()
+        df.mean().fillna(0).to_dict()
     )
     return df
 
