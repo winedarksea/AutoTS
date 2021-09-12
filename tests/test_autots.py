@@ -144,7 +144,7 @@ class AutoTSTest(unittest.TestCase):
         # test that actually the best model (or nearly) was chosen
         self.assertGreater(validation_results['Score'].quantile(0.05), best_model_result['Score'].iloc[0])
         # test back_forecast
-        self.assertEquals(back_forecast.index, df.index, msg="Back forecasting failed to have equivalent index to train.")
+        self.assertTrue((back_forecast.index == model.df_wide_numeric.index).all(), msg="Back forecasting failed to have equivalent index to train.")
 
         # a
         # b

@@ -1631,6 +1631,9 @@ def generate_score(
     # generate minimizing scores, where smaller = better accuracy
     try:
         model_results = model_results.replace([np.inf, -np.inf], np.nan)
+        # not sure why there are negative SMAPE values, but make sure they get dealt with
+        if model_results['smape'].min() < 0:
+            model_results['smape'] = model_results['smape'].where(model_results['smape'] >= 0, model_results['smape'].max())
         # handle NaN in scores...
         # model_results = model_results.fillna(value=model_results.max(axis=0))
 
@@ -1782,9 +1785,9 @@ def back_forecast(df, model_name, model_param_dict, model_transform_dict,
         else:
             df_split = df.iloc[0: int_idx].copy()
         # handle appropriate regressors
-        if future_regressor_train is not None and future_regressor_train != []:
+        if isinstance(future_regressor_train, pd.DataFrame):
             if n == 0:
-                split_regr = future_regressor_train.reindex(df_split.index.iloc[::-1])
+                split_regr = future_regressor_train.reindex(df_split.index[::-1])
                 split_regr_future = future_regressor_train.reindex(result_idx)
             else:
                 split_regr = future_regressor_train.reindex(df_split.index)
