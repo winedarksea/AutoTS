@@ -1795,35 +1795,41 @@ def back_forecast(df, model_name, model_param_dict, model_transform_dict,
         else:
             split_regr = []
             split_regr_future = []
-
-        df_forecast = model_forecast(
-            model_name=model_name,
-            model_param_dict=model_param_dict,
-            model_transform_dict=model_transform_dict,
-            df_train=df_split,
-            forecast_length=inner_forecast_length,
-            frequency=frequency,
-            prediction_interval=prediction_interval,
-            no_negatives=no_negatives,
-            constraint=constraint,
-            future_regressor_train=split_regr,
-            future_regressor_forecast=split_regr_future,
-            holiday_country=holiday_country,
-            random_seed=random_seed,
-            verbose=verbose,
-            n_jobs=n_jobs,
-        )
-        b_forecast = pd.concat([b_forecast, df_forecast.forecast])
-        b_forecast_up = pd.concat([b_forecast_up, df_forecast.upper_forecast])
-        b_forecast_low = pd.concat([b_forecast_low, df_forecast.lower_forecast])
-        # handle index being wrong for the flipped forecast which comes first
-        if n == 0:
-            b_forecast = b_forecast.iloc[::-1]
-            b_forecast_up = b_forecast_up.iloc[::-1]
-            b_forecast_low = b_forecast_low.iloc[::-1]
-            b_forecast.index = result_idx
-            b_forecast_up.index = result_idx
-            b_forecast_low.index = result_idx
+        try:
+            df_forecast = model_forecast(
+                model_name=model_name,
+                model_param_dict=model_param_dict,
+                model_transform_dict=model_transform_dict,
+                df_train=df_split,
+                forecast_length=inner_forecast_length,
+                frequency=frequency,
+                prediction_interval=prediction_interval,
+                no_negatives=no_negatives,
+                constraint=constraint,
+                future_regressor_train=split_regr,
+                future_regressor_forecast=split_regr_future,
+                holiday_country=holiday_country,
+                random_seed=random_seed,
+                verbose=verbose,
+                n_jobs=n_jobs,
+            )
+            b_forecast = pd.concat([b_forecast, df_forecast.forecast])
+            b_forecast_up = pd.concat([b_forecast_up, df_forecast.upper_forecast])
+            b_forecast_low = pd.concat([b_forecast_low, df_forecast.lower_forecast])
+            # handle index being wrong for the flipped forecast which comes first
+            if n == 0:
+                b_forecast = b_forecast.iloc[::-1]
+                b_forecast_up = b_forecast_up.iloc[::-1]
+                b_forecast_low = b_forecast_low.iloc[::-1]
+                b_forecast.index = result_idx
+                b_forecast_up.index = result_idx
+                b_forecast_low.index = result_idx
+        except Exception as e:
+            print(f"back_forecast split {n} failed with {repr(e)}")
+            b_df = pd.DataFrame(np.nan, index=df.index[int_idx: int_idx_1], columns=df.columns)
+            b_forecast = pd.concat([b_forecast, b_df])
+            b_forecast_up = pd.concat([b_forecast_up, b_df])
+            b_forecast_low = pd.concat([b_forecast_low, b_df])
 
     df_forecast.forecast = b_forecast
     df_forecast.upper_forecast = b_forecast_up

@@ -20,6 +20,7 @@
 * best_model_name, best_model_params, and best_model_transformation_params AutoTS attributes now available
 * mean, median, and ffill NaN now handle fully NaN series by returning 0.
 * fixed bug that was causing mosaic generalization to fail if ffill/bfill handled all missing values
+* STLFilter and HPFilter and convolution_filter Transformers added
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

@@ -1615,7 +1615,7 @@ or otherwise increase models available."""
         if series is None:
             series = random.choice(self.df_wide_numeric.columns)
         b_df = self.back_forecast(column=series, n_splits=n_splits, verbose=0).forecast
-        b_df = b_df.rename(columns=lambda x: x + "_forecast")
+        b_df = b_df.rename(columns=lambda x: str(x) + "_forecast")
         plot_df = pd.concat([
             pd.DataFrame(self.df_wide_numeric[series]),
             b_df,

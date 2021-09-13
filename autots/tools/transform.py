@@ -319,20 +319,12 @@ class StatsmodelsFilter(EmptyTransformer):
     """Irreversible filters.
 
     Args:
-        method (str): bkfilter or cffilter
+        method (str): bkfilter or cffilter or convolution_filter
     """
 
     def __init__(self, method: str = 'bkfilter', **kwargs):
         super().__init__(name="StatsmodelsFilter")
         self.method = method
-
-    def fit(self, df):
-        """Fits filter.
-
-        Args:
-            df (pandas.DataFrame): input dataframe
-        """
-        return self
 
     def fit_transform(self, df):
         """Fit and Return Detrended DataFrame.
@@ -340,7 +332,6 @@ class StatsmodelsFilter(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        self.fit(df)
         return self.transform(df)
 
     def transform(self, df):
@@ -349,11 +340,6 @@ class StatsmodelsFilter(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        try:
-            df = df.astype(float)
-        except Exception:
-            raise ValueError("Data Cannot Be Converted to Numeric Float")
-
         if self.method == 'bkfilter':
             from statsmodels.tsa.filters import bk_filter
 
@@ -366,15 +352,123 @@ class StatsmodelsFilter(EmptyTransformer):
             cycle, trend = cf_filter.cffilter(df)
             cycle.columns = df.columns
             df = df - cycle
+        elif "convolution_filter" in self.method:
+            from statsmodels.tsa.filters.filtertools import convolution_filter
+
+            df = convolution_filter(df, [[.75] * df.shape[1], [.25] * df.shape[1]])
+            df = df.fillna(method='ffill').fillna(method='bfill')
         return df
 
-    def inverse_transform(self, df):
-        """Return data to original form.
+
+class HPFilter(EmptyTransformer):
+    """Irreversible filters.
+
+    Args:
+        lamb (int): lambda for hpfilter
+    """
+
+    def __init__(self, part: str = 'trend', lamb: float = 1600, **kwargs):
+        super().__init__(name="HPFilter")
+        self.part = part
+        self.lamb = lamb
+
+    def fit_transform(self, df):
+        """Fit and Return Detrended DataFrame.
 
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        return self.transform(df)
+
+    def transform(self, df):
+        """Return detrended data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        from statsmodels.tsa.filters.hp_filter import hpfilter
+
+        def _hpfilter_one_return(series, lamb=1600, part="trend"):
+            """Convert filter to apply on pd DataFrame."""
+            hp_cycle, hp_trend = hpfilter(series, lamb)
+            if part == "cycle":
+                return hp_cycle
+            else:
+                return hp_trend
+        if df.isnull().values.any():
+            raise ValueError("hpfilter does not handle null values.")
+        df = df.apply(_hpfilter_one_return, lamb=self.lamb, part=self.part)
         return df
+
+    @staticmethod
+    def get_new_params(method: str = 'random'):
+        part = random.choices(['trend', 'cycle'], weights=[0.98, 0.02])[0]
+        lamb = random.choices([1600, 6.25, 129600, 104976000000], weights=[0.5, 0.2, 0.2, 0.1])[0]
+        return {"part": part, "lamb": lamb}
+
+
+class STLFilter(EmptyTransformer):
+    """Irreversible filters.
+
+    Args:
+        decomp_type (str): which decomposition to use
+        part (str): which part of decomposition to return
+        seaonal (int): seaonsal component of STL
+    """
+
+    def __init__(self, decomp_type="STL", part: str = 'trend', seasonal: int = 7, **kwargs):
+        super().__init__(name="STLFilter")
+        self.part = part
+        self.seasonal = seasonal
+        self.decomp_type = decomp_type
+
+    def fit_transform(self, df):
+        """Fit and Return Detrended DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self.transform(df)
+
+    def transform(self, df):
+        """Return detrended data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        from statsmodels.tsa.seasonal import STL, seasonal_decompose
+
+        def _stl_one_return(series, decomp_type="STL", seasonal=7, part="trend"):
+            """Convert filter to apply on pd DataFrame."""
+            if str(decomp_type).lower() == 'stl':
+                result = STL(series, seasonal=seasonal).fit()
+            else:
+                result = seasonal_decompose(series)
+            if part == "seasonal":
+                return result.seasonal
+            elif part == "resid":
+                return result.resid
+            else:
+                return result.trend
+        if df.isnull().values.any():
+            raise ValueError("STLFilter does not handle null values.")
+
+        df = df.apply(_stl_one_return, decomp_type=self.decomp_type, seasonal=self.seasonal, part=self.part)
+        return df.fillna(method='ffill').fillna(method='bfill')
+
+    @staticmethod
+    def get_new_params(method: str = 'random'):
+        decomp_type = random.choices(['STL', 'seasonal_decompose'], weights=[0.5, 0.5])[0]
+        part = random.choices(['trend', 'seasonal', "resid"], weights=[0.98, 0.02, 0.001])[0]
+        if decomp_type == "STL":
+            seasonal = seasonal_int()
+            if seasonal < 7:
+                seasonal = 7
+            elif seasonal % 2 == 0:
+                seasonal = seasonal - 1
+            return {"decomp_type": decomp_type, "part": part, "seasonal": seasonal}
+        else:
+            return {"decomp_type": decomp_type, "part": part}
 
 
 class SinTrend(EmptyTransformer):
@@ -766,30 +860,6 @@ class RollingMeanTransformer(EmptyTransformer):
                 return staged
 
 
-"""
-df = df_wide_numeric.tail(60).head(50).fillna(0)
-df_forecast = (df_wide_numeric).tail(10).fillna(0)
-forecats = transformed.tail(10)
-test = RollingMeanTransformer().fit(df)
-transformed = test.transform(df)
-inverse = test.inverse_transform(forecats, trans_method = 'forecast')
-df == test.inverse_transform(test.transform(df), trans_method = 'original')
-inverse == df_wide_numeric.tail(10)
-"""
-"""
-df = df_wide_numeric.tail(60).fillna(0)
-test = SeasonalDifference().fit(df)
-transformed = test.transform(df)
-forecats = transformed.tail(10)
-df == test.inverse_transform(transformed, trans_method = 'original')
-
-df = df_wide_numeric.tail(60).head(50).fillna(0)
-test = SeasonalDifference().fit(df)
-inverse = test.inverse_transform(forecats, trans_method = 'forecast')
-inverse == df_wide_numeric.tail(10).fillna(0)
-"""
-
-
 class SeasonalDifference(EmptyTransformer):
     """Remove seasonal component.
 
@@ -940,7 +1010,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             verbose_bool=False,
             random_seed=2020,
         )
-        self.model = self.model.fit(X, y)
+        self.model = self.model.fit(X, y.ravel())
         self.shape = df.shape
         return self
 
@@ -1021,8 +1091,6 @@ class DifferencedTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        # df = df_wide_numeric.tail(60).head(50)
-        # df_forecast = (df_wide_numeric - df_wide_numeric.shift(1)).tail(10)
         df = (df - df.shift(self.lag)).fillna(method='bfill')
         return df
 
@@ -1051,6 +1119,8 @@ class DifferencedTransformer(EmptyTransformer):
         else:
             df_len = df.shape[0]
             df = pd.concat([self.last_values, df], axis=0)
+            if df.isnull().values.any():
+                raise ValueError("NaN in DifferencedTransformer.inverse_transform")
             return df.cumsum().tail(df_len)
 
 
@@ -1506,7 +1576,7 @@ class Discretize(EmptyTransformer):
                 if self.discretization == 'center':
                     bins = np.cumsum(bins, dtype=float, axis=0)
                     bins[2:] = bins[2:] - bins[:-2]
-                    bins = bins[2 - 1 :] / 2
+                    bins = bins[2 - 1:] / 2
                 elif self.discretization == 'lower':
                     bins = np.delete(bins, (-1), axis=0)
                 elif self.discretization == 'upper':
@@ -1654,8 +1724,8 @@ class ScipyFilter(EmptyTransformer):
         method_args (list): passed to filter as appropriate
     """
 
-    def __init__(self, method: str = 'bkfilter', method_args: list = None, **kwargs):
-        super().__init__(name="StatsmodelsFilter")
+    def __init__(self, method: str = 'hilbert', method_args: list = None, **kwargs):
+        super().__init__(name="ScipyFilter")
         self.method = method
         self.method_args = method_args
 
@@ -1695,7 +1765,7 @@ class ScipyFilter(EmptyTransformer):
         # analog_choice = bool(random.randint(0, 1))
         analog_choice = False
         xn = random.randint(1, 99)
-        btype = random.choice(["lowpass", "highpass"])  #  "bandpass", "bandstop"
+        btype = random.choice(["lowpass", "highpass"])  # "bandpass", "bandstop"
         if method in ['wiener', 'hilbert']:
             method_args = None
         elif method == "savgol_filter":
@@ -1840,6 +1910,7 @@ trans_dict = {
     'SeasonalDifference28': SeasonalDifference(lag_1=28, method='Mean'),
     'bkfilter': StatsmodelsFilter(method='bkfilter'),
     'cffilter': StatsmodelsFilter(method='cffilter'),
+    'convolution_filter': StatsmodelsFilter(method='convolution_filter'),
     "Discretize": Discretize(discretization="center", n_bins=10),
     'DatepartRegressionLtd': DatepartRegressionTransformer(
         regression_model={
@@ -1868,6 +1939,8 @@ have_params = {
     'Slice': Slice,
     'Detrend': Detrend,
     'ScipyFilter': ScipyFilter,
+    'HPFilter': HPFilter,
+    'STLFilter': STLFilter,
 }
 # where will results will vary if not all series are included together
 shared_trans = ['PCA', 'FastICA']
@@ -1941,6 +2014,8 @@ class GeneralTransformer(object):
             'Discretize' - bin or round data into groups
             'DatepartRegression' - move a trend trained on datetime index
             "ScipyFilter" - filter data (lose information but smoother!) from scipy
+            "HPFilter" - statsmodels hp_filter
+            "STLFilter" - seasonal decompose and keep just one part of decomposition.
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -2289,6 +2364,8 @@ transformer_dict = {
     # 'SeasonalDifference28': 0.0,  # old
     'cffilter': 0.01,
     'bkfilter': 0.05,
+    'convolution_filter': 0.001,
+    "HPFilter": 0.02,
     'DatepartRegression': 0.02,
     # 'DatepartRegressionElasticNet': 0.0,  # old
     # 'DatepartRegressionLtd': 0.0,  # old
@@ -2298,6 +2375,7 @@ transformer_dict = {
     "Round": 0.05,
     "Slice": 0.02,
     "ScipyFilter": 0.02,
+    "STLFilter": 0.01,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
@@ -2305,6 +2383,7 @@ del fast_transformer_dict['DatepartRegression']
 del fast_transformer_dict['SinTrend']
 del fast_transformer_dict['FastICA']
 del fast_transformer_dict['ScipyFilter']
+del fast_transformer_dict['STLFilter']
 
 # and even more
 superfast_transformer_dict = fast_transformer_dict.copy()
@@ -2312,6 +2391,8 @@ del superfast_transformer_dict['IntermittentOccurrence']
 del superfast_transformer_dict['cffilter']
 del superfast_transformer_dict['QuantileTransformer']
 del superfast_transformer_dict['PowerTransformer']
+del fast_transformer_dict['convolution_filter']
+del fast_transformer_dict['HPFilter']
 
 # probability dictionary of FillNA methods
 na_probs = {
