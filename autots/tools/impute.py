@@ -93,7 +93,13 @@ df_interpolate = [
     'akima',
 ]
 # these seem to cause more harm than good usually
-df_interpolate_messy = ['polynomial', 'krogh', 'cubicspline', 'from_derivatives', 'slinear']
+df_interpolate_messy = [
+    'polynomial',
+    'krogh',
+    'cubicspline',
+    'from_derivatives',
+    'slinear',
+]
 df_interpolate_full = list(set(df_interpolate + df_interpolate_messy))
 
 

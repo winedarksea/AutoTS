@@ -238,10 +238,10 @@ def mosaic_classifier(df_train, known):
             index=None if len(p_full) > 1 else [0],
         )
         upload = pd.concat([upload, missing_rows])
-    X = fill_median((
-        summarize_series(df_train)
-        .transpose())
-        .merge(upload, left_index=True, right_on="series_id")
+    X = fill_median(
+        (summarize_series(df_train).transpose()).merge(
+            upload, left_index=True, right_on="series_id"
+        )
     )
     X.set_index("series_id", inplace=True)  # .drop(columns=['series_id'], inplace=True)
     to_predict = X[X['model_id'].isna()].drop(columns=['model_id'])
@@ -1198,7 +1198,7 @@ def MosaicEnsemble(
         newdf.columns = base_df.columns
         newdf['forecast_period'] = np.tile(
             np.arange(max_forecast_period + 1, needed_stamps + 1 + max_forecast_period),
-            base_df.shape[0]
+            base_df.shape[0],
         )
         melted = pd.concat([melted, newdf])
     elif len_sample_index < (max_forecast_period + 1):
@@ -1214,9 +1214,13 @@ def MosaicEnsemble(
             l_fore.append(lower_forecasts[row[3]][row[2]].iloc[row[1]])
     except Exception as e:
         m0 = f"{row[3]} in available_models: {row[3] in available_models}, "
-        mi = m0 + f"In forecast: {row[3] in forecasts.keys()}, in upper: {row[3] in upper_forecasts.keys()}, in Lower: {row[3] in lower_forecasts.keys()}"
+        mi = (
+            m0
+            + f"In forecast: {row[3] in forecasts.keys()}, in upper: {row[3] in upper_forecasts.keys()}, in Lower: {row[3] in lower_forecasts.keys()}"
+        )
         raise ValueError(
-            f"Mosaic Ensemble failed on model {row[3]} series {row[2]} and period {row[1]} due to missing model: {e} " + mi
+            f"Mosaic Ensemble failed on model {row[3]} series {row[2]} and period {row[1]} due to missing model: {e} "
+            + mi
         )
     melted[
         'forecast'

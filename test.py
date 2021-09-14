@@ -10,6 +10,7 @@ from autots.datasets import (
     load_yearly,
     load_weekly,
     load_weekdays,
+    load_zeroes,
 )
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor
@@ -32,7 +33,7 @@ if use_template:
     generations = 0
     num_validations = 0
 else:
-    generations = 5
+    generations = 3
     num_validations = 2
 
 if use_m5:
@@ -80,10 +81,11 @@ model_list = [
     'WindowRegression',
 ]
 
-transformer_list = "all"  # ["ScipyFilter"]
+transformer_list = "all"  # ["bkfilter", "STLFilter", "HPFilter", 'StandardScaler']
 transformer_max_depth = 3
+model_list = "default"
 model_list = 'superfast'  # fast_parallel
-# model_list = ["LastValueNaive", "WindowRegression", "UnivariateRegression", "RollingRegression"]
+# model_list = ["LastValueNaive", "UnivariateRegression", "UnivariateMotif", "FBProphet"]
 
 metric_weighting = {
     'smape_weighting': 3,
@@ -121,17 +123,6 @@ model = AutoTS(
 )
 
 
-future_regressor_train, future_regressor_forecast = fake_regressor(
-    df,
-    dimensions=1,
-    forecast_length=forecast_length,
-    date_col='datetime' if long else None,
-    value_col='value' if long else None,
-    id_col='series_id' if long else None,
-    drop_most_recent=model.drop_most_recent,
-    aggfunc=model.aggfunc,
-    verbose=model.verbose,
-)
 future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
     df,
     dimensions=4,
@@ -170,11 +161,6 @@ initial_results = model.results()
 # validation results
 validation_results = model.results("validation")
 
-prediction.plot(model.df_wide_numeric,
-                series=model.df_wide_numeric.columns[0],
-                remove_zeroes=False,
-                start_date="2019-01-01")
-
 initial_results['TransformationRuntime'] = initial_results['TransformationRuntime'].dt.total_seconds()
 initial_results['FitRuntime'] = initial_results['FitRuntime'].dt.total_seconds()
 initial_results['PredictRuntime'] = initial_results['PredictRuntime'].dt.total_seconds()
@@ -185,6 +171,11 @@ print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 
 initial_results.to_csv("general_template_" + str(platform.node()) + ".csv")
+
+prediction.plot(model.df_wide_numeric,
+                series=model.df_wide_numeric.columns[0],
+                remove_zeroes=False,
+                start_date="2019-01-01")
 
 plt.show()
 model.plot_generation_loss()
@@ -200,6 +191,9 @@ if model.best_model['Ensemble'].iloc[0] == 2:
     if 'mosaic' in model.best_model['ModelParameters'].iloc[0].lower():
         mosaic_df = model.mosaic_to_df()
         print(mosaic_df[mosaic_df.columns[0:5]].head(5))
+
+plt.show()
+model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
 
 """
 # Import/Export

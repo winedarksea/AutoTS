@@ -1633,7 +1633,9 @@ def generate_score(
         model_results = model_results.replace([np.inf, -np.inf], np.nan)
         # not sure why there are negative SMAPE values, but make sure they get dealt with
         if model_results['smape'].min() < 0:
-            model_results['smape'] = model_results['smape'].where(model_results['smape'] >= 0, model_results['smape'].max())
+            model_results['smape'] = model_results['smape'].where(
+                model_results['smape'] >= 0, model_results['smape'].max()
+            )
         # handle NaN in scores...
         # model_results = model_results.fillna(value=model_results.max(axis=0))
 
@@ -1744,13 +1746,23 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
     return overall_score
 
 
-def back_forecast(df, model_name, model_param_dict, model_transform_dict,
-                  future_regressor_train=None,
-                  n_splits: int = "auto", forecast_length=14,
-                  frequency="infer", prediction_interval=0.9, no_negatives=False,
-                  constraint=None, holiday_country="US",
-                  random_seed=123, n_jobs="auto", verbose=0,
-                  ):
+def back_forecast(
+    df,
+    model_name,
+    model_param_dict,
+    model_transform_dict,
+    future_regressor_train=None,
+    n_splits: int = "auto",
+    forecast_length=14,
+    frequency="infer",
+    prediction_interval=0.9,
+    no_negatives=False,
+    constraint=None,
+    holiday_country="US",
+    random_seed=123,
+    n_jobs="auto",
+    verbose=0,
+):
     """Create forecasts for the historical training data, ie. backcast or back forecast.
 
     This actually forecasts on historical data, these are not fit model values as are often returned by other packages.
@@ -1771,7 +1783,11 @@ def back_forecast(df, model_name, model_param_dict, model_transform_dict,
         n_splits = int(n_splits)
 
     chunk_size = df.index.shape[0] / n_splits
-    b_forecast, b_forecast_up, b_forecast_low = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+    b_forecast, b_forecast_up, b_forecast_low = (
+        pd.DataFrame(),
+        pd.DataFrame(),
+        pd.DataFrame(),
+    )
     for n in range(n_splits):
         int_idx = int(n * chunk_size)
         int_idx_1 = int((n + 1) * chunk_size)
@@ -1781,9 +1797,9 @@ def back_forecast(df, model_name, model_param_dict, model_transform_dict,
             df_split = df.iloc[int_idx_1:].copy()
             df_split = df_split.iloc[::-1]
             df_split.index = df_split.index[::-1]
-            result_idx = df.iloc[0: int_idx_1].index
+            result_idx = df.iloc[0:int_idx_1].index
         else:
-            df_split = df.iloc[0: int_idx].copy()
+            df_split = df.iloc[0:int_idx].copy()
         # handle appropriate regressors
         if isinstance(future_regressor_train, pd.DataFrame):
             if n == 0:
@@ -1791,7 +1807,9 @@ def back_forecast(df, model_name, model_param_dict, model_transform_dict,
                 split_regr_future = future_regressor_train.reindex(result_idx)
             else:
                 split_regr = future_regressor_train.reindex(df_split.index)
-                split_regr_future = future_regressor_train.reindex(df.index[int_idx: int_idx_1])
+                split_regr_future = future_regressor_train.reindex(
+                    df.index[int_idx:int_idx_1]
+                )
         else:
             split_regr = []
             split_regr_future = []
@@ -1826,7 +1844,9 @@ def back_forecast(df, model_name, model_param_dict, model_transform_dict,
                 b_forecast_low.index = result_idx
         except Exception as e:
             print(f"back_forecast split {n} failed with {repr(e)}")
-            b_df = pd.DataFrame(np.nan, index=df.index[int_idx: int_idx_1], columns=df.columns)
+            b_df = pd.DataFrame(
+                np.nan, index=df.index[int_idx:int_idx_1], columns=df.columns
+            )
             b_forecast = pd.concat([b_forecast, b_df])
             b_forecast_up = pd.concat([b_forecast_up, b_df])
             b_forecast_low = pd.concat([b_forecast_low, b_df])

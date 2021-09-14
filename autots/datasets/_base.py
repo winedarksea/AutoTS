@@ -381,8 +381,7 @@ def load_zeroes(long=False, shape=None, start_date: str = "2021-01-01"):
     if shape is None:
         shape = (200, 5)
     df_wide = pd.DataFrame(
-        np.zeros(shape),
-        index=pd.date_range(start_date, periods=shape[0], freq="D")
+        np.zeros(shape), index=pd.date_range(start_date, periods=shape[0], freq="D")
     )
     if not long:
         return df_wide

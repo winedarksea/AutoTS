@@ -162,7 +162,7 @@ class AutoTSTest(unittest.TestCase):
         n_jobs = 'auto'
         verbose = -1
         validation_method = "backwards"
-        generations = 0
+        generations = 1
         num_validations = 1
         models_to_validate = 0.10  # must be a decimal percent for this test
 

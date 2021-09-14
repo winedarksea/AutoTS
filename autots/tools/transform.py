@@ -355,7 +355,7 @@ class StatsmodelsFilter(EmptyTransformer):
         elif "convolution_filter" in self.method:
             from statsmodels.tsa.filters.filtertools import convolution_filter
 
-            df = convolution_filter(df, [[.75] * df.shape[1], [.25] * df.shape[1]])
+            df = convolution_filter(df, [[0.75] * df.shape[1], [0.25] * df.shape[1]])
             df = df.fillna(method='ffill').fillna(method='bfill')
         return df
 
@@ -395,6 +395,7 @@ class HPFilter(EmptyTransformer):
                 return hp_cycle
             else:
                 return hp_trend
+
         if df.isnull().values.any():
             raise ValueError("hpfilter does not handle null values.")
         df = df.apply(_hpfilter_one_return, lamb=self.lamb, part=self.part)
@@ -403,7 +404,9 @@ class HPFilter(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = 'random'):
         part = random.choices(['trend', 'cycle'], weights=[0.98, 0.02])[0]
-        lamb = random.choices([1600, 6.25, 129600, 104976000000], weights=[0.5, 0.2, 0.2, 0.1])[0]
+        lamb = random.choices(
+            [1600, 6.25, 129600, 104976000000], weights=[0.5, 0.2, 0.2, 0.1]
+        )[0]
         return {"part": part, "lamb": lamb}
 
 
@@ -416,7 +419,9 @@ class STLFilter(EmptyTransformer):
         seaonal (int): seaonsal component of STL
     """
 
-    def __init__(self, decomp_type="STL", part: str = 'trend', seasonal: int = 7, **kwargs):
+    def __init__(
+        self, decomp_type="STL", part: str = 'trend', seasonal: int = 7, **kwargs
+    ):
         super().__init__(name="STLFilter")
         self.part = part
         self.seasonal = seasonal
@@ -450,16 +455,26 @@ class STLFilter(EmptyTransformer):
                 return result.resid
             else:
                 return result.trend
+
         if df.isnull().values.any():
             raise ValueError("STLFilter does not handle null values.")
 
-        df = df.apply(_stl_one_return, decomp_type=self.decomp_type, seasonal=self.seasonal, part=self.part)
+        df = df.apply(
+            _stl_one_return,
+            decomp_type=self.decomp_type,
+            seasonal=self.seasonal,
+            part=self.part,
+        )
         return df.fillna(method='ffill').fillna(method='bfill')
 
     @staticmethod
     def get_new_params(method: str = 'random'):
-        decomp_type = random.choices(['STL', 'seasonal_decompose'], weights=[0.5, 0.5])[0]
-        part = random.choices(['trend', 'seasonal', "resid"], weights=[0.98, 0.02, 0.001])[0]
+        decomp_type = random.choices(['STL', 'seasonal_decompose'], weights=[0.5, 0.5])[
+            0
+        ]
+        part = random.choices(
+            ['trend', 'seasonal', "resid"], weights=[0.98, 0.02, 0.001]
+        )[0]
         if decomp_type == "STL":
             seasonal = seasonal_int()
             if seasonal < 7:
@@ -1001,6 +1016,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
         y = df.values
+        if y.shape[1] == 1:
+            y = y.ravel()
         X = date_part(df.index, method=self.datepart_method)
         from autots.models.sklearn import retrieve_regressor
 
@@ -1010,7 +1027,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             verbose_bool=False,
             random_seed=2020,
         )
-        self.model = self.model.fit(X, y.ravel())
+        self.model = self.model.fit(X, y)
         self.shape = df.shape
         return self
 
@@ -1576,7 +1593,7 @@ class Discretize(EmptyTransformer):
                 if self.discretization == 'center':
                     bins = np.cumsum(bins, dtype=float, axis=0)
                     bins[2:] = bins[2:] - bins[:-2]
-                    bins = bins[2 - 1:] / 2
+                    bins = bins[2 - 1 :] / 2
                 elif self.discretization == 'lower':
                     bins = np.delete(bins, (-1), axis=0)
                 elif self.discretization == 'upper':
