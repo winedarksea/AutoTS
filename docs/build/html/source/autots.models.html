@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.models package &#8212; AutoTS 0.3.5 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.3.6 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -1322,6 +1322,25 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dt id="autots.models.sklearn.window_maker">
 <code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">window_maker</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">window_size: int = 10</em>, <em class="sig-param">input_dim: str = 'univariate'</em>, <em class="sig-param">normalize_window: bool = False</em>, <em class="sig-param">shuffle: bool = False</em>, <em class="sig-param">output_dim: str = 'forecast_length'</em>, <em class="sig-param">forecast_length: int = 1</em>, <em class="sig-param">max_windows: int = 5000</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">random_seed: int = 1234</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.window_maker" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convert a dataset into slices with history and y forecast.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – <cite>wide</cite> format df with sorted index</p></li>
+<li><p><strong>window_size</strong> (<em>int</em>) – length of history to use for X window</p></li>
+<li><p><strong>input_dim</strong> (<em>str</em>) – univariate or multivariate. If multivariate, all series in single X row</p></li>
+<li><p><strong>shuffle</strong> (<em>bool</em>) – (deprecated)</p></li>
+<li><p><strong>output_dim</strong> (<em>str</em>) – ‘forecast_length’ or ‘1step’ where 1 step is basically forecast_length=1</p></li>
+<li><p><strong>forecast_length</strong> (<em>int</em>) – number of periods ahead that will be forecast</p></li>
+<li><p><strong>max_windows</strong> (<em>int</em>) – a cap on total number of windows to generate. If exceeded, random of this int are selected.</p></li>
+<li><p><strong>regression_type</strong> (<em>str</em>) – None or “user” if to try to concat regressor to windows</p></li>
+<li><p><strong>future_regressor</strong> (<em>pd.DataFrame</em>) – values of regressor if used</p></li>
+<li><p><strong>random_seed</strong> (<em>int</em>) – a consistent random</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>X, Y</p>
+</dd>
+</dl>
 </dd></dl>
 
 </section>

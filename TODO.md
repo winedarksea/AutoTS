@@ -15,16 +15,12 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* New Transfromer ScipyFilter
-* New models Univariate and MultivariateMotif
-* 'midhinge' and "weighted_mean" to AverageValueNaive
-* Add passing regressors to WindowRegression and made more efficient window generation
-* more plotting methods: plot_horizontal_transformers
-* for most -Regression type models, `model_params` is now treated as kwargs and can accept any args for that model
-* ExtraTrees and RadiusRegressor to -Regression type models
-* bug fix in generate_score_per_series
-* 'Generation' now tracked in results table, plus plotting method for generation loss
-
+* back_forecast for forecast on training data
+* Mosaic ensembles can now be used beyond training forecast_length and for shorter lengths too
+* best_model_name, best_model_params, and best_model_transformation_params AutoTS attributes now available
+* mean, median, and ffill NaN now handle fully NaN series by returning 0.
+* fixed bug that was causing mosaic generalization to fail if ffill/bfill handled all missing values
+* STLFilter and HPFilter and convolution_filter Transformers added
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

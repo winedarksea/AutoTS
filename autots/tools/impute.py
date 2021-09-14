@@ -12,26 +12,26 @@ def fill_zero(df):
 def fill_forward(df):
     """Fill NaN with previous values."""
     df = df.fillna(method='ffill')
-    df = df.fillna(method='bfill')
+    df = df.fillna(method='bfill').fillna(0)
     return df
 
 
 def fill_mean(df):
     """Fill NaN with mean."""
-    df = df.fillna(df.mean().to_dict())
+    df = df.fillna(df.mean().fillna(0).to_dict())
     return df
 
 
 def fill_median(df):
     """Fill NaN with median."""
-    df = df.fillna(df.median().to_dict())
+    df = df.fillna(df.median().fillna(0).to_dict())
     return df
 
 
 def rolling_mean(df, window: int = 10):
     """Fill NaN with mean of last window values."""
     df = df.fillna(df.rolling(window=window, min_periods=1).mean()).fillna(
-        df.mean().to_dict()
+        df.mean().fillna(0).to_dict()
     )
     return df
 
@@ -83,19 +83,24 @@ df_interpolate = [
     'pad',
     'nearest',
     'zero',
-    'slinear',
     'quadratic',
     'cubic',
     'spline',
     'barycentric',
-    'polynomial',
-    'krogh',
     'piecewise_polynomial',
     'spline',
     'pchip',
     'akima',
+]
+# these seem to cause more harm than good usually
+df_interpolate_messy = [
+    'polynomial',
+    'krogh',
+    'cubicspline',
     'from_derivatives',
-]  # 'cubicspline'
+    'slinear',
+]
+df_interpolate_full = list(set(df_interpolate + df_interpolate_messy))
 
 
 def FillNA(df, method: str = 'ffill', window: int = 10):
@@ -155,8 +160,11 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
             df.columns = cols
         return df
 
-    elif method in df_interpolate:
-        return df.interpolate(method=method, order=5).fillna(method='bfill')
+    elif method in df_interpolate_full:
+        df = df.interpolate(method=method, order=5).fillna(method='bfill')
+        if df.isnull().values.any():
+            df = fill_forward(df)
+        return df
 
     elif method is None or method == 'None':
         return df

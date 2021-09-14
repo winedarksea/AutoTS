@@ -9,6 +9,7 @@ from autots.datasets._base import (
     load_hourly,
     load_weekly,
     load_weekdays,
+    load_zeroes,
 )
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     'load_weekly',
     'load_weekdays',
     'load_live_daily',
+    'load_zeroes',
 ]

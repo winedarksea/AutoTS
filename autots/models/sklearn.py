@@ -852,7 +852,23 @@ def window_maker(
     future_regressor=None,
     random_seed: int = 1234,
 ):
-    """Convert a dataset into slices with history and y forecast."""
+    """Convert a dataset into slices with history and y forecast.
+
+    Args:
+        df (pd.DataFrame): `wide` format df with sorted index
+        window_size (int): length of history to use for X window
+        input_dim (str): univariate or multivariate. If multivariate, all series in single X row
+        shuffle (bool): (deprecated)
+        output_dim (str): 'forecast_length' or '1step' where 1 step is basically forecast_length=1
+        forecast_length (int): number of periods ahead that will be forecast
+        max_windows (int): a cap on total number of windows to generate. If exceeded, random of this int are selected.
+        regression_type (str): None or "user" if to try to concat regressor to windows
+        future_regressor (pd.DataFrame): values of regressor if used
+        random_seed (int): a consistent random
+
+    Returns:
+        X, Y
+    """
     if output_dim == '1step':
         forecast_length = 1
     phrase_n = forecast_length + window_size
@@ -890,7 +906,6 @@ def window_maker(
             Y = Y.ravel()
 
     except Exception as e:
-        # print(f"New numpy version of Window Regression failed {e}.")
         if str(regression_type).lower() == "user":
             if input_dim == "multivariate":
                 raise ValueError(
@@ -1506,6 +1521,8 @@ class DatepartRegression(ModelObject):
                 self.regression_type = None
 
         y = df.values
+        if y.shape[1] == 1:
+            y = y.ravel()
 
         X = date_part(df.index, method=self.datepart_method)
         if self.regression_type == 'User':

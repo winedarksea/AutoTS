@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots package &#8212; AutoTS 0.3.5 documentation</title>
+    <title>autots package &#8212; AutoTS 0.3.6 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -277,6 +277,20 @@ if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite
 <dd></dd></dl>
 
 <dl class="method">
+<dt id="autots.AutoTS.back_forecast">
+<code class="sig-name descname">back_forecast</code><span class="sig-paren">(</span><em class="sig-param">column=None</em>, <em class="sig-param">n_splits: int = 3</em>, <em class="sig-param">tail: int = None</em>, <em class="sig-param">verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.back_forecast" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create forecasts for the historical training data, ie. backcast or back forecast.</p>
+<p>This actually forecasts on historical data, these are not fit model values as are often returned by other packages.
+As such, this will be slower, but more representative of real world model performance.
+There may be jumps in data between chunks.</p>
+<p>Args are same as for model_forecast except…
+n_splits(int): how many pieces to split data into. Pass 2 for fastest, or “auto” for best accuracy
+column (str): if to run on only one column, pass column name. Faster than full.
+tail (int): df.tail() of the dataset, back_forecast is only run on n most recent observations.</p>
+<p>Returns a standard prediction object (access .forecast, .lower_forecast, .upper_forecast)</p>
+</dd></dl>
+
+<dl class="method">
 <dt id="autots.AutoTS.export_template">
 <code class="sig-name descname">export_template</code><span class="sig-paren">(</span><em class="sig-param">filename=None</em>, <em class="sig-param">models: str = 'best'</em>, <em class="sig-param">n: int = 5</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">include_results: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.export_template" title="Permalink to this definition">¶</a></dt>
 <dd><p>Export top results as a reusable template.</p>
@@ -368,6 +382,21 @@ Must be done before the AutoTS object is .fit().</p>
 <dt id="autots.AutoTS.mosaic_to_df">
 <code class="sig-name descname">mosaic_to_df</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.mosaic_to_df" title="Permalink to this definition">¶</a></dt>
 <dd><p>Helper function to create a readable df of models in mosaic.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.AutoTS.plot_backforecast">
+<code class="sig-name descname">plot_backforecast</code><span class="sig-paren">(</span><em class="sig-param">series=None</em>, <em class="sig-param">n_splits: int = 3</em>, <em class="sig-param">start_date=None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.plot_backforecast" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plot the historical data and fit forecast on historic.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>series</strong> (<em>str</em><em> or </em><em>list</em>) – column names of time series</p></li>
+<li><p><strong>n_splits</strong> (<em>int</em><em> or </em><em>str</em>) – “auto”, number &gt; 2, higher more accurate but slower</p></li>
+<li><p><strong>passed to pd.DataFrame.plot</strong><strong>(</strong><strong>)</strong> (<em>**kwargs</em>) – </p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="method">
@@ -532,7 +561,9 @@ most of the interpolate methods from pandas.interpolate</p>
 ‘ClipOutliers’ - remove outliers
 ‘Discretize’ - bin or round data into groups
 ‘DatepartRegression’ - move a trend trained on datetime index
-“ScipyFilter” - filter data (lose information but smoother!) from scipy</p>
+“ScipyFilter” - filter data (lose information but smoother!) from scipy
+“HPFilter” - statsmodels hp_filter
+“STLFilter” - seasonal decompose and keep just one part of decomposition.</p>
 </p></li>
 <li><p><strong>transformation_params</strong> (<em>dict</em>) – params of transformers {0: {}, 1: {‘model’: ‘Poisson’}, …}
 pass through dictionary of empty dictionaries to utilize defaults</p></li>
@@ -616,7 +647,7 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 
 <dl class="function">
 <dt id="autots.RandomTransform">
-<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.05</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.05</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.1</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'DatepartRegression': 0.02</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.05</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.05</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.6</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.2</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.1</em>, <em class="sig-param">'mean': 0.05</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.05</em>, <em class="sig-param">None: 0.01</em>, <em class="sig-param">'interpolate': 0.6}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.RandomTransform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.05</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.05</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.1</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.02</em>, <em class="sig-param">'DatepartRegression': 0.02</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.05</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.05</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.6</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.2</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.1</em>, <em class="sig-param">'mean': 0.05</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.05</em>, <em class="sig-param">None: 0.01</em>, <em class="sig-param">'interpolate': 0.6}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.RandomTransform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a dict of randomly choosen transformation selections.</p>
 <p>DatepartRegression is used as a signal that slow parameters are allowed.</p>
 </dd></dl>

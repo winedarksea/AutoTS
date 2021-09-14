@@ -89,6 +89,7 @@ class AutoTSTest(unittest.TestCase):
         forecasts_df = prediction.forecast
         initial_results = model.results()
         validation_results = model.results("validation")
+        back_forecast = model.back_forecast(n_splits=2, verbose=0).forecast
 
         validated_count = (validation_results['Runs'] == (num_validations + 1)).sum()
 
@@ -142,6 +143,8 @@ class AutoTSTest(unittest.TestCase):
         self.assertEqual(len(template_dict['models'].keys()), template_dict['model_count'])
         # test that actually the best model (or nearly) was chosen
         self.assertGreater(validation_results['Score'].quantile(0.05), best_model_result['Score'].iloc[0])
+        # test back_forecast
+        self.assertTrue((back_forecast.index == model.df_wide_numeric.index).all(), msg="Back forecasting failed to have equivalent index to train.")
 
         # a
         # b
@@ -159,7 +162,7 @@ class AutoTSTest(unittest.TestCase):
         n_jobs = 'auto'
         verbose = -1
         validation_method = "backwards"
-        generations = 0
+        generations = 1
         num_validations = 1
         models_to_validate = 0.10  # must be a decimal percent for this test
 

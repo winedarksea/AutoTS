@@ -364,7 +364,7 @@ def simple_train_test_split(
         (df.shape[0]) - forecast_length
     ):
         raise ValueError(
-            "forecast_length is too large, not enough training data, alter min_allowed_train_percent to override, or reduce validation number, if applicable"
+            "forecast_length is too large for training data, alter min_allowed_train_percent to override"
         )
 
     train = df.head((df.shape[0]) - forecast_length)

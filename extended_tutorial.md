@@ -308,11 +308,14 @@ result.forecast
 `pip install autots`
 ### Requirements:
 	Python >= 3.6
-	numpy >= 1.20 (Sliding Window in Motif and WindowRegression)
+	numpy
+		>= 1.20 (Sliding Window in Motif and WindowRegression)
 	pandas
-	sklearn 	>= 0.20.0
-				>= 0.23.0 (PoissonReg)
-				>= 0.24.0 (OrdinalEncoder handle_unknown)
+		>= 1.1.0 (prediction.long_form_results())
+	sklearn
+		>= 0.23.0 (PoissonReg)
+		>= 0.24.0 (OrdinalEncoder handle_unknown)
+		>? (IterativeImputer, HistGradientBoostingRegressor)
 	statsmodels
 
 Of these, numpy and pandas are critical. 
@@ -388,22 +391,18 @@ pip install autots
 #### Intel conda channel installation (fastest, also, more prone to bugs)
 https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html
 ```shell
-# create the environment. Intelpy compatability is often a version or two behind latest py
-conda create -n intelpy -c intel python=3.7 intelpython3_full
-conda activate intelpy
+# create the environment
+conda create -n intelpython -c intel python=3.7 intelpython3_full
+conda activate intelpython
 
 # install additional packages as desired
 conda install -c intel statsmodels lightgbm tensorflow
-conda install -c intel tensorflow-probability
-python -m pip install mxnet
+python -m pip install mxnet --no-deps
 python -m pip install gluonts
-# conda install -c anaconda tornado pystan  # may be necessary for fbprophet
-python -m pip install prophet
+conda install -c conda-forge prophet
 
-pip install autots
+python -m pip install autots
 
-# also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html
-# pip install intel-tensorflow-avx512  and conda install tensorflow-mkl
 # MKL_NUM_THREADS, USE_DAAL4PY_SKLEARN=1
 ```
 

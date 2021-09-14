@@ -1,10 +1,12 @@
 """Tools for generating and forecasting with ensembles of models."""
+import random
 import datetime
 import numpy as np
 import pandas as pd
 import json
 from autots.models.base import PredictionObject
 from autots.models.model_list import no_shared
+from autots.tools.impute import fill_median
 
 
 horizontal_aliases = ['horizontal', 'probabilistic']
@@ -192,6 +194,7 @@ def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
     # known = {'EXUSEU': 'xx1', 'MCOILWTICO': 'xx2', 'CSUSHPISA': 'xx3'}
     columnz = df_train.columns.tolist()
     X = summarize_series(df_train).transpose()
+    X = fill_median(X)
     known_l = list(known.keys())
     unknown = list(set(columnz) - set(known_l))
     Xt = X.loc[known_l]
@@ -235,10 +238,10 @@ def mosaic_classifier(df_train, known):
             index=None if len(p_full) > 1 else [0],
         )
         upload = pd.concat([upload, missing_rows])
-    X = (
-        summarize_series(df_train)
-        .transpose()
-        .merge(upload, left_index=True, right_on="series_id")
+    X = fill_median(
+        (summarize_series(df_train).transpose()).merge(
+            upload, left_index=True, right_on="series_id"
+        )
     )
     X.set_index("series_id", inplace=True)  # .drop(columns=['series_id'], inplace=True)
     to_predict = X[X['model_id'].isna()].drop(columns=['model_id'])
@@ -295,8 +298,8 @@ def generalize_horizontal(
         # remove unavailable models
         mosaicy = pd.DataFrame(mosaicy[mosaicy.isin(available_models)])
         # so we can fill some missing by just using a forward fill, should be good enough
-        mosaicy.fillna(method='ffill', limit=3, inplace=True)
-        mosaicy.fillna(method='bfill', limit=3, inplace=True)
+        mosaicy.fillna(method='ffill', limit=5, inplace=True)
+        mosaicy.fillna(method='bfill', limit=5, inplace=True)
         if mosaicy.isna().any().any() or mosaicy.shape[1] != df_train.shape[1]:
             if full_models is not None:
                 k2 = pd.DataFrame(mosaicy[mosaicy.isin(full_models)])
@@ -305,7 +308,7 @@ def generalize_horizontal(
             final = mosaic_classifier(df_train, known=k2)
             return final.to_dict()
         else:
-            return known_matches
+            return mosaicy.to_dict()
 
     else:
         # remove any unavailable models
@@ -1155,6 +1158,7 @@ def MosaicEnsemble(
 
     # this is meant to fill in any failures
     startTime = datetime.datetime.now()
+    sample_idx = next(iter(forecasts.values())).index
     available_models = [mod for mod, fcs in forecasts.items() if fcs.shape[0] > 0]
     train_size = df_train.shape
     full_models = [
@@ -1183,6 +1187,23 @@ def MosaicEnsemble(
         ignore_index=False,
     ).reset_index(drop=False)
     melted["forecast_period"] = melted["forecast_period"].astype(int)
+    max_forecast_period = melted["forecast_period"].max()
+    # handle forecast length being longer than template
+    len_sample_index = len(sample_idx)
+    if len_sample_index > (max_forecast_period + 1):
+        print("Mosaic forecast length longer than template provided.")
+        base_df = melted[melted['forecast_period'] == max_forecast_period]
+        needed_stamps = len_sample_index - (max_forecast_period + 1)
+        newdf = pd.DataFrame(np.repeat(base_df.to_numpy(), needed_stamps, axis=0))
+        newdf.columns = base_df.columns
+        newdf['forecast_period'] = np.tile(
+            np.arange(max_forecast_period + 1, needed_stamps + 1 + max_forecast_period),
+            base_df.shape[0],
+        )
+        melted = pd.concat([melted, newdf])
+    elif len_sample_index < (max_forecast_period + 1):
+        print("Mosaic forecast length less than template provided.")
+        melted = melted[melted['forecast_period'] < len_sample_index]
 
     fore, u_fore, l_fore = [], [], []
     row = (0, "Unknown", "Unknown", "Unknown")
@@ -1192,8 +1213,14 @@ def MosaicEnsemble(
             u_fore.append(upper_forecasts[row[3]][row[2]].iloc[row[1]])
             l_fore.append(lower_forecasts[row[3]][row[2]].iloc[row[1]])
     except Exception as e:
+        m0 = f"{row[3]} in available_models: {row[3] in available_models}, "
+        mi = (
+            m0
+            + f"In forecast: {row[3] in forecasts.keys()}, in upper: {row[3] in upper_forecasts.keys()}, in Lower: {row[3] in lower_forecasts.keys()}"
+        )
         raise ValueError(
-            f"Mosaic Ensemble failed on model {row[3]} series {row[2]} and period {row[1]} due to missing model: {e}"
+            f"Mosaic Ensemble failed on model {row[3]} series {row[2]} and period {row[1]} due to missing model: {e} "
+            + mi
         )
     melted[
         'forecast'
@@ -1205,7 +1232,6 @@ def MosaicEnsemble(
         'lower_forecast'
     ] = l_fore  # [lower_forecasts[row[3]][row[2]].iloc[row[1]] for row in melted.itertuples()]
 
-    sample_idx = forecasts[next(iter(forecasts))].index
     forecast_df = melted.pivot(
         values="forecast", columns="series_id", index="forecast_period"
     )

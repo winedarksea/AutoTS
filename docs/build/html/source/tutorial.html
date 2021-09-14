@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Tutorial &#8212; AutoTS 0.3.5 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.3.6 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -334,11 +334,14 @@ Unlike <code class="docutils literal notranslate"><span class="pre">horizontal</
 <section id="requirements">
 <h3>Requirements:<a class="headerlink" href="#requirements" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>Python &gt;= 3.6
-numpy &gt;= 1.20 (Sliding Window in Motif and WindowRegression)
+numpy
+    &gt;= 1.20 (Sliding Window in Motif and WindowRegression)
 pandas
-sklearn     &gt;= 0.20.0
-            &gt;= 0.23.0 (PoissonReg)
-            &gt;= 0.24.0 (OrdinalEncoder handle_unknown)
+    &gt;= 1.1.0 (prediction.long_form_results())
+sklearn
+    &gt;= 0.23.0 (PoissonReg)
+    &gt;= 0.24.0 (OrdinalEncoder handle_unknown)
+    &gt;? (IterativeImputer, HistGradientBoostingRegressor)
 statsmodels
 </pre></div>
 </div>
@@ -417,22 +420,18 @@ pip install autots
 <section id="intel-conda-channel-installation-fastest-also-more-prone-to-bugs">
 <h4>Intel conda channel installation (fastest, also, more prone to bugs)<a class="headerlink" href="#intel-conda-channel-installation-fastest-also-more-prone-to-bugs" title="Permalink to this headline">¶</a></h4>
 <p><a class="reference external" href="https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html">https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html</a></p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create the environment. Intelpy compatability is often a version or two behind latest py</span>
-conda create -n intelpy -c intel <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.7 intelpython3_full
-conda activate intelpy
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create the environment</span>
+conda create -n intelpython -c intel <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.7 intelpython3_full
+conda activate intelpython
 
 <span class="c1"># install additional packages as desired</span>
 conda install -c intel statsmodels lightgbm tensorflow
-conda install -c intel tensorflow-probability
-python -m pip install mxnet
+python -m pip install mxnet --no-deps
 python -m pip install gluonts
-<span class="c1"># conda install -c anaconda tornado pystan  # may be necessary for fbprophet</span>
-python -m pip install prophet
+conda install -c conda-forge prophet
 
-pip install autots
+python -m pip install autots
 
-<span class="c1"># also checkout daal4py: https://intelpython.github.io/daal4py/sklearn.html</span>
-<span class="c1"># pip install intel-tensorflow-avx512  and conda install tensorflow-mkl</span>
 <span class="c1"># MKL_NUM_THREADS, USE_DAAL4PY_SKLEARN=1</span>
 </pre></div>
 </div>
