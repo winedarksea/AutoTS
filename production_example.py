@@ -194,7 +194,8 @@ if graph:
         plt.show()
 
         series = model.horizontal_to_df()
-        series = series.sample(25, replace=False)
+        if series.shape[0] > 25:
+            series = series.sample(25, replace=False)
         series[['log(Volatility)', 'log(Mean)']] = np.log(
             series[['Volatility', 'Mean']]
         )

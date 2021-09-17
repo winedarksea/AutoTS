@@ -15,12 +15,9 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* back_forecast for forecast on training data
-* Mosaic ensembles can now be used beyond training forecast_length and for shorter lengths too
-* best_model_name, best_model_params, and best_model_transformation_params AutoTS attributes now available
-* mean, median, and ffill NaN now handle fully NaN series by returning 0.
-* fixed bug that was causing mosaic generalization to fail if ffill/bfill handled all missing values
-* STLFilter and HPFilter and convolution_filter Transformers added
+* bug fix in fake_date imputation
+* bug fix in Round
+* make SinTrend fail if it fails on all series (may revert this, unsure)
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

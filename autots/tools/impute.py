@@ -58,23 +58,29 @@ def fake_date_fill(df, back_method: str = 'slice'):
             - 'keepna' - keep the lagging na
     """
     df_index = df.index.to_series().copy()
-    df = df.sort_index(ascending=False)
-    df = df.apply(lambda x: pd.Series(x.dropna().values))
-    df = df.sort_index(ascending=False)
-    df.index = df_index.tail(len(df.index))
-    df = df.dropna(how='all', axis=0)
+    df2 = df.sort_index(ascending=False).copy()
+    df2 = df2.apply(lambda x: pd.Series(x.dropna().values))
+    df2 = df2.sort_index(ascending=False)
+    df2.index = df_index.tail(len(df2.index))
+    df2 = df2.dropna(how='all', axis=0)
+    if df2.empty:
+        df2 = df.fillna(0)
 
     if back_method == 'bfill':
-        df = df.fillna(method='bfill')
+        df2 = df2.fillna(method='bfill')
         return df
     elif back_method == 'slice':
-        df = df.dropna(how='any', axis=0)
-        return df
+        thresh = int(df.shape[1] * 0.5)
+        thresh = thresh if thresh > 1 else 1
+        df3 = df2.dropna(thresh=thresh, axis=0).fillna(method='bfill')
+        if df3.empty or df3.shape[1] < 8:
+            df3 = df2.fillna(0)
+        return df3
     elif back_method == 'keepna':
-        return df
+        return df2
     else:
         print('back_method not recognized in fake_date_fill')
-        return df
+        return df2
 
 
 df_interpolate = [

@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 use_template = False
 use_m5 = False  # long = False
 force_univariate = False  # long = False
+back_forecast = False
 
 # this is the template file imported:
 example_filename = "example_export.csv"  # .csv/.json
@@ -49,17 +50,6 @@ weights_hourly = {'traffic_volume': 10}
 weights_monthly = {'GS10': 5}
 weights_weekly = {
     'Weekly Minnesota Midgrade Conventional Retail Gasoline Prices  (Dollars per Gallon)': 2
-}
-grouping_monthly = {
-    'CSUSHPISA': 'A',
-    'EMVOVERALLEMV': 'A',
-    'EXCAUS': 'exchange rates',
-    'EXCHUS': 'exchange rates',
-    'EXUSEU': 'exchange rates',
-    'MCOILWTICO': 'C',
-    'T10YIEM': 'C',
-    'wrong': 'C',
-    'USEPUINDXM': 'C',
 }
 
 model_list = [
@@ -193,7 +183,8 @@ if model.best_model['Ensemble'].iloc[0] == 2:
         print(mosaic_df[mosaic_df.columns[0:5]].head(5))
 
 plt.show()
-model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
+if back_forecast:
+    model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
 
 """
 # Import/Export

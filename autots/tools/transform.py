@@ -537,16 +537,21 @@ class SinTrend(EmptyTransformer):
         X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
         self.sin_params = pd.DataFrame()
         # make this faster (250 columns in 2.5 seconds isn't bad, though)
+        fail_count = 0
         for column in df.columns:
+            vals = 0
             try:
                 y = df[column].values
                 vals = self.fit_sin(X, y)
                 current_param = pd.DataFrame(vals, index=[column])
             except Exception as e:
-                print(f"SinTrend failed with {repr(e)}")
+                print(f"SinTrend failed with {repr(e)} for {column} with {vals}")
                 current_param = pd.DataFrame(
                     {"amp": 0, "omega": 1, "phase": 1, "offset": 1}, index=[column]
                 )
+                fail_count += 1
+            if fail_count >= df.shape[1]:
+                raise ValueError("SinTrend Transformer failed on all series.")
             self.sin_params = pd.concat([self.sin_params, current_param], axis=0)
         self.shape = df.shape
         return self
@@ -1375,21 +1380,17 @@ class Round(EmptyTransformer):
 
     def __init__(
         self,
-        method: str = "middle",
         decimals: int = 0,
         on_transform: bool = False,
         on_inverse: bool = True,
+        force_int: bool = False,
         **kwargs,
     ):
         super().__init__(name="Round")
-        self.method = method
-        self.decimals = decimals
+        self.decimals = int(decimals)
         self.on_transform = on_transform
         self.on_inverse = on_inverse
-
-        self.force_int = False
-        if decimals <= 0:
-            self.force_int = True
+        self.force_int = force_int
 
     @staticmethod
     def get_new_params(method: str = 'random'):
@@ -1399,7 +1400,6 @@ class Round(EmptyTransformer):
             on_inverse_c = True
         choice = random.choices([-2, -1, 0, 1, 2], [0.1, 0.2, 0.4, 0.2, 0.1], k=1)[0]
         return {
-            "model": "middle",
             "decimals": choice,
             "on_transform": on_transform_c,
             "on_inverse": on_inverse_c,
@@ -2408,8 +2408,8 @@ del superfast_transformer_dict['IntermittentOccurrence']
 del superfast_transformer_dict['cffilter']
 del superfast_transformer_dict['QuantileTransformer']
 del superfast_transformer_dict['PowerTransformer']
-del fast_transformer_dict['convolution_filter']
-del fast_transformer_dict['HPFilter']
+del superfast_transformer_dict['convolution_filter']
+del superfast_transformer_dict['HPFilter']
 
 # probability dictionary of FillNA methods
 na_probs = {

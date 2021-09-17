@@ -117,7 +117,7 @@ class FBProphet(ModelObject):
             df (pandas.DataFrame): Datetime Indexed
         """
         if not _has_prophet:
-            raise ImportError("Package fbprophet is required")
+            raise ImportError("Package prophet is required")
 
         df = self.basic_profile(df)
         self.regressor_train = None
@@ -182,7 +182,7 @@ class FBProphet(ModelObject):
             if just_point_forecast == True, a dataframe of point forecasts
         """
         if not _has_prophet:
-            raise ImportError("Package fbprophet is required")
+            raise ImportError("Package prophet is required")
         predictStartTime = datetime.datetime.now()
         # if self.regression_type != None:
         #   assert len(future_regressor) == forecast_length, "regressor not equal to forecast length"
