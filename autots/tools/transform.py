@@ -1,5 +1,6 @@
 """Preprocessing data methods."""
 import random
+import warnings
 import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
@@ -513,7 +514,9 @@ class SinTrend(EmptyTransformer):
         def sinfunc(t, A, w, p, c):
             return A * np.sin(w * t + p) + c
 
-        popt, pcov = scipy.optimize.curve_fit(sinfunc, tt, yy, p0=guess, maxfev=10000)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            popt, pcov = scipy.optimize.curve_fit(sinfunc, tt, yy, p0=guess, maxfev=10000)
         A, w, p, c = popt
         # f = w/(2.*np.pi)
         # fitfunc = lambda t: A * np.sin(w*t + p) + c

@@ -880,8 +880,8 @@ class AutoTS(object):
                     min_allowed_train_percent=self.min_allowed_train_percent,
                     verbose=self.verbose,
                 )
-                self.validation_train_indexes.append(val_df_train)
-                self.validation_test_indexes.append(val_df_test)
+                self.validation_train_indexes.append(val_df_train.index)
+                self.validation_test_indexes.append(val_df_test.index)
                 if self.verbose >= 2:
                     print(f'Validation index is {val_df_train.index}')
 

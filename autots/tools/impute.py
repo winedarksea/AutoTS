@@ -67,14 +67,16 @@ def fake_date_fill(df, back_method: str = 'slice'):
         df2 = df.fillna(0)
 
     if back_method == 'bfill':
-        df2 = df2.fillna(method='bfill')
+        df2 = fill_forward(df2)
         return df
     elif back_method == 'slice':
         thresh = int(df.shape[1] * 0.5)
         thresh = thresh if thresh > 1 else 1
-        df3 = df2.dropna(thresh=thresh, axis=0).fillna(method='bfill')
-        if df3.empty or df3.shape[1] < 8:
-            df3 = df2.fillna(0)
+        df3 = df2.dropna(thresh=thresh, axis=0)
+        if df3.empty or df3.shape[0] < 8:
+            df3 = fill_forward(df2)
+        else:
+            df3 = fill_forward(df3)
         return df3
     elif back_method == 'keepna':
         return df2

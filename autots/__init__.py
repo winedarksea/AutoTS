@@ -11,6 +11,7 @@ from autots.datasets import (
     load_weekly,
     load_weekdays,
     load_live_daily,
+    load_linear,
 )
 
 from autots.evaluator.auto_ts import AutoTS
@@ -31,6 +32,7 @@ __all__ = [
     'load_weekly',
     'load_weekdays',
     'load_live_daily',
+    'load_linear',
     'AutoTS',
     'TransformTS',
     'GeneralTransformer',

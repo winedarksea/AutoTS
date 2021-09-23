@@ -56,7 +56,9 @@ def SPL(A, F, df_train, quantile):
     """Scaled pinball loss."""
     # scaler = df_train.tail(1000).diff().abs().mean(axis=0)
     # scaler = np.abs(np.diff(df_train[-1000:], axis=0)).mean(axis=0)
-    scaler = np.nanmean(np.abs(np.diff(df_train[-1000:], axis=0)), axis=0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        scaler = np.nanmean(np.abs(np.diff(df_train[-1000:], axis=0)), axis=0)
     # need to handle zeroes to prevent div 0 errors.
     # this will tend to make that series irrelevant to the overall evaluation
     fill_val = np.nanmax(scaler)
