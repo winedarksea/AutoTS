@@ -30,6 +30,7 @@ from autots.models.basics import (
     SeasonalNaive,
     ZeroesNaive,
     Motif,
+    NVAR,
 )
 from autots.models.statsmodels import (
     GLS,
@@ -422,6 +423,15 @@ def ModelMonster(
             verbose=verbose,
             n_jobs=n_jobs,
             multivariate=False,
+            **parameters,
+        )
+        return model
+    elif model == 'NVAR':
+        model = NVAR(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
             **parameters,
         )
         return model

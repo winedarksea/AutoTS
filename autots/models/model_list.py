@@ -25,6 +25,7 @@ all_models = [
     "Greykite",
     'UnivariateMotif',
     'MultivariateMotif',
+    'NVAR',
 ]
 default = [
     'ZeroesNaive',
@@ -44,6 +45,7 @@ default = [
     'DatepartRegression',
     'UnivariateRegression',
     'UnivariateMotif',
+    'NVAR',
 ]
 # fastest models at any scale
 superfast = [
@@ -69,6 +71,7 @@ fast = [
     # 'ComponentAnalysis',
     'DatepartRegression',
     'UnivariateRegression',
+    'NVAR',
 ]
 # models that can scale well if many CPU cores are available
 parallel = [
@@ -77,7 +80,6 @@ parallel = [
     'ARIMA',
     'GLM',
     'UnobservedComponents',
-    # 'MotifSimulation',
     "Greykite",
     'UnivariateMotif',
     'MultivariateMotif',
@@ -107,6 +109,7 @@ probabilistic = [
     'VAR',
     'UnivariateMotif',
     "MultivariateMotif",
+    'NVAR',
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -119,6 +122,7 @@ multivariate = [
     'VAR',
     'ComponentAnalysis',
     "MultivariateMotif",
+    'NVAR',
 ]
 # USED IN AUTO_MODEL, models with no parameters
 no_params = ['ZeroesNaive', 'LastValueNaive', 'GLS']
@@ -143,6 +147,7 @@ recombination_approved = [
     "Greykite",
     'UnivariateMotif',
     "MultivariateMotif",
+    'NVAR',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [

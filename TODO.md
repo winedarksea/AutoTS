@@ -18,6 +18,8 @@
 * bug fix in fake_date imputation
 * bug fix in Round
 * make SinTrend fail if it fails on all series (may revert this, unsure)
+* load_linear and load_sine artificial datasets
+* new NVAR model based on https://github.com/quantinfo/ng-rc-paper-code/
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
