@@ -1316,6 +1316,8 @@ def predict_reservoir(df, forecast_length, prediction_interval=None, warmup_pts=
 
     This is very slow and memory hungry when n series/dimensions gets big (ie > 50).
     Already effectively parallelized by linpack it seems.
+    It's very sensitive to error in most recent data point!
+    The seed_pts and seed_weighted can help address that.
 
     Args:
         name (str): String to identify class
@@ -1325,6 +1327,8 @@ def predict_reservoir(df, forecast_length, prediction_interval=None, warmup_pts=
         ridge_param (float): standard lambda for ridge regression
         warmup_pts (int): in reality, passing 1 here (no warmup) is fine
         seed_pts (int): number of back steps to use to simulate future
+            if > 10, also increases search space of probabilistic forecast
+        seed_weighted (str): how to summarize most recent points if seed_pts > 1
     """
     assert k > 0, "nvar `k` must be > 0"
     assert warmup_pts > 0, "nvar `warmup_pts` must be > 0"
@@ -1414,7 +1418,7 @@ def predict_reservoir(df, forecast_length, prediction_interval=None, warmup_pts=
         # this works by using n most recent points as different starting "seeds"
         # this has the advantage of generating perfect bounds on perfect functions
         # on real world data, well, things will be less perfect...
-        n_samples = 10
+        n_samples = 10 if seed_pts <= 10 else seed_pts
         interval_list = []
         for ns in range(n_samples):
 
@@ -1609,9 +1613,9 @@ class NVAR(ModelObject):
         ridge_choice = random.choices([0, -1, -2, -3, -4, -5, -6, -7, -8], [0.1, 0.1, 0.1, 0.5, 0.1, 0.1, 0.5, 0.1, 0.1])[0]
         ridge_choice = 2 * 10 ** ridge_choice
         warmup_pts_choice = random.choices([1, 50, 250], [0.9, 0.1, 0.1])[0]
-        seed_pts_choice = random.choices([1, 10, 100], [0.7, 0.3, 0.01])[0]
+        seed_pts_choice = random.choices([1, 10, 100], [0.8, 0.2, 0.01])[0]
         if seed_pts_choice > 1:
-            seed_weighted_choice = random.choices([None, "linear", "exponential"], [0.5, 0.2, 0.3])[0]
+            seed_weighted_choice = random.choices([None, "linear", "exponential"], [0.3, 0.3, 0.3])[0]
         else:
             seed_weighted_choice = None
         batch_size_choice = random.choices([5, 10, 20, 30], [0.5, 0.2, 0.01, 0.001])[0]
