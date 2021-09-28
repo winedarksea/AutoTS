@@ -44,6 +44,8 @@ def create_lagged_regressor(
         summarize = summarize.lower()
     if isinstance(backfill, str):
         backfill = backfill.lower()
+    if isinstance(df, pd.Series):
+        df = df.to_frame()
     dates = df.index
     df_cols = df.columns
 

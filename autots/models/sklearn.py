@@ -115,16 +115,24 @@ def retrieve_regressor(
     verbose_bool: bool = False,
     random_seed: int = 2020,
     n_jobs: int = 1,
+    multioutput: bool = True,
 ):
     """Convert a model param dict to model object for regression frameworks."""
     model_class = regression_model['model']
     model_param_dict = regression_model.get("model_params", {})
     if model_class == 'ElasticNet':
-        from sklearn.linear_model import MultiTaskElasticNet
-
-        regr = MultiTaskElasticNet(
-            alpha=1.0, random_state=random_seed, **model_param_dict
-        )
+        if multioutput:
+            from sklearn.linear_model import MultiTaskElasticNet
+    
+            regr = MultiTaskElasticNet(
+                alpha=1.0, random_state=random_seed, **model_param_dict
+            )
+        else:
+            from sklearn.linear_model import ElasticNet
+    
+            regr = ElasticNet(
+                alpha=1.0, random_state=random_seed, **model_param_dict
+            )
         return regr
     elif model_class == 'DecisionTree':
         from sklearn.tree import DecisionTreeRegressor
@@ -154,109 +162,126 @@ def retrieve_regressor(
         )
         return regr
     elif model_class == 'KNN':
-        from sklearn.multioutput import MultiOutputRegressor
         from sklearn.neighbors import KNeighborsRegressor
 
-        regr = MultiOutputRegressor(
-            KNeighborsRegressor(**model_param_dict),
-            n_jobs=n_jobs,
-        )
+        if multioutput:
+            from sklearn.multioutput import MultiOutputRegressor
+
+            regr = MultiOutputRegressor(
+                KNeighborsRegressor(**model_param_dict),
+                n_jobs=n_jobs,
+            )
+        else:
+            regr = KNeighborsRegressor(**model_param_dict, n_jobs=n_jobs)
         return regr
     elif model_class == 'HistGradientBoost':
-        from sklearn.multioutput import MultiOutputRegressor
-
         try:
             from sklearn.experimental import enable_hist_gradient_boosting  # noqa
         except Exception:
             pass
         from sklearn.ensemble import HistGradientBoostingRegressor
+        
+        if multioutput:
+            from sklearn.multioutput import MultiOutputRegressor
 
-        regr = MultiOutputRegressor(
-            HistGradientBoostingRegressor(
-                max_iter=200,
-                verbose=int(verbose_bool),
-                random_state=random_seed,
-                **model_param_dict,
+            regr = MultiOutputRegressor(
+                HistGradientBoostingRegressor(
+                    max_iter=200,
+                    verbose=int(verbose_bool),
+                    random_state=random_seed,
+                    **model_param_dict,
+                )
             )
-        )
+        else:
+            regr = HistGradientBoostingRegressor(
+                    max_iter=200,
+                    verbose=int(verbose_bool),
+                    random_state=random_seed,
+                    **model_param_dict,
+            )
         return regr
     elif model_class == 'LightGBM':
-        from sklearn.multioutput import RegressorChain
         from lightgbm import LGBMRegressor
 
-        regr = RegressorChain(
-            LGBMRegressor(
+        regr = LGBMRegressor(
                 verbose=int(verbose_bool),
                 random_state=random_seed,
                 n_jobs=n_jobs,
                 **model_param_dict,
-            )
         )
-        return regr
+        if multioutput:
+            from sklearn.multioutput import RegressorChain
+
+            return RegressorChain(regr)
+        else:
+            return regr
     elif model_class == 'Adaboost':
-        from sklearn.multioutput import MultiOutputRegressor
         from sklearn.ensemble import AdaBoostRegressor
 
         if regression_model["model_params"]['base_estimator'] == 'SVR':
             from sklearn.svm import LinearSVR
 
             svc = LinearSVR(verbose=verbose, random_state=random_seed, max_iter=1500)
-            regr = MultiOutputRegressor(
-                AdaBoostRegressor(
+            regr = AdaBoostRegressor(
                     base_estimator=svc,
                     n_estimators=regression_model["model_params"]['n_estimators'],
                     loss=regression_model["model_params"]['loss'],
                     learning_rate=regression_model["model_params"]['learning_rate'],
                     random_state=random_seed,
-                ),
-                n_jobs=n_jobs,
             )
-            return regr
         elif regression_model["model_params"]['base_estimator'] == 'LinReg':
             from sklearn.linear_model import LinearRegression
 
             linreg = LinearRegression()
-            regr = MultiOutputRegressor(
-                AdaBoostRegressor(
+            regr = AdaBoostRegressor(
                     base_estimator=linreg,
                     n_estimators=regression_model["model_params"]['n_estimators'],
                     loss=regression_model["model_params"]['loss'],
                     learning_rate=regression_model["model_params"]['learning_rate'],
                     random_state=random_seed,
-                ),
-                n_jobs=n_jobs,
             )
-            return regr
         else:
-            regr = MultiOutputRegressor(
-                AdaBoostRegressor(random_state=random_seed, **model_param_dict),
-                n_jobs=n_jobs,
-            )
+            regr = AdaBoostRegressor(random_state=random_seed, **model_param_dict)
+        if multioutput:
+            from sklearn.multioutput import MultiOutputRegressor
+
+            return MultiOutputRegressor(regr, n_jobs=n_jobs)
+        else:
             return regr
     elif model_class == 'xgboost':
         import xgboost as xgb
-        from sklearn.multioutput import MultiOutputRegressor
+        if multioutput:
+            from sklearn.multioutput import MultiOutputRegressor
 
-        regr = MultiOutputRegressor(
-            xgb.XGBRegressor(verbosity=verbose, **model_param_dict),
-            n_jobs=n_jobs,
-        )
+            regr = MultiOutputRegressor(
+                xgb.XGBRegressor(verbosity=verbose, **model_param_dict),
+                n_jobs=n_jobs,
+            )
+        else:
+            regr = xgb.XGBRegressor(verbosity=verbose, **model_param_dict, n_jobs=n_jobs)
         return regr
     elif model_class == 'SVM':
-        from sklearn.multioutput import MultiOutputRegressor
         from sklearn.svm import LinearSVR
+        if multioutput:
+            from sklearn.multioutput import MultiOutputRegressor
 
-        regr = MultiOutputRegressor(
-            LinearSVR(verbose=verbose_bool, **model_param_dict),
-            n_jobs=n_jobs,
-        )
+            regr = MultiOutputRegressor(
+                LinearSVR(verbose=verbose_bool, **model_param_dict),
+                n_jobs=n_jobs,
+            )
+        else:
+            regr = LinearSVR(verbose=verbose_bool, **model_param_dict)
         return regr
     elif model_class == 'BayesianRidge':
-        from sklearn.multioutput import RegressorChain
         from sklearn.linear_model import BayesianRidge
 
-        regr = RegressorChain(BayesianRidge(**model_param_dict))
-        return regr
+        regr = BayesianRidge(**model_param_dict)
+        if multioutput:
+            from sklearn.multioutput import RegressorChain
+
+            return RegressorChain(regr)
+        else:
+            return regr
     elif model_class == "ExtraTrees":
         from sklearn.ensemble import ExtraTreesRegressor
 
@@ -323,7 +348,7 @@ def generate_regressor_params(
                         ['linear', 'square', 'exponential'], p=[0.8, 0.1, 0.1], size=1
                     ).item(),
                     "base_estimator": np.random.choice(
-                        ['DecisionTree', 'LinReg', 'SVR'], p=[0.8, 0.1, 0.1], size=1
+                        [None, 'LinReg', 'SVR'], p=[0.8, 0.1, 0.1], size=1
                     ).item(),
                     "learning_rate": np.random.choice(
                         [1, 0.5], p=[0.9, 0.1], size=1
@@ -658,6 +683,11 @@ class RollingRegression(ModelObject):
         """
         X = X.drop(X.tail(1).index).drop(X.head(1).index)
 
+        multioutput = True
+        if Y.ndim < 2:
+            multioutput = False
+        elif Y.shape[1] < 2:
+            multioutput = False
         # retrieve model object to train
         self.regr = retrieve_regressor(
             regression_model=self.regression_model,
@@ -665,6 +695,7 @@ class RollingRegression(ModelObject):
             verbose_bool=self.verbose_bool,
             random_seed=self.random_seed,
             n_jobs=self.n_jobs,
+            multioutput=multioutput,
         )
         self.regr = self.regr.fit(X, Y)
 
@@ -878,6 +909,9 @@ def window_maker(
         x = np.lib.stride_tricks.sliding_window_view(df.to_numpy(), phrase_n, axis=0)
         x = x.reshape(-1, x.shape[-1])
         Y = x[:, window_size:]
+        if Y.ndim > 1:
+            if Y.shape[1] == 1:
+                Y = Y.ravel()
         X = x[:, :window_size]
         r_arr = None
         if max_windows is not None:
@@ -893,19 +927,18 @@ def window_maker(
             X = X / np.where(div_sum == 0, 1, div_sum)
         # regressors
         if str(regression_type).lower() == "user":
+            shape_1 = df.shape[1] if df.ndim > 1 else 1
             if isinstance(future_regressor, pd.DataFrame):
                 regr_arr = np.repeat(
                     future_regressor.reindex(df.index).to_numpy()[(phrase_n - 1) :],
-                    df.shape[1],
+                    shape_1,
                     axis=0,
                 )
                 if r_arr is not None:
                     regr_arr = regr_arr[r_arr]
                 X = np.concatenate([X, regr_arr], axis=1)
-        if Y.shape[1] == 1:
-            Y = Y.ravel()
 
-    except Exception as e:
+    except Exception:
         if str(regression_type).lower() == "user":
             if input_dim == "multivariate":
                 raise ValueError(
@@ -966,6 +999,7 @@ def last_window(
     normalize_window: bool = False,
 ):
     z = df.shape[0] - window_size
+    shape_1 = df.shape[1] if df.ndim > 1 else 1
     if input_dim == 'univariate':
         cX = df.iloc[
             z : (z + window_size),
@@ -973,7 +1007,7 @@ def last_window(
         cX = (
             cX.reset_index(drop=True)
             .transpose()
-            .set_index(np.repeat(z, (df.shape[1],)), append=True)
+            .set_index(np.repeat(z, (shape_1,)), append=True)
         )
     else:
         cX = df.iloc[
@@ -1070,12 +1104,18 @@ class WindowRegression(ModelObject):
             future_regressor=future_regressor,
             random_seed=self.random_seed,
         )
+        multioutput = True
+        if Y.ndim < 2:
+            multioutput = False
+        elif Y.shape[1] < 2:
+            multioutput = False
         self.regr = retrieve_regressor(
             regression_model=self.regression_model,
             verbose=self.verbose,
             verbose_bool=self.verbose_bool,
             random_seed=self.random_seed,
             n_jobs=self.n_jobs,
+            multioutput=multioutput,
         )
         self.regr = self.regr.fit(X, Y)
         self.last_window = df.tail(self.window_size)
@@ -1521,19 +1561,25 @@ class DatepartRegression(ModelObject):
                 self.regression_type = None
 
         y = df.values
-        if y.shape[1] == 1:
-            y = y.ravel()
 
         X = date_part(df.index, method=self.datepart_method)
         if self.regression_type == 'User':
             X = pd.concat([X, future_regressor], axis=0)
+        X.columns = [str(xc) for xc in X.columns]
 
+        multioutput = True
+        if y.ndim < 2:
+            multioutput = False
+        elif y.shape[1] < 2:
+            multioutput = False
+            y = y.ravel()
         self.model = retrieve_regressor(
             regression_model=self.regression_model,
             verbose=self.verbose,
             verbose_bool=self.verbose_bool,
             random_seed=self.random_seed,
             n_jobs=self.n_jobs,
+            multioutput=multioutput,
         )
         self.df_train = df
         self.model = self.model.fit(X, y)
@@ -1562,8 +1608,9 @@ class DatepartRegression(ModelObject):
         X = date_part(index, method=self.datepart_method)
         if self.regression_type == 'User':
             X = pd.concat([X, future_regressor], axis=0)
+        X.columns = [str(xc) for xc in X.columns]
 
-        forecast = pd.DataFrame(self.model.predict(X.values))
+        forecast = pd.DataFrame(self.model.predict(X))
 
         forecast.columns = self.column_names
         forecast.index = index
@@ -1789,12 +1836,18 @@ class UnivariateRegression(ModelObject):
                 n_jobs_passed = n_jobs
             else:
                 n_jobs_passed = 1
+            multioutput = True
+            if Y.ndim < 2:
+                multioutput = False
+            elif Y.shape[1] < 2:
+                multioutput = False
             dah_model = retrieve_regressor(
                 regression_model=self.regression_model,
                 verbose=self.verbose,
                 verbose_bool=self.verbose_bool,
                 random_seed=self.random_seed,
                 n_jobs=n_jobs_passed,
+                multioutput=multioutput,
             )
             dah_model.fit(X, Y)
             return {col: dah_model}

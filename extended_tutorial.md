@@ -334,7 +334,7 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 conda create -n openblas python=3.9
 conda activate openblas
 
-python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm --exists-action i
+python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost --exists-action i
 
 python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily, --no-deps to pip install prophet if this fails
 python -m pip install mxnet --exists-action i     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps

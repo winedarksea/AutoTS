@@ -1029,11 +1029,17 @@ class DatepartRegressionTransformer(EmptyTransformer):
         X = date_part(df.index, method=self.datepart_method)
         from autots.models.sklearn import retrieve_regressor
 
+        multioutput = True
+        if y.ndim < 2:
+            multioutput = False
+        elif y.shape[1] < 2:
+            multioutput = False
         self.model = retrieve_regressor(
             regression_model=self.regression_model,
             verbose=0,
             verbose_bool=False,
             random_seed=2020,
+            multioutput=multioutput,
         )
         self.model = self.model.fit(X, y)
         self.shape = df.shape

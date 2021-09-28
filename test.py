@@ -12,14 +12,12 @@ from autots.datasets import (
     load_weekdays,
     load_zeroes,
 )
-from autots import AutoTS
-from autots.evaluator.auto_ts import fake_regressor
+from autots import AutoTS, create_lagged_regressor
 import matplotlib.pyplot as plt
 
 # raise ValueError("aaargh!")
 use_template = False
 use_m5 = False  # long = False
-force_univariate = False  # long = False
 back_forecast = False
 
 # this is the template file imported:
@@ -113,17 +111,14 @@ model = AutoTS(
 )
 
 
-future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
+future_regressor_train2d, future_regressor_forecast2d  = create_lagged_regressor(
     df,
-    dimensions=4,
     forecast_length=forecast_length,
-    date_col='datetime' if long else None,
-    value_col='value' if long else None,
-    id_col='series_id' if long else None,
-    drop_most_recent=model.drop_most_recent,
-    aggfunc=model.aggfunc,
-    verbose=model.verbose,
+    summarize=None,
+    backfill='datepartregression',
+    fill_na='ffill'
 )
+
 
 # model = model.import_results('test.pickle')
 if use_template:
@@ -186,6 +181,10 @@ plt.show()
 if back_forecast:
     model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
 
+df_wide_numeric = model.df_wide_numeric
+
+df = df_wide_numeric.tail(100).fillna(0).astype(float)
+
 """
 # Import/Export
 model.export_template(example_filename, models='all',
@@ -194,6 +193,18 @@ model.export_template(example_filename, models='all',
 del(model)
 model = model.import_template(example_filename, method='only')
 print("Overwrite template is: {}".format(str(model.initial_template)))
+
+future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
+    df,
+    dimensions=4,
+    forecast_length=forecast_length,
+    date_col='datetime' if long else None,
+    value_col='value' if long else None,
+    id_col='series_id' if long else None,
+    drop_most_recent=model.drop_most_recent,
+    aggfunc=model.aggfunc,
+    verbose=model.verbose,
+)
 """
 
 """
@@ -211,9 +222,6 @@ Edgey Cases:
 """
 
 # %%
-df_wide_numeric = model.df_wide_numeric
-
-df = df_wide_numeric.tail(100).fillna(0).astype(float)
 
 """
 PACKAGE RELEASE

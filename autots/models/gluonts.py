@@ -80,7 +80,7 @@ class GluonTS(ModelObject):
             self.learning_rate = learning_rate
         self.context_length = context_length
         self.forecast_length = forecast_length
-        self.multivariate_mods = ['DeepVAR', 'GPVAR']
+        self.multivariate_mods = ['DeepVAR', 'GPVAR', "LSTNet"]
 
     def fit(self, df, future_regressor=[]):
         """Train algorithm given data supplied.
@@ -263,6 +263,16 @@ class GluonTS(ModelObject):
                 prediction_length=ts_metadata['forecast_length'],
                 trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )
+        elif self.gluon_model == 'LSTNet':
+            from gluonts.model.lstnet import LSTNetEstimator
+
+            estimator = LSTNetEstimator(
+                target_dim=gluon_train.shape[0],
+                freq=ts_metadata['freq'],
+                context_length=ts_metadata['context_length'],
+                prediction_length=ts_metadata['forecast_length'],
+                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
+            )
         elif self.gluon_model == 'NBEATS':
             from gluonts.model.n_beats import NBEATSEstimator
 
@@ -270,6 +280,51 @@ class GluonTS(ModelObject):
                 freq=ts_metadata['freq'],
                 context_length=ts_metadata['context_length'],
                 prediction_length=ts_metadata['forecast_length'],
+                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
+            )
+        elif self.gluon_model == 'Rotbaum':
+            from gluonts.model.rotbaum import TreeEstimator
+
+            estimator = TreeEstimator(
+                freq=ts_metadata['freq'],
+                context_length=ts_metadata['context_length'],
+                prediction_length=ts_metadata['forecast_length'],
+                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
+            )
+        elif self.gluon_model == 'DeepRenewalProcess':
+            from gluonts.model.renewal import DeepRenewalProcessEstimator
+        
+            estimator = DeepRenewalProcessEstimator(
+                prediction_length=ts_metadata['forecast_length'],
+                context_length=ts_metadata['context_length'],
+                freq=ts_metadata['freq'],
+                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
+            )
+        elif self.gluon_model == 'SelfAttention':
+            from gluonts.model.san import SelfAttentionEstimator
+        
+            estimator = SelfAttentionEstimator(
+                prediction_length=ts_metadata['forecast_length'],
+                context_length=ts_metadata['context_length'],
+                freq=ts_metadata['freq'],
+                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
+            )
+        elif self.gluon_model == 'TemporalFusionTransformer':
+            from gluonts.model.tft import TemporalFusionTransformerEstimator
+        
+            estimator = TemporalFusionTransformerEstimator(
+                prediction_length=ts_metadata['forecast_length'],
+                context_length=ts_metadata['context_length'],
+                freq=ts_metadata['freq'],
+                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
+            )
+        elif self.gluon_model == 'DeepTPP':
+            from gluonts.model.tpp.deeptpp import DeepTPPEstimator
+        
+            estimator = DeepTPPEstimator(
+                prediction_length=ts_metadata['forecast_length'],
+                context_length=ts_metadata['context_length'],
+                freq=ts_metadata['freq'],
                 trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )
         else:
@@ -390,8 +445,14 @@ class GluonTS(ModelObject):
                 'DeepVAR',
                 'GPVAR',
                 'NBEATS',
+                'Rotbaum',
+                'LSTNet',
+                'DeepRenewalProcess',
+                'SelfAttention',
+                'TemporalFusionTransformer',
+                'DeepTPP'
             ],
-            [0.1, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05],
+            [0.1, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
             k=1,
         )[0]
         # your base parameters
@@ -402,7 +463,7 @@ class GluonTS(ModelObject):
         epochs_choice = random.choices([20, 40, 80, 150], [0.58, 0.35, 0.05, 0.02])[0]
         learning_rate_choice = random.choices([0.01, 0.001, 0.0001], [0.3, 0.6, 0.1])[0]
         # NPTS doesn't use these, so just fill a constant
-        if gluon_model_choice == 'NPTS':
+        if gluon_model_choice in ['NPTS', 'Rotbaum']:
             epochs_choice = 20
             learning_rate_choice = 0.001
         # this model being noticeably slower than others at scale
@@ -434,3 +495,5 @@ model = model.fit(df_wide.fillna(method='ffill').fillna(method='bfill'))
 prediction = model.predict(forecast_length = 14)
 prediction.forecast
 """
+
+# to add: model_dim, dropout_rate, act_type, init, 

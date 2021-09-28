@@ -901,7 +901,7 @@ class AutoTS(object):
                 if self.introduce_na or (self.introduce_na is None and self._nan_tail):
                     nan_frac = val_df_train.shape[1] / num_validations
                     val_df_train.iloc[
-                        -1, int(nan_frac * y) : int(nan_frac * (y + 1))
+                        -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
                     ] = np.nan
 
                 # run validation template on current slice
