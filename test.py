@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 # raise ValueError("aaargh!")
 use_template = False
 use_m5 = False  # long = False
+force_univariate = True  # long = False
 back_forecast = False
 
 # this is the template file imported:
@@ -50,30 +51,11 @@ weights_weekly = {
     'Weekly Minnesota Midgrade Conventional Retail Gasoline Prices  (Dollars per Gallon)': 2
 }
 
-model_list = [
-    'ZeroesNaive',
-    'LastValueNaive',
-    'AverageValueNaive',
-    'GLS',
-    'SeasonalNaive',
-    'GLM',
-    'ETS',
-    # 'FBProphet',
-    # 'RollingRegression',
-    # 'GluonTS',
-    'UnobservedComponents',
-    'DatepartRegression',
-    'ARIMA',
-    'VAR',
-    'VECM',
-    'WindowRegression',
-]
-
 transformer_list = "all"  # ["bkfilter", "STLFilter", "HPFilter", 'StandardScaler']
 transformer_max_depth = 3
 model_list = "default"
 model_list = 'superfast'  # fast_parallel
-# model_list = ["LastValueNaive", "UnivariateRegression", "UnivariateMotif", "FBProphet"]
+# model_list = ["UnivariateRegression", "WindowRegression", "DatepartRegression", "RollingRegression"]
 
 metric_weighting = {
     'smape_weighting': 3,

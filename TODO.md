@@ -21,6 +21,10 @@
 * load_linear and load_sine artificial datasets
 * new NVAR model based on https://github.com/quantinfo/ng-rc-paper-code/
 * tuning retrieve_regressor to allow it to better work with multioutput and univariate
+* expand GluonTS models included
+* GluonTS now works on univariate inputs
+* GluonTS now works with regressors
+* fixed bug where model_count wrong for mosaic ensembles
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'
