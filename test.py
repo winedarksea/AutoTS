@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 # raise ValueError("aaargh!")
 use_template = False
 use_m5 = False  # long = False
-force_univariate = True  # long = False
+force_univariate = False  # long = False
 back_forecast = False
 
 # this is the template file imported:

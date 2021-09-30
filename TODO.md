@@ -25,6 +25,7 @@
 * GluonTS now works on univariate inputs
 * GluonTS now works with regressors
 * fixed bug where model_count wrong for mosaic ensembles
+* fixed bug in VECM that meant it didn't couldn't utilize future_regressor
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

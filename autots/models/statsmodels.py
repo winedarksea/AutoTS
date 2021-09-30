@@ -1331,7 +1331,7 @@ class VECM(ModelObject):
         self.deterministic = deterministic
         self.k_ar_diff = k_ar_diff
 
-    def fit(self, df, future_regressor=[]):
+    def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
 
         Args:
@@ -1340,24 +1340,24 @@ class VECM(ModelObject):
         df = self.basic_profile(df)
         self.df_train = df
 
-        if self.regression_type == 'Holiday':
+        type_str = str(self.regression_type).lower()
+        if type_str == 'holiday':
             from autots.tools.holiday import holiday_flag
 
             self.regressor_train = holiday_flag(
                 df.index, country=self.holiday_country
             ).values
-        else:
-            if self.regression_type is not None:
-                if (np.array(future_regressor).shape[0]) != (df.shape[0]):
-                    self.regression_type = None
-                else:
-                    self.regressor_train = future_regressor
+        elif type_str == "user":
+            if future_regressor is None:
+                raise ValueError("regression_type='User' but no future_regressor supplied")
+            else:
+                self.regressor_train = future_regressor
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
     def predict(
-        self, forecast_length: int, future_regressor=[], just_point_forecast=False
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
     ):
         """Generates forecast data immediately following dates of index supplied to .fit()
 
@@ -1382,9 +1382,10 @@ class VECM(ModelObject):
             ).values
         if self.regression_type is not None:
             assert (
-                len(future_regressor) == forecast_length
-            ), "regressor not equal to forecast length"
+                future_regressor.shape[0] == forecast_length
+            ), "regressor row count not equal to forecast length"
 
+        # LinAlgError: SVD did not converge (occurs when NaN in train data)
         if self.regression_type in ["User", "Holiday"]:
             maModel = VECM(
                 self.df_train,
@@ -1393,8 +1394,8 @@ class VECM(ModelObject):
                 deterministic=self.deterministic,
                 k_ar_diff=self.k_ar_diff,
             ).fit()
-            # forecast = maModel.predict(start=test_index[0], end=test_index[-1], exog = future_regressor)
-            forecast = maModel.predict(steps=len(test_index), exog=future_regressor)
+            # don't ask me why it is exog_fc here and not exog like elsewhere
+            forecast = maModel.predict(steps=len(test_index), exog_fc=future_regressor)
         else:
             maModel = VECM(
                 self.df_train,
@@ -1444,7 +1445,7 @@ class VECM(ModelObject):
         ).item()
 
         regression_list = [None, 'User', 'Holiday']
-        regression_probability = [0.9, 0.05, 0.05]
+        regression_probability = [0.8, 0.15, 0.05]
         regression_choice = np.random.choice(
             a=regression_list, size=1, p=regression_probability
         ).item()

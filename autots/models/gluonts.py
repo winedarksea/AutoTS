@@ -7,6 +7,7 @@ Except it is really the only thing I use that runs mxnet, and it takes a while t
 import logging
 import random
 import datetime
+import numpy as np
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 
@@ -129,6 +130,7 @@ class GluonTS(ModelObject):
         ts_metadata = {
             'num_series': len(gluon_train.index),
             'freq': gluon_freq,
+            'start_ts': df.index[0],
             'gluon_start': [
                 gluon_train.columns[0] for _ in range(len(gluon_train.index))
             ],
@@ -142,21 +144,21 @@ class GluonTS(ModelObject):
                 one_dim_target=False,
             )
         else:
-            """
-            time_series_dicts = []
-            for time_series in gluon_train.values:
-                time_series_dicts.append({"target": time_series, "start": ts_metadata['gluon_start']})
-            self.test_ds = ListDataset(time_series_dicts, freq=ts_metadata['freq'])
-            """
             if self.regression_type == "User":
+                if future_regressor is None:
+                    raise ValueError("regression_type='User' but no future_regressor supplied")
                 self.gluon_train = gluon_train
+                regr = future_regressor.to_numpy().T
+                self.regr_train = regr
+                print("GluonTS regr shape: {regr.shape}")
                 self.test_ds = ListDataset([{FieldName.TARGET: target,
                      FieldName.START: start,
                      FieldName.FEAT_DYNAMIC_REAL: fdr}
-                    for (target, start, fdr) in zip(
+                    for (target, fdr, start) in zip(
                         gluon_train.to_numpy(),
+                        regr,
                         ts_metadata['gluon_start'],
-                        future_regressor.to_numpy().T)],
+                        )],
                     freq=ts_metadata['freq'],
                     )
             else:
@@ -302,7 +304,7 @@ class GluonTS(ModelObject):
                 freq=ts_metadata['freq'],
                 context_length=ts_metadata['context_length'],
                 prediction_length=ts_metadata['forecast_length'],
-                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
+                # trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )
         elif self.gluon_model == 'DeepRenewalProcess':
             from gluonts.model.renewal import DeepRenewalProcessEstimator
@@ -370,13 +372,19 @@ class GluonTS(ModelObject):
             forecast_length=self.ts_metadata['forecast_length']
         )
         if self.regression_type == "User":
-            self.test_ds = ListDataset([{FieldName.TARGET: target,
-                FieldName.START: start,
+            if future_regressor is None:
+                raise ValueError("regression_type='User' but no future_regressor supplied")
+            regr = future_regressor.to_numpy().T
+            regr = np.concatenate([self.regr_train, regr], axis=1)
+            print("GluonTS future regr shape: {regr.shape}")
+            self.test_ds = ListDataset([{
+                FieldName.TARGET: target,
+                FieldName.START: self.ts_metadata['start_ts'],
                 FieldName.FEAT_DYNAMIC_REAL: fdr}
-                for (target, start, fdr) in zip(
-                self.gluon_train.to_numpy(),
-                self.ts_metadata['gluon_start'],
-                future_regressor.to_numpy().T)],
+                for (target, fdr) in zip(
+                    self.gluon_train.to_numpy(),
+                    regr
+                )],
             freq=self.ts_metadata['freq'],
             )
 
@@ -420,7 +428,7 @@ class GluonTS(ModelObject):
                     [all_forecast, rowForecast], ignore_index=True
                 ).reset_index(drop=True)
                 i += 1
-            if result.start_date != test_index[0]:
+            if result.start_date != test_index[0] and int(self.verbose) > 0:
                 print(f"GluonTS start_date is {result.start_date} vs created index {test_index[0]}")
             forecast = all_forecast.pivot_table(
                 values='MedianForecast', index='ForecastDate', columns='series_id'
