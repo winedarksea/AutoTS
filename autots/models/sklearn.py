@@ -306,25 +306,34 @@ def retrieve_regressor(
         )
         return regr
 
+sklearn_model_dict: dict = {
+    'RandomForest': 0.1,
+    'ElasticNet': 0.05,
+    'MLP': 0.25,
+    'DecisionTree': 0.1,
+    'KNN': 0.1,
+    'Adaboost': 0.05,
+    'SVM': 0.001,  # tends to be the slowest
+    'BayesianRidge': 0.08,
+    'xgboost': 0.01,
+    'KerasRNN': 0.05,
+    'HistGradientBoost': 0.01,
+    'LightGBM': 0.1,
+    'ExtraTrees': 0.03,
+    'RadiusNeighbors': 0.03,
+}
+# models where we can be sure the model isn't sharing information across multiple Y's...
+no_shared_model_dict = {
+    'KNN': 0.2,
+    'Adaboost': 0.1,
+    'SVM': 0.1,
+    'xgboost': 0.1,
+    'HistGradientBoost': 0.1,
+}
 
-def generate_regressor_params(
-    model_dict: dict = {
-        'RandomForest': 0.1,
-        'ElasticNet': 0.05,
-        'MLP': 0.25,
-        'DecisionTree': 0.1,
-        'KNN': 0.1,
-        'Adaboost': 0.05,
-        'SVM': 0.001,  # tends to be the slowest
-        'BayesianRidge': 0.08,
-        'xgboost': 0.01,
-        'KerasRNN': 0.05,
-        'HistGradientBoost': 0.01,
-        'LightGBM': 0.1,
-        'ExtraTrees': 0.03,
-        'RadiusNeighbors': 0.03,
-    },
-):
+def generate_regressor_params(model_dict=None,):
+    if model_dict is None:
+        model_dict = sklearn_model_dict
     """Generate new parameters for input to regressor."""
     model = random.choices(list(model_dict.keys()), list(model_dict.values()), k=1)[0]
     if model in [
@@ -1643,7 +1652,7 @@ class DatepartRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params()
+        model_choice = generate_regressor_params()  # model_dict=no_shared_model_dict
         datepart_choice = np.random.choice(
             a=["recurring", "simple", "expanded"], size=1, p=[0.4, 0.3, 0.3]
         ).item()

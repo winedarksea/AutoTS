@@ -997,6 +997,7 @@ def TemplateWizard(
     # template = unpack_ensemble_models(template, template_cols, keep_ensemble = False)
 
     for index, row in template.iterrows():
+        template_start_time = datetime.datetime.now()
         try:
             model_str = row['Model']
             parameter_dict = json.loads(row['ModelParameters'])
@@ -1075,11 +1076,6 @@ def TemplateWizard(
                 df_forecast.model_parameters,
                 df_forecast.transformation_parameters,
             )
-            total_runtime = (
-                df_forecast.fit_runtime
-                + df_forecast.predict_runtime  # noqa W503
-                + df_forecast.transformation_runtime  # noqa W503
-            )
             result = pd.DataFrame(
                 {
                     'ID': model_id,
@@ -1091,7 +1087,7 @@ def TemplateWizard(
                     'TransformationRuntime': df_forecast.transformation_runtime,
                     'FitRuntime': df_forecast.fit_runtime,
                     'PredictRuntime': df_forecast.predict_runtime,
-                    'TotalRuntime': total_runtime,
+                    'TotalRuntime': datetime.datetime.now() - template_start_time,
                     'Ensemble': ensemble_input,
                     'Exceptions': np.nan,
                     'Runs': 1,
@@ -1157,6 +1153,7 @@ def TemplateWizard(
 
         except KeyboardInterrupt:
             if model_interrupt:
+                fit_runtime = datetime.datetime.now() - template_start_time
                 result = pd.DataFrame(
                     {
                         'ID': create_model_id(
@@ -1167,9 +1164,9 @@ def TemplateWizard(
                         'TransformationParameters': json.dumps(transformation_dict),
                         'Ensemble': ensemble_input,
                         'TransformationRuntime': datetime.timedelta(0),
-                        'FitRuntime': datetime.timedelta(0),
+                        'FitRuntime': fit_runtime,
                         'PredictRuntime': datetime.timedelta(0),
-                        'TotalRuntime': datetime.timedelta(0),
+                        'TotalRuntime': fit_runtime,
                         'Exceptions': "KeyboardInterrupt by user",
                         'Runs': 1,
                         'Generation': current_generation,
@@ -1204,7 +1201,7 @@ def TemplateWizard(
                             (repr(e)), template_result.model_count, model_str
                         )
                     )
-
+            fit_runtime = datetime.datetime.now() - template_start_time
             result = pd.DataFrame(
                 {
                     'ID': create_model_id(
@@ -1215,9 +1212,9 @@ def TemplateWizard(
                     'TransformationParameters': json.dumps(transformation_dict),
                     'Ensemble': ensemble_input,
                     'TransformationRuntime': datetime.timedelta(0),
-                    'FitRuntime': datetime.timedelta(0),
+                    'FitRuntime': fit_runtime,
                     'PredictRuntime': datetime.timedelta(0),
-                    'TotalRuntime': datetime.timedelta(0),
+                    'TotalRuntime': fit_runtime,
                     'Exceptions': repr(e),
                     'Runs': 1,
                     'Generation': current_generation,

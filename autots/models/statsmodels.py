@@ -654,7 +654,7 @@ class ARIMA(ModelObject):
         self.q = q
         self.order = (p, d, q)
 
-    def fit(self, df, future_regressor=[]):
+    def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied .
 
         Args:
@@ -662,25 +662,25 @@ class ARIMA(ModelObject):
         """
         df = self.basic_profile(df)
         self.regressor_train = None
-        if self.regression_type == 'Holiday':
+        method_str = str(self.regression_type).lower()
+        if method_str == 'holiday':
             from autots.tools.holiday import holiday_flag
 
             self.regressor_train = holiday_flag(
                 df.index, country=self.holiday_country
             ).values
-        else:
-            if self.regression_type is not None:
-                if (np.array(future_regressor).shape[0]) != (df.shape[0]):
-                    self.regression_type = None
-                else:
-                    self.regressor_train = future_regressor
+        elif method_str == "user":
+            if future_regressor is None:
+                raise ValueError("regression_type='User' but future_regressor not supplied")
+            else:
+                self.regressor_train = future_regressor
         self.df_train = df
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
     def predict(
-        self, forecast_length: int, future_regressor=[], just_point_forecast=False
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
@@ -703,7 +703,7 @@ class ARIMA(ModelObject):
             future_regressor = holiday_flag(test_index, country=self.holiday_country)
         if self.regression_type is not None:
             assert (
-                len(future_regressor) == forecast_length
+                future_regressor.shape[0] == forecast_length
             ), "regressor not equal to forecast length"
         if self.regression_type in ["User", "Holiday"]:
             if future_regressor.values.ndim == 1:
@@ -777,24 +777,22 @@ class ARIMA(ModelObject):
 
         large p,d,q can be very slow (a p of 30 can take hours)
         """
-        p_choice = np.random.choice(
-            a=[0, 1, 2, 3, 4, 5, 7, 12],
-            size=1,
-            p=[0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
-        ).item()
-        d_choice = np.random.choice(
-            a=[0, 1, 2, 3], size=1, p=[0.4, 0.3, 0.2, 0.1]
-        ).item()
-        q_choice = np.random.choice(
-            a=[0, 1, 2, 3, 4, 5, 7, 12],
-            size=1,
-            p=[0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
-        ).item()
+        p_choice = random.choices(
+            [0, 1, 2, 3, 4, 5, 7, 12],
+            [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+        )[0]
+        d_choice = random.choices(
+            [0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1]
+        )[0]
+        q_choice = random.choices(
+            [0, 1, 2, 3, 4, 5, 7, 12],
+            [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+        )[0]
         regression_list = [None, 'User', 'Holiday']
-        regression_probability = [0.4, 0.4, 0.2]
-        regression_choice = np.random.choice(
-            a=regression_list, size=1, p=regression_probability
-        ).item()
+        regression_probability = [0.5, 0.3, 0.2]
+        regression_choice = random.choices(
+            regression_list, regression_probability
+        )[0]
 
         parameter_dict = {
             'p': p_choice,

@@ -509,7 +509,7 @@ class GluonTS(ModelObject):
         if gluon_model_choice in self.multivariate_mods:
             regression_choice = None
         else:
-            regression_choice = random.choices([None, "User"], [0.8, 0.2])[0]
+            regression_choice = random.choices([None, "User"], [0.8, 0.4])[0]
 
         return {
             'gluon_model': gluon_model_choice,
