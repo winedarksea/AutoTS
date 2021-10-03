@@ -81,7 +81,7 @@ class GluonTS(ModelObject):
             self.learning_rate = learning_rate
         self.context_length = context_length
         self.forecast_length = forecast_length
-        self.multivariate_mods = ['DeepVAR', 'GPVAR', "LSTNet"]
+        self.multivariate_mods = ['DeepVAR', 'GPVAR']
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -341,7 +341,7 @@ class GluonTS(ModelObject):
                 context_interval_length=ts_metadata['context_length'],
                 num_marks=1,  # cardinality
                 freq=ts_metadata['freq'],
-                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
+                trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate, hybridize=False),
             )
         else:
             raise ValueError("'gluon_model' not recognized.")
