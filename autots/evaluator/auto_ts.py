@@ -880,8 +880,8 @@ class AutoTS(object):
                     min_allowed_train_percent=self.min_allowed_train_percent,
                     verbose=self.verbose,
                 )
-                self.validation_train_indexes.append(val_df_train)
-                self.validation_test_indexes.append(val_df_test)
+                self.validation_train_indexes.append(val_df_train.index)
+                self.validation_test_indexes.append(val_df_test.index)
                 if self.verbose >= 2:
                     print(f'Validation index is {val_df_train.index}')
 
@@ -901,7 +901,7 @@ class AutoTS(object):
                 if self.introduce_na or (self.introduce_na is None and self._nan_tail):
                     nan_frac = val_df_train.shape[1] / num_validations
                     val_df_train.iloc[
-                        -1, int(nan_frac * y) : int(nan_frac * (y + 1))
+                        -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
                     ] = np.nan
 
                 # run validation template on current slice

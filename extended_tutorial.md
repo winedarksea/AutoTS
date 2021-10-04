@@ -14,17 +14,6 @@
 
 ## Extended Tutorial
 
-## Underlying Process
-AutoTS works in the following way at present:
-* The process begins with data reshaping and basic data handling as needed
-* An initial train/test split is generated where the test is the most recent data, of forecast_length
-* The initial model template is a combination of transfer learning and randomly generated models. This is tested on the initial train/test
-* Models consist of a pre-transformation step (fill na options, outlier removal options, etc), and algorithm (ie ETS) and model paramters (trend, damped, ...)
-* The top models (selected by a combination of metrics) are recombined with random mutations for n_generations
-* A percentage of the best models from this process go to cross validation, where they are re-assessed on new train/test splits.
-* If used, horizontal ensembling uses the validation data to choose the best model for each series.
-* The best model or ensemble in validation is selected as best_model and used in the `.predict()` method to generate forecasts.
-
 ### A simple example
 ```python
 # also: _hourly, _daily, _weekly, or _yearly
@@ -76,7 +65,7 @@ Dropping series which are mostly missing, or using `prefill_na=0` (or other valu
 ### What to Worry About
 There are some basic things to beware of that can commonly lead to poor results:
 
-1. Bad data (sudden drops or missing values) in the most recent data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. 
+1. Bad data (sudden drops or missing values) in the *most recent* data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. 
 2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be choosen. Choose a good method and as many validations as possible. 
 
 ### Validation and Cross Validation
@@ -345,7 +334,7 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 conda create -n openblas python=3.9
 conda activate openblas
 
-python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm --exists-action i
+python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost --exists-action i
 
 python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily, --no-deps to pip install prophet if this fails
 python -m pip install mxnet --exists-action i     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
@@ -552,6 +541,7 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 |  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 | UnivariateMotif/MultivariateMotif | scipy.distaince.cdist |      |    True       |     joblib      |       | *            |              |               |
+|  NVAR                   |              |                         |    True       |   blas/lapack   |       | True         |              |               |
 |  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |   *           |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |

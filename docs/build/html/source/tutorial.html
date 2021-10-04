@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Tutorial &#8212; AutoTS 0.3.6 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.3.7 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -54,20 +54,6 @@
 </section>
 <section id="extended-tutorial">
 <h2>Extended Tutorial<a class="headerlink" href="#extended-tutorial" title="Permalink to this headline">¶</a></h2>
-</section>
-<section id="underlying-process">
-<h2>Underlying Process<a class="headerlink" href="#underlying-process" title="Permalink to this headline">¶</a></h2>
-<p>AutoTS works in the following way at present:</p>
-<ul class="simple">
-<li><p>The process begins with data reshaping and basic data handling as needed</p></li>
-<li><p>An initial train/test split is generated where the test is the most recent data, of forecast_length</p></li>
-<li><p>The initial model template is a combination of transfer learning and randomly generated models. This is tested on the initial train/test</p></li>
-<li><p>Models consist of a pre-transformation step (fill na options, outlier removal options, etc), and algorithm (ie ETS) and model paramters (trend, damped, …)</p></li>
-<li><p>The top models (selected by a combination of metrics) are recombined with random mutations for n_generations</p></li>
-<li><p>A percentage of the best models from this process go to cross validation, where they are re-assessed on new train/test splits.</p></li>
-<li><p>If used, horizontal ensembling uses the validation data to choose the best model for each series.</p></li>
-<li><p>The best model or ensemble in validation is selected as best_model and used in the <code class="docutils literal notranslate"><span class="pre">.predict()</span></code> method to generate forecasts.</p></li>
-</ul>
 <section id="id1">
 <h3>A simple example<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># also: _hourly, _daily, _weekly, or _yearly</span>
@@ -117,7 +103,7 @@ Dropping series which are mostly missing, or using <code class="docutils literal
 <h3>What to Worry About<a class="headerlink" href="#what-to-worry-about" title="Permalink to this headline">¶</a></h3>
 <p>There are some basic things to beware of that can commonly lead to poor results:</p>
 <ol class="arabic simple">
-<li><p>Bad data (sudden drops or missing values) in the most recent data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts.</p></li>
+<li><p>Bad data (sudden drops or missing values) in the <em>most recent</em> data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts.</p></li>
 <li><p>Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don’t accurately represent the series, a poor model may be choosen. Choose a good method and as many validations as possible.</p></li>
 </ol>
 </section>
@@ -375,7 +361,7 @@ greykite
 conda create -n openblas <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9
 conda activate openblas
 
-python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm --exists-action i
+python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost --exists-action i
 
 python -m pip install pystan prophet --exists-action i  <span class="c1"># conda-forge option below works more easily, --no-deps to pip install prophet if this fails</span>
 python -m pip install mxnet --exists-action i     <span class="c1"># check the mxnet documentation for more install options, also try pip install mxnet --no-deps</span>
@@ -795,7 +781,17 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>Greykite</p></td>
+<tr class="row-even"><td><p>NVAR</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td><p>blas/lapack</p></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>Greykite</p></td>
 <td><p>greykite</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -808,7 +804,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 </ul>
 </td>
 </tr>
-<tr class="row-odd"><td><p>MotifSimulation</p></td>
+<tr class="row-even"><td><p>MotifSimulation</p></td>
 <td><p>sklearn.metrics.pairwise</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -818,7 +814,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>TensorflowSTS</p></td>
+<tr class="row-odd"><td><p>TensorflowSTS</p></td>
 <td><p>tensorflow_probability</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -828,7 +824,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>TFPRegression</p></td>
+<tr class="row-even"><td><p>TFPRegression</p></td>
 <td><p>tensorflow_probability</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -838,7 +834,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>ComponentAnalysis</p></td>
+<tr class="row-odd"><td><p>ComponentAnalysis</p></td>
 <td><p>sklearn</p></td>
 <td></td>
 <td></td>
@@ -848,7 +844,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>TSFreshRegressor</p></td>
+<tr class="row-even"><td><p>TSFreshRegressor</p></td>
 <td><p>tsfresh, sklearn</p></td>
 <td></td>
 <td></td>
@@ -900,7 +896,6 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Tutorial</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#table-of-contents">Table of Contents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#extended-tutorial">Extended Tutorial</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#underlying-process">Underlying Process</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#deployment-and-template-import-export">Deployment and Template Import/Export</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#installation-and-dependency-versioning">Installation and Dependency Versioning</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#caveats-and-advice">Caveats and Advice</a></li>

@@ -1098,7 +1098,7 @@ def generate_mosaic_template(
         'ModelParameters': json.dumps(
             {
                 'model_name': "Mosaic",
-                'model_count': id_sliced.shape[0],
+                'model_count': used_models_results.shape[0],
                 'model_metric': "MAE",
                 'models': used_models_results.to_dict(orient='index'),
                 'series': model_id_array.to_dict(orient='dict'),

@@ -15,12 +15,17 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* back_forecast for forecast on training data
-* Mosaic ensembles can now be used beyond training forecast_length and for shorter lengths too
-* best_model_name, best_model_params, and best_model_transformation_params AutoTS attributes now available
-* mean, median, and ffill NaN now handle fully NaN series by returning 0.
-* fixed bug that was causing mosaic generalization to fail if ffill/bfill handled all missing values
-* STLFilter and HPFilter and convolution_filter Transformers added
+* bug fix in fake_date imputation
+* bug fix in Round
+* make SinTrend fail if it fails on all series (may revert this)
+* load_linear and load_sine artificial datasets
+* new NVAR model based on https://github.com/quantinfo/ng-rc-paper-code/
+* tuning retrieve_regressor to allow it to better work with multioutput and univariate
+* expand GluonTS models included
+* GluonTS now works on univariate inputs
+* GluonTS now works with regressors
+* fixed bug where model_count wrong for mosaic ensembles
+* fixed bug in VECM that meant it didn't couldn't utilize future_regressor
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

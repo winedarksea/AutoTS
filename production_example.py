@@ -167,7 +167,7 @@ if initial_training or evolve:
         template_filename, models="best", n=n_export, max_per_model_class=5
     )
     if archive_templates:
-        arc_file = f"{template_filename.split('.csv')[0]}_{start_time.strftime('%Y%m%d')}.csv"
+        arc_file = f"{template_filename.split('.csv')[0]}_{start_time.strftime('%Y%m%d%H%M')}.csv"
         model.export_template(
             arc_file, models="best", n=1
         )
@@ -194,7 +194,8 @@ if graph:
         plt.show()
 
         series = model.horizontal_to_df()
-        series = series.sample(25, replace=False)
+        if series.shape[0] > 25:
+            series = series.sample(25, replace=False)
         series[['log(Volatility)', 'log(Mean)']] = np.log(
             series[['Volatility', 'Mean']]
         )
