@@ -1306,7 +1306,16 @@ class Motif(ModelObject):
         }
 
 
-def predict_reservoir(df, forecast_length, prediction_interval=None, warmup_pts=1, k=2, ridge_param=2.5e-6, seed_pts: int = 1, seed_weighted: str = None):
+def predict_reservoir(
+    df,
+    forecast_length,
+    prediction_interval=None,
+    warmup_pts=1,
+    k=2,
+    ridge_param=2.5e-6,
+    seed_pts: int = 1,
+    seed_weighted: str = None,
+):
     """Nonlinear Variable Autoregression or 'Next-Generation Reservoir Computing'
 
     based on https://github.com/quantinfo/ng-rc-paper-code/
@@ -1341,7 +1350,7 @@ def predict_reservoir(df, forecast_length, prediction_interval=None, warmup_pts=
     if warmup_pts >= max_warmup_pts:
         warmup_pts = max_warmup_pts if max_warmup_pts > 0 else 1
 
-    traintime_pts = n_pts - warmup_pts   # round(traintime / dt)
+    traintime_pts = n_pts - warmup_pts  # round(traintime / dt)
     warmtrain_pts = warmup_pts + traintime_pts
     testtime_pts = forecast_length + 1  # round(testtime / dt)
     maxtime_pts = n_pts  # round(maxtime / dt)
@@ -1443,21 +1452,29 @@ def predict_reservoir(df, forecast_length, prediction_interval=None, warmup_pts=
                 x_int[0:d, j + 1] = x_int[0:d, j] + W_out @ out_test[:]
             start_slice = ns + 2
             end_slice = start_slice + testtime_pts - 1
-            interval_list.append(x_int[:, start_slice: end_slice])
+            interval_list.append(x_int[:, start_slice:end_slice])
 
         interval_list = np.array(interval_list)
         if seed_pts > 1:
-            pred_int = np.concatenate([np.expand_dims(x_test[:, 1:], axis=0), interval_list])
+            pred_int = np.concatenate(
+                [np.expand_dims(x_test[:, 1:], axis=0), interval_list]
+            )
             # assuming interval_list has more recent first
             if seed_weighted == "linear":
-                pred = np.average(pred_int, axis=0, weights=range(pred_int.shape[0], 0, -1))[0:d]
+                pred = np.average(
+                    pred_int, axis=0, weights=range(pred_int.shape[0], 0, -1)
+                )[0:d]
             elif seed_weighted == "exponential":
-                pred = np.average(pred_int, axis=0, weights=np.geomspace(100, 1, pred_int.shape[0]))[0:d]
+                pred = np.average(
+                    pred_int, axis=0, weights=np.geomspace(100, 1, pred_int.shape[0])
+                )[0:d]
             else:
                 pred = np.quantile(pred_int, q=0.5, axis=0)[0:d]
         pred_upper = np.nanquantile(interval_list, q=prediction_interval, axis=0)[0:d]
         pred_upper = np.where(pred_upper < pred, pred, pred_upper)
-        pred_lower = np.nanquantile(interval_list, q=(1 - prediction_interval), axis=0)[0:d]
+        pred_lower = np.nanquantile(interval_list, q=(1 - prediction_interval), axis=0)[
+            0:d
+        ]
         pred_lower = np.where(pred_lower > pred, pred, pred_lower)
         return pred, pred_upper, pred_lower
     else:
@@ -1558,7 +1575,7 @@ class NVAR(ModelObject):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 fore, up, low = predict_reservoir(
-                    self.df_train[srt: stop],
+                    self.df_train[srt:stop],
                     forecast_length=forecast_length,
                     warmup_pts=self.warmup_pts,
                     seed_pts=self.seed_pts,
@@ -1570,21 +1587,24 @@ class NVAR(ModelObject):
             df_list_up.append(
                 pd.DataFrame(
                     up.T,
-                    columns=self.new_col_names[srt: stop],
+                    columns=self.new_col_names[srt:stop],
                     index=the_index,
-                ))
+                )
+            )
             df_list.append(
                 pd.DataFrame(
                     fore.T,
-                    columns=self.new_col_names[srt: stop],
+                    columns=self.new_col_names[srt:stop],
                     index=the_index,
-                ))
+                )
+            )
             df_list_low.append(
                 pd.DataFrame(
                     low.T,
-                    columns=self.new_col_names[srt: stop],
+                    columns=self.new_col_names[srt:stop],
                     index=the_index,
-                ))
+                )
+            )
         forecast = pd.concat(df_list, axis=1)[self.column_names]
         if just_point_forecast:
             return forecast
@@ -1610,32 +1630,41 @@ class NVAR(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
         k_choice = random.choices([1, 2, 3, 4, 5], [0.5, 0.5, 0.1, 0.001, 0.001])[0]
-        ridge_choice = random.choices([0, -1, -2, -3, -4, -5, -6, -7, -8], [0.1, 0.1, 0.1, 0.5, 0.1, 0.1, 0.5, 0.1, 0.1])[0]
+        ridge_choice = random.choices(
+            [0, -1, -2, -3, -4, -5, -6, -7, -8],
+            [0.1, 0.1, 0.1, 0.5, 0.1, 0.1, 0.5, 0.1, 0.1],
+        )[0]
         ridge_choice = 2 * 10 ** ridge_choice
         warmup_pts_choice = random.choices([1, 50, 250], [0.9, 0.1, 0.1])[0]
         seed_pts_choice = random.choices([1, 10, 100], [0.8, 0.2, 0.01])[0]
         if seed_pts_choice > 1:
-            seed_weighted_choice = random.choices([None, "linear", "exponential"], [0.3, 0.3, 0.3])[0]
+            seed_weighted_choice = random.choices(
+                [None, "linear", "exponential"], [0.3, 0.3, 0.3]
+            )[0]
         else:
             seed_weighted_choice = None
         batch_size_choice = random.choices([5, 10, 20, 30], [0.5, 0.2, 0.01, 0.001])[0]
-        batch_method_choice = random.choices(["input_order", "std_sorted", "max_sorted"], [0.5, 0.1, 0.1])[0]
-        return {'k': k_choice,
-                'ridge_param': ridge_choice,
-                'warmup_pts': warmup_pts_choice,
-                'seed_pts': seed_pts_choice,
-                'seed_weighted': seed_weighted_choice,
-                'batch_size': batch_size_choice,
-                'batch_method': batch_method_choice,
-                }
+        batch_method_choice = random.choices(
+            ["input_order", "std_sorted", "max_sorted"], [0.5, 0.1, 0.1]
+        )[0]
+        return {
+            'k': k_choice,
+            'ridge_param': ridge_choice,
+            'warmup_pts': warmup_pts_choice,
+            'seed_pts': seed_pts_choice,
+            'seed_weighted': seed_weighted_choice,
+            'batch_size': batch_size_choice,
+            'batch_method': batch_method_choice,
+        }
 
     def get_params(self):
         """Return dict of current parameters."""
-        return {'k': self.k,
-                'ridge_param': self.ridge_param,
-                'warmup_pts': self.warmup_pts,
-                'seed_pts': self.seed_pts,
-                'seed_weighted': self.seed_weighted,
-                'batch_size': self.batch_size,
-                'batch_method': self.batch_method,
-                }
+        return {
+            'k': self.k,
+            'ridge_param': self.ridge_param,
+            'warmup_pts': self.warmup_pts,
+            'seed_pts': self.seed_pts,
+            'seed_weighted': self.seed_weighted,
+            'batch_size': self.batch_size,
+            'batch_method': self.batch_method,
+        }

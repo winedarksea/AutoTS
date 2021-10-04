@@ -30,9 +30,7 @@ def fill_median(df):
 
 def rolling_mean(df, window: int = 10):
     """Fill NaN with mean of last window values."""
-    df = fill_forward(
-        df.fillna(df.rolling(window=window, min_periods=1).mean())
-    )
+    df = fill_forward(df.fillna(df.rolling(window=window, min_periods=1).mean()))
     return df
 
 

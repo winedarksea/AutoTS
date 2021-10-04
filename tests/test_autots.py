@@ -107,8 +107,8 @@ class AutoTSTest(unittest.TestCase):
         template_dict = json.loads(model.best_model['ModelParameters'].iloc[0])
         best_model_result = validation_results[validation_results['ID'] == model.best_model['ID'].iloc[0]]
 
-        # check there were no failed models in this simple setup (fancier models are expected to fail sometimes!)
-        self.assertTrue(initial_results['Exceptions'].isna().all())
+        # check there were few failed models in this simple setup (fancier models are expected to fail sometimes!)
+        self.assertGreater(initial_results['Exceptions'].isnull().mean(), 0.95, "Too many 'superfast' models failed. This can occur by random chance, try running again.")
         # check general model setup
         self.assertEqual(validated_count, model.models_to_validate)
         self.assertGreater(model.models_to_validate, (initial_results['ValidationRound'] == 0).sum() * models_to_validate - 2)
@@ -131,11 +131,11 @@ class AutoTSTest(unittest.TestCase):
         self.assertFalse(model.subset_flag)
         # assess 'backwards' validation
         self.assertEqual(len(model.validation_test_indexes), num_validations)
-        self.assertTrue(model.validation_test_indexes[0].index.intersection(model.validation_train_indexes[0].index).empty)
-        self.assertTrue(model.validation_test_indexes[1].index.intersection(model.validation_train_indexes[1].index).empty)
+        self.assertTrue(model.validation_test_indexes[0].intersection(model.validation_train_indexes[0]).empty)
+        self.assertTrue(model.validation_test_indexes[1].intersection(model.validation_train_indexes[1]).empty)
         self.assertEqual(model.validation_train_indexes[0].shape[0], df.shape[0] - (forecast_length * 2 + 1))  # +1 via drop most recent
-        self.assertTrue((model.validation_test_indexes[0].index == expected_val1).all())
-        self.assertTrue((model.validation_test_indexes[1].index == expected_val2).all())
+        self.assertTrue((model.validation_test_indexes[0] == expected_val1).all())
+        self.assertTrue((model.validation_test_indexes[1] == expected_val2).all())
         # assess Horizontal Ensembling
         self.assertTrue('horizontal' in template_dict['model_name'].lower())
         self.assertEqual(len(template_dict['series'].keys()), df.shape[1])
@@ -201,7 +201,8 @@ class AutoTSTest(unittest.TestCase):
         initial_results = model.results()
         validation_results = model.results("validation")
 
-        validated_count = (validation_results['Runs'] == (num_validations + 1)).sum()
+        # validated_count = (validation_results['Runs'] == (num_validations + 1)).sum()
+        validated_count = (validation_results['Runs'] > 1).sum()
 
         # so these account for DROP MOST RECENT = 1
         expected_idx = pd.date_range(
@@ -220,7 +221,7 @@ class AutoTSTest(unittest.TestCase):
         self.assertEqual(set(initial_results['Model'].unique().tolist()) - {'Ensemble'}, set(default_model_list), msg="Not all models used in initial template.")
         self.assertTrue(check_fails.all(), msg=f"These models failed: {check_fails[~check_fails].index.tolist()}. It is more likely a package install problem than a code problem")
         # check general model setup
-        self.assertEqual(validated_count, model.models_to_validate)
+        self.assertGreaterEqual(validated_count, model.models_to_validate)
         self.assertGreater(model.models_to_validate, (initial_results['ValidationRound'] == 0).sum() * models_to_validate - 2)
         self.assertFalse(model.best_model.empty)
         # check the generated forecasts look right
@@ -238,9 +239,9 @@ class AutoTSTest(unittest.TestCase):
         self.assertFalse(model.subset_flag)
         # assess 'backwards' validation
         self.assertEqual(len(model.validation_test_indexes), num_validations)
-        self.assertTrue(model.validation_test_indexes[0].index.intersection(model.validation_train_indexes[0].index).empty)
+        self.assertTrue(model.validation_test_indexes[0].intersection(model.validation_train_indexes[0]).empty)
         self.assertEqual(model.validation_train_indexes[0].shape[0], df.shape[0] - (forecast_length * 2 + 1))  # +1 via drop most recent
-        self.assertTrue((model.validation_test_indexes[0].index == expected_val1).all())
+        self.assertTrue((model.validation_test_indexes[0] == expected_val1).all())
         # assess Horizontal Ensembling
         self.assertTrue('horizontal' in template_dict['model_name'].lower())
         self.assertEqual(len(template_dict['series'].keys()), df.shape[1])

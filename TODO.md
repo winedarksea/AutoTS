@@ -17,7 +17,7 @@
 # Latest
 * bug fix in fake_date imputation
 * bug fix in Round
-* make SinTrend fail if it fails on all series (may revert this, unsure)
+* make SinTrend fail if it fails on all series (may revert this)
 * load_linear and load_sine artificial datasets
 * new NVAR model based on https://github.com/quantinfo/ng-rc-paper-code/
 * tuning retrieve_regressor to allow it to better work with multioutput and univariate

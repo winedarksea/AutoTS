@@ -671,7 +671,9 @@ class ARIMA(ModelObject):
             ).values
         elif method_str == "user":
             if future_regressor is None:
-                raise ValueError("regression_type='User' but future_regressor not supplied")
+                raise ValueError(
+                    "regression_type='User' but future_regressor not supplied"
+                )
             else:
                 self.regressor_train = future_regressor
         self.df_train = df
@@ -781,18 +783,14 @@ class ARIMA(ModelObject):
             [0, 1, 2, 3, 4, 5, 7, 12],
             [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
-        d_choice = random.choices(
-            [0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1]
-        )[0]
+        d_choice = random.choices([0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1])[0]
         q_choice = random.choices(
             [0, 1, 2, 3, 4, 5, 7, 12],
             [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
         regression_list = [None, 'User', 'Holiday']
         regression_probability = [0.5, 0.3, 0.2]
-        regression_choice = random.choices(
-            regression_list, regression_probability
-        )[0]
+        regression_choice = random.choices(regression_list, regression_probability)[0]
 
         parameter_dict = {
             'p': p_choice,
@@ -1347,7 +1345,9 @@ class VECM(ModelObject):
             ).values
         elif type_str == "user":
             if future_regressor is None:
-                raise ValueError("regression_type='User' but no future_regressor supplied")
+                raise ValueError(
+                    "regression_type='User' but no future_regressor supplied"
+                )
             else:
                 self.regressor_train = future_regressor
 

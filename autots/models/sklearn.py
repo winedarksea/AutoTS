@@ -123,16 +123,14 @@ def retrieve_regressor(
     if model_class == 'ElasticNet':
         if multioutput:
             from sklearn.linear_model import MultiTaskElasticNet
-    
+
             regr = MultiTaskElasticNet(
                 alpha=1.0, random_state=random_seed, **model_param_dict
             )
         else:
             from sklearn.linear_model import ElasticNet
-    
-            regr = ElasticNet(
-                alpha=1.0, random_state=random_seed, **model_param_dict
-            )
+
+            regr = ElasticNet(alpha=1.0, random_state=random_seed, **model_param_dict)
         return regr
     elif model_class == 'DecisionTree':
         from sklearn.tree import DecisionTreeRegressor
@@ -180,7 +178,7 @@ def retrieve_regressor(
         except Exception:
             pass
         from sklearn.ensemble import HistGradientBoostingRegressor
-        
+
         if multioutput:
             from sklearn.multioutput import MultiOutputRegressor
 
@@ -194,20 +192,20 @@ def retrieve_regressor(
             )
         else:
             regr = HistGradientBoostingRegressor(
-                    max_iter=200,
-                    verbose=int(verbose_bool),
-                    random_state=random_seed,
-                    **model_param_dict,
+                max_iter=200,
+                verbose=int(verbose_bool),
+                random_state=random_seed,
+                **model_param_dict,
             )
         return regr
     elif model_class == 'LightGBM':
         from lightgbm import LGBMRegressor
 
         regr = LGBMRegressor(
-                verbose=int(verbose_bool),
-                random_state=random_seed,
-                n_jobs=n_jobs,
-                **model_param_dict,
+            verbose=int(verbose_bool),
+            random_state=random_seed,
+            n_jobs=n_jobs,
+            **model_param_dict,
         )
         if multioutput:
             from sklearn.multioutput import RegressorChain
@@ -223,22 +221,22 @@ def retrieve_regressor(
 
             svc = LinearSVR(verbose=verbose, random_state=random_seed, max_iter=1500)
             regr = AdaBoostRegressor(
-                    base_estimator=svc,
-                    n_estimators=regression_model["model_params"]['n_estimators'],
-                    loss=regression_model["model_params"]['loss'],
-                    learning_rate=regression_model["model_params"]['learning_rate'],
-                    random_state=random_seed,
+                base_estimator=svc,
+                n_estimators=regression_model["model_params"]['n_estimators'],
+                loss=regression_model["model_params"]['loss'],
+                learning_rate=regression_model["model_params"]['learning_rate'],
+                random_state=random_seed,
             )
         elif regression_model["model_params"]['base_estimator'] == 'LinReg':
             from sklearn.linear_model import LinearRegression
 
             linreg = LinearRegression()
             regr = AdaBoostRegressor(
-                    base_estimator=linreg,
-                    n_estimators=regression_model["model_params"]['n_estimators'],
-                    loss=regression_model["model_params"]['loss'],
-                    learning_rate=regression_model["model_params"]['learning_rate'],
-                    random_state=random_seed,
+                base_estimator=linreg,
+                n_estimators=regression_model["model_params"]['n_estimators'],
+                loss=regression_model["model_params"]['loss'],
+                learning_rate=regression_model["model_params"]['learning_rate'],
+                random_state=random_seed,
             )
         else:
             regr = AdaBoostRegressor(random_state=random_seed, **model_param_dict)
@@ -250,6 +248,7 @@ def retrieve_regressor(
             return regr
     elif model_class == 'xgboost':
         import xgboost as xgb
+
         if multioutput:
             from sklearn.multioutput import MultiOutputRegressor
 
@@ -258,10 +257,13 @@ def retrieve_regressor(
                 n_jobs=n_jobs,
             )
         else:
-            regr = xgb.XGBRegressor(verbosity=verbose, **model_param_dict, n_jobs=n_jobs)
+            regr = xgb.XGBRegressor(
+                verbosity=verbose, **model_param_dict, n_jobs=n_jobs
+            )
         return regr
     elif model_class == 'SVM':
         from sklearn.svm import LinearSVR
+
         if multioutput:
             from sklearn.multioutput import MultiOutputRegressor
 
@@ -306,6 +308,7 @@ def retrieve_regressor(
         )
         return regr
 
+
 sklearn_model_dict: dict = {
     'RandomForest': 0.1,
     'ElasticNet': 0.05,
@@ -331,7 +334,10 @@ no_shared_model_dict = {
     'HistGradientBoost': 0.1,
 }
 
-def generate_regressor_params(model_dict=None,):
+
+def generate_regressor_params(
+    model_dict=None,
+):
     if model_dict is None:
         model_dict = sklearn_model_dict
     """Generate new parameters for input to regressor."""

@@ -55,7 +55,7 @@ transformer_list = "all"  # ["bkfilter", "STLFilter", "HPFilter", 'StandardScale
 transformer_max_depth = 3
 model_list = "default"
 model_list = 'superfast'  # fast_parallel
-# model_list = ["UnivariateRegression", "WindowRegression", "DatepartRegression", "RollingRegression"]
+# model_list = ["GluonTS", "AverageValueNaive"]
 
 metric_weighting = {
     'smape_weighting': 3,

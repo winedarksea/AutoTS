@@ -516,7 +516,9 @@ class SinTrend(EmptyTransformer):
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            popt, pcov = scipy.optimize.curve_fit(sinfunc, tt, yy, p0=guess, maxfev=10000)
+            popt, pcov = scipy.optimize.curve_fit(
+                sinfunc, tt, yy, p0=guess, maxfev=10000
+            )
         A, w, p, c = popt
         # f = w/(2.*np.pi)
         # fitfunc = lambda t: A * np.sin(w*t + p) + c

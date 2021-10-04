@@ -418,12 +418,13 @@ def load_sine(long=False, shape=None, start_date: str = "2021-01-01"):
     df_wide = pd.DataFrame(
         np.ones(shape),
         index=pd.date_range(start_date, periods=shape[0], freq="D"),
-        columns=range(shape[1])
+        columns=range(shape[1]),
     )
     X = pd.to_numeric(df_wide.index, errors='coerce', downcast='integer').values
 
     def sin_func(a, X):
         return a * np.sin(1 * X) + a
+
     for column in df_wide.columns:
         df_wide[column] = sin_func(column, X)
     if not long:

@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.datasets package &#8212; AutoTS 0.3.6 documentation</title>
+    <title>autots.datasets package &#8212; AutoTS 0.3.7 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -38,113 +38,11 @@
 <section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
 </section>
-<section id="module-autots.datasets.fred">
-<span id="autots-datasets-fred-module"></span><h2>autots.datasets.fred module<a class="headerlink" href="#module-autots.datasets.fred" title="Permalink to this headline">¶</a></h2>
-<p>FRED (Federal Reserve Economic Data) Data Import</p>
-<p>requires API key from FRED
-and pip install fredapi</p>
-<dl class="function">
-<dt id="autots.datasets.fred.get_fred_data">
-<code class="sig-prename descclassname">autots.datasets.fred.</code><code class="sig-name descname">get_fred_data</code><span class="sig-paren">(</span><em class="sig-param">fredkey: str</em>, <em class="sig-param">SeriesNameDict: dict = None</em>, <em class="sig-param">long=True</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.fred.get_fred_data" title="Permalink to this definition">¶</a></dt>
-<dd><p>Imports Data from Federal Reserve.
-For simplest results, make sure requested series are all of the same frequency.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>fredkey</strong> (<em>str</em>) – an API key from FRED</p></li>
-<li><p><strong>SeriesNameDict</strong> (<em>dict</em>) – pairs of FRED Series IDs and Series Names like: {‘SeriesID’: ‘SeriesName’} or a list of FRED IDs.
-Series id must match Fred IDs, but name can be anything
-if None, several default series are returned</p></li>
-<li><p><strong>long</strong> (<em>bool</em>) – if True, return long style data, else return wide style data with dt index</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
+<section id="autots-datasets-fred-module">
+<h2>autots.datasets.fred module<a class="headerlink" href="#autots-datasets-fred-module" title="Permalink to this headline">¶</a></h2>
 </section>
-<section id="module-autots.datasets">
-<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots.datasets" title="Permalink to this headline">¶</a></h2>
-<p>Tools for Importing Sample Data</p>
-<dl class="function">
-<dt id="autots.datasets.load_daily">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_daily</code><span class="sig-paren">(</span><em class="sig-param">long: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_daily" title="Permalink to this definition">¶</a></dt>
-<dd><p>2020 Covid, Air Pollution, and Economic Data.</p>
-<p>Sources: Covid Tracking Project, EPA, and FRED</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>long</strong> (<em>bool</em>) – if True, return data in long format. Otherwise return wide</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.datasets.load_monthly">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_monthly</code><span class="sig-paren">(</span><em class="sig-param">long: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_monthly" title="Permalink to this definition">¶</a></dt>
-<dd><p>Federal Reserve of St. Louis monthly economic indicators.</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.datasets.load_yearly">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_yearly</code><span class="sig-paren">(</span><em class="sig-param">long: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_yearly" title="Permalink to this definition">¶</a></dt>
-<dd><p>Federal Reserve of St. Louis annual economic indicators.</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.datasets.load_hourly">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_hourly</code><span class="sig-paren">(</span><em class="sig-param">long: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_hourly" title="Permalink to this definition">¶</a></dt>
-<dd><p>Traffic data from the MN DOT via the UCI data repository.</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.datasets.load_weekly">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_weekly</code><span class="sig-paren">(</span><em class="sig-param">long: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_weekly" title="Permalink to this definition">¶</a></dt>
-<dd><p>Weekly petroleum industry data from the EIA.</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.datasets.load_weekdays">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_weekdays</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False</em>, <em class="sig-param">categorical: bool = True</em>, <em class="sig-param">periods: int = 180</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_weekdays" title="Permalink to this definition">¶</a></dt>
-<dd><p>Test edge cases by creating a Series with values as day of week.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>long</strong> (<em>bool</em>) – if True, return a df with columns “value” and “datetime”
-if False, return a Series with dt index</p></li>
-<li><p><strong>categorical</strong> (<em>bool</em>) – if True, return str/object, else return int</p></li>
-<li><p><strong>periods</strong> (<em>int</em>) – number of periods, ie length of data to generate</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.datasets.load_live_daily">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_live_daily</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False, fred_key: str = None, fred_series: list = ['DGS10', 'T5YIE', 'SP500', 'DCOILWTICO', 'DEXUSEU'], tickers: list = ['MSFT'], trends_list: list = ['forecasting', 'cycling', 'cpu', 'microsoft'], weather_data_types: list = ['AWND', 'WSF2', 'TAVG'], weather_stations: list = ['USW00094846', 'USW00014925'], weather_years: int = 10, london_air_stations: list = ['CT3', 'SK8'], london_air_species: str = 'PM25', london_air_days: int = 180, earthquake_days: int = 180, earthquake_min_magnitude: int = 5</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_live_daily" title="Permalink to this definition">¶</a></dt>
-<dd><p>Generates a dataframe of data up to the present day.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>long</strong> (<em>bool</em>) – whether to return in long format or wide</p></li>
-<li><p><strong>fred_key</strong> (<em>str</em>) – <a class="reference external" href="https://fred.stlouisfed.org/docs/api/api_key.html">https://fred.stlouisfed.org/docs/api/api_key.html</a></p></li>
-<li><p><strong>fred_series</strong> (<em>list</em>) – list of FRED series IDs. This requires fredapi package</p></li>
-<li><p><strong>tickers</strong> (<em>list</em>) – list of stock tickers, requires yfinance</p></li>
-<li><p><strong>trends</strong> (<em>list</em>) – list of search keywords, requires pytrends.</p></li>
-<li><p><strong>weather_data_types</strong> (<em>list</em>) – from NCEI NOAA api data types, GHCN Daily Weather Elements
-PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG</p></li>
-<li><p><strong>weather_stations</strong> (<em>list</em>) – from NCEI NOAA api station ids</p></li>
-<li><p><strong>london_air_stations</strong> (<em>list</em>) – londonair.org.uk source station IDs</p></li>
-<li><p><strong>london_species</strong> (<em>str</em>) – what measurement to pull from London Air. Not all stations have all metrics.        earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.datasets.load_zeroes">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_zeroes</code><span class="sig-paren">(</span><em class="sig-param">long=False</em>, <em class="sig-param">shape=None</em>, <em class="sig-param">start_date: str = '2021-01-01'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_zeroes" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create a dataset of just zeroes for testing edge case.</p>
-</dd></dl>
-
+<section id="module-contents">
+<h2>Module contents<a class="headerlink" href="#module-contents" title="Permalink to this headline">¶</a></h2>
 </section>
 </section>
 
