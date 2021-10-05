@@ -15,17 +15,9 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* bug fix in fake_date imputation
-* bug fix in Round
-* make SinTrend fail if it fails on all series (may revert this)
-* load_linear and load_sine artificial datasets
-* new NVAR model based on https://github.com/quantinfo/ng-rc-paper-code/
-* tuning retrieve_regressor to allow it to better work with multioutput and univariate
-* expand GluonTS models included
-* GluonTS now works on univariate inputs
-* GluonTS now works with regressors
-* fixed bug where model_count wrong for mosaic ensembles
-* fixed bug in VECM that meant it didn't couldn't utilize future_regressor
+* add Transformer method to sklearn DNN models
+* added param space for RandomForest regressions
+* removed Tensorflow models from UnivariateRegression as it can cause a crash with GPU training
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

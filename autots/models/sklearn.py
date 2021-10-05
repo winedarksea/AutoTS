@@ -150,13 +150,16 @@ def retrieve_regressor(
         regr = KerasRNN(
             verbose=verbose,
             random_seed=random_seed,
-            kernel_initializer=regression_model["model_params"]['kernel_initializer'],
-            epochs=regression_model["model_params"]['epochs'],
-            batch_size=regression_model["model_params"]['batch_size'],
-            optimizer=regression_model["model_params"]['optimizer'],
-            loss=regression_model["model_params"]['loss'],
-            hidden_layer_sizes=regression_model["model_params"]['hidden_layer_sizes'],
-            rnn_type=regression_model["model_params"]['rnn_type'],
+            **model_param_dict
+        )
+        return regr
+    elif model_class == 'Transformer':
+        from autots.models.dnn import Transformer
+
+        regr = Transformer(
+            verbose=verbose,
+            random_seed=random_seed,
+            **model_param_dict
         )
         return regr
     elif model_class == 'KNN':
@@ -301,7 +304,6 @@ def retrieve_regressor(
 
         regr = RandomForestRegressor(
             random_state=random_seed,
-            n_estimators=1000,
             verbose=verbose,
             n_jobs=n_jobs,
             **model_param_dict,
@@ -310,21 +312,25 @@ def retrieve_regressor(
 
 
 sklearn_model_dict: dict = {
-    'RandomForest': 0.1,
+    'RandomForest': 0.15,
     'ElasticNet': 0.05,
-    'MLP': 0.25,
+    'MLP': 0.2,
     'DecisionTree': 0.1,
     'KNN': 0.1,
     'Adaboost': 0.05,
     'SVM': 0.001,  # tends to be the slowest
     'BayesianRidge': 0.08,
     'xgboost': 0.01,
-    'KerasRNN': 0.05,
+    'KerasRNN': 2.05,
+    'Transformer': 1.05,
     'HistGradientBoost': 0.01,
     'LightGBM': 0.1,
     'ExtraTrees': 0.03,
     'RadiusNeighbors': 0.03,
 }
+univariate_model_dict = sklearn_model_dict.copy()
+del univariate_model_dict['KerasRNN']
+del univariate_model_dict['Transformer']
 # models where we can be sure the model isn't sharing information across multiple Y's...
 no_shared_model_dict = {
     'KNN': 0.2,
@@ -350,7 +356,9 @@ def generate_regressor_params(
         'MLP',
         'KNN',
         'KerasRNN',
+        'Transformer',
         'HistGradientBoost',
+        'RandomForest',
     ]:
         if model == 'Adaboost':
             param_dict = {
@@ -442,6 +450,24 @@ def generate_regressor_params(
                     ).item(),
                 },
             }
+        elif model == 'RandomForest':
+            param_dict = {
+                "model": 'RandomForest',
+                "model_params": {
+                    "n_estimators": random.choices(
+                        [300, 100, 1000, 5000], [0.2, 0.2, 0.8, 0.05]
+                    )[0],
+                    "min_samples_leaf": random.choices(
+                        [2, 4, 1], [0.2, 0.2, 0.8]
+                    )[0],
+                    "bootstrap": random.choices(
+                        [True, False], [0.9, 0.1]
+                    )[0],
+                    "criterion": random.choices(
+                        ["squared_error", "poisson", "absolute_error"], [0.8, 0.2, 0.2]
+                    )[0],
+                },
+            }
         elif model == 'KerasRNN':
             init_list = [
                 'glorot_uniform',
@@ -453,21 +479,20 @@ def generate_regressor_params(
             param_dict = {
                 "model": 'KerasRNN',
                 "model_params": {
-                    "kernel_initializer": np.random.choice(init_list, size=1).item(),
-                    "epochs": np.random.choice(
-                        [50, 100, 500], p=[0.7, 0.2, 0.1], size=1
-                    ).item(),
-                    "batch_size": np.random.choice(
-                        [8, 16, 32, 72], p=[0.2, 0.2, 0.5, 0.1], size=1
-                    ).item(),
-                    "optimizer": np.random.choice(
-                        ['adam', 'rmsprop', 'adagrad'], p=[0.4, 0.5, 0.1], size=1
-                    ).item(),
-                    "loss": np.random.choice(
+                    "kernel_initializer": random.choices(init_list)[0],
+                    "epochs": random.choices(
+                        [50, 100, 500], [0.7, 0.2, 0.1]
+                    )[0],
+                    "batch_size": random.choices(
+                        [8, 16, 32, 72], [0.2, 0.2, 0.5, 0.1]
+                    )[0],
+                    "optimizer": random.choices(
+                        ['adam', 'rmsprop', 'adagrad'], [0.4, 0.5, 0.1]
+                    )[0],
+                    "loss": random.choices(
                         ['mae', 'Huber', 'poisson', 'mse', 'mape'],
-                        p=[0.2, 0.3, 0.1, 0.2, 0.2],
-                        size=1,
-                    ).item(),
+                        [0.2, 0.3, 0.1, 0.2, 0.2],
+                    )[0],
                     "hidden_layer_sizes": random.choices(
                         [
                             (100,),
@@ -479,9 +504,54 @@ def generate_regressor_params(
                         ],
                         [0.1, 0.3, 0.3, 0.1, 0.1, 0.1],
                     )[0],
-                    "rnn_type": np.random.choice(
-                        ['LSTM', 'GRU'], p=[0.7, 0.3], size=1
-                    ).item(),
+                    "rnn_type": random.choices(
+                        ['LSTM', 'GRU', "E2D2"], [0.5, 0.3, 0.2]
+                    )[0],
+                    "shape": random.choice([1, 2]),
+                },
+            }
+        elif model == 'Transformer':
+            param_dict = {
+                "model": 'Transformer',
+                "model_params": {
+                    "epochs": random.choices(
+                        [50, 100, 500], [0.7, 0.2, 0.1]
+                    )[0],
+                    "batch_size": random.choices(
+                        [8, 16, 32, 72], [0.2, 0.2, 0.5, 0.1]
+                    )[0],
+                    "optimizer": random.choices(
+                        ['adam', 'rmsprop', 'adagrad'], [0.4, 0.5, 0.1]
+                    )[0],
+                    "loss": random.choices(
+                        ['mae', 'Huber', 'poisson', 'mse', 'mape'],
+                        [0.2, 0.3, 0.1, 0.2, 0.2],
+                    )[0],
+                    "head_size": random.choices(
+                        [32, 64, 128, 256], [0.1, 0.1, 0.3, 0.5]
+                    )[0],
+                    "num_heads": random.choices(
+                        [2, 4], [0.2, 0.2]
+                    )[0],
+                    "ff_dim": random.choices(
+                        [2, 3, 4, 32, 64], [0.1, 0.1, 0.8, 0.05, 0.05]
+                    )[0],
+                    "num_transformer_blocks": random.choices(
+                        [1, 2, 4, 6],
+                        [0.2, 0.2, 0.6, 0.05],
+                    )[0],
+                    "mlp_units": random.choices(
+                        [32, 64, 128, 256],
+                        [0.2, 0.3, 0.8, 0.2],
+                    )[0],
+                    "mlp_dropout": random.choices(
+                        [0.05, 0.2, 0.4],
+                        [0.2, 0.8, 0.2],
+                    )[0],
+                    "dropout": random.choices(
+                        [0.05, 0.2, 0.4],
+                        [0.2, 0.8, 0.2],
+                    )[0],
                 },
             }
         elif model == 'HistGradientBoost':
@@ -1975,7 +2045,7 @@ class UnivariateRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params()
+        model_choice = generate_regressor_params(model_dict=univariate_model_dict)
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30], [0.6, 0.1, 0.1, 0.1, 0.1]
         )[0]
