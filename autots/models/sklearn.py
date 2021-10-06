@@ -96,7 +96,7 @@ def rolling_x_regressor(
     X = X.replace([np.inf, -np.inf], np.nan)
     X = X.fillna(method='ffill').fillna(method='bfill')
 
-    X.columns = [x for x in range(len(X.columns))]
+    X.columns = [str(x) for x in range(len(X.columns))]
 
     return X
 
@@ -475,6 +475,7 @@ def generate_regressor_params(
                 'glorot_normal',
                 'RandomUniform',
                 'he_normal',
+                'zeros',
             ]
             param_dict = {
                 "model": 'KerasRNN',
@@ -505,7 +506,7 @@ def generate_regressor_params(
                         [0.1, 0.3, 0.3, 0.1, 0.1, 0.1],
                     )[0],
                     "rnn_type": random.choices(
-                        ['LSTM', 'GRU', "E2D2"], [0.5, 0.3, 0.2]
+                        ['LSTM', 'GRU', "E2D2", "CNN"], [0.5, 0.3, 0.15, 0.15]
                     )[0],
                     "shape": random.choice([1, 2]),
                 },
@@ -543,7 +544,7 @@ def generate_regressor_params(
                     "mlp_units": random.choices(
                         [32, 64, 128, 256],
                         [0.2, 0.3, 0.8, 0.2],
-                    )[0],
+                    ),
                     "mlp_dropout": random.choices(
                         [0.05, 0.2, 0.4],
                         [0.2, 0.8, 0.2],
@@ -767,6 +768,8 @@ class RollingRegression(ModelObject):
         rolling values
         """
         X = X.drop(X.tail(1).index).drop(X.head(1).index)
+        if isinstance(X, pd.DataFrame):
+            X.columns = [str(xc) for xc in X.columns]
 
         multioutput = True
         if Y.ndim < 2:
@@ -838,6 +841,8 @@ class RollingRegression(ModelObject):
             if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
                 x_dat = pd.DataFrame(self.x_transformer.transform(x_dat))
                 x_dat = x_dat.replace([np.inf, -np.inf], 0).fillna(0)
+            if isinstance(x_dat, pd.DataFrame):
+                x_dat.columns = [str(xc) for xc in x_dat.columns]
 
             rfPred = pd.DataFrame(self.regr.predict(x_dat.tail(1).values))
 
@@ -1194,6 +1199,8 @@ class WindowRegression(ModelObject):
             multioutput = False
         elif Y.shape[1] < 2:
             multioutput = False
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
         self.regr = retrieve_regressor(
             regression_model=self.regression_model,
             verbose=self.verbose,

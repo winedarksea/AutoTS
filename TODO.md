@@ -16,6 +16,7 @@
 
 # Latest
 * add Transformer method to sklearn DNN models
+* expanded and tuned KerasRNN model options
 * added param space for RandomForest regressions
 * removed Tensorflow models from UnivariateRegression as it can cause a crash with GPU training
 
