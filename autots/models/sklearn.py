@@ -312,28 +312,28 @@ def retrieve_regressor(
 
 
 sklearn_model_dict: dict = {
-    'RandomForest': 0.15,
+    'RandomForest': 0.05,
     'ElasticNet': 0.05,
-    'MLP': 0.2,
-    'DecisionTree': 0.1,
+    'MLP': 0.05,
+    'DecisionTree': 0.05,
     'KNN': 0.05,
     'Adaboost': 0.05,
-    'SVM': 0.001,  # tends to be the slowest
-    'BayesianRidge': 0.08,
-    'xgboost': 0.01,
-    'KerasRNN': 2.05,
-    'Transformer': 1.05,
-    'HistGradientBoost': 0.01,
-    'LightGBM': 0.1,
-    'ExtraTrees': 0.03,
-    'RadiusNeighbors': 0.03,
+    'SVM': 0.05,  # tends to be the slowest
+    'BayesianRidge': 0.05,
+    'xgboost': 0.05,
+    'KerasRNN': 0.05,
+    'Transformer': 0.05,
+    'HistGradientBoost': 0.05,
+    'LightGBM': 0.05,
+    'ExtraTrees': 0.05,
+    'RadiusNeighbors': 0.05,
 }
 univariate_model_dict = sklearn_model_dict.copy()
 del univariate_model_dict['KerasRNN']
 del univariate_model_dict['Transformer']
 # models where we can be sure the model isn't sharing information across multiple Y's...
 no_shared_model_dict = {
-    'KNN': 0.2,
+    'KNN': 0.1,
     'Adaboost': 0.1,
     'SVM': 0.1,
     'xgboost': 0.1,

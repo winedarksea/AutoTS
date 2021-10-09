@@ -26,6 +26,7 @@ def create_regressor(
 
     It is recommended that the .head(forecast_length) of both regressor_train and the df for training are dropped.
     `df = df.iloc[forecast_length:]`
+    If you don't want the lagged features, set summarize="median" which will only give one column of such, which can then be easily dropped
 
     Args:
         df (pd.DataFrame): WIDE style dataframe (use long_to_wide if the data isn't already)
@@ -48,6 +49,8 @@ def create_regressor(
     """
     if not isinstance(df.index, pd.DatetimeIndex):
         raise ValueError("create_regressor input df must be `wide` style with pd.DatetimeIndex index")
+    if isinstance(df, pd.Series):
+        df = df.to_frame()
     if drop_most_recent > 0:
         df = df.drop(df.tail(drop_most_recent).index)
     if frequency == "infer":
@@ -164,13 +167,12 @@ def create_lagged_regressor(
         scaler = StandardScaler()
         df = pd.DataFrame(scaler.fit_transform(df), index=dates, columns=df_cols)
 
-    pca_flag = False
     ag_flag = False
     # these shouldn't care about NaN
     if summarize is None:
         pass
     if summarize == "auto":
-        pca_flag = True if df.shape[1] > 10 else False
+        ag_flag = True if df.shape[1] > 10 else False
     elif summarize == 'mean':
         df = df.mean(axis=1).to_frame()
     elif summarize == 'median':
@@ -180,7 +182,8 @@ def create_lagged_regressor(
         df.columns = [0, 1]
 
     df = FillNA(df, method=fill_na)
-    if summarize == 'pca' or pca_flag:
+    # some debate over whether PCA or RandomProjection will result in minor data leakage, if used
+    if summarize == 'pca':
         from sklearn.decomposition import PCA
 
         n_components = "mle" if df.shape[0] > df.shape[1] else None

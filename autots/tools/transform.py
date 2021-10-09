@@ -1001,6 +1001,16 @@ class DatepartRegressionTransformer(EmptyTransformer):
 
         if method == "all":
             choice = generate_regressor_params()
+        elif method == "fast":
+            choice = generate_regressor_params(
+                model_dict={
+                    'ElasticNet': 0.25,
+                    'DecisionTree': 0.25,
+                    'KNN': 0.1,
+                    'MLP': 0.2,
+                    'RandomForest': 0.2,
+                }
+            )
         else:
             choice = generate_regressor_params(
                 model_dict={
