@@ -63,6 +63,7 @@ class AutoTS(object):
         drop_data_older_than_periods (int): take only the n most recent timestamps
         model_list (list): str alias or list of names of model objects to use
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
+            can accept string aliases: "all", "fast", "superfast"
         transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
@@ -119,7 +120,7 @@ class AutoTS(object):
             'mae_weighting': 2,
             'rmse_weighting': 2,
             'containment_weighting': 0,
-            'runtime_weighting': 0,
+            'runtime_weighting': 0.05,
             'spl_weighting': 2,
             'contour_weighting': 1,
         },

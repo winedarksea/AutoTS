@@ -2,7 +2,7 @@
 """Tests."""
 
 import unittest
-from autots import create_lagged_regressor, load_daily
+from autots import create_lagged_regressor, load_daily, create_regressor
 
 
 class test_create_lagged_regressor(unittest.TestCase):
@@ -22,14 +22,16 @@ class test_create_lagged_regressor(unittest.TestCase):
         self.assertFalse(fcst.isna().any().any())
         self.assertTrue((df.index == regr.index).all())
 
-        regr, fcst = create_lagged_regressor(
+        regr, fcst = create_regressor(
             df,
             forecast_length=forecast_length,
-            summarize=None,
-            backfill='DatepartRegression',
+            summarize="auto",
+            datepart_method="recurring",
+            holiday_countries=["UK", "US"],
+            backfill='ffill',
             fill_na='zero')
 
-        self.assertEqual(regr.shape, df.shape)
+        self.assertEqual(regr.shape[0], df.shape[0])
         self.assertEqual(fcst.shape[0], forecast_length)
         self.assertFalse(regr.isna().any().any())
         self.assertFalse(fcst.isna().any().any())

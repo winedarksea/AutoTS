@@ -1064,7 +1064,7 @@ def TemplateWizard(
             )
             if validation_round >= 1 and verbose > 0:
                 validation_accuracy_print = (
-                    "Model {} of model {} with avg smape {}: ".format(
+                    "{} - {} with avg smape {}: ".format(
                         str(template_result.model_count),
                         model_str,
                         model_error.avg_metrics['smape'].round(2),

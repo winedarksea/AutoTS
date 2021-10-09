@@ -10,7 +10,7 @@
 * [Installation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning)
 * [Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
 * [Adding Regressors](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information)
-* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id7)
+* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id8)
 
 ## Extended Tutorial
 
@@ -537,7 +537,7 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  FBProphet              | fbprophet    |                         |    True       |     joblib      |       |              |              | True          |
 |  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   | True         |              |               |
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
-|  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              |               |
+|  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 |  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 | UnivariateMotif/MultivariateMotif | scipy.distaince.cdist |      |    True       |     joblib      |       | *            |              |               |

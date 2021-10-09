@@ -2169,7 +2169,7 @@ class GeneralTransformer(object):
             from sklearn.decomposition import PCA
 
             transformer = PCA(
-                n_components=df.shape[1], whiten=False, random_state=random_seed
+                n_components=min(df.shape), whiten=False, random_state=random_seed
             )
             return transformer
 
@@ -2370,14 +2370,14 @@ def get_transformer_params(transformer: str = "EmptyTransformer", method: str = 
 transformer_dict = {
     None: 0.0,
     'MinMaxScaler': 0.05,
-    'PowerTransformer': 0.05,
+    'PowerTransformer': 0.02,  # is noticeably slower at scale, if not tons
     'QuantileTransformer': 0.05,
     'MaxAbsScaler': 0.05,
     'StandardScaler': 0.04,
     'RobustScaler': 0.05,
     'PCA': 0.01,
     'FastICA': 0.01,
-    'Detrend': 0.05,
+    'Detrend': 0.1,  # slow with some params, but that's handled in get_params
     'RollingMeanTransformer': 0.02,
     'RollingMean100thN': 0.01,  # old
     'DifferencedTransformer': 0.1,
@@ -2411,7 +2411,6 @@ del fast_transformer_dict['DatepartRegression']
 del fast_transformer_dict['SinTrend']
 del fast_transformer_dict['FastICA']
 del fast_transformer_dict['ScipyFilter']
-del fast_transformer_dict['STLFilter']
 
 # and even more
 superfast_transformer_dict = fast_transformer_dict.copy()
@@ -2421,20 +2420,24 @@ del superfast_transformer_dict['QuantileTransformer']
 del superfast_transformer_dict['PowerTransformer']
 del superfast_transformer_dict['convolution_filter']
 del superfast_transformer_dict['HPFilter']
+del superfast_transformer_dict['STLFilter']
+del superfast_transformer_dict['PctChangeTransformer']
 
 # probability dictionary of FillNA methods
 na_probs = {
-    'ffill': 0.6,
+    'ffill': 0.5,
     'fake_date': 0.1,
     'rolling_mean': 0.2,
     'rolling_mean_24': 0.1,
-    'IterativeImputer': 0.1,
+    'IterativeImputer': 0.1,  # this parallelizes, uses more memory
     'mean': 0.05,
     'zero': 0.05,
     'ffill_mean_biased': 0.1,
     'median': 0.05,
     None: 0.01,
-    "interpolate": 0.6,
+    "interpolate": 0.5,
+    "KNNImputer": 0.05,
+    "IterativeImputerExtraTrees": 0.0001,
 }
 
 
@@ -2470,14 +2473,14 @@ def RandomTransform(
 ):
     """Return a dict of randomly choosen transformation selections.
 
-    DatepartRegression is used as a signal that slow parameters are allowed.
+    SinTrend is used as a signal that slow parameters are allowed.
     """
     transformer_list, transformer_prob = transformer_list_to_dict(transformer_list)
 
     # adjust fast/slow based on Transformers allowed
     if fast_params is None:
         fast_params = True
-        slow_flags = ["DatepartRegression"]
+        slow_flags = ["SinTrend"]
         intersects = [i for i in slow_flags if i in transformer_list]
         if intersects:
             fast_params = False
@@ -2487,7 +2490,9 @@ def RandomTransform(
     if fast_params:
         params_method = "fast"
         throw_away = na_prob_dict.pop('IterativeImputer', None)
-        throw_away = na_prob_dict.pop('interpolate', None)  # noqa
+        # throw_away = na_prob_dict.pop('KNNImputer', None)
+        throw_away = na_prob_dict.pop('IterativeImputerExtraTrees', None)  # noqa
+        # throw_away = na_prob_dict.pop('interpolate', None)  # noqa
 
     # clean na_probs dict
     na_probabilities = list(na_prob_dict.values())
@@ -2499,7 +2504,7 @@ def RandomTransform(
     # choose FillNA
     na_choice = random.choices(na_probs_list, na_probabilities)[0]
     if na_choice == "interpolate":
-        na_choice = random.choice(df_interpolate)
+        na_choice = random.choices(list(df_interpolate.keys()), list(df_interpolate.values()))[0]
 
     # choose length of transformers
     num_trans = random.randint(1, transformer_max_depth)

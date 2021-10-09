@@ -17,7 +17,7 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt  # required only for graphs
-from autots import AutoTS, load_live_daily, create_lagged_regressor
+from autots import AutoTS, load_live_daily, create_regressor
 
 fred_key = None  # https://fred.stlouisfed.org/docs/api/api_key.html
 forecast_name = "example"
@@ -25,6 +25,7 @@ graph = True  # whether to plot a graph
 # https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects
 frequency = "D"
 forecast_length = 28  # number of periods to forecast ahead
+drop_most_recent = 1  # whether to discard the n most recent records (as incomplete)
 n_jobs = "auto"  # "auto" or set to number of CPU cores
 prediction_interval = 0.9  # sets the upper and lower forecast range by probability range. Bigger = wider
 initial_training = "auto"  # set this to True on first run, or on reset, 'auto' looks for existing template, if found, sets to False.
@@ -82,12 +83,18 @@ most_recent_date = df.notna()[::-1].idxmax()
 drop_cols = most_recent_date[most_recent_date < min_cutoff_date].index.tolist()
 df = df.drop(columns=drop_cols)
 
-regr_train, regr_fcst = create_lagged_regressor(
+# regressor with some things we can glean from data and datetime index
+regr_train, regr_fcst = create_regressor(
     df,
     forecast_length=forecast_length,
-    summarize=None,
-    backfill='datepartregression',
-    fill_na='ffill'
+    frequency=frequency,
+    drop_most_recent=drop_most_recent,
+    scale=True,
+    summarize="auto",
+    backfill='bfill',
+    fill_na='ffill',
+    holiday_countries=["US", "UK"],  # requires holidays package
+    datepart_method="recurring",
 )
 
 # remove the first forecast_length rows (because those are lost in regressor)
@@ -124,7 +131,7 @@ model = AutoTS(
     num_validations=2,
     validation_method="backwards",  # "seasonal 364" would be a good choice too
     constraint=2,
-    drop_most_recent=1,  # if newest data is incomplete, also remember to increase forecast_length
+    drop_most_recent=drop_most_recent,  # if newest data is incomplete, also remember to increase forecast_length
     # no_negatives=True,
     # subset=100,
     # prefill_na=0,

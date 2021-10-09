@@ -11,8 +11,9 @@ from autots.datasets import (
     load_weekly,
     load_weekdays,
     load_zeroes,
+    load_linear,
 )
-from autots import AutoTS, create_lagged_regressor
+from autots import AutoTS, create_regressor
 import matplotlib.pyplot as plt
 
 # raise ValueError("aaargh!")
@@ -20,21 +21,22 @@ use_template = False
 use_m5 = False  # long = False
 force_univariate = False  # long = False
 back_forecast = False
+graph = True
 
 # this is the template file imported:
 example_filename = "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
-df = load_monthly(long=long)
+df = load_linear(long=long, shape=(500, 7000), introduce_nan=0.4)
 n_jobs = "auto"
-verbose = 1
+verbose = 2
 validation_method = "backwards"
 if use_template:
-    generations = 0
+    generations = 5
     num_validations = 0
 else:
-    generations = 3
-    num_validations = 2
+    generations = 15
+    num_validations = 1
 
 if use_m5:
     long = False
@@ -52,7 +54,7 @@ weights_weekly = {
 }
 
 transformer_list = "all"  # ["bkfilter", "STLFilter", "HPFilter", 'StandardScaler']
-transformer_max_depth = 3
+transformer_max_depth = 1
 model_list = "default"
 model_list = 'superfast'  # fast_parallel
 # model_list = ["GluonTS", "AverageValueNaive"]
@@ -62,17 +64,18 @@ metric_weighting = {
     'mae_weighting': 1,
     'rmse_weighting': 1,
     'containment_weighting': 0,
-    'runtime_weighting': 0,
+    'runtime_weighting': 0.1,
     'spl_weighting': 1,
     'contour_weighting': 1,
 }
 
-
+frequency = 'infer'
+drop_most_recent = 0
 model = AutoTS(
     forecast_length=forecast_length,
-    frequency='infer',
+    frequency=frequency,
     prediction_interval=0.9,
-    ensemble=["simple", "distance", "horizontal-max", "horizontal-min", "mosaic"],
+    ensemble=None,
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,
@@ -80,25 +83,30 @@ model = AutoTS(
     model_list=model_list,
     transformer_list=transformer_list,
     transformer_max_depth=transformer_max_depth,
-    initial_template='General+Random',
+    initial_template='Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.35,
     max_per_model_class=None,
     model_interrupt=True,
     n_jobs=n_jobs,
-    drop_most_recent=1,
+    drop_most_recent=drop_most_recent,
     # prefill_na=0,
     subset=None,
     verbose=verbose,
 )
 
 
-future_regressor_train2d, future_regressor_forecast2d  = create_lagged_regressor(
+future_regressor_train2d, future_regressor_forecast2d = create_regressor(
     df,
     forecast_length=forecast_length,
-    summarize=None,
-    backfill='datepartregression',
-    fill_na='ffill'
+    frequency=frequency,
+    drop_most_recent=drop_most_recent,
+    scale=True,
+    summarize="auto",
+    backfill='bfill',
+    fill_na='ffill',
+    holiday_countries=["US"],
+    datepart_method="recurring",
 )
 
 
@@ -139,29 +147,29 @@ print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 
 initial_results.to_csv("general_template_" + str(platform.node()) + ".csv")
 
-prediction.plot(model.df_wide_numeric,
-                series=model.df_wide_numeric.columns[0],
-                remove_zeroes=False,
-                start_date="2019-01-01")
+if graph:
+    prediction.plot(model.df_wide_numeric,
+                    series=model.df_wide_numeric.columns[0],
+                    remove_zeroes=False,
+                    start_date="2019-01-01")
+    plt.show()
+    model.plot_generation_loss()
 
-plt.show()
-model.plot_generation_loss()
+    if model.best_model['Ensemble'].iloc[0] == 2:
+        plt.show()
+        model.plot_horizontal_transformers(method="fillna")
+        plt.show()
+        model.plot_horizontal_transformers()
+        plt.show()
+        model.plot_horizontal()
+        plt.show()
+        if 'mosaic' in model.best_model['ModelParameters'].iloc[0].lower():
+            mosaic_df = model.mosaic_to_df()
+            print(mosaic_df[mosaic_df.columns[0:5]].head(5))
 
-if model.best_model['Ensemble'].iloc[0] == 2:
     plt.show()
-    model.plot_horizontal_transformers(method="fillna")
-    plt.show()
-    model.plot_horizontal_transformers()
-    plt.show()
-    model.plot_horizontal()
-    plt.show()
-    if 'mosaic' in model.best_model['ModelParameters'].iloc[0].lower():
-        mosaic_df = model.mosaic_to_df()
-        print(mosaic_df[mosaic_df.columns[0:5]].head(5))
-
-plt.show()
-if back_forecast:
-    model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
+    if back_forecast:
+        model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
 
 df_wide_numeric = model.df_wide_numeric
 

@@ -316,7 +316,7 @@ sklearn_model_dict: dict = {
     'ElasticNet': 0.05,
     'MLP': 0.2,
     'DecisionTree': 0.1,
-    'KNN': 0.1,
+    'KNN': 0.05,
     'Adaboost': 0.05,
     'SVM': 0.001,  # tends to be the slowest
     'BayesianRidge': 0.08,
@@ -506,7 +506,7 @@ def generate_regressor_params(
                         [0.1, 0.3, 0.3, 0.1, 0.1, 0.1],
                     )[0],
                     "rnn_type": random.choices(
-                        ['LSTM', 'GRU', "E2D2", "CNN"], [0.5, 0.3, 0.15, 0.15]
+                        ['LSTM', 'GRU', "E2D2", "CNN"], [0.5, 0.3, 0.15, 0.01]
                     )[0],
                     "shape": random.choice([1, 2]),
                 },
@@ -516,7 +516,7 @@ def generate_regressor_params(
                 "model": 'Transformer',
                 "model_params": {
                     "epochs": random.choices(
-                        [50, 100, 500], [0.7, 0.2, 0.1]
+                        [50, 100, 500, 750], [0.7, 0.2, 0.1, 0.05]
                     )[0],
                     "batch_size": random.choices(
                         [8, 16, 32, 72], [0.2, 0.2, 0.5, 0.1]
@@ -529,7 +529,7 @@ def generate_regressor_params(
                         [0.2, 0.3, 0.1, 0.2, 0.2],
                     )[0],
                     "head_size": random.choices(
-                        [32, 64, 128, 256], [0.1, 0.1, 0.3, 0.5]
+                        [32, 64, 128, 256, 384], [0.1, 0.1, 0.3, 0.5, 0.05]
                     )[0],
                     "num_heads": random.choices(
                         [2, 4], [0.2, 0.2]

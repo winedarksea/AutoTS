@@ -41,7 +41,7 @@ def seasonal_int(include_one: bool = False):
     return int(lag)
 
 
-def date_part(DTindex, method: str = 'simple'):
+def date_part(DTindex, method: str = 'simple', set_index: bool = True):
     """Create date part columns from pd.DatetimeIndex.
 
     Args:
@@ -50,6 +50,7 @@ def date_part(DTindex, method: str = 'simple'):
             simple - just day, year, month, weekday
             expanded - all available futures
             recurring - all features that should commonly repeat without aging
+        set_index (bool): if True, return DTindex as index of df
 
     Returns:
         pd.Dataframe with DTindex
@@ -108,4 +109,6 @@ def date_part(DTindex, method: str = 'simple'):
                 }
             )
             date_part_df = pd.concat([date_part_df, date_part_df2], axis=1)
+    if set_index:
+        date_part_df.index = DTindex
     return date_part_df
