@@ -176,6 +176,21 @@ def ModelMonster(
         )
         return model
 
+    elif model == 'MultivariateRegression':
+        from autots.models.sklearn import MultivariateRegression
+
+        model = MultivariateRegression(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            forecast_length=forecast_length,
+            **parameters,
+        )
+        return model
+
     elif model == 'UnobservedComponents':
         model = UnobservedComponents(
             frequency=frequency,

@@ -8,7 +8,7 @@ import random
 import pandas as pd
 
 
-def seasonal_int(include_one: bool = False):
+def seasonal_int(include_one: bool = False, small=False):
     """Generate a random integer of typical seasonalities."""
     prob_dict = {
         'random_int': 0.1,
@@ -38,6 +38,8 @@ def seasonal_int(include_one: bool = False):
         lag = 'random_int'
     if lag == 'random_int':
         lag = random.randint(2, 100)
+    if small:
+        lag = lag if lag < 364 else 364
     return int(lag)
 
 

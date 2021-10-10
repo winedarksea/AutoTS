@@ -1981,7 +1981,7 @@ have_params = {
     'STLFilter': STLFilter,
 }
 # where will results will vary if not all series are included together
-shared_trans = ['PCA', 'FastICA']
+shared_trans = ['PCA', 'FastICA', "DatepartRegression"]
 # transformers not defined in AutoTS
 external_transformers = [
     'MinMaxScaler',
@@ -2400,20 +2400,16 @@ transformer_dict = {
     'PositiveShift': 0.02,
     'Log': 0.01,
     'IntermittentOccurrence': 0.01,
-    # 'SeasonalDifference7': 0.0,  # old
     'SeasonalDifference': 0.1,
-    # 'SeasonalDifference28': 0.0,  # old
     'cffilter': 0.01,
     'bkfilter': 0.05,
     'convolution_filter': 0.001,
     "HPFilter": 0.02,
-    'DatepartRegression': 0.02,
-    # 'DatepartRegressionElasticNet': 0.0,  # old
-    # 'DatepartRegressionLtd': 0.0,  # old
+    'DatepartRegression': 0.01,
     "ClipOutliers": 0.05,
-    "Discretize": 0.05,
+    "Discretize": 0.03,
     "CenterLastValue": 0.01,
-    "Round": 0.05,
+    "Round": 0.02,
     "Slice": 0.02,
     "ScipyFilter": 0.02,
     "STLFilter": 0.01,
@@ -2424,17 +2420,24 @@ del fast_transformer_dict['SinTrend']
 del fast_transformer_dict['FastICA']
 del fast_transformer_dict['ScipyFilter']
 
-# and even more
-superfast_transformer_dict = fast_transformer_dict.copy()
-del superfast_transformer_dict['IntermittentOccurrence']
-del superfast_transformer_dict['cffilter']
-del superfast_transformer_dict['QuantileTransformer']
-del superfast_transformer_dict['PowerTransformer']
-del superfast_transformer_dict['convolution_filter']
-del superfast_transformer_dict['HPFilter']
-del superfast_transformer_dict['STLFilter']
-del superfast_transformer_dict['PctChangeTransformer']
-del superfast_transformer_dict['DatepartRegression']
+# and even more, not just removing slow but also less commonly useful ones
+superfast_transformer_dict = {
+    None: 0.0,
+    'MinMaxScaler': 0.05,
+    'MaxAbsScaler': 0.05,
+    'StandardScaler': 0.04,
+    'RobustScaler': 0.05,
+    'Detrend': 0.1,
+    'RollingMeanTransformer': 0.02,
+    'DifferencedTransformer': 0.1,
+    'PositiveShift': 0.02,
+    'Log': 0.01,
+    'SeasonalDifference': 0.1,
+    'bkfilter': 0.05,
+    "ClipOutliers": 0.05,
+    "Discretize": 0.03,
+    "Slice": 0.02,
+}
 
 # probability dictionary of FillNA methods
 na_probs = {
@@ -2442,7 +2445,7 @@ na_probs = {
     'fake_date': 0.1,
     'rolling_mean': 0.2,
     'rolling_mean_24': 0.1,
-    'IterativeImputer': 0.1,  # this parallelizes, uses more memory
+    'IterativeImputer': 0.1,  # this parallelizes, uses much memory
     'mean': 0.05,
     'zero': 0.05,
     'ffill_mean_biased': 0.1,
@@ -2450,7 +2453,7 @@ na_probs = {
     None: 0.01,
     "interpolate": 0.5,
     "KNNImputer": 0.05,
-    "IterativeImputerExtraTrees": 0.0001,
+    "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
 }
 
 
@@ -2503,9 +2506,7 @@ def RandomTransform(
     if fast_params:
         params_method = "fast"
         throw_away = na_prob_dict.pop('IterativeImputer', None)
-        # throw_away = na_prob_dict.pop('KNNImputer', None)
         throw_away = na_prob_dict.pop('IterativeImputerExtraTrees', None)  # noqa
-        # throw_away = na_prob_dict.pop('interpolate', None)  # noqa
 
     # clean na_probs dict
     na_probabilities = list(na_prob_dict.values())

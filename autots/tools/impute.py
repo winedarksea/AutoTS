@@ -98,11 +98,11 @@ df_interpolate = {
     'pchip': 0.1,
     'akima': 0.1,
     # these seem to cause more harm than good usually
-    'polynomial': 0,
-    'krogh': 0,
-    'cubicspline': 0,
-    'from_derivatives': 0,
-    'slinear': 0,
+    'polynomial': 0.0,
+    'krogh': 0.0,
+    'cubicspline': 0.0,
+    'from_derivatives': 0.0,
+    'slinear': 0.0,
 }
 df_interpolate_full = list(df_interpolate.keys())
 

@@ -527,7 +527,7 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  SeasonalNaive          |              |                         |               |                 |       |              |              |               |
 |  GLS                    | statsmodels  |                         |               |                 |       | True         |              |               |
 |  GLM                    | statsmodels  |                         |               |     joblib      |       |              |              | True          |
-| ETS - Exponential Smoothing | statsmodels  |                    |               |     joblib      |       |              |              |               |
+| ETS - Exponential Smoothing | statsmodels  |                     |               |     joblib      |       |              |              |               |
 |  UnobservedComponents   | statsmodels  |                         |               |     joblib      |       |              |              | True          |
 |  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  VARMAX                 | statsmodels  |                         |    True       |                 |       | True         |              |               |
@@ -535,10 +535,11 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  VECM                   | statsmodels  |                         |               |                 |       | True         |              | True          |
 |  VAR                    | statsmodels  |                         |    True       |                 |       | True         |              | True          |
 |  FBProphet              | fbprophet    |                         |    True       |     joblib      |       |              |              | True          |
-|  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   | True         |              |               |
+|  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   | True         |              | True          |
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
+|  MultivariateRegression | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 | UnivariateMotif/MultivariateMotif | scipy.distaince.cdist |      |    True       |     joblib      |       | *            |              |               |
 |  NVAR                   |              |                         |    True       |   blas/lapack   |       | True         |              |               |
@@ -547,4 +548,3 @@ df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # fo
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |
 |  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |               |
-|  TSFreshRegressor       | tsfresh, sklearn |                     |               |                 |       |              | True         |               |

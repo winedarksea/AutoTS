@@ -318,6 +318,7 @@ class AutoTS(object):
         self.best_model_name = ""
         self.best_model_params = ""
         self.best_model_transformation_params = ""
+        self.traceback = True if verbose > 1 else False
 
         if verbose > 2:
             print('"Hello. Would you like to destroy some evil today?" - Sanderson')
@@ -604,6 +605,7 @@ class AutoTS(object):
             verbose=verbose,
             n_jobs=self.n_jobs,
             max_generations=self.max_generations,
+            traceback=self.traceback,
         )
         model_count = template_result.model_count
 
@@ -672,6 +674,7 @@ class AutoTS(object):
                 n_jobs=self.n_jobs,
                 current_generation=current_generation,
                 max_generations=self.max_generations,
+                traceback=self.traceback,
             )
             model_count = template_result.model_count
 
@@ -716,6 +719,7 @@ class AutoTS(object):
                     current_generation=(current_generation + 1),
                     verbose=verbose,
                     n_jobs=self.n_jobs,
+                    traceback=self.traceback,
                 )
                 model_count = template_result.model_count
                 # capture results from lower-level template run
@@ -928,6 +932,7 @@ class AutoTS(object):
                     verbose=verbose,
                     n_jobs=self.n_jobs,
                     validation_round=(y + 1),
+                    traceback=self.traceback,
                 )
                 model_count = template_result.model_count
                 # gather results of template run
@@ -1015,7 +1020,7 @@ or otherwise increase models available."""
                     random_seed=random_seed,
                     verbose=verbose,
                     n_jobs=self.n_jobs,
-                    traceback=True,
+                    traceback=self.traceback,
                 )
                 # capture results from lower-level template run
                 template_result.model_results['TotalRuntime'].fillna(

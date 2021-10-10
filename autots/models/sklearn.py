@@ -101,6 +101,45 @@ def rolling_x_regressor(
     return X
 
 
+def rolling_x_regressor_regressor(
+        df,
+        mean_rolling_periods: int = 30,
+        macd_periods: int = None,
+        std_rolling_periods: int = 7,
+        max_rolling_periods: int = None,
+        min_rolling_periods: int = None,
+        ewm_alpha: float = 0.5,
+        additional_lag_periods: int = 7,
+        abs_energy: bool = False,
+        rolling_autocorr_periods: int = None,
+        add_date_part: str = None,
+        holiday: bool = False,
+        holiday_country: str = 'US',
+        polynomial_degree: int = None,
+        window: int = None,
+        future_regressor=None,
+):
+    """Adds in the future_regressor."""
+    X = rolling_x_regressor(
+        df,
+        mean_rolling_periods=mean_rolling_periods,
+        macd_periods=macd_periods,
+        std_rolling_periods=std_rolling_periods,
+        additional_lag_periods=additional_lag_periods,
+        ewm_alpha=ewm_alpha,
+        abs_energy=abs_energy,
+        rolling_autocorr_periods=rolling_autocorr_periods,
+        add_date_part=add_date_part,
+        holiday=holiday,
+        holiday_country=holiday_country,
+        polynomial_degree=polynomial_degree,
+        window=window,
+    )
+    if future_regressor is not None:
+        X = pd.concat([X, future_regressor], axis=1)
+    return X
+
+
 def retrieve_regressor(
     regression_model: dict = {
         "model": 'Adaboost',
@@ -339,6 +378,7 @@ no_shared_model_dict = {
     'xgboost': 0.1,
     'HistGradientBoost': 0.1,
 }
+# these are models that are relatively fast with large multioutput Y
 datepart_model_dict: dict = {
     'RandomForest': 0.05,
     'ElasticNet': 0.05,
@@ -670,13 +710,8 @@ class RollingRegression(ModelObject):
         verbose: int = 0,
         random_seed: int = 2020,
         regression_model: dict = {
-            "model": 'Adaboost',
-            "model_params": {
-                'n_estimators': 50,
-                'base_estimator': 'DecisionTree',
-                'loss': 'linear',
-                'learning_rate': 1.0,
-            },
+            "model": 'ExtraTrees',
+            "model_params": {},
         },
         holiday: bool = False,
         mean_rolling_periods: int = 30,
@@ -1160,13 +1195,8 @@ class WindowRegression(ModelObject):
         verbose: int = 0,
         window_size: int = 10,
         regression_model: dict = {
-            "model": 'Adaboost',
-            "model_params": {
-                'n_estimators': 50,
-                'base_estimator': 'DecisionTree',
-                'loss': 'linear',
-                'learning_rate': 1.0,
-            },
+            "model": 'RandomForest',
+            "model_params": {},
         },
         input_dim: str = 'univariate',
         output_dim: str = 'forecast_length',
@@ -1719,7 +1749,7 @@ class DatepartRegression(ModelObject):
 
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
-            regressor (numpy.Array): additional regressor
+            future_regressor (pandas.DataFrame or Series): Datetime Indexed
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
 
         Returns:
@@ -1814,13 +1844,8 @@ class UnivariateRegression(ModelObject):
         random_seed: int = 2020,
         forecast_length: int = 7,
         regression_model: dict = {
-            "model": 'Adaboost',
-            "model_params": {
-                'n_estimators': 50,
-                'base_estimator': 'DecisionTree',
-                'loss': 'linear',
-                'learning_rate': 1.0,
-            },
+            "model": 'ExtraTrees',
+            "model_params": {},
         },
         holiday: bool = False,
         mean_rolling_periods: int = 30,
@@ -1891,7 +1916,7 @@ class UnivariateRegression(ModelObject):
             x_transformer = VarianceThreshold(threshold=0.0)
         return x_transformer
 
-    def fit(self, df, future_regressor=[]):
+    def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
 
         Args:
@@ -1899,24 +1924,21 @@ class UnivariateRegression(ModelObject):
             future_regressor (pandas.DataFrame or Series): Datetime Indexed
         """
         df = self.basic_profile(df)
-        self.df_train = df
+        self.sktraindata = df
 
         # if external regressor, do some check up
         if self.regression_type is not None:
-            if (np.array(future_regressor).shape[0]) != (df.shape[0]):
-                self.regression_type = None
+            if future_regressor is None:
+                raise ValueError("regression_type='User' but not future_regressor supplied.")
+            elif future_regressor.shape[0] != df.shape[0]:
+                raise ValueError("future_regressor shape does not match training data shape.")
             else:
                 self.regressor_train = future_regressor
 
-        # define X and Y
-        self.sktraindata = self.df_train.dropna(how='all', axis=0)
-        self.sktraindata = self.sktraindata.fillna(method='ffill').fillna(
-            method='bfill'
-        )
         cols = self.sktraindata.columns
 
         def forecast_by_column(self, args, parallel, n_jobs, col):
-            """Run one series of ETS and return prediction."""
+            """Run one series and return prediction."""
             base = pd.DataFrame(self.sktraindata[col])
             Y = base.copy()
             for curr_shift in range(1, self.forecast_length):
@@ -2005,14 +2027,14 @@ class UnivariateRegression(ModelObject):
         self,
         forecast_length: int = None,
         just_point_forecast: bool = False,
-        future_regressor=[],
+        future_regressor=None,
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
                 ignored here for this model, must be set in __init__ before .fit()
-            regressor (numpy.Array): additional regressor
+            future_regressor (pd.DataFrame): additional regressor
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
 
         Returns:
@@ -2059,7 +2081,7 @@ class UnivariateRegression(ModelObject):
             return forecast
         else:
             upper_forecast, lower_forecast = Point_to_Probability(
-                self.df_train,
+                self.sktraindata,
                 forecast,
                 method='inferred_normal',
                 prediction_interval=self.prediction_interval,
@@ -2157,6 +2179,320 @@ class UnivariateRegression(ModelObject):
             'add_date_part': self.add_date_part,
             'polynomial_degree': self.polynomial_degree,
             'x_transform': self.x_transform,
+            'regression_type': self.regression_type,
+            'window': self.window,
+        }
+        return parameter_dict
+
+
+
+class MultivariateRegression(ModelObject):
+    """Regression-framed approach to forecasting using sklearn.
+    A multiariate version of rolling regression: ie each series is agged independently but modeled together
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        holiday (bool): If true, include holiday flags
+        regression_type (str): type of regression (None, 'User')
+
+    """
+
+    def __init__(
+        self,
+        name: str = "MultivariateRegression",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        regression_type: str = None,
+        holiday_country: str = 'US',
+        verbose: int = 0,
+        random_seed: int = 2020,
+        forecast_length: int = 7,
+        regression_model: dict = {
+            "model": 'RandomForest',
+            "model_params": {},
+        },
+        holiday: bool = False,
+        mean_rolling_periods: int = 30,
+        macd_periods: int = None,
+        std_rolling_periods: int = 7,
+        max_rolling_periods: int = 7,
+        min_rolling_periods: int = 7,
+        ewm_alpha: float = 0.5,
+        additional_lag_periods: int = 7,
+        abs_energy: bool = False,
+        rolling_autocorr_periods: int = None,
+        datepart_method: str = None,
+        polynomial_degree: int = None,
+        window: int = None,
+        n_jobs: int = -1,
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            regression_type=regression_type,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+        )
+        self.forecast_length = forecast_length
+        self.regression_model = regression_model
+        self.holiday = holiday
+        self.mean_rolling_periods = mean_rolling_periods
+        if mean_rolling_periods is None:
+            self.macd_periods = None
+        else:
+            self.macd_periods = macd_periods
+        self.std_rolling_periods = std_rolling_periods
+        self.max_rolling_periods = max_rolling_periods
+        self.min_rolling_periods = min_rolling_periods
+        self.ewm_alpha = ewm_alpha
+        self.additional_lag_periods = additional_lag_periods
+        self.abs_energy = abs_energy
+        self.rolling_autocorr_periods = rolling_autocorr_periods
+        self.datepart_method = datepart_method
+        self.polynomial_degree = polynomial_degree
+        self.window = window
+        self.regressor_train = None
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+            future_regressor (pandas.DataFrame or Series): Datetime Indexed
+        """
+        df = self.basic_profile(df)
+        self.sktraindata = df
+
+        # if external regressor, do some check up
+        if self.regression_type is not None:
+            if future_regressor is None:
+                raise ValueError("regression_type='User' but not future_regressor supplied.")
+            elif future_regressor.shape[0] != df.shape[0]:
+                raise ValueError("future_regressor shape does not match training data shape.")
+            else:
+                self.regressor_train = future_regressor
+
+        # define X and Y
+        Y = self.sktraindata.drop(index=self.sktraindata.index[0])
+        Y = pd.concat([Y[x_col].to_frame()for x_col in Y.columns]).sum(axis=1)
+
+        # drop look ahead data
+        base = self.sktraindata.drop(index=self.sktraindata.index[-1])
+        if self.regressor_train is not None:
+            cut_regr = self.regressor_train.drop(index=self.sktraindata.index[0])
+            cut_regr.index = base.index
+        else:
+            cut_regr = None
+        X = pd.concat([
+            rolling_x_regressor_regressor(
+                base[x_col].to_frame(),
+                mean_rolling_periods=self.mean_rolling_periods,
+                macd_periods=self.macd_periods,
+                std_rolling_periods=self.std_rolling_periods,
+                additional_lag_periods=self.additional_lag_periods,
+                ewm_alpha=self.ewm_alpha,
+                abs_energy=self.abs_energy,
+                rolling_autocorr_periods=self.rolling_autocorr_periods,
+                add_date_part=self.datepart_method,
+                holiday=self.holiday,
+                holiday_country=self.holiday_country,
+                polynomial_degree=self.polynomial_degree,
+                window=self.window,
+                future_regressor=cut_regr,
+            )
+            for x_col in base.columns]
+        )
+        del base
+
+        Y.index = X.index  # and just hope I got the adjustments right
+
+        multioutput = True
+        if Y.ndim < 2:
+            multioutput = False
+        elif Y.shape[1] < 2:
+            multioutput = False
+        self.model = retrieve_regressor(
+            regression_model=self.regression_model,
+            verbose=self.verbose,
+            verbose_bool=self.verbose_bool,
+            random_seed=self.random_seed,
+            n_jobs=self.n_jobs,
+            multioutput=multioutput,
+        )
+        self.model.fit(X.values, Y)
+        # we only need the N most recent points for predict
+        # could make this smart by taking only max of rolling params, then small=False could be used
+        self.sktraindata = df.tail(366)
+
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self,
+        forecast_length: int = None,
+        just_point_forecast: bool = False,
+        future_regressor=None,
+    ):
+        """Generate forecast data immediately following dates of index supplied to .fit().
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+                ignored here for this model, must be set in __init__ before .fit()
+            future_regressor (pd.DataFrame): additional regressor
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        index = self.create_forecast_index(forecast_length=forecast_length)
+        forecast = pd.DataFrame()
+        base = self.sktraindata
+
+        for fcst_step in range(forecast_length):
+            cur_regr = None
+            if self.regression_type is not None:
+                cur_regr = future_regressor.iloc[[fcst_step]]
+            x_dat = pd.concat([
+                rolling_x_regressor_regressor(
+                    base[x_col].to_frame(),
+                    mean_rolling_periods=self.mean_rolling_periods,
+                    macd_periods=self.macd_periods,
+                    std_rolling_periods=self.std_rolling_periods,
+                    additional_lag_periods=self.additional_lag_periods,
+                    ewm_alpha=self.ewm_alpha,
+                    abs_energy=self.abs_energy,
+                    rolling_autocorr_periods=self.rolling_autocorr_periods,
+                    add_date_part=self.datepart_method,
+                    holiday=self.holiday,
+                    holiday_country=self.holiday_country,
+                    polynomial_degree=self.polynomial_degree,
+                    window=self.window,
+                    future_regressor=cur_regr,
+                ).tail(1)
+                for x_col in base.columns]
+            )
+            rfPred = self.model.predict(x_dat.values)
+            pred_clean = pd.DataFrame(rfPred, index=base.columns, columns=[index[fcst_step]]).transpose()
+            forecast = pd.concat([
+                forecast,
+                pred_clean,
+            ])
+            base = pd.concat([
+                base,
+                pred_clean,
+            ])
+
+        forecast = forecast[self.column_names]
+
+        # test that forecasts look reasonable
+        # check X and Y looks
+        # fix regr
+
+        if just_point_forecast:
+            return forecast
+        else:
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.sktraindata,
+                forecast,
+                method='inferred_normal',
+                prediction_interval=self.prediction_interval,
+            )
+
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=self.forecast_length,
+                forecast_index=forecast.index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast,
+                forecast=forecast,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning."""
+        model_choice = generate_regressor_params(model_dict=univariate_model_dict)
+        mean_rolling_periods_choice = random.choices(
+            [None, 5, 7, 12, 30], [0.6, 0.1, 0.1, 0.1, 0.1]
+        )[0]
+        if mean_rolling_periods_choice is not None:
+            macd_periods_choice = seasonal_int(small=True)
+            if macd_periods_choice == mean_rolling_periods_choice:
+                macd_periods_choice = mean_rolling_periods_choice + 10
+        else:
+            macd_periods_choice = None
+        std_rolling_periods_choice = random.choices(
+            [None, 5, 7, 10, 30], [0.6, 0.1, 0.1, 0.1, 0.1]
+        )[0]
+        max_rolling_periods_choice = random.choices([None, seasonal_int(small=True)], [0.5, 0.5])[
+            0
+        ]
+        min_rolling_periods_choice = random.choices([None, seasonal_int(small=True)], [0.5, 0.5])[
+            0
+        ]
+        lag_periods_choice = seasonal_int(small=True) - 1
+        lag_periods_choice = 2 if lag_periods_choice < 2 else lag_periods_choice
+        ewm_choice = random.choices([None, 0.2, 0.5, 0.8], [0.75, 0.1, 0.1, 0.05])[0]
+        abs_energy_choice = random.choices([True, False], [0.1, 0.9])[0]
+        rolling_autocorr_periods_choice = random.choices(
+            [None, 2, 7, 12, 30], [0.86, 0.01, 0.01, 0.01, 0.01]
+        )[0]
+        add_date_part_choice = random.choices(
+            [None, 'simple', 'expanded', 'recurring'], [0.7, 0.1, 0.1, 0.1]
+        )[0]
+        holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
+        polynomial_degree_choice = None
+        regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
+        window_choice = random.choices([None, 3, 7, 10], [0.7, 0.2, 0.05, 0.05])[0]
+        parameter_dict = {
+            'regression_model': model_choice,
+            'holiday': holiday_choice,
+            'mean_rolling_periods': mean_rolling_periods_choice,
+            'macd_periods': macd_periods_choice,
+            'std_rolling_periods': std_rolling_periods_choice,
+            'max_rolling_periods': max_rolling_periods_choice,
+            'min_rolling_periods': min_rolling_periods_choice,
+            'ewm_alpha': ewm_choice,
+            'additional_lag_periods': lag_periods_choice,
+            'abs_energy': abs_energy_choice,
+            'rolling_autocorr_periods': rolling_autocorr_periods_choice,
+            'datepart_method': add_date_part_choice,
+            'polynomial_degree': polynomial_degree_choice,
+            'regression_type': regression_choice,
+            'window': window_choice,
+        }
+        return parameter_dict
+
+    def get_params(self):
+        """Return dict of current parameters."""
+        parameter_dict = {
+            'regression_model': self.regression_model,
+            'holiday': self.holiday,
+            'mean_rolling_periods': self.mean_rolling_periods,
+            'macd_periods': self.macd_periods,
+            'std_rolling_periods': self.std_rolling_periods,
+            'max_rolling_periods': self.max_rolling_periods,
+            'min_rolling_periods': self.min_rolling_periods,
+            'ewm_alpha': self.ewm_alpha,
+            'additional_lag_periods': self.additional_lag_periods,
+            'abs_energy': self.abs_energy,
+            'rolling_autocorr_periods': self.rolling_autocorr_periods,
+            'datepart_method': self.datepart_method,
+            'polynomial_degree': self.polynomial_degree,
             'regression_type': self.regression_type,
             'window': self.window,
         }
