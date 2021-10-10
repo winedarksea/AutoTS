@@ -21,6 +21,7 @@
 * removed Tensorflow models from UnivariateRegression as it can cause a crash with GPU training
 * added create_regressor function
 * two new impute methods (KNNImputer, IterativeImputerExtraTrees), but only with "all" transformers
+* optimizing scalability by tuning transformer and imputation defaults
 
 # Errors: 
 DynamicFactor holidays 	Exceptions 'numpy.ndarray' object has no attribute 'values'

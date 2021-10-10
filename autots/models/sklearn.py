@@ -318,7 +318,7 @@ sklearn_model_dict: dict = {
     'DecisionTree': 0.05,
     'KNN': 0.05,
     'Adaboost': 0.05,
-    'SVM': 0.05,  # tends to be the slowest
+    'SVM': 0.05,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
     'xgboost': 0.05,
     'KerasRNN': 0.05,
@@ -338,6 +338,18 @@ no_shared_model_dict = {
     'SVM': 0.1,
     'xgboost': 0.1,
     'HistGradientBoost': 0.1,
+}
+datepart_model_dict: dict = {
+    'RandomForest': 0.05,
+    'ElasticNet': 0.05,
+    'MLP': 0.05,
+    'DecisionTree': 0.05,
+    'Adaboost': 0.05,
+    'SVM': 0.05,
+    'KerasRNN': 0.05,
+    'Transformer': 0.05,
+    'ExtraTrees': 0.05,
+    'RadiusNeighbors': 0.05,
 }
 
 
@@ -359,6 +371,7 @@ def generate_regressor_params(
         'Transformer',
         'HistGradientBoost',
         'RandomForest',
+        'ExtraTrees',
     ]:
         if model == 'Adaboost':
             param_dict = {
@@ -465,6 +478,24 @@ def generate_regressor_params(
                     )[0],
                     "criterion": random.choices(
                         ["squared_error", "poisson", "absolute_error"], [0.8, 0.2, 0.2]
+                    )[0],
+                },
+            }
+        elif model == 'ExtraTrees':
+            param_dict = {
+                "model": 'ExtraTrees',
+                "model_params": {
+                    "n_estimators": random.choices(
+                        [50, 100, 500], [0.1, 0.8, 0.1]
+                    )[0],
+                    "min_samples_leaf": random.choices(
+                        [2, 4, 1], [0.1, 0.1, 0.8]
+                    )[0],
+                    "max_depth": random.choices(
+                        [None, 5, 10], [0.9, 0.1, 0.1]
+                    )[0],
+                    "criterion": random.choices(
+                        ["squared_error", "absolute_error"], [0.8, 0.2]
                     )[0],
                 },
             }
@@ -1735,7 +1766,7 @@ class DatepartRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params()  # model_dict=no_shared_model_dict
+        model_choice = generate_regressor_params(model_dict=datepart_model_dict)
         datepart_choice = np.random.choice(
             a=["recurring", "simple", "expanded"], size=1, p=[0.4, 0.3, 0.3]
         ).item()

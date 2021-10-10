@@ -478,7 +478,7 @@ class STLFilter(EmptyTransformer):
         )[0]
         if decomp_type == "STL":
             seasonal = seasonal_int()
-            if seasonal < 7:
+            if seasonal < 7 or method == "fast":
                 seasonal = 7
             elif seasonal % 2 == 0:
                 seasonal = seasonal - 1
@@ -1004,11 +1004,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
         elif method == "fast":
             choice = generate_regressor_params(
                 model_dict={
-                    'ElasticNet': 0.25,
-                    'DecisionTree': 0.25,
-                    'KNN': 0.1,
-                    'MLP': 0.2,
-                    'RandomForest': 0.2,
+                    'ElasticNet': 0.5,
+                    'DecisionTree': 0.5,
                 }
             )
         else:
@@ -1019,6 +1016,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
                     'KNN': 0.1,
                     'MLP': 0.2,
                     'RandomForest': 0.2,
+                    'ExtraTrees': 0.25,
+                    "SVM": 0.1,
+                    "RadiusRegressor": 0.1,
                 }
             )
 
@@ -2178,6 +2178,9 @@ class GeneralTransformer(object):
         elif transformation == 'PCA':
             from sklearn.decomposition import PCA
 
+            # could probably may it work, but this is simpler
+            if df.shape[1] > df.shape[0]:
+                raise ValueError("PCA fails when n series > n observations")
             transformer = PCA(
                 n_components=min(df.shape), whiten=False, random_state=random_seed
             )
@@ -2186,6 +2189,8 @@ class GeneralTransformer(object):
         elif transformation == 'FastICA':
             from sklearn.decomposition import FastICA
 
+            if df.shape[1] > 500:
+                raise ValueError("FastICA fails with > 500 series")
             transformer = FastICA(
                 n_components=df.shape[1],
                 whiten=True,
@@ -2266,9 +2271,7 @@ class GeneralTransformer(object):
             df = self.transformers[i].fit_transform(df)
             # convert to DataFrame only if it isn't already
             if not isinstance(df, pd.DataFrame):
-                df = pd.DataFrame(df)
-                df.index = self.df_index
-                df.columns = self.df_colnames
+                df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
             # update index reference if sliced
             if transformation in ['Slice']:
                 self.df_index = df.index
@@ -2417,7 +2420,6 @@ transformer_dict = {
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
-del fast_transformer_dict['DatepartRegression']
 del fast_transformer_dict['SinTrend']
 del fast_transformer_dict['FastICA']
 del fast_transformer_dict['ScipyFilter']
@@ -2432,10 +2434,11 @@ del superfast_transformer_dict['convolution_filter']
 del superfast_transformer_dict['HPFilter']
 del superfast_transformer_dict['STLFilter']
 del superfast_transformer_dict['PctChangeTransformer']
+del superfast_transformer_dict['DatepartRegression']
 
 # probability dictionary of FillNA methods
 na_probs = {
-    'ffill': 0.5,
+    'ffill': 0.3,
     'fake_date': 0.1,
     'rolling_mean': 0.2,
     'rolling_mean_24': 0.1,
