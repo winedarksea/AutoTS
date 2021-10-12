@@ -517,6 +517,17 @@ print(df_trans.tail())
 df_inv_return = trans.inverse_transform(df_trans, trans_method="original")  # forecast for future data
 ```
 
+### Note on Regression Models
+The Regression models are WindowRegression, RollingRegression, UnivariateRegression, MultivariateRegression, and DatepartRegression. 
+They are all different ways of reshaping the time series into X and Y for traditional ML and Deep Learning approaches. 
+All draw from the same potential pool of models, mostly sklearn and tensorflow models. 
+
+* DatepartRegression is where X is simply the date features, and Y are the time series values for that date. 
+* WindowRegression takes an `n` preceeding data points as X to predict the future value or values of the series. 
+* RollingRegression takes all time series and summarized rolling values of those series in one massive dataframe as X. Works well for a small number of series but scales poorly. 
+* MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series `i` are used to predict next step for series `i`, with a model trained on all data from all series.
+* UnivariateRegression is the same as MultivariateRegression but trains an independent model on each series, thus not capable of learning from the patterns of other series. This performs well in horizontal ensembles as it can be parsed down to one series with the same performance on that series. 
+
 ## Models
 
 | Model                   | Dependencies | Optional Dependencies   | Probabilistic | Multiprocessing | GPU   | Multivariate | Experimental | Use Regressor |

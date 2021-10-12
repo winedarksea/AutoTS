@@ -403,7 +403,7 @@ def load_linear(long=False, shape=None, start_date: str = "2021-01-01", introduc
     )
     df_wide = (df_wide * list(range(0, shape[1]))).cumsum()
     if introduce_nan is not None:
-        df_wide = df_wide.sample(frac=introduce_nan).reindex(idx)
+        df_wide = df_wide.sample(frac=(1 - introduce_nan)).reindex(idx)
     if not long:
         return df_wide
     else:

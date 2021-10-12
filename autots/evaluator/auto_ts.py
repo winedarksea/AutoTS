@@ -222,7 +222,7 @@ class AutoTS(object):
         initial_template = str(initial_template).lower()
         if initial_template == 'random':
             self.initial_template = RandomTemplate(
-                len(self.model_list) * 8,
+                len(self.model_list) * 12,
                 model_list=self.model_list,
                 transformer_list=self.transformer_list,
                 transformer_max_depth=self.transformer_max_depth,
@@ -235,7 +235,7 @@ class AutoTS(object):
             from autots.templates.general import general_template
 
             random_template = RandomTemplate(
-                len(self.model_list) * 6,
+                len(self.model_list) * 8,
                 model_list=self.model_list,
                 transformer_list=self.transformer_list,
                 transformer_max_depth=self.transformer_max_depth,

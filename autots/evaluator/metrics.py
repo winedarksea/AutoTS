@@ -101,8 +101,7 @@ def containment(lower_forecast, upper_forecast, actual):
         result = (
             np.count_nonzero(
                 (upper_forecast >= actual) & (lower_forecast <= actual), axis=0
-            )
-            / actual.shape[0]
+            ) / actual.shape[0]
         )
     return result
 

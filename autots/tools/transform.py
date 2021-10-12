@@ -1006,6 +1006,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
                 model_dict={
                     'ElasticNet': 0.5,
                     'DecisionTree': 0.5,
+                    # 'ExtraTrees': 0.25,
                 }
             )
         else:
