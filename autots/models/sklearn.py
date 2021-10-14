@@ -246,7 +246,6 @@ def retrieve_regressor(
 
             regr = MultiOutputRegressor(
                 HistGradientBoostingRegressor(
-                    max_iter=200,
                     verbose=int(verbose_bool),
                     random_state=random_seed,
                     **model_param_dict,
@@ -254,7 +253,6 @@ def retrieve_regressor(
             )
         else:
             regr = HistGradientBoostingRegressor(
-                max_iter=200,
                 verbose=int(verbose_bool),
                 random_state=random_seed,
                 **model_param_dict,
@@ -359,11 +357,16 @@ def retrieve_regressor(
         return regr
     elif model_class == "PoissonRegresssion":
         from sklearn.linear_model import PoissonRegressor
-        from sklearn.multioutput import MultiOutputRegressor
 
-        return MultiOutputRegressor(
-            PoissonRegressor(fit_intercept=True, max_iter=200, **model_param_dict)
-        )
+        if multioutput:
+            from sklearn.multioutput import MultiOutputRegressor
+
+            regr = MultiOutputRegressor(
+                PoissonRegressor(fit_intercept=True, max_iter=200, **model_param_dict),
+                n_jobs=n_jobs,
+            )
+        else:
+            regr = PoissonRegressor(**model_param_dict)
     elif model_class == 'RANSAC':
         from sklearn.linear_model import RANSACRegressor
 
@@ -382,38 +385,39 @@ def retrieve_regressor(
 
 
 sklearn_model_dict: dict = {
-    'RandomForest': 0.05,
-    'ElasticNet': 0.05,
-    'MLP': 0.05,
-    'DecisionTree': 0.05,
-    'KNN': 0.05,
-    'Adaboost': 0.05,
-    'SVM': 0.05,  # was slow, LinearSVR seems much faster
-    'BayesianRidge': 0.05,
-    'xgboost': 0.05,
-    'KerasRNN': 0.05,
-    'Transformer': 0.05,
-    'HistGradientBoost': 0.03,
-    'LightGBM': 0.05,
-    'ExtraTrees': 0.05,
-    'RadiusNeighbors': 0.05,
-    'PoissonRegresssion': 0.02,
-    'RANSAC': 0.02,
-}
-# these should train quickly, and not mind being run with multiple in parallel
-univariate_model_dict: dict = {
     'RandomForest': 0.02,
     'ElasticNet': 0.05,
     'MLP': 0.05,
     'DecisionTree': 0.05,
     'KNN': 0.05,
-    'Adaboost': 0.05,
+    'Adaboost': 0.03,
     'SVM': 0.05,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
+    'xgboost': 0.02,
+    'KerasRNN': 0.02,
+    'Transformer': 0.02,
     'HistGradientBoost': 0.03,
-    'LightGBM': 0.05,
+    'LightGBM': 0.03,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.05,
+    'PoissonRegresssion': 0.03,
+    'RANSAC': 0.05,
+}
+# these should train quickly, and not mind being run with multiple in parallel
+univariate_model_dict: dict = {
+    # 'RandomForest': 0.02,  # too unstable in parallel
+    'ElasticNet': 0.05,
+    'MLP': 0.05,
+    'DecisionTree': 0.05,
+    'KNN': 0.05,
+    'Adaboost': 0.05,
+    'SVM': 0.05,  # was slow, LinearSVR seems much faster
+    'BayesianRidge': 0.03,
+    'HistGradientBoost': 0.02,
+    'LightGBM': 0.01,
+    'ExtraTrees': 0.05,
+    'RadiusNeighbors': 0.05,
+    'RANSAC': 0.02,
 }
 # these should train relatively quickly when given many observations of X and Y
 multivariate_model_dict = {}
@@ -426,7 +430,7 @@ no_shared_model_dict = {
     'HistGradientBoost': 0.1,
     'PoissonRegresssion': 0.05,
 }
-# these are models that are relatively fast with large multioutput Y
+# these are models that are relatively fast with large multioutput Y, small n obs
 datepart_model_dict: dict = {
     'RandomForest': 0.05,
     'ElasticNet': 0.05,
@@ -465,18 +469,18 @@ def generate_regressor_params(
             param_dict = {
                 "model": 'Adaboost',
                 "model_params": {
-                    "n_estimators": np.random.choice(
-                        [50, 100, 500], p=[0.7, 0.2, 0.1], size=1
-                    ).item(),
-                    "loss": np.random.choice(
-                        ['linear', 'square', 'exponential'], p=[0.8, 0.1, 0.1], size=1
-                    ).item(),
-                    "base_estimator": np.random.choice(
-                        [None, 'LinReg', 'SVR'], p=[0.8, 0.1, 0.1], size=1
-                    ).item(),
-                    "learning_rate": np.random.choice(
-                        [1, 0.5], p=[0.9, 0.1], size=1
-                    ).item(),
+                    "n_estimators": random.choices(
+                        [50, 100, 500], [0.7, 0.2, 0.1]
+                    )[0],
+                    "loss": random.choices(
+                        ['linear', 'square', 'exponential'], [0.8, 0.01, 0.1]
+                    )[0],
+                    "base_estimator": random.choices(
+                        [None, 'LinReg', 'SVR'], [0.8, 0.1, 0.1]
+                    )[0],
+                    "learning_rate": random.choices(
+                        [1, 0.5], [0.9, 0.1]
+                    )[0],
                 },
             }
         elif model == 'xgboost':
@@ -556,7 +560,7 @@ def generate_regressor_params(
                 "model": 'RandomForest',
                 "model_params": {
                     "n_estimators": random.choices(
-                        [300, 100, 1000, 5000], [0.2, 0.2, 0.8, 0.05]
+                        [300, 100, 1000, 5000], [0.4, 0.4, 0.2, 0.01]
                     )[0],
                     "min_samples_leaf": random.choices(
                         [2, 4, 1], [0.2, 0.2, 0.8]
@@ -566,7 +570,7 @@ def generate_regressor_params(
                     )[0],
                     # absolute_error is noticeably slower
                     "criterion": random.choices(
-                        ["squared_error", "poisson"], [0.99, 0.01]
+                        ["squared_error", "poisson"], [0.99, 0.001]
                     )[0],
                 },
             }
@@ -602,7 +606,7 @@ def generate_regressor_params(
                 "model_params": {
                     "kernel_initializer": random.choices(init_list)[0],
                     "epochs": random.choices(
-                        [50, 100, 500], [0.7, 0.2, 0.1]
+                        [50, 100, 200, 500, 750], [0.75, 0.2, 0.05, 0.01, 0.001]
                     )[0],
                     "batch_size": random.choices(
                         [8, 16, 32, 72], [0.2, 0.2, 0.5, 0.1]
@@ -636,10 +640,10 @@ def generate_regressor_params(
                 "model": 'Transformer',
                 "model_params": {
                     "epochs": random.choices(
-                        [50, 100, 500, 750], [0.7, 0.2, 0.1, 0.05]
+                        [50, 100, 200, 500, 750], [0.75, 0.2, 0.05, 0.01, 0.001]
                     )[0],
                     "batch_size": random.choices(
-                        [8, 16, 32, 72], [0.2, 0.2, 0.5, 0.1]
+                        [8, 16, 32, 64, 72], [0.01, 0.2, 0.5, 0.1, 0.1]
                     )[0],
                     "optimizer": random.choices(
                         ['adam', 'rmsprop', 'adagrad'], [0.4, 0.5, 0.1]
@@ -679,40 +683,50 @@ def generate_regressor_params(
             param_dict = {
                 "model": 'HistGradientBoost',
                 "model_params": {
-                    "loss": np.random.choice(
-                        a=['squared_error', 'poisson', 'absolute_error'],
-                        p=[0.4, 0.3, 0.3],
-                        size=1,
-                    ).item(),
-                    "learning_rate": np.random.choice(
-                        a=[1, 0.1, 0.01], p=[0.3, 0.4, 0.3], size=1
-                    ).item(),
+                    "loss": random.choices(
+                        ['squared_error', 'poisson', 'absolute_error'],
+                        [0.8, 0.1, 0.1]
+                    )[0],
+                    "learning_rate": random.choices(
+                        [1, 0.1, 0.01], [0.3, 0.4, 0.3]
+                    )[0],
+                    "max_depth": random.choices(
+                        [None, 5, 10, 20], [0.7, 0.1, 0.1, 0.1]
+                    )[0],
+                    "min_samples_leaf": random.choices(
+                        [20, 5, 10, 30], [0.9, 0.1, 0.1, 0.1]
+                    )[0],
+                    "max_iter": random.choices(
+                        [100, 250, 50, 500], [0.9, 0.1, 0.1, 0.001]
+                    )[0],
+                    "l2_regularization": random.choices(
+                        [0, 0.01, 0.02, 0.4], [0.9, 0.1, 0.1, 0.1]
+                    )[0],
                 },
             }
         elif model == 'LightGBM':
             param_dict = {
                 "model": 'LightGBM',
                 "model_params": {
-                    "objective": np.random.choice(
-                        a=['regression', 'gamma', 'huber', 'regression_l1'],
-                        p=[0.4, 0.3, 0.1, 0.2],
-                        size=1,
-                    ).item(),
-                    "learning_rate": np.random.choice(
-                        a=[0.001, 0.1, 0.01], p=[0.1, 0.6, 0.3], size=1
-                    ).item(),
-                    "num_leaves": np.random.choice(
-                        a=[31, 127, 70], p=[0.6, 0.1, 0.3], size=1
-                    ).item(),
-                    "max_depth": np.random.choice(
-                        a=[-1, 5, 10], p=[0.6, 0.1, 0.3], size=1
-                    ).item(),
-                    "boosting_type": np.random.choice(
-                        a=['gbdt', 'rf', 'dart', 'goss'], p=[0.6, 0, 0.2, 0.2], size=1
-                    ).item(),
-                    "n_estimators": np.random.choice(
-                        a=[100, 250, 50, 500], p=[0.6, 0.099, 0.3, 0.0010], size=1
-                    ).item(),
+                    "objective": random.choices(
+                        ['regression', 'gamma', 'huber', 'regression_l1'],
+                        [0.4, 0.3, 0.1, 0.2],
+                    )[0],
+                    "learning_rate": random.choices(
+                        [0.001, 0.1, 0.01], [0.1, 0.6, 0.3],
+                    )[0],
+                    "num_leaves": random.choices(
+                        [31, 127, 70], [0.6, 0.1, 0.3],
+                    )[0],
+                    "max_depth": random.choices(
+                        [-1, 5, 10], [0.6, 0.1, 0.3],
+                    )[0],
+                    "boosting_type": random.choices(
+                        ['gbdt', 'rf', 'dart', 'goss'], [0.6, 0, 0.2, 0.2],
+                    )[0],
+                    "n_estimators": random.choices(
+                        [100, 250, 50, 500], [0.6, 0.099, 0.3, 0.0010],
+                    )[0],
                 },
             }
         else:
@@ -2059,10 +2073,12 @@ class UnivariateRegression(ModelObject):
                 multioutput = False
             elif Y.shape[1] < 2:
                 multioutput = False
+            # because the training messages get annoying
+            inner_verbose = self.verbose - 1 if self.verbose > 0 else self.verbose
             dah_model = retrieve_regressor(
                 regression_model=self.regression_model,
-                verbose=self.verbose,
-                verbose_bool=self.verbose_bool,
+                verbose=inner_verbose,
+                verbose_bool=False,
                 random_seed=self.random_seed,
                 n_jobs=n_jobs_passed,
                 multioutput=multioutput,
@@ -2071,7 +2087,12 @@ class UnivariateRegression(ModelObject):
             return {col: dah_model}
 
         self.parallel = True
-        if self.n_jobs in [0, 1] or len(cols) < 3:
+        self.not_parallel_models = ['LightGBM', 'RandomForest', "BayesianRidge", 'Transformer', "KerasRNN", "HistGradientBoost"]
+        out_n_jobs = int(self.n_jobs - 1)
+        out_n_jobs = 1 if out_n_jobs < 1 else out_n_jobs
+        if out_n_jobs in [0, 1] or len(cols) < 3:
+            self.parallel = False
+        elif self.regression_model.get("model", "ElasticNet") in self.not_parallel_models:
             self.parallel = False
         else:
             try:
@@ -2081,7 +2102,7 @@ class UnivariateRegression(ModelObject):
         args = {}
         # joblib multiprocessing to loop through series
         if self.parallel:
-            df_list = Parallel(n_jobs=(self.n_jobs - 1))(
+            df_list = Parallel(n_jobs=out_n_jobs)(
                 delayed(forecast_by_column)(self, args, self.parallel, self.n_jobs, col)
                 for (col) in cols
             )
@@ -2532,7 +2553,7 @@ class MultivariateRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params(model_dict=univariate_model_dict)
+        model_choice = generate_regressor_params(model_dict=sklearn_model_dict)
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
         )[0]
@@ -2572,6 +2593,7 @@ class MultivariateRegression(ModelObject):
         regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
         window_choice = random.choices([None, 3, 7, 10], [0.2, 0.2, 0.05, 0.05])[0]
         parameter_dict = {
+            'regression_model': model_choice,
             'mean_rolling_periods': mean_rolling_periods_choice,
             'macd_periods': macd_periods_choice,
             'std_rolling_periods': std_rolling_periods_choice,
@@ -2589,13 +2611,13 @@ class MultivariateRegression(ModelObject):
             'regression_type': regression_choice,
             'window': window_choice,
             'holiday': holiday_choice,
-            'regression_model': model_choice,
         }
         return parameter_dict
 
     def get_params(self):
         """Return dict of current parameters."""
         parameter_dict = {
+            'regression_model': self.regression_model,
             'mean_rolling_periods': self.mean_rolling_periods,
             'macd_periods': self.macd_periods,
             'std_rolling_periods': self.std_rolling_periods,
@@ -2613,6 +2635,5 @@ class MultivariateRegression(ModelObject):
             'regression_type': self.regression_type,
             'window': self.window,
             'holiday': self.holiday,
-            'regression_model': self.regression_model,
         }
         return parameter_dict

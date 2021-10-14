@@ -82,6 +82,7 @@ class AutoTS(object):
             None, 0, 'mean', or 'median'. 0 may be useful in for examples sales cases where all NaN can be assumed equal to zero.
         introduce_na (bool): whether to force last values in one training validation to be NaN. Helps make more robust models.
             defaults to None, which is as True if any NaN in tail of training data. Will not introduce NaN to all series if subset is used.
+            if True, will also randomly change 20% of rows to NaN in the validations
         model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
@@ -203,7 +204,7 @@ class AutoTS(object):
         if self.n_jobs == 'auto':
             self.n_jobs = int(cpu_count() * 0.75)
             if verbose > 0:
-                print(f"Auto-detected {self.n_jobs} cpus for n_jobs.")
+                print(f"Using {self.n_jobs} cpus for n_jobs.")
         elif str(self.n_jobs).isdigit():
             self.n_jobs = int(self.n_jobs)
             if self.n_jobs < 0:
@@ -904,9 +905,13 @@ class AutoTS(object):
 
                 # force NaN for robustness
                 if self.introduce_na or (self.introduce_na is None and self._nan_tail):
+                    if self.introduce_na:
+                        idx = val_df_train.index
+                        # make 20% of rows NaN at random
+                        val_df_train = val_df_train.sample(frac=0.8, random_state=self.random_seed).reindex(idx)
                     nan_frac = val_df_train.shape[1] / num_validations
                     val_df_train.iloc[
-                        -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
+                        -2:, int(nan_frac * y): int(nan_frac * (y + 1))
                     ] = np.nan
 
                 # run validation template on current slice
@@ -961,11 +966,6 @@ or otherwise increase models available."""
                         metric_weighting=metric_weighting,
                         total_validations=(num_validations + 1),
                     )
-                    # select only those models which were validated
-                    # series_sel = per_series.mean(axis=1).groupby(level=0).count()
-                    # series_sel = series_sel[series_sel >= (num_validations + 1)]
-                    # per_series = per_series[per_series.index.isin(series_sel.index)]
-                    # per_series = per_series.groupby(level=0).mean()
                     ens_templates = HorizontalTemplateGenerator(
                         per_series,
                         model_results=self.initial_results.model_results,
@@ -1108,6 +1108,7 @@ or otherwise increase models available."""
         self.best_model_transformation_params = json.loads(
             self.best_model['TransformationParameters'].iloc[0]
         )
+        self.best_model_ensemble = self.best_model['Ensemble'].iloc[0]
 
         # set flags to check if regressors or ensemble used in final model.
         param_dict = json.loads(self.best_model.iloc[0]['ModelParameters'])
@@ -1188,15 +1189,14 @@ or otherwise increase models available."""
                 index=self.df_wide_numeric.index
             )
 
-        urow = self.best_model.iloc[0]
         # allow multiple prediction intervals
         if isinstance(prediction_interval, list):
             forecast_objects = {}
             for interval in prediction_interval:
                 df_forecast = model_forecast(
-                    model_name=urow['Model'],
-                    model_param_dict=urow['ModelParameters'],
-                    model_transform_dict=urow['TransformationParameters'],
+                    model_name=self.best_model_name,
+                    model_param_dict=self.best_model_params,
+                    model_transform_dict=self.best_model_transformation_params,
                     df_train=self.df_wide_numeric,
                     forecast_length=forecast_length,
                     frequency=self.frequency,
@@ -1226,9 +1226,9 @@ or otherwise increase models available."""
             return forecast_objects
         else:
             df_forecast = model_forecast(
-                model_name=urow['Model'],
-                model_param_dict=urow['ModelParameters'],
-                model_transform_dict=urow['TransformationParameters'],
+                model_name=self.best_model_name,
+                model_param_dict=self.best_model_params,
+                model_transform_dict=self.best_model_transformation_params,
                 df_train=self.df_wide_numeric,
                 forecast_length=forecast_length,
                 frequency=self.frequency,

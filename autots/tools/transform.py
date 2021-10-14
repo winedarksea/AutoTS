@@ -2451,7 +2451,7 @@ na_probs = {
     'zero': 0.05,
     'ffill_mean_biased': 0.1,
     'median': 0.05,
-    None: 0.01,
+    None: 0.001,
     "interpolate": 0.5,
     "KNNImputer": 0.05,
     "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
