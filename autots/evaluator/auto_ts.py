@@ -509,7 +509,7 @@ class AutoTS(object):
         ensemble = self.ensemble
 
         # check if NaN in last row
-        self._nan_tail = df_wide_numeric.tail(1).isna().sum(axis=1).iloc[0] > 0
+        self._nan_tail = df_wide_numeric.tail(2).isna().sum(axis=1).sum() > 0
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()

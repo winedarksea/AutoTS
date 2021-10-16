@@ -367,6 +367,7 @@ def retrieve_regressor(
             )
         else:
             regr = PoissonRegressor(**model_param_dict)
+        return regr
     elif model_class == 'RANSAC':
         from sklearn.linear_model import RANSACRegressor
 
@@ -384,6 +385,7 @@ def retrieve_regressor(
         return regr
 
 
+# models that can more quickly handle many X/Y obs, with modest number of features
 sklearn_model_dict: dict = {
     'RandomForest': 0.02,
     'ElasticNet': 0.05,
@@ -393,19 +395,18 @@ sklearn_model_dict: dict = {
     'Adaboost': 0.03,
     'SVM': 0.05,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
-    'xgboost': 0.02,
+    'xgboost': 0.01,
     'KerasRNN': 0.02,
     'Transformer': 0.02,
     'HistGradientBoost': 0.03,
     'LightGBM': 0.03,
     'ExtraTrees': 0.05,
-    'RadiusNeighbors': 0.05,
+    'RadiusNeighbors': 0.02,
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
 }
-# these should train quickly, and not mind being run with multiple in parallel
+# these should train quickly with low dimensional X/Y, and not mind being run multiple in parallel
 univariate_model_dict: dict = {
-    # 'RandomForest': 0.02,  # too unstable in parallel
     'ElasticNet': 0.05,
     'MLP': 0.05,
     'DecisionTree': 0.05,
@@ -419,8 +420,22 @@ univariate_model_dict: dict = {
     'RadiusNeighbors': 0.05,
     'RANSAC': 0.02,
 }
-# these should train relatively quickly when given many observations of X and Y
-multivariate_model_dict = {}
+# for high dimensionality, many-feature X, many-feature Y, but with moderate obs count
+rolling_regression_dict = {
+    'RandomForest': 0.02,
+    'ElasticNet': 0.05,
+    'MLP': 0.05,
+    'DecisionTree': 0.05,
+    'KNN': 0.05,
+    'Adaboost': 0.03,
+    'SVM': 0.05,
+    'KerasRNN': 0.02,
+    'LightGBM': 0.03,
+    'ExtraTrees': 0.05,
+    'RadiusNeighbors': 0.01,
+    'PoissonRegresssion': 0.03,
+    'RANSAC': 0.05,
+}
 # models where we can be sure the model isn't sharing information across multiple Y's...
 no_shared_model_dict = {
     'KNN': 0.1,
@@ -1028,7 +1043,7 @@ class RollingRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params()
+        model_choice = generate_regressor_params(model_dict=rolling_regression_dict)
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30], [0.2, 0.2, 0.2, 0.2, 0.2]
         )[0]
