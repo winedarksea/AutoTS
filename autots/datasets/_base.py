@@ -393,14 +393,14 @@ def load_zeroes(long=False, shape=None, start_date: str = "2021-01-01"):
         return df_long
 
 
-def load_linear(long=False, shape=None, start_date: str = "2021-01-01", introduce_nan: float = None):
+def load_linear(
+    long=False, shape=None, start_date: str = "2021-01-01", introduce_nan: float = None
+):
     """Create a dataset of just zeroes for testing edge case."""
     if shape is None:
         shape = (500, 5)
     idx = pd.date_range(start_date, periods=shape[0], freq="D")
-    df_wide = pd.DataFrame(
-        np.ones(shape), index=idx
-    )
+    df_wide = pd.DataFrame(np.ones(shape), index=idx)
     df_wide = (df_wide * list(range(0, shape[1]))).cumsum()
     if introduce_nan is not None:
         df_wide = df_wide.sample(frac=(1 - introduce_nan)).reindex(idx)

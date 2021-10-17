@@ -64,15 +64,16 @@ fast = [
     'LastValueNaive',
     'AverageValueNaive',
     'GLS',
+    'SeasonalNaive',
     'GLM',
     'ETS',
-    # 'WindowRegression',
-    # 'GluonTS',
+    # 'UnobservedComponents',  # it's fast enough but I'll leave for parallel
     'VAR',
-    'SeasonalNaive',
     'VECM',
+    'WindowRegression',  # well, this gets slow with Transformer
     'DatepartRegression',
-    'UnivariateRegression',
+    'UnivariateMotif',
+    'MultivariateMotif',
     'NVAR',
 ]
 # models that can scale well if many CPU cores are available
@@ -98,14 +99,13 @@ experimental = [
 # models that perform slowly at scale
 slow = list((set(all_models) - set(fast)) - set(experimental))
 # use GPU
-gpu = ['GluonTS']
+gpu = ['GluonTS', 'WindowRegression']
 # models with model-based upper/lower forecasts
 probabilistic = [
     'ARIMA',
     'GluonTS',
     'FBProphet',
     'AverageValueNaive',
-    # 'MotifSimulation',
     'VARMAX',
     'DynamicFactor',
     'VAR',

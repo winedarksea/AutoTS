@@ -21,16 +21,17 @@ from autots import AutoTS, load_live_daily, create_regressor
 
 fred_key = None  # https://fred.stlouisfed.org/docs/api/api_key.html
 forecast_name = "example"
-graph = True  # whether to plot a graph
+graph = True  # whether to plot graphs
 # https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects
 frequency = "D"
 forecast_length = 28  # number of periods to forecast ahead
 drop_most_recent = 1  # whether to discard the n most recent records (as incomplete)
+num_validations = 2  # number of cross validation runs. More is better but slower, usually
 n_jobs = "auto"  # "auto" or set to number of CPU cores
 prediction_interval = 0.9  # sets the upper and lower forecast range by probability range. Bigger = wider
 initial_training = "auto"  # set this to True on first run, or on reset, 'auto' looks for existing template, if found, sets to False.
 evolve = True  # allow time series to progressively evolve on each run, if False, uses fixed template
-archive_templates = False  # save a copy of the model template used with a timestamp
+archive_templates = True  # save a copy of the model template used with a timestamp
 save_location = None  # "C:/Users/Colin/Downloads"  # directory to save templates to. Defaults to working dir
 template_filename = f"autots_forecast_template_{forecast_name}.csv"
 forecast_csv_name = None  # f"autots_forecast_{forecast_name}.csv"  # or None, point forecast only is written
@@ -83,7 +84,8 @@ most_recent_date = df.notna()[::-1].idxmax()
 drop_cols = most_recent_date[most_recent_date < min_cutoff_date].index.tolist()
 df = df.drop(columns=drop_cols)
 
-# regressor with some things we can glean from data and datetime index
+# example regressor with some things we can glean from data and datetime index
+# note this only accepts `wide` style input dataframes
 regr_train, regr_fcst = create_regressor(
     df,
     forecast_length=forecast_length,
@@ -92,7 +94,7 @@ regr_train, regr_fcst = create_regressor(
     scale=True,
     summarize="auto",
     backfill='bfill',
-    fill_na='ffill',
+    fill_na='spline',
     holiday_countries=["US", "UK"],  # requires holidays package
     datepart_method="recurring",
 )
@@ -101,6 +103,7 @@ regr_train, regr_fcst = create_regressor(
 df = df.iloc[forecast_length:]
 regr_train = regr_train.iloc[forecast_length:]
 
+print("data setup completed, beginning modeling")
 """
 Begin modeling
 """
@@ -128,7 +131,7 @@ model = AutoTS(
     aggfunc="sum",
     models_to_validate=models_to_validate,
     model_interrupt=True,
-    num_validations=2,
+    num_validations=num_validations,
     validation_method="backwards",  # "seasonal 364" would be a good choice too
     constraint=2,
     drop_most_recent=drop_most_recent,  # if newest data is incomplete, also remember to increase forecast_length

@@ -14,15 +14,17 @@ X, Y = window_maker(df, forecast_length = 6, shuffle = False,
 """
 
 if _has_tf:
+
     class ResidualWrapper(tf.keras.Model):
         """From https://www.tensorflow.org/tutorials/structured_data/time_series"""
+
         def __init__(self, model):
             super().__init__()
             self.model = model
-    
+
         def call(self, inputs, *args, **kwargs):
             delta = self.model(inputs, *args, **kwargs)
-              
+
             # The prediction for each time step is the input
             # from the previous time step plus the delta
             # calculated by the model.
@@ -91,54 +93,89 @@ class KerasRNN(object):
         if self.rnn_type == "E2D2":
             # crudely borrowed from: https://www.analyticsvidhya.com/blog/2020/10/multivariate-multi-step-time-series-forecasting-using-stacked-lstm-sequence-to-sequence-autoencoder-in-tensorflow-2-0-keras/
             encoder_inputs = tf.keras.layers.Input(shape=INPUT_SHAPE)
-            encoder_l1 = tf.keras.layers.LSTM(self.hidden_layer_sizes[0],return_sequences=True, return_state=True)
+            encoder_l1 = tf.keras.layers.LSTM(
+                self.hidden_layer_sizes[0], return_sequences=True, return_state=True
+            )
             encoder_outputs1 = encoder_l1(encoder_inputs)
             encoder_states1 = encoder_outputs1[1:]
-            encoder_l2 = tf.keras.layers.LSTM(self.hidden_layer_sizes[0], return_state=True)
+            encoder_l2 = tf.keras.layers.LSTM(
+                self.hidden_layer_sizes[0], return_state=True
+            )
             encoder_outputs2 = encoder_l2(encoder_outputs1[0])
             encoder_states2 = encoder_outputs2[1:]
             #
-            decoder_inputs = tf.keras.layers.RepeatVector(OUTPUT_SHAPE)(encoder_outputs2[0])
+            decoder_inputs = tf.keras.layers.RepeatVector(OUTPUT_SHAPE)(
+                encoder_outputs2[0]
+            )
             layer_2_shape = self.hidden_layer_sizes
-            layer_2_size = layer_2_shape[2] if len(layer_2_shape) >= 3 else layer_2_shape[0]
+            layer_2_size = (
+                layer_2_shape[2] if len(layer_2_shape) >= 3 else layer_2_shape[0]
+            )
             #
-            decoder_l1 = tf.keras.layers.LSTM(layer_2_size, return_sequences=True)(decoder_inputs,initial_state = encoder_states1)
-            decoder_l2 = tf.keras.layers.LSTM(layer_2_size, return_sequences=True)(decoder_l1,initial_state = encoder_states2)
-            decoder_outputs2 = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(OUTPUT_SHAPE))(decoder_l2)
+            decoder_l1 = tf.keras.layers.LSTM(layer_2_size, return_sequences=True)(
+                decoder_inputs, initial_state=encoder_states1
+            )
+            decoder_l2 = tf.keras.layers.LSTM(layer_2_size, return_sequences=True)(
+                decoder_l1, initial_state=encoder_states2
+            )
+            decoder_outputs2 = tf.keras.layers.TimeDistributed(
+                tf.keras.layers.Dense(OUTPUT_SHAPE)
+            )(decoder_l2)
             #
-            simple_lstm_model = tf.keras.models.Model(encoder_inputs,decoder_outputs2)
+            simple_lstm_model = tf.keras.models.Model(encoder_inputs, decoder_outputs2)
         if self.rnn_type == "CNN":
             if len(self.hidden_layer_sizes) == 1:
                 kernel_size = 10 if INPUT_SHAPE[0] > 10 else INPUT_SHAPE[0]
-                simple_lstm_model = tf.keras.Sequential([
-                    tf.keras.layers.Conv1D(filters=self.hidden_layer_sizes[0],
-                                           kernel_size=kernel_size,
-                                           activation='relu',
-                                           input_shape=INPUT_SHAPE,
-                                           kernel_initializer=self.kernel_initializer),
-                    tf.keras.layers.Dense(units=self.hidden_layer_sizes[0], activation='relu'),
-                    tf.keras.layers.Dense(units=OUTPUT_SHAPE),
-                ])
+                simple_lstm_model = tf.keras.Sequential(
+                    [
+                        tf.keras.layers.Conv1D(
+                            filters=self.hidden_layer_sizes[0],
+                            kernel_size=kernel_size,
+                            activation='relu',
+                            input_shape=INPUT_SHAPE,
+                            kernel_initializer=self.kernel_initializer,
+                        ),
+                        tf.keras.layers.Dense(
+                            units=self.hidden_layer_sizes[0], activation='relu'
+                        ),
+                        tf.keras.layers.Dense(units=OUTPUT_SHAPE),
+                    ]
+                )
             else:
                 # borrowed from https://keras.io/examples/timeseries/timeseries_classification_from_scratch
                 input_layer = tf.keras.layers.Input(INPUT_SHAPE)
                 layer_shape = self.hidden_layer_sizes
-                layer_2_size = layer_shape[1] if len(layer_shape) >= 2 else layer_shape[0]
-                layer_3_size = layer_shape[2] if len(layer_shape) >= 3 else layer_shape[0]
-    
-                conv1 = tf.keras.layers.Conv1D(filters=self.hidden_layer_sizes[0], kernel_size=3, padding="same", kernel_initializer=self.kernel_initializer)(input_layer)
+                layer_2_size = (
+                    layer_shape[1] if len(layer_shape) >= 2 else layer_shape[0]
+                )
+                layer_3_size = (
+                    layer_shape[2] if len(layer_shape) >= 3 else layer_shape[0]
+                )
+
+                conv1 = tf.keras.layers.Conv1D(
+                    filters=self.hidden_layer_sizes[0],
+                    kernel_size=3,
+                    padding="same",
+                    kernel_initializer=self.kernel_initializer,
+                )(input_layer)
                 conv1 = tf.keras.layers.BatchNormalization()(conv1)
                 conv1 = tf.keras.layers.ReLU()(conv1)
-                conv2 = tf.keras.layers.Conv1D(filters=layer_2_size, kernel_size=3, padding="same")(conv1)
+                conv2 = tf.keras.layers.Conv1D(
+                    filters=layer_2_size, kernel_size=3, padding="same"
+                )(conv1)
                 conv2 = tf.keras.layers.BatchNormalization()(conv2)
                 conv2 = tf.keras.layers.ReLU()(conv2)
-                conv3 = tf.keras.layers.Conv1D(filters=layer_3_size, kernel_size=3, padding="same")(conv2)
+                conv3 = tf.keras.layers.Conv1D(
+                    filters=layer_3_size, kernel_size=3, padding="same"
+                )(conv2)
                 conv3 = tf.keras.layers.BatchNormalization()(conv3)
                 conv3 = tf.keras.layers.ReLU()(conv3)
-    
+
                 gap = tf.keras.layers.GlobalAveragePooling1D()(conv3)
                 output_layer = tf.keras.layers.Dense(OUTPUT_SHAPE)(gap)
-                simple_lstm_model =  tf.keras.models.Model(inputs=input_layer, outputs=output_layer)
+                simple_lstm_model = tf.keras.models.Model(
+                    inputs=input_layer, outputs=output_layer
+                )
         elif len(self.hidden_layer_sizes) == 3:
             if self.rnn_type == 'GRU':
                 simple_lstm_model = tf.keras.models.Sequential(
@@ -177,17 +214,19 @@ class KerasRNN(object):
                 )
         if len(self.hidden_layer_sizes) == 1:
             if self.rnn_type == 'GRU':
-                simple_lstm_model = ResidualWrapper(tf.keras.models.Sequential(
-                    [
-                        tf.keras.layers.GRU(
-                            self.hidden_layer_sizes[0],
-                            kernel_initializer=self.kernel_initializer,
-                            input_shape=INPUT_SHAPE,
-                        ),
-                        tf.keras.layers.Dense(10, activation='relu'),
-                        tf.keras.layers.Dense(OUTPUT_SHAPE),
-                    ]
-                ))
+                simple_lstm_model = ResidualWrapper(
+                    tf.keras.models.Sequential(
+                        [
+                            tf.keras.layers.GRU(
+                                self.hidden_layer_sizes[0],
+                                kernel_initializer=self.kernel_initializer,
+                                input_shape=INPUT_SHAPE,
+                            ),
+                            tf.keras.layers.Dense(10, activation='relu'),
+                            tf.keras.layers.Dense(OUTPUT_SHAPE),
+                        ]
+                    )
+                )
             else:
                 simple_lstm_model = tf.keras.models.Sequential(
                     [
@@ -272,7 +311,7 @@ def transformer_build_model(
 
 class Transformer(object):
     """Wrapper for Tensorflow Keras based Transformer.
-    
+
     based on: https://keras.io/examples/timeseries/timeseries_transformer_classification/
 
     Args:
@@ -310,7 +349,7 @@ class Transformer(object):
         self.batch_size = batch_size
         self.optimizer = optimizer
         self.loss = loss
-        
+
         self.head_size = head_size
         self.num_heads = num_heads
         self.ff_dim = ff_dim
@@ -358,7 +397,9 @@ class Transformer(object):
             optimizer=optimizer,
         )
 
-        callbacks = [tf.keras.callbacks.EarlyStopping(patience=10, restore_best_weights=True)]
+        callbacks = [
+            tf.keras.callbacks.EarlyStopping(patience=10, restore_best_weights=True)
+        ]
 
         self.model.fit(
             train_X,

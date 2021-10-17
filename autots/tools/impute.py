@@ -182,7 +182,8 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
 
         df = IterativeImputer(
             ExtraTreesRegressor(n_estimators=10, random_state=0),
-            random_state=0, max_iter=100
+            random_state=0,
+            max_iter=100,
         ).fit_transform(df)
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df)

@@ -6,19 +6,19 @@ from autots.tools.holiday import holiday_flag
 
 
 def create_regressor(
-        df,
-        forecast_length,
-        frequency: str = "infer",
-        holiday_countries: list = ["US"],
-        datepart_method: str = "recurring",
-        drop_most_recent: int = 0,
-        scale: bool = True,
-        summarize: str = "auto",
-        backfill: str = "bfill",
-        n_jobs: str = "auto",
-        fill_na: str = 'ffill',
-        aggfunc: str = "first",
-    ):
+    df,
+    forecast_length,
+    frequency: str = "infer",
+    holiday_countries: list = ["US"],
+    datepart_method: str = "recurring",
+    drop_most_recent: int = 0,
+    scale: bool = True,
+    summarize: str = "auto",
+    backfill: str = "bfill",
+    n_jobs: str = "auto",
+    fill_na: str = 'ffill',
+    aggfunc: str = "first",
+):
     """Create a regressor from information available in the existing dataset.
     Components: are lagged data, datepart information, and holiday.
 
@@ -48,7 +48,9 @@ def create_regressor(
         regressor_train, regressor_forecast
     """
     if not isinstance(df.index, pd.DatetimeIndex):
-        raise ValueError("create_regressor input df must be `wide` style with pd.DatetimeIndex index")
+        raise ValueError(
+            "create_regressor input df must be `wide` style with pd.DatetimeIndex index"
+        )
     if isinstance(df, pd.Series):
         df = df.to_frame()
     if drop_most_recent > 0:
@@ -77,17 +79,11 @@ def create_regressor(
     # datepart
     if datepart_method in ['simple', 'expanded', 'recurring']:
         regr_train = pd.concat(
-            [
-                regr_train,
-                date_part(regr_train.index, method=datepart_method)
-            ],
+            [regr_train, date_part(regr_train.index, method=datepart_method)],
             axis=1,
         )
         regr_fcst = pd.concat(
-            [
-                regr_fcst,
-                date_part(regr_fcst.index, method=datepart_method)
-            ],
+            [regr_fcst, date_part(regr_fcst.index, method=datepart_method)],
             axis=1,
         )
     # holiday (list)
@@ -96,13 +92,17 @@ def create_regressor(
             holiday_countries = holiday_countries.split(",")
 
         for holiday_country in holiday_countries:
-            regr_train[f"holiday_flag_{holiday_country}"] = holiday_flag(regr_train.index, country=holiday_country)
+            regr_train[f"holiday_flag_{holiday_country}"] = holiday_flag(
+                regr_train.index, country=holiday_country
+            )
             holiday_future = holiday_flag(
                 regr_train.index.shift(1, freq=frequency), country=holiday_country
             )
             holiday_future.index = regr_train.index
             regr_train[f"holiday_flag_{holiday_country}_future"] = holiday_future
-            regr_fcst[f"holiday_flag_{holiday_country}"] = holiday_flag(regr_fcst.index, country=holiday_country)
+            regr_fcst[f"holiday_flag_{holiday_country}"] = holiday_flag(
+                regr_fcst.index, country=holiday_country
+            )
             holiday_future = holiday_flag(
                 regr_fcst.index.shift(1, freq=frequency), country=holiday_country
             )

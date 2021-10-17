@@ -92,15 +92,6 @@ autots.models.tfp module
    :undoc-members:
    :show-inheritance:
 
-autots.models.tsfresh module
-----------------------------
-
-.. automodule:: autots.models.tsfresh
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
 Module contents
 ---------------
 

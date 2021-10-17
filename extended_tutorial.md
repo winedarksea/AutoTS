@@ -39,7 +39,9 @@ print(model)
 #### Import of data
 There are two shapes/styles of `pandas.DataFrame` which are accepted. 
 The first is *long* data, like that out of an aggregated sales-transaction table containing three columns identified to `.fit()` as `date_col {pd.Datetime}, value_col {the numeric or categorical data of interest}, and id_col {id string, if multiple series are provided}`. 
-Alternatively, the data may be in a *wide* format where the index is a `pandas.DatetimeIndex`, and each column is a distinct data series.  
+Alternatively, the data may be in a *wide* format where the index is a `pandas.DatetimeIndex`, and each column is a distinct data series. 
+
+If horizontal style ensembles are used, series_ids/column names will be coerced to strings. 
 
 #### You can tailor the process in a few ways...
 The simplest way to improve accuracy is to increase the number of generations `max_generations=15`. Each generation tries new models, taking additional time but improving the accuracy. The nature of genetic algorithms, however, means there is no consistent improvement for each generation, and large number of generations will often only result in minimal performance gains.
@@ -66,7 +68,7 @@ Dropping series which are mostly missing, or using `prefill_na=0` (or other valu
 There are some basic things to beware of that can commonly lead to poor results:
 
 1. Bad data (sudden drops or missing values) in the *most recent* data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. 
-2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be choosen. Choose a good method and as many validations as possible. 
+2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be chosen. Choose a good method and as many validations as possible. 
 
 ### Validation and Cross Validation
 Cross validation helps assure that the optimal model is stable over the dynamics of a time series. 
@@ -140,9 +142,8 @@ model = model.fit(
 prediction = model.predict()
 forecasts_df = prediction.forecast
 # prediction.long_form_results()
-# model.best_model.to_string()
 
-if model.best_model['Ensemble'].iloc[0] == 2:
+if model.best_model_ensemble == 2:
     model.plot_horizontal()
 ```
 
@@ -215,6 +216,14 @@ df_forecast = model_forecast(
 df_forecast.forecast.head(5)
 ```
 
+The `model.predict()` of AutoTS class runs the model given by three stored attributes:
+```
+model.best_model_name,
+model.best_model_params,
+model.best_model_transformation_params
+```
+If you overwrite these, it will accordingly change the forecast output.
+
 ### Metrics
 There are a number of available metrics, all combined together into a 'Score' which evaluates the best model. The 'Score' that compares models can easily be adjusted by passing through custom metric weights dictionary. 
 Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights must be numbers greater than or equal to 0.
@@ -281,8 +290,7 @@ import json
 from autots.models.ensemble import mosaic_to_horizontal, model_forecast
 
 # assuming model is from AutoTS.fit() with a mosaic as best_model
-model_params_init = json.loads(model.best_model['ModelParameters'].iloc[0])
-model_params = mosaic_to_horizontal(model_params_init, forecast_period=0)
+model_params = mosaic_to_horizontal(model.best_model_params, forecast_period=0)
 result = model_forecast(
 	model_name="Ensemble",
 	model_param_dict=model_params,
@@ -316,6 +324,7 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 
 `pip install autots['additional']`
 ### Optional Packages
+	psutil
 	holidays
 	prophet
 	gluonts (requires mxnet)
@@ -323,10 +332,11 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 	tensorflow >= 2.0.0
 	lightgbm
 	xgboost
-	psutil
 	tensorflow-probability
 	fredapi
 	greykite
+	
+Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs. 
 
 #### Safest bet for installation:
 ```shell

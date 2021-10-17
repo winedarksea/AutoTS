@@ -2519,7 +2519,9 @@ def RandomTransform(
     # choose FillNA
     na_choice = random.choices(na_probs_list, na_probabilities)[0]
     if na_choice == "interpolate":
-        na_choice = random.choices(list(df_interpolate.keys()), list(df_interpolate.values()))[0]
+        na_choice = random.choices(
+            list(df_interpolate.keys()), list(df_interpolate.values())
+        )[0]
 
     # choose length of transformers
     num_trans = random.randint(1, transformer_max_depth)

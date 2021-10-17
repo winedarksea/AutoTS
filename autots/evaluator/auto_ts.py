@@ -45,6 +45,7 @@ class AutoTS(object):
         prediction_interval (float): 0-1, uncertainty range for upper and lower forecasts. Adjust range, but rarely matches actual containment.
         max_generations (int): number of genetic algorithms generations to run.
             More runs = longer runtime, generally better accuracy.
+            It's called `max` because someday there will be an auto early stopping option, but for now this is just the exact number of generations to run.
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.
         ensemble (str): None or list or comma-separated string containing:
@@ -81,8 +82,8 @@ class AutoTS(object):
         prefill_na (str): value to input to fill all NaNs with. Leaving as None and allowing model interpolation is recommended.
             None, 0, 'mean', or 'median'. 0 may be useful in for examples sales cases where all NaN can be assumed equal to zero.
         introduce_na (bool): whether to force last values in one training validation to be NaN. Helps make more robust models.
-            defaults to None, which is as True if any NaN in tail of training data. Will not introduce NaN to all series if subset is used.
-            if True, will also randomly change 20% of rows to NaN in the validations
+            defaults to None, which introduces NaN in last rows of validations if any NaN in tail of training data. Will not introduce NaN to all series if subset is used.
+            if True, will also randomly change 20% of all rows to NaN in the validations
         model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
@@ -90,15 +91,21 @@ class AutoTS(object):
         n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also 'auto'.
 
     Attributes:
-        best_model (pandas.DataFrame): DataFrame containing template for the best ranked model
+        best_model (pd.DataFrame): DataFrame containing template for the best ranked model
+        best_model_name (str): model name
+        best_model_params (dict): model params
+        best_model_transformation_params (dict): transformation parameters
+        best_model_ensemble (int): Ensemble type int id
         regression_check (bool): If True, the best_model uses an input 'User' future_regressor
+        df_wide_numeric (pd.DataFrame): dataframe containing shaped final data
+        model_results (object): contains a collection of result metrics
 
     Methods:
         fit, predict
         export_template, import_template, import_results
         results, failure_rate
         horizontal_to_df, mosaic_to_df
-        plot_horizontal, plot_horizontal_transformers, plot_generation_loss
+        plot_horizontal, plot_horizontal_transformers, plot_generation_loss, plot_backforecast
     """
 
     def __init__(
@@ -238,7 +245,7 @@ class AutoTS(object):
             from autots.templates.general import general_template
 
             random_template = RandomTemplate(
-                len(self.model_list) * 8,
+                len(self.model_list) * 5,
                 model_list=self.model_list,
                 transformer_list=self.transformer_list,
                 transformer_max_depth=self.transformer_max_depth,
@@ -913,10 +920,12 @@ class AutoTS(object):
                     if self.introduce_na:
                         idx = val_df_train.index
                         # make 20% of rows NaN at random
-                        val_df_train = val_df_train.sample(frac=0.8, random_state=self.random_seed).reindex(idx)
+                        val_df_train = val_df_train.sample(
+                            frac=0.8, random_state=self.random_seed
+                        ).reindex(idx)
                     nan_frac = val_df_train.shape[1] / num_validations
                     val_df_train.iloc[
-                        -2:, int(nan_frac * y): int(nan_frac * (y + 1))
+                        -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
                     ] = np.nan
 
                 # run validation template on current slice
@@ -1087,7 +1096,6 @@ or otherwise increase models available."""
                         .drop_duplicates(subset=self.template_cols)
                         .head(1)[self.template_cols_id]
                     )
-                    self.ensemble_check = int((self.best_model['Ensemble'].iloc[0]) > 0)
                 except IndexError:
                     raise ValueError(error_msg_template)
         else:
@@ -1103,7 +1111,6 @@ or otherwise increase models available."""
                     .drop_duplicates(subset=self.template_cols)
                     .head(1)[template_cols]
                 )
-                self.ensemble_check = int((self.best_model['Ensemble'].iloc[0]) > 0)
             except IndexError:
                 raise ValueError(error_msg_template)
         # give a more convenient dict option
@@ -1113,6 +1120,7 @@ or otherwise increase models available."""
             self.best_model['TransformationParameters'].iloc[0]
         )
         self.best_model_ensemble = self.best_model['Ensemble'].iloc[0]
+        self.ensemble_check = int(self.best_model_ensemble > 0)
 
         # set flags to check if regressors or ensemble used in final model.
         param_dict = json.loads(self.best_model.iloc[0]['ModelParameters'])
