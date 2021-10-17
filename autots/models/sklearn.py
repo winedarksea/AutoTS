@@ -405,6 +405,8 @@ sklearn_model_dict: dict = {
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
 }
+multivariate_model_dict = sklearn_model_dict.copy()
+del multivariate_model_dict['Transformer']
 # these should train quickly with low dimensional X/Y, and not mind being run multiple in parallel
 univariate_model_dict: dict = {
     'ElasticNet': 0.05,
@@ -1241,6 +1243,7 @@ def window_maker(
             Y = pd.concat([Y, cY], axis=0)
         if normalize_window:
             X = X.div(X.sum(axis=1), axis=0)
+        X.columns = [str(x) for x in range(len(X.columns))]
 
     return X, Y
 
@@ -1269,6 +1272,7 @@ def last_window(
         cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
     if normalize_window:
         cX = cX.div(cX.sum(axis=1), axis=0)
+    
     return cX
 
 
@@ -1410,6 +1414,8 @@ class WindowRegression(ModelObject):
                     tmerg = pd.concat([blasted_thing] * pred.shape[0], axis=0)
                     tmerg.index = pred.index
                     pred = pd.concat([pred, tmerg], axis=1, ignore_index=True)
+                if isinstance(pred, pd.DataFrame):
+                    pred = pred.to_numpy()
                 rfPred = pd.DataFrame(self.regr.predict(pred))
                 if self.input_dim == 'univariate':
                     rfPred = rfPred.transpose()
@@ -1433,6 +1439,8 @@ class WindowRegression(ModelObject):
                 ]
                 tmerg.index = pred.index
                 pred = pd.concat([pred, tmerg], axis=1)
+            if isinstance(pred, pd.DataFrame):
+                pred = pred.to_numpy()
             cY = pd.DataFrame(self.regr.predict(pred))
             if self.input_dim == 'multivariate':
                 cY.index = ['values']
@@ -2568,7 +2576,7 @@ class MultivariateRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params(model_dict=sklearn_model_dict)
+        model_choice = generate_regressor_params(model_dict=multivariate_model_dict)
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
         )[0]

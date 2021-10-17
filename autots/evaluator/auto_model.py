@@ -1009,6 +1009,17 @@ def TemplateWizard(
     template_result.model_count = model_count
     if isinstance(template, pd.Series):
         template = template.to_frame()
+    if verbose > 1:
+        try:
+            from psutil import virtual_memory
+        except Exception:
+            class MemObjecty(object):
+                def __init__(self):
+                    self.percent = np.nan
+
+            def virtual_memory():
+                return MemObjecty()
+
     # template = unpack_ensemble_models(template, template_cols, keep_ensemble = False)
 
     for index, row in template.iterrows():
@@ -1066,6 +1077,8 @@ def TemplateWizard(
                 n_jobs=n_jobs,
                 template_cols=template_cols,
             )
+            if verbose > 1:
+                post_memory_percent = virtual_memory().percent
 
             per_ts = True if 'distance' in ensemble else False
             full_mae = True if "mosaic" in ensemble else False
@@ -1111,6 +1124,8 @@ def TemplateWizard(
                 },
                 index=[0],
             )
+            if verbose > 1:
+                result['PostMemoryPercent'] = post_memory_percent
             a = pd.DataFrame(
                 model_error.avg_metrics_weighted.rename(lambda x: x + '_weighted')
             ).transpose()
@@ -1726,19 +1741,19 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
     if sum([mae_weighting, rmse_weighting, contour_weighting, spl_weighting]) == 0:
         mae_weighting = 1
 
-    mae_scaler = results_object.per_series_mae[results_object.per_series_mae != 0].min()
+    mae_scaler = results_object.per_series_mae[results_object.per_series_mae != 0].min().fillna(1)
     mae_score = results_object.per_series_mae / mae_scaler
     overall_score = mae_score * mae_weighting
     if rmse_weighting > 0:
         rmse_scaler = results_object.per_series_rmse[
             results_object.per_series_rmse != 0
-        ].min()
+        ].min().fillna(1)
         rmse_score = results_object.per_series_rmse / rmse_scaler
         overall_score = overall_score + (rmse_score * rmse_weighting)
     if spl_weighting > 0:
         spl_scaler = results_object.per_series_spl[
             results_object.per_series_spl != 0
-        ].min()
+        ].min().fillna(1)
         spl_score = results_object.per_series_spl / spl_scaler
         overall_score = overall_score + (spl_score * spl_weighting)
     if contour_weighting > 0:

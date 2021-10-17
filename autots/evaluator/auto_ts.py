@@ -175,6 +175,8 @@ class AutoTS(object):
         self.model_interrupt = model_interrupt
         self.verbose = int(verbose)
         self.n_jobs = n_jobs
+        # just a list of horizontal types in general
+        self.h_ens_list = ['horizontal', 'probabilistic', 'hdist', "mosaic"]
         if self.ensemble == 'all':
             self.ensemble = 'simple,distance,horizontal-max,probabilistic'
         elif self.ensemble == 'auto':
@@ -452,6 +454,26 @@ class AutoTS(object):
                 )
                 time.sleep(2)
 
+        # remove other ensembling types if univariate
+        if df_wide_numeric.shape[1] == 1:
+            if "simple" in self.ensemble:
+                ens_piece1 = "simple"
+            else:
+                ens_piece1 = ""
+            if "distance" in self.ensemble:
+                ens_piece2 = "distance"
+            else:
+                ens_piece2 = ""
+            if "mosaic" in self.ensemble:
+                ens_piece3 = "mosaic"
+            else:
+                ens_piece3 = ""
+            self.ensemble = ens_piece1 + "," + ens_piece2 + "," + ens_piece3
+        ensemble = self.ensemble
+        # because horizontal cannot handle non-string columns/series_ids
+        if any(x in ensemble for x in self.h_ens_list):
+            df_wide_numeric.columns = [str(xc) for xc in df_wide_numeric.columns]
+
         # use "mean" to assign weight as mean
         if weighted:
             if weights == 'mean':
@@ -490,23 +512,6 @@ class AutoTS(object):
         # replace any zeroes that occur prior to all non-zero values
         if self.remove_leading_zeroes:
             df_wide_numeric = remove_leading_zeros(df_wide_numeric)
-
-        # remove other ensembling types if univariate
-        if df_wide_numeric.shape[1] == 1:
-            if "simple" in self.ensemble:
-                ens_piece1 = "simple"
-            else:
-                ens_piece1 = ""
-            if "distance" in self.ensemble:
-                ens_piece2 = "distance"
-            else:
-                ens_piece2 = ""
-            if "mosaic" in self.ensemble:
-                ens_piece3 = "mosaic"
-            else:
-                ens_piece3 = ""
-            self.ensemble = ens_piece1 + "," + ens_piece2 + "," + ens_piece3
-        ensemble = self.ensemble
 
         # check if NaN in last row
         self._nan_tail = df_wide_numeric.tail(2).isna().sum(axis=1).sum() > 0
@@ -956,8 +961,7 @@ Try increasing models_to_validate, max_per_model_class
 or otherwise increase models available."""
 
         # Construct horizontal style ensembles
-        ens_list = ['horizontal', 'probabilistic', 'hdist', 'mosaic']
-        if any(x in ensemble for x in ens_list):
+        if any(x in ensemble for x in self.h_ens_list):
             ensemble_templates = pd.DataFrame()
             try:
                 if 'horizontal' in ensemble or 'probabilistic' in ensemble:
@@ -1317,8 +1321,7 @@ or otherwise increase models available."""
                 export_template = export_template[
                     export_template['Runs'] >= (self.num_validations + 1)
                 ]
-                ens_list = ['horizontal', 'probabilistic', 'hdist', "mosaic"]
-                if any(x in self.ensemble for x in ens_list):
+                if any(x in self.ensemble for x in self.h_ens_list):
                     temp = self.initial_results.model_results
                     temp = temp[temp['Ensemble'] >= 2]
                     temp = temp[temp['Exceptions'].isna()]
