@@ -19,7 +19,10 @@ def rolling_x_regressor(
     std_rolling_periods: int = 7,
     max_rolling_periods: int = None,
     min_rolling_periods: int = None,
+    quantile90_rolling_periods: int = None,
+    quantile10_rolling_periods: int = None,
     ewm_alpha: float = 0.5,
+    ewm_var_alpha: float = None,
     additional_lag_periods: int = 7,
     abs_energy: bool = False,
     rolling_autocorr_periods: int = None,
@@ -49,9 +52,25 @@ def rolling_x_regressor(
         X = pd.concat([X, df.rolling(max_rolling_periods, min_periods=1).max()], axis=1)
     if str(min_rolling_periods).isdigit():
         X = pd.concat([X, df.rolling(min_rolling_periods, min_periods=1).min()], axis=1)
+    if str(quantile90_rolling_periods).isdigit():
+        X = pd.concat(
+            [X, df.rolling(quantile90_rolling_periods, min_periods=1).quantile(0.9)],
+            axis=1,
+        )
+    if str(quantile10_rolling_periods).isdigit():
+        X = pd.concat(
+            [X, df.rolling(quantile10_rolling_periods, min_periods=1).quantile(0.1)],
+            axis=1,
+        )
+
     if str(ewm_alpha).replace('.', '').isdigit():
         X = pd.concat(
             [X, df.ewm(alpha=ewm_alpha, ignore_na=True, min_periods=1).mean()], axis=1
+        )
+    if str(ewm_var_alpha).replace('.', '').isdigit():
+        X = pd.concat(
+            [X, df.ewm(alpha=ewm_var_alpha, ignore_na=True, min_periods=1).var()],
+            axis=1,
         )
     if str(additional_lag_periods).isdigit():
         X = pd.concat([X, df.shift(additional_lag_periods)], axis=1).fillna(
@@ -96,8 +115,55 @@ def rolling_x_regressor(
     X = X.replace([np.inf, -np.inf], np.nan)
     X = X.fillna(method='ffill').fillna(method='bfill')
 
-    X.columns = [x for x in range(len(X.columns))]
+    X.columns = [str(x) for x in range(len(X.columns))]
 
+    return X
+
+
+def rolling_x_regressor_regressor(
+    df,
+    mean_rolling_periods: int = 30,
+    macd_periods: int = None,
+    std_rolling_periods: int = 7,
+    max_rolling_periods: int = None,
+    min_rolling_periods: int = None,
+    quantile90_rolling_periods: int = None,
+    quantile10_rolling_periods: int = None,
+    ewm_alpha: float = 0.5,
+    ewm_var_alpha: float = None,
+    additional_lag_periods: int = 7,
+    abs_energy: bool = False,
+    rolling_autocorr_periods: int = None,
+    add_date_part: str = None,
+    holiday: bool = False,
+    holiday_country: str = 'US',
+    polynomial_degree: int = None,
+    window: int = None,
+    future_regressor=None,
+):
+    """Adds in the future_regressor."""
+    X = rolling_x_regressor(
+        df,
+        mean_rolling_periods=mean_rolling_periods,
+        macd_periods=macd_periods,
+        std_rolling_periods=std_rolling_periods,
+        max_rolling_periods=max_rolling_periods,
+        min_rolling_periods=min_rolling_periods,
+        ewm_var_alpha=ewm_var_alpha,
+        quantile90_rolling_periods=quantile90_rolling_periods,
+        quantile10_rolling_periods=quantile10_rolling_periods,
+        additional_lag_periods=additional_lag_periods,
+        ewm_alpha=ewm_alpha,
+        abs_energy=abs_energy,
+        rolling_autocorr_periods=rolling_autocorr_periods,
+        add_date_part=add_date_part,
+        holiday=holiday,
+        holiday_country=holiday_country,
+        polynomial_degree=polynomial_degree,
+        window=window,
+    )
+    if future_regressor is not None:
+        X = pd.concat([X, future_regressor], axis=1)
     return X
 
 
@@ -147,17 +213,12 @@ def retrieve_regressor(
     elif model_class == 'KerasRNN':
         from autots.models.dnn import KerasRNN
 
-        regr = KerasRNN(
-            verbose=verbose,
-            random_seed=random_seed,
-            kernel_initializer=regression_model["model_params"]['kernel_initializer'],
-            epochs=regression_model["model_params"]['epochs'],
-            batch_size=regression_model["model_params"]['batch_size'],
-            optimizer=regression_model["model_params"]['optimizer'],
-            loss=regression_model["model_params"]['loss'],
-            hidden_layer_sizes=regression_model["model_params"]['hidden_layer_sizes'],
-            rnn_type=regression_model["model_params"]['rnn_type'],
-        )
+        regr = KerasRNN(verbose=verbose, random_seed=random_seed, **model_param_dict)
+        return regr
+    elif model_class == 'Transformer':
+        from autots.models.dnn import Transformer
+
+        regr = Transformer(verbose=verbose, random_seed=random_seed, **model_param_dict)
         return regr
     elif model_class == 'KNN':
         from sklearn.neighbors import KNeighborsRegressor
@@ -184,7 +245,6 @@ def retrieve_regressor(
 
             regr = MultiOutputRegressor(
                 HistGradientBoostingRegressor(
-                    max_iter=200,
                     verbose=int(verbose_bool),
                     random_state=random_seed,
                     **model_param_dict,
@@ -192,7 +252,6 @@ def retrieve_regressor(
             )
         else:
             regr = HistGradientBoostingRegressor(
-                max_iter=200,
                 verbose=int(verbose_bool),
                 random_state=random_seed,
                 **model_param_dict,
@@ -295,13 +354,29 @@ def retrieve_regressor(
 
         regr = RadiusNeighborsRegressor(n_jobs=n_jobs, **model_param_dict)
         return regr
+    elif model_class == "PoissonRegresssion":
+        from sklearn.linear_model import PoissonRegressor
+
+        if multioutput:
+            from sklearn.multioutput import MultiOutputRegressor
+
+            regr = MultiOutputRegressor(
+                PoissonRegressor(fit_intercept=True, max_iter=200, **model_param_dict),
+                n_jobs=n_jobs,
+            )
+        else:
+            regr = PoissonRegressor(**model_param_dict)
+        return regr
+    elif model_class == 'RANSAC':
+        from sklearn.linear_model import RANSACRegressor
+
+        return RANSACRegressor(random_state=random_seed, **model_param_dict)
     else:
         regression_model['model'] = 'RandomForest'
         from sklearn.ensemble import RandomForestRegressor
 
         regr = RandomForestRegressor(
             random_state=random_seed,
-            n_estimators=1000,
             verbose=verbose,
             n_jobs=n_jobs,
             **model_param_dict,
@@ -309,29 +384,80 @@ def retrieve_regressor(
         return regr
 
 
+# models that can more quickly handle many X/Y obs, with modest number of features
 sklearn_model_dict: dict = {
-    'RandomForest': 0.1,
+    'RandomForest': 0.02,
     'ElasticNet': 0.05,
-    'MLP': 0.25,
-    'DecisionTree': 0.1,
-    'KNN': 0.1,
-    'Adaboost': 0.05,
-    'SVM': 0.001,  # tends to be the slowest
-    'BayesianRidge': 0.08,
+    'MLP': 0.05,
+    'DecisionTree': 0.05,
+    'KNN': 0.05,
+    'Adaboost': 0.03,
+    'SVM': 0.05,  # was slow, LinearSVR seems much faster
+    'BayesianRidge': 0.05,
     'xgboost': 0.01,
-    'KerasRNN': 0.05,
-    'HistGradientBoost': 0.01,
-    'LightGBM': 0.1,
-    'ExtraTrees': 0.03,
-    'RadiusNeighbors': 0.03,
+    'KerasRNN': 0.02,
+    'Transformer': 0.02,
+    'HistGradientBoost': 0.03,
+    'LightGBM': 0.03,
+    'ExtraTrees': 0.05,
+    'RadiusNeighbors': 0.02,
+    'PoissonRegresssion': 0.03,
+    'RANSAC': 0.05,
+}
+multivariate_model_dict = sklearn_model_dict.copy()
+del multivariate_model_dict['Transformer']
+# these should train quickly with low dimensional X/Y, and not mind being run multiple in parallel
+univariate_model_dict: dict = {
+    'ElasticNet': 0.05,
+    'MLP': 0.05,
+    'DecisionTree': 0.05,
+    'KNN': 0.05,
+    'Adaboost': 0.05,
+    'SVM': 0.05,  # was slow, LinearSVR seems much faster
+    'BayesianRidge': 0.03,
+    'HistGradientBoost': 0.02,
+    'LightGBM': 0.01,
+    'ExtraTrees': 0.05,
+    'RadiusNeighbors': 0.05,
+    'RANSAC': 0.02,
+}
+# for high dimensionality, many-feature X, many-feature Y, but with moderate obs count
+rolling_regression_dict = {
+    'RandomForest': 0.02,
+    'ElasticNet': 0.05,
+    'MLP': 0.05,
+    'DecisionTree': 0.05,
+    'KNN': 0.05,
+    'Adaboost': 0.03,
+    'SVM': 0.05,
+    'KerasRNN': 0.02,
+    'LightGBM': 0.03,
+    'ExtraTrees': 0.05,
+    'RadiusNeighbors': 0.01,
+    'PoissonRegresssion': 0.03,
+    'RANSAC': 0.05,
 }
 # models where we can be sure the model isn't sharing information across multiple Y's...
 no_shared_model_dict = {
-    'KNN': 0.2,
+    'KNN': 0.1,
     'Adaboost': 0.1,
     'SVM': 0.1,
     'xgboost': 0.1,
     'HistGradientBoost': 0.1,
+    'PoissonRegresssion': 0.05,
+}
+# these are models that are relatively fast with large multioutput Y, small n obs
+datepart_model_dict: dict = {
+    'RandomForest': 0.05,
+    'ElasticNet': 0.05,
+    'MLP': 0.05,
+    'DecisionTree': 0.05,
+    'Adaboost': 0.05,
+    'SVM': 0.05,
+    'KerasRNN': 0.05,
+    'Transformer': 0.05,
+    'ExtraTrees': 0.07,
+    'RadiusNeighbors': 0.05,
 }
 
 
@@ -350,24 +476,23 @@ def generate_regressor_params(
         'MLP',
         'KNN',
         'KerasRNN',
+        'Transformer',
         'HistGradientBoost',
+        'RandomForest',
+        'ExtraTrees',
     ]:
         if model == 'Adaboost':
             param_dict = {
                 "model": 'Adaboost',
                 "model_params": {
-                    "n_estimators": np.random.choice(
-                        [50, 100, 500], p=[0.7, 0.2, 0.1], size=1
-                    ).item(),
-                    "loss": np.random.choice(
-                        ['linear', 'square', 'exponential'], p=[0.8, 0.1, 0.1], size=1
-                    ).item(),
-                    "base_estimator": np.random.choice(
-                        [None, 'LinReg', 'SVR'], p=[0.8, 0.1, 0.1], size=1
-                    ).item(),
-                    "learning_rate": np.random.choice(
-                        [1, 0.5], p=[0.9, 0.1], size=1
-                    ).item(),
+                    "n_estimators": random.choices([50, 100, 500], [0.7, 0.2, 0.1])[0],
+                    "loss": random.choices(
+                        ['linear', 'square', 'exponential'], [0.8, 0.01, 0.1]
+                    )[0],
+                    "base_estimator": random.choices(
+                        [None, 'LinReg', 'SVR'], [0.8, 0.1, 0.1]
+                    )[0],
+                    "learning_rate": random.choices([1, 0.5], [0.9, 0.1])[0],
                 },
             }
         elif model == 'xgboost':
@@ -442,6 +567,35 @@ def generate_regressor_params(
                     ).item(),
                 },
             }
+        elif model == 'RandomForest':
+            param_dict = {
+                "model": 'RandomForest',
+                "model_params": {
+                    "n_estimators": random.choices(
+                        [300, 100, 1000, 5000], [0.4, 0.4, 0.2, 0.01]
+                    )[0],
+                    "min_samples_leaf": random.choices([2, 4, 1], [0.2, 0.2, 0.8])[0],
+                    "bootstrap": random.choices([True, False], [0.9, 0.1])[0],
+                    # absolute_error is noticeably slower
+                    "criterion": random.choices(
+                        ["squared_error", "poisson"], [0.99, 0.001]
+                    )[0],
+                },
+            }
+        elif model == 'ExtraTrees':
+            max_depth_choice = random.choices([None, 5, 10, 20], [0.2, 0.1, 0.5, 0.3])[
+                0
+            ]
+            estimators_choice = random.choices([50, 100, 500], [0.05, 0.9, 0.05])[0]
+            param_dict = {
+                "model": 'ExtraTrees',
+                "model_params": {
+                    "n_estimators": estimators_choice,
+                    "min_samples_leaf": random.choices([2, 4, 1], [0.1, 0.1, 0.8])[0],
+                    "max_depth": max_depth_choice,
+                    "criterion": "squared_error",
+                },
+            }
         elif model == 'KerasRNN':
             init_list = [
                 'glorot_uniform',
@@ -449,25 +603,25 @@ def generate_regressor_params(
                 'glorot_normal',
                 'RandomUniform',
                 'he_normal',
+                'zeros',
             ]
             param_dict = {
                 "model": 'KerasRNN',
                 "model_params": {
-                    "kernel_initializer": np.random.choice(init_list, size=1).item(),
-                    "epochs": np.random.choice(
-                        [50, 100, 500], p=[0.7, 0.2, 0.1], size=1
-                    ).item(),
-                    "batch_size": np.random.choice(
-                        [8, 16, 32, 72], p=[0.2, 0.2, 0.5, 0.1], size=1
-                    ).item(),
-                    "optimizer": np.random.choice(
-                        ['adam', 'rmsprop', 'adagrad'], p=[0.4, 0.5, 0.1], size=1
-                    ).item(),
-                    "loss": np.random.choice(
+                    "kernel_initializer": random.choices(init_list)[0],
+                    "epochs": random.choices(
+                        [50, 100, 200, 500, 750], [0.75, 0.2, 0.05, 0.01, 0.001]
+                    )[0],
+                    "batch_size": random.choices([8, 16, 32, 72], [0.2, 0.2, 0.5, 0.1])[
+                        0
+                    ],
+                    "optimizer": random.choices(
+                        ['adam', 'rmsprop', 'adagrad'], [0.4, 0.5, 0.1]
+                    )[0],
+                    "loss": random.choices(
                         ['mae', 'Huber', 'poisson', 'mse', 'mape'],
-                        p=[0.2, 0.3, 0.1, 0.2, 0.2],
-                        size=1,
-                    ).item(),
+                        [0.2, 0.3, 0.1, 0.2, 0.2],
+                    )[0],
                     "hidden_layer_sizes": random.choices(
                         [
                             (100,),
@@ -479,49 +633,104 @@ def generate_regressor_params(
                         ],
                         [0.1, 0.3, 0.3, 0.1, 0.1, 0.1],
                     )[0],
-                    "rnn_type": np.random.choice(
-                        ['LSTM', 'GRU'], p=[0.7, 0.3], size=1
-                    ).item(),
+                    "rnn_type": random.choices(
+                        ['LSTM', 'GRU', "E2D2", "CNN"], [0.5, 0.3, 0.15, 0.01]
+                    )[0],
+                    "shape": random.choice([1, 2]),
+                },
+            }
+        elif model == 'Transformer':
+            param_dict = {
+                "model": 'Transformer',
+                "model_params": {
+                    "epochs": random.choices(
+                        [50, 100, 200, 500, 750], [0.75, 0.2, 0.05, 0.01, 0.001]
+                    )[0],
+                    "batch_size": random.choices(
+                        [8, 16, 32, 64, 72], [0.01, 0.2, 0.5, 0.1, 0.1]
+                    )[0],
+                    "optimizer": random.choices(
+                        ['adam', 'rmsprop', 'adagrad'], [0.4, 0.5, 0.1]
+                    )[0],
+                    "loss": random.choices(
+                        ['mae', 'Huber', 'poisson', 'mse', 'mape'],
+                        [0.2, 0.3, 0.1, 0.2, 0.2],
+                    )[0],
+                    "head_size": random.choices(
+                        [32, 64, 128, 256, 384], [0.1, 0.1, 0.3, 0.5, 0.05]
+                    )[0],
+                    "num_heads": random.choices([2, 4], [0.2, 0.2])[0],
+                    "ff_dim": random.choices(
+                        [2, 3, 4, 32, 64], [0.1, 0.1, 0.8, 0.05, 0.05]
+                    )[0],
+                    "num_transformer_blocks": random.choices(
+                        [1, 2, 4, 6],
+                        [0.2, 0.2, 0.6, 0.05],
+                    )[0],
+                    "mlp_units": random.choices(
+                        [32, 64, 128, 256],
+                        [0.2, 0.3, 0.8, 0.2],
+                    ),
+                    "mlp_dropout": random.choices(
+                        [0.05, 0.2, 0.4],
+                        [0.2, 0.8, 0.2],
+                    )[0],
+                    "dropout": random.choices(
+                        [0.05, 0.2, 0.4],
+                        [0.2, 0.8, 0.2],
+                    )[0],
                 },
             }
         elif model == 'HistGradientBoost':
             param_dict = {
                 "model": 'HistGradientBoost',
                 "model_params": {
-                    "loss": np.random.choice(
-                        a=['least_squares', 'poisson', 'least_absolute_deviation'],
-                        p=[0.4, 0.3, 0.3],
-                        size=1,
-                    ).item(),
-                    "learning_rate": np.random.choice(
-                        a=[1, 0.1, 0.01], p=[0.3, 0.4, 0.3], size=1
-                    ).item(),
+                    "loss": random.choices(
+                        ['squared_error', 'poisson', 'absolute_error'], [0.8, 0.1, 0.1]
+                    )[0],
+                    "learning_rate": random.choices([1, 0.1, 0.01], [0.3, 0.4, 0.3])[0],
+                    "max_depth": random.choices(
+                        [None, 5, 10, 20], [0.7, 0.1, 0.1, 0.1]
+                    )[0],
+                    "min_samples_leaf": random.choices(
+                        [20, 5, 10, 30], [0.9, 0.1, 0.1, 0.1]
+                    )[0],
+                    "max_iter": random.choices(
+                        [100, 250, 50, 500], [0.9, 0.1, 0.1, 0.001]
+                    )[0],
+                    "l2_regularization": random.choices(
+                        [0, 0.01, 0.02, 0.4], [0.9, 0.1, 0.1, 0.1]
+                    )[0],
                 },
             }
         elif model == 'LightGBM':
             param_dict = {
                 "model": 'LightGBM',
                 "model_params": {
-                    "objective": np.random.choice(
-                        a=['regression', 'gamma', 'huber', 'regression_l1'],
-                        p=[0.4, 0.3, 0.1, 0.2],
-                        size=1,
-                    ).item(),
-                    "learning_rate": np.random.choice(
-                        a=[0.001, 0.1, 0.01], p=[0.1, 0.6, 0.3], size=1
-                    ).item(),
-                    "num_leaves": np.random.choice(
-                        a=[31, 127, 70], p=[0.6, 0.1, 0.3], size=1
-                    ).item(),
-                    "max_depth": np.random.choice(
-                        a=[-1, 5, 10], p=[0.6, 0.1, 0.3], size=1
-                    ).item(),
-                    "boosting_type": np.random.choice(
-                        a=['gbdt', 'rf', 'dart', 'goss'], p=[0.6, 0, 0.2, 0.2], size=1
-                    ).item(),
-                    "n_estimators": np.random.choice(
-                        a=[100, 250, 50, 500], p=[0.6, 0.099, 0.3, 0.0010], size=1
-                    ).item(),
+                    "objective": random.choices(
+                        ['regression', 'gamma', 'huber', 'regression_l1'],
+                        [0.4, 0.3, 0.1, 0.2],
+                    )[0],
+                    "learning_rate": random.choices(
+                        [0.001, 0.1, 0.01],
+                        [0.1, 0.6, 0.3],
+                    )[0],
+                    "num_leaves": random.choices(
+                        [31, 127, 70],
+                        [0.6, 0.1, 0.3],
+                    )[0],
+                    "max_depth": random.choices(
+                        [-1, 5, 10],
+                        [0.6, 0.1, 0.3],
+                    )[0],
+                    "boosting_type": random.choices(
+                        ['gbdt', 'rf', 'dart', 'goss'],
+                        [0.6, 0, 0.2, 0.2],
+                    )[0],
+                    "n_estimators": random.choices(
+                        [100, 250, 50, 500],
+                        [0.6, 0.099, 0.3, 0.0010],
+                    )[0],
                 },
             }
         else:
@@ -568,13 +777,8 @@ class RollingRegression(ModelObject):
         verbose: int = 0,
         random_seed: int = 2020,
         regression_model: dict = {
-            "model": 'Adaboost',
-            "model_params": {
-                'n_estimators': 50,
-                'base_estimator': 'DecisionTree',
-                'loss': 'linear',
-                'learning_rate': 1.0,
-            },
+            "model": 'ExtraTrees',
+            "model_params": {},
         },
         holiday: bool = False,
         mean_rolling_periods: int = 30,
@@ -582,6 +786,9 @@ class RollingRegression(ModelObject):
         std_rolling_periods: int = 7,
         max_rolling_periods: int = 7,
         min_rolling_periods: int = 7,
+        ewm_var_alpha: int = None,
+        quantile90_rolling_periods: int = None,
+        quantile10_rolling_periods: int = None,
         ewm_alpha: float = 0.5,
         additional_lag_periods: int = 7,
         abs_energy: bool = False,
@@ -614,6 +821,9 @@ class RollingRegression(ModelObject):
         self.std_rolling_periods = std_rolling_periods
         self.max_rolling_periods = max_rolling_periods
         self.min_rolling_periods = min_rolling_periods
+        self.ewm_var_alpha = ewm_var_alpha
+        self.quantile90_rolling_periods = quantile90_rolling_periods
+        self.quantile10_rolling_periods = quantile10_rolling_periods
         self.ewm_alpha = ewm_alpha
         self.additional_lag_periods = additional_lag_periods
         self.abs_energy = abs_energy
@@ -673,6 +883,11 @@ class RollingRegression(ModelObject):
             mean_rolling_periods=self.mean_rolling_periods,
             macd_periods=self.macd_periods,
             std_rolling_periods=self.std_rolling_periods,
+            max_rolling_periods=self.max_rolling_periods,
+            min_rolling_periods=self.min_rolling_periods,
+            ewm_var_alpha=self.ewm_var_alpha,
+            quantile90_rolling_periods=self.quantile90_rolling_periods,
+            quantile10_rolling_periods=self.quantile10_rolling_periods,
             additional_lag_periods=self.additional_lag_periods,
             ewm_alpha=self.ewm_alpha,
             abs_energy=self.abs_energy,
@@ -697,6 +912,8 @@ class RollingRegression(ModelObject):
         rolling values
         """
         X = X.drop(X.tail(1).index).drop(X.head(1).index)
+        if isinstance(X, pd.DataFrame):
+            X.columns = [str(xc) for xc in X.columns]
 
         multioutput = True
         if Y.ndim < 2:
@@ -752,6 +969,11 @@ class RollingRegression(ModelObject):
                 mean_rolling_periods=self.mean_rolling_periods,
                 macd_periods=self.macd_periods,
                 std_rolling_periods=self.std_rolling_periods,
+                max_rolling_periods=self.max_rolling_periods,
+                min_rolling_periods=self.min_rolling_periods,
+                ewm_var_alpha=self.ewm_var_alpha,
+                quantile90_rolling_periods=self.quantile90_rolling_periods,
+                quantile10_rolling_periods=self.quantile10_rolling_periods,
                 additional_lag_periods=self.additional_lag_periods,
                 ewm_alpha=self.ewm_alpha,
                 abs_energy=self.abs_energy,
@@ -768,8 +990,10 @@ class RollingRegression(ModelObject):
             if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
                 x_dat = pd.DataFrame(self.x_transformer.transform(x_dat))
                 x_dat = x_dat.replace([np.inf, -np.inf], 0).fillna(0)
+            if isinstance(x_dat, pd.DataFrame):
+                x_dat.columns = [str(xc) for xc in x_dat.columns]
 
-            rfPred = pd.DataFrame(self.regr.predict(x_dat.tail(1).values))
+            rfPred = pd.DataFrame(self.regr.predict(x_dat.tail(1).to_numpy()))
 
             forecast = pd.concat([forecast, rfPred], axis=0, ignore_index=True)
             self.sktraindata = pd.concat(
@@ -808,7 +1032,7 @@ class RollingRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params()
+        model_choice = generate_regressor_params(model_dict=rolling_regression_dict)
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30], [0.2, 0.2, 0.2, 0.2, 0.2]
         )[0]
@@ -829,7 +1053,9 @@ class RollingRegression(ModelObject):
         ]
         lag_periods_choice = seasonal_int() - 1
         lag_periods_choice = 2 if lag_periods_choice < 2 else lag_periods_choice
-        ewm_choice = random.choices([None, 0.2, 0.5, 0.8], [0.7, 0.1, 0.1, 0.1])[0]
+        ewm_choice = random.choices(
+            [None, 0.05, 0.1, 0.2, 0.5, 0.8], [0.4, 0.01, 0.05, 0.1, 0.1, 0.05]
+        )[0]
         abs_energy_choice = random.choices([True, False], [0.3, 0.7])[0]
         rolling_autocorr_periods_choice = random.choices(
             [None, 2, 7, 12, 30], [0.8, 0.05, 0.05, 0.05, 0.05]
@@ -873,6 +1099,9 @@ class RollingRegression(ModelObject):
             'std_rolling_periods': self.std_rolling_periods,
             'max_rolling_periods': self.max_rolling_periods,
             'min_rolling_periods': self.min_rolling_periods,
+            "ewm_var_alpha": self.ewm_var_alpha,
+            "quantile90_rolling_periods": self.quantile90_rolling_periods,
+            "quantile10_rolling_periods": self.quantile10_rolling_periods,
             'ewm_alpha': self.ewm_alpha,
             'additional_lag_periods': self.additional_lag_periods,
             'abs_energy': self.abs_energy,
@@ -1003,6 +1232,7 @@ def window_maker(
             Y = pd.concat([Y, cY], axis=0)
         if normalize_window:
             X = X.div(X.sum(axis=1), axis=0)
+        X.columns = [str(x) for x in range(len(X.columns))]
 
     return X, Y
 
@@ -1031,6 +1261,7 @@ def last_window(
         cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
     if normalize_window:
         cX = cX.div(cX.sum(axis=1), axis=0)
+
     return cX
 
 
@@ -1054,13 +1285,8 @@ class WindowRegression(ModelObject):
         verbose: int = 0,
         window_size: int = 10,
         regression_model: dict = {
-            "model": 'Adaboost',
-            "model_params": {
-                'n_estimators': 50,
-                'base_estimator': 'DecisionTree',
-                'loss': 'linear',
-                'learning_rate': 1.0,
-            },
+            "model": 'RandomForest',
+            "model_params": {},
         },
         input_dim: str = 'univariate',
         output_dim: str = 'forecast_length',
@@ -1124,6 +1350,8 @@ class WindowRegression(ModelObject):
             multioutput = False
         elif Y.shape[1] < 2:
             multioutput = False
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
         self.regr = retrieve_regressor(
             regression_model=self.regression_model,
             verbose=self.verbose,
@@ -1175,6 +1403,8 @@ class WindowRegression(ModelObject):
                     tmerg = pd.concat([blasted_thing] * pred.shape[0], axis=0)
                     tmerg.index = pred.index
                     pred = pd.concat([pred, tmerg], axis=1, ignore_index=True)
+                if isinstance(pred, pd.DataFrame):
+                    pred = pred.to_numpy()
                 rfPred = pd.DataFrame(self.regr.predict(pred))
                 if self.input_dim == 'univariate':
                     rfPred = rfPred.transpose()
@@ -1198,6 +1428,8 @@ class WindowRegression(ModelObject):
                 ]
                 tmerg.index = pred.index
                 pred = pd.concat([pred, tmerg], axis=1)
+            if isinstance(pred, pd.DataFrame):
+                pred = pred.to_numpy()
             cY = pd.DataFrame(self.regr.predict(pred))
             if self.input_dim == 'multivariate':
                 cY.index = ['values']
@@ -1575,7 +1807,7 @@ class DatepartRegression(ModelObject):
             if (np.array(future_regressor).shape[0]) != (df.shape[0]):
                 self.regression_type = None
 
-        y = df.values
+        y = df.to_numpy()
 
         X = date_part(df.index, method=self.datepart_method)
         if self.regression_type == 'User':
@@ -1611,7 +1843,7 @@ class DatepartRegression(ModelObject):
 
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
-            regressor (numpy.Array): additional regressor
+            future_regressor (pandas.DataFrame or Series): Datetime Indexed
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
 
         Returns:
@@ -1658,7 +1890,7 @@ class DatepartRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params()  # model_dict=no_shared_model_dict
+        model_choice = generate_regressor_params(model_dict=datepart_model_dict)
         datepart_choice = np.random.choice(
             a=["recurring", "simple", "expanded"], size=1, p=[0.4, 0.3, 0.3]
         ).item()
@@ -1706,13 +1938,8 @@ class UnivariateRegression(ModelObject):
         random_seed: int = 2020,
         forecast_length: int = 7,
         regression_model: dict = {
-            "model": 'Adaboost',
-            "model_params": {
-                'n_estimators': 50,
-                'base_estimator': 'DecisionTree',
-                'loss': 'linear',
-                'learning_rate': 1.0,
-            },
+            "model": 'ExtraTrees',
+            "model_params": {},
         },
         holiday: bool = False,
         mean_rolling_periods: int = 30,
@@ -1720,6 +1947,7 @@ class UnivariateRegression(ModelObject):
         std_rolling_periods: int = 7,
         max_rolling_periods: int = 7,
         min_rolling_periods: int = 7,
+        ewm_var_alpha: float = None,
         ewm_alpha: float = 0.5,
         additional_lag_periods: int = 7,
         abs_energy: bool = False,
@@ -1753,6 +1981,7 @@ class UnivariateRegression(ModelObject):
         self.std_rolling_periods = std_rolling_periods
         self.max_rolling_periods = max_rolling_periods
         self.min_rolling_periods = min_rolling_periods
+        self.ewm_var_alpha = ewm_var_alpha
         self.ewm_alpha = ewm_alpha
         self.additional_lag_periods = additional_lag_periods
         self.abs_energy = abs_energy
@@ -1783,7 +2012,7 @@ class UnivariateRegression(ModelObject):
             x_transformer = VarianceThreshold(threshold=0.0)
         return x_transformer
 
-    def fit(self, df, future_regressor=[]):
+    def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
 
         Args:
@@ -1791,24 +2020,25 @@ class UnivariateRegression(ModelObject):
             future_regressor (pandas.DataFrame or Series): Datetime Indexed
         """
         df = self.basic_profile(df)
-        self.df_train = df
+        self.sktraindata = df
 
         # if external regressor, do some check up
         if self.regression_type is not None:
-            if (np.array(future_regressor).shape[0]) != (df.shape[0]):
-                self.regression_type = None
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type='User' but not future_regressor supplied."
+                )
+            elif future_regressor.shape[0] != df.shape[0]:
+                raise ValueError(
+                    "future_regressor shape does not match training data shape."
+                )
             else:
                 self.regressor_train = future_regressor
 
-        # define X and Y
-        self.sktraindata = self.df_train.dropna(how='all', axis=0)
-        self.sktraindata = self.sktraindata.fillna(method='ffill').fillna(
-            method='bfill'
-        )
         cols = self.sktraindata.columns
 
         def forecast_by_column(self, args, parallel, n_jobs, col):
-            """Run one series of ETS and return prediction."""
+            """Run one series and return prediction."""
             base = pd.DataFrame(self.sktraindata[col])
             Y = base.copy()
             for curr_shift in range(1, self.forecast_length):
@@ -1824,6 +2054,9 @@ class UnivariateRegression(ModelObject):
                 mean_rolling_periods=self.mean_rolling_periods,
                 macd_periods=self.macd_periods,
                 std_rolling_periods=self.std_rolling_periods,
+                max_rolling_periods=self.max_rolling_periods,
+                min_rolling_periods=self.min_rolling_periods,
+                ewm_var_alpha=self.ewm_var_alpha,
                 additional_lag_periods=self.additional_lag_periods,
                 ewm_alpha=self.ewm_alpha,
                 abs_energy=self.abs_energy,
@@ -1856,19 +2089,35 @@ class UnivariateRegression(ModelObject):
                 multioutput = False
             elif Y.shape[1] < 2:
                 multioutput = False
+            # because the training messages get annoying
+            inner_verbose = self.verbose - 1 if self.verbose > 0 else self.verbose
             dah_model = retrieve_regressor(
                 regression_model=self.regression_model,
-                verbose=self.verbose,
-                verbose_bool=self.verbose_bool,
+                verbose=inner_verbose,
+                verbose_bool=False,
                 random_seed=self.random_seed,
                 n_jobs=n_jobs_passed,
                 multioutput=multioutput,
             )
-            dah_model.fit(X, Y)
+            dah_model.fit(X.to_numpy(), Y)
             return {col: dah_model}
 
         self.parallel = True
-        if self.n_jobs in [0, 1] or len(cols) < 3:
+        self.not_parallel_models = [
+            'LightGBM',
+            'RandomForest',
+            "BayesianRidge",
+            'Transformer',
+            "KerasRNN",
+            "HistGradientBoost",
+        ]
+        out_n_jobs = int(self.n_jobs - 1)
+        out_n_jobs = 1 if out_n_jobs < 1 else out_n_jobs
+        if out_n_jobs in [0, 1] or len(cols) < 3:
+            self.parallel = False
+        elif (
+            self.regression_model.get("model", "ElasticNet") in self.not_parallel_models
+        ):
             self.parallel = False
         else:
             try:
@@ -1878,7 +2127,7 @@ class UnivariateRegression(ModelObject):
         args = {}
         # joblib multiprocessing to loop through series
         if self.parallel:
-            df_list = Parallel(n_jobs=(self.n_jobs - 1))(
+            df_list = Parallel(n_jobs=out_n_jobs)(
                 delayed(forecast_by_column)(self, args, self.parallel, self.n_jobs, col)
                 for (col) in cols
             )
@@ -1897,14 +2146,14 @@ class UnivariateRegression(ModelObject):
         self,
         forecast_length: int = None,
         just_point_forecast: bool = False,
-        future_regressor=[],
+        future_regressor=None,
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
                 ignored here for this model, must be set in __init__ before .fit()
-            regressor (numpy.Array): additional regressor
+            future_regressor (pd.DataFrame): additional regressor
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
 
         Returns:
@@ -1922,6 +2171,9 @@ class UnivariateRegression(ModelObject):
                 mean_rolling_periods=self.mean_rolling_periods,
                 macd_periods=self.macd_periods,
                 std_rolling_periods=self.std_rolling_periods,
+                max_rolling_periods=self.max_rolling_periods,
+                min_rolling_periods=self.min_rolling_periods,
+                ewm_var_alpha=self.ewm_var_alpha,
                 additional_lag_periods=self.additional_lag_periods,
                 ewm_alpha=self.ewm_alpha,
                 abs_energy=self.abs_energy,
@@ -1937,7 +2189,7 @@ class UnivariateRegression(ModelObject):
             if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
                 x_dat = pd.DataFrame(self.x_transformer.transform(x_dat))
                 x_dat = x_dat.replace([np.inf, -np.inf], 0).fillna(0)
-            rfPred = self.models[x_col].predict(x_dat.tail(1).values)
+            rfPred = self.models[x_col].predict(x_dat.tail(1).to_numpy())
             # rfPred = pd.DataFrame(rfPred).transpose()
             # rfPred.columns = [x_col]
             rfPred = pd.Series(rfPred.flatten())
@@ -1951,7 +2203,7 @@ class UnivariateRegression(ModelObject):
             return forecast
         else:
             upper_forecast, lower_forecast = Point_to_Probability(
-                self.df_train,
+                self.sktraindata,
                 forecast,
                 method='inferred_normal',
                 prediction_interval=self.prediction_interval,
@@ -1975,7 +2227,7 @@ class UnivariateRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params()
+        model_choice = generate_regressor_params(model_dict=univariate_model_dict)
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30], [0.6, 0.1, 0.1, 0.1, 0.1]
         )[0]
@@ -1996,7 +2248,12 @@ class UnivariateRegression(ModelObject):
         ]
         lag_periods_choice = seasonal_int() - 1
         lag_periods_choice = 2 if lag_periods_choice < 2 else lag_periods_choice
-        ewm_choice = random.choices([None, 0.2, 0.5, 0.8], [0.75, 0.1, 0.1, 0.05])[0]
+        ewm_choice = random.choices(
+            [None, 0.1, 0.2, 0.5, 0.8], [0.75, 0.05, 0.1, 0.1, 0.05]
+        )[0]
+        ewm_var_alpha = random.choices(
+            [None, 0.05, 0.1, 0.2, 0.5, 0.8], [0.7, 0.01, 0.05, 0.1, 0.1, 0.05]
+        )[0]
         abs_energy_choice = random.choices([True, False], [0.1, 0.9])[0]
         rolling_autocorr_periods_choice = random.choices(
             [None, 2, 7, 12, 30], [0.86, 0.01, 0.01, 0.01, 0.01]
@@ -2020,6 +2277,7 @@ class UnivariateRegression(ModelObject):
             'std_rolling_periods': std_rolling_periods_choice,
             'max_rolling_periods': max_rolling_periods_choice,
             'min_rolling_periods': min_rolling_periods_choice,
+            "ewm_var_alpha": ewm_var_alpha,
             'ewm_alpha': ewm_choice,
             'additional_lag_periods': lag_periods_choice,
             'abs_energy': abs_energy_choice,
@@ -2042,6 +2300,7 @@ class UnivariateRegression(ModelObject):
             'std_rolling_periods': self.std_rolling_periods,
             'max_rolling_periods': self.max_rolling_periods,
             'min_rolling_periods': self.min_rolling_periods,
+            "ewm_var_alpha": self.ewm_var_alpha,
             'ewm_alpha': self.ewm_alpha,
             'additional_lag_periods': self.additional_lag_periods,
             'abs_energy': self.abs_energy,
@@ -2051,5 +2310,378 @@ class UnivariateRegression(ModelObject):
             'x_transform': self.x_transform,
             'regression_type': self.regression_type,
             'window': self.window,
+        }
+        return parameter_dict
+
+
+class MultivariateRegression(ModelObject):
+    """Regression-framed approach to forecasting using sklearn.
+    A multiariate version of rolling regression: ie each series is agged independently but modeled together
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        holiday (bool): If true, include holiday flags
+        regression_type (str): type of regression (None, 'User')
+
+    """
+
+    def __init__(
+        self,
+        name: str = "MultivariateRegression",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        regression_type: str = None,
+        holiday_country: str = 'US',
+        verbose: int = 0,
+        random_seed: int = 2020,
+        forecast_length: int = 7,
+        regression_model: dict = {
+            "model": 'RandomForest',
+            "model_params": {},
+        },
+        holiday: bool = False,
+        mean_rolling_periods: int = 30,
+        macd_periods: int = None,
+        std_rolling_periods: int = 7,
+        max_rolling_periods: int = 7,
+        min_rolling_periods: int = 7,
+        ewm_var_alpha: float = None,
+        quantile90_rolling_periods: int = None,
+        quantile10_rolling_periods: int = None,
+        ewm_alpha: float = 0.5,
+        additional_lag_periods: int = 7,
+        abs_energy: bool = False,
+        rolling_autocorr_periods: int = None,
+        datepart_method: str = None,
+        polynomial_degree: int = None,
+        window: int = None,
+        n_jobs: int = -1,
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            regression_type=regression_type,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+        )
+        self.forecast_length = forecast_length
+        self.regression_model = regression_model
+        self.holiday = holiday
+        self.mean_rolling_periods = mean_rolling_periods
+        if mean_rolling_periods is None:
+            self.macd_periods = None
+        else:
+            self.macd_periods = macd_periods
+        self.std_rolling_periods = std_rolling_periods
+        self.max_rolling_periods = max_rolling_periods
+        self.min_rolling_periods = min_rolling_periods
+        self.ewm_var_alpha = ewm_var_alpha
+        self.quantile90_rolling_periods = quantile90_rolling_periods
+        self.quantile10_rolling_periods = quantile10_rolling_periods
+        self.ewm_alpha = ewm_alpha
+        self.additional_lag_periods = additional_lag_periods
+        self.abs_energy = abs_energy
+        self.rolling_autocorr_periods = rolling_autocorr_periods
+        self.datepart_method = datepart_method
+        self.polynomial_degree = polynomial_degree
+        self.window = window
+        self.regressor_train = None
+
+        # detect just the max needed for cutoff (makes faster)
+        starting_min = 90  # based on what effects ewm alphas, too
+        list_o_vals = [
+            mean_rolling_periods,
+            macd_periods,
+            std_rolling_periods,
+            max_rolling_periods,
+            min_rolling_periods,
+            quantile90_rolling_periods,
+            quantile10_rolling_periods,
+            additional_lag_periods,
+            rolling_autocorr_periods,
+            window,
+            starting_min,
+        ]
+        self.min_threshold = max([x for x in list_o_vals if str(x).isdigit()])
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+            future_regressor (pandas.DataFrame or Series): Datetime Indexed
+        """
+        df = self.basic_profile(df)
+
+        # if external regressor, do some check up
+        if self.regression_type is not None:
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type='User' but not future_regressor supplied."
+                )
+            elif future_regressor.shape[0] != df.shape[0]:
+                raise ValueError(
+                    "future_regressor shape does not match training data shape."
+                )
+            else:
+                self.regressor_train = future_regressor
+
+        # define X and Y
+        Y = df[1:].to_numpy().ravel(order="F")
+        # drop look ahead data
+        base = df[:-1]
+        if self.regression_type is not None:
+            cut_regr = self.regressor_train[1:]
+            cut_regr.index = base.index
+        else:
+            cut_regr = None
+        # open to suggestions on making this faster
+        X = pd.concat(
+            [
+                rolling_x_regressor_regressor(
+                    base[x_col].to_frame(),
+                    mean_rolling_periods=self.mean_rolling_periods,
+                    macd_periods=self.macd_periods,
+                    std_rolling_periods=self.std_rolling_periods,
+                    max_rolling_periods=self.max_rolling_periods,
+                    min_rolling_periods=self.min_rolling_periods,
+                    ewm_var_alpha=self.ewm_var_alpha,
+                    quantile90_rolling_periods=self.quantile90_rolling_periods,
+                    quantile10_rolling_periods=self.quantile10_rolling_periods,
+                    additional_lag_periods=self.additional_lag_periods,
+                    ewm_alpha=self.ewm_alpha,
+                    abs_energy=self.abs_energy,
+                    rolling_autocorr_periods=self.rolling_autocorr_periods,
+                    add_date_part=self.datepart_method,
+                    holiday=self.holiday,
+                    holiday_country=self.holiday_country,
+                    polynomial_degree=self.polynomial_degree,
+                    window=self.window,
+                    future_regressor=cut_regr,
+                )
+                for x_col in base.columns
+            ]
+        )
+        del base
+
+        multioutput = True
+        if Y.ndim < 2:
+            multioutput = False
+        elif Y.shape[1] < 2:
+            multioutput = False
+        self.model = retrieve_regressor(
+            regression_model=self.regression_model,
+            verbose=self.verbose,
+            verbose_bool=self.verbose_bool,
+            random_seed=self.random_seed,
+            n_jobs=self.n_jobs,
+            multioutput=multioutput,
+        )
+        self.model.fit(X.to_numpy(), Y)
+        # we only need the N most recent points for predict
+        self.sktraindata = df.tail(self.min_threshold)
+
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self,
+        forecast_length: int = None,
+        just_point_forecast: bool = False,
+        future_regressor=None,
+    ):
+        """Generate forecast data immediately following dates of index supplied to .fit().
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+                ignored here for this model, must be set in __init__ before .fit()
+            future_regressor (pd.DataFrame): additional regressor
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        index = self.create_forecast_index(forecast_length=forecast_length)
+        forecast = pd.DataFrame()
+        if self.regressor_train is not None:
+            base_regr = pd.concat([self.regressor_train, future_regressor])
+            # move index back one to align with training dates on merge
+            regr_idx = base_regr.index[:-1]
+            base_regr = base_regr[1:]
+            base_regr.index = regr_idx
+        # need to copy else multiple predictions move every on...
+        current_x = self.sktraindata.copy()
+
+        # and this is ridiculously slow, nested loop
+        for fcst_step in range(forecast_length):
+            cur_regr = None
+            if self.regression_type is not None:
+                cur_regr = base_regr.reindex(current_x.index)
+            x_dat = pd.concat(
+                [
+                    rolling_x_regressor_regressor(
+                        current_x[x_col].to_frame(),
+                        mean_rolling_periods=self.mean_rolling_periods,
+                        macd_periods=self.macd_periods,
+                        std_rolling_periods=self.std_rolling_periods,
+                        max_rolling_periods=self.max_rolling_periods,
+                        min_rolling_periods=self.min_rolling_periods,
+                        ewm_var_alpha=self.ewm_var_alpha,
+                        quantile90_rolling_periods=self.quantile90_rolling_periods,
+                        quantile10_rolling_periods=self.quantile10_rolling_periods,
+                        additional_lag_periods=self.additional_lag_periods,
+                        ewm_alpha=self.ewm_alpha,
+                        abs_energy=self.abs_energy,
+                        rolling_autocorr_periods=self.rolling_autocorr_periods,
+                        add_date_part=self.datepart_method,
+                        holiday=self.holiday,
+                        holiday_country=self.holiday_country,
+                        polynomial_degree=self.polynomial_degree,
+                        window=self.window,
+                        future_regressor=cur_regr,
+                    ).tail(1)
+                    for x_col in current_x.columns
+                ]
+            )
+            rfPred = self.model.predict(x_dat.to_numpy())
+            pred_clean = pd.DataFrame(
+                rfPred, index=current_x.columns, columns=[index[fcst_step]]
+            ).transpose()
+            forecast = pd.concat(
+                [
+                    forecast,
+                    pred_clean,
+                ]
+            )
+            current_x = pd.concat(
+                [
+                    current_x,
+                    pred_clean,
+                ]
+            )
+
+        forecast = forecast[self.column_names]
+
+        if just_point_forecast:
+            return forecast
+        else:
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.sktraindata,
+                forecast,
+                method='inferred_normal',
+                prediction_interval=self.prediction_interval,
+            )
+
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=self.forecast_length,
+                forecast_index=forecast.index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast,
+                forecast=forecast,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning."""
+        model_choice = generate_regressor_params(model_dict=multivariate_model_dict)
+        mean_rolling_periods_choice = random.choices(
+            [None, 5, 7, 12, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+        )[0]
+        if mean_rolling_periods_choice is not None:
+            macd_periods_choice = seasonal_int(small=True)
+            if macd_periods_choice == mean_rolling_periods_choice:
+                macd_periods_choice = mean_rolling_periods_choice + 10
+        else:
+            macd_periods_choice = None
+        std_rolling_periods_choice = random.choices(
+            [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+        )[0]
+        ewm_var_alpha = random.choices([None, 0.2, 0.5, 0.8], [0.4, 0.1, 0.1, 0.05])[0]
+        quantile90_rolling_periods = random.choices(
+            [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+        )[0]
+        quantile10_rolling_periods = random.choices(
+            [None, 5, 7, 10, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
+        )[0]
+        max_rolling_periods_choice = random.choices(
+            [None, seasonal_int(small=True)], [0.2, 0.5]
+        )[0]
+        min_rolling_periods_choice = random.choices(
+            [None, seasonal_int(small=True)], [0.2, 0.5]
+        )[0]
+        lag_periods_choice = None
+        ewm_choice = random.choices(
+            [None, 0.1, 0.2, 0.5, 0.8], [0.4, 0.01, 0.1, 0.1, 0.05]
+        )[0]
+        abs_energy_choice = False
+        rolling_autocorr_periods_choice = random.choices(
+            [None, 2, 7, 12, 30], [0.4, 0.01, 0.01, 0.01, 0.01]
+        )[0]
+        add_date_part_choice = random.choices(
+            [None, 'simple', 'expanded', 'recurring'], [0.4, 0.1, 0.1, 0.1]
+        )[0]
+        holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
+        polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]
+        regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
+        window_choice = random.choices([None, 3, 7, 10], [0.2, 0.2, 0.05, 0.05])[0]
+        parameter_dict = {
+            'regression_model': model_choice,
+            'mean_rolling_periods': mean_rolling_periods_choice,
+            'macd_periods': macd_periods_choice,
+            'std_rolling_periods': std_rolling_periods_choice,
+            'max_rolling_periods': max_rolling_periods_choice,
+            'min_rolling_periods': min_rolling_periods_choice,
+            "quantile90_rolling_periods": quantile90_rolling_periods,
+            "quantile10_rolling_periods": quantile10_rolling_periods,
+            'ewm_alpha': ewm_choice,
+            "ewm_var_alpha": ewm_var_alpha,
+            'additional_lag_periods': lag_periods_choice,
+            'abs_energy': abs_energy_choice,
+            'rolling_autocorr_periods': rolling_autocorr_periods_choice,
+            'datepart_method': add_date_part_choice,
+            'polynomial_degree': polynomial_degree_choice,
+            'regression_type': regression_choice,
+            'window': window_choice,
+            'holiday': holiday_choice,
+        }
+        return parameter_dict
+
+    def get_params(self):
+        """Return dict of current parameters."""
+        parameter_dict = {
+            'regression_model': self.regression_model,
+            'mean_rolling_periods': self.mean_rolling_periods,
+            'macd_periods': self.macd_periods,
+            'std_rolling_periods': self.std_rolling_periods,
+            'max_rolling_periods': self.max_rolling_periods,
+            'min_rolling_periods': self.min_rolling_periods,
+            "quantile90_rolling_periods": self.quantile90_rolling_periods,
+            "quantile10_rolling_periods": self.quantile10_rolling_periods,
+            'ewm_alpha': self.ewm_alpha,
+            "ewm_var_alpha": self.ewm_var_alpha,
+            'additional_lag_periods': self.additional_lag_periods,
+            'abs_energy': self.abs_energy,
+            'rolling_autocorr_periods': self.rolling_autocorr_periods,
+            'datepart_method': self.datepart_method,
+            'polynomial_degree': self.polynomial_degree,
+            'regression_type': self.regression_type,
+            'window': self.window,
+            'holiday': self.holiday,
         }
         return parameter_dict

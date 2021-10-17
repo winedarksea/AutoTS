@@ -26,6 +26,7 @@ all_models = [
     'UnivariateMotif',
     'MultivariateMotif',
     'NVAR',
+    'MultivariateRegression',
 ]
 default = [
     'ZeroesNaive',
@@ -36,7 +37,7 @@ default = [
     'GLM',
     'ETS',
     'FBProphet',
-    'RollingRegression',
+    'RollingRegression',  # maybe not?
     'GluonTS',
     'UnobservedComponents',
     'VAR',
@@ -44,7 +45,9 @@ default = [
     'WindowRegression',
     'DatepartRegression',
     'UnivariateRegression',
+    'MultivariateRegression',
     'UnivariateMotif',
+    'MultivariateMotif',
     'NVAR',
 ]
 # fastest models at any scale
@@ -61,16 +64,16 @@ fast = [
     'LastValueNaive',
     'AverageValueNaive',
     'GLS',
+    'SeasonalNaive',
     'GLM',
     'ETS',
-    # 'WindowRegression',
-    # 'GluonTS',
+    # 'UnobservedComponents',  # it's fast enough but I'll leave for parallel
     'VAR',
-    'SeasonalNaive',
     'VECM',
-    # 'ComponentAnalysis',
+    'WindowRegression',  # well, this gets slow with Transformer
     'DatepartRegression',
-    'UnivariateRegression',
+    'UnivariateMotif',
+    'MultivariateMotif',
     'NVAR',
 ]
 # models that can scale well if many CPU cores are available
@@ -96,14 +99,13 @@ experimental = [
 # models that perform slowly at scale
 slow = list((set(all_models) - set(fast)) - set(experimental))
 # use GPU
-gpu = ['GluonTS']
+gpu = ['GluonTS', 'WindowRegression']
 # models with model-based upper/lower forecasts
 probabilistic = [
     'ARIMA',
     'GluonTS',
     'FBProphet',
     'AverageValueNaive',
-    # 'MotifSimulation',
     'VARMAX',
     'DynamicFactor',
     'VAR',
@@ -120,9 +122,9 @@ multivariate = [
     'RollingRegression',
     'WindowRegression',
     'VAR',
-    'ComponentAnalysis',
     "MultivariateMotif",
     'NVAR',
+    'MultivariateRegression',
 ]
 # USED IN AUTO_MODEL, models with no parameters
 no_params = ['ZeroesNaive', 'LastValueNaive', 'GLS']
@@ -148,6 +150,7 @@ recombination_approved = [
     'UnivariateMotif',
     "MultivariateMotif",
     'NVAR',
+    'MultivariateRegression',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -165,8 +168,6 @@ no_shared = [
     "UnivariateRegression",
     "Greykite",
     'UnivariateMotif',
-    # 'MotifSimulation',
-    # 'DatepartRegression',
 ]
 # allow the use of a regressor
 regressor = [
@@ -180,8 +181,9 @@ regressor = [
     'WindowRegression',
     'VAR',
     'DatepartRegression',
-    "Greykite",
-    # "UnivariateRegression",
+    "GluonTS",
+    "UnivariateRegression",
+    'MultivariateRegression',
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {

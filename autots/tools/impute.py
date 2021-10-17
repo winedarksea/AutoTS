@@ -83,30 +83,28 @@ def fake_date_fill(df, back_method: str = 'slice'):
         return df2
 
 
-df_interpolate = [
-    'linear',
-    'time',
-    'pad',
-    'nearest',
-    'zero',
-    'quadratic',
-    'cubic',
-    'spline',
-    'barycentric',
-    'piecewise_polynomial',
-    'spline',
-    'pchip',
-    'akima',
-]
-# these seem to cause more harm than good usually
-df_interpolate_messy = [
-    'polynomial',
-    'krogh',
-    'cubicspline',
-    'from_derivatives',
-    'slinear',
-]
-df_interpolate_full = list(set(df_interpolate + df_interpolate_messy))
+df_interpolate = {
+    'linear': 0.1,
+    'time': 0.1,
+    'pad': 0.1,
+    'nearest': 0.1,
+    'zero': 0.1,
+    'quadratic': 0.1,
+    'cubic': 0.1,
+    'spline': 0.1,
+    'barycentric': 0.01,  # this parallelizes and is noticeably slower
+    'piecewise_polynomial': 0.01,
+    'spline': 0.1,
+    'pchip': 0.1,
+    'akima': 0.1,
+    # these seem to cause more harm than good usually
+    'polynomial': 0.0,
+    'krogh': 0.0,
+    'cubicspline': 0.0,
+    'from_derivatives': 0.0,
+    'slinear': 0.0,
+}
+df_interpolate_full = list(df_interpolate.keys())
 
 
 def FillNA(df, method: str = 'ffill', window: int = 10):
@@ -150,6 +148,12 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
     elif method == 'fake_date':
         return fake_date_fill(df, back_method='slice')
 
+    elif method in df_interpolate_full:
+        df = df.interpolate(method=method, order=5).fillna(method='bfill')
+        if df.isnull().values.any():
+            df = fill_forward(df)
+        return df
+
     elif method == 'IterativeImputer':
         cols = df.columns
         indx = df.index
@@ -166,10 +170,37 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
             df.columns = cols
         return df
 
-    elif method in df_interpolate_full:
-        df = df.interpolate(method=method, order=5).fillna(method='bfill')
-        if df.isnull().values.any():
-            df = fill_forward(df)
+    elif method == 'IterativeImputerExtraTrees':
+        cols = df.columns
+        indx = df.index
+        try:
+            from sklearn.experimental import enable_iterative_imputer  # noqa
+        except Exception:
+            pass
+        from sklearn.ensemble import ExtraTreesRegressor
+        from sklearn.impute import IterativeImputer
+
+        df = IterativeImputer(
+            ExtraTreesRegressor(n_estimators=10, random_state=0),
+            random_state=0,
+            max_iter=100,
+        ).fit_transform(df)
+        if not isinstance(df, pd.DataFrame):
+            df = pd.DataFrame(df)
+            df.index = indx
+            df.columns = cols
+        return df
+
+    elif method == 'KNNImputer':
+        cols = df.columns
+        indx = df.index
+        from sklearn.impute import KNNImputer
+
+        df = KNNImputer(n_neighbors=5).fit_transform(df)
+        if not isinstance(df, pd.DataFrame):
+            df = pd.DataFrame(df)
+            df.index = indx
+            df.columns = cols
         return df
 
     elif method is None or method == 'None':

@@ -8,7 +8,7 @@ import random
 import pandas as pd
 
 
-def seasonal_int(include_one: bool = False):
+def seasonal_int(include_one: bool = False, small=False):
     """Generate a random integer of typical seasonalities."""
     prob_dict = {
         'random_int': 0.1,
@@ -38,10 +38,12 @@ def seasonal_int(include_one: bool = False):
         lag = 'random_int'
     if lag == 'random_int':
         lag = random.randint(2, 100)
+    if small:
+        lag = lag if lag < 364 else 364
     return int(lag)
 
 
-def date_part(DTindex, method: str = 'simple'):
+def date_part(DTindex, method: str = 'simple', set_index: bool = True):
     """Create date part columns from pd.DatetimeIndex.
 
     Args:
@@ -50,6 +52,7 @@ def date_part(DTindex, method: str = 'simple'):
             simple - just day, year, month, weekday
             expanded - all available futures
             recurring - all features that should commonly repeat without aging
+        set_index (bool): if True, return DTindex as index of df
 
     Returns:
         pd.Dataframe with DTindex
@@ -108,4 +111,6 @@ def date_part(DTindex, method: str = 'simple'):
                 }
             )
             date_part_df = pd.concat([date_part_df, date_part_df2], axis=1)
+    if set_index:
+        date_part_df.index = DTindex
     return date_part_df

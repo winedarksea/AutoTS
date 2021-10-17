@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Tutorial &#8212; AutoTS 0.3.7 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.3.8 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -49,7 +49,7 @@
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning">Installation</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice">Caveats</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information">Adding Regressors</a></p></li>
-<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id7">Models</a></p></li>
+<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id8">Models</a></p></li>
 </ul>
 </section>
 <section id="extended-tutorial">
@@ -81,6 +81,7 @@
 <p>There are two shapes/styles of <code class="docutils literal notranslate"><span class="pre">pandas.DataFrame</span></code> which are accepted.
 The first is <em>long</em> data, like that out of an aggregated sales-transaction table containing three columns identified to <code class="docutils literal notranslate"><span class="pre">.fit()</span></code> as <code class="docutils literal notranslate"><span class="pre">date_col</span> <span class="pre">{pd.Datetime},</span> <span class="pre">value_col</span> <span class="pre">{the</span> <span class="pre">numeric</span> <span class="pre">or</span> <span class="pre">categorical</span> <span class="pre">data</span> <span class="pre">of</span> <span class="pre">interest},</span> <span class="pre">and</span> <span class="pre">id_col</span> <span class="pre">{id</span> <span class="pre">string,</span> <span class="pre">if</span> <span class="pre">multiple</span> <span class="pre">series</span> <span class="pre">are</span> <span class="pre">provided}</span></code>.
 Alternatively, the data may be in a <em>wide</em> format where the index is a <code class="docutils literal notranslate"><span class="pre">pandas.DatetimeIndex</span></code>, and each column is a distinct data series.</p>
+<p>If horizontal style ensembles are used, series_ids/column names will be coerced to strings.</p>
 </section>
 <section id="you-can-tailor-the-process-in-a-few-ways">
 <h4>You can tailor the process in a few ways…<a class="headerlink" href="#you-can-tailor-the-process-in-a-few-ways" title="Permalink to this headline">¶</a></h4>
@@ -104,7 +105,7 @@ Dropping series which are mostly missing, or using <code class="docutils literal
 <p>There are some basic things to beware of that can commonly lead to poor results:</p>
 <ol class="arabic simple">
 <li><p>Bad data (sudden drops or missing values) in the <em>most recent</em> data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts.</p></li>
-<li><p>Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don’t accurately represent the series, a poor model may be choosen. Choose a good method and as many validations as possible.</p></li>
+<li><p>Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don’t accurately represent the series, a poor model may be chosen. Choose a good method and as many validations as possible.</p></li>
 </ol>
 </section>
 <section id="id2">
@@ -171,9 +172,8 @@ Here weather data is included - winter and road construction being the major inf
 <span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">()</span>
 <span class="n">forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="o">.</span><span class="n">forecast</span>
 <span class="c1"># prediction.long_form_results()</span>
-<span class="c1"># model.best_model.to_string()</span>
 
-<span class="k">if</span> <span class="n">model</span><span class="o">.</span><span class="n">best_model</span><span class="p">[</span><span class="s1">&#39;Ensemble&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+<span class="k">if</span> <span class="n">model</span><span class="o">.</span><span class="n">best_model_ensemble</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
     <span class="n">model</span><span class="o">.</span><span class="n">plot_horizontal</span><span class="p">()</span>
 </pre></div>
 </div>
@@ -242,6 +242,13 @@ This will run Ensembles.</p>
 <span class="n">df_forecast</span><span class="o">.</span><span class="n">forecast</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>The <code class="docutils literal notranslate"><span class="pre">model.predict()</span></code> of AutoTS class runs the model given by three stored attributes:</p>
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>model.best_model_name,
+model.best_model_params,
+model.best_model_transformation_params
+</pre></div>
+</div>
+<p>If you overwrite these, it will accordingly change the forecast output.</p>
 </section>
 <section id="id6">
 <h3>Metrics<a class="headerlink" href="#id6" title="Permalink to this headline">¶</a></h3>
@@ -300,8 +307,7 @@ Unlike <code class="docutils literal notranslate"><span class="pre">horizontal</
 <span class="kn">from</span> <span class="nn">autots.models.ensemble</span> <span class="kn">import</span> <span class="n">mosaic_to_horizontal</span><span class="p">,</span> <span class="n">model_forecast</span>
 
 <span class="c1"># assuming model is from AutoTS.fit() with a mosaic as best_model</span>
-<span class="n">model_params_init</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">best_model</span><span class="p">[</span><span class="s1">&#39;ModelParameters&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-<span class="n">model_params</span> <span class="o">=</span> <span class="n">mosaic_to_horizontal</span><span class="p">(</span><span class="n">model_params_init</span><span class="p">,</span> <span class="n">forecast_period</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">model_params</span> <span class="o">=</span> <span class="n">mosaic_to_horizontal</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">best_model_params</span><span class="p">,</span> <span class="n">forecast_period</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
 <span class="n">result</span> <span class="o">=</span> <span class="n">model_forecast</span><span class="p">(</span>
     <span class="n">model_name</span><span class="o">=</span><span class="s2">&quot;Ensemble&quot;</span><span class="p">,</span>
     <span class="n">model_param_dict</span><span class="o">=</span><span class="n">model_params</span><span class="p">,</span>
@@ -342,19 +348,20 @@ Limited functionality should exist without scikit-learn.</p>
 </section>
 <section id="optional-packages">
 <h3>Optional Packages<a class="headerlink" href="#optional-packages" title="Permalink to this headline">¶</a></h3>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>holidays
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>psutil
+holidays
 prophet
 gluonts (requires mxnet)
 mxnet (mxnet-mkl, mxnet-cu91, mxnet-cu101mkl, etc.)
 tensorflow &gt;= 2.0.0
 lightgbm
 xgboost
-psutil
 tensorflow-probability
 fredapi
 greykite
 </pre></div>
 </div>
+<p>Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs.</p>
 <section id="safest-bet-for-installation">
 <h4>Safest bet for installation:<a class="headerlink" href="#safest-bet-for-installation" title="Permalink to this headline">¶</a></h4>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a conda or venv environment</span>
@@ -550,6 +557,19 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <span class="n">df_inv_return</span> <span class="o">=</span> <span class="n">trans</span><span class="o">.</span><span class="n">inverse_transform</span><span class="p">(</span><span class="n">df_trans</span><span class="p">,</span> <span class="n">trans_method</span><span class="o">=</span><span class="s2">&quot;original&quot;</span><span class="p">)</span>  <span class="c1"># forecast for future data</span>
 </pre></div>
 </div>
+<section id="note-on-regression-models">
+<h3>Note on Regression Models<a class="headerlink" href="#note-on-regression-models" title="Permalink to this headline">¶</a></h3>
+<p>The Regression models are WindowRegression, RollingRegression, UnivariateRegression, MultivariateRegression, and DatepartRegression.
+They are all different ways of reshaping the time series into X and Y for traditional ML and Deep Learning approaches.
+All draw from the same potential pool of models, mostly sklearn and tensorflow models.</p>
+<ul class="simple">
+<li><p>DatepartRegression is where X is simply the date features, and Y are the time series values for that date.</p></li>
+<li><p>WindowRegression takes an <code class="docutils literal notranslate"><span class="pre">n</span></code> preceeding data points as X to predict the future value or values of the series.</p></li>
+<li><p>RollingRegression takes all time series and summarized rolling values of those series in one massive dataframe as X. Works well for a small number of series but scales poorly.</p></li>
+<li><p>MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series <code class="docutils literal notranslate"><span class="pre">i</span></code> are used to predict next step for series <code class="docutils literal notranslate"><span class="pre">i</span></code>, with a model trained on all data from all series.</p></li>
+<li><p>UnivariateRegression is the same as MultivariateRegression but trains an independent model on each series, thus not capable of learning from the patterns of other series. This performs well in horizontal ensembles as it can be parsed down to one series with the same performance on that series.</p></li>
+</ul>
+</section>
 </section>
 <section id="id8">
 <h2>Models<a class="headerlink" href="#id8" title="Permalink to this headline">¶</a></h2>
@@ -726,7 +746,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>yes</p></td>
 <td><p>True</p></td>
 <td></td>
-<td></td>
+<td><p>True</p></td>
 </tr>
 <tr class="row-odd"><td><p>RollingRegression</p></td>
 <td><p>sklearn</p></td>
@@ -746,7 +766,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>some</p></td>
 <td><p>True</p></td>
 <td></td>
-<td></td>
+<td><p>True</p></td>
 </tr>
 <tr class="row-odd"><td><p>DatepartRegression</p></td>
 <td><p>sklearn</p></td>
@@ -758,7 +778,17 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>UnivariateRegression</p></td>
+<tr class="row-even"><td><p>MultivariateRegression</p></td>
+<td><p>sklearn</p></td>
+<td><p>lightgbm, tensorflow</p></td>
+<td></td>
+<td><p>sklearn</p></td>
+<td><p>some</p></td>
+<td><p>True</p></td>
+<td></td>
+<td><p>True</p></td>
+</tr>
+<tr class="row-odd"><td><p>UnivariateRegression</p></td>
 <td><p>sklearn</p></td>
 <td><p>lightgbm, tensorflow</p></td>
 <td></td>
@@ -768,7 +798,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>UnivariateMotif/MultivariateMotif</p></td>
+<tr class="row-even"><td><p>UnivariateMotif/MultivariateMotif</p></td>
 <td><p>scipy.distaince.cdist</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -781,7 +811,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>NVAR</p></td>
+<tr class="row-odd"><td><p>NVAR</p></td>
 <td></td>
 <td></td>
 <td><p>True</p></td>
@@ -791,7 +821,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>Greykite</p></td>
+<tr class="row-even"><td><p>Greykite</p></td>
 <td><p>greykite</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -804,7 +834,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 </ul>
 </td>
 </tr>
-<tr class="row-even"><td><p>MotifSimulation</p></td>
+<tr class="row-odd"><td><p>MotifSimulation</p></td>
 <td><p>sklearn.metrics.pairwise</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -814,7 +844,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>TensorflowSTS</p></td>
+<tr class="row-even"><td><p>TensorflowSTS</p></td>
 <td><p>tensorflow_probability</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -824,7 +854,7 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>TFPRegression</p></td>
+<tr class="row-odd"><td><p>TFPRegression</p></td>
 <td><p>tensorflow_probability</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -834,23 +864,13 @@ Some transformers (mostly the smoothing filters like <code class="docutils liter
 <td><p>True</p></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>ComponentAnalysis</p></td>
+<tr class="row-even"><td><p>ComponentAnalysis</p></td>
 <td><p>sklearn</p></td>
 <td></td>
 <td></td>
 <td></td>
 <td></td>
 <td><p>True</p></td>
-<td><p>True</p></td>
-<td></td>
-</tr>
-<tr class="row-even"><td><p>TSFreshRegressor</p></td>
-<td><p>tsfresh, sklearn</p></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
 <td><p>True</p></td>
 <td></td>
 </tr>

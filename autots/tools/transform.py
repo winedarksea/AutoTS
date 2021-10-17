@@ -478,7 +478,7 @@ class STLFilter(EmptyTransformer):
         )[0]
         if decomp_type == "STL":
             seasonal = seasonal_int()
-            if seasonal < 7:
+            if seasonal < 7 or method == "fast":
                 seasonal = 7
             elif seasonal % 2 == 0:
                 seasonal = seasonal - 1
@@ -1001,6 +1001,14 @@ class DatepartRegressionTransformer(EmptyTransformer):
 
         if method == "all":
             choice = generate_regressor_params()
+        elif method == "fast":
+            choice = generate_regressor_params(
+                model_dict={
+                    'ElasticNet': 0.5,
+                    'DecisionTree': 0.5,
+                    # 'ExtraTrees': 0.25,
+                }
+            )
         else:
             choice = generate_regressor_params(
                 model_dict={
@@ -1009,6 +1017,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
                     'KNN': 0.1,
                     'MLP': 0.2,
                     'RandomForest': 0.2,
+                    'ExtraTrees': 0.25,
+                    "SVM": 0.1,
+                    "RadiusRegressor": 0.1,
                 }
             )
 
@@ -1971,7 +1982,7 @@ have_params = {
     'STLFilter': STLFilter,
 }
 # where will results will vary if not all series are included together
-shared_trans = ['PCA', 'FastICA']
+shared_trans = ['PCA', 'FastICA', "DatepartRegression"]
 # transformers not defined in AutoTS
 external_transformers = [
     'MinMaxScaler',
@@ -2168,14 +2179,19 @@ class GeneralTransformer(object):
         elif transformation == 'PCA':
             from sklearn.decomposition import PCA
 
+            # could probably may it work, but this is simpler
+            if df.shape[1] > df.shape[0]:
+                raise ValueError("PCA fails when n series > n observations")
             transformer = PCA(
-                n_components=df.shape[1], whiten=False, random_state=random_seed
+                n_components=min(df.shape), whiten=False, random_state=random_seed
             )
             return transformer
 
         elif transformation == 'FastICA':
             from sklearn.decomposition import FastICA
 
+            if df.shape[1] > 500:
+                raise ValueError("FastICA fails with > 500 series")
             transformer = FastICA(
                 n_components=df.shape[1],
                 whiten=True,
@@ -2256,9 +2272,7 @@ class GeneralTransformer(object):
             df = self.transformers[i].fit_transform(df)
             # convert to DataFrame only if it isn't already
             if not isinstance(df, pd.DataFrame):
-                df = pd.DataFrame(df)
-                df.index = self.df_index
-                df.columns = self.df_colnames
+                df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
             # update index reference if sliced
             if transformation in ['Slice']:
                 self.df_index = df.index
@@ -2370,14 +2384,14 @@ def get_transformer_params(transformer: str = "EmptyTransformer", method: str = 
 transformer_dict = {
     None: 0.0,
     'MinMaxScaler': 0.05,
-    'PowerTransformer': 0.05,
+    'PowerTransformer': 0.02,  # is noticeably slower at scale, if not tons
     'QuantileTransformer': 0.05,
     'MaxAbsScaler': 0.05,
     'StandardScaler': 0.04,
     'RobustScaler': 0.05,
     'PCA': 0.01,
     'FastICA': 0.01,
-    'Detrend': 0.05,
+    'Detrend': 0.1,  # slow with some params, but that's handled in get_params
     'RollingMeanTransformer': 0.02,
     'RollingMean100thN': 0.01,  # old
     'DifferencedTransformer': 0.1,
@@ -2387,54 +2401,60 @@ transformer_dict = {
     'PositiveShift': 0.02,
     'Log': 0.01,
     'IntermittentOccurrence': 0.01,
-    # 'SeasonalDifference7': 0.0,  # old
     'SeasonalDifference': 0.1,
-    # 'SeasonalDifference28': 0.0,  # old
     'cffilter': 0.01,
     'bkfilter': 0.05,
     'convolution_filter': 0.001,
     "HPFilter": 0.02,
-    'DatepartRegression': 0.02,
-    # 'DatepartRegressionElasticNet': 0.0,  # old
-    # 'DatepartRegressionLtd': 0.0,  # old
+    'DatepartRegression': 0.01,
     "ClipOutliers": 0.05,
-    "Discretize": 0.05,
+    "Discretize": 0.03,
     "CenterLastValue": 0.01,
-    "Round": 0.05,
+    "Round": 0.02,
     "Slice": 0.02,
     "ScipyFilter": 0.02,
     "STLFilter": 0.01,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
-del fast_transformer_dict['DatepartRegression']
 del fast_transformer_dict['SinTrend']
 del fast_transformer_dict['FastICA']
 del fast_transformer_dict['ScipyFilter']
-del fast_transformer_dict['STLFilter']
 
-# and even more
-superfast_transformer_dict = fast_transformer_dict.copy()
-del superfast_transformer_dict['IntermittentOccurrence']
-del superfast_transformer_dict['cffilter']
-del superfast_transformer_dict['QuantileTransformer']
-del superfast_transformer_dict['PowerTransformer']
-del superfast_transformer_dict['convolution_filter']
-del superfast_transformer_dict['HPFilter']
+# and even more, not just removing slow but also less commonly useful ones
+superfast_transformer_dict = {
+    None: 0.0,
+    'MinMaxScaler': 0.05,
+    'MaxAbsScaler': 0.05,
+    'StandardScaler': 0.04,
+    'RobustScaler': 0.05,
+    'Detrend': 0.1,
+    'RollingMeanTransformer': 0.02,
+    'DifferencedTransformer': 0.1,
+    'PositiveShift': 0.02,
+    'Log': 0.01,
+    'SeasonalDifference': 0.1,
+    'bkfilter': 0.05,
+    "ClipOutliers": 0.05,
+    "Discretize": 0.03,
+    "Slice": 0.02,
+}
 
 # probability dictionary of FillNA methods
 na_probs = {
-    'ffill': 0.6,
+    'ffill': 0.3,
     'fake_date': 0.1,
     'rolling_mean': 0.2,
     'rolling_mean_24': 0.1,
-    'IterativeImputer': 0.1,
+    'IterativeImputer': 0.1,  # this parallelizes, uses much memory
     'mean': 0.05,
     'zero': 0.05,
     'ffill_mean_biased': 0.1,
     'median': 0.05,
-    None: 0.01,
-    "interpolate": 0.6,
+    None: 0.001,
+    "interpolate": 0.5,
+    "KNNImputer": 0.05,
+    "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
 }
 
 
@@ -2470,14 +2490,14 @@ def RandomTransform(
 ):
     """Return a dict of randomly choosen transformation selections.
 
-    DatepartRegression is used as a signal that slow parameters are allowed.
+    SinTrend is used as a signal that slow parameters are allowed.
     """
     transformer_list, transformer_prob = transformer_list_to_dict(transformer_list)
 
     # adjust fast/slow based on Transformers allowed
     if fast_params is None:
         fast_params = True
-        slow_flags = ["DatepartRegression"]
+        slow_flags = ["SinTrend"]
         intersects = [i for i in slow_flags if i in transformer_list]
         if intersects:
             fast_params = False
@@ -2487,7 +2507,7 @@ def RandomTransform(
     if fast_params:
         params_method = "fast"
         throw_away = na_prob_dict.pop('IterativeImputer', None)
-        throw_away = na_prob_dict.pop('interpolate', None)  # noqa
+        throw_away = na_prob_dict.pop('IterativeImputerExtraTrees', None)  # noqa
 
     # clean na_probs dict
     na_probabilities = list(na_prob_dict.values())
@@ -2499,7 +2519,9 @@ def RandomTransform(
     # choose FillNA
     na_choice = random.choices(na_probs_list, na_probabilities)[0]
     if na_choice == "interpolate":
-        na_choice = random.choice(df_interpolate)
+        na_choice = random.choices(
+            list(df_interpolate.keys()), list(df_interpolate.values())
+        )[0]
 
     # choose length of transformers
     num_trans = random.randint(1, transformer_max_depth)

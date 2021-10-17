@@ -1,5 +1,4 @@
 """Tools for generating and forecasting with ensembles of models."""
-import random
 import datetime
 import numpy as np
 import pandas as pd
@@ -291,7 +290,7 @@ def generalize_horizontal(
     org_list = org_idx.tolist()
     # remove any unnecessary series
     known_matches = {ser: mod for ser, mod in known_matches.items() if ser in org_list}
-    # here split for mosiac or horizontal
+    # here split for mosaic or horizontal
     if mosaic_or_horizontal(known_matches) == "mosaic":
         # make it a dataframe
         mosaicy = pd.DataFrame.from_dict(known_matches)

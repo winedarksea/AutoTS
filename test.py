@@ -11,68 +11,59 @@ from autots.datasets import (
     load_weekly,
     load_weekdays,
     load_zeroes,
+    load_linear,
 )
-from autots import AutoTS, create_lagged_regressor
+from autots import AutoTS, create_regressor
 import matplotlib.pyplot as plt
 
 # raise ValueError("aaargh!")
 use_template = False
-use_m5 = False  # long = False
 force_univariate = False  # long = False
 back_forecast = False
+graph = True
 
 # this is the template file imported:
 example_filename = "example_export.csv"  # .csv/.json
 forecast_length = 8
 long = False
-df = load_monthly(long=long)
+# df = load_linear(long=long, shape=(200, 500), introduce_nan=0.2)
+df = load_daily(long=long)
 n_jobs = "auto"
-verbose = 1
+verbose = 2
 validation_method = "backwards"
 if use_template:
-    generations = 0
+    generations = 5
     num_validations = 0
 else:
-    generations = 3
-    num_validations = 2
+    generations = 5
+    num_validations = 1
 
-if use_m5:
-    long = False
-    df = pd.read_csv("m5_sample.gz")
-    df['datetime'] = pd.DatetimeIndex(df['datetime'])
-    df = df.set_index("datetime", drop=True)
-    # df = df.iloc[:, 0:40]
 if force_univariate:
     df = df.iloc[:, 0]
 
-weights_hourly = {'traffic_volume': 10}
-weights_monthly = {'GS10': 5}
-weights_weekly = {
-    'Weekly Minnesota Midgrade Conventional Retail Gasoline Prices  (Dollars per Gallon)': 2
-}
-
-transformer_list = "all"  # ["bkfilter", "STLFilter", "HPFilter", 'StandardScaler']
-transformer_max_depth = 3
+transformer_list = "fast"  # ["bkfilter", "STLFilter", "HPFilter", 'StandardScaler']
+transformer_max_depth = 1
 model_list = "default"
 model_list = 'superfast'  # fast_parallel
-# model_list = ["GluonTS", "AverageValueNaive"]
+# model_list = ["DatepartRegression", "WindowRegression"]
 
 metric_weighting = {
     'smape_weighting': 3,
     'mae_weighting': 1,
     'rmse_weighting': 1,
     'containment_weighting': 0,
-    'runtime_weighting': 0,
+    'runtime_weighting': 0.1,
     'spl_weighting': 1,
     'contour_weighting': 1,
 }
 
-
+frequency = 'infer'
+drop_most_recent = 0
 model = AutoTS(
     forecast_length=forecast_length,
-    frequency='infer',
+    frequency=frequency,
     prediction_interval=0.9,
-    ensemble=["simple", "distance", "horizontal-max", "horizontal-min", "mosaic"],
+    ensemble=None,
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,
@@ -80,25 +71,31 @@ model = AutoTS(
     model_list=model_list,
     transformer_list=transformer_list,
     transformer_max_depth=transformer_max_depth,
-    initial_template='General+Random',
+    initial_template='Random',
     metric_weighting=metric_weighting,
     models_to_validate=0.35,
     max_per_model_class=None,
     model_interrupt=True,
     n_jobs=n_jobs,
-    drop_most_recent=1,
+    drop_most_recent=drop_most_recent,
+    introduce_na=True,
     # prefill_na=0,
     subset=None,
     verbose=verbose,
 )
 
 
-future_regressor_train2d, future_regressor_forecast2d  = create_lagged_regressor(
+regr_train, regr_fcst = create_regressor(
     df,
     forecast_length=forecast_length,
-    summarize=None,
-    backfill='datepartregression',
-    fill_na='ffill'
+    frequency=frequency,
+    drop_most_recent=drop_most_recent,
+    scale=True,
+    summarize="auto",
+    backfill='bfill',
+    fill_na='pchip',
+    holiday_countries=["US"],
+    datepart_method="recurring",
 )
 
 
@@ -109,9 +106,8 @@ if use_template:
 start_time_for = timeit.default_timer()
 model = model.fit(
     df,
-    future_regressor=future_regressor_train2d,
+    future_regressor=regr_train,
     weights="mean",
-    # grouping_ids=grouping_monthly,
     # result_file='test.pickle',
     date_col='datetime' if long else None,
     value_col='value' if long else None,
@@ -120,7 +116,7 @@ model = model.fit(
 
 elapsed_for = timeit.default_timer() - start_time_for
 
-prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=1)
+prediction = model.predict(future_regressor=regr_fcst, verbose=1)
 # point forecasts dataframe
 forecasts_df = prediction.forecast
 # accuracy of all tried model results (not including cross validation)
@@ -139,73 +135,65 @@ print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 
 initial_results.to_csv("general_template_" + str(platform.node()) + ".csv")
 
-prediction.plot(model.df_wide_numeric,
-                series=model.df_wide_numeric.columns[0],
-                remove_zeroes=False,
-                start_date="2019-01-01")
+if graph:
+    prediction.plot(model.df_wide_numeric,
+                    series=model.df_wide_numeric.columns[0],
+                    remove_zeroes=False,
+                    start_date="2019-01-01")
+    plt.show()
+    model.plot_generation_loss()
 
-plt.show()
-model.plot_generation_loss()
+    if model.best_model['Ensemble'].iloc[0] == 2:
+        plt.show()
+        model.plot_horizontal_transformers(method="fillna")
+        plt.show()
+        model.plot_horizontal_transformers()
+        plt.show()
+        model.plot_horizontal()
+        plt.show()
+        if 'mosaic' in model.best_model['ModelParameters'].iloc[0].lower():
+            mosaic_df = model.mosaic_to_df()
+            print(mosaic_df[mosaic_df.columns[0:5]].head(5))
 
-if model.best_model['Ensemble'].iloc[0] == 2:
     plt.show()
-    model.plot_horizontal_transformers(method="fillna")
-    plt.show()
-    model.plot_horizontal_transformers()
-    plt.show()
-    model.plot_horizontal()
-    plt.show()
-    if 'mosaic' in model.best_model['ModelParameters'].iloc[0].lower():
-        mosaic_df = model.mosaic_to_df()
-        print(mosaic_df[mosaic_df.columns[0:5]].head(5))
-
-plt.show()
-if back_forecast:
-    model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
+    if back_forecast:
+        model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
 
 df_wide_numeric = model.df_wide_numeric
 
 df = df_wide_numeric.tail(100).fillna(0).astype(float)
 
+print('test run complete')
+
 """
 # Import/Export
 model.export_template(example_filename, models='all',
                       n=15, max_per_model_class=3)
-
 del(model)
 model = model.import_template(example_filename, method='only')
 print("Overwrite template is: {}".format(str(model.initial_template)))
 
-future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
-    df,
-    dimensions=4,
-    forecast_length=forecast_length,
-    date_col='datetime' if long else None,
-    value_col='value' if long else None,
-    id_col='series_id' if long else None,
-    drop_most_recent=model.drop_most_recent,
-    aggfunc=model.aggfunc,
-    verbose=model.verbose,
-)
-"""
+# default save location of files is apparently root
+systemd-run --unit=background_cmd_service --remain-after-exit /home/colin/miniconda3/envs/openblas/bin/python /home/colin/AutoTS/test.py
+journalctl -r -n 10 -u background_cmd_service
+journalctl -f -u background_cmd_service
+journalctl -b -u background_cmd_service
 
-"""
-Things needing testing:
-    With and without regressor
-    With and without weighting
-    Different frequencies
-    Various verbose inputs
+systemctl stop background_cmd_service
+systemctl reset-failed
+systemctl kill background_cmd_service
+
+scp colin@192.168.1.122:/home/colin/AutoTS/general_template_colin-1135.csv ./Documents/AutoTS
+scp colin@192.168.1.122:/general_template_colin-1135.csv ./Documents/AutoTS
+
 
 Edgey Cases:
-        Single Time Series
-        Forecast Length of 1
-        Very short training data
-        Lots of NaN
-"""
+    Single Time Series
+    Forecast Length of 1
+    Very short training data
+    Lots of NaN
 
-# %%
 
-"""
 PACKAGE RELEASE
 # update version in setup.py, /docs/conf.py, /autots/_init__.py
 
@@ -237,8 +225,6 @@ twine upload dist/*
 
 Merge dev to master on GitHub and create release (include .tar.gz)
 """
-
-# %%
 
 # Help correlate errors with parameters
 """
