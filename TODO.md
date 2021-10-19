@@ -13,17 +13,8 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* add Transformer model to sklearn DNN models
-* expanded and tuned KerasRNN model options
-* added param space for RandomForest, ExtraTrees, Poisson, and RANSAC regressions
-* removed Tensorflow models from UnivariateRegression as it can cause a crash with GPU training
-* added create_regressor function
-* two new impute methods (KNNImputer, IterativeImputerExtraTrees), but only with "all" transformers
-* deletion of old TSFresh model, which was horribly slow and not going to get any faster
-* optimizing scalability by tuning transformer and imputation defaults
-* MultivariateRegression model (RollingRegression but 1d to models)
-* fix for generate_score_per_series bug with all zeroes series
-* bug fix for where horizontal ensembles failed if series_ids/column names were integers
+* update validation template creation for horizontal ensembles
+* made MultivariateRegression probabilistic
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

@@ -69,7 +69,7 @@ class AutoTS(object):
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
             0.99 is forced to 100% validation. 1 evaluates just 1 model.
-            If horizontal or probabilistic ensemble, then additional min per_series models above the number here may be added to validation.
+            If horizontal or mosaic ensemble, then additional min per_series models above the number here are added to validation.
         max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
         validation_method (str): 'even', 'backwards', or 'seasonal n' where n is an integer of seasonal
             'backwards' is better for recency and for shorter training sets
@@ -98,7 +98,7 @@ class AutoTS(object):
         best_model_ensemble (int): Ensemble type int id
         regression_check (bool): If True, the best_model uses an input 'User' future_regressor
         df_wide_numeric (pd.DataFrame): dataframe containing shaped final data
-        model_results (object): contains a collection of result metrics
+        initial_results.model_results (object): contains a collection of result metrics
 
     Methods:
         fit, predict
@@ -811,20 +811,11 @@ class AutoTS(object):
             'Score', ascending=True, na_position='last'
         ).head(self.models_to_validate)
         # add on best per_series models (which may not be in the top scoring)
-        ensy = ['horizontal', 'probabilistic']
-        if (
-            any(x in ensemble for x in ensy)
-            and not self.subset_flag
-            and self.models_to_validate > 30
-        ):
+        if any(x in ensemble for x in self.h_ens_list):
             model_results = self.initial_results.model_results
-            mods = pd.DataFrame()
-            if 'horizontal' in ensemble:
-                mods = pd.concat([mods, self.initial_results.per_series_mae.idxmin()])
-            if 'probabilistic' in ensemble:
-                mods = pd.concat([mods, self.initial_results.per_series_spl.idxmin()])
+            mods = generate_score_per_series(self.initial_results, self.metric_weighting, 1).idxmin()
             per_series_val = model_results[
-                model_results['ID'].isin(mods.iloc[:, 0].unique().tolist())
+                model_results['ID'].isin(mods.unique().tolist())
             ]
             validation_template = pd.concat(
                 [validation_template, per_series_val], axis=0

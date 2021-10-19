@@ -411,9 +411,9 @@ univariate_model_dict: dict = {
     'ElasticNet': 0.05,
     'MLP': 0.05,
     'DecisionTree': 0.05,
-    'KNN': 0.05,
+    'KNN': 0.03,
     'Adaboost': 0.05,
-    'SVM': 0.05,  # was slow, LinearSVR seems much faster
+    'SVM': 0.05,
     'BayesianRidge': 0.03,
     'HistGradientBoost': 0.02,
     'LightGBM': 0.01,
@@ -708,8 +708,8 @@ def generate_regressor_params(
                 "model": 'LightGBM',
                 "model_params": {
                     "objective": random.choices(
-                        ['regression', 'gamma', 'huber', 'regression_l1'],
-                        [0.4, 0.3, 0.1, 0.2],
+                        ['regression', 'gamma', 'huber', 'regression_l1', 'tweedie', 'poisson', 'quantile'],
+                        [0.4, 0.2, 0.2, 0.2, 0.2, 0.05, 0.01],
                     )[0],
                     "learning_rate": random.choices(
                         [0.001, 0.1, 0.01],
@@ -729,7 +729,7 @@ def generate_regressor_params(
                     )[0],
                     "n_estimators": random.choices(
                         [100, 250, 50, 500],
-                        [0.6, 0.099, 0.3, 0.0010],
+                        [0.6, 0.1, 0.3, 0.0010],
                     )[0],
                 },
             }
@@ -2357,6 +2357,13 @@ class MultivariateRegression(ModelObject):
         datepart_method: str = None,
         polynomial_degree: int = None,
         window: int = None,
+        quantile_params: dict = {
+            'learning_rate': 0.1,
+            'max_depth': 20,
+            'min_samples_leaf': 4,
+            'min_samples_split': 5,
+            'n_estimators': 250
+        },
         n_jobs: int = -1,
         **kwargs,
     ):
@@ -2392,6 +2399,7 @@ class MultivariateRegression(ModelObject):
         self.datepart_method = datepart_method
         self.polynomial_degree = polynomial_degree
         self.window = window
+        self.quantile_params = quantile_params
         self.regressor_train = None
 
         # detect just the max needed for cutoff (makes faster)
@@ -2419,6 +2427,7 @@ class MultivariateRegression(ModelObject):
             future_regressor (pandas.DataFrame or Series): Datetime Indexed
         """
         df = self.basic_profile(df)
+        from sklearn.ensemble import GradientBoostingRegressor
 
         # if external regressor, do some check up
         if self.regression_type is not None:
@@ -2470,6 +2479,17 @@ class MultivariateRegression(ModelObject):
             ]
         )
         del base
+        alpha_base = (1 - self.prediction_interval) / 2
+        self.model_upper = GradientBoostingRegressor(
+            loss='quantile', alpha=(1 - alpha_base),
+            random_state=self.random_seed,
+            **self.quantile_params,
+        )
+        self.model_lower = GradientBoostingRegressor(
+            loss='quantile', alpha=alpha_base,
+            random_state=self.random_seed,
+            **self.quantile_params
+        )
 
         multioutput = True
         if Y.ndim < 2:
@@ -2485,6 +2505,8 @@ class MultivariateRegression(ModelObject):
             multioutput=multioutput,
         )
         self.model.fit(X.to_numpy(), Y)
+        self.model_upper.fit(X.to_numpy(), Y)
+        self.model_lower.fit(X.to_numpy(), Y)
         # we only need the N most recent points for predict
         self.sktraindata = df.tail(self.min_threshold)
 
@@ -2512,6 +2534,8 @@ class MultivariateRegression(ModelObject):
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
         forecast = pd.DataFrame()
+        upper_forecast = pd.DataFrame()
+        lower_forecast = pd.DataFrame()
         if self.regressor_train is not None:
             base_regr = pd.concat([self.regressor_train, future_regressor])
             # move index back one to align with training dates on merge
@@ -2556,12 +2580,17 @@ class MultivariateRegression(ModelObject):
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
-            forecast = pd.concat(
-                [
-                    forecast,
-                    pred_clean,
-                ]
-            )
+            rfPred_upper = self.model_upper.predict(x_dat.to_numpy())
+            pred_upper = pd.DataFrame(
+                rfPred_upper, index=current_x.columns, columns=[index[fcst_step]]
+            ).transpose()
+            rfPred_lower = self.model_lower.predict(x_dat.to_numpy())
+            pred_lower = pd.DataFrame(
+                rfPred_lower, index=current_x.columns, columns=[index[fcst_step]]
+            ).transpose()
+            forecast = pd.concat([forecast, pred_clean])
+            upper_forecast = pd.concat([upper_forecast, pred_upper])
+            lower_forecast = pd.concat([lower_forecast, pred_lower])
             current_x = pd.concat(
                 [
                     current_x,
@@ -2570,17 +2599,12 @@ class MultivariateRegression(ModelObject):
             )
 
         forecast = forecast[self.column_names]
+        upper_forecast = upper_forecast[self.column_names]
+        lower_forecast = lower_forecast[self.column_names]
 
         if just_point_forecast:
             return forecast
         else:
-            upper_forecast, lower_forecast = Point_to_Probability(
-                self.sktraindata,
-                forecast,
-                method='inferred_normal',
-                prediction_interval=self.prediction_interval,
-            )
-
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(
                 model_name=self.name,

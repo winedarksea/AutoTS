@@ -37,7 +37,7 @@ default = [
     'GLM',
     'ETS',
     'FBProphet',
-    'RollingRegression',  # maybe not?
+    # 'RollingRegression',  # maybe not?
     'GluonTS',
     'UnobservedComponents',
     'VAR',
@@ -70,7 +70,7 @@ fast = [
     # 'UnobservedComponents',  # it's fast enough but I'll leave for parallel
     'VAR',
     'VECM',
-    'WindowRegression',  # well, this gets slow with Transformer
+    'WindowRegression',  # well, this gets slow with Transformer, KerasRNN
     'DatepartRegression',
     'UnivariateMotif',
     'MultivariateMotif',
