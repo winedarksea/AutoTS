@@ -376,3 +376,37 @@ def simple_train_test_split(
     if (verbose >= 0) and ((test.isnull().sum(axis=0) / test.shape[0]).max() > 0.9):
         print("One or more series is 90% or more NaN in this test split")
     return train.copy(), test.copy()
+
+
+def clean_weights(weights, series, verbose=0):
+    """Polish up series weighting information
+
+    Args:
+        weights (dict): dictionary of series_id: weight (float or int)
+        series (iterable): list of series_ids in the dataset
+    """
+    if not bool(weights):
+        weights = {x: 1 for x in series}
+    else:
+        # handle not all weights being provided
+        if verbose > 1:
+            key_count = 0
+            for col in series:
+                if col in weights:
+                    key_count += 1
+            key_count = len(series) - key_count
+            if key_count > 0:
+                print(f"{key_count} series_id not in weights. Inferring 1.")
+            else:
+                print("All series_id present in weighting.")
+        weights = {
+            col: (weights[col] if col in weights else 1)
+            for col in series
+        }
+        # handle non-numeric inputs, somewhat slower than desired
+        for key in weights:
+            try:
+                weights[key] = abs(float(weights[key]))
+            except Exception:
+                weights[key] = 1
+    return weights

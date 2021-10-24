@@ -7,7 +7,6 @@ import pandas as pd
 import datetime
 import json
 from hashlib import md5
-from autots.evaluator.metrics import PredictionEval
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
 from autots.models.ensemble import (
     EnsembleForecast,
@@ -1083,8 +1082,7 @@ def TemplateWizard(
 
             per_ts = True if 'distance' in ensemble else False
             full_mae = True if "mosaic" in ensemble else False
-            model_error = PredictionEval(
-                df_forecast,
+            model_error = df_forecast.evaluate(
                 df_test,
                 series_weights=weights,
                 df_train=df_train,

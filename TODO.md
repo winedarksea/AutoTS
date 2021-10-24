@@ -15,6 +15,9 @@
 # Latest
 * update validation template creation for horizontal ensembles
 * made MultivariateRegression probabilistic
+* fixed bug where weighting didn't take floats
+* pushed the evaluate options from a separate function to part of the PredictionObject
+* added 'custom' validation option
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

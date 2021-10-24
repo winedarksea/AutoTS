@@ -1032,7 +1032,9 @@ class RollingRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params(model_dict=rolling_regression_dict)
+        rolling_model_dict = sklearn_model_dict.copy()
+        del rolling_model_dict['KNN']
+        model_choice = generate_regressor_params(model_dict=rolling_model_dict)
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30], [0.2, 0.2, 0.2, 0.2, 0.2]
         )[0]
