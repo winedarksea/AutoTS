@@ -27,6 +27,7 @@ all_models = [
     'MultivariateMotif',
     'NVAR',
     'MultivariateRegression',
+    'SectionalMotif',
 ]
 default = [
     'ZeroesNaive',
@@ -48,6 +49,7 @@ default = [
     'MultivariateRegression',
     'UnivariateMotif',
     'MultivariateMotif',
+    'SectionalMotif',
     'NVAR',
 ]
 # fastest models at any scale
@@ -74,6 +76,7 @@ fast = [
     'DatepartRegression',
     'UnivariateMotif',
     'MultivariateMotif',
+    'SectionalMotif',
     'NVAR',
 ]
 # models that can scale well if many CPU cores are available
@@ -111,6 +114,7 @@ probabilistic = [
     'VAR',
     'UnivariateMotif',
     "MultivariateMotif",
+    'SectionalMotif',
     'NVAR',
 ]
 # models that use the shared information of multiple series to improve accuracy
@@ -125,6 +129,7 @@ multivariate = [
     "MultivariateMotif",
     'NVAR',
     'MultivariateRegression',
+    'SectionalMotif',
 ]
 # USED IN AUTO_MODEL, models with no parameters
 no_params = ['ZeroesNaive', 'LastValueNaive', 'GLS']
@@ -151,6 +156,7 @@ recombination_approved = [
     "MultivariateMotif",
     'NVAR',
     'MultivariateRegression',
+    'SectionalMotif',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -184,6 +190,7 @@ regressor = [
     "GluonTS",
     "UnivariateRegression",
     'MultivariateRegression',
+    'SectionalMotif',  # kinda
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {

@@ -29,7 +29,7 @@ from autots.models.basics import (
     SeasonalNaive,
     ZeroesNaive,
     Motif,
-    WideMotif,
+    SectionalMotif,
     NVAR,
 )
 from autots.models.statsmodels import (
@@ -441,8 +441,8 @@ def ModelMonster(
             **parameters,
         )
         return model
-    elif model == 'WideMotif':
-        model = WideMotif(
+    elif model == 'SectionalMotif':
+        model = SectionalMotif(
             frequency=frequency,
             prediction_interval=prediction_interval,
             random_seed=random_seed,
