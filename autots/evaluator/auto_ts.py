@@ -35,6 +35,7 @@ from autots.models.ensemble import (
 )
 from autots.models.model_list import model_lists
 from autots.tools import cpu_count
+from autots.tools.window_functions import retrieve_closest_indices
 
 
 class AutoTS(object):
@@ -76,6 +77,7 @@ class AutoTS(object):
             'backwards' is better for recency and for shorter training sets
             'even' splits the data into equally-sized slices best for more consistent data
             'seasonal n' for example 'seasonal 364' would test all data on each previous year of the forecast_length that would immediately follow the training data.
+            'similarity' automatically finds the data sections most similar to the most recent data that will be used for prediction
             'custom' - if used, .fit() needs validation_indexes passed - a list of pd.DatetimeIndex's, tail of each is used as test
         min_allowed_train_percent (float): percent of forecast length to allow as min training, else raises error.
             0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
@@ -512,6 +514,21 @@ class AutoTS(object):
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
 
+        # generate similarity matching indices (so it can fail now, not after all the generations)
+        if self.validation_method == "similarity":
+            from autots.tools.transform import GeneralTransformer
+
+            params = {"fillna": "ffill", "transformations": {"0": "QuantileTransformer", "1": "RobustScaler"}, "transformation_params": {"0": {"output_distribution": "uniform", "n_quantiles": 1000}, "1": {}}}
+            trans = GeneralTransformer(**params)
+
+            created_idx = retrieve_closest_indices(
+                trans.fit_transform(df_wide_numeric),
+                num_indices=num_validations,
+                forecast_length=self.forecast_length,
+                stride_size=self.forecast_length,
+            )
+            self.validation_indexes = [df_wide_numeric.index[df_wide_numeric.index <= indx[-1]] for indx in created_idx]
+
         # record if subset or not
         if self.subset is not None:
             self.subset = abs(int(self.subset))
@@ -842,7 +859,7 @@ class AutoTS(object):
                         val_per = val_per - forecast_length
                     val_per = df_wide_numeric.shape[0] - val_per
                     current_slice = df_wide_numeric.head(val_per)
-                elif self.validation_method == 'custom':
+                elif self.validation_method in ['custom', "similarity"]:
                     current_slice = df_wide_numeric.reindex(self.validation_indexes[y])
                 else:
                     raise ValueError(

@@ -1905,7 +1905,7 @@ class SectionalMotif(ModelObject):
             "nan_euclidean",
         ]
         return {
-            "window": random.choices([3, 5, 7, 10, 15, 30], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1])[0],
+            "window": random.choices([3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1])[0],
             "point_method": random.choices(
                 ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
             )[0],

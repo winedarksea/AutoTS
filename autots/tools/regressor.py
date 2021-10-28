@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA
 from autots.tools.shaping import infer_frequency
@@ -30,6 +31,7 @@ def create_regressor(
 
     Args:
         df (pd.DataFrame): WIDE style dataframe (use long_to_wide if the data isn't already)
+            categorical features will be discard for this, if present
         forecast_length (int): time ahead that will be forecast
         frequency (str): those annoying offset codes you have to always use for time series
         holiday_countries (list): list of countries to pull holidays for. Reqs holidays pkg
@@ -66,6 +68,9 @@ def create_regressor(
                 df = df.resample(frequency).apply(aggfunc)
         except Exception:
             df = df.asfreq(frequency, fill_value=None)
+    # handle categorical
+    df = df.apply(pd.to_numeric, errors='ignore')
+    df = df.select_dtypes(include=np.number)
     # lagged data
     regr_train, regr_fcst = create_lagged_regressor(
         df,
@@ -92,22 +97,28 @@ def create_regressor(
             holiday_countries = holiday_countries.split(",")
 
         for holiday_country in holiday_countries:
+            # create holiday flag for historic regressor
             regr_train[f"holiday_flag_{holiday_country}"] = holiday_flag(
                 regr_train.index, country=holiday_country
             )
-            holiday_future = holiday_flag(
-                regr_train.index.shift(1, freq=frequency), country=holiday_country
-            )
-            holiday_future.index = regr_train.index
-            regr_train[f"holiday_flag_{holiday_country}_future"] = holiday_future
+            # now do again for future regressor
             regr_fcst[f"holiday_flag_{holiday_country}"] = holiday_flag(
                 regr_fcst.index, country=holiday_country
             )
-            holiday_future = holiday_flag(
-                regr_fcst.index.shift(1, freq=frequency), country=holiday_country
-            )
-            holiday_future.index = regr_fcst.index
-            regr_fcst[f"holiday_flag_{holiday_country}_future"] = holiday_future
+            # now try it for future days
+            try:
+                holiday_future = holiday_flag(
+                    regr_train.index.shift(1, freq=frequency), country=holiday_country
+                )
+                holiday_future.index = regr_train.index
+                holiday_future_2 = holiday_flag(
+                    regr_fcst.index.shift(1, freq=frequency), country=holiday_country
+                )
+                holiday_future_2.index = regr_fcst.index
+                regr_train[f"holiday_flag_{holiday_country}_future"] = holiday_future
+                regr_fcst[f"holiday_flag_{holiday_country}_future"] = holiday_future_2
+            except Exception:
+                print(f"holiday_future columns failed to add for {holiday_country}, likely due to complex datetime index")
 
     # columns all as strings
     regr_train.columns = [str(xc) for xc in regr_train.columns]

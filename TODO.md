@@ -18,8 +18,11 @@
 * fixed bug where weighting didn't take floats
 * pushed the evaluate options from a separate function to part of the PredictionObject
 * added 'custom' validation option
+* added "similarity" validation option
 * SectionalMotif model added
 * window functions grouped in module
+* fix bugs in holiday_flag
+* create_regressor handle categorical features
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

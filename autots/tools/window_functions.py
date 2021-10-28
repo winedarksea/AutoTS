@@ -222,37 +222,94 @@ def window_maker_3(array, window_size: int, **kwargs):
     return x
 
 
-"""
-from scipy.spatial.distance import cdist
-array = df_wide_numeric.to_numpy()
-window_size = 5
-tlt_len = array.shape[0]
-distance_metric = "euclidean"
-max_steps = array.shape[0] - window_size
-window_idxs = window_id_maker(
-    window_size=window_size, start_index=0,
-    max_steps=max_steps, stride_size=1, skip_size=1
-)
-if distance_metric == "nan_euclidean":
-    from sklearn.metrics.pairwise import nan_euclidean_distances
+def retrieve_closest_indices(
+    df,
+    num_indices,
+    forecast_length,
+    window_size: int = 10,
+    distance_metric: str = "braycurtis",
+    stride_size: int = 1,
+    start_index: int = None,
+    include_differenced: bool = False,
+):
+    """Find next indicies closest to the final segment of forecast_length
 
-    res = np.array([
-        nan_euclidean_distances(
-            array[:, a][window_idxs],
-            array[(tlt_len - window_size):tlt_len, a].reshape(1, -1)
-        ) for a in range(array.shape[1])
-    ])
-else:
-    res = np.array([
-        cdist(
-            array[:, a][window_idxs],
-            array[(tlt_len - window_size):tlt_len, a].reshape(1, -1),
-            metric=distance_metric
-        ) for a in range(array.shape[1])
-    ])
-res_sum = np.nansum(res, axis=0)
-num_top = 5
-res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top]
-array[window_idxs[res_idx]]
-df_wide_numeric.index[window_idxs[res_idx]]
-"""
+    Args:
+        df (pd.DataFrame): source data in wide format
+        num_indices (int): number of indices to return
+        forecast_length (int): length of forecast
+        window_size (int): length of comparison
+        distance_metric (str): distance measure from scipy and nan_euclidean
+        stride_size (int): length of spacing between windows
+        start_index (int): index to begin creation of windows from
+        include_difference (bool): if True, also compare on differences
+    """
+    array = df.to_numpy()
+    index = df.index
+    tlt_len = array.shape[0]
+    combined_window_size = window_size + forecast_length
+    # remove extra so last segment not included at all
+    max_steps = array.shape[0] - combined_window_size - forecast_length
+    # have the last window end evenly
+    spare_room = (array.shape[0] - forecast_length - combined_window_size)
+    if start_index is None:
+        # handle massive stride size relative to data
+        start_index = 0
+        if stride_size * 6 < array.shape[0]:
+            start_index = spare_room % stride_size
+    if num_indices > (spare_room / stride_size):
+        raise ValueError("num_validations/num_indices too high for this dataset")
+    window_idxs = window_id_maker(
+        window_size=combined_window_size, start_index=start_index,
+        max_steps=max_steps, stride_size=stride_size, skip_size=1
+    )
+    # calculate distance between all points and last window of history
+    if distance_metric == "nan_euclidean":
+        from sklearn.metrics.pairwise import nan_euclidean_distances
+
+        res = np.array([
+            nan_euclidean_distances(
+                array[:, a][window_idxs[:, :window_size]],
+                array[(tlt_len - window_size):tlt_len, a].reshape(1, -1)
+            ) for a in range(array.shape[1])
+        ])
+        if include_differenced:
+            array_diff = np.diff(array, n=1, axis=0)
+            array_diff = np.concatenate([array_diff[0:1], array_diff])
+            res_diff = np.array([
+                nan_euclidean_distances(
+                    array_diff[:, a][window_idxs[:, :window_size]],
+                    array_diff[(tlt_len - window_size):tlt_len, a].reshape(1, -1)
+                ) for a in range(array_diff.shape[1])
+            ])
+            res = np.mean([res, res_diff], axis=0)
+    else:
+        from scipy.spatial.distance import cdist
+
+        res = np.array([
+            cdist(
+                array[:, a][window_idxs[:, :window_size]],
+                array[(tlt_len - window_size):tlt_len, a].reshape(1, -1),
+                metric=distance_metric
+            ) for a in range(array.shape[1])
+        ])
+        if include_differenced:
+            array_diff = np.diff(array, n=1, axis=0)
+            array_diff = np.concatenate([array_diff[0:1], array_diff])
+            res_diff = np.array([
+                cdist(
+                    array_diff[:, a][window_idxs[:, :window_size]],
+                    array_diff[(tlt_len - window_size):tlt_len, a].reshape(1, -1),
+                    metric=distance_metric
+                ) for a in range(array_diff.shape[1])
+            ])
+            res = np.mean([res, res_diff], axis=0)
+    # find the lowest distance historical windows
+    res_sum = np.nansum(res, axis=0)
+    num_top = num_indices
+    res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top]
+    select_index = index.to_numpy()[window_idxs[res_idx]]
+    if select_index.ndim == 3:
+        res_shape = select_index.shape
+        select_index = select_index.reshape((res_shape[0], res_shape[2]))
+    return select_index
