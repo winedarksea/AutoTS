@@ -3,29 +3,21 @@ import numpy as np
 import pandas as pd
 
 
-def holiday_flag(DTindex, country: str = 'US'):
+def holiday_flag(DTindex, country: str = 'US', encode_holiday_type: bool = False):
     """Create a 0/1 flag for given datetime index.
 
     Args:
         DTindex (panda.DatetimeIndex): DatetimeIndex of dates to create flags
         country (str): to pass through to python package Holidays
+        encode_holiday_type (bool): if True, each holiday gets a unique integer, if False, 0/1 for all holidays
 
     Returns:
-        pandas.Series() with DatetimeIndex and column 'HolidayFlag'
+        pandas.Series() with DatetimeIndex and name 'HolidayFlag'
     """
-    years = list(range(DTindex[0].year, DTindex[-1].year + 1))
-    if country.upper() in ['US', "USA", "United States"]:
+    country = str(country).upper()
+    if country in ['US', "USA", "UNITED STATES"]:
         try:
-            import holidays
-
-            country_holidays_base = holidays.CountryHoliday('US', years=years)
-            country_holidays = country_holidays_base.keys()
-            holi_days = pd.Series(
-                np.repeat(1, len(country_holidays)),
-                index=pd.DatetimeIndex(country_holidays),
-                name="HolidayFlag",
-            )
-            holi_days = holi_days.reindex(DTindex).fillna(0)
+            holi_days = query_holidays(DTindex, country="US", encode_holiday_type=encode_holiday_type)
         except Exception:
             from pandas.tseries.holiday import USFederalHolidayCalendar
 
@@ -39,19 +31,45 @@ def holiday_flag(DTindex, country: str = 'US'):
             holi_days = holi_days.reindex(DTindex).fillna(0)
             holi_days.rename("HolidayFlag", inplace=True)
     else:
-        import holidays
+        holi_days = query_holidays(DTindex, country=country, encode_holiday_type=encode_holiday_type)
 
-        country_holidays_base = holidays.CountryHoliday(country.upper())
+    return holi_days
+
+
+def query_holidays(DTindex, country: str, encode_holiday_type: bool = False):
+    """Query holidays package for dates.
+
+    Args:
+        DTindex (panda.DatetimeIndex): DatetimeIndex of dates to create flags
+        country (str): to pass through to python package Holidays
+        encode_holiday_type (bool): if True, each holiday gets a unique integer, if False, 0/1 for all holidays
+    """
+    import holidays
+
+    years = list(range(DTindex[0].year, DTindex[-1].year + 1))
+    country_holidays_base = holidays.CountryHoliday(country, years=years)
+    if encode_holiday_type:
+        from sklearn.preprocessing import OrdinalEncoder
+
+        # sorting to hopefully get consistent encoding across runs (requires long period...)
+        country_holidays = pd.Series(country_holidays_base).sort_values()
+        encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=999)
+        holi_days = pd.Series(encoder.fit_transform(country_holidays.to_numpy().reshape(-1, 1)).flatten(), name="HolidayFlag")
+        # since zeroes are reserved for non-holidays
+        holi_days = holi_days + 1
+        holi_days.index = country_holidays.index
+    else:
         country_holidays = country_holidays_base.keys()
-        # country_holidays = country_holidays_base[DTindex[0]: DTindex[-1]]
-        # all_days = pd.Series(np.repeat(0, len(DTindex)), index=DTindex)
         holi_days = pd.Series(
             np.repeat(1, len(country_holidays)),
             index=pd.DatetimeIndex(country_holidays),
             name="HolidayFlag",
         )
+    # do some messy stuff to make sub daily data (hourly) align with daily holidays
+    try:
+        holi_days.index = pd.DatetimeIndex(holi_days.index).normalize()
+        holi_days = holi_days.reindex(pd.DatetimeIndex(DTindex).normalize()).fillna(0)
+        holi_days.index = DTindex
+    except Exception:
         holi_days = holi_days.reindex(DTindex).fillna(0)
-        # holi_days = all_days.combine(holi_days, func=max).fillna(0)
-        # holi_days.rename("HolidayFlag", inplace=True)
-
-    return holi_days[DTindex]
+    return holi_days

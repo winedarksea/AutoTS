@@ -223,14 +223,14 @@ class PredictionObject(object):
         start_date: str = None,
         **kwargs,
     ):
-        """Generate an example plot of one series.
+        """Generate an example plot of one series. Does not handle non-numeric forecasts.
 
         Args:
             df_wide (str): historic data for plotting actuals
             series (str): column name of series to plot. Random if None.
             ax: matplotlib axes to pass through to pd.plot()
             remove_zeroes (bool): if True, don't plot any zeroes
-            start_date (str): Y-m-d string to remove all data before
+            start_date (str): Y-m-d string or Timestamp to remove all data before
             **kwargs passed to pd.DataFrame.plot()
         """
         if series is None:
@@ -259,6 +259,9 @@ class PredictionObject(object):
             plot_df[plot_df == 0] = np.nan
 
         if start_date is not None:
+            start_date = pd.to_datetime(start_date, infer_datetime_format=True)
+            if plot_df.index.max() < pd.to_datetime(start_date, infer_datetime_format=True):
+                raise ValueError("start_date is more recent than all data provided")
             plot_df[plot_df.index >= start_date].plot(**kwargs)
         else:
             plot_df.plot(**kwargs)
