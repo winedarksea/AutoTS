@@ -23,10 +23,11 @@ fred_key = None  # https://fred.stlouisfed.org/docs/api/api_key.html
 forecast_name = "example"
 graph = True  # whether to plot graphs
 # https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects
-frequency = "D"
+frequency = "D"  # "infer" for automatic alignment, but specific offsets are most reliable
 forecast_length = 28  # number of periods to forecast ahead
 drop_most_recent = 1  # whether to discard the n most recent records (as incomplete)
 num_validations = 2  # number of cross validation runs. More is better but slower, usually
+validation_method = "similarity"  # "similarity", "backwards", "seasonal 364" are good choices here
 n_jobs = "auto"  # "auto" or set to number of CPU cores
 prediction_interval = 0.9  # sets the upper and lower forecast range by probability range. Bigger = wider
 initial_training = "auto"  # set this to True on first run, or on reset, 'auto' looks for existing template, if found, sets to False.
@@ -132,7 +133,7 @@ model = AutoTS(
     models_to_validate=models_to_validate,
     model_interrupt=True,
     num_validations=num_validations,
-    validation_method="backwards",  # "seasonal 364" would be a good choice too
+    validation_method=validation_method,
     constraint=2,
     drop_most_recent=drop_most_recent,  # if newest data is incomplete, also remember to increase forecast_length
     # no_negatives=True,

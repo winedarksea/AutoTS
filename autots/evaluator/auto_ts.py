@@ -13,6 +13,7 @@ from autots.tools.shaping import (
     subset_series,
     simple_train_test_split,
     NumericTransformer,
+    clean_weights,
 )
 from autots.evaluator.auto_model import (
     TemplateEvalObject,
@@ -34,6 +35,7 @@ from autots.models.ensemble import (
 )
 from autots.models.model_list import model_lists
 from autots.tools import cpu_count
+from autots.tools.window_functions import retrieve_closest_indices
 
 
 class AutoTS(object):
@@ -69,12 +71,14 @@ class AutoTS(object):
         num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
             0.99 is forced to 100% validation. 1 evaluates just 1 model.
-            If horizontal or probabilistic ensemble, then additional min per_series models above the number here may be added to validation.
+            If horizontal or mosaic ensemble, then additional min per_series models above the number here are added to validation.
         max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
         validation_method (str): 'even', 'backwards', or 'seasonal n' where n is an integer of seasonal
             'backwards' is better for recency and for shorter training sets
             'even' splits the data into equally-sized slices best for more consistent data
             'seasonal n' for example 'seasonal 364' would test all data on each previous year of the forecast_length that would immediately follow the training data.
+            'similarity' automatically finds the data sections most similar to the most recent data that will be used for prediction
+            'custom' - if used, .fit() needs validation_indexes passed - a list of pd.DatetimeIndex's, tail of each is used as test
         min_allowed_train_percent (float): percent of forecast length to allow as min training, else raises error.
             0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
             Useful in (unrecommended) cases where forecast_length > training length.
@@ -98,7 +102,7 @@ class AutoTS(object):
         best_model_ensemble (int): Ensemble type int id
         regression_check (bool): If True, the best_model uses an input 'User' future_regressor
         df_wide_numeric (pd.DataFrame): dataframe containing shaped final data
-        model_results (object): contains a collection of result metrics
+        initial_results.model_results (object): contains a collection of result metrics
 
     Methods:
         fit, predict
@@ -353,6 +357,7 @@ class AutoTS(object):
         weights: dict = {},
         result_file: str = None,
         grouping_ids=None,
+        validation_indexes: list = None,
     ):
         """Train algorithm given data supplied.
 
@@ -383,6 +388,14 @@ class AutoTS(object):
 
         # convert class variables to local variables (makes testing easier)
         forecast_length = self.forecast_length
+        self.validation_indexes = validation_indexes
+        if self.validation_method == "custom":
+            assert (
+                validation_indexes is not None
+            ), "validation_indexes needs to be filled with 'custom' validation"
+            assert (
+                len(validation_indexes) >= self.num_validations
+            ), "validation_indexes needs to be >= num_validations with 'custom' validation"
         # flag if weights are given
         if bool(weights):
             weighted = True
@@ -492,29 +505,8 @@ class AutoTS(object):
             elif weights == 'max':
                 weights = df_wide_numeric.max(axis=0).to_dict()
         # clean up series weighting input
-        if not weighted:
-            weights = {x: 1 for x in df_wide_numeric.columns}
-        else:
-            # handle not all weights being provided
-            if self.verbose > 1:
-                key_count = 0
-                for col in df_wide_numeric.columns:
-                    if col in weights:
-                        key_count += 1
-                key_count = df_wide_numeric.shape[1] - key_count
-                if key_count > 0:
-                    print(f"{key_count} series_id not in weights. Inferring 1.")
-                else:
-                    print("All series_id present in weighting.")
-            weights = {
-                col: (weights[col] if col in weights else 1)
-                for col in df_wide_numeric.columns
-            }
-            # handle non-numeric inputs
-            weights = {
-                key: (abs(float(weights[key])) if str(weights[key]).isdigit() else 1)
-                for key in weights
-            }
+        weights = clean_weights(weights, df_wide_numeric.columns, self.verbose)
+        self.weights = weights
 
         # replace any zeroes that occur prior to all non-zero values
         if self.remove_leading_zeroes:
@@ -525,6 +517,31 @@ class AutoTS(object):
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
+
+        # generate similarity matching indices (so it can fail now, not after all the generations)
+        if self.validation_method == "similarity":
+            from autots.tools.transform import GeneralTransformer
+
+            params = {
+                "fillna": "ffill",
+                "transformations": {"0": "QuantileTransformer", "1": "RobustScaler"},
+                "transformation_params": {
+                    "0": {"output_distribution": "uniform", "n_quantiles": 1000},
+                    "1": {},
+                },
+            }
+            trans = GeneralTransformer(**params)
+
+            created_idx = retrieve_closest_indices(
+                trans.fit_transform(df_wide_numeric),
+                num_indices=num_validations,
+                forecast_length=self.forecast_length,
+                stride_size=self.forecast_length,
+            )
+            self.validation_indexes = [
+                df_wide_numeric.index[df_wide_numeric.index <= indx[-1]]
+                for indx in created_idx
+            ]
 
         # record if subset or not
         if self.subset is not None:
@@ -811,20 +828,13 @@ class AutoTS(object):
             'Score', ascending=True, na_position='last'
         ).head(self.models_to_validate)
         # add on best per_series models (which may not be in the top scoring)
-        ensy = ['horizontal', 'probabilistic']
-        if (
-            any(x in ensemble for x in ensy)
-            and not self.subset_flag
-            and self.models_to_validate > 30
-        ):
+        if any(x in ensemble for x in self.h_ens_list):
             model_results = self.initial_results.model_results
-            mods = pd.DataFrame()
-            if 'horizontal' in ensemble:
-                mods = pd.concat([mods, self.initial_results.per_series_mae.idxmin()])
-            if 'probabilistic' in ensemble:
-                mods = pd.concat([mods, self.initial_results.per_series_spl.idxmin()])
+            mods = generate_score_per_series(
+                self.initial_results, self.metric_weighting, 1
+            ).idxmin()
             per_series_val = model_results[
-                model_results['ID'].isin(mods.iloc[:, 0].unique().tolist())
+                model_results['ID'].isin(mods.unique().tolist())
             ]
             validation_template = pd.concat(
                 [validation_template, per_series_val], axis=0
@@ -865,6 +875,8 @@ class AutoTS(object):
                         val_per = val_per - forecast_length
                     val_per = df_wide_numeric.shape[0] - val_per
                     current_slice = df_wide_numeric.head(val_per)
+                elif self.validation_method in ['custom', "similarity"]:
+                    current_slice = df_wide_numeric.reindex(self.validation_indexes[y])
                 else:
                     raise ValueError(
                         "Validation Method not recognized try 'even', 'backwards'"
@@ -887,6 +899,7 @@ class AutoTS(object):
                         print(f'{y + 1} subset is of: {df_subset.columns}')
                 else:
                     df_subset = current_slice
+                # subset weighting info
                 if not weighted:
                     current_weights = {x: 1 for x in df_subset.columns}
                 else:
@@ -974,13 +987,13 @@ or otherwise increase models available."""
             ensemble_templates = pd.DataFrame()
             try:
                 if 'horizontal' in ensemble or 'probabilistic' in ensemble:
-                    per_series = generate_score_per_series(
+                    self.score_per_series = generate_score_per_series(
                         self.initial_results,
                         metric_weighting=metric_weighting,
                         total_validations=(num_validations + 1),
                     )
                     ens_templates = HorizontalTemplateGenerator(
-                        per_series,
+                        self.score_per_series,
                         model_results=self.initial_results.model_results,
                         forecast_length=forecast_length,
                         ensemble=ensemble.replace('probabilistic', ' ').replace(

@@ -4,9 +4,11 @@ Base model information
 
 @author: Colin
 """
+import warnings
 import datetime
 import numpy as np
 import pandas as pd
+from autots.evaluator.metrics import smape, mae, rmse, containment, contour, spl, medae
 
 
 class ModelObject(object):
@@ -99,6 +101,7 @@ class PredictionObject(object):
         long_form_results: return complete results in long form
         total_runtime: return runtime for all model components in seconds
         plot
+        evaluate
     """
 
     def __init__(
@@ -116,6 +119,11 @@ class PredictionObject(object):
         model_parameters={},
         transformation_parameters={},
         transformation_runtime=datetime.timedelta(0),
+        per_series_metrics=np.nan,
+        per_timestamp=np.nan,
+        avg_metrics=np.nan,
+        avg_metrics_weighted=np.nan,
+        full_mae_error=None,
     ):
         self.model_name = model_name
         self.model_parameters = model_parameters
@@ -130,6 +138,12 @@ class PredictionObject(object):
         self.predict_runtime = predict_runtime
         self.fit_runtime = fit_runtime
         self.transformation_runtime = transformation_runtime
+        # eval attributes
+        self.per_series_metrics = per_series_metrics
+        self.per_timestamp = per_timestamp
+        self.avg_metrics = avg_metrics
+        self.avg_metrics_weighted = avg_metrics_weighted
+        self.full_mae_error = full_mae_error
 
     def __repr__(self):
         """Print."""
@@ -210,14 +224,14 @@ class PredictionObject(object):
         start_date: str = None,
         **kwargs,
     ):
-        """Generate an example plot of one series.
+        """Generate an example plot of one series. Does not handle non-numeric forecasts.
 
         Args:
             df_wide (str): historic data for plotting actuals
             series (str): column name of series to plot. Random if None.
             ax: matplotlib axes to pass through to pd.plot()
             remove_zeroes (bool): if True, don't plot any zeroes
-            start_date (str): Y-m-d string to remove all data before
+            start_date (str): Y-m-d string or Timestamp to remove all data before
             **kwargs passed to pd.DataFrame.plot()
         """
         if series is None:
@@ -246,6 +260,108 @@ class PredictionObject(object):
             plot_df[plot_df == 0] = np.nan
 
         if start_date is not None:
+            start_date = pd.to_datetime(start_date, infer_datetime_format=True)
+            if plot_df.index.max() < pd.to_datetime(
+                start_date, infer_datetime_format=True
+            ):
+                raise ValueError("start_date is more recent than all data provided")
             plot_df[plot_df.index >= start_date].plot(**kwargs)
         else:
             plot_df.plot(**kwargs)
+
+    def evaluate(
+        self,
+        actual,
+        series_weights: dict = None,
+        df_train=None,
+        per_timestamp_errors: bool = False,
+        full_mae_error: bool = True,
+    ):
+        """Evalute prediction against test actual. Fills out attributes of base object.
+
+        This fails with pd.NA values supplied.
+
+        Args:
+            actual (pd.DataFrame): dataframe of actual values of (forecast length * n series)
+            series_weights (dict): key = column/series_id, value = weight
+            df_train (pd.DataFrame): historical values of series, wide, used for setting scaler for SPL
+                if None, actuals are used instead. Suboptimal.
+            per_timestamp (bool): whether to calculate and return per timestamp direction errors
+
+        Returns:
+            per_series_metrics
+            per_timestamp
+            avg_metrics
+            avg_metrics_weighted
+            full_mae_error
+        """
+        A = np.array(actual)
+        F = np.array(self.forecast)
+        lower_forecast = np.array(self.lower_forecast)
+        upper_forecast = np.array(self.upper_forecast)
+        if df_train is None:
+            df_train = A
+        df_train = np.array(df_train)
+
+        # check series_weights information
+        if series_weights is None:
+            from autots.tools.shaping import clean_weights
+
+            series_weights = clean_weights(weights=False, series=self.forecast.columns)
+        # make sure the series_weights are passed correctly to metrics
+        if len(series_weights) != F.shape[1]:
+            series_weights = {col: series_weights[col] for col in self.forecast.columns}
+
+        # reuse this in several metrics
+        self.full_mae_errors = abs(A - F)
+
+        # calculate scaler once for spl
+        scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
+        fill_val = np.nanmax(scaler)
+        fill_val = fill_val if fill_val > 0 else 1
+        scaler[scaler == 0] = fill_val
+        scaler[np.isnan(scaler)] = fill_val
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            self.per_series_metrics = pd.DataFrame(
+                {
+                    'smape': smape(A, F, self.full_mae_errors),
+                    'mae': mae(self.full_mae_errors),
+                    # 'medae': medae(self.full_mae_errors),
+                    'rmse': rmse(self.full_mae_errors),
+                    'containment': containment(lower_forecast, upper_forecast, A),
+                    'spl': spl(
+                        A=A,
+                        F=upper_forecast,
+                        quantile=self.prediction_interval,
+                        scaler=scaler,
+                    )
+                    + spl(
+                        A=A,
+                        F=lower_forecast,
+                        quantile=(1 - self.prediction_interval),
+                        scaler=scaler,
+                    ),
+                    'contour': contour(A, F),
+                },
+                index=actual.columns,
+            ).transpose()
+
+        if per_timestamp_errors:
+            smape_df = abs(self.forecast - actual) / (abs(self.forecast) + abs(actual))
+            weight_mean = np.mean(list(series_weights.values()))
+            wsmape_df = (smape_df * series_weights) / weight_mean
+            smape_cons = (np.nansum(wsmape_df, axis=1) * 200) / np.count_nonzero(
+                ~np.isnan(actual), axis=1
+            )
+            per_timestamp = pd.DataFrame({'weighted_smape': smape_cons}).transpose()
+            self.per_timestamp = per_timestamp
+
+        # this weighting won't work well if entire metrics are NaN
+        # but results should still be comparable
+        self.avg_metrics_weighted = (self.per_series_metrics * series_weights).sum(
+            axis=1, skipna=True
+        ) / sum(series_weights.values())
+        self.avg_metrics = self.per_series_metrics.mean(axis=1, skipna=True)
+        return self

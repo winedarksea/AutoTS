@@ -2240,22 +2240,6 @@ class GeneralTransformer(object):
             return EmptyTransformer()
 
     def _fit(self, df):
-        """
-        if self.grouping is not None:
-            from autots.tools.hierarchial import hierarchial
-
-            if 'kmeans' in self.grouping:
-                n_groups = int(''.join([s for s in str(self.grouping) if s.isdigit()]))
-            else:
-                n_groups = 3
-            self.hier = hierarchial(
-                n_groups=n_groups,
-                grouping_method=self.grouping,
-                grouping_ids=self.grouping_ids,
-                reconciliation=self.reconciliation,
-            ).fit(df)
-            df = self.hier.transform(df)
-        """
         # fill NaN
         df = self.fill_na(df)
 
@@ -2486,6 +2470,7 @@ def RandomTransform(
     transformer_max_depth: int = 4,
     na_prob_dict: dict = na_probs,
     fast_params: bool = None,
+    superfast_params: bool = None,
     traditional_order: bool = False,
 ):
     """Return a dict of randomly choosen transformation selections.
@@ -2501,6 +2486,12 @@ def RandomTransform(
         intersects = [i for i in slow_flags if i in transformer_list]
         if intersects:
             fast_params = False
+    if superfast_params is None:
+        superfast_params = False
+        slow_flags = ["DatepartRegression", "ScipyFilter", "QuantileTransformer"]
+        intersects = [i for i in slow_flags if i in transformer_list]
+        if not intersects:
+            superfast_params = True
 
     # filter na_probs if Fast
     params_method = None
@@ -2508,6 +2499,10 @@ def RandomTransform(
         params_method = "fast"
         throw_away = na_prob_dict.pop('IterativeImputer', None)
         throw_away = na_prob_dict.pop('IterativeImputerExtraTrees', None)  # noqa
+    if superfast_params:
+        params_method = "fast"
+        throw_away = df_interpolate.pop('spline', None)  # noqa
+        throw_away = na_prob_dict.pop('KNNImputer', None)  # noqa
 
     # clean na_probs dict
     na_probabilities = list(na_prob_dict.values())

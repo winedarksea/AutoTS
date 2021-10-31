@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Tutorial &#8212; AutoTS 0.3.8 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.3.9 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -121,6 +121,8 @@ In general, the safest approach is to have as many validations as possible, as l
 <p><strong>Seasonal</strong> validation is supplied as <code class="docutils literal notranslate"><span class="pre">'seasonal</span> <span class="pre">n'</span></code> ie <code class="docutils literal notranslate"><span class="pre">'seasonal</span> <span class="pre">364'</span></code>. This is a variation on <code class="docutils literal notranslate"><span class="pre">backwards</span></code> validation and offers the best performance of all validation methods if an appropriate period is supplied.
 It trains on the most recent data as usual, then valdations are <code class="docutils literal notranslate"><span class="pre">n</span></code> periods back from the datetime of the forecast would be.
 For example with daily data, forecasting for a month ahead, and <code class="docutils literal notranslate"><span class="pre">n=364</span></code>, the first test might be on May 2021, with validation on June 2020 and June 2019, the final forecast then of June 2021.</p>
+<p><strong>Similarity</strong> automatically finds the data sections most similar to the most recent data that will be used for prediction. This is the best general purpose choice but currently can be sensitive to messy data.</p>
+<p><strong>Custom</strong> allows validations of any type. If used, .fit() needs <code class="docutils literal notranslate"><span class="pre">validation_indexes</span></code> passed - a list of pd.DatetimeIndex’s, tail of forecast_length of each is used as test (which should be of the same length as <code class="docutils literal notranslate"><span class="pre">num_validations</span></code>).</p>
 <p>Only a subset of models are taken from initial validation to cross validation. The number of models is set such as <code class="docutils literal notranslate"><span class="pre">models_to_validate=10</span></code>.
 If a float in 0 to 1 is provided, it is treated as a % of models to select.
 If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter.
@@ -186,8 +188,8 @@ Here weather data is included - winter and road construction being the major inf
 <section id="id4">
 <h3>Model Lists<a class="headerlink" href="#id4" title="Permalink to this headline">¶</a></h3>
 <p>By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of <code class="docutils literal notranslate"><span class="pre">'probabilistic',</span> <span class="pre">'multivariate',</span> <span class="pre">'fast',</span> <span class="pre">'superfast',</span> <span class="pre">or</span> <span class="pre">'all'</span></code>.</p>
-<p>A table of all available models is available further below.</p>
-<p>On large multivariate series, <code class="docutils literal notranslate"><span class="pre">TSFreshRegressor</span></code>, <code class="docutils literal notranslate"><span class="pre">DynamicFactor</span></code> and <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code> can be impractically slow.</p>
+<p>A table of all available models is below.</p>
+<p>On large multivariate series, <code class="docutils literal notranslate"><span class="pre">DynamicFactor</span></code> and <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code> can be impractically slow.</p>
 </section>
 </section>
 <section id="deployment-and-template-import-export">
@@ -276,7 +278,7 @@ This weighting is not to be confused with series weighting, which effects how eq
 <p><em>Horizontal</em> style ensembles use <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code> for series selection, but only the values passed for <code class="docutils literal notranslate"><span class="pre">mae,</span> <span class="pre">rmse,</span> <span class="pre">contour,</span> <span class="pre">spl</span></code>. If all of these are 0, mae is used for selection.</p>
 <p><code class="docutils literal notranslate"><span class="pre">sMAPE</span></code> is generally the most versatile metric across multiple series, but doesn’t handle forecasts with lots of zeroes well.</p>
 <p><code class="docutils literal notranslate"><span class="pre">SPL</span></code> is <em>Scaled Pinball Loss</em> and is the optimal metric for assessing upper/lower quantile forecast accuracies.</p>
-<p><code class="docutils literal notranslate"><span class="pre">Containment</span></code> measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL.</p>
+<p><code class="docutils literal notranslate"><span class="pre">Containment</span></code> measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called <code class="docutils literal notranslate"><span class="pre">coverage_fraction</span></code>.</p>
 <p><code class="docutils literal notranslate"><span class="pre">Contour</span></code> is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but <em>not</em> the magnitude of that difference. Does not work with forecast_length=1.</p>
 <p>The contour metric is useful as it encourages ‘wavy’ forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they “don’t look like they are trying hard enough” to some managers, and using contour favors non-flat forecasts that (to many) look like a more serious model.</p>
 </section>
@@ -370,6 +372,7 @@ conda activate openblas
 
 python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost --exists-action i
 
+python -m pip install yfinance pytrends fredapi
 python -m pip install pystan prophet --exists-action i  <span class="c1"># conda-forge option below works more easily, --no-deps to pip install prophet if this fails</span>
 python -m pip install mxnet --exists-action i     <span class="c1"># check the mxnet documentation for more install options, also try pip install mxnet --no-deps</span>
 python -m pip install gluonts --exists-action i
@@ -418,10 +421,13 @@ conda create -n intelpython -c intel <span class="nv">python</span><span class="
 conda activate intelpython
 
 <span class="c1"># install additional packages as desired</span>
-conda install -c intel statsmodels lightgbm tensorflow
+python -m pip install yfinance pytrends fredapi
 python -m pip install mxnet --no-deps
 python -m pip install gluonts
 conda install -c conda-forge prophet
+conda install spyder
+conda update intelpython3_full
+conda install -c intel statsmodels lightgbm tensorflow
 
 python -m pip install autots
 
@@ -505,6 +511,7 @@ To prevent forecast accuracy for considering these additional series too heavily
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Was a model choosen that used the regressor? </span><span class="si">{</span><span class="n">model</span><span class="o">.</span><span class="n">used_regressor_check</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>For models here in the lower level api, confusingly, regression_type=”User” must be specified as well as passing future_regressor. Why? This allows the model search to easily try both with and without the regressor, because sometimes the regressor may do more harm than good.</p>
 </section>
 <section id="a-hack-for-passing-in-parameters-that-aren-t-otherwise-available">
 <h3>A Hack for Passing in Parameters (that aren’t otherwise available)<a class="headerlink" href="#a-hack-for-passing-in-parameters-that-aren-t-otherwise-available" title="Permalink to this headline">¶</a></h3>
@@ -569,6 +576,8 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <li><p>MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series <code class="docutils literal notranslate"><span class="pre">i</span></code> are used to predict next step for series <code class="docutils literal notranslate"><span class="pre">i</span></code>, with a model trained on all data from all series.</p></li>
 <li><p>UnivariateRegression is the same as MultivariateRegression but trains an independent model on each series, thus not capable of learning from the patterns of other series. This performs well in horizontal ensembles as it can be parsed down to one series with the same performance on that series.</p></li>
 </ul>
+<p>How the upper and lower forecast bounds are created for these models will likely change in the future.
+Currently <code class="docutils literal notranslate"><span class="pre">MultivariateRegression</span></code> utilizes a stock GradientBoostingRegressor with quantile loss for probabilistic estimates, while others utilize point to probabilistic estimates.</p>
 </section>
 </section>
 <section id="id8">
@@ -781,7 +790,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <tr class="row-even"><td><p>MultivariateRegression</p></td>
 <td><p>sklearn</p></td>
 <td><p>lightgbm, tensorflow</p></td>
-<td></td>
+<td><p>True</p></td>
 <td><p>sklearn</p></td>
 <td><p>some</p></td>
 <td><p>True</p></td>
@@ -811,7 +820,17 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>NVAR</p></td>
+<tr class="row-odd"><td><p>SectionalMotif</p></td>
+<td><p>scipy.distaince.cdist</p></td>
+<td><p>sklearn</p></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td><p>True</p></td>
+</tr>
+<tr class="row-even"><td><p>NVAR</p></td>
 <td></td>
 <td></td>
 <td><p>True</p></td>
@@ -821,7 +840,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>Greykite</p></td>
+<tr class="row-odd"><td><p>Greykite</p></td>
 <td><p>greykite</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -834,7 +853,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 </ul>
 </td>
 </tr>
-<tr class="row-odd"><td><p>MotifSimulation</p></td>
+<tr class="row-even"><td><p>MotifSimulation</p></td>
 <td><p>sklearn.metrics.pairwise</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -844,7 +863,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>TensorflowSTS</p></td>
+<tr class="row-odd"><td><p>TensorflowSTS</p></td>
 <td><p>tensorflow_probability</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -854,7 +873,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>TFPRegression</p></td>
+<tr class="row-even"><td><p>TFPRegression</p></td>
 <td><p>tensorflow_probability</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -864,7 +883,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>ComponentAnalysis</p></td>
+<tr class="row-odd"><td><p>ComponentAnalysis</p></td>
 <td><p>sklearn</p></td>
 <td></td>
 <td></td>

@@ -12,6 +12,7 @@ from autots.datasets import (
     load_weekdays,
     load_zeroes,
     load_linear,
+    load_sine,
 )
 from autots import AutoTS, create_regressor
 import matplotlib.pyplot as plt
@@ -30,13 +31,15 @@ long = False
 df = load_daily(long=long)
 n_jobs = "auto"
 verbose = 2
-validation_method = "backwards"
+validation_method = "similarity"
+frequency = 'infer'
+drop_most_recent = 0
 if use_template:
     generations = 5
     num_validations = 0
 else:
-    generations = 5
-    num_validations = 1
+    generations = 3
+    num_validations = 2
 
 if force_univariate:
     df = df.iloc[:, 0]
@@ -45,7 +48,7 @@ transformer_list = "fast"  # ["bkfilter", "STLFilter", "HPFilter", 'StandardScal
 transformer_max_depth = 1
 model_list = "default"
 model_list = 'superfast'  # fast_parallel
-# model_list = ["DatepartRegression", "WindowRegression"]
+# model_list = ["NVAR", "SectionalMotif"]
 
 metric_weighting = {
     'smape_weighting': 3,
@@ -57,13 +60,11 @@ metric_weighting = {
     'contour_weighting': 1,
 }
 
-frequency = 'infer'
-drop_most_recent = 0
 model = AutoTS(
     forecast_length=forecast_length,
     frequency=frequency,
     prediction_interval=0.9,
-    ensemble=None,
+    ensemble=['horizontal-max'],
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,
@@ -80,7 +81,7 @@ model = AutoTS(
     drop_most_recent=drop_most_recent,
     introduce_na=True,
     # prefill_na=0,
-    subset=None,
+    # subset=5,
     verbose=verbose,
 )
 
@@ -109,6 +110,7 @@ model = model.fit(
     future_regressor=regr_train,
     weights="mean",
     # result_file='test.pickle',
+    validation_indexes=[pd.date_range("2021-01-01", "2022-02-02"), pd.date_range("2021-01-01", "2022-03-03")],
     date_col='datetime' if long else None,
     value_col='value' if long else None,
     id_col='series_id' if long else None,
@@ -132,14 +134,16 @@ initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_secon
 sleep(5)
 print(model)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
+print("Slowest models:")
+print(initial_results.groupby("Model").agg({'TotalRuntimeSeconds': ['mean', 'max']}).idxmax())
 
 initial_results.to_csv("general_template_" + str(platform.node()) + ".csv")
 
 if graph:
     prediction.plot(model.df_wide_numeric,
-                    series=model.df_wide_numeric.columns[0],
+                    series=model.df_wide_numeric.columns[2],
                     remove_zeroes=False,
-                    start_date="2019-01-01")
+                    start_date="2018-09-26")
     plt.show()
     model.plot_generation_loss()
 

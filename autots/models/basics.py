@@ -10,6 +10,7 @@ import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools import seasonal_int
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
+from autots.tools.window_functions import window_id_maker
 
 # optional requirement
 try:
@@ -1111,6 +1112,15 @@ class Motif(ModelObject):
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
+        n_jobs (int): how many parallel processes to run
+        random_seed (int): used in selecting windows if max_windows is less than total available
+        window (int): length of forecast history to match on
+        point_method (int): how to summarize the nearest neighbors to generate the point forecast
+            "weighted_mean", "mean", "median", "midhinge"
+        distance_metric (str): all valid values for scipy cdist
+        k (int): number of closest neighbors to consider
+        max_windows (int): max number of windows to consider (a speed/accuracy tradeoff)
+        multivariate (bool): if True, utilizes matches from all provided series for each series forecast. Else just own history of series.
     """
 
     def __init__(
@@ -1286,12 +1296,14 @@ class Motif(ModelObject):
             'yule',
         ]
         return {
-            "window": random.choices([5, 7, 10, 15, 30], [0.2, 0.1, 0.5, 0.1, 0.1])[0],
+            "window": random.choices([5, 7, 10, 15, 30], [0.01, 0.1, 0.5, 0.1, 0.1])[0],
             "point_method": random.choices(
                 ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
             )[0],
             "distance_metric": random.choice(metric_list),
-            "k": random.choices([5, 10, 15, 20, 100], [0.2, 0.5, 0.1, 0.1, 0.1])[0],
+            "k": random.choices(
+                [3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0],
             "max_windows": random.choices([None, 1000, 10000], [0.01, 0.1, 0.8])[0],
         }
 
@@ -1667,4 +1679,282 @@ class NVAR(ModelObject):
             'seed_weighted': self.seed_weighted,
             'batch_size': self.batch_size,
             'batch_method': self.batch_method,
+        }
+
+
+class SectionalMotif(ModelObject):
+    """Forecasts using a nearest neighbors type model adapted for probabilistic time series.
+    This version takes the distance metric average for all series at once.
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        regression_type (str): "User" or None. If used, will be as covariate. The ratio of num_series:num_regressor_series will largely determine the impact
+        window (int): length of forecast history to match on
+        point_method (int): how to summarize the nearest neighbors to generate the point forecast
+            "weighted_mean", "mean", "median", "midhinge"
+        distance_metric (str): all valid values for scipy cdist + "nan_euclidean" from sklearn
+        include_differenced (bool): True to have the distance metric result be an average of the distance on absolute values as well as differenced values
+        k (int): number of closest neighbors to consider
+        stride_size (int): how many obs to skip between each new window. Higher numbers will reduce the number of matching windows and make the model faster.
+    """
+
+    def __init__(
+        self,
+        name: str = "SectionalMotif",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        holiday_country: str = 'US',
+        random_seed: int = 2020,
+        verbose: int = 0,
+        regression_type: str = None,
+        window: int = 5,
+        point_method: str = "weighted_mean",
+        distance_metric: str = "nan_euclidean",
+        include_differenced: bool = False,
+        k: int = 10,
+        stride_size: int = 1,
+        **kwargs
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            regression_type=regression_type,
+        )
+        self.window = window
+        self.point_method = point_method
+        self.distance_metric = distance_metric
+        self.include_differenced = include_differenced
+        self.k = k
+        self.stride_size = stride_size
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+            regressor (numpy.Array): additional regressor
+        """
+        df = self.basic_profile(df)
+        self.df = df
+        if str(self.regression_type).lower() == "user":
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type=='User' but no future_regressor supplied"
+                )
+            self.future_regressor = future_regressor
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+        window_size = self.window
+        point_method = self.point_method
+        distance_metric = self.distance_metric
+        regression_type = str(self.regression_type).lower()
+
+        # the regressor can be tacked on to provide (minor) influence to the distance metric
+        if regression_type == "user":
+            # here unlagging the regressor to match with history only
+            full_regr = pd.concat([self.future_regressor, future_regressor], axis=0)
+            full_regr = full_regr.tail(self.df.shape[0])
+            full_regr.index = self.df.index
+            array = pd.concat([self.df, full_regr], axis=1).to_numpy()
+        else:
+            array = self.df.to_numpy()
+        tlt_len = array.shape[0]
+        combined_window_size = window_size + forecast_length
+        max_steps = array.shape[0] - combined_window_size
+        window_idxs = window_id_maker(
+            window_size=combined_window_size,
+            start_index=0,
+            max_steps=max_steps,
+            stride_size=self.stride_size,
+            skip_size=1,
+        )
+        # calculate distance between all points and last window of history
+        if distance_metric == "nan_euclidean":
+            from sklearn.metrics.pairwise import nan_euclidean_distances
+
+            res = np.array(
+                [
+                    nan_euclidean_distances(
+                        array[:, a][window_idxs[:, :window_size]],
+                        array[(tlt_len - window_size) : tlt_len, a].reshape(1, -1),
+                    )
+                    for a in range(array.shape[1])
+                ]
+            )
+            if self.include_differenced:
+                array_diff = np.diff(array, n=1, axis=0)
+                array_diff = np.concatenate([array_diff[0:1], array_diff])
+                res_diff = np.array(
+                    [
+                        nan_euclidean_distances(
+                            array_diff[:, a][window_idxs[:, :window_size]],
+                            array_diff[(tlt_len - window_size) : tlt_len, a].reshape(
+                                1, -1
+                            ),
+                        )
+                        for a in range(array_diff.shape[1])
+                    ]
+                )
+                res = np.mean([res, res_diff], axis=0)
+        else:
+            res = np.array(
+                [
+                    cdist(
+                        array[:, a][window_idxs[:, :window_size]],
+                        array[(tlt_len - window_size) : tlt_len, a].reshape(1, -1),
+                        metric=distance_metric,
+                    )
+                    for a in range(array.shape[1])
+                ]
+            )
+            if self.include_differenced:
+                array_diff = np.diff(array, n=1, axis=0)
+                array_diff = np.concatenate([array_diff[0:1], array_diff])
+                res_diff = np.array(
+                    [
+                        cdist(
+                            array_diff[:, a][window_idxs[:, :window_size]],
+                            array_diff[(tlt_len - window_size) : tlt_len, a].reshape(
+                                1, -1
+                            ),
+                            metric=distance_metric,
+                        )
+                        for a in range(array_diff.shape[1])
+                    ]
+                )
+                res = np.mean([res, res_diff], axis=0)
+        # find the lowest distance historical windows
+        res_sum = np.nansum(res, axis=0)
+        num_top = self.k
+        res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top]
+        results = array[window_idxs[res_idx, window_size:]]
+        # reshape results to (num_windows, forecast_length, num_series)
+        if results.ndim == 4:
+            res_shape = results.shape
+            results = results.reshape((res_shape[0], res_shape[2], res_shape[3]))
+        if regression_type == "user":
+            results = results[:, :, : self.df.shape[1]]
+        # now aggregate results into point and bound forecasts
+        if point_method == "weighted_mean":
+            weights = res_sum[res_idx].flatten()
+            if weights.sum() == 0:
+                weights = None
+            forecast = np.average(results, axis=0, weights=weights)
+        elif point_method == "mean":
+            forecast = np.nanmean(results, axis=0)
+        elif point_method == "median":
+            forecast = np.nanmedian(results, axis=0)
+        elif point_method == "midhinge":
+            q1 = np.nanquantile(results, q=0.25, axis=0)
+            q2 = np.nanquantile(results, q=0.75, axis=0)
+            forecast = (q1 + q2) / 2
+
+        pred_int = (1 - self.prediction_interval) / 2
+        upper_forecast = np.nanquantile(results, q=(1 - pred_int), axis=0)
+        lower_forecast = np.nanquantile(results, q=pred_int, axis=0)
+
+        forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
+        lower_forecast = pd.DataFrame(
+            lower_forecast, index=test_index, columns=self.column_names
+        )
+        upper_forecast = pd.DataFrame(
+            upper_forecast, index=test_index, columns=self.column_names
+        )
+        if just_point_forecast:
+            return forecast
+        else:
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=forecast.index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast,
+                forecast=forecast,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Returns dict of new parameters for parameter tuning"""
+        metric_list = [
+            'braycurtis',
+            'canberra',
+            'chebyshev',
+            'cityblock',
+            'correlation',
+            'cosine',
+            'dice',
+            'euclidean',
+            'hamming',
+            'jaccard',
+            # 'jensenshannon',
+            'kulsinski',
+            'mahalanobis',
+            'matching',
+            'minkowski',
+            'rogerstanimoto',
+            'russellrao',
+            # 'seuclidean',
+            'sokalmichener',
+            'sokalsneath',
+            'sqeuclidean',
+            'yule',
+            "nan_euclidean",
+        ]
+        return {
+            "window": random.choices(
+                [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
+            )[0],
+            "point_method": random.choices(
+                ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
+            )[0],
+            "distance_metric": random.choice(metric_list),
+            "include_differenced": random.choices([True, False], [0.9, 0.1])[0],
+            "k": random.choices(
+                [1, 3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0],
+            "stride_size": random.choices([1, 2, 5, 10], [0.6, 0.1, 0.1, 0.1])[0],
+            'regression_type': random.choices([None, "User"], [0.9, 0.1])[0],
+        }
+
+    def get_params(self):
+        """Return dict of current parameters"""
+        return {
+            "window": self.window,
+            "point_method": self.point_method,
+            "distance_metric": self.distance_metric,
+            "include_differenced": self.include_differenced,
+            "k": self.k,
+            "stride_size": self.stride_size,
+            'regression_type': self.regression_type,
         }

@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.models package &#8212; AutoTS 0.3.8 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.3.9 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -95,7 +95,7 @@
 
 <dl class="class">
 <dt id="autots.models.base.PredictionObject">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.base.</code><code class="sig-name descname">PredictionObject</code><span class="sig-paren">(</span><em class="sig-param">model_name: str = 'Uninitiated'</em>, <em class="sig-param">forecast_length: int = 0</em>, <em class="sig-param">forecast_index=nan</em>, <em class="sig-param">forecast_columns=nan</em>, <em class="sig-param">lower_forecast=nan</em>, <em class="sig-param">forecast=nan</em>, <em class="sig-param">upper_forecast=nan</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">predict_runtime=datetime.timedelta(0)</em>, <em class="sig-param">fit_runtime=datetime.timedelta(0)</em>, <em class="sig-param">model_parameters={}</em>, <em class="sig-param">transformation_parameters={}</em>, <em class="sig-param">transformation_runtime=datetime.timedelta(0)</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.base.</code><code class="sig-name descname">PredictionObject</code><span class="sig-paren">(</span><em class="sig-param">model_name: str = 'Uninitiated'</em>, <em class="sig-param">forecast_length: int = 0</em>, <em class="sig-param">forecast_index=nan</em>, <em class="sig-param">forecast_columns=nan</em>, <em class="sig-param">lower_forecast=nan</em>, <em class="sig-param">forecast=nan</em>, <em class="sig-param">upper_forecast=nan</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">predict_runtime=datetime.timedelta(0)</em>, <em class="sig-param">fit_runtime=datetime.timedelta(0)</em>, <em class="sig-param">model_parameters={}</em>, <em class="sig-param">transformation_parameters={}</em>, <em class="sig-param">transformation_runtime=datetime.timedelta(0)</em>, <em class="sig-param">per_series_metrics=nan</em>, <em class="sig-param">per_timestamp=nan</em>, <em class="sig-param">avg_metrics=nan</em>, <em class="sig-param">avg_metrics_weighted=nan</em>, <em class="sig-param">full_mae_error=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Generic class for holding forecast information.</p>
 <dl class="attribute">
@@ -146,6 +146,36 @@
 <dd></dd></dl>
 
 <dl class="method">
+<dt id="autots.models.base.PredictionObject.evaluate">
+<code class="sig-name descname">evaluate</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.evaluate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">evaluate</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">series_weights: dict = None</em>, <em class="sig-param">df_train=None</em>, <em class="sig-param">per_timestamp_errors: bool = False</em>, <em class="sig-param">full_mae_error: bool = True</em><span class="sig-paren">)</span></dt>
+<dd><p>Evalute prediction against test actual. Fills out attributes of base object.</p>
+<p>This fails with pd.NA values supplied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>actual</strong> (<em>pd.DataFrame</em>) – dataframe of actual values of (forecast length * n series)</p></li>
+<li><p><strong>series_weights</strong> (<em>dict</em>) – key = column/series_id, value = weight</p></li>
+<li><p><strong>df_train</strong> (<em>pd.DataFrame</em>) – historical values of series, wide, used for setting scaler for SPL
+if None, actuals are used instead. Suboptimal.</p></li>
+<li><p><strong>per_timestamp</strong> (<em>bool</em>) – whether to calculate and return per timestamp direction errors</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>per_series_metrics
+per_timestamp
+avg_metrics
+avg_metrics_weighted
+full_mae_error</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
 <dt>
 <code class="sig-name descname">long_form_results</code><span class="sig-paren">(</span><em class="sig-param">id_name='SeriesID'</em>, <em class="sig-param">value_name='Value'</em>, <em class="sig-param">interval_name='PredictionInterval'</em>, <em class="sig-param">update_datetime_name=None</em><span class="sig-paren">)</span></dt>
 <dd><p>Export forecasts (including upper and lower) as single ‘long’ format output</p>
@@ -167,7 +197,7 @@
 <dl class="method">
 <dt>
 <code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">df_wide=None</em>, <em class="sig-param">series: str = None</em>, <em class="sig-param">ax=None</em>, <em class="sig-param">remove_zeroes: bool = False</em>, <em class="sig-param">start_date: str = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span></dt>
-<dd><p>Generate an example plot of one series.</p>
+<dd><p>Generate an example plot of one series. Does not handle non-numeric forecasts.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -175,7 +205,7 @@
 <li><p><strong>series</strong> (<em>str</em>) – column name of series to plot. Random if None.</p></li>
 <li><p><strong>ax</strong> – matplotlib axes to pass through to pd.plot()</p></li>
 <li><p><strong>remove_zeroes</strong> (<em>bool</em>) – if True, don’t plot any zeroes</p></li>
-<li><p><strong>start_date</strong> (<em>str</em>) – Y-m-d string to remove all data before</p></li>
+<li><p><strong>start_date</strong> (<em>str</em>) – Y-m-d string or Timestamp to remove all data before</p></li>
 <li><p><strong>passed to pd.DataFrame.plot</strong><strong>(</strong><strong>)</strong> (<em>**kwargs</em>) – </p></li>
 </ul>
 </dd>
@@ -321,6 +351,15 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
 <li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em>) – how many parallel processes to run</p></li>
+<li><p><strong>random_seed</strong> (<em>int</em>) – used in selecting windows if max_windows is less than total available</p></li>
+<li><p><strong>window</strong> (<em>int</em>) – length of forecast history to match on</p></li>
+<li><p><strong>point_method</strong> (<em>int</em>) – how to summarize the nearest neighbors to generate the point forecast
+“weighted_mean”, “mean”, “median”, “midhinge”</p></li>
+<li><p><strong>distance_metric</strong> (<em>str</em>) – all valid values for scipy cdist</p></li>
+<li><p><strong>k</strong> (<em>int</em>) – number of closest neighbors to consider</p></li>
+<li><p><strong>max_windows</strong> (<em>int</em>) – max number of windows to consider (a speed/accuracy tradeoff)</p></li>
+<li><p><strong>multivariate</strong> (<em>bool</em>) – if True, utilizes matches from all provided series for each series forecast. Else just own history of series.</p></li>
 </ul>
 </dd>
 </dl>
@@ -554,6 +593,76 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.models.basics.SectionalMotif">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">SectionalMotif</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'SectionalMotif'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">window: int = 5</em>, <em class="sig-param">point_method: str = 'weighted_mean'</em>, <em class="sig-param">distance_metric: str = 'nan_euclidean'</em>, <em class="sig-param">include_differenced: bool = False</em>, <em class="sig-param">k: int = 10</em>, <em class="sig-param">stride_size: int = 1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SectionalMotif" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>Forecasts using a nearest neighbors type model adapted for probabilistic time series.
+This version takes the distance metric average for all series at once.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>regression_type</strong> (<em>str</em>) – “User” or None. If used, will be as covariate. The ratio of num_series:num_regressor_series will largely determine the impact</p></li>
+<li><p><strong>window</strong> (<em>int</em>) – length of forecast history to match on</p></li>
+<li><p><strong>point_method</strong> (<em>int</em>) – how to summarize the nearest neighbors to generate the point forecast
+“weighted_mean”, “mean”, “median”, “midhinge”</p></li>
+<li><p><strong>distance_metric</strong> (<em>str</em>) – all valid values for scipy cdist + “nan_euclidean” from sklearn</p></li>
+<li><p><strong>include_differenced</strong> (<em>bool</em>) – True to have the distance metric result be an average of the distance on absolute values as well as differenced values</p></li>
+<li><p><strong>k</strong> (<em>int</em>) – number of closest neighbors to consider</p></li>
+<li><p><strong>stride_size</strong> (<em>int</em>) – how many obs to skip between each new window. Higher numbers will reduce the number of matching windows and make the model faster.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.basics.SectionalMotif.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SectionalMotif.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.SectionalMotif.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SectionalMotif.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns dict of new parameters for parameter tuning</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.SectionalMotif.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SectionalMotif.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.SectionalMotif.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SectionalMotif.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
@@ -1244,7 +1353,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="class">
 <dt id="autots.models.sklearn.MultivariateRegression">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">MultivariateRegression</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'MultivariateRegression'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">forecast_length: int = 7</em>, <em class="sig-param">regression_model: dict = {'model': 'RandomForest'</em>, <em class="sig-param">'model_params': {}}</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = 7</em>, <em class="sig-param">min_rolling_periods: int = 7</em>, <em class="sig-param">ewm_var_alpha: float = None</em>, <em class="sig-param">quantile90_rolling_periods: int = None</em>, <em class="sig-param">quantile10_rolling_periods: int = None</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">additional_lag_periods: int = 7</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">datepart_method: str = None</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">window: int = None</em>, <em class="sig-param">n_jobs: int = -1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.MultivariateRegression" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">MultivariateRegression</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'MultivariateRegression'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">forecast_length: int = 7</em>, <em class="sig-param">regression_model: dict = {'model': 'RandomForest'</em>, <em class="sig-param">'model_params': {}}</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = 7</em>, <em class="sig-param">min_rolling_periods: int = 7</em>, <em class="sig-param">ewm_var_alpha: float = None</em>, <em class="sig-param">quantile90_rolling_periods: int = None</em>, <em class="sig-param">quantile10_rolling_periods: int = None</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">additional_lag_periods: int = 7</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">datepart_method: str = None</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">window: int = None</em>, <em class="sig-param">quantile_params: dict = {'learning_rate': 0.1</em>, <em class="sig-param">'max_depth': 20</em>, <em class="sig-param">'min_samples_leaf': 4</em>, <em class="sig-param">'min_samples_split': 5</em>, <em class="sig-param">'n_estimators': 250}</em>, <em class="sig-param">n_jobs: int = -1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.MultivariateRegression" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Regression-framed approach to forecasting using sklearn.
 A multiariate version of rolling regression: ie each series is agged independently but modeled together</p>
@@ -1502,11 +1611,6 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="autots.models.sklearn.last_window">
-<code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">last_window</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">window_size: int = 10</em>, <em class="sig-param">input_dim: str = 'univariate'</em>, <em class="sig-param">normalize_window: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.last_window" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="autots.models.sklearn.retrieve_regressor">
 <code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">retrieve_regressor</code><span class="sig-paren">(</span><em class="sig-param">regression_model: dict = {'model': 'Adaboost'</em>, <em class="sig-param">'model_params': {'base_estimator': 'DecisionTree'</em>, <em class="sig-param">'learning_rate': 1.0</em>, <em class="sig-param">'loss': 'linear'</em>, <em class="sig-param">'n_estimators': 50}}</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">verbose_bool: bool = False</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">n_jobs: int = 1</em>, <em class="sig-param">multioutput: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.retrieve_regressor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convert a model param dict to model object for regression frameworks.</p>
@@ -1524,31 +1628,6 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dt id="autots.models.sklearn.rolling_x_regressor_regressor">
 <code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">rolling_x_regressor_regressor</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = None</em>, <em class="sig-param">min_rolling_periods: int = None</em>, <em class="sig-param">quantile90_rolling_periods: int = None</em>, <em class="sig-param">quantile10_rolling_periods: int = None</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">ewm_var_alpha: float = None</em>, <em class="sig-param">additional_lag_periods: int = 7</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">add_date_part: str = None</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">window: int = None</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.rolling_x_regressor_regressor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Adds in the future_regressor.</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.models.sklearn.window_maker">
-<code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">window_maker</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">window_size: int = 10</em>, <em class="sig-param">input_dim: str = 'univariate'</em>, <em class="sig-param">normalize_window: bool = False</em>, <em class="sig-param">shuffle: bool = False</em>, <em class="sig-param">output_dim: str = 'forecast_length'</em>, <em class="sig-param">forecast_length: int = 1</em>, <em class="sig-param">max_windows: int = 5000</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">random_seed: int = 1234</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.window_maker" title="Permalink to this definition">¶</a></dt>
-<dd><p>Convert a dataset into slices with history and y forecast.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – <cite>wide</cite> format df with sorted index</p></li>
-<li><p><strong>window_size</strong> (<em>int</em>) – length of history to use for X window</p></li>
-<li><p><strong>input_dim</strong> (<em>str</em>) – univariate or multivariate. If multivariate, all series in single X row</p></li>
-<li><p><strong>shuffle</strong> (<em>bool</em>) – (deprecated)</p></li>
-<li><p><strong>output_dim</strong> (<em>str</em>) – ‘forecast_length’ or ‘1step’ where 1 step is basically forecast_length=1</p></li>
-<li><p><strong>forecast_length</strong> (<em>int</em>) – number of periods ahead that will be forecast</p></li>
-<li><p><strong>max_windows</strong> (<em>int</em>) – a cap on total number of windows to generate. If exceeded, random of this int are selected.</p></li>
-<li><p><strong>regression_type</strong> (<em>str</em>) – None or “user” if to try to concat regressor to windows</p></li>
-<li><p><strong>future_regressor</strong> (<em>pd.DataFrame</em>) – values of regressor if used</p></li>
-<li><p><strong>random_seed</strong> (<em>int</em>) – a consistent random</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>X, Y</p>
-</dd>
-</dl>
 </dd></dl>
 
 </section>

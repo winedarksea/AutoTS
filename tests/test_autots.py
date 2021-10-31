@@ -90,8 +90,7 @@ class AutoTSTest(unittest.TestCase):
         initial_results = model.results()
         validation_results = model.results("validation")
         back_forecast = model.back_forecast(n_splits=2, verbose=0).forecast
-
-        validated_count = (validation_results['Runs'] == (num_validations + 1)).sum()
+        # validated_count = (validation_results['Runs'] == (num_validations + 1)).sum()
 
         # so these account for DROP MOST RECENT = 1
         expected_idx = pd.date_range(
@@ -110,7 +109,7 @@ class AutoTSTest(unittest.TestCase):
         # check there were few failed models in this simple setup (fancier models are expected to fail sometimes!)
         self.assertGreater(initial_results['Exceptions'].isnull().mean(), 0.95, "Too many 'superfast' models failed. This can occur by random chance, try running again.")
         # check general model setup
-        self.assertEqual(validated_count, model.models_to_validate)
+        # self.assertEqual(validated_count, model.models_to_validate)
         self.assertGreater(model.models_to_validate, (initial_results['ValidationRound'] == 0).sum() * models_to_validate - 2)
         self.assertEqual(set(initial_results['Model'].unique().tolist()) - {'Ensemble'}, set(model.model_list))
         self.assertFalse(model.best_model.empty)

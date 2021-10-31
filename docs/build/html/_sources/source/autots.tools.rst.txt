@@ -84,6 +84,14 @@ autots.tools.transform module
    :undoc-members:
    :show-inheritance:
 
+autots.tools.window\_functions module
+-------------------------------------
+
+.. automodule:: autots.tools.window_functions
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 

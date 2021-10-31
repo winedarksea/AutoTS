@@ -13,17 +13,19 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* add Transformer model to sklearn DNN models
-* expanded and tuned KerasRNN model options
-* added param space for RandomForest, ExtraTrees, Poisson, and RANSAC regressions
-* removed Tensorflow models from UnivariateRegression as it can cause a crash with GPU training
-* added create_regressor function
-* two new impute methods (KNNImputer, IterativeImputerExtraTrees), but only with "all" transformers
-* deletion of old TSFresh model, which was horribly slow and not going to get any faster
-* optimizing scalability by tuning transformer and imputation defaults
-* MultivariateRegression model (RollingRegression but 1d to models)
-* fix for generate_score_per_series bug with all zeroes series
-* bug fix for where horizontal ensembles failed if series_ids/column names were integers
+* update validation template creation for horizontal ensembles
+* made MultivariateRegression probabilistic
+* fixed bug where weighting didn't take floats
+* pushed the evaluate options from a separate function to part of the PredictionObject
+* added 'custom' validation option
+* added "similarity" validation option
+* SectionalMotif model added
+* window functions grouped in module
+* fixed bugs in holiday_flag
+* holiday_flag now has holiday categorical encoding option and works better on sub-daily data
+* create_regressor handle categorical features
+* 'superfast' transformer_dict now adjusts fillna methods as well
+* optimizing metric calculation runtimes (feel the speed of 500 µs savings!)
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

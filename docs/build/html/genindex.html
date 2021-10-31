@@ -5,7 +5,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Index &#8212; AutoTS 0.3.8 documentation</title>
+    <title>Index &#8212; AutoTS 0.3.9 documentation</title>
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
@@ -49,6 +49,7 @@
  | <a href="#M"><strong>M</strong></a>
  | <a href="#N"><strong>N</strong></a>
  | <a href="#P"><strong>P</strong></a>
+ | <a href="#Q"><strong>Q</strong></a>
  | <a href="#R"><strong>R</strong></a>
  | <a href="#S"><strong>S</strong></a>
  | <a href="#T"><strong>T</strong></a>
@@ -101,10 +102,10 @@
 </li>
       <li><a href="source/autots.models.html#module-autots.models.greykite">autots.models.greykite (module)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#module-autots.models.model_list">autots.models.model_list (module)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#module-autots.models.prophet">autots.models.prophet (module)</a>
 </li>
       <li><a href="source/autots.models.html#module-autots.models.sklearn">autots.models.sklearn (module)</a>
@@ -138,6 +139,8 @@
       <li><a href="source/autots.tools.html#module-autots.tools.shaping">autots.tools.shaping (module)</a>
 </li>
       <li><a href="source/autots.tools.html#module-autots.tools.transform">autots.tools.transform (module)</a>
+</li>
+      <li><a href="source/autots.tools.html#module-autots.tools.window_functions">autots.tools.window_functions (module)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTSIntervals">AutoTSIntervals (class in autots.evaluator.auto_ts)</a>
 </li>
@@ -203,6 +206,8 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.tools.html#autots.tools.transform.CenterLastValue">CenterLastValue (class in autots.tools.transform)</a>
 </li>
+      <li><a href="source/autots.tools.html#autots.tools.shaping.clean_weights">clean_weights() (in module autots.tools.shaping)</a>
+</li>
       <li><a href="source/autots.tools.html#autots.tools.transform.clip_outliers">clip_outliers() (in module autots.tools.transform)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.transform.ClipOutliers">ClipOutliers (class in autots.tools.transform)</a>
@@ -213,10 +218,10 @@
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.containment">containment() (in module autots.evaluator.metrics)</a>
 </li>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.contour">contour() (in module autots.evaluator.metrics)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.contour">contour() (in module autots.evaluator.metrics)</a>
+</li>
       <li><a href="source/autots.tools.html#autots.tools.cpu_count.cpu_count">cpu_count() (in module autots.tools.cpu_count)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.base.ModelObject.create_forecast_index">create_forecast_index() (autots.models.base.ModelObject method)</a>
@@ -291,7 +296,7 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#autots.models.statsmodels.ETS">ETS (class in autots.models.statsmodels)</a>
 </li>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.EvalObject">EvalObject (class in autots.evaluator.metrics)</a>
+      <li><a href="source/autots.models.html#autots.models.base.PredictionObject.evaluate">evaluate() (autots.models.base.PredictionObject method)</a>, <a href="source/autots.models.html#autots.models.base.PredictionObject.evaluate">[1]</a>
 </li>
       <li><a href="source/autots.html#autots.AutoTS.export_template">export_template() (autots.AutoTS method)</a>
 
@@ -353,6 +358,8 @@
         <li><a href="source/autots.models.html#autots.models.basics.NVAR.fit">(autots.models.basics.NVAR method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.basics.SeasonalNaive.fit">(autots.models.basics.SeasonalNaive method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.basics.SectionalMotif.fit">(autots.models.basics.SectionalMotif method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.basics.ZeroesNaive.fit">(autots.models.basics.ZeroesNaive method)</a>
 </li>
@@ -542,6 +549,8 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.basics.SeasonalNaive.get_new_params">(autots.models.basics.SeasonalNaive method)</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.basics.SectionalMotif.get_new_params">(autots.models.basics.SectionalMotif method)</a>
+</li>
         <li><a href="source/autots.models.html#autots.models.basics.ZeroesNaive.get_new_params">(autots.models.basics.ZeroesNaive method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.gluonts.GluonTS.get_new_params">(autots.models.gluonts.GluonTS method)</a>
@@ -629,6 +638,8 @@
         <li><a href="source/autots.models.html#autots.models.basics.NVAR.get_params">(autots.models.basics.NVAR method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.basics.SeasonalNaive.get_params">(autots.models.basics.SeasonalNaive method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.basics.SectionalMotif.get_params">(autots.models.basics.SectionalMotif method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.basics.ZeroesNaive.get_params">(autots.models.basics.ZeroesNaive method)</a>
 </li>
@@ -795,7 +806,7 @@
 <h2 id="L">L</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="source/autots.models.html#autots.models.sklearn.last_window">last_window() (in module autots.models.sklearn)</a>
+      <li><a href="source/autots.tools.html#autots.tools.window_functions.last_window">last_window() (in module autots.tools.window_functions)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.basics.LastValueNaive">LastValueNaive (class in autots.models.basics)</a>
 </li>
@@ -873,6 +884,12 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.mae">mae() (in module autots.evaluator.metrics)</a>
 </li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.mean_absolute_error">mean_absolute_error() (in module autots.evaluator.metrics)</a>
+</li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.medae">medae() (in module autots.evaluator.metrics)</a>
+</li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.median_absolute_error">median_absolute_error() (in module autots.evaluator.metrics)</a>
+</li>
       <li><a href="source/autots.html#autots.model_forecast">model_forecast() (in module autots)</a>
 
       <ul>
@@ -883,18 +900,18 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.base.PredictionObject.model_parameters">model_parameters (autots.models.base.PredictionObject attribute)</a>
 </li>
-      <li><a href="source/autots.html#autots.AutoTS.model_results">model_results (autots.AutoTS attribute)</a>
+      <li><a href="source/autots.html#autots.AutoTS.initial_results.model_results">model_results (autots.AutoTS.initial_results attribute)</a>
 
       <ul>
-        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.model_results">(autots.evaluator.auto_ts.AutoTS attribute)</a>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.initial_results.model_results">(autots.evaluator.auto_ts.AutoTS.initial_results attribute)</a>
 </li>
       </ul></li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelMonster">ModelMonster() (in module autots.evaluator.auto_model)</a>
 </li>
-      <li><a href="source/autots.models.html#autots.models.base.ModelObject">ModelObject (class in autots.models.base)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.models.html#autots.models.base.ModelObject">ModelObject (class in autots.models.base)</a>
+</li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelPrediction">ModelPrediction() (in module autots.evaluator.auto_model)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.ensemble.mosaic_classifier">mosaic_classifier() (in module autots.models.ensemble)</a>
@@ -994,6 +1011,8 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.basics.SeasonalNaive.predict">(autots.models.basics.SeasonalNaive method)</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.basics.SectionalMotif.predict">(autots.models.basics.SectionalMotif method)</a>
+</li>
         <li><a href="source/autots.models.html#autots.models.basics.ZeroesNaive.predict">(autots.models.basics.ZeroesNaive method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.dnn.KerasRNN.predict">(autots.models.dnn.KerasRNN method)</a>
@@ -1047,9 +1066,15 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#autots.models.basics.predict_reservoir">predict_reservoir() (in module autots.models.basics)</a>
 </li>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.PredictionEval">PredictionEval() (in module autots.evaluator.metrics)</a>
-</li>
       <li><a href="source/autots.models.html#autots.models.base.PredictionObject">PredictionObject (class in autots.models.base)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="Q">Q</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.tools.html#autots.tools.holiday.query_holidays">query_holidays() (in module autots.tools.holiday)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -1083,6 +1108,8 @@
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.results">(autots.evaluator.auto_ts.AutoTS method)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.tools.html#autots.tools.window_functions.retrieve_closest_indices">retrieve_closest_indices() (in module autots.tools.window_functions)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#autots.models.sklearn.retrieve_regressor">retrieve_regressor() (in module autots.models.sklearn)</a>
@@ -1105,6 +1132,8 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.sklearn.RollingRegression">RollingRegression (class in autots.models.sklearn)</a>
 </li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.root_mean_square_error">root_mean_square_error() (in module autots.evaluator.metrics)</a>
+</li>
       <li><a href="source/autots.tools.html#autots.tools.transform.Round">Round (class in autots.tools.transform)</a>
 </li>
   </ul></td>
@@ -1115,6 +1144,8 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.TemplateEvalObject.save">save() (autots.evaluator.auto_model.TemplateEvalObject method)</a>
 </li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.scaled_pinball_loss">scaled_pinball_loss() (in module autots.evaluator.metrics)</a>
+</li>
       <li><a href="source/autots.tools.html#autots.tools.transform.ScipyFilter">ScipyFilter (class in autots.tools.transform)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.seasonal.seasonal_int">seasonal_int() (in module autots.tools.seasonal)</a>
@@ -1122,6 +1153,8 @@
       <li><a href="source/autots.tools.html#autots.tools.transform.SeasonalDifference">SeasonalDifference (class in autots.tools.transform)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.basics.SeasonalNaive">SeasonalNaive (class in autots.models.basics)</a>
+</li>
+      <li><a href="source/autots.models.html#autots.models.basics.SectionalMotif">SectionalMotif (class in autots.models.basics)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.greykite.seek_the_oracle">seek_the_oracle() (in module autots.models.greykite)</a>
 
@@ -1141,7 +1174,7 @@
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.smape">smape() (in module autots.evaluator.metrics)</a>
 </li>
-      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.SPL">SPL() (in module autots.evaluator.metrics)</a>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.spl">spl() (in module autots.evaluator.metrics)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.transform.StatsmodelsFilter">StatsmodelsFilter (class in autots.tools.transform)</a>
 </li>
@@ -1150,6 +1183,8 @@
       <li><a href="source/autots.tools.html#autots.tools.shaping.subset_series">subset_series() (in module autots.tools.shaping)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.ensemble.summarize_series">summarize_series() (in module autots.models.ensemble)</a>
+</li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.symmetric_mean_absolute_percentage_error">symmetric_mean_absolute_percentage_error() (in module autots.evaluator.metrics)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -1277,10 +1312,16 @@
 <h2 id="W">W</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="source/autots.models.html#autots.models.sklearn.window_maker">window_maker() (in module autots.models.sklearn)</a>
+      <li><a href="source/autots.tools.html#autots.tools.window_functions.window_id_maker">window_id_maker() (in module autots.tools.window_functions)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.window_functions.window_maker">window_maker() (in module autots.tools.window_functions)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.tools.html#autots.tools.window_functions.window_maker_2">window_maker_2() (in module autots.tools.window_functions)</a>
+</li>
+      <li><a href="source/autots.tools.html#autots.tools.window_functions.window_maker_3">window_maker_3() (in module autots.tools.window_functions)</a>
+</li>
       <li><a href="source/autots.models.html#autots.models.sklearn.WindowRegression">WindowRegression (class in autots.models.sklearn)</a>
 </li>
   </ul></td>

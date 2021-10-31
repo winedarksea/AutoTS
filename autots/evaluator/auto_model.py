@@ -7,7 +7,6 @@ import pandas as pd
 import datetime
 import json
 from hashlib import md5
-from autots.evaluator.metrics import PredictionEval
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
 from autots.models.ensemble import (
     EnsembleForecast,
@@ -30,6 +29,7 @@ from autots.models.basics import (
     SeasonalNaive,
     ZeroesNaive,
     Motif,
+    SectionalMotif,
     NVAR,
 )
 from autots.models.statsmodels import (
@@ -441,6 +441,15 @@ def ModelMonster(
             **parameters,
         )
         return model
+    elif model == 'SectionalMotif':
+        model = SectionalMotif(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
+            **parameters,
+        )
+        return model
     elif model == 'NVAR':
         model = NVAR(
             frequency=frequency,
@@ -587,8 +596,6 @@ class TemplateEvalObject(object):
         per_series_rmse=pd.DataFrame(),
         per_series_contour=pd.DataFrame(),
         per_series_spl=pd.DataFrame(),
-        per_series_rmse1=pd.DataFrame(),
-        per_series_rmse2=pd.DataFrame(),
         model_count: int = 0,
     ):
         self.model_results = model_results
@@ -597,8 +604,6 @@ class TemplateEvalObject(object):
         self.per_series_contour = per_series_contour
         self.per_series_rmse = per_series_rmse
         self.per_series_spl = per_series_spl
-        self.per_series_rmse1 = per_series_rmse1
-        self.per_series_rmse2 = per_series_rmse2
         self.per_timestamp_smape = per_timestamp_smape
         self.full_mae_ids = []
         self.full_mae_errors = []
@@ -628,12 +633,6 @@ class TemplateEvalObject(object):
         )
         self.per_series_spl = pd.concat(
             [self.per_series_spl, another_eval.per_series_spl], axis=0, sort=False
-        )
-        self.per_series_rmse1 = pd.concat(
-            [self.per_series_rmse1, another_eval.per_series_rmse1], axis=0, sort=False
-        )
-        self.per_series_rmse2 = pd.concat(
-            [self.per_series_rmse2, another_eval.per_series_rmse2], axis=0, sort=False
         )
         self.per_timestamp_smape = pd.concat(
             [self.per_timestamp_smape, another_eval.per_timestamp_smape],
@@ -1083,8 +1082,7 @@ def TemplateWizard(
 
             per_ts = True if 'distance' in ensemble else False
             full_mae = True if "mosaic" in ensemble else False
-            model_error = PredictionEval(
-                df_forecast,
+            model_error = df_forecast.evaluate(
                 df_test,
                 series_weights=weights,
                 df_train=df_train,
@@ -1138,36 +1136,35 @@ def TemplateWizard(
                 sort=False,
             ).reset_index(drop=True)
 
-            if 'horizontal' in ensemble or 'probabilistic' in ensemble:
-                ps_metric = model_error.per_series_metrics
-                template_result.per_series_mae = pd.concat(
-                    [
-                        template_result.per_series_mae,
-                        _ps_metric(ps_metric, 'mae', model_id),
-                    ],
-                    axis=0,
-                )
-                template_result.per_series_contour = pd.concat(
-                    [
-                        template_result.per_series_contour,
-                        _ps_metric(ps_metric, 'contour', model_id),
-                    ],
-                    axis=0,
-                )
-                template_result.per_series_rmse = pd.concat(
-                    [
-                        template_result.per_series_rmse,
-                        _ps_metric(ps_metric, 'rmse', model_id),
-                    ],
-                    axis=0,
-                )
-                template_result.per_series_spl = pd.concat(
-                    [
-                        template_result.per_series_spl,
-                        _ps_metric(ps_metric, 'spl', model_id),
-                    ],
-                    axis=0,
-                )
+            ps_metric = model_error.per_series_metrics
+            template_result.per_series_mae = pd.concat(
+                [
+                    template_result.per_series_mae,
+                    _ps_metric(ps_metric, 'mae', model_id),
+                ],
+                axis=0,
+            )
+            template_result.per_series_contour = pd.concat(
+                [
+                    template_result.per_series_contour,
+                    _ps_metric(ps_metric, 'contour', model_id),
+                ],
+                axis=0,
+            )
+            template_result.per_series_rmse = pd.concat(
+                [
+                    template_result.per_series_rmse,
+                    _ps_metric(ps_metric, 'rmse', model_id),
+                ],
+                axis=0,
+            )
+            template_result.per_series_spl = pd.concat(
+                [
+                    template_result.per_series_spl,
+                    _ps_metric(ps_metric, 'spl', model_id),
+                ],
+                axis=0,
+            )
 
             if 'distance' in ensemble:
                 cur_smape = model_error.per_timestamp.loc['weighted_smape']

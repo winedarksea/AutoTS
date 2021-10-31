@@ -10,6 +10,7 @@ import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.seasonal import date_part, seasonal_int
+from autots.tools.window_functions import window_maker, last_window
 
 
 def rolling_x_regressor(
@@ -411,9 +412,9 @@ univariate_model_dict: dict = {
     'ElasticNet': 0.05,
     'MLP': 0.05,
     'DecisionTree': 0.05,
-    'KNN': 0.05,
+    'KNN': 0.03,
     'Adaboost': 0.05,
-    'SVM': 0.05,  # was slow, LinearSVR seems much faster
+    'SVM': 0.05,
     'BayesianRidge': 0.03,
     'HistGradientBoost': 0.02,
     'LightGBM': 0.01,
@@ -708,8 +709,16 @@ def generate_regressor_params(
                 "model": 'LightGBM',
                 "model_params": {
                     "objective": random.choices(
-                        ['regression', 'gamma', 'huber', 'regression_l1'],
-                        [0.4, 0.3, 0.1, 0.2],
+                        [
+                            'regression',
+                            'gamma',
+                            'huber',
+                            'regression_l1',
+                            'tweedie',
+                            'poisson',
+                            'quantile',
+                        ],
+                        [0.4, 0.2, 0.2, 0.2, 0.2, 0.05, 0.01],
                     )[0],
                     "learning_rate": random.choices(
                         [0.001, 0.1, 0.01],
@@ -729,7 +738,7 @@ def generate_regressor_params(
                     )[0],
                     "n_estimators": random.choices(
                         [100, 250, 50, 500],
-                        [0.6, 0.099, 0.3, 0.0010],
+                        [0.6, 0.1, 0.3, 0.0010],
                     )[0],
                 },
             }
@@ -1032,7 +1041,9 @@ class RollingRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params(model_dict=rolling_regression_dict)
+        rolling_model_dict = sklearn_model_dict.copy()
+        del rolling_model_dict['KNN']
+        model_choice = generate_regressor_params(model_dict=rolling_model_dict)
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30], [0.2, 0.2, 0.2, 0.2, 0.2]
         )[0]
@@ -1112,157 +1123,6 @@ class RollingRegression(ModelObject):
             'regression_type': self.regression_type,
         }
         return parameter_dict
-
-
-def window_maker(
-    df,
-    window_size: int = 10,
-    input_dim: str = 'univariate',
-    normalize_window: bool = False,
-    shuffle: bool = False,
-    output_dim: str = 'forecast_length',
-    forecast_length: int = 1,
-    max_windows: int = 5000,
-    regression_type: str = None,
-    future_regressor=None,
-    random_seed: int = 1234,
-):
-    """Convert a dataset into slices with history and y forecast.
-
-    Args:
-        df (pd.DataFrame): `wide` format df with sorted index
-        window_size (int): length of history to use for X window
-        input_dim (str): univariate or multivariate. If multivariate, all series in single X row
-        shuffle (bool): (deprecated)
-        output_dim (str): 'forecast_length' or '1step' where 1 step is basically forecast_length=1
-        forecast_length (int): number of periods ahead that will be forecast
-        max_windows (int): a cap on total number of windows to generate. If exceeded, random of this int are selected.
-        regression_type (str): None or "user" if to try to concat regressor to windows
-        future_regressor (pd.DataFrame): values of regressor if used
-        random_seed (int): a consistent random
-
-    Returns:
-        X, Y
-    """
-    if output_dim == '1step':
-        forecast_length = 1
-    phrase_n = forecast_length + window_size
-    try:
-        if input_dim == "multivariate":
-            raise ValueError("input_dim=`multivariate` not supported this way.")
-        x = np.lib.stride_tricks.sliding_window_view(df.to_numpy(), phrase_n, axis=0)
-        x = x.reshape(-1, x.shape[-1])
-        Y = x[:, window_size:]
-        if Y.ndim > 1:
-            if Y.shape[1] == 1:
-                Y = Y.ravel()
-        X = x[:, :window_size]
-        r_arr = None
-        if max_windows is not None:
-            X_size = x.shape[0]
-            if max_windows < X_size:
-                r_arr = np.random.default_rng(random_seed).integers(
-                    0, X_size, size=max_windows
-                )
-                Y = Y[r_arr]
-                X = X[r_arr]
-        if normalize_window:
-            div_sum = np.nansum(X, axis=1).reshape(-1, 1)
-            X = X / np.where(div_sum == 0, 1, div_sum)
-        # regressors
-        if str(regression_type).lower() == "user":
-            shape_1 = df.shape[1] if df.ndim > 1 else 1
-            if isinstance(future_regressor, pd.DataFrame):
-                regr_arr = np.repeat(
-                    future_regressor.reindex(df.index).to_numpy()[(phrase_n - 1) :],
-                    shape_1,
-                    axis=0,
-                )
-                if r_arr is not None:
-                    regr_arr = regr_arr[r_arr]
-                X = np.concatenate([X, regr_arr], axis=1)
-
-    except Exception:
-        if str(regression_type).lower() == "user":
-            if input_dim == "multivariate":
-                raise ValueError(
-                    "input_dim=`multivariate` and regression_type=`user` cannot be combined."
-                )
-            else:
-                raise ValueError(
-                    "WindowRegression regression_type='user' requires numpy >= 1.20"
-                )
-        max_pos_wind = df.shape[0] - phrase_n + 1
-        max_pos_wind = max_windows if max_pos_wind > max_windows else max_pos_wind
-        if max_pos_wind == max_windows:
-            numbers = np.random.default_rng(random_seed).choice(
-                (df.shape[0] - phrase_n), size=max_pos_wind, replace=False
-            )
-            if not shuffle:
-                numbers = np.sort(numbers)
-        else:
-            numbers = np.array(range(max_pos_wind))
-            if shuffle:
-                np.random.shuffle(numbers)
-
-        X = pd.DataFrame()
-        Y = pd.DataFrame()
-        for z in numbers:
-            if input_dim == 'univariate':
-                rand_slice = df.iloc[
-                    z : (z + phrase_n),
-                ]
-                rand_slice = (
-                    rand_slice.reset_index(drop=True)
-                    .transpose()
-                    .set_index(np.repeat(z, (df.shape[1],)), append=True)
-                )
-                cX = rand_slice.iloc[:, 0:(window_size)]
-                cY = rand_slice.iloc[:, window_size:]
-            else:
-                cX = df.iloc[
-                    z : (z + window_size),
-                ]
-                cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
-                cY = df.iloc[
-                    (z + window_size) : (z + phrase_n),
-                ]
-                cY = pd.DataFrame(cY.stack().reset_index(drop=True)).transpose()
-            X = pd.concat([X, cX], axis=0)
-            Y = pd.concat([Y, cY], axis=0)
-        if normalize_window:
-            X = X.div(X.sum(axis=1), axis=0)
-        X.columns = [str(x) for x in range(len(X.columns))]
-
-    return X, Y
-
-
-def last_window(
-    df,
-    window_size: int = 10,
-    input_dim: str = 'univariate',
-    normalize_window: bool = False,
-):
-    z = df.shape[0] - window_size
-    shape_1 = df.shape[1] if df.ndim > 1 else 1
-    if input_dim == 'univariate':
-        cX = df.iloc[
-            z : (z + window_size),
-        ]
-        cX = (
-            cX.reset_index(drop=True)
-            .transpose()
-            .set_index(np.repeat(z, (shape_1,)), append=True)
-        )
-    else:
-        cX = df.iloc[
-            z : (z + window_size),
-        ]
-        cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
-    if normalize_window:
-        cX = cX.div(cX.sum(axis=1), axis=0)
-
-    return cX
 
 
 class WindowRegression(ModelObject):
@@ -2357,6 +2217,13 @@ class MultivariateRegression(ModelObject):
         datepart_method: str = None,
         polynomial_degree: int = None,
         window: int = None,
+        quantile_params: dict = {
+            'learning_rate': 0.1,
+            'max_depth': 20,
+            'min_samples_leaf': 4,
+            'min_samples_split': 5,
+            'n_estimators': 250,
+        },
         n_jobs: int = -1,
         **kwargs,
     ):
@@ -2392,6 +2259,7 @@ class MultivariateRegression(ModelObject):
         self.datepart_method = datepart_method
         self.polynomial_degree = polynomial_degree
         self.window = window
+        self.quantile_params = quantile_params
         self.regressor_train = None
 
         # detect just the max needed for cutoff (makes faster)
@@ -2419,6 +2287,7 @@ class MultivariateRegression(ModelObject):
             future_regressor (pandas.DataFrame or Series): Datetime Indexed
         """
         df = self.basic_profile(df)
+        from sklearn.ensemble import GradientBoostingRegressor
 
         # if external regressor, do some check up
         if self.regression_type is not None:
@@ -2470,6 +2339,19 @@ class MultivariateRegression(ModelObject):
             ]
         )
         del base
+        alpha_base = (1 - self.prediction_interval) / 2
+        self.model_upper = GradientBoostingRegressor(
+            loss='quantile',
+            alpha=(1 - alpha_base),
+            random_state=self.random_seed,
+            **self.quantile_params,
+        )
+        self.model_lower = GradientBoostingRegressor(
+            loss='quantile',
+            alpha=alpha_base,
+            random_state=self.random_seed,
+            **self.quantile_params,
+        )
 
         multioutput = True
         if Y.ndim < 2:
@@ -2485,6 +2367,8 @@ class MultivariateRegression(ModelObject):
             multioutput=multioutput,
         )
         self.model.fit(X.to_numpy(), Y)
+        self.model_upper.fit(X.to_numpy(), Y)
+        self.model_lower.fit(X.to_numpy(), Y)
         # we only need the N most recent points for predict
         self.sktraindata = df.tail(self.min_threshold)
 
@@ -2512,6 +2396,8 @@ class MultivariateRegression(ModelObject):
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
         forecast = pd.DataFrame()
+        upper_forecast = pd.DataFrame()
+        lower_forecast = pd.DataFrame()
         if self.regressor_train is not None:
             base_regr = pd.concat([self.regressor_train, future_regressor])
             # move index back one to align with training dates on merge
@@ -2556,12 +2442,17 @@ class MultivariateRegression(ModelObject):
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
-            forecast = pd.concat(
-                [
-                    forecast,
-                    pred_clean,
-                ]
-            )
+            rfPred_upper = self.model_upper.predict(x_dat.to_numpy())
+            pred_upper = pd.DataFrame(
+                rfPred_upper, index=current_x.columns, columns=[index[fcst_step]]
+            ).transpose()
+            rfPred_lower = self.model_lower.predict(x_dat.to_numpy())
+            pred_lower = pd.DataFrame(
+                rfPred_lower, index=current_x.columns, columns=[index[fcst_step]]
+            ).transpose()
+            forecast = pd.concat([forecast, pred_clean])
+            upper_forecast = pd.concat([upper_forecast, pred_upper])
+            lower_forecast = pd.concat([lower_forecast, pred_lower])
             current_x = pd.concat(
                 [
                     current_x,
@@ -2570,17 +2461,12 @@ class MultivariateRegression(ModelObject):
             )
 
         forecast = forecast[self.column_names]
+        upper_forecast = upper_forecast[self.column_names]
+        lower_forecast = lower_forecast[self.column_names]
 
         if just_point_forecast:
             return forecast
         else:
-            upper_forecast, lower_forecast = Point_to_Probability(
-                self.sktraindata,
-                forecast,
-                method='inferred_normal',
-                prediction_interval=self.prediction_interval,
-            )
-
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(
                 model_name=self.name,

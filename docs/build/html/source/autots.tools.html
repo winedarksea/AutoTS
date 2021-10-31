@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.tools package &#8212; AutoTS 0.3.8 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.3.9 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -97,17 +97,33 @@
 <p>Manage holiday features.</p>
 <dl class="function">
 <dt id="autots.tools.holiday.holiday_flag">
-<code class="sig-prename descclassname">autots.tools.holiday.</code><code class="sig-name descname">holiday_flag</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em>, <em class="sig-param">country: str = 'US'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.holiday.holiday_flag" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.holiday.</code><code class="sig-name descname">holiday_flag</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em>, <em class="sig-param">country: str = 'US'</em>, <em class="sig-param">encode_holiday_type: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.holiday.holiday_flag" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a 0/1 flag for given datetime index.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>DTindex</strong> (<em>panda.DatetimeIndex</em>) – DatetimeIndex of dates to create flags</p></li>
 <li><p><strong>country</strong> (<em>str</em>) – to pass through to python package Holidays</p></li>
+<li><p><strong>encode_holiday_type</strong> (<em>bool</em>) – if True, each holiday gets a unique integer, if False, 0/1 for all holidays</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>pandas.Series() with DatetimeIndex and column ‘HolidayFlag’</p>
+<dd class="field-even"><p>pandas.Series() with DatetimeIndex and name ‘HolidayFlag’</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.holiday.query_holidays">
+<code class="sig-prename descclassname">autots.tools.holiday.</code><code class="sig-name descname">query_holidays</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em>, <em class="sig-param">country: str</em>, <em class="sig-param">encode_holiday_type: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.holiday.query_holidays" title="Permalink to this definition">¶</a></dt>
+<dd><p>Query holidays package for dates.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>DTindex</strong> (<em>panda.DatetimeIndex</em>) – DatetimeIndex of dates to create flags</p></li>
+<li><p><strong>country</strong> (<em>str</em>) – to pass through to python package Holidays</p></li>
+<li><p><strong>encode_holiday_type</strong> (<em>bool</em>) – if True, each holiday gets a unique integer, if False, 0/1 for all holidays</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -338,7 +354,8 @@ If you don’t want the lagged features, set summarize=”median” which will o
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – WIDE style dataframe (use long_to_wide if the data isn’t already)</p></li>
+<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – WIDE style dataframe (use long_to_wide if the data isn’t already)
+categorical features will be discard for this, if present</p></li>
 <li><p><strong>forecast_length</strong> (<em>int</em>) – time ahead that will be forecast</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – those annoying offset codes you have to always use for time series</p></li>
 <li><p><strong>holiday_countries</strong> (<em>list</em>) – list of countries to pull holidays for. Reqs holidays pkg</p></li>
@@ -454,6 +471,20 @@ If new categorical series or levels are present in .transform() it won’t work!
 <dd><p>Convert categorical dataset to numeric.</p>
 </dd></dl>
 
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.shaping.clean_weights">
+<code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">clean_weights</code><span class="sig-paren">(</span><em class="sig-param">weights</em>, <em class="sig-param">series</em>, <em class="sig-param">verbose=0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.clean_weights" title="Permalink to this definition">¶</a></dt>
+<dd><p>Polish up series weighting information</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>weights</strong> (<em>dict</em>) – dictionary of series_id: weight (float or int)</p></li>
+<li><p><strong>series</strong> (<em>iterable</em>) – list of series_ids in the dataset</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="function">
@@ -1423,7 +1454,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="function">
 <dt id="autots.tools.transform.RandomTransform">
-<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.1</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.02</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.03</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.3</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.2</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.1</em>, <em class="sig-param">'mean': 0.05</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.05</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.5</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.1</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.02</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.03</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.3</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.2</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.1</em>, <em class="sig-param">'mean': 0.05</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.05</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.5</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">superfast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a dict of randomly choosen transformation selections.</p>
 <p>SinTrend is used as a signal that slow parameters are allowed.</p>
 </dd></dl>
@@ -1943,6 +1974,121 @@ Inverse transformed values returned will also not return as ‘exactly’ equals
 <dt id="autots.tools.transform.transformer_list_to_dict">
 <code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">transformer_list_to_dict</code><span class="sig-paren">(</span><em class="sig-param">transformer_list</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.transformer_list_to_dict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convert various possibilities to dict.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.window_functions">
+<span id="autots-tools-window-functions-module"></span><h2>autots.tools.window_functions module<a class="headerlink" href="#module-autots.tools.window_functions" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="autots.tools.window_functions.last_window">
+<code class="sig-prename descclassname">autots.tools.window_functions.</code><code class="sig-name descname">last_window</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">window_size: int = 10</em>, <em class="sig-param">input_dim: str = 'univariate'</em>, <em class="sig-param">normalize_window: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.window_functions.last_window" title="Permalink to this definition">¶</a></dt>
+<dd><p>Pandas based function to provide the last window of window_maker.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.window_functions.retrieve_closest_indices">
+<code class="sig-prename descclassname">autots.tools.window_functions.</code><code class="sig-name descname">retrieve_closest_indices</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">num_indices</em>, <em class="sig-param">forecast_length</em>, <em class="sig-param">window_size: int = 10</em>, <em class="sig-param">distance_metric: str = 'braycurtis'</em>, <em class="sig-param">stride_size: int = 1</em>, <em class="sig-param">start_index: int = None</em>, <em class="sig-param">include_differenced: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.window_functions.retrieve_closest_indices" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find next indicies closest to the final segment of forecast_length</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – source data in wide format</p></li>
+<li><p><strong>num_indices</strong> (<em>int</em>) – number of indices to return</p></li>
+<li><p><strong>forecast_length</strong> (<em>int</em>) – length of forecast</p></li>
+<li><p><strong>window_size</strong> (<em>int</em>) – length of comparison</p></li>
+<li><p><strong>distance_metric</strong> (<em>str</em>) – distance measure from scipy and nan_euclidean</p></li>
+<li><p><strong>stride_size</strong> (<em>int</em>) – length of spacing between windows</p></li>
+<li><p><strong>start_index</strong> (<em>int</em>) – index to begin creation of windows from</p></li>
+<li><p><strong>include_difference</strong> (<em>bool</em>) – if True, also compare on differences</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.window_functions.window_id_maker">
+<code class="sig-prename descclassname">autots.tools.window_functions.</code><code class="sig-name descname">window_id_maker</code><span class="sig-paren">(</span><em class="sig-param">window_size: int</em>, <em class="sig-param">max_steps: int</em>, <em class="sig-param">start_index: int = 0</em>, <em class="sig-param">stride_size: int = 1</em>, <em class="sig-param">skip_size: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.window_functions.window_id_maker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create indices for array of multiple window slices of data</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>window_size</strong> (<em>int</em>) – length of time history to include</p></li>
+<li><p><strong>max_steps</strong> (<em>int</em>) – the maximum number of windows to create</p></li>
+<li><p><strong>start_index</strong> (<em>int</em>) – if to not start at the first point, start at this point</p></li>
+<li><p><strong>stride_size</strong> (<em>int</em>) – number of skips between each window start point</p></li>
+<li><p><strong>skip_size</strong> (<em>int</em>) – number of skips between each obs in a window (downsamples)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>np.array with 3D shape (num windows, window_length, num columns/series), 2D array if only 1D <cite>array</cite> provided)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.window_functions.window_maker">
+<code class="sig-prename descclassname">autots.tools.window_functions.</code><code class="sig-name descname">window_maker</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">window_size: int = 10</em>, <em class="sig-param">input_dim: str = 'univariate'</em>, <em class="sig-param">normalize_window: bool = False</em>, <em class="sig-param">shuffle: bool = False</em>, <em class="sig-param">output_dim: str = 'forecast_length'</em>, <em class="sig-param">forecast_length: int = 1</em>, <em class="sig-param">max_windows: int = 5000</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">random_seed: int = 1234</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.window_functions.window_maker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a dataset into slices with history and y forecast.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – <cite>wide</cite> format df with sorted index</p></li>
+<li><p><strong>window_size</strong> (<em>int</em>) – length of history to use for X window</p></li>
+<li><p><strong>input_dim</strong> (<em>str</em>) – univariate or multivariate. If multivariate, all series in single X row</p></li>
+<li><p><strong>shuffle</strong> (<em>bool</em>) – (deprecated)</p></li>
+<li><p><strong>output_dim</strong> (<em>str</em>) – ‘forecast_length’ or ‘1step’ where 1 step is basically forecast_length=1</p></li>
+<li><p><strong>forecast_length</strong> (<em>int</em>) – number of periods ahead that will be forecast</p></li>
+<li><p><strong>max_windows</strong> (<em>int</em>) – a cap on total number of windows to generate. If exceeded, random of this int are selected.</p></li>
+<li><p><strong>regression_type</strong> (<em>str</em>) – None or “user” if to try to concat regressor to windows</p></li>
+<li><p><strong>future_regressor</strong> (<em>pd.DataFrame</em>) – values of regressor if used</p></li>
+<li><p><strong>random_seed</strong> (<em>int</em>) – a consistent random</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>X, Y</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.window_functions.window_maker_2">
+<code class="sig-prename descclassname">autots.tools.window_functions.</code><code class="sig-name descname">window_maker_2</code><span class="sig-paren">(</span><em class="sig-param">array</em>, <em class="sig-param">window_size: int</em>, <em class="sig-param">max_steps: int = None</em>, <em class="sig-param">start_index: int = 0</em>, <em class="sig-param">stride_size: int = 1</em>, <em class="sig-param">skip_size: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.window_functions.window_maker_2" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create array of multiple window slices of data
+Note that this returns a different orientation than window_maker_3</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>array</strong> (<em>np.array</em>) – source of historic information of shape (num_obs, num_series)</p></li>
+<li><p><strong>window_size</strong> (<em>int</em>) – length of time history to include</p></li>
+<li><p><strong>max_steps</strong> (<em>int</em>) – the maximum number of windows to create</p></li>
+<li><p><strong>start_index</strong> (<em>int</em>) – if to not start at the first point, start at this point</p></li>
+<li><p><strong>stride_size</strong> (<em>int</em>) – number of skips between each window start point</p></li>
+<li><p><strong>skip_size</strong> (<em>int</em>) – number of skips between each obs in a window (downsamples)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>np.array with 3D shape (num windows, window_length, num columns/series), 2D array if only 1D <cite>array</cite> provided)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.window_functions.window_maker_3">
+<code class="sig-prename descclassname">autots.tools.window_functions.</code><code class="sig-name descname">window_maker_3</code><span class="sig-paren">(</span><em class="sig-param">array</em>, <em class="sig-param">window_size: int</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.window_functions.window_maker_3" title="Permalink to this definition">¶</a></dt>
+<dd><p>stride tricks version of window. About 40% faster than window_maker_2
+Note that this returns a different orientation than window_maker_2</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>array</strong> (<em>np.array</em>) – in shape of (num_obs, num_series)</p></li>
+<li><p><strong>window_size</strong> (<em>int</em>) – length of slice of history</p></li>
+<li><p><strong>passed to np.lib.stride_tricks.sliding_window_view</strong> (<em>**kwargs</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>np.array with 3D shape (num windows, num columns/series, window_length), 2D array if only 1D <cite>array</cite> provided)</p>
+</dd>
+</dl>
 </dd></dl>
 
 </section>

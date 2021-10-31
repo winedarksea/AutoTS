@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Intro &#8212; AutoTS 0.3.8 documentation</title>
+    <title>Intro &#8212; AutoTS 0.3.9 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -39,13 +39,20 @@
 <section id="autots">
 <h1>AutoTS<a class="headerlink" href="#autots" title="Permalink to this headline">¶</a></h1>
 <p><span class="raw-html-m2r"><img src="/img/autots_logo.png" width="400" height="184" title="AutoTS Logo"></span></p>
-<p><strong>Forecasting Model Selection for Multiple Time Series</strong></p>
-<p>AutoML for forecasting with open-source time series implementations.</p>
-<p>For other time series needs, check out the list <a class="reference external" href="https://github.com/MaxBenChrist/awesome_time_series_in_python">here</a>.</p>
+<p>AutoTS is a time series package for Python designed for rapidly deploying high-accuracy forecasts at scale.</p>
+<p>There are dozens of forecasting models usable in the <code class="docutils literal notranslate"><span class="pre">sklearn</span></code> style of <code class="docutils literal notranslate"><span class="pre">.fit()</span></code> and <code class="docutils literal notranslate"><span class="pre">.predict()</span></code>.
+These includes naive, statistical, machine learning, and deep learning models.
+Additionally, there are over 30 time series specific transforms usable in the <code class="docutils literal notranslate"><span class="pre">sklearn</span></code> style of <code class="docutils literal notranslate"><span class="pre">.fit()</span></code>, <code class="docutils literal notranslate"><span class="pre">.transform()</span></code> and <code class="docutils literal notranslate"><span class="pre">.inverse_transform()</span></code>.
+All of these function directly on Pandas Dataframes, without the need for conversion to proprietary objects.</p>
+<p>All models support forecasting multivariate (multiple time series) outputs and also support probabilistic (upper/lower bound) forecasts.
+Most models can readily scale to tens and even hundreds of thousands of input series.
+Many models also support passing in user-defined exogenous regressors.</p>
+<p>These models are all designed for integration in an AutoML feature search which automatically finds the best models, preprocessing, and ensembling for a given dataset through genetic algorithms.</p>
+<p>Horizontal and mosaic style ensembles are the flagship ensembling types, allowing each series to receive the most accurate possible models while still maintaining scalability.</p>
+<p>A combination of metrics and cross-validation options, the ability to apply subsets and weighting, regressor generation tools, live datasets, template import and export, plotting, and a collection of data shaping parameters round out the available feature set.</p>
 <section id="table-of-contents">
 <h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
-<li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#features">Features</a></p></li>
 <li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#installation">Installation</a></p></li>
 <li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#basic-use">Basic Use</a></p></li>
 <li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#tips-for-speed-and-large-data">Tips for Speed and Large Data</a></p></li>
@@ -54,52 +61,15 @@
 </ul>
 </section>
 <section id="id1">
-<h2>Features<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
-<ul class="simple">
-<li><p>Finds optimal time series forecasting model and data transformations by genetic programming optimization</p></li>
-<li><p>Handles univariate and multivariate/parallel time series</p></li>
-<li><p>Point and probabilistic upper/lower bound forecasts for all models</p></li>
-<li><p>Over twenty available model classes, with tens of thousands of possible hyperparameter configurations</p>
-<ul>
-<li><p>Includes naive, statistical, machine learning, and deep learning models</p></li>
-<li><p>Multiprocessing for univariate models for scalability on multivariate datasets</p></li>
-<li><p>Ability to add external regressors</p></li>
-</ul>
-</li>
-<li><p>Over thirty time series specific data transformations</p>
-<ul>
-<li><p>Ability to handle messy data by learning optimal NaN imputation and outlier removal</p></li>
-</ul>
-</li>
-<li><p>Allows automatic ensembling of best models</p>
-<ul>
-<li><p>‘horizontal’ ensembling on multivariate series - learning the best model for each series</p></li>
-</ul>
-</li>
-<li><p>Multiple cross validation options</p>
-<ul>
-<li><p>‘seasonal’ validation allows forecasts to be optimized for the seasonity of the data</p></li>
-</ul>
-</li>
-<li><p>Subsetting and weighting to improve speed and relevance of search on large datasets</p>
-<ul>
-<li><p>‘constraint’ parameter can be used to assure forecasts don’t drift beyond historic boundaries</p></li>
-</ul>
-</li>
-<li><p>Option to use one or a combination of metrics for model selection</p></li>
-<li><p>Import and export of model templates for deployment and greater user customization</p></li>
-</ul>
-</section>
-<section id="id2">
-<h2>Installation<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h2>
+<h2>Installation<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
 <div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>pip install autots
 </pre></div>
 </div>
 <p>This includes dependencies for basic models, but <a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md#installation-and-dependency-versioning">additonal packages</a> are required for some models and methods.</p>
 </section>
-<section id="id3">
-<h2>Basic Use<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h2>
-<p>Input data is expected to come in either a <em>long</em> or a <em>wide</em> format:</p>
+<section id="id2">
+<h2>Basic Use<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h2>
+<p>Input data for AutoTS is expected to come in either a <em>long</em> or a <em>wide</em> format:</p>
 <ul class="simple">
 <li><p>The <em>wide</em> format is a <code class="docutils literal notranslate"><span class="pre">pandas.DataFrame</span></code> with a <code class="docutils literal notranslate"><span class="pre">pandas.DatetimeIndex</span></code> and each column a distinct series.</p></li>
 <li><p>The <em>long</em> format has three columns:</p>
@@ -111,6 +81,7 @@
 </li>
 <li><p>For <em>long</em> data, the column name for each of these is passed to .fit() as <code class="docutils literal notranslate"><span class="pre">date_col</span></code>, <code class="docutils literal notranslate"><span class="pre">id_col</span></code>, and <code class="docutils literal notranslate"><span class="pre">value_col</span></code>. No parameters are needed for <em>wide</em> data.</p></li>
 </ul>
+<p>Lower-level functions are only designed for <code class="docutils literal notranslate"><span class="pre">wide</span></code> style data.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># also load: _hourly, _monthly, _weekly, _yearly, or _live_daily</span>
 <span class="kn">from</span> <span class="nn">autots</span> <span class="kn">import</span> <span class="n">AutoTS</span><span class="p">,</span> <span class="n">load_daily</span>
 
@@ -160,12 +131,12 @@
 <p>Check out <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html">extended_tutorial.md</a> for a more detailed guide to features!</p>
 <p>Also take a look at the <a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/production_example.py">production_example.py</a></p>
 </section>
-<section id="id4">
-<h2>Tips for Speed and Large Data:<a class="headerlink" href="#id4" title="Permalink to this headline">¶</a></h2>
+<section id="id3">
+<h2>Tips for Speed and Large Data:<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
 <li><p>Use appropriate model lists, especially the predefined lists:</p>
 <ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">superfast</span></code> (simple naive models) and <code class="docutils literal notranslate"><span class="pre">fast</span></code> (more complex but still faster models)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">superfast</span></code> (simple naive models) and <code class="docutils literal notranslate"><span class="pre">fast</span></code> (more complex but still faster models, optimized for many series)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">fast_parallel</span></code> (a combination of <code class="docutils literal notranslate"><span class="pre">fast</span></code> and <code class="docutils literal notranslate"><span class="pre">parallel</span></code>) or <code class="docutils literal notranslate"><span class="pre">parallel</span></code>, given many CPU cores are available</p>
 <ul>
 <li><p><code class="docutils literal notranslate"><span class="pre">n_jobs</span></code> usually gets pretty close with <code class="docutils literal notranslate"><span class="pre">='auto'</span></code> but adjust as necessary for the environment</p></li>
@@ -177,12 +148,12 @@
 <li><p>Use the <code class="docutils literal notranslate"><span class="pre">subset</span></code> parameter when there are many similar series, <code class="docutils literal notranslate"><span class="pre">subset=100</span></code> will often generalize well for tens of thousands of similar series.</p>
 <ul>
 <li><p>if using <code class="docutils literal notranslate"><span class="pre">subset</span></code>, passing <code class="docutils literal notranslate"><span class="pre">weights</span></code> for series will weight subset selection towards higher priority series.</p></li>
-<li><p>if limited by RAM, it can be easily distributed by running multiple instances of AutoTS on different batches of data, having first imported a template pretrained as a starting point for all.</p></li>
+<li><p>if limited by RAM, it can be distributed by running multiple instances of AutoTS on different batches of data, having first imported a template pretrained as a starting point for all.</p></li>
 </ul>
 </li>
 <li><p>Set <code class="docutils literal notranslate"><span class="pre">model_interrupt=True</span></code> which passes over the current model when a <code class="docutils literal notranslate"><span class="pre">KeyboardInterrupt</span></code> ie <code class="docutils literal notranslate"><span class="pre">crtl+c</span></code> is pressed (although if the interrupt falls between generations it will stop the entire training).</p></li>
 <li><p>Use the <code class="docutils literal notranslate"><span class="pre">result_file</span></code> method of <code class="docutils literal notranslate"><span class="pre">.fit()</span></code> which will save progress after each generation - helpful to save progress if a long training is being done. Use <code class="docutils literal notranslate"><span class="pre">import_results</span></code> to recover.</p></li>
-<li><p>While Transformations are pretty fast, setting <code class="docutils literal notranslate"><span class="pre">transformer_max_depth</span></code> to a lower number (say, 2) will increase speed. Also utilize <code class="docutils literal notranslate"><span class="pre">transformer_list</span></code>.</p></li>
+<li><p>While Transformations are pretty fast, setting <code class="docutils literal notranslate"><span class="pre">transformer_max_depth</span></code> to a lower number (say, 2) will increase speed. Also utilize <code class="docutils literal notranslate"><span class="pre">transformer_list</span></code> == ‘fast’ or ‘superfast’.</p></li>
 <li><p>Check out <a class="reference external" href="https://github.com/winedarksea/AutoTS/discussions/76">this example</a> of using AutoTS with pandas UDF.</p></li>
 <li><p>Ensembles are obviously slower to predict because they run many models, ‘distance’ models 2x slower, and ‘simple’ models 3x-5x slower.</p>
 <ul>
@@ -249,10 +220,9 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Intro</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#autots">AutoTS</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#table-of-contents">Table of Contents</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#id1">Features</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#id2">Installation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#id3">Basic Use</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#id4">Tips for Speed and Large Data:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id1">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id2">Basic Use</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id3">Tips for Speed and Large Data:</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#how-to-contribute">How to Contribute:</a></li>
 </ul>
 </li>
