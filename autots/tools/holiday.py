@@ -17,7 +17,9 @@ def holiday_flag(DTindex, country: str = 'US', encode_holiday_type: bool = False
     country = str(country).upper()
     if country in ['US', "USA", "UNITED STATES"]:
         try:
-            holi_days = query_holidays(DTindex, country="US", encode_holiday_type=encode_holiday_type)
+            holi_days = query_holidays(
+                DTindex, country="US", encode_holiday_type=encode_holiday_type
+            )
         except Exception:
             from pandas.tseries.holiday import USFederalHolidayCalendar
 
@@ -25,13 +27,15 @@ def holiday_flag(DTindex, country: str = 'US', encode_holiday_type: bool = False
             holi_days = (
                 USFederalHolidayCalendar()
                 .holidays()
-                .to_series()[DTindex[0]: DTindex[-1]]
+                .to_series()[DTindex[0] : DTindex[-1]]
             )
             holi_days = pd.Series(np.repeat(1, len(holi_days)), index=holi_days)
             holi_days = holi_days.reindex(DTindex).fillna(0)
             holi_days.rename("HolidayFlag", inplace=True)
     else:
-        holi_days = query_holidays(DTindex, country=country, encode_holiday_type=encode_holiday_type)
+        holi_days = query_holidays(
+            DTindex, country=country, encode_holiday_type=encode_holiday_type
+        )
 
     return holi_days
 
@@ -54,7 +58,10 @@ def query_holidays(DTindex, country: str, encode_holiday_type: bool = False):
         # sorting to hopefully get consistent encoding across runs (requires long period...)
         country_holidays = pd.Series(country_holidays_base).sort_values()
         encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=999)
-        holi_days = pd.Series(encoder.fit_transform(country_holidays.to_numpy().reshape(-1, 1)).flatten(), name="HolidayFlag")
+        holi_days = pd.Series(
+            encoder.fit_transform(country_holidays.to_numpy().reshape(-1, 1)).flatten(),
+            name="HolidayFlag",
+        )
         # since zeroes are reserved for non-holidays
         holi_days = holi_days + 1
         holi_days.index = country_holidays.index

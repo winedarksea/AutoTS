@@ -118,7 +118,9 @@ def create_regressor(
                 regr_train[f"holiday_flag_{holiday_country}_future"] = holiday_future
                 regr_fcst[f"holiday_flag_{holiday_country}_future"] = holiday_future_2
             except Exception:
-                print(f"holiday_future columns failed to add for {holiday_country}, likely due to complex datetime index")
+                print(
+                    f"holiday_future columns failed to add for {holiday_country}, likely due to complex datetime index"
+                )
 
     # columns all as strings
     regr_train.columns = [str(xc) for xc in regr_train.columns]

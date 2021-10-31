@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.evaluator package &#8212; AutoTS 0.3.8 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 0.3.9 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -113,7 +113,7 @@
 
 <dl class="class">
 <dt id="autots.evaluator.auto_model.TemplateEvalObject">
-<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateEvalObject</code><span class="sig-paren">(</span><em class="sig-param">model_results=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_timestamp_smape=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_mae=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_rmse=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_contour=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_spl=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_rmse1=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_rmse2=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">model_count: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateEvalObject" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateEvalObject</code><span class="sig-paren">(</span><em class="sig-param">model_results=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_timestamp_smape=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_mae=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_rmse=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_contour=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_spl=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">model_count: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateEvalObject" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Object to contain all the failures!.</p>
 <dl class="attribute">
@@ -358,12 +358,14 @@ can accept string aliases: “all”, “fast”, “superfast”</p></li>
 <li><p><strong>num_validations</strong> (<em>int</em>) – number of cross validations to perform. 0 for just train/test on final split.</p></li>
 <li><p><strong>models_to_validate</strong> (<em>int</em>) – top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
 0.99 is forced to 100% validation. 1 evaluates just 1 model.
-If horizontal or probabilistic ensemble, then additional min per_series models above the number here may be added to validation.</p></li>
+If horizontal or mosaic ensemble, then additional min per_series models above the number here are added to validation.</p></li>
 <li><p><strong>max_per_model_class</strong> (<em>int</em>) – of the models_to_validate what is the maximum to pass from any one model class/family.</p></li>
 <li><p><strong>validation_method</strong> (<em>str</em>) – ‘even’, ‘backwards’, or ‘seasonal n’ where n is an integer of seasonal
 ‘backwards’ is better for recency and for shorter training sets
 ‘even’ splits the data into equally-sized slices best for more consistent data
-‘seasonal n’ for example ‘seasonal 364’ would test all data on each previous year of the forecast_length that would immediately follow the training data.</p></li>
+‘seasonal n’ for example ‘seasonal 364’ would test all data on each previous year of the forecast_length that would immediately follow the training data.
+‘similarity’ automatically finds the data sections most similar to the most recent data that will be used for prediction
+‘custom’ - if used, .fit() needs validation_indexes passed - a list of pd.DatetimeIndex’s, tail of each is used as test</p></li>
 <li><p><strong>min_allowed_train_percent</strong> (<em>float</em>) – percent of forecast length to allow as min training, else raises error.
 0.5 with a forecast length of 10 would mean 5 training points are mandated, for a total of 15 points.
 Useful in (unrecommended) cases where forecast_length &gt; training length.</p></li>
@@ -459,8 +461,8 @@ if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite
 </dd></dl>
 
 <dl class="attribute">
-<dt id="autots.evaluator.auto_ts.AutoTS.model_results">
-<code class="sig-name descname">model_results</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.model_results" title="Permalink to this definition">¶</a></dt>
+<dt id="autots.evaluator.auto_ts.AutoTS.initial_results.model_results">
+<code class="sig-prename descclassname">initial_results.</code><code class="sig-name descname">model_results</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.initial_results.model_results" title="Permalink to this definition">¶</a></dt>
 <dd><p>contains a collection of result metrics</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -543,7 +545,7 @@ the max number of each model class to include in template</p></li>
 
 <dl class="method">
 <dt id="autots.evaluator.auto_ts.AutoTS.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = None</em>, <em class="sig-param">value_col: str = None</em>, <em class="sig-param">id_col: str = None</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">weights: dict = {}</em>, <em class="sig-param">result_file: str = None</em>, <em class="sig-param">grouping_ids=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = None</em>, <em class="sig-param">value_col: str = None</em>, <em class="sig-param">id_col: str = None</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">weights: dict = {}</em>, <em class="sig-param">result_file: str = None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">validation_indexes: list = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -751,40 +753,6 @@ Currently result_file and import only save/load initial run, no validations.</p>
 <section id="module-autots.evaluator.metrics">
 <span id="autots-evaluator-metrics-module"></span><h2>autots.evaluator.metrics module<a class="headerlink" href="#module-autots.evaluator.metrics" title="Permalink to this headline">¶</a></h2>
 <p>Tools for calculating forecast errors.</p>
-<dl class="class">
-<dt id="autots.evaluator.metrics.EvalObject">
-<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">EvalObject</code><span class="sig-paren">(</span><em class="sig-param">model_name: str = 'Uninitiated'</em>, <em class="sig-param">per_series_metrics=nan</em>, <em class="sig-param">per_timestamp=nan</em>, <em class="sig-param">avg_metrics=nan</em>, <em class="sig-param">avg_metrics_weighted=nan</em>, <em class="sig-param">full_mae_error=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.EvalObject" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>Object to contain all the failures!.</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.evaluator.metrics.PredictionEval">
-<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">PredictionEval</code><span class="sig-paren">(</span><em class="sig-param">PredictionObject</em>, <em class="sig-param">actual</em>, <em class="sig-param">series_weights: dict</em>, <em class="sig-param">df_train=None</em>, <em class="sig-param">per_timestamp_errors: bool = False</em>, <em class="sig-param">full_mae_error: bool = False</em>, <em class="sig-param">dist_n: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.PredictionEval" title="Permalink to this definition">¶</a></dt>
-<dd><p>Evalute prediction against test actual.</p>
-<p>This fails with pd.NA values supplied.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>PredictionObject</strong> (<em>autots.PredictionObject</em>) – Prediction from AutoTS model object</p></li>
-<li><p><strong>actual</strong> (<em>pd.DataFrame</em>) – dataframe of actual values of (forecast length * n series)</p></li>
-<li><p><strong>series_weights</strong> (<em>dict</em>) – key = column/series_id, value = weight</p></li>
-<li><p><strong>df_train</strong> (<em>pd.DataFrame</em>) – historical values of series, used for setting scaler for SPL
-if None, actuals are used instead. Suboptimal.</p></li>
-<li><p><strong>per_timestamp</strong> (<em>bool</em>) – whether to calculate and return per timestamp direction errors</p></li>
-<li><p><strong>dist_n</strong> (<em>int</em>) – if not None, calculates two part rmse on head(n) and tail(remainder) of forecast.</p></li>
-<li><p><strong>full_mae_error</strong> (<em>bool</em>) – if True, return all MAE values for all series and timestamps</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.evaluator.metrics.SPL">
-<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">SPL</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em>, <em class="sig-param">df_train</em>, <em class="sig-param">quantile</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.SPL" title="Permalink to this definition">¶</a></dt>
-<dd><p>Scaled pinball loss.</p>
-</dd></dl>
-
 <dl class="function">
 <dt id="autots.evaluator.metrics.containment">
 <code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">containment</code><span class="sig-paren">(</span><em class="sig-param">lower_forecast</em>, <em class="sig-param">upper_forecast</em>, <em class="sig-param">actual</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.containment" title="Permalink to this definition">¶</a></dt>
@@ -819,7 +787,34 @@ Returns a 1-D array of results in len n series</p>
 
 <dl class="function">
 <dt id="autots.evaluator.metrics.mae">
-<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">mae</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.mae" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">mae</code><span class="sig-paren">(</span><em class="sig-param">ae</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.mae" title="Permalink to this definition">¶</a></dt>
+<dd><p>Accepting abs error already calculated</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.evaluator.metrics.mean_absolute_error">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">mean_absolute_error</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.mean_absolute_error" title="Permalink to this definition">¶</a></dt>
+<dd><p>Expects two, 2-D numpy arrays of forecast_length * n series.</p>
+<p>Returns a 1-D array of results in len n series</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>A</strong> (<em>numpy.array</em>) – known true values</p></li>
+<li><p><strong>F</strong> (<em>numpy.array</em>) – predicted values</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.evaluator.metrics.medae">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">medae</code><span class="sig-paren">(</span><em class="sig-param">ae</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.medae" title="Permalink to this definition">¶</a></dt>
+<dd><p>Accepting abs error already calculated</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.evaluator.metrics.median_absolute_error">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">median_absolute_error</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.median_absolute_error" title="Permalink to this definition">¶</a></dt>
 <dd><p>Expects two, 2-D numpy arrays of forecast_length * n series.</p>
 <p>Returns a 1-D array of results in len n series</p>
 <dl class="field-list simple">
@@ -840,7 +835,13 @@ Returns a 1-D array of results in len n series</p>
 
 <dl class="function">
 <dt id="autots.evaluator.metrics.rmse">
-<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">rmse</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">forecast</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.rmse" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">rmse</code><span class="sig-paren">(</span><em class="sig-param">ae</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.rmse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Accepting abs error already calculated</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.evaluator.metrics.root_mean_square_error">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">root_mean_square_error</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">forecast</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.root_mean_square_error" title="Permalink to this definition">¶</a></dt>
 <dd><p>Expects two, 2-D numpy arrays of forecast_length * n series.</p>
 <p>Returns a 1-D array of results in len n series</p>
 <dl class="field-list simple">
@@ -854,8 +855,36 @@ Returns a 1-D array of results in len n series</p>
 </dd></dl>
 
 <dl class="function">
+<dt id="autots.evaluator.metrics.scaled_pinball_loss">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">scaled_pinball_loss</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em>, <em class="sig-param">df_train</em>, <em class="sig-param">quantile</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.scaled_pinball_loss" title="Permalink to this definition">¶</a></dt>
+<dd><p>Scaled pinball loss.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>A</strong> (<em>np.array</em>) – actual values</p></li>
+<li><p><strong>F</strong> (<em>np.array</em>) – forecast values</p></li>
+<li><p><strong>df_train</strong> (<em>np.array</em>) – values of historic data for scaling</p></li>
+<li><p><strong>quantile</strong> (<em>float</em>) – which bound of upper/lower forecast this is</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
 <dt id="autots.evaluator.metrics.smape">
-<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">smape</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">forecast</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.smape" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">smape</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">forecast</em>, <em class="sig-param">ae</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.smape" title="Permalink to this definition">¶</a></dt>
+<dd><p>Accepting abs error already calculated</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.evaluator.metrics.spl">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">spl</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em>, <em class="sig-param">quantile</em>, <em class="sig-param">scaler</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.spl" title="Permalink to this definition">¶</a></dt>
+<dd><p>Accepting scaler already calculated</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.evaluator.metrics.symmetric_mean_absolute_percentage_error">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">symmetric_mean_absolute_percentage_error</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">forecast</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.symmetric_mean_absolute_percentage_error" title="Permalink to this definition">¶</a></dt>
 <dd><p>Expect two, 2-D numpy arrays of forecast_length * n series.
 Allows NaN in actuals, and corresponding NaN in forecast, but not unmatched NaN in forecast
 Also doesn’t like zeroes in either forecast or actual - results in poor error value even if forecast is accurate</p>

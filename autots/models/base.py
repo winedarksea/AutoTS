@@ -4,10 +4,11 @@ Base model information
 
 @author: Colin
 """
+import warnings
 import datetime
 import numpy as np
 import pandas as pd
-from autots.evaluator.metrics import smape, mae, rmse, containment, contour, SPL
+from autots.evaluator.metrics import smape, mae, rmse, containment, contour, spl, medae
 
 
 class ModelObject(object):
@@ -260,19 +261,22 @@ class PredictionObject(object):
 
         if start_date is not None:
             start_date = pd.to_datetime(start_date, infer_datetime_format=True)
-            if plot_df.index.max() < pd.to_datetime(start_date, infer_datetime_format=True):
+            if plot_df.index.max() < pd.to_datetime(
+                start_date, infer_datetime_format=True
+            ):
                 raise ValueError("start_date is more recent than all data provided")
             plot_df[plot_df.index >= start_date].plot(**kwargs)
         else:
             plot_df.plot(**kwargs)
 
-    def evaluate(self,
-                 actual,
-                 series_weights: dict = None,
-                 df_train=None,
-                 per_timestamp_errors: bool = False,
-                 full_mae_error: bool = False,
-                 ):
+    def evaluate(
+        self,
+        actual,
+        series_weights: dict = None,
+        df_train=None,
+        per_timestamp_errors: bool = False,
+        full_mae_error: bool = True,
+    ):
         """Evalute prediction against test actual. Fills out attributes of base object.
 
         This fails with pd.NA values supplied.
@@ -283,7 +287,6 @@ class PredictionObject(object):
             df_train (pd.DataFrame): historical values of series, wide, used for setting scaler for SPL
                 if None, actuals are used instead. Suboptimal.
             per_timestamp (bool): whether to calculate and return per timestamp direction errors
-            full_mae_error (bool): if True, return all absolute error values for all series and timestamps
 
         Returns:
             per_series_metrics
@@ -292,52 +295,61 @@ class PredictionObject(object):
             avg_metrics_weighted
             full_mae_error
         """
-
-        if series_weights is None:
-            from autots.tools.shaping import clean_weights
-
-            series_weights = clean_weights(weights=False, series=self.forecast.columns)
-
         A = np.array(actual)
         F = np.array(self.forecast)
         lower_forecast = np.array(self.lower_forecast)
         upper_forecast = np.array(self.upper_forecast)
         if df_train is None:
-            df_train = actual
+            df_train = A
         df_train = np.array(df_train)
+
+        # check series_weights information
+        if series_weights is None:
+            from autots.tools.shaping import clean_weights
+
+            series_weights = clean_weights(weights=False, series=self.forecast.columns)
         # make sure the series_weights are passed correctly to metrics
         if len(series_weights) != F.shape[1]:
-            series_weights = {
-                col: series_weights[col] for col in self.forecast.columns
-            }
+            series_weights = {col: series_weights[col] for col in self.forecast.columns}
 
-        per_series = pd.DataFrame(
-            {
-                'smape': smape(A, F),
-                'mae': mae(A, F),
-                'rmse': rmse(A, F),
-                'containment': containment(lower_forecast, upper_forecast, A),
-                'spl': SPL(
-                    A=A,
-                    F=upper_forecast,
-                    df_train=df_train,
-                    quantile=self.prediction_interval,
-                )
-                + SPL(
-                    A=A,
-                    F=lower_forecast,
-                    df_train=df_train,
-                    quantile=(1 - self.prediction_interval),
-                ),
-                'contour': contour(A, F),
-            }
-        ).transpose()
-        per_series.columns = actual.columns
+        # reuse this in several metrics
+        self.full_mae_errors = abs(A - F)
+
+        # calculate scaler once for spl
+        scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
+        fill_val = np.nanmax(scaler)
+        fill_val = fill_val if fill_val > 0 else 1
+        scaler[scaler == 0] = fill_val
+        scaler[np.isnan(scaler)] = fill_val
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            self.per_series_metrics = pd.DataFrame(
+                {
+                    'smape': smape(A, F, self.full_mae_errors),
+                    'mae': mae(self.full_mae_errors),
+                    # 'medae': medae(self.full_mae_errors),
+                    'rmse': rmse(self.full_mae_errors),
+                    'containment': containment(lower_forecast, upper_forecast, A),
+                    'spl': spl(
+                        A=A,
+                        F=upper_forecast,
+                        quantile=self.prediction_interval,
+                        scaler=scaler,
+                    )
+                    + spl(
+                        A=A,
+                        F=lower_forecast,
+                        quantile=(1 - self.prediction_interval),
+                        scaler=scaler,
+                    ),
+                    'contour': contour(A, F),
+                },
+                index=actual.columns,
+            ).transpose()
 
         if per_timestamp_errors:
-            smape_df = abs(self.forecast - actual) / (
-                abs(self.forecast) + abs(actual)
-            )
+            smape_df = abs(self.forecast - actual) / (abs(self.forecast) + abs(actual))
             weight_mean = np.mean(list(series_weights.values()))
             wsmape_df = (smape_df * series_weights) / weight_mean
             smape_cons = (np.nansum(wsmape_df, axis=1) * 200) / np.count_nonzero(
@@ -348,13 +360,8 @@ class PredictionObject(object):
 
         # this weighting won't work well if entire metrics are NaN
         # but results should still be comparable
-        self.avg_metrics_weighted = (per_series * series_weights).sum(
+        self.avg_metrics_weighted = (self.per_series_metrics * series_weights).sum(
             axis=1, skipna=True
         ) / sum(series_weights.values())
-        self.avg_metrics = per_series.mean(axis=1, skipna=True)
-
-        if full_mae_error:
-            self.full_mae_errors = abs(A - F)
-
-        self.per_series_metrics = per_series
+        self.avg_metrics = self.per_series_metrics.mean(axis=1, skipna=True)
         return self

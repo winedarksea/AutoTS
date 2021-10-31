@@ -21,10 +21,11 @@
 * added "similarity" validation option
 * SectionalMotif model added
 * window functions grouped in module
-* fix bugs in holiday_flag
+* fixed bugs in holiday_flag
 * holiday_flag now has holiday categorical encoding option and works better on sub-daily data
 * create_regressor handle categorical features
 * 'superfast' transformer_dict now adjusts fillna methods as well
+* optimizing metric calculation runtimes (feel the speed of 500 µs savings!)
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

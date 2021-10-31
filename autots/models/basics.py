@@ -1301,7 +1301,9 @@ class Motif(ModelObject):
                 ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
             )[0],
             "distance_metric": random.choice(metric_list),
-            "k": random.choices([3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.5, 0.1, 0.1, 0.1])[0],
+            "k": random.choices(
+                [3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0],
             "max_windows": random.choices([None, 1000, 10000], [0.01, 0.1, 0.8])[0],
         }
 
@@ -1743,7 +1745,9 @@ class SectionalMotif(ModelObject):
         self.df = df
         if str(self.regression_type).lower() == "user":
             if future_regressor is None:
-                raise ValueError("regression_type=='User' but no future_regressor supplied")
+                raise ValueError(
+                    "regression_type=='User' but no future_regressor supplied"
+                )
             self.future_regressor = future_regressor
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -1782,47 +1786,66 @@ class SectionalMotif(ModelObject):
         combined_window_size = window_size + forecast_length
         max_steps = array.shape[0] - combined_window_size
         window_idxs = window_id_maker(
-            window_size=combined_window_size, start_index=0,
-            max_steps=max_steps, stride_size=self.stride_size, skip_size=1
+            window_size=combined_window_size,
+            start_index=0,
+            max_steps=max_steps,
+            stride_size=self.stride_size,
+            skip_size=1,
         )
         # calculate distance between all points and last window of history
         if distance_metric == "nan_euclidean":
             from sklearn.metrics.pairwise import nan_euclidean_distances
 
-            res = np.array([
-                nan_euclidean_distances(
-                    array[:, a][window_idxs[:, :window_size]],
-                    array[(tlt_len - window_size):tlt_len, a].reshape(1, -1)
-                ) for a in range(array.shape[1])
-            ])
+            res = np.array(
+                [
+                    nan_euclidean_distances(
+                        array[:, a][window_idxs[:, :window_size]],
+                        array[(tlt_len - window_size) : tlt_len, a].reshape(1, -1),
+                    )
+                    for a in range(array.shape[1])
+                ]
+            )
             if self.include_differenced:
                 array_diff = np.diff(array, n=1, axis=0)
                 array_diff = np.concatenate([array_diff[0:1], array_diff])
-                res_diff = np.array([
-                    nan_euclidean_distances(
-                        array_diff[:, a][window_idxs[:, :window_size]],
-                        array_diff[(tlt_len - window_size):tlt_len, a].reshape(1, -1)
-                    ) for a in range(array_diff.shape[1])
-                ])
+                res_diff = np.array(
+                    [
+                        nan_euclidean_distances(
+                            array_diff[:, a][window_idxs[:, :window_size]],
+                            array_diff[(tlt_len - window_size) : tlt_len, a].reshape(
+                                1, -1
+                            ),
+                        )
+                        for a in range(array_diff.shape[1])
+                    ]
+                )
                 res = np.mean([res, res_diff], axis=0)
         else:
-            res = np.array([
-                cdist(
-                    array[:, a][window_idxs[:, :window_size]],
-                    array[(tlt_len - window_size):tlt_len, a].reshape(1, -1),
-                    metric=distance_metric
-                ) for a in range(array.shape[1])
-            ])
+            res = np.array(
+                [
+                    cdist(
+                        array[:, a][window_idxs[:, :window_size]],
+                        array[(tlt_len - window_size) : tlt_len, a].reshape(1, -1),
+                        metric=distance_metric,
+                    )
+                    for a in range(array.shape[1])
+                ]
+            )
             if self.include_differenced:
                 array_diff = np.diff(array, n=1, axis=0)
                 array_diff = np.concatenate([array_diff[0:1], array_diff])
-                res_diff = np.array([
-                    cdist(
-                        array_diff[:, a][window_idxs[:, :window_size]],
-                        array_diff[(tlt_len - window_size):tlt_len, a].reshape(1, -1),
-                        metric=distance_metric
-                    ) for a in range(array_diff.shape[1])
-                ])
+                res_diff = np.array(
+                    [
+                        cdist(
+                            array_diff[:, a][window_idxs[:, :window_size]],
+                            array_diff[(tlt_len - window_size) : tlt_len, a].reshape(
+                                1, -1
+                            ),
+                            metric=distance_metric,
+                        )
+                        for a in range(array_diff.shape[1])
+                    ]
+                )
                 res = np.mean([res, res_diff], axis=0)
         # find the lowest distance historical windows
         res_sum = np.nansum(res, axis=0)
@@ -1834,7 +1857,7 @@ class SectionalMotif(ModelObject):
             res_shape = results.shape
             results = results.reshape((res_shape[0], res_shape[2], res_shape[3]))
         if regression_type == "user":
-            results = results[:, :, :self.df.shape[1]]
+            results = results[:, :, : self.df.shape[1]]
         # now aggregate results into point and bound forecasts
         if point_method == "weighted_mean":
             weights = res_sum[res_idx].flatten()
@@ -1855,8 +1878,12 @@ class SectionalMotif(ModelObject):
         lower_forecast = np.nanquantile(results, q=pred_int, axis=0)
 
         forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
-        lower_forecast = pd.DataFrame(lower_forecast, index=test_index, columns=self.column_names)
-        upper_forecast = pd.DataFrame(upper_forecast, index=test_index, columns=self.column_names)
+        lower_forecast = pd.DataFrame(
+            lower_forecast, index=test_index, columns=self.column_names
+        )
+        upper_forecast = pd.DataFrame(
+            upper_forecast, index=test_index, columns=self.column_names
+        )
         if just_point_forecast:
             return forecast
         else:
@@ -1905,13 +1932,17 @@ class SectionalMotif(ModelObject):
             "nan_euclidean",
         ]
         return {
-            "window": random.choices([3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1])[0],
+            "window": random.choices(
+                [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
+            )[0],
             "point_method": random.choices(
                 ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
             )[0],
             "distance_metric": random.choice(metric_list),
             "include_differenced": random.choices([True, False], [0.9, 0.1])[0],
-            "k": random.choices([1, 3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1])[0],
+            "k": random.choices(
+                [1, 3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0],
             "stride_size": random.choices([1, 2, 5, 10], [0.6, 0.1, 0.1, 0.1])[0],
             'regression_type': random.choices([None, "User"], [0.9, 0.1])[0],
         }

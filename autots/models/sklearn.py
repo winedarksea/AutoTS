@@ -709,7 +709,15 @@ def generate_regressor_params(
                 "model": 'LightGBM',
                 "model_params": {
                     "objective": random.choices(
-                        ['regression', 'gamma', 'huber', 'regression_l1', 'tweedie', 'poisson', 'quantile'],
+                        [
+                            'regression',
+                            'gamma',
+                            'huber',
+                            'regression_l1',
+                            'tweedie',
+                            'poisson',
+                            'quantile',
+                        ],
                         [0.4, 0.2, 0.2, 0.2, 0.2, 0.05, 0.01],
                     )[0],
                     "learning_rate": random.choices(
@@ -1115,8 +1123,6 @@ class RollingRegression(ModelObject):
             'regression_type': self.regression_type,
         }
         return parameter_dict
-
-
 
 
 class WindowRegression(ModelObject):
@@ -2216,7 +2222,7 @@ class MultivariateRegression(ModelObject):
             'max_depth': 20,
             'min_samples_leaf': 4,
             'min_samples_split': 5,
-            'n_estimators': 250
+            'n_estimators': 250,
         },
         n_jobs: int = -1,
         **kwargs,
@@ -2335,14 +2341,16 @@ class MultivariateRegression(ModelObject):
         del base
         alpha_base = (1 - self.prediction_interval) / 2
         self.model_upper = GradientBoostingRegressor(
-            loss='quantile', alpha=(1 - alpha_base),
+            loss='quantile',
+            alpha=(1 - alpha_base),
             random_state=self.random_seed,
             **self.quantile_params,
         )
         self.model_lower = GradientBoostingRegressor(
-            loss='quantile', alpha=alpha_base,
+            loss='quantile',
+            alpha=alpha_base,
             random_state=self.random_seed,
-            **self.quantile_params
+            **self.quantile_params,
         )
 
         multioutput = True

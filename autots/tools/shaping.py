@@ -399,10 +399,7 @@ def clean_weights(weights, series, verbose=0):
                 print(f"{key_count} series_id not in weights. Inferring 1.")
             else:
                 print("All series_id present in weighting.")
-        weights = {
-            col: (weights[col] if col in weights else 1)
-            for col in series
-        }
+        weights = {col: (weights[col] if col in weights else 1) for col in series}
         # handle non-numeric inputs, somewhat slower than desired
         for key in weights:
             try:

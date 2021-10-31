@@ -62,7 +62,7 @@ def window_maker(
             shape_1 = df.shape[1] if df.ndim > 1 else 1
             if isinstance(future_regressor, pd.DataFrame):
                 regr_arr = np.repeat(
-                    future_regressor.reindex(df.index).to_numpy()[(phrase_n - 1):],
+                    future_regressor.reindex(df.index).to_numpy()[(phrase_n - 1) :],
                     shape_1,
                     axis=0,
                 )
@@ -98,7 +98,7 @@ def window_maker(
         for z in numbers:
             if input_dim == 'univariate':
                 rand_slice = df.iloc[
-                    z: (z + phrase_n),
+                    z : (z + phrase_n),
                 ]
                 rand_slice = (
                     rand_slice.reset_index(drop=True)
@@ -109,11 +109,11 @@ def window_maker(
                 cY = rand_slice.iloc[:, window_size:]
             else:
                 cX = df.iloc[
-                    z: (z + window_size),
+                    z : (z + window_size),
                 ]
                 cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
                 cY = df.iloc[
-                    (z + window_size): (z + phrase_n),
+                    (z + window_size) : (z + phrase_n),
                 ]
                 cY = pd.DataFrame(cY.stack().reset_index(drop=True)).transpose()
             X = pd.concat([X, cX], axis=0)
@@ -136,7 +136,7 @@ def last_window(
     shape_1 = df.shape[1] if df.ndim > 1 else 1
     if input_dim == 'univariate':
         cX = df.iloc[
-            z: (z + window_size),
+            z : (z + window_size),
         ]
         cX = (
             cX.reset_index(drop=True)
@@ -145,7 +145,7 @@ def last_window(
         )
     else:
         cX = df.iloc[
-            z: (z + window_size),
+            z : (z + window_size),
         ]
         cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
     if normalize_window:
@@ -154,9 +154,14 @@ def last_window(
     return cX
 
 
-def window_id_maker(window_size: int, max_steps: int,
-                    start_index: int = 0, stride_size: int = 1, skip_size: int = 1):
-    """ Create indices for array of multiple window slices of data
+def window_id_maker(
+    window_size: int,
+    max_steps: int,
+    start_index: int = 0,
+    stride_size: int = 1,
+    skip_size: int = 1,
+):
+    """Create indices for array of multiple window slices of data
 
     Args:
         window_size (int): length of time history to include
@@ -169,16 +174,22 @@ def window_id_maker(window_size: int, max_steps: int,
         np.array with 3D shape (num windows, window_length, num columns/series), 2D array if only 1D `array` provided)
     """
     window_idxs = (
-        start_index +
-        np.expand_dims(np.arange(window_size, step=skip_size), 0) +
-        np.expand_dims(np.arange(max_steps + 1, step=stride_size), 0).T
+        start_index
+        + np.expand_dims(np.arange(window_size, step=skip_size), 0)
+        + np.expand_dims(np.arange(max_steps + 1, step=stride_size), 0).T
     )
 
     return window_idxs
 
 
-def window_maker_2(array, window_size: int, max_steps: int = None,
-                   start_index: int = 0, stride_size: int = 1, skip_size: int = 1):
+def window_maker_2(
+    array,
+    window_size: int,
+    max_steps: int = None,
+    start_index: int = 0,
+    stride_size: int = 1,
+    skip_size: int = 1,
+):
     """Create array of multiple window slices of data
     Note that this returns a different orientation than window_maker_3
 
@@ -197,8 +208,11 @@ def window_maker_2(array, window_size: int, max_steps: int = None,
         max_steps = array.shape[0] - window_size
 
     window_idxs = window_id_maker(
-        window_size=window_size, start_index=start_index,
-        max_steps=max_steps, stride_size=stride_size, skip_size=skip_size
+        window_size=window_size,
+        start_index=start_index,
+        max_steps=max_steps,
+        stride_size=stride_size,
+        skip_size=skip_size,
     )
 
     return array[window_idxs]
@@ -216,9 +230,7 @@ def window_maker_3(array, window_size: int, **kwargs):
     Returns:
         np.array with 3D shape (num windows, num columns/series, window_length), 2D array if only 1D `array` provided)
     """
-    x = np.lib.stride_tricks.sliding_window_view(
-        array, window_size, axis=0, **kwargs
-    )
+    x = np.lib.stride_tricks.sliding_window_view(array, window_size, axis=0, **kwargs)
     return x
 
 
@@ -251,7 +263,7 @@ def retrieve_closest_indices(
     # remove extra so last segment not included at all
     max_steps = array.shape[0] - combined_window_size - forecast_length
     # have the last window end evenly
-    spare_room = (array.shape[0] - forecast_length - combined_window_size)
+    spare_room = array.shape[0] - forecast_length - combined_window_size
     if start_index is None:
         # handle massive stride size relative to data
         start_index = 0
@@ -260,49 +272,64 @@ def retrieve_closest_indices(
     if num_indices > (spare_room / stride_size):
         raise ValueError("num_validations/num_indices too high for this dataset")
     window_idxs = window_id_maker(
-        window_size=combined_window_size, start_index=start_index,
-        max_steps=max_steps, stride_size=stride_size, skip_size=1
+        window_size=combined_window_size,
+        start_index=start_index,
+        max_steps=max_steps,
+        stride_size=stride_size,
+        skip_size=1,
     )
     # calculate distance between all points and last window of history
     if distance_metric == "nan_euclidean":
         from sklearn.metrics.pairwise import nan_euclidean_distances
 
-        res = np.array([
-            nan_euclidean_distances(
-                array[:, a][window_idxs[:, :window_size]],
-                array[(tlt_len - window_size):tlt_len, a].reshape(1, -1)
-            ) for a in range(array.shape[1])
-        ])
+        res = np.array(
+            [
+                nan_euclidean_distances(
+                    array[:, a][window_idxs[:, :window_size]],
+                    array[(tlt_len - window_size) : tlt_len, a].reshape(1, -1),
+                )
+                for a in range(array.shape[1])
+            ]
+        )
         if include_differenced:
             array_diff = np.diff(array, n=1, axis=0)
             array_diff = np.concatenate([array_diff[0:1], array_diff])
-            res_diff = np.array([
-                nan_euclidean_distances(
-                    array_diff[:, a][window_idxs[:, :window_size]],
-                    array_diff[(tlt_len - window_size):tlt_len, a].reshape(1, -1)
-                ) for a in range(array_diff.shape[1])
-            ])
+            res_diff = np.array(
+                [
+                    nan_euclidean_distances(
+                        array_diff[:, a][window_idxs[:, :window_size]],
+                        array_diff[(tlt_len - window_size) : tlt_len, a].reshape(1, -1),
+                    )
+                    for a in range(array_diff.shape[1])
+                ]
+            )
             res = np.mean([res, res_diff], axis=0)
     else:
         from scipy.spatial.distance import cdist
 
-        res = np.array([
-            cdist(
-                array[:, a][window_idxs[:, :window_size]],
-                array[(tlt_len - window_size):tlt_len, a].reshape(1, -1),
-                metric=distance_metric
-            ) for a in range(array.shape[1])
-        ])
+        res = np.array(
+            [
+                cdist(
+                    array[:, a][window_idxs[:, :window_size]],
+                    array[(tlt_len - window_size) : tlt_len, a].reshape(1, -1),
+                    metric=distance_metric,
+                )
+                for a in range(array.shape[1])
+            ]
+        )
         if include_differenced:
             array_diff = np.diff(array, n=1, axis=0)
             array_diff = np.concatenate([array_diff[0:1], array_diff])
-            res_diff = np.array([
-                cdist(
-                    array_diff[:, a][window_idxs[:, :window_size]],
-                    array_diff[(tlt_len - window_size):tlt_len, a].reshape(1, -1),
-                    metric=distance_metric
-                ) for a in range(array_diff.shape[1])
-            ])
+            res_diff = np.array(
+                [
+                    cdist(
+                        array_diff[:, a][window_idxs[:, :window_size]],
+                        array_diff[(tlt_len - window_size) : tlt_len, a].reshape(1, -1),
+                        metric=distance_metric,
+                    )
+                    for a in range(array_diff.shape[1])
+                ]
+            )
             res = np.mean([res, res_diff], axis=0)
     # find the lowest distance historical windows
     res_sum = np.nansum(res, axis=0)

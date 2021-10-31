@@ -390,8 +390,12 @@ class AutoTS(object):
         forecast_length = self.forecast_length
         self.validation_indexes = validation_indexes
         if self.validation_method == "custom":
-            assert validation_indexes is not None, "validation_indexes needs to be filled with 'custom' validation"
-            assert len(validation_indexes) >= self.num_validations, "validation_indexes needs to be >= num_validations with 'custom' validation"
+            assert (
+                validation_indexes is not None
+            ), "validation_indexes needs to be filled with 'custom' validation"
+            assert (
+                len(validation_indexes) >= self.num_validations
+            ), "validation_indexes needs to be >= num_validations with 'custom' validation"
         # flag if weights are given
         if bool(weights):
             weighted = True
@@ -518,7 +522,14 @@ class AutoTS(object):
         if self.validation_method == "similarity":
             from autots.tools.transform import GeneralTransformer
 
-            params = {"fillna": "ffill", "transformations": {"0": "QuantileTransformer", "1": "RobustScaler"}, "transformation_params": {"0": {"output_distribution": "uniform", "n_quantiles": 1000}, "1": {}}}
+            params = {
+                "fillna": "ffill",
+                "transformations": {"0": "QuantileTransformer", "1": "RobustScaler"},
+                "transformation_params": {
+                    "0": {"output_distribution": "uniform", "n_quantiles": 1000},
+                    "1": {},
+                },
+            }
             trans = GeneralTransformer(**params)
 
             created_idx = retrieve_closest_indices(
@@ -527,7 +538,10 @@ class AutoTS(object):
                 forecast_length=self.forecast_length,
                 stride_size=self.forecast_length,
             )
-            self.validation_indexes = [df_wide_numeric.index[df_wide_numeric.index <= indx[-1]] for indx in created_idx]
+            self.validation_indexes = [
+                df_wide_numeric.index[df_wide_numeric.index <= indx[-1]]
+                for indx in created_idx
+            ]
 
         # record if subset or not
         if self.subset is not None:
@@ -816,7 +830,9 @@ class AutoTS(object):
         # add on best per_series models (which may not be in the top scoring)
         if any(x in ensemble for x in self.h_ens_list):
             model_results = self.initial_results.model_results
-            mods = generate_score_per_series(self.initial_results, self.metric_weighting, 1).idxmin()
+            mods = generate_score_per_series(
+                self.initial_results, self.metric_weighting, 1
+            ).idxmin()
             per_series_val = model_results[
                 model_results['ID'].isin(mods.unique().tolist())
             ]
@@ -922,7 +938,7 @@ class AutoTS(object):
                         ).reindex(idx)
                     nan_frac = val_df_train.shape[1] / num_validations
                     val_df_train.iloc[
-                        -2:, int(nan_frac * y): int(nan_frac * (y + 1))
+                        -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
                     ] = np.nan
 
                 # run validation template on current slice

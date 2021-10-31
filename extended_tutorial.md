@@ -88,6 +88,10 @@ Here are the available methods:
 It trains on the most recent data as usual, then valdations are `n` periods back from the datetime of the forecast would be. 
 For example with daily data, forecasting for a month ahead, and `n=364`, the first test might be on May 2021, with validation on June 2020 and June 2019, the final forecast then of June 2021. 
 
+**Similarity** automatically finds the data sections most similar to the most recent data that will be used for prediction. This is the best general purpose choice but currently can be sensitive to messy data.
+
+**Custom** allows validations of any type. If used, .fit() needs `validation_indexes` passed - a list of pd.DatetimeIndex's, tail of forecast_length of each is used as test (which should be of the same length as `num_validations`).
+
 Only a subset of models are taken from initial validation to cross validation. The number of models is set such as `models_to_validate=10`. 
 If a float in 0 to 1 is provided, it is treated as a % of models to select. 
 If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter. 
@@ -156,9 +160,9 @@ lower_forecasts_df = prediction.lower_forecast
 ### Model Lists
 By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of `'probabilistic', 'multivariate', 'fast', 'superfast', or 'all'`.
 
-A table of all available models is available further below.
+A table of all available models is below.
 
-On large multivariate series, `TSFreshRegressor`, `DynamicFactor` and `VARMAX` can be impractically slow.
+On large multivariate series, `DynamicFactor` and `VARMAX` can be impractically slow.
 
 ## Deployment and Template Import/Export
 Take a look at the [production_example.py](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
@@ -253,7 +257,7 @@ It is best to usually use several metrics. Often the best sMAPE model, for examp
 
 `SPL` is *Scaled Pinball Loss* and is the optimal metric for assessing upper/lower quantile forecast accuracies.
 
-`Containment` measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL.
+`Containment` measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called `coverage_fraction`.
 
 `Contour` is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. Does not work with forecast_length=1. 
 
@@ -346,6 +350,7 @@ conda activate openblas
 
 python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost --exists-action i
 
+python -m pip install yfinance pytrends fredapi
 python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily, --no-deps to pip install prophet if this fails
 python -m pip install mxnet --exists-action i     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
 python -m pip install gluonts --exists-action i
@@ -395,10 +400,13 @@ conda create -n intelpython -c intel python=3.7 intelpython3_full
 conda activate intelpython
 
 # install additional packages as desired
-conda install -c intel statsmodels lightgbm tensorflow
+python -m pip install yfinance pytrends fredapi
 python -m pip install mxnet --no-deps
 python -m pip install gluonts
 conda install -c conda-forge prophet
+conda install spyder
+conda update intelpython3_full
+conda install -c intel statsmodels lightgbm tensorflow
 
 python -m pip install autots
 
@@ -477,6 +485,7 @@ forecasts_df = prediction.forecast
 print(model)
 print(f"Was a model choosen that used the regressor? {model.used_regressor_check}")
 ```
+For models here in the lower level api, confusingly, regression_type="User" must be specified as well as passing future_regressor. Why? This allows the model search to easily try both with and without the regressor, because sometimes the regressor may do more harm than good.
 
 ### A Hack for Passing in Parameters (that aren't otherwise available)
 There are a lot of parameters available here, but not always all of the options available for a particular parameter are actually used in generated templates. 
@@ -538,6 +547,9 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 * MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series `i` are used to predict next step for series `i`, with a model trained on all data from all series.
 * UnivariateRegression is the same as MultivariateRegression but trains an independent model on each series, thus not capable of learning from the patterns of other series. This performs well in horizontal ensembles as it can be parsed down to one series with the same performance on that series. 
 
+How the upper and lower forecast bounds are created for these models will likely change in the future. 
+Currently `MultivariateRegression` utilizes a stock GradientBoostingRegressor with quantile loss for probabilistic estimates, while others utilize point to probabilistic estimates.
+
 ## Models
 
 | Model                   | Dependencies | Optional Dependencies   | Probabilistic | Multiprocessing | GPU   | Multivariate | Experimental | Use Regressor |
@@ -560,9 +572,10 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
-|  MultivariateRegression | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
+|  MultivariateRegression | sklearn      | lightgbm, tensorflow    |    True       |     sklearn     | some  | True         |              | True          |
 |  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 | UnivariateMotif/MultivariateMotif | scipy.distaince.cdist |      |    True       |     joblib      |       | *            |              |               |
+|  SectionalMotif         | scipy.distaince.cdist |  sklearn       |    True       |                 |       | True         |              | True          |
 |  NVAR                   |              |                         |    True       |   blas/lapack   |       | True         |              |               |
 |  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |   *           |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |

@@ -3,7 +3,6 @@
 import unittest
 import numpy as np
 import pandas as pd
-from autots.evaluator.metrics import PredictionEval
 from autots.models.base import PredictionObject
 
 
@@ -33,8 +32,7 @@ class TestMetrics(unittest.TestCase):
             'c': [np.nan, np.nan, np.nan, np.nan, np.nan]
         })
 
-        output_res = PredictionEval(
-            predictions,
+        output_res = predictions.evaluate(
             actual,
             series_weights={'a': 10, 'b': 1, 'c': 1},
             df_train=actual,  # just used for SPL scaling

@@ -1,10 +1,9 @@
 """Tools for calculating forecast errors."""
 import warnings
 import numpy as np
-import pandas as pd
 
 
-def smape(actual, forecast):
+def symmetric_mean_absolute_percentage_error(actual, forecast):
     """Expect two, 2-D numpy arrays of forecast_length * n series.
     Allows NaN in actuals, and corresponding NaN in forecast, but not unmatched NaN in forecast
     Also doesn't like zeroes in either forecast or actual - results in poor error value even if forecast is accurate
@@ -27,7 +26,7 @@ def smape(actual, forecast):
     return smape
 
 
-def mae(A, F):
+def mean_absolute_error(A, F):
     """Expects two, 2-D numpy arrays of forecast_length * n series.
 
     Returns a 1-D array of results in len n series
@@ -68,8 +67,15 @@ def pinball_loss(A, F, quantile):
     return result
 
 
-def SPL(A, F, df_train, quantile):
-    """Scaled pinball loss."""
+def scaled_pinball_loss(A, F, df_train, quantile):
+    """Scaled pinball loss.
+
+    Args:
+        A (np.array): actual values
+        F (np.array): forecast values
+        df_train (np.array): values of historic data for scaling
+        quantile (float): which bound of upper/lower forecast this is
+    """
     # scaler = df_train.tail(1000).diff().abs().mean(axis=0)
     # scaler = np.abs(np.diff(df_train[-1000:], axis=0)).mean(axis=0)
     with warnings.catch_warnings():
@@ -88,7 +94,7 @@ def SPL(A, F, df_train, quantile):
     return pl / scaler
 
 
-def rmse(actual, forecast):
+def root_mean_square_error(actual, forecast):
     """Expects two, 2-D numpy arrays of forecast_length * n series.
 
     Returns a 1-D array of results in len n series
@@ -112,15 +118,12 @@ def containment(lower_forecast, upper_forecast, actual):
         actual (numpy.array): known true values
         forecast (numpy.array): predicted values
     """
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        result = (
-            np.count_nonzero(
-                (upper_forecast >= actual) & (lower_forecast <= actual), axis=0
-            )
-            / actual.shape[0]
+    return (
+        np.count_nonzero(
+            (upper_forecast >= actual) & (lower_forecast <= actual), axis=0
         )
-    return result
+        / actual.shape[0]
+    )
 
 
 def contour(A, F):
@@ -147,3 +150,35 @@ def contour(A, F):
         except Exception:
             contour_result = np.nan
     return contour_result
+
+
+def rmse(ae):
+    """Accepting abs error already calculated"""
+    return np.sqrt(np.nanmean((ae ** 2), axis=0))
+
+
+def mae(ae):
+    """Accepting abs error already calculated"""
+    return np.nanmean(ae, axis=0)
+
+
+def medae(ae):
+    """Accepting abs error already calculated"""
+    return np.nanmedian(ae, axis=0)
+
+
+def smape(actual, forecast, ae):
+    """Accepting abs error already calculated"""
+    return (
+        np.nansum((ae / (abs(forecast) + abs(actual))), axis=0) * 200
+    ) / np.count_nonzero(~np.isnan(actual), axis=0)
+
+
+def spl(A, F, quantile, scaler):
+    """Accepting scaler already calculated"""
+    return (
+        np.nanmean(
+            np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A)), axis=0
+        )
+        / scaler
+    )

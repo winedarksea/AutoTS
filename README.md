@@ -2,38 +2,29 @@
 
 <img src="/img/autots_logo.png" width="400" height="184" title="AutoTS Logo">
 
-**Forecasting Model Selection for Multiple Time Series**
+AutoTS is a time series package for Python designed for rapidly deploying high-accuracy forecasts at scale. 
 
-AutoML for forecasting with open-source time series implementations.
+There are dozens of forecasting models usable in the `sklearn` style of `.fit()` and `.predict()`. 
+These includes naive, statistical, machine learning, and deep learning models. 
+Additionally, there are over 30 time series specific transforms usable in the `sklearn` style of `.fit()`, `.transform()` and `.inverse_transform()`. 
+All of these function directly on Pandas Dataframes, without the need for conversion to proprietary objects. 
 
-For other time series needs, check out the list [here](https://github.com/MaxBenChrist/awesome_time_series_in_python).
+All models support forecasting multivariate (multiple time series) outputs and also support probabilistic (upper/lower bound) forecasts. 
+Most models can readily scale to tens and even hundreds of thousands of input series. 
+Many models also support passing in user-defined exogenous regressors. 
+
+These models are all designed for integration in an AutoML feature search which automatically finds the best models, preprocessing, and ensembling for a given dataset through genetic algorithms. 
+
+Horizontal and mosaic style ensembles are the flagship ensembling types, allowing each series to receive the most accurate possible models while still maintaining scalability.
+
+A combination of metrics and cross-validation options, the ability to apply subsets and weighting, regressor generation tools, live datasets, template import and export, plotting, and a collection of data shaping parameters round out the available feature set. 
 
 ## Table of Contents
-* [Features](https://github.com/winedarksea/AutoTS#features)
 * [Installation](https://github.com/winedarksea/AutoTS#installation)
 * [Basic Use](https://github.com/winedarksea/AutoTS#basic-use)
 * [Tips for Speed and Large Data](https://github.com/winedarksea/AutoTS#tips-for-speed-and-large-data)
 * Extended Tutorial [GitHub](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md) or [Docs](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html)
 * [Production Example](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
-
-## Features
-* Finds optimal time series forecasting model and data transformations by genetic programming optimization
-* Handles univariate and multivariate/parallel time series
-* Point and probabilistic upper/lower bound forecasts for all models
-* Over twenty available model classes, with tens of thousands of possible hyperparameter configurations
-	* Includes naive, statistical, machine learning, and deep learning models
-	* Multiprocessing for univariate models for scalability on multivariate datasets
-	* Ability to add external regressors
-* Over thirty time series specific data transformations
-	* Ability to handle messy data by learning optimal NaN imputation and outlier removal
-* Allows automatic ensembling of best models
-	* 'horizontal' ensembling on multivariate series - learning the best model for each series
-* Multiple cross validation options
-	* 'seasonal' validation allows forecasts to be optimized for the seasonity of the data
-* Subsetting and weighting to improve speed and relevance of search on large datasets
-	* 'constraint' parameter can be used to assure forecasts don't drift beyond historic boundaries
-* Option to use one or a combination of metrics for model selection
-* Import and export of model templates for deployment and greater user customization
 
 ## Installation
 ```
@@ -43,7 +34,7 @@ This includes dependencies for basic models, but [additonal packages](https://gi
 
 ## Basic Use
 
-Input data is expected to come in either a *long* or a *wide* format:
+Input data for AutoTS is expected to come in either a *long* or a *wide* format:
 
 - The *wide* format is a `pandas.DataFrame` with a `pandas.DatetimeIndex` and each column a distinct series. 
 - The *long* format has three columns: 
@@ -51,6 +42,8 @@ Input data is expected to come in either a *long* or a *wide* format:
   - Series ID. For a single time series, series_id can be `= None`.
   - Value
 - For *long* data, the column name for each of these is passed to .fit() as `date_col`, `id_col`, and `value_col`. No parameters are needed for *wide* data.
+
+Lower-level functions are only designed for `wide` style data.
 
 ```python
 # also load: _hourly, _monthly, _weekly, _yearly, or _live_daily
@@ -107,16 +100,16 @@ Also take a look at the [production_example.py](https://github.com/winedarksea/A
 
 ## Tips for Speed and Large Data:
 * Use appropriate model lists, especially the predefined lists:
-	* `superfast` (simple naive models) and `fast` (more complex but still faster models)
+	* `superfast` (simple naive models) and `fast` (more complex but still faster models, optimized for many series)
 	* `fast_parallel` (a combination of `fast` and `parallel`) or `parallel`, given many CPU cores are available
 		* `n_jobs` usually gets pretty close with `='auto'` but adjust as necessary for the environment
 	* see a dict of predefined lists (some defined for internal use) with `from autots.models.model_list import model_lists`
 * Use the `subset` parameter when there are many similar series, `subset=100` will often generalize well for tens of thousands of similar series.
 	* if using `subset`, passing `weights` for series will weight subset selection towards higher priority series.
-	* if limited by RAM, it can be easily distributed by running multiple instances of AutoTS on different batches of data, having first imported a template pretrained as a starting point for all.
+	* if limited by RAM, it can be distributed by running multiple instances of AutoTS on different batches of data, having first imported a template pretrained as a starting point for all.
 * Set `model_interrupt=True` which passes over the current model when a `KeyboardInterrupt` ie `crtl+c` is pressed (although if the interrupt falls between generations it will stop the entire training).
 * Use the `result_file` method of `.fit()` which will save progress after each generation - helpful to save progress if a long training is being done. Use `import_results` to recover.
-* While Transformations are pretty fast, setting `transformer_max_depth` to a lower number (say, 2) will increase speed. Also utilize `transformer_list`.
+* While Transformations are pretty fast, setting `transformer_max_depth` to a lower number (say, 2) will increase speed. Also utilize `transformer_list` == 'fast' or 'superfast'.
 * Check out [this example](https://github.com/winedarksea/AutoTS/discussions/76) of using AutoTS with pandas UDF.
 * Ensembles are obviously slower to predict because they run many models, 'distance' models 2x slower, and 'simple' models 3x-5x slower.
 	* `ensemble='horizontal-max'` with `model_list='no_shared_fast'` can scale relatively well given many cpu cores because each model is only run on the series it is needed for.
