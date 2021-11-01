@@ -39,14 +39,14 @@ default = [
     'ETS',
     'FBProphet',
     # 'RollingRegression',  # maybe not?
-    'GluonTS',
+    'GluonTS',  # downweight if that becomes an option
     'UnobservedComponents',
     'VAR',
     'VECM',
     'WindowRegression',
     'DatepartRegression',
     'UnivariateRegression',
-    'MultivariateRegression',
+    # 'MultivariateRegression',  # downweight if that becomes an option
     'UnivariateMotif',
     'MultivariateMotif',
     'SectionalMotif',

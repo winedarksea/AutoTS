@@ -68,14 +68,15 @@ class AutoTS(object):
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
             can accept string aliases: "all", "fast", "superfast"
         transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
-        num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
+        num_validations (int): number of cross validations to perform. 0 for just train/test on best split.
+            Possible confusion: num_validations is the number of validations to perform *after* the first eval segment, so totally eval/validations will be this + 1.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
             0.99 is forced to 100% validation. 1 evaluates just 1 model.
             If horizontal or mosaic ensemble, then additional min per_series models above the number here are added to validation.
         max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
         validation_method (str): 'even', 'backwards', or 'seasonal n' where n is an integer of seasonal
             'backwards' is better for recency and for shorter training sets
-            'even' splits the data into equally-sized slices best for more consistent data
+            'even' splits the data into equally-sized slices best for more consistent data, a poetic but less effective strategy than others here
             'seasonal n' for example 'seasonal 364' would test all data on each previous year of the forecast_length that would immediately follow the training data.
             'similarity' automatically finds the data sections most similar to the most recent data that will be used for prediction
             'custom' - if used, .fit() needs validation_indexes passed - a list of pd.DatetimeIndex's, tail of each is used as test
@@ -334,6 +335,8 @@ class AutoTS(object):
         self.best_model_params = ""
         self.best_model_transformation_params = ""
         self.traceback = True if verbose > 1 else False
+        self.validation_train_indexes = []
+        self.validation_test_indexes = []
 
         if verbose > 2:
             print('"Hello. Would you like to destroy some evil today?" - Sanderson')
@@ -395,8 +398,8 @@ class AutoTS(object):
                 validation_indexes is not None
             ), "validation_indexes needs to be filled with 'custom' validation"
             assert (
-                len(validation_indexes) >= self.num_validations
-            ), "validation_indexes needs to be >= num_validations with 'custom' validation"
+                len(validation_indexes) >= (self.num_validations + 1)
+            ), "validation_indexes needs to be >= num_validations + 1 with 'custom' validation"
         # flag if weights are given
         if bool(weights):
             weighted = True
@@ -525,19 +528,24 @@ class AutoTS(object):
 
             params = {
                 "fillna": "ffill",
-                "transformations": {"0": "QuantileTransformer", "1": "RobustScaler"},
+                "transformations": {"0": "MinMaxScaler"},
                 "transformation_params": {
-                    "0": {"output_distribution": "uniform", "n_quantiles": 1000},
-                    "1": {},
+                    "0": {},
                 },
             }
             trans = GeneralTransformer(**params)
 
+            stride_size = round(self.forecast_length / 2)
+            stride_size = stride_size if stride_size > 0 else 1
             created_idx = retrieve_closest_indices(
                 trans.fit_transform(df_wide_numeric),
-                num_indices=num_validations,
+                num_indices=num_validations + 1,
                 forecast_length=self.forecast_length,
-                stride_size=self.forecast_length,
+                stride_size=stride_size,
+                distance_metric="canberra",
+                include_differenced=True,
+                window_size=15,
+                verbose=self.verbose,
             )
             self.validation_indexes = [
                 df_wide_numeric.index[df_wide_numeric.index <= indx[-1]]
@@ -554,6 +562,7 @@ class AutoTS(object):
         else:
             self.subset_flag = False
 
+        #
         # take a subset of the data if working with a large number of series
         if self.subset_flag:
             df_subset = subset_series(
@@ -566,6 +575,12 @@ class AutoTS(object):
                 print(f'First subset is of: {df_subset.columns}')
         else:
             df_subset = df_wide_numeric.copy()
+        # go to first index
+        if self.validation_method in ['custom', "similarity"]:
+            first_idx = self.validation_indexes[0]
+            if max(first_idx) > max(df_subset.index):
+                raise ValueError("provided validation index exceeds historical data period")
+            df_subset = df_subset.reindex(first_idx)
 
         # subset the weighting information as well
         if not weighted:
@@ -580,6 +595,8 @@ class AutoTS(object):
             min_allowed_train_percent=self.min_allowed_train_percent,
             verbose=self.verbose,
         )
+        self.validation_train_indexes.append(df_train.index)
+        self.validation_test_indexes.append(df_test.index)
         try:
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
@@ -846,8 +863,6 @@ class AutoTS(object):
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
         validation_template = validation_template[self.template_cols]
-        self.validation_train_indexes = []
-        self.validation_test_indexes = []
 
         # run validations
         if num_validations > 0:
@@ -879,7 +894,7 @@ class AutoTS(object):
                     val_per = df_wide_numeric.shape[0] - val_per
                     current_slice = df_wide_numeric.head(val_per)
                 elif self.validation_method in ['custom', "similarity"]:
-                    current_slice = df_wide_numeric.reindex(self.validation_indexes[y])
+                    current_slice = df_wide_numeric.reindex(self.validation_indexes[(y + 1)])
                 else:
                     raise ValueError(
                         "Validation Method not recognized try 'even', 'backwards'"

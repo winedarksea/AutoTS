@@ -16,6 +16,7 @@
 * BestN ensembles now support weighting model components
 * cluster-based and generate_score_per_series-based 'simple' ensembles
 * 'univariate' model_list added
+* similarity and custom cross validation now set initial evaluation segment
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

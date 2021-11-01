@@ -110,7 +110,7 @@ model = model.fit(
     future_regressor=regr_train,
     weights="mean",
     # result_file='test.pickle',
-    validation_indexes=[pd.date_range("2021-01-01", "2022-02-02"), pd.date_range("2021-01-01", "2022-03-03")],
+    validation_indexes=[pd.date_range("2021-01-01", "2022-05-02"), pd.date_range("2021-01-01", "2022-02-02"), pd.date_range("2021-01-01", "2022-03-03")],
     date_col='datetime' if long else None,
     value_col='value' if long else None,
     id_col='series_id' if long else None,
@@ -133,6 +133,7 @@ initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_secon
 
 sleep(5)
 print(model)
+print(model.validation_test_indexes)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 print("Slowest models:")
 print(initial_results.groupby("Model").agg({'TotalRuntimeSeconds': ['mean', 'max']}).idxmax())
