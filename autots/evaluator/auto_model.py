@@ -787,7 +787,6 @@ def model_forecast(
 
     # if an ensemble
     if model_name == 'Ensemble':
-        forecasts_list = []
         forecasts_runtime = {}
         forecasts = {}
         upper_forecasts = {}
@@ -855,7 +854,6 @@ def model_forecast(
                     + df_forecast.predict_runtime
                     + df_forecast.transformation_runtime
                 )
-                forecasts_list.extend([model_id])
                 forecasts_runtime[model_id] = total_runtime
                 forecasts[model_id] = df_forecast.forecast
                 upper_forecasts[model_id] = df_forecast.upper_forecast
@@ -872,7 +870,7 @@ def model_forecast(
         ens_forecast = EnsembleForecast(
             model_name,
             model_param_dict,
-            forecasts_list=forecasts_list,
+            forecasts_list=list(forecasts.keys()),
             forecasts=forecasts,
             lower_forecasts=lower_forecasts,
             upper_forecasts=upper_forecasts,

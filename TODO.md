@@ -13,19 +13,9 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* update validation template creation for horizontal ensembles
-* made MultivariateRegression probabilistic
-* fixed bug where weighting didn't take floats
-* pushed the evaluate options from a separate function to part of the PredictionObject
-* added 'custom' validation option
-* added "similarity" validation option
-* SectionalMotif model added
-* window functions grouped in module
-* fixed bugs in holiday_flag
-* holiday_flag now has holiday categorical encoding option and works better on sub-daily data
-* create_regressor handle categorical features
-* 'superfast' transformer_dict now adjusts fillna methods as well
-* optimizing metric calculation runtimes (feel the speed of 500 µs savings!)
+* BestN ensembles now support weighting model components
+* cluster-based and generate_score_per_series-based 'simple' ensembles
+* 'univariate' model_list added
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

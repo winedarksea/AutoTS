@@ -103,6 +103,7 @@ class AutoTS(object):
         regression_check (bool): If True, the best_model uses an input 'User' future_regressor
         df_wide_numeric (pd.DataFrame): dataframe containing shaped final data
         initial_results.model_results (object): contains a collection of result metrics
+        score_per_series (pd.DataFrame): generated score of metrics given per input series, if horizontal ensembles
 
     Methods:
         fit, predict
@@ -189,7 +190,7 @@ class AutoTS(object):
         # just a list of horizontal types in general
         self.h_ens_list = ['horizontal', 'probabilistic', 'hdist', "mosaic"]
         if self.ensemble == 'all':
-            self.ensemble = 'simple,distance,horizontal-max,probabilistic'
+            self.ensemble = 'simple,distance,horizontal-max,mosaic'
         elif self.ensemble == 'auto':
             if model_list in ['fast', 'default', 'all', 'multivariate']:
                 self.ensemble = 'simple,distance,horizontal-max'
@@ -721,10 +722,12 @@ class AutoTS(object):
         # try ensembling
         if ensemble not in [None, 'none']:
             try:
+                self.score_per_series = generate_score_per_series(self.initial_results, self.metric_weighting, 1)
                 ensemble_templates = EnsembleTemplateGenerator(
                     self.initial_results,
                     forecast_length=forecast_length,
                     ensemble=ensemble,
+                    score_per_series=self.score_per_series,
                 )
                 template_result = TemplateWizard(
                     ensemble_templates,

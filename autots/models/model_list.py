@@ -131,6 +131,7 @@ multivariate = [
     'MultivariateRegression',
     'SectionalMotif',
 ]
+univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
 no_params = ['ZeroesNaive', 'LastValueNaive', 'GLS']
 # USED IN AUTO_MODEL, ONLY MODELS WHICH CAN ACCEPT RANDOM MIXING OF PARAMS
@@ -202,6 +203,7 @@ model_lists = {
     "fast_parallel": fast_parallel,
     "probabilistic": probabilistic,
     "multivariate": multivariate,
+    "univariate": univariate,
     "no_params": no_params,
     "recombination_approved": recombination_approved,
     "no_shared": no_shared,
