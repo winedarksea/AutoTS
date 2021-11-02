@@ -2498,10 +2498,10 @@ def RandomTransform(
     if fast_params:
         params_method = "fast"
         throw_away = na_prob_dict.pop('IterativeImputer', None)
+        throw_away = df_interpolate.pop('spline', None)  # noqa
         throw_away = na_prob_dict.pop('IterativeImputerExtraTrees', None)  # noqa
     if superfast_params:
         params_method = "fast"
-        throw_away = df_interpolate.pop('spline', None)  # noqa
         throw_away = na_prob_dict.pop('KNNImputer', None)  # noqa
 
     # clean na_probs dict

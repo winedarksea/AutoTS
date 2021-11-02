@@ -341,7 +341,7 @@ def retrieve_closest_indices(
     res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top]
     res_idx = res_idx[np.argsort(res_sum[res_idx].flatten())]
     if verbose > 1:
-        print(f"similarity validation distance metrics: {res_sum[res_idx].flatten()} with min: {res_sum.min()}")
+        print(f"similarity validation distance metrics: {res_sum[res_idx].flatten()} with last window: {res_sum[-1].item()}")
     select_index = index.to_numpy()[window_idxs[res_idx]]
     if select_index.ndim == 3:
         res_shape = select_index.shape

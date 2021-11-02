@@ -17,6 +17,7 @@
 * cluster-based and generate_score_per_series-based 'simple' ensembles
 * 'univariate' model_list added
 * similarity and custom cross validation now set initial evaluation segment
+* 'subsample' ensemble expansion of 'simple'
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
