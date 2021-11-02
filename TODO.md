@@ -18,6 +18,8 @@
 * 'univariate' model_list added
 * similarity and custom cross validation now set initial evaluation segment
 * 'subsample' ensemble expansion of 'simple'
+* added Theta model from statsmodels
+* added ARDL model from statsmodels
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

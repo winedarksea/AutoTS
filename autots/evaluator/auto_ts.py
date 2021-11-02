@@ -527,8 +527,8 @@ class AutoTS(object):
             from autots.tools.transform import GeneralTransformer
 
             params = {
-                "fillna": "ffill",
-                "transformations": {"0": "MinMaxScaler"},
+                "fillna": "median",  # mean or median one of few consistent things
+                "transformations": {"0": "MaxAbsScaler"},
                 "transformation_params": {
                     "0": {},
                 },
@@ -542,9 +542,9 @@ class AutoTS(object):
                 num_indices=num_validations + 1,
                 forecast_length=self.forecast_length,
                 stride_size=stride_size,
-                distance_metric="canberra",
-                include_differenced=True,
-                window_size=15,
+                distance_metric="nan_euclidean",
+                include_differenced=False,
+                window_size=30,
                 include_last=True,
                 verbose=self.verbose,
             )

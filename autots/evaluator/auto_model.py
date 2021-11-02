@@ -42,6 +42,8 @@ from autots.models.statsmodels import (
     VAR,
     VECM,
     VARMAX,
+    Theta,
+    ARDL,
 )
 
 
@@ -420,7 +422,7 @@ def ModelMonster(
 
         return model
     elif model == 'MultivariateMotif':
-        model = Motif(
+        return Motif(
             frequency=frequency,
             prediction_interval=prediction_interval,
             random_seed=random_seed,
@@ -429,9 +431,8 @@ def ModelMonster(
             multivariate=True,
             **parameters,
         )
-        return model
     elif model == 'UnivariateMotif':
-        model = Motif(
+        return Motif(
             frequency=frequency,
             prediction_interval=prediction_interval,
             random_seed=random_seed,
@@ -440,25 +441,42 @@ def ModelMonster(
             multivariate=False,
             **parameters,
         )
-        return model
     elif model == 'SectionalMotif':
-        model = SectionalMotif(
+        return SectionalMotif(
             frequency=frequency,
             prediction_interval=prediction_interval,
             random_seed=random_seed,
             verbose=verbose,
             **parameters,
         )
-        return model
     elif model == 'NVAR':
-        model = NVAR(
+        return NVAR(
             frequency=frequency,
             prediction_interval=prediction_interval,
             random_seed=random_seed,
             verbose=verbose,
             **parameters,
         )
-        return model
+    elif model == 'Theta':
+        return Theta(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'ARDL':
+        return ARDL(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)

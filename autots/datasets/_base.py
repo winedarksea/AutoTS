@@ -5,6 +5,7 @@ import io
 import requests
 import numpy as np
 import pandas as pd
+import time
 
 
 def load_daily(long: bool = True):
@@ -230,13 +231,13 @@ def load_live_daily(
         fred_key (str): https://fred.stlouisfed.org/docs/api/api_key.html
         fred_series (list): list of FRED series IDs. This requires fredapi package
         tickers (list): list of stock tickers, requires yfinance
-        trends (list): list of search keywords, requires pytrends.
+        trends_list (list): list of search keywords, requires pytrends. None to skip.
         weather_data_types (list): from NCEI NOAA api data types, GHCN Daily Weather Elements
             PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG
-        weather_stations (list): from NCEI NOAA api station ids
-        london_air_stations (list): londonair.org.uk source station IDs
+        weather_stations (list): from NCEI NOAA api station ids. Pass empty list to skip.
+        london_air_stations (list): londonair.org.uk source station IDs. Pass empty list to skip.
         london_species (str): what measurement to pull from London Air. Not all stations have all metrics.\
-        earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov
+        earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov. Set None to skip this.
     """
     dataset_lists = []
     current_date = datetime.datetime.utcnow()
@@ -268,25 +269,11 @@ def load_live_daily(
             except Exception:
                 pass
             dataset_lists.append(msft_hist)
+            time.sleep(1)
         except ModuleNotFoundError:
             print("You need to: pip install yfinance")
         except Exception as e:
             print(f"yfinance data failed: {repr(e)}")
-
-    try:
-        from pytrends.request import TrendReq
-
-        pytrends = TrendReq(hl="en-US", tz=360)
-        # pytrends.build_payload(kw_list, cat=0, timeframe='today 5-y', geo='', gprop='')
-        pytrends.build_payload(trends_list, timeframe="all")
-        gtrends = pytrends.interest_over_time()
-        gtrends.index = gtrends.index.tz_localize(None)
-        gtrends.drop(columns="isPartial", inplace=True, errors="ignore")
-        dataset_lists.append(gtrends)
-    except ImportError:
-        print("You need to: pip install pytrends")
-    except Exception as e:
-        print(f"pytrends data failed: {repr(e)}")
 
     str_end_time = current_date.strftime("%Y-%m-%d")
     start_date = (current_date - datetime.timedelta(days=360 * weather_years)).strftime(
@@ -305,6 +292,7 @@ def load_live_daily(
             wdf = wdf.set_index('DATE').drop(columns=['STATION'])
             wdf.rename(columns=lambda x: wstation + "_" + x, inplace=True)
             dataset_lists.append(wdf)
+            time.sleep(1)
         except Exception as e:
             print(f"weather data failed: {repr(e)}")
 
@@ -324,35 +312,53 @@ def load_live_daily(
             adf['Datetime'] = pd.to_datetime(adf['ReadingDateTime'], dayfirst=True)
             adf[acol] = adf['Value']
             dataset_lists.append(adf[['Datetime', acol]].set_index("Datetime"))
+            time.sleep(1)
             # "/Data/Traffic/Site/SiteCode={SiteCode}/StartDate={StartDate}/EndDate={EndDate}/Json"
         except Exception as e:
             print(f"London Air data failed: {repr(e)}")
 
-    try:
-        str_end_time = current_date.strftime("%Y-%m-%d")
-        start_date = (current_date - datetime.timedelta(days=earthquake_days)).strftime(
-            "%Y-%m-%d"
-        )
-        # is limited to ~1000 rows of data, ie individual earthquakes
-        ebase = "https://earthquake.usgs.gov/fdsnws/event/1/query?"
-        eargs = f"format=csv&starttime={start_date}&endtime={str_end_time}&minmagnitude={earthquake_min_magnitude}"
-        eq = pd.read_csv(ebase + eargs)
-        eq["time"] = pd.to_datetime(eq["time"], infer_datetime_format=True)
-        eq["time"] = eq["time"].dt.tz_localize(None)
-        eq.set_index("time", inplace=True)
-        global_earthquakes = eq.resample("1D").agg({"mag": "mean", "depth": "count"})
-        global_earthquakes["mag"] = global_earthquakes["mag"].fillna(
-            earthquake_min_magnitude
-        )
-        global_earthquakes = global_earthquakes.rename(
-            columns={
-                "mag": "largest_magnitude_earthquake",
-                "depth": "count_large_earthquakes",
-            }
-        )
-        dataset_lists.append(global_earthquakes)
-    except Exception as e:
-        print(f"earthquake data failed: {repr(e)}")
+    if earthquake_min_magnitude is not None:
+        try:
+            str_end_time = current_date.strftime("%Y-%m-%d")
+            start_date = (current_date - datetime.timedelta(days=earthquake_days)).strftime(
+                "%Y-%m-%d"
+            )
+            # is limited to ~1000 rows of data, ie individual earthquakes
+            ebase = "https://earthquake.usgs.gov/fdsnws/event/1/query?"
+            eargs = f"format=csv&starttime={start_date}&endtime={str_end_time}&minmagnitude={earthquake_min_magnitude}"
+            eq = pd.read_csv(ebase + eargs)
+            eq["time"] = pd.to_datetime(eq["time"], infer_datetime_format=True)
+            eq["time"] = eq["time"].dt.tz_localize(None)
+            eq.set_index("time", inplace=True)
+            global_earthquakes = eq.resample("1D").agg({"mag": "mean", "depth": "count"})
+            global_earthquakes["mag"] = global_earthquakes["mag"].fillna(
+                earthquake_min_magnitude
+            )
+            global_earthquakes = global_earthquakes.rename(
+                columns={
+                    "mag": "largest_magnitude_earthquake",
+                    "depth": "count_large_earthquakes",
+                }
+            )
+            dataset_lists.append(global_earthquakes)
+        except Exception as e:
+            print(f"earthquake data failed: {repr(e)}")
+
+    if trends_list is not None:
+        try:
+            from pytrends.request import TrendReq
+    
+            pytrends = TrendReq(hl="en-US", tz=360)
+            # pytrends.build_payload(kw_list, cat=0, timeframe='today 5-y', geo='', gprop='')
+            pytrends.build_payload(trends_list, timeframe="all")
+            gtrends = pytrends.interest_over_time()
+            gtrends.index = gtrends.index.tz_localize(None)
+            gtrends.drop(columns="isPartial", inplace=True, errors="ignore")
+            dataset_lists.append(gtrends)
+        except ImportError:
+            print("You need to: pip install pytrends")
+        except Exception as e:
+            print(f"pytrends data failed: {repr(e)}")
 
     if len(dataset_lists) < 1:
         raise ValueError("No data successfully downloaded!")

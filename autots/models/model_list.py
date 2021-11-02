@@ -28,6 +28,8 @@ all_models = [
     'NVAR',
     'MultivariateRegression',
     'SectionalMotif',
+    'Theta',
+    'ARDL',
 ]
 default = [
     'ZeroesNaive',
@@ -51,6 +53,8 @@ default = [
     'MultivariateMotif',
     'SectionalMotif',
     'NVAR',
+    # 'Theta',
+    # 'ARDL',
 ]
 # fastest models at any scale
 superfast = [
@@ -89,6 +93,8 @@ parallel = [
     "Greykite",
     'UnivariateMotif',
     'MultivariateMotif',
+    'Theta',
+    'ARDL',
 ]
 # models that should be fast given many CPU cores
 fast_parallel = list(set(parallel + fast))
@@ -116,6 +122,8 @@ probabilistic = [
     "MultivariateMotif",
     'SectionalMotif',
     'NVAR',
+    'Theta',
+    'ARDL',
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -158,6 +166,8 @@ recombination_approved = [
     'NVAR',
     'MultivariateRegression',
     'SectionalMotif',
+    'Theta',
+    'ARDL',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -175,6 +185,8 @@ no_shared = [
     "UnivariateRegression",
     "Greykite",
     'UnivariateMotif',
+    'Theta',
+    'ARDL',
 ]
 # allow the use of a regressor
 regressor = [
@@ -192,6 +204,7 @@ regressor = [
     "UnivariateRegression",
     'MultivariateRegression',
     'SectionalMotif',  # kinda
+    'ARDL',
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {

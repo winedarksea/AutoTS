@@ -1,5 +1,6 @@
 """Statsmodels based forecasting models."""
 import datetime
+import warnings
 import random
 import numpy as np
 import pandas as pd
@@ -12,6 +13,12 @@ try:
     from statsmodels.api import GLM as SM_GLM
 except Exception:
     pass
+
+joblib_present = True
+try:
+    from joblib import Parallel, delayed
+except Exception:
+    joblib_present = False
 
 
 class GLS(ModelObject):
@@ -278,11 +285,8 @@ class GLM(ModelObject):
 
         if self.n_jobs in [0, 1] or len(cols) < 4:
             parallel = False
-        else:
-            try:
-                from joblib import Parallel, delayed
-            except Exception:
-                parallel = False
+        elif not joblib_present:
+            parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose)(
@@ -449,7 +453,7 @@ class ETS(ModelObject):
             'verbose': self.verbose,
         }
 
-        def ets_forecast_by_column(current_series, args, col):
+        def ets_forecast_by_column(current_series, args):
             """Run one series of ETS and return prediction."""
             series_name = current_series.name
             try:
@@ -490,22 +494,19 @@ class ETS(ModelObject):
         cols = self.df_train.columns.tolist()
         if self.n_jobs in [0, 1] or len(cols) < 4:
             parallel = False
-        else:
-            try:
-                from joblib import Parallel, delayed
-            except Exception:
-                parallel = False
+        elif not joblib_present:
+            parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs)(
-                delayed(ets_forecast_by_column)(self.df_train[col], args, col)
+                delayed(ets_forecast_by_column)(self.df_train[col], args)
                 for (col) in cols
             )
             forecast = pd.concat(df_list, axis=1)
         else:
             df_list = []
             for col in cols:
-                df_list.append(ets_forecast_by_column(self.df_train[col], args, col))
+                df_list.append(ets_forecast_by_column(self.df_train[col], args))
             forecast = pd.concat(df_list, axis=1)
         if just_point_forecast:
             return forecast
@@ -571,27 +572,29 @@ class ETS(ModelObject):
 
 def arima_seek_the_oracle(current_series, args, series):
     try:
-        if args['regression_type'] in ["User", "Holiday"]:
-            maModel = SARIMAX(
-                current_series,
-                order=args['order'],
-                freq=args['frequency'],
-                exog=args['regressor_train'],
-            ).fit(maxiter=600, disp=args['verbose'])
-        else:
-            maModel = SARIMAX(
-                current_series, order=args['order'], freq=args['frequency']
-            ).fit(maxiter=400, disp=args['verbose'])
-        if args['regression_type'] in ["User", "Holiday"]:
-            outer_forecasts = maModel.get_forecast(
-                steps=args['forecast_length'], exog=args['exog']
-            )
-        else:
-            outer_forecasts = maModel.get_forecast(steps=args['forecast_length'])
-        outer_forecasts_df = outer_forecasts.conf_int(alpha=args['alpha'])
-        cforecast = outer_forecasts.summary_frame()['mean']
-        clower_forecast = outer_forecasts_df.iloc[:, 0]
-        cupper_forecast = outer_forecasts_df.iloc[:, 1]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category='ConvergenceWarning')
+            if args['regression_type'] in ["User", "Holiday"]:
+                maModel = SARIMAX(
+                    current_series,
+                    order=args['order'],
+                    freq=args['frequency'],
+                    exog=args['regressor_train'],
+                ).fit(maxiter=600, disp=args['verbose'])
+            else:
+                maModel = SARIMAX(
+                    current_series, order=args['order'], freq=args['frequency']
+                ).fit(maxiter=400, disp=args['verbose'])
+            if args['regression_type'] in ["User", "Holiday"]:
+                outer_forecasts = maModel.get_forecast(
+                    steps=args['forecast_length'], exog=args['exog']
+                )
+            else:
+                outer_forecasts = maModel.get_forecast(steps=args['forecast_length'])
+            outer_forecasts_df = outer_forecasts.conf_int(alpha=args['alpha'])
+            cforecast = outer_forecasts.summary_frame()['mean']
+            clower_forecast = outer_forecasts_df.iloc[:, 0]
+            cupper_forecast = outer_forecasts_df.iloc[:, 1]
     except Exception:
         cforecast = pd.Series(
             np.zeros((args['forecast_length'],)), index=args['test_index']
@@ -730,11 +733,8 @@ class ARIMA(ModelObject):
         cols = self.df_train.columns.tolist()
         if self.n_jobs in [0, 1] or len(cols) < 4:
             parallel = False
-        else:
-            try:
-                from joblib import Parallel, delayed
-            except Exception:
-                parallel = False
+        elif not joblib_present:
+            parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
@@ -989,13 +989,8 @@ class UnobservedComponents(ModelObject):
         cols = self.df_train.columns.tolist()
         if self.n_jobs in [0, 1] or len(cols) < 4:
             parallel = False
-        else:
-            try:
-                from joblib import Parallel, delayed
-            except Exception:
-                if self.verbose > 1:
-                    print("Joblib import failed, not parallel...")
-                parallel = False
+        elif not joblib_present:
+            parallel = False
         # joblib multiprocessing to loop through series
         # print(f"parallel is {parallel} and n_jobs is {self.n_jobs}")
         if parallel:
@@ -1775,3 +1770,412 @@ class VAR(ModelObject):
             'ic': self.ic,
         }
         return parameter_dict
+
+
+class Theta(ModelObject):
+    """Theta Model from Statsmodels
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        params from Theta Model as per statsmodels
+
+    """
+
+    def __init__(
+        self,
+        name: str = "Theta",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        deseasonalize: bool = True,
+        use_test: bool = True,
+        difference: bool = False,
+        period: int = None,
+        theta: float = 2,
+        use_mle: bool = False,
+        method: str = "auto",
+        holiday_country: str = 'US',
+        random_seed: int = 2020,
+        verbose: int = 0,
+        n_jobs: int = None,
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+        )
+        self.deseasonalize = deseasonalize
+        self.difference = difference
+        self.use_test = use_test
+        self.period = period
+        self.method = method
+        self.theta = theta
+        self.use_mle = use_mle
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        df = self.basic_profile(df)
+
+        self.df_train = df
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        from statsmodels.tsa.forecasting.theta import ThetaModel
+
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+        args = {
+            'deseasonalize': self.deseasonalize,
+            'difference': self.difference,
+            'use_test': self.use_test,
+            'method': self.method,
+            'period': self.period,
+            'forecast_length': forecast_length,
+            'prediction_interval': self.prediction_interval,
+            'theta': self.theta,
+            'use_mle': self.use_mle,
+        }
+
+        def theta_forecast_by_column(current_series, args):
+            """Run one series of Theta and return prediction."""
+            series_name = current_series.name
+            esModel = ThetaModel(
+                current_series,
+                deseasonalize=args['deseasonalize'],
+                difference=args['difference'],
+                use_test=args['use_test'],
+                method=args['method'],
+                period=args['period'],
+            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category='ConvergenceWarning')
+                warnings.simplefilter("ignore", category=UserWarning)
+                # fit model
+                modelResult = esModel.fit(use_mle=args['use_mle'])
+                # generate forecasts
+                esPred = modelResult.forecast(
+                    steps=args['forecast_length'], theta=args['theta']
+                )
+                bound_predict = modelResult.prediction_intervals(
+                    steps=args['forecast_length'], theta=args['theta'],
+                    alpha=(1 - args['prediction_interval'])
+                )
+                # overly clever identification of which is lower and upper
+                sumz = bound_predict.sum()
+                lower_forecast = bound_predict[sumz.idxmin()]
+                upper_forecast = bound_predict[sumz.idxmax()]
+            esPred = pd.Series(esPred)
+            esPred.name = series_name
+            lower_forecast.name = series_name
+            upper_forecast.name = series_name
+            return (esPred, lower_forecast, upper_forecast)
+
+        parallel = True
+        cols = self.df_train.columns.tolist()
+        if self.n_jobs in [0, 1] or len(cols) < 5:
+            parallel = False
+        elif not joblib_present:
+            parallel = False
+        # joblib multiprocessing to loop through series
+        if parallel:
+            verbs = 0 if self.verbose < 1 else self.verbose - 1
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+                delayed(theta_forecast_by_column)(
+                    current_series=self.df_train[col], args=args
+                )
+                for col in cols
+            )
+            complete = list(map(list, zip(*df_list)))
+        else:
+            df_list = []
+            for col in cols:
+                df_list.append(theta_forecast_by_column(self.df_train[col], args))
+            complete = list(map(list, zip(*df_list)))
+        forecast = pd.concat(complete[0], axis=1)
+        lower_forecast = pd.concat(complete[1], axis=1)
+        upper_forecast = pd.concat(complete[2], axis=1)
+        forecast.index = test_index
+        lower_forecast.index = test_index
+        upper_forecast.index = test_index
+
+        if just_point_forecast:
+            return forecast
+        else:
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=test_index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast,
+                forecast=forecast,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning."""
+        return {
+            'deseasonalize': random.choices([True, False], [0.8, 0.2])[0],
+            'difference': random.choice([True, False]),
+            'use_test': random.choices([True, False], [0.8, 0.2])[0],
+            'method': "auto",
+            'period': None,
+            'theta': random.choice([1.2, 2, 3]),
+            'use_mle': random.choices([True, False], [0.2, 0.8])[0],
+        }
+
+    def get_params(self):
+        """Return dict of current parameters."""
+        return {
+            'deseasonalize': self.deseasonalize,
+            'difference': self.difference,
+            'use_test': self.use_test,
+            'method': self.method,
+            'period': self.period,
+            'theta': self.theta,
+            'use_mle': self.use_mle,
+        }
+
+
+class ARDL(ModelObject):
+    """ARIMA from Statsmodels.
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        p (int): is the number of autoregressive steps,
+        d (int): is the number of differences needed for stationarity
+        q (int): is the number of lagged forecast errors in the prediction.
+        regression_type (str): type of regression (None, 'User', or 'Holiday')
+        n_jobs (int): passed to joblib for multiprocessing. Set to none for context manager.
+
+    """
+
+    def __init__(
+        self,
+        name: str = "ARDL",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        lags: int = 2,
+        trend: str = "c",
+        order: int = 0,
+        regression_type: str = None,
+        holiday_country: str = 'US',
+        random_seed: int = 2020,
+        verbose: int = 0,
+        n_jobs: int = None,
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            regression_type=regression_type,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+        )
+        self.lags = lags
+        self.trend = trend
+        self.order = order
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied .
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        df = self.basic_profile(df)
+        self.regressor_train = None
+        self.regression_type = str(self.regression_type).lower()
+        self.regression_type = None if self.regression_type == 'none' else self.regression_type
+        if self.regression_type == 'holiday':
+            from autots.tools.holiday import holiday_flag
+
+            self.regressor_train = pd.DataFrame(holiday_flag(
+                df.index, country=self.holiday_country
+            ))
+        elif self.regression_type == "user":
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type='User' but future_regressor not supplied"
+                )
+            else:
+                self.regressor_train = future_regressor.reindex(df.index)
+        self.df_train = df
+
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
+        """Generate forecast data immediately following dates of index supplied to .fit().
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        from statsmodels.tsa.api import ARDL
+
+        def ardl_per_column(current_series, args):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category='ConvergenceWarning')
+                warnings.simplefilter("ignore", category='ValueWarning')
+                warnings.simplefilter("ignore", category='UserWarning')
+                if args['regression_type'] in ["user", "holiday"]:
+                    maModel = ARDL(
+                        current_series,
+                        lags=args['lags'],
+                        trend=args['trend'],
+                        order=args['order'],
+                        exog=args['regressor_train'],
+                    ).fit()
+                else:
+                    maModel = ARDL(
+                        current_series, lags=args['lags'], trend=args['trend'], order=args['order'],
+                    ).fit()
+                series_len = current_series.shape[0]
+                if args['regression_type'] in ["user", "holiday"]:
+                    outer_forecasts = maModel.get_prediction(
+                        start=series_len, end=series_len + args['forecast_length'] - 1, exog_oos=args['exog']
+                    )
+                else:
+                    outer_forecasts = maModel.get_prediction(start=series_len + 1, end=series_len + args['forecast_length'])
+                outer_forecasts_df = outer_forecasts.conf_int(alpha=args['alpha'])
+                cforecast = outer_forecasts.summary_frame()['mean']
+                clower_forecast = outer_forecasts_df.iloc[:, 0]
+                cupper_forecast = outer_forecasts_df.iloc[:, 1]
+            cforecast.name = current_series.name
+            clower_forecast.name = current_series.name
+            cupper_forecast.name = current_series.name
+            return (cforecast, clower_forecast, cupper_forecast)
+
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+        alpha = 1 - self.prediction_interval
+        if self.regression_type == 'holiday':
+            from autots.tools.holiday import holiday_flag
+
+            future_regressor = pd.DataFrame(holiday_flag(test_index, country=self.holiday_country))
+        if self.regression_type is not None:
+            assert (
+                future_regressor.shape[0] == forecast_length
+            ), "regressor not equal to forecast length"
+
+        args = {
+            'lags': self.lags,
+            'order': self.order,
+            'regression_type': self.regression_type,
+            'regressor_train': self.regressor_train,
+            'exog': future_regressor,
+            'trend': self.trend,
+            'alpha': alpha,
+            'forecast_length': forecast_length,
+        }
+        parallel = True
+        cols = self.df_train.columns.tolist()
+        if self.n_jobs in [0, 1] or len(cols) < 4:
+            parallel = False
+        elif not joblib_present:
+            parallel = False
+        # joblib multiprocessing to loop through series
+        if parallel:
+            verbs = 0 if self.verbose < 1 else self.verbose - 1
+            df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
+                delayed(ardl_per_column)(
+                    current_series=self.df_train[col], args=args,
+                )
+                for col in cols
+            )
+            complete = list(map(list, zip(*df_list)))
+        else:
+            df_list = []
+            for col in cols:
+                df_list.append(ardl_per_column(self.df_train[col], args))
+            complete = list(map(list, zip(*df_list)))
+        forecast = pd.concat(complete[0], axis=1)
+        lower_forecast = pd.concat(complete[1], axis=1)
+        upper_forecast = pd.concat(complete[2], axis=1)
+
+        if just_point_forecast:
+            return forecast
+        else:
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=test_index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast,
+                forecast=forecast,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning.
+        """
+        regression_list = ['user', 'holiday']
+        regression_probability = [0.5, 0.5]
+        regression_choice = random.choices(regression_list, regression_probability)[0]
+
+        return {
+            'lags': random.choices([1, 2, 3, 4], [0.4, 0.3, 0.2, 0.1])[0],
+            'trend': random.choice(['n', 'c', 't', 'ct']),
+            'order': random.choices([0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1])[0],
+            'regression_type': regression_choice,
+        }
+
+    def get_params(self):
+        """Return dict of current parameters."""
+        return {
+            'lags': self.lags,
+            'trend': self.trend,
+            'order': self.order,
+            'regression_type': self.regression_type,
+        }
