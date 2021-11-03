@@ -20,6 +20,11 @@
 * 'subsample' ensemble expansion of 'simple'
 * added Theta model from statsmodels
 * added ARDL model from statsmodels
+* expanded UnobservedComponents functionality, although it still fails on some params for unknown reasons
+* fixed bug in AutoTS.predict() where it was breaking regressors in some cases
+* transition from [] to None as default for no future_regressor
+* enforce more extensive failing if regression_type==User and no regressor passed
+* fixed regressor handling in DatepartRegression
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

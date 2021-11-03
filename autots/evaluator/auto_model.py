@@ -1,5 +1,6 @@
 """Mid-level helper functions for AutoTS."""
 import sys
+import traceback as tb
 import random
 from math import ceil
 import numpy as np
@@ -493,8 +494,8 @@ def ModelPrediction(
     prediction_interval: float = 0.9,
     no_negatives: bool = False,
     constraint: float = None,
-    future_regressor_train=[],
-    future_regressor_forecast=[],
+    future_regressor_train=None,
+    future_regressor_forecast=None,
     holiday_country: str = 'US',
     startTimeStamps=None,
     grouping_ids=None,
@@ -528,10 +529,8 @@ def ModelPrediction(
     df_train_transformed = transformer_object._fit(df_train)
 
     # make sure regressor has same length. This could be a problem if wrong size regressor is passed.
-    if len(future_regressor_train) > 0:
-        future_regressor_train = future_regressor_train.tail(
-            df_train_transformed.shape[0]
-        )
+    if future_regressor_train is not None:
+        future_regressor_train = future_regressor_train.reindex(df_train.index)
 
     transformation_runtime = datetime.datetime.now() - transformationStartTime
     # from autots.evaluator.auto_model import ModelMonster
@@ -741,8 +740,8 @@ def model_forecast(
     prediction_interval: float = 0.9,
     no_negatives: bool = False,
     constraint: float = None,
-    future_regressor_train=[],
-    future_regressor_forecast=[],
+    future_regressor_train=None,
+    future_regressor_forecast=None,
     holiday_country: str = 'US',
     startTimeStamps=None,
     grouping_ids=None,
@@ -883,6 +882,7 @@ def model_forecast(
             except Exception as e:
                 # currently this leaves no key/value for models that fail
                 if verbose >= 1:  # 1
+                    print(tb.format_exc())
                     p = f"FAILED: Ensemble {model_param_dict['model_name']} component {index} of {total_ens} with error: {repr(e)}"
                     print(p)
         ens_forecast = EnsembleForecast(
@@ -967,8 +967,8 @@ def TemplateWizard(
     prediction_interval: float = 0.9,
     no_negatives: bool = False,
     constraint: float = None,
-    future_regressor_train=[],
-    future_regressor_forecast=[],
+    future_regressor_train=None,
+    future_regressor_forecast=None,
     holiday_country: str = 'US',
     startTimeStamps=None,
     random_seed: int = 2020,
@@ -1228,8 +1228,6 @@ def TemplateWizard(
         except Exception as e:
             if verbose >= 0:
                 if traceback:
-                    import traceback as tb
-
                     print(
                         'Template Eval Error: {} in model {}: {}'.format(
                             ''.join(tb.format_exception(None, e, e.__traceback__)),

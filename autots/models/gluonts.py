@@ -319,6 +319,8 @@ class GluonTS(ModelObject):
             estimator = DeepRenewalProcessEstimator(
                 prediction_length=ts_metadata['forecast_length'],
                 context_length=ts_metadata['context_length'],
+                num_layers=1,  # original paper used 1 layer, 10 cells
+                num_cells=10,
                 freq=ts_metadata['freq'],
                 trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )

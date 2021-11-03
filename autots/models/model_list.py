@@ -53,8 +53,8 @@ default = [
     'MultivariateMotif',
     'SectionalMotif',
     'NVAR',
-    # 'Theta',
-    # 'ARDL',
+    'Theta',
+    'ARDL',
 ]
 # fastest models at any scale
 superfast = [
@@ -124,6 +124,8 @@ probabilistic = [
     'NVAR',
     'Theta',
     'ARDL',
+    'UnobservedComponents',
+    # 'MultivariateRegression',
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [

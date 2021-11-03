@@ -863,7 +863,7 @@ class RollingRegression(ModelObject):
             x_transformer = VarianceThreshold(threshold=0.0)
         return x_transformer
 
-    def fit(self, df, future_regressor=[]):
+    def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
 
         Args:
@@ -875,10 +875,9 @@ class RollingRegression(ModelObject):
 
         # if external regressor, do some check up
         if self.regression_type is not None:
-            if (np.array(future_regressor).shape[0]) != (df.shape[0]):
-                self.regression_type = None
-            else:
-                self.regressor_train = future_regressor
+            if future_regressor is None:
+                raise ValueError("future_regressor not supplied, necessary for regression_type")
+            self.regressor_train = future_regressor
 
         # define X and Y
         self.sktraindata = self.df_train.dropna(how='all', axis=0)
@@ -946,7 +945,7 @@ class RollingRegression(ModelObject):
     def predict(
         self,
         forecast_length: int,
-        future_regressor=[],
+        future_regressor=None,
         just_point_forecast: bool = False,
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
@@ -962,7 +961,7 @@ class RollingRegression(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
-        if self.regression_type == 'User':
+        if self.regression_type in ['User', 'user']:
             complete_regressor = pd.concat(
                 [self.regressor_train, future_regressor], axis=0
             )
@@ -1178,7 +1177,7 @@ class WindowRegression(ModelObject):
         self.forecast_length = forecast_length
         self.max_windows = abs(int(max_windows))
 
-    def fit(self, df, future_regressor=[]):
+    def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
 
         Args:
@@ -1191,6 +1190,9 @@ class WindowRegression(ModelObject):
                 "Scale exceeds recommendation for input_dim == `multivariate`"
             )
         df = self.basic_profile(df)
+        if self.regression_type in ["User", "user"]:
+            if future_regressor is None:
+                raise ValueError("regression_type='User' but no future_regressor passed")
         self.df_train = df
         X, Y = window_maker(
             df,
@@ -1228,7 +1230,7 @@ class WindowRegression(ModelObject):
     def predict(
         self,
         forecast_length: int,
-        future_regressor=[],
+        future_regressor=None,
         just_point_forecast: bool = False,
     ):
         """Generate forecast data immediately following dates of .fit().
@@ -1258,7 +1260,7 @@ class WindowRegression(ModelObject):
                     input_dim=self.input_dim,
                     normalize_window=self.normalize_window,
                 )
-                if str(self.regression_type).lower() == "user":
+                if self.regression_type in ["User", "user"]:
                     blasted_thing = future_regressor.iloc[x].to_frame().transpose()
                     tmerg = pd.concat([blasted_thing] * pred.shape[0], axis=0)
                     tmerg.index = pred.index
@@ -1282,7 +1284,7 @@ class WindowRegression(ModelObject):
                 input_dim=self.input_dim,
                 normalize_window=self.normalize_window,
             )
-            if str(self.regression_type).lower() == "user":
+            if self.regression_type in ["User", "user"]:
                 tmerg = future_regressor.tail(1).loc[
                     future_regressor.tail(1).index.repeat(pred.shape[0])
                 ]
@@ -1418,7 +1420,7 @@ class ComponentAnalysis(ModelObject):
         self.n_components = n_components
         self.forecast_length = forecast_length
 
-    def fit(self, df, future_regressor=[]):
+    def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
 
         Args:
@@ -1501,7 +1503,7 @@ class ComponentAnalysis(ModelObject):
     def predict(
         self,
         forecast_length: int,
-        future_regressor=[],
+        future_regressor=None,
         just_point_forecast: bool = False,
     ):
         """Generate forecast data immediately following dates of .fit().
@@ -1655,7 +1657,7 @@ class DatepartRegression(ModelObject):
         self.regression_model = regression_model
         self.datepart_method = datepart_method
 
-    def fit(self, df, future_regressor=[]):
+    def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
 
         Args:
@@ -1664,14 +1666,16 @@ class DatepartRegression(ModelObject):
         df = self.basic_profile(df)
         # if external regressor, do some check up
         if self.regression_type is not None:
-            if (np.array(future_regressor).shape[0]) != (df.shape[0]):
-                self.regression_type = None
+            if future_regressor is None:
+                raise ValueError("regression_type='User' but no future_regressor passed")
 
         y = df.to_numpy()
 
         X = date_part(df.index, method=self.datepart_method)
-        if self.regression_type == 'User':
-            X = pd.concat([X, future_regressor], axis=0)
+        if self.regression_type in ['User', 'user']:
+            # regr = future_regressor.copy()
+            # regr.index = X.index
+            X = pd.concat([X, future_regressor], axis=1)
         X.columns = [str(xc) for xc in X.columns]
 
         multioutput = True
@@ -1696,7 +1700,7 @@ class DatepartRegression(ModelObject):
     def predict(
         self,
         forecast_length: int,
-        future_regressor=[],
+        future_regressor=None,
         just_point_forecast: bool = False,
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
@@ -1713,8 +1717,8 @@ class DatepartRegression(ModelObject):
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
         X = date_part(index, method=self.datepart_method)
-        if self.regression_type == 'User':
-            X = pd.concat([X, future_regressor], axis=0)
+        if self.regression_type in ['User', 'user']:
+            X = pd.concat([X, future_regressor], axis=1)
         X.columns = [str(xc) for xc in X.columns]
 
         forecast = pd.DataFrame(self.model.predict(X))

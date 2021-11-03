@@ -335,6 +335,7 @@ class AutoTS(object):
         self.best_model_params = ""
         self.best_model_transformation_params = ""
         self.traceback = True if verbose > 1 else False
+        self.future_regressor_train = None
         self.validation_train_indexes = []
         self.validation_test_indexes = []
 
@@ -357,7 +358,7 @@ class AutoTS(object):
         date_col: str = None,
         value_col: str = None,
         id_col: str = None,
-        future_regressor=[],
+        future_regressor=None,
         weights: dict = {},
         result_file: str = None,
         grouping_ids=None,
@@ -471,12 +472,6 @@ class AutoTS(object):
                 "Warning: column/series names are not unique. Unique column names are highly recommended for wide data!"
             )
             time.sleep(3)  # give the message a chance to be seen
-        if len(future_regressor) > 0:
-            if future_regressor.shape[0] != df_wide_numeric.shape[0]:
-                print(
-                    "future_regressor row count does not match length of training data"
-                )
-                time.sleep(2)
 
         # remove other ensembling types if univariate
         if df_wide_numeric.shape[1] == 1:
@@ -598,7 +593,7 @@ class AutoTS(object):
         )
         self.validation_train_indexes.append(df_train.index)
         self.validation_test_indexes.append(df_test.index)
-        try:
+        if future_regressor is not None:
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
             if future_regressor.empty:
@@ -611,9 +606,15 @@ class AutoTS(object):
             self.future_regressor_train = future_regressor
             future_regressor_train = future_regressor.reindex(index=df_train.index)
             future_regressor_test = future_regressor.reindex(index=df_test.index)
-        except Exception:
-            future_regressor_train = []
-            future_regressor_test = []
+        else:
+            future_regressor_train = None
+            future_regressor_test = None
+        if future_regressor is not None:
+            if future_regressor.shape[0] != df_wide_numeric.shape[0]:
+                print(
+                    "future_regressor row count does not match length of training data"
+                )
+                time.sleep(2)
 
         model_count = 0
 
@@ -936,16 +937,16 @@ class AutoTS(object):
                     print(f'Validation index is {val_df_train.index}')
 
                 # slice regressor into current validation slices
-                try:
+                if future_regressor is not None:
                     val_future_regressor_train = future_regressor.reindex(
                         index=val_df_train.index
                     )
                     val_future_regressor_test = future_regressor.reindex(
                         index=val_df_test.index
                     )
-                except Exception:
-                    val_future_regressor_train = []
-                    val_future_regressor_test = []
+                else:
+                    val_future_regressor_train = None
+                    val_future_regressor_test = None
 
                 # force NaN for robustness
                 if self.introduce_na or (self.introduce_na is None and self._nan_tail):
@@ -1193,7 +1194,7 @@ or otherwise increase models available."""
         self,
         forecast_length: int = "self",
         prediction_interval: float = 'self',
-        future_regressor=[],
+        future_regressor=None,
         hierarchy=None,
         just_point_forecast: bool = False,
         verbose: int = 'self',
@@ -1219,13 +1220,12 @@ or otherwise increase models available."""
         if prediction_interval == 'self':
             prediction_interval = self.prediction_interval
 
-        # if the models don't need the regressor, ignore it...
-        if not self.used_regressor_check:
-            future_regressor = []
-            self.future_regressor_train = []
-        else:
+        # checkup regressor
+        if future_regressor is not None:
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
+            if self.future_regressor_train is None:
+                raise ValueError("regressor passed to .predict but no regressor was passed to .fit")
             # handle any non-numeric data, crudely
             future_regressor = self.regr_num_trans.transform(future_regressor)
             # make sure training regressor fits training data index
@@ -1780,7 +1780,7 @@ class AutoTSIntervals(object):
         },
         weights: dict = {},
         grouping_ids=None,
-        future_regressor=[],
+        future_regressor=None,
         model_interrupt: bool = False,
         constraint=2,
         no_negatives=False,
@@ -1874,9 +1874,9 @@ class AutoTSIntervals(object):
         self.categorical_transformer = current_model.categorical_transformer
         return self
 
-    def predict(self, future_regressor=[], verbose: int = 'self') -> dict:
+    def predict(self, future_regressor=None, verbose: int = 'self') -> dict:
         """Generate forecasts after training complete."""
-        if len(future_regressor) > 0:
+        if future_regressor is not None:
             future_regressor = pd.DataFrame(future_regressor)
             self.future_regressor_train = self.future_regressor_train.reindex(
                 index=self.df_wide_numeric.index
