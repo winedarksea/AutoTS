@@ -84,12 +84,10 @@ def create_regressor(
     # datepart
     if datepart_method in ['simple', 'expanded', 'recurring']:
         regr_train = pd.concat(
-            [regr_train, date_part(regr_train.index, method=datepart_method)],
-            axis=1,
+            [regr_train, date_part(regr_train.index, method=datepart_method)], axis=1,
         )
         regr_fcst = pd.concat(
-            [regr_fcst, date_part(regr_fcst.index, method=datepart_method)],
-            axis=1,
+            [regr_fcst, date_part(regr_fcst.index, method=datepart_method)], axis=1,
         )
     # holiday (list)
     if holiday_countries is not None:

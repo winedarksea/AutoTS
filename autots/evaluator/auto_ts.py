@@ -1,4 +1,4 @@
-"""Higher-level backbone of auto time series modeling."""
+"""Higher-level functions of automated time series modeling."""
 import numpy as np
 import pandas as pd
 import random
@@ -398,8 +398,8 @@ class AutoTS(object):
             assert (
                 validation_indexes is not None
             ), "validation_indexes needs to be filled with 'custom' validation"
-            assert (
-                len(validation_indexes) >= (self.num_validations + 1)
+            assert len(validation_indexes) >= (
+                self.num_validations + 1
             ), "validation_indexes needs to be >= num_validations + 1 with 'custom' validation"
         # flag if weights are given
         if bool(weights):
@@ -524,9 +524,7 @@ class AutoTS(object):
             params = {
                 "fillna": "median",  # mean or median one of few consistent things
                 "transformations": {"0": "MaxAbsScaler"},
-                "transformation_params": {
-                    "0": {},
-                },
+                "transformation_params": {"0": {},},
             }
             trans = GeneralTransformer(**params)
 
@@ -538,7 +536,7 @@ class AutoTS(object):
                 forecast_length=self.forecast_length,
                 stride_size=stride_size,
                 distance_metric="nan_euclidean",
-                include_differenced=False,
+                include_differenced=True,
                 window_size=30,
                 include_last=True,
                 verbose=self.verbose,
@@ -575,7 +573,9 @@ class AutoTS(object):
         if self.validation_method in ['custom', "similarity"]:
             first_idx = self.validation_indexes[0]
             if max(first_idx) > max(df_subset.index):
-                raise ValueError("provided validation index exceeds historical data period")
+                raise ValueError(
+                    "provided validation index exceeds historical data period"
+                )
             df_subset = df_subset.reindex(first_idx)
 
         # subset the weighting information as well
@@ -741,7 +741,9 @@ class AutoTS(object):
         # try ensembling
         if ensemble not in [None, 'none']:
             try:
-                self.score_per_series = generate_score_per_series(self.initial_results, self.metric_weighting, 1)
+                self.score_per_series = generate_score_per_series(
+                    self.initial_results, self.metric_weighting, 1
+                )
                 ensemble_templates = EnsembleTemplateGenerator(
                     self.initial_results,
                     forecast_length=forecast_length,
@@ -787,10 +789,8 @@ class AutoTS(object):
                 print(f"Ensembling Error: {e}")
 
         # drop any duplicates in results
-        self.initial_results.model_results = (
-            self.initial_results.model_results.drop_duplicates(
-                subset=(['ID'] + self.template_cols)
-            )
+        self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(
+            subset=(['ID'] + self.template_cols)
         )
 
         # validations if float
@@ -896,7 +896,9 @@ class AutoTS(object):
                     val_per = df_wide_numeric.shape[0] - val_per
                     current_slice = df_wide_numeric.head(val_per)
                 elif self.validation_method in ['custom', "similarity"]:
-                    current_slice = df_wide_numeric.reindex(self.validation_indexes[(y + 1)])
+                    current_slice = df_wide_numeric.reindex(
+                        self.validation_indexes[(y + 1)]
+                    )
                 else:
                     raise ValueError(
                         "Validation Method not recognized try 'even', 'backwards'"
@@ -1225,7 +1227,9 @@ or otherwise increase models available."""
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
             if self.future_regressor_train is None:
-                raise ValueError("regressor passed to .predict but no regressor was passed to .fit")
+                raise ValueError(
+                    "regressor passed to .predict but no regressor was passed to .fit"
+                )
             # handle any non-numeric data, crudely
             future_regressor = self.regr_num_trans.transform(future_regressor)
             # make sure training regressor fits training data index
@@ -1681,11 +1685,7 @@ or otherwise increase models available."""
         b_df = self.back_forecast(column=series, n_splits=n_splits, verbose=0).forecast
         b_df = b_df.rename(columns=lambda x: str(x) + "_forecast")
         plot_df = pd.concat(
-            [
-                pd.DataFrame(self.df_wide_numeric[series]),
-                b_df,
-            ],
-            axis=1,
+            [pd.DataFrame(self.df_wide_numeric[series]), b_df,], axis=1,
         )
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
@@ -1941,11 +1941,7 @@ def fake_regressor(
         ), "df index is not pd.DatetimeIndex"
     else:
         df_wide = long_to_wide(
-            df,
-            date_col=date_col,
-            value_col=value_col,
-            id_col=id_col,
-            aggfunc=aggfunc,
+            df, date_col=date_col, value_col=value_col, id_col=id_col, aggfunc=aggfunc,
         )
 
     df_wide = df_cleanup(

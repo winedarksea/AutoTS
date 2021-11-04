@@ -1020,9 +1020,7 @@ class MotifSimulation(ModelObject):
             a=[5, 10, 20, 50, 100, 200, 500], size=1, p=[0, 0, 0.2, 0.2, 0.4, 0.1, 0.1]
         ).item()
         point_method_choice = np.random.choice(
-            a=['median', 'mean', 'sign_biased_mean'],
-            size=1,
-            p=[0.59, 0.3, 0.1],
+            a=['median', 'mean', 'sign_biased_mean'], size=1, p=[0.59, 0.3, 0.1],
         ).item()
 
         return {
@@ -1598,23 +1596,17 @@ class NVAR(ModelObject):
                 )
             df_list_up.append(
                 pd.DataFrame(
-                    up.T,
-                    columns=self.new_col_names[srt:stop],
-                    index=the_index,
+                    up.T, columns=self.new_col_names[srt:stop], index=the_index,
                 )
             )
             df_list.append(
                 pd.DataFrame(
-                    fore.T,
-                    columns=self.new_col_names[srt:stop],
-                    index=the_index,
+                    fore.T, columns=self.new_col_names[srt:stop], index=the_index,
                 )
             )
             df_list_low.append(
                 pd.DataFrame(
-                    low.T,
-                    columns=self.new_col_names[srt:stop],
-                    index=the_index,
+                    low.T, columns=self.new_col_names[srt:stop], index=the_index,
                 )
             )
         forecast = pd.concat(df_list, axis=1)[self.column_names]

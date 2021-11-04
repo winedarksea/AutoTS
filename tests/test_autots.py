@@ -129,7 +129,7 @@ class AutoTSTest(unittest.TestCase):
         self.assertFalse(model.used_regressor_check)
         self.assertFalse(model.subset_flag)
         # assess 'backwards' validation
-        self.assertEqual(len(model.validation_test_indexes), num_validations)
+        self.assertEqual(len(model.validation_test_indexes), num_validations + 1)
         self.assertTrue(model.validation_test_indexes[0].intersection(model.validation_train_indexes[0]).empty)
         self.assertTrue(model.validation_test_indexes[1].intersection(model.validation_train_indexes[1]).empty)
         self.assertEqual(model.validation_train_indexes[0].shape[0], df.shape[0] - (forecast_length * 2 + 1))  # +1 via drop most recent
@@ -237,7 +237,7 @@ class AutoTSTest(unittest.TestCase):
         self.assertFalse(model.weighted)
         self.assertFalse(model.subset_flag)
         # assess 'backwards' validation
-        self.assertEqual(len(model.validation_test_indexes), num_validations)
+        self.assertEqual(len(model.validation_test_indexes), num_validations + 1)
         self.assertTrue(model.validation_test_indexes[0].intersection(model.validation_train_indexes[0]).empty)
         self.assertEqual(model.validation_train_indexes[0].shape[0], df.shape[0] - (forecast_length * 2 + 1))  # +1 via drop most recent
         self.assertTrue((model.validation_test_indexes[0] == expected_val1).all())

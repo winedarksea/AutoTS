@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.datasets package &#8212; AutoTS 0.3.9 documentation</title>
+    <title>autots.datasets package &#8212; AutoTS 0.3.10 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -128,12 +128,12 @@ if False, return a Series with dt index</p></li>
 <li><p><strong>fred_key</strong> (<em>str</em>) – <a class="reference external" href="https://fred.stlouisfed.org/docs/api/api_key.html">https://fred.stlouisfed.org/docs/api/api_key.html</a></p></li>
 <li><p><strong>fred_series</strong> (<em>list</em>) – list of FRED series IDs. This requires fredapi package</p></li>
 <li><p><strong>tickers</strong> (<em>list</em>) – list of stock tickers, requires yfinance</p></li>
-<li><p><strong>trends</strong> (<em>list</em>) – list of search keywords, requires pytrends.</p></li>
+<li><p><strong>trends_list</strong> (<em>list</em>) – list of search keywords, requires pytrends. None to skip.</p></li>
 <li><p><strong>weather_data_types</strong> (<em>list</em>) – from NCEI NOAA api data types, GHCN Daily Weather Elements
 PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG</p></li>
-<li><p><strong>weather_stations</strong> (<em>list</em>) – from NCEI NOAA api station ids</p></li>
-<li><p><strong>london_air_stations</strong> (<em>list</em>) – londonair.org.uk source station IDs</p></li>
-<li><p><strong>london_species</strong> (<em>str</em>) – what measurement to pull from London Air. Not all stations have all metrics.        earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov</p></li>
+<li><p><strong>weather_stations</strong> (<em>list</em>) – from NCEI NOAA api station ids. Pass empty list to skip.</p></li>
+<li><p><strong>london_air_stations</strong> (<em>list</em>) – londonair.org.uk source station IDs. Pass empty list to skip.</p></li>
+<li><p><strong>london_species</strong> (<em>str</em>) – what measurement to pull from London Air. Not all stations have all metrics.        earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov. Set None to skip this.</p></li>
 </ul>
 </dd>
 </dl>

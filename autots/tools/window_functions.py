@@ -62,7 +62,7 @@ def window_maker(
             shape_1 = df.shape[1] if df.ndim > 1 else 1
             if isinstance(future_regressor, pd.DataFrame):
                 regr_arr = np.repeat(
-                    future_regressor.reindex(df.index).to_numpy()[(phrase_n - 1):],
+                    future_regressor.reindex(df.index).to_numpy()[(phrase_n - 1) :],
                     shape_1,
                     axis=0,
                 )
@@ -98,7 +98,7 @@ def window_maker(
         for z in numbers:
             if input_dim == 'univariate':
                 rand_slice = df.iloc[
-                    z: (z + phrase_n),
+                    z : (z + phrase_n),
                 ]
                 rand_slice = (
                     rand_slice.reset_index(drop=True)
@@ -109,11 +109,11 @@ def window_maker(
                 cY = rand_slice.iloc[:, window_size:]
             else:
                 cX = df.iloc[
-                    z: (z + window_size),
+                    z : (z + window_size),
                 ]
                 cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
                 cY = df.iloc[
-                    (z + window_size): (z + phrase_n),
+                    (z + window_size) : (z + phrase_n),
                 ]
                 cY = pd.DataFrame(cY.stack().reset_index(drop=True)).transpose()
             X = pd.concat([X, cX], axis=0)
@@ -136,7 +136,7 @@ def last_window(
     shape_1 = df.shape[1] if df.ndim > 1 else 1
     if input_dim == 'univariate':
         cX = df.iloc[
-            z: (z + window_size),
+            z : (z + window_size),
         ]
         cX = (
             cX.reset_index(drop=True)
@@ -145,7 +145,7 @@ def last_window(
         )
     else:
         cX = df.iloc[
-            z: (z + window_size),
+            z : (z + window_size),
         ]
         cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
     if normalize_window:
@@ -289,7 +289,7 @@ def retrieve_closest_indices(
             [
                 nan_euclidean_distances(
                     array[:, a][window_idxs[:, :window_size]],
-                    array[(tlt_len - window_size): tlt_len, a].reshape(1, -1),
+                    array[(tlt_len - window_size) : tlt_len, a].reshape(1, -1),
                 )
                 for a in range(array.shape[1])
             ]
@@ -301,7 +301,7 @@ def retrieve_closest_indices(
                 [
                     nan_euclidean_distances(
                         array_diff[:, a][window_idxs[:, :window_size]],
-                        array_diff[(tlt_len - window_size): tlt_len, a].reshape(1, -1),
+                        array_diff[(tlt_len - window_size) : tlt_len, a].reshape(1, -1),
                     )
                     for a in range(array_diff.shape[1])
                 ]
@@ -314,7 +314,7 @@ def retrieve_closest_indices(
             [
                 cdist(
                     array[:, a][window_idxs[:, :window_size]],
-                    array[(tlt_len - window_size): tlt_len, a].reshape(1, -1),
+                    array[(tlt_len - window_size) : tlt_len, a].reshape(1, -1),
                     metric=distance_metric,
                 )
                 for a in range(array.shape[1])
@@ -327,7 +327,7 @@ def retrieve_closest_indices(
                 [
                     cdist(
                         array_diff[:, a][window_idxs[:, :window_size]],
-                        array_diff[(tlt_len - window_size): tlt_len, a].reshape(1, -1),
+                        array_diff[(tlt_len - window_size) : tlt_len, a].reshape(1, -1),
                         metric=distance_metric,
                     )
                     for a in range(array_diff.shape[1])
@@ -341,7 +341,9 @@ def retrieve_closest_indices(
     res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top]
     res_idx = res_idx[np.argsort(res_sum[res_idx].flatten())]
     if verbose > 1:
-        print(f"similarity validation distance metrics: {res_sum[res_idx].flatten()} with last window: {res_sum[-1].item()}")
+        print(
+            f"similarity validation distance metrics: {res_sum[res_idx].flatten()} with last window: {res_sum[-1].item()}"
+        )
     select_index = index.to_numpy()[window_idxs[res_idx]]
     if select_index.ndim == 3:
         res_shape = select_index.shape

@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Tutorial &#8212; AutoTS 0.3.9 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.3.10 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -122,7 +122,8 @@ In general, the safest approach is to have as many validations as possible, as l
 It trains on the most recent data as usual, then valdations are <code class="docutils literal notranslate"><span class="pre">n</span></code> periods back from the datetime of the forecast would be.
 For example with daily data, forecasting for a month ahead, and <code class="docutils literal notranslate"><span class="pre">n=364</span></code>, the first test might be on May 2021, with validation on June 2020 and June 2019, the final forecast then of June 2021.</p>
 <p><strong>Similarity</strong> automatically finds the data sections most similar to the most recent data that will be used for prediction. This is the best general purpose choice but currently can be sensitive to messy data.</p>
-<p><strong>Custom</strong> allows validations of any type. If used, .fit() needs <code class="docutils literal notranslate"><span class="pre">validation_indexes</span></code> passed - a list of pd.DatetimeIndex’s, tail of forecast_length of each is used as test (which should be of the same length as <code class="docutils literal notranslate"><span class="pre">num_validations</span></code>).</p>
+<p><strong>Custom</strong> allows validations of any type. If used, .fit() needs <code class="docutils literal notranslate"><span class="pre">validation_indexes</span></code> passed - a list of pd.DatetimeIndex’s, tail of forecast_length of each is used as test (which should be of the same length as <code class="docutils literal notranslate"><span class="pre">num_validations</span></code> + 1).</p>
+<p><code class="docutils literal notranslate"><span class="pre">backwards</span></code>, <code class="docutils literal notranslate"><span class="pre">even</span></code> and <code class="docutils literal notranslate"><span class="pre">seasonal</span></code> validation all perform initial evaluation on the most recent split of data. <code class="docutils literal notranslate"><span class="pre">custom</span></code> performs initial evaluation on the first index in the list provided, while <code class="docutils literal notranslate"><span class="pre">similarity</span></code> acts on the closest distance segment first.</p>
 <p>Only a subset of models are taken from initial validation to cross validation. The number of models is set such as <code class="docutils literal notranslate"><span class="pre">models_to_validate=10</span></code>.
 If a float in 0 to 1 is provided, it is treated as a % of models to select.
 If you suspect your most recent data is not fairly representative of the whole, it would be a good idea to increase this parameter.
@@ -341,7 +342,7 @@ statsmodels
 </div>
 <p>Of these, numpy and pandas are critical.
 Limited functionality should exist without scikit-learn.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>* Sklearn needed for categorical to numeric, some detrends/transformers, horizontal generalization, numerous models
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>* Sklearn needed for categorical to numeric, some detrends/transformers, horizontal generalization, numerous models, nan_euclidean distance
 </pre></div>
 </div>
 <p>Full functionality should be maintained without statsmodels, albeit with fewer available models.</p>
@@ -373,6 +374,7 @@ conda activate openblas
 python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost --exists-action i
 
 python -m pip install yfinance pytrends fredapi
+python -m pip install numexpr bottleneck
 python -m pip install pystan prophet --exists-action i  <span class="c1"># conda-forge option below works more easily, --no-deps to pip install prophet if this fails</span>
 python -m pip install mxnet --exists-action i     <span class="c1"># check the mxnet documentation for more install options, also try pip install mxnet --no-deps</span>
 python -m pip install gluonts --exists-action i
@@ -426,8 +428,8 @@ python -m pip install mxnet --no-deps
 python -m pip install gluonts
 conda install -c conda-forge prophet
 conda install spyder
-conda update intelpython3_full
-conda install -c intel statsmodels lightgbm tensorflow
+conda update -c intel intelpython3_full
+conda install -c intel numexpr statsmodels lightgbm tensorflow
 
 python -m pip install autots
 
@@ -439,26 +441,23 @@ python -m pip install autots
 </section>
 <section id="caveats-and-advice">
 <h2>Caveats and Advice<a class="headerlink" href="#caveats-and-advice" title="Permalink to this headline">¶</a></h2>
+<section id="mysterious-crashes">
+<h3>Mysterious crashes<a class="headerlink" href="#mysterious-crashes" title="Permalink to this headline">¶</a></h3>
+<p>Usually mysterious crashes or hangs (those without clear error messages) occur when the CPU or Memory is overloaded.
+Try setting <code class="docutils literal notranslate"><span class="pre">n_jobs=1</span></code> or an otherwise low number, which should reduce the load. Also test the ‘superfast’ naive models, which are generally low resource consumption.
+GPU-accelerated models (Tensorflow in Regressions and GluonTS) are also more prone to crashes, and may be a source of problems when used.
+If problems persist, post to the GitHub Discussion or Issues.</p>
+</section>
 <section id="series-ids-really-need-to-be-unique-or-column-names-need-to-be-all-unique-in-wide-data">
 <h3>Series IDs really need to be unique (or column names need to be all unique in wide data)<a class="headerlink" href="#series-ids-really-need-to-be-unique-or-column-names-need-to-be-all-unique-in-wide-data" title="Permalink to this headline">¶</a></h3>
 <p>Pretty much as it says, if this isn’t true, some odd things may happen that shouldn’t.</p>
-<p>Also if using the model Prophet models, you can’t have any columns named ‘ds’</p>
+<p>Also if using the Prophet model, you can’t have any series named ‘ds’</p>
 </section>
 <section id="short-training-history">
 <h3>Short Training History<a class="headerlink" href="#short-training-history" title="Permalink to this headline">¶</a></h3>
 <p>How much data is ‘too little’ depends on the seasonality and volatility of the data.
 Minimal training data most greatly impacts the ability to do proper cross validation. Set <code class="docutils literal notranslate"><span class="pre">num_validations=0</span></code> in such cases.
 Since ensembles are based on the test dataset, it would also be wise to set <code class="docutils literal notranslate"><span class="pre">ensemble=None</span></code> if <code class="docutils literal notranslate"><span class="pre">num_validations=0</span></code>.</p>
-</section>
-<section id="too-much-training-data">
-<h3>Too much training data.<a class="headerlink" href="#too-much-training-data" title="Permalink to this headline">¶</a></h3>
-<p>Too much data is already handled to some extent by the <code class="docutils literal notranslate"><span class="pre">Slice</span></code> Transformer.
-That said, large datasets will be slower and more memory intensive, for high frequency data (say hourly) it can often be advisable to roll that up to a higher level (daily, hourly, etc.).
-Rollup can be accomplished by specifying the frequency = your rollup frequency, and then setting the <code class="docutils literal notranslate"><span class="pre">agg_func=np.sum</span></code> or ‘mean’ or other appropriate statistic.</p>
-</section>
-<section id="lots-of-nan-in-data">
-<h3>Lots of NaN in data<a class="headerlink" href="#lots-of-nan-in-data" title="Permalink to this headline">¶</a></h3>
-<p>Various NaN filling techniques are tested in the transformation. Rolling up data to a less-frequent frequency may also help deal with NaNs.</p>
 </section>
 <section id="adding-regressors-and-other-information">
 <h3>Adding regressors and other information<a class="headerlink" href="#adding-regressors-and-other-information" title="Permalink to this headline">¶</a></h3>
@@ -520,7 +519,7 @@ Usually, very slow options are left out. If you are familiar with a model, you c
 To clarify, you can’t usually add in entirely new parameters in this way, but you can often pass in new choices for existing parameter values.</p>
 <ol class="arabic simple">
 <li><p>Run AutoTS with your desired model and export a template.</p></li>
-<li><p>Open the template in a text editor or Excel and manually change the param values to whatever you want.</p></li>
+<li><p>Open the template in a text editor or Excel and manually change the param values to what you want.</p></li>
 <li><p>Run AutoTS again, this time importing the template before running .fit().</p></li>
 <li><p>There is no guarantee it will choose the model with the given params- choices are made based on validation accuracy, but it will at least run it, and if it does well, it will be incorporated into new models in that run (that’s how the genetic algorithms work).</p></li>
 </ol>
@@ -680,7 +679,7 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <tr class="row-odd"><td><p>UnobservedComponents</p></td>
 <td><p>statsmodels</p></td>
 <td></td>
-<td></td>
+<td><p>True</p></td>
 <td><p>joblib</p></td>
 <td></td>
 <td></td>
@@ -734,6 +733,26 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td></td>
 <td><p>True</p></td>
+<td></td>
+<td><p>True</p></td>
+</tr>
+<tr class="row-odd"><td><p>Theta</p></td>
+<td><p>statsmodels</p></td>
+<td></td>
+<td><p>True</p></td>
+<td><p>joblib</p></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>ARDL</p></td>
+<td><p>statsmodels</p></td>
+<td></td>
+<td><p>True</p></td>
+<td><p>joblib</p></td>
+<td></td>
+<td></td>
 <td></td>
 <td><p>True</p></td>
 </tr>

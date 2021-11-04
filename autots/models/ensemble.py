@@ -81,7 +81,11 @@ def BestNEnsemble(
     forecast_keys = list(forecasts.keys())
     model_weights = dict(ensemble_params.get("model_weights", {}))
     ensemble_params['model_weights'] = model_weights
-    ensemble_params['models'] = {k: v for k, v in dict(ensemble_params.get('models')).items() if k in forecast_keys}
+    ensemble_params['models'] = {
+        k: v
+        for k, v in dict(ensemble_params.get('models')).items()
+        if k in forecast_keys
+    }
 
     model_count = len(forecast_keys)
     if model_count < 1:
@@ -227,10 +231,7 @@ def mosaic_classifier(df_train, known):
     """CLassify unknown series with the appropriate model for mosaic ensembles."""
     known.index.name = "forecast_period"
     upload = pd.melt(
-        known,
-        var_name="series_id",
-        value_name="model_id",
-        ignore_index=False,
+        known, var_name="series_id", value_name="model_id", ignore_index=False,
     ).reset_index(drop=False)
     upload['forecast_period'] = upload['forecast_period'].astype(int)
     missing_cols = df_train.columns[
@@ -610,17 +611,19 @@ def _generate_distance_ensemble(dis_frac, forecast_length, initial_results):
     ]
     first_model = ens_per_ts.iloc[:, 0:first_bit].mean(axis=1).idxmin()
     last_model = (
-        ens_per_ts.iloc[:, first_bit: (last_bit + first_bit)].mean(axis=1).idxmin()
+        ens_per_ts.iloc[:, first_bit : (last_bit + first_bit)].mean(axis=1).idxmin()
     )
     ensemble_models = {}
-    best3 = initial_results.model_results[
-        initial_results.model_results['ID'].isin([first_model, last_model])
-    ].drop_duplicates(
-        subset=['Model', 'ModelParameters', 'TransformationParameters']
-    ).set_index("ID")[
-        ['Model', 'ModelParameters', 'TransformationParameters']
-    ]
-    ensemble_models = best.to_dict(orient='index')
+    best3 = (
+        initial_results.model_results[
+            initial_results.model_results['ID'].isin([first_model, last_model])
+        ]
+        .drop_duplicates(
+            subset=['Model', 'ModelParameters', 'TransformationParameters']
+        )
+        .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+    )
+    ensemble_models = best3.to_dict(orient='index')
     return {
         'Model': 'Ensemble',
         'ModelParameters': json.dumps(
@@ -639,7 +642,12 @@ def _generate_distance_ensemble(dis_frac, forecast_length, initial_results):
     }
 
 
-def _generate_bestn_dict(best, model_name: str = 'BestN', model_metric: str = "best_score", model_weights: dict = None):
+def _generate_bestn_dict(
+    best,
+    model_name: str = 'BestN',
+    model_metric: str = "best_score",
+    model_weights: dict = None,
+):
     ensemble_models = best.to_dict(orient='index')
     model_parms = {
         'model_name': model_name,
@@ -651,16 +659,17 @@ def _generate_bestn_dict(best, model_name: str = 'BestN', model_metric: str = "b
         model_parms['model_weights'] = model_weights
     return {
         'Model': 'Ensemble',
-        'ModelParameters': json.dumps(
-            model_parms
-        ),
+        'ModelParameters': json.dumps(model_parms),
         'TransformationParameters': '{}',
         'Ensemble': 1,
     }
 
 
 def EnsembleTemplateGenerator(
-    initial_results, forecast_length: int = 14, ensemble: str = "simple", score_per_series=None,
+    initial_results,
+    forecast_length: int = 14,
+    ensemble: str = "simple",
+    score_per_series=None,
 ):
     """Generate class 1 (non-horizontal) ensemble templates given a table of results."""
     ensemble_templates = pd.DataFrame()
@@ -674,7 +683,12 @@ def EnsembleTemplateGenerator(
         ]
         n_models = best3nonunique.shape[0]
         if n_models == 3:
-            best3nu_params = pd.DataFrame(_generate_bestn_dict(best3nonunique, model_name='BestN', model_metric="best_score"), index=[0])
+            best3nu_params = pd.DataFrame(
+                _generate_bestn_dict(
+                    best3nonunique, model_name='BestN', model_metric="best_score"
+                ),
+                index=[0],
+            )
             ensemble_templates = pd.concat([ensemble_templates, best3nu_params], axis=0)
 
         # best 3, by SMAPE, RMSE, SPL
@@ -682,12 +696,19 @@ def EnsembleTemplateGenerator(
         bestrmse = ens_temp.nsmallest(2, columns=['rmse_weighted'])
         bestmae = ens_temp.nsmallest(3, columns=['spl_weighted'])
         best3metric = pd.concat([bestsmape, bestrmse, bestmae], axis=0)
-        best3metric = best3metric.drop_duplicates().head(3).set_index("ID")[
-            ['Model', 'ModelParameters', 'TransformationParameters']
-        ]
+        best3metric = (
+            best3metric.drop_duplicates()
+            .head(3)
+            .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+        )
         n_models = best3metric.shape[0]
         if n_models == 3:
-            best3m_params = pd.DataFrame(_generate_bestn_dict(best3metric, model_name='BestN', model_metric="mixed_metric"), index=[0])
+            best3m_params = pd.DataFrame(
+                _generate_bestn_dict(
+                    best3metric, model_name='BestN', model_metric="mixed_metric"
+                ),
+                index=[0],
+            )
             ensemble_templates = pd.concat([ensemble_templates, best3m_params], axis=0)
 
         # best 3, all must be of different model types
@@ -702,19 +723,30 @@ def EnsembleTemplateGenerator(
         ]
         n_models = best3unique.shape[0]
         if n_models == 3:
-            best3u_params = pd.DataFrame(_generate_bestn_dict(best3unique, model_name='BestN', model_metric="best_score_unique"), index=[0])
+            best3u_params = pd.DataFrame(
+                _generate_bestn_dict(
+                    best3unique, model_name='BestN', model_metric="best_score_unique"
+                ),
+                index=[0],
+            )
             ensemble_templates = pd.concat(
                 [ensemble_templates, best3u_params], axis=0, ignore_index=True
             )
 
     if 'distance' in ensemble:
         dis_frac = 0.2
-        distance_params = pd.DataFrame(_generate_distance_ensemble(dis_frac, forecast_length, initial_results), index=[0])
+        distance_params = pd.DataFrame(
+            _generate_distance_ensemble(dis_frac, forecast_length, initial_results),
+            index=[0],
+        )
         ensemble_templates = pd.concat(
             [ensemble_templates, distance_params], axis=0, ignore_index=True
         )
         dis_frac = 0.5
-        distance_params2 = pd.DataFrame(_generate_distance_ensemble(dis_frac, forecast_length, initial_results), index=[0])
+        distance_params2 = pd.DataFrame(
+            _generate_distance_ensemble(dis_frac, forecast_length, initial_results),
+            index=[0],
+        )
         ensemble_templates = pd.concat(
             [ensemble_templates, distance_params2], axis=0, ignore_index=True
         )
@@ -730,12 +762,20 @@ def EnsembleTemplateGenerator(
         # choose best n based on score per series
         n = 3
         chosen_ones = per_series_ranked.sum(axis=1).nlargest(n)
-        bestn = ens_temp[ens_temp['ID'].isin(chosen_ones.index.tolist())].set_index("ID")[
-            ['Model', 'ModelParameters', 'TransformationParameters']
-        ]
+        bestn = ens_temp[ens_temp['ID'].isin(chosen_ones.index.tolist())].set_index(
+            "ID"
+        )[['Model', 'ModelParameters', 'TransformationParameters']]
         n_models = bestn.shape[0]
         if n_models == n:
-            best3u_params = pd.DataFrame(_generate_bestn_dict(bestn, model_name='BestN', model_metric="bestn_horizontal", model_weights=chosen_ones.to_dict()), index=[0])
+            best3u_params = pd.DataFrame(
+                _generate_bestn_dict(
+                    bestn,
+                    model_name='BestN',
+                    model_metric="bestn_horizontal",
+                    model_weights=chosen_ones.to_dict(),
+                ),
+                index=[0],
+            )
             ensemble_templates = pd.concat(
                 [ensemble_templates, best3u_params], axis=0, ignore_index=True
             )
@@ -751,17 +791,31 @@ def EnsembleTemplateGenerator(
                 clstr = AgglomerativeClustering(n_clusters=n_clusters).fit(X)
                 series_labels = clstr.labels_
                 for cluster in np.unique(series_labels).tolist():
-                    current_ps = per_series_ranked[per_series_ranked.columns[series_labels == cluster]]
+                    current_ps = per_series_ranked[
+                        per_series_ranked.columns[series_labels == cluster]
+                    ]
                     n = 3
                     chosen_ones = current_ps.sum(axis=1).nlargest(n)
-                    bestn = ens_temp[ens_temp['ID'].isin(chosen_ones.index.tolist())].set_index("ID")[
+                    bestn = ens_temp[
+                        ens_temp['ID'].isin(chosen_ones.index.tolist())
+                    ].set_index("ID")[
                         ['Model', 'ModelParameters', 'TransformationParameters']
                     ]
                     n_models = bestn.shape[0]
                     if n_models == n:
-                        best3u_params = pd.DataFrame(_generate_bestn_dict(bestn, model_name='BestN', model_metric=f"cluster_{cluster}", model_weights=chosen_ones.to_dict()), index=[0])
+                        best3u_params = pd.DataFrame(
+                            _generate_bestn_dict(
+                                bestn,
+                                model_name='BestN',
+                                model_metric=f"cluster_{cluster}",
+                                model_weights=chosen_ones.to_dict(),
+                            ),
+                            index=[0],
+                        )
                         ensemble_templates = pd.concat(
-                            [ensemble_templates, best3u_params], axis=0, ignore_index=True
+                            [ensemble_templates, best3u_params],
+                            axis=0,
+                            ignore_index=True,
                         )
             except Exception as e:
                 print(f"cluster-based simple ensemble failed with {repr(e)}")
@@ -792,21 +846,26 @@ def EnsembleTemplateGenerator(
             if per_series_des.shape[1] == 0:
                 per_series_des = per_series.copy().drop(mods.index, axis=0)
 
-        best3 = initial_results.model_results[
-            initial_results.model_results['ID'].isin(mods.index.tolist())
-        ].drop_duplicates(
-            subset=['Model', 'ModelParameters', 'TransformationParameters']
-        ).set_index("ID")[
-            ['Model', 'ModelParameters', 'TransformationParameters']
-        ]
-        best3_params = pd.DataFrame(_generate_bestn_dict(best3, model_name='BestN', model_metric="horizontal"), index=[0])
+        best3 = (
+            initial_results.model_results[
+                initial_results.model_results['ID'].isin(mods.index.tolist())
+            ]
+            .drop_duplicates(
+                subset=['Model', 'ModelParameters', 'TransformationParameters']
+            )
+            .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+        )
+        best3_params = pd.DataFrame(
+            _generate_bestn_dict(best3, model_name='BestN', model_metric="horizontal"),
+            index=[0],
+        )
         ensemble_templates = pd.concat(
             [ensemble_templates, best3_params], axis=0, ignore_index=True
         )
     if 'subsample' in ensemble:
         try:
             import random
-    
+
             if score_per_series is None:
                 per_series = initial_results.per_series_mae
             else:
@@ -818,11 +877,12 @@ def EnsembleTemplateGenerator(
             num_series = per_series.shape[1]
             n_samples = num_series * 2
             max_deep_ensembles = 100
-            n_samples = n_samples if n_samples < max_deep_ensembles else max_deep_ensembles
+            n_samples = (
+                n_samples if n_samples < max_deep_ensembles else max_deep_ensembles
+            )
             col_min = 1 if num_series < 3 else 2
             col_max = round(num_series / 2)
             col_max = num_series if col_max > num_series else col_max
-            error_count = 0
             for samp in range(n_samples):
                 n_cols = random.randint(col_min, col_max)
                 current_ps = per_series_ranked.sample(n=n_cols, axis=1)
@@ -830,12 +890,27 @@ def EnsembleTemplateGenerator(
                 n_sample = random.randint(2, 5)
                 # randomly choose one of best models
                 chosen_ones = current_ps.sum(axis=1).nlargest(n_largest)
-                n_sample = n_sample if n_sample < chosen_ones.shape[0] else chosen_ones.shape[0]
+                n_sample = (
+                    n_sample
+                    if n_sample < chosen_ones.shape[0]
+                    else chosen_ones.shape[0]
+                )
                 chosen_ones = chosen_ones.sample(n_sample).sort_values(ascending=False)
-                bestn = ens_temp[ens_temp['ID'].isin(chosen_ones.index.tolist())].set_index("ID")[
+                bestn = ens_temp[
+                    ens_temp['ID'].isin(chosen_ones.index.tolist())
+                ].set_index("ID")[
                     ['Model', 'ModelParameters', 'TransformationParameters']
                 ]
-                best3u_params = pd.DataFrame(_generate_bestn_dict(bestn, model_name='BestN', model_metric=f"subsample_{samp}", model_weights=chosen_ones.to_dict()), index=[0])
+                model_weights = random.choice([chosen_ones.to_dict(), None])
+                best3u_params = pd.DataFrame(
+                    _generate_bestn_dict(
+                        bestn,
+                        model_name='BestN',
+                        model_metric=f"subsample_{samp}",
+                        model_weights=model_weights,
+                    ),
+                    index=[0],
+                )
                 ensemble_templates = pd.concat(
                     [ensemble_templates, best3u_params], axis=0, ignore_index=True
                 )
@@ -1176,10 +1251,7 @@ def MosaicEnsemble(
     final = pd.DataFrame.from_dict(all_series)
     final.index.name = "forecast_period"
     melted = pd.melt(
-        final,
-        var_name="series_id",
-        value_name="model_id",
-        ignore_index=False,
+        final, var_name="series_id", value_name="model_id", ignore_index=False,
     ).reset_index(drop=False)
     melted["forecast_period"] = melted["forecast_period"].astype(int)
     max_forecast_period = melted["forecast_period"].max()

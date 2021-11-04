@@ -789,13 +789,11 @@ class ARIMA(ModelObject):
         large p,d,q can be very slow (a p of 30 can take hours)
         """
         p_choice = random.choices(
-            [0, 1, 2, 3, 4, 5, 7, 12],
-            [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+            [0, 1, 2, 3, 4, 5, 7, 12], [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
         d_choice = random.choices([0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1])[0]
         q_choice = random.choices(
-            [0, 1, 2, 3, 4, 5, 7, 12],
-            [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+            [0, 1, 2, 3, 4, 5, 7, 12], [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
         regression_list = [None, 'User', 'Holiday']
         regression_probability = [0.5, 0.3, 0.2]
@@ -977,8 +975,13 @@ class UnobservedComponents(ModelObject):
                         exog=args['regressor_train'],
                         level=args['level'],
                         autoregressive=args['autoregressive'],
-                        **args['model_kwargs']
-                    ).fit(disp=args['verbose_bool'], maxiter=args['maxiter'], cov_type=args['cov_type'], method=args['method'])
+                        **args['model_kwargs'],
+                    ).fit(
+                        disp=args['verbose_bool'],
+                        maxiter=args['maxiter'],
+                        cov_type=args['cov_type'],
+                        method=args['method'],
+                    )
                 else:
                     maModel = UnobservedComponents(
                         current_series,
@@ -993,11 +996,18 @@ class UnobservedComponents(ModelObject):
                         # stochastic_cycle=args['stochastic_cycle'],
                         # stochastic_level=args['stochastic_level'],
                         # stochastic_trend=args['stochastic_trend'],
-                    ).fit(disp=args['verbose_bool'], maxiter=args['maxiter'], cov_type=args['cov_type'], method=args['method'])
+                    ).fit(
+                        disp=args['verbose_bool'],
+                        maxiter=args['maxiter'],
+                        cov_type=args['cov_type'],
+                        method=args['method'],
+                    )
                 series_len = current_series.shape[0]
                 if args['regression_type'] in ["User", "Holiday"]:
                     outer_forecasts = maModel.get_prediction(
-                        start=series_len, end=series_len + args['forecast_length'] - 1, exog=args['exog']
+                        start=series_len,
+                        end=series_len + args['forecast_length'] - 1,
+                        exog=args['exog'],
                     )
                 else:
                     outer_forecasts = maModel.get_forecast(args['forecast_length'])
@@ -1065,9 +1075,18 @@ class UnobservedComponents(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         levels = [
-            'irregular', 'fixed intercept', 'deterministic constant', 'local level',
-            'random walk', 'fixed slope', 'deterministic trend', 'local linear deterministic trend',
-            'random walk with drift', 'local linear trend', 'smooth trend', 'random trend'
+            'irregular',
+            'fixed intercept',
+            'deterministic constant',
+            'local level',
+            'random walk',
+            'fixed slope',
+            'deterministic trend',
+            'local linear deterministic trend',
+            'random walk with drift',
+            'local linear trend',
+            'smooth trend',
+            'random trend',
         ]
         level_choice = random.choice(levels)
         """
@@ -1093,8 +1112,13 @@ class UnobservedComponents(ModelObject):
         return {
             'level': level_choice,
             'maxiter': random.choice([50, 100, 250]),
-            'cov_type': random.choices(["opg", "oim", "approx", 'robust'], [0.8, 0.1, 0.1, 0.1])[0],
-            'method': random.choices(["lbfgs", "bfgs", "powell", "cg", "newton", "nm"], [0.8, 0.1, 0.1, 0.1, 0.1, 0.1])[0],
+            'cov_type': random.choices(
+                ["opg", "oim", "approx", 'robust'], [0.8, 0.1, 0.1, 0.1]
+            )[0],
+            'method': random.choices(
+                ["lbfgs", "bfgs", "powell", "cg", "newton", "nm"],
+                [0.8, 0.1, 0.1, 0.1, 0.1, 0.1],
+            )[0],
             'autoregressive': random.choices([None, 1, 2], [0.8, 0.2, 0.1])[0],
             'regression_type': regression_choice,
         }
@@ -1171,7 +1195,9 @@ class DynamicFactor(ModelObject):
         else:
             if self.regression_type is not None:
                 if future_regressor is None:
-                    raise ValueError("regression_type='User' but future_regressor not passed")
+                    raise ValueError(
+                        "regression_type='User' but future_regressor not passed"
+                    )
                 else:
                     self.regressor_train = future_regressor
 
@@ -1351,9 +1377,7 @@ class VECM(ModelObject):
         if type_str == 'holiday':
             from autots.tools.holiday import holiday_flag
 
-            self.regressor_train = holiday_flag(
-                df.index, country=self.holiday_country
-            )
+            self.regressor_train = holiday_flag(df.index, country=self.holiday_country)
         elif type_str == "user":
             if future_regressor is None:
                 raise ValueError(
@@ -1386,9 +1410,7 @@ class VECM(ModelObject):
         if self.regression_type == 'Holiday':
             from autots.tools.holiday import holiday_flag
 
-            future_regressor = holiday_flag(
-                test_index, country=self.holiday_country
-            )
+            future_regressor = holiday_flag(test_index, country=self.holiday_country)
         elif self.regression_type is not None:
             assert (
                 future_regressor.shape[0] == forecast_length
@@ -1404,7 +1426,9 @@ class VECM(ModelObject):
                 k_ar_diff=self.k_ar_diff,
             ).fit()
             # don't ask me why it is exog_fc here and not exog like elsewhere
-            forecast = maModel.predict(steps=forecast_length, exog_fc=np.array(future_regressor))
+            forecast = maModel.predict(
+                steps=forecast_length, exog_fc=np.array(future_regressor)
+            )
         else:
             maModel = VECM(
                 self.df_train,
@@ -1898,8 +1922,9 @@ class Theta(ModelObject):
                     steps=args['forecast_length'], theta=args['theta']
                 )
                 bound_predict = modelResult.prediction_intervals(
-                    steps=args['forecast_length'], theta=args['theta'],
-                    alpha=(1 - args['prediction_interval'])
+                    steps=args['forecast_length'],
+                    theta=args['theta'],
+                    alpha=(1 - args['prediction_interval']),
                 )
                 # overly clever identification of which is lower and upper
                 sumz = bound_predict.sum()
@@ -2040,9 +2065,9 @@ class ARDL(ModelObject):
         if self.regression_type == 'holiday':
             from autots.tools.holiday import holiday_flag
 
-            self.regressor_train = pd.DataFrame(holiday_flag(
-                df.index, country=self.holiday_country
-            ))
+            self.regressor_train = pd.DataFrame(
+                holiday_flag(df.index, country=self.holiday_country)
+            )
         elif self.regression_type in ["User", "user"]:
             if future_regressor is None:
                 raise ValueError(
@@ -2087,15 +2112,22 @@ class ARDL(ModelObject):
                     ).fit()
                 else:
                     maModel = ARDL(
-                        current_series, lags=args['lags'], trend=args['trend'], order=args['order'],
+                        current_series,
+                        lags=args['lags'],
+                        trend=args['trend'],
+                        order=args['order'],
                     ).fit()
                 series_len = current_series.shape[0]
                 if args['regression_type'] in ["User", "user", "holiday"]:
                     outer_forecasts = maModel.get_prediction(
-                        start=series_len, end=series_len + args['forecast_length'] - 1, exog_oos=args['exog']
+                        start=series_len,
+                        end=series_len + args['forecast_length'] - 1,
+                        exog_oos=args['exog'],
                     )
                 else:
-                    outer_forecasts = maModel.get_prediction(start=series_len, end=series_len + args['forecast_length'] - 1)
+                    outer_forecasts = maModel.get_prediction(
+                        start=series_len, end=series_len + args['forecast_length'] - 1
+                    )
                 outer_forecasts_df = outer_forecasts.conf_int(alpha=args['alpha'])
                 cforecast = outer_forecasts.summary_frame()['mean']
                 clower_forecast = outer_forecasts_df.iloc[:, 0]
@@ -2110,7 +2142,9 @@ class ARDL(ModelObject):
         if self.regression_type == 'holiday':
             from autots.tools.holiday import holiday_flag
 
-            future_regressor = pd.DataFrame(holiday_flag(test_index, country=self.holiday_country))
+            future_regressor = pd.DataFrame(
+                holiday_flag(test_index, country=self.holiday_country)
+            )
         if self.regression_type is not None:
             assert (
                 future_regressor.shape[0] == forecast_length
@@ -2136,9 +2170,7 @@ class ARDL(ModelObject):
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
-                delayed(ardl_per_column)(
-                    current_series=self.df_train[col], args=args,
-                )
+                delayed(ardl_per_column)(current_series=self.df_train[col], args=args,)
                 for col in cols
             )
             complete = list(map(list, zip(*df_list)))

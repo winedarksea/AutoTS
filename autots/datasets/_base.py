@@ -320,9 +320,9 @@ def load_live_daily(
     if earthquake_min_magnitude is not None:
         try:
             str_end_time = current_date.strftime("%Y-%m-%d")
-            start_date = (current_date - datetime.timedelta(days=earthquake_days)).strftime(
-                "%Y-%m-%d"
-            )
+            start_date = (
+                current_date - datetime.timedelta(days=earthquake_days)
+            ).strftime("%Y-%m-%d")
             # is limited to ~1000 rows of data, ie individual earthquakes
             ebase = "https://earthquake.usgs.gov/fdsnws/event/1/query?"
             eargs = f"format=csv&starttime={start_date}&endtime={str_end_time}&minmagnitude={earthquake_min_magnitude}"
@@ -330,7 +330,9 @@ def load_live_daily(
             eq["time"] = pd.to_datetime(eq["time"], infer_datetime_format=True)
             eq["time"] = eq["time"].dt.tz_localize(None)
             eq.set_index("time", inplace=True)
-            global_earthquakes = eq.resample("1D").agg({"mag": "mean", "depth": "count"})
+            global_earthquakes = eq.resample("1D").agg(
+                {"mag": "mean", "depth": "count"}
+            )
             global_earthquakes["mag"] = global_earthquakes["mag"].fillna(
                 earthquake_min_magnitude
             )
@@ -347,7 +349,7 @@ def load_live_daily(
     if trends_list is not None:
         try:
             from pytrends.request import TrendReq
-    
+
             pytrends = TrendReq(hl="en-US", tz=360)
             # pytrends.build_payload(kw_list, cat=0, timeframe='today 5-y', geo='', gprop='')
             pytrends.build_payload(trends_list, timeframe="all")

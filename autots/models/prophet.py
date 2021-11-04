@@ -124,7 +124,9 @@ class FBProphet(ModelObject):
         self.dimensionality_reducer = None
         if self.regression_type in ['User', 'user']:
             if future_regressor is None:
-                raise ValueError("regression_type='User' but no future_regressor passed")
+                raise ValueError(
+                    "regression_type='User' but no future_regressor passed"
+                )
             else:
                 if future_regressor.ndim > 1:
                     if future_regressor.shape[1] > 1:
