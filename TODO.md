@@ -17,6 +17,7 @@
 * cluster-based and generate_score_per_series-based 'simple' ensembles
 * 'univariate' model_list added
 * similarity and custom cross validation now set initial evaluation segment
+	* validation_test_indexes and train now include initial eval segment
 * 'subsample' ensemble expansion of 'simple'
 * added Theta model from statsmodels
 * added ARDL model from statsmodels
