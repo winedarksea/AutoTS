@@ -27,7 +27,7 @@ frequency = "D"  # "infer" for automatic alignment, but specific offsets are mos
 forecast_length = 28  # number of periods to forecast ahead
 drop_most_recent = 1  # whether to discard the n most recent records (as incomplete)
 num_validations = 2  # number of cross validation runs. More is better but slower, usually
-validation_method = "similarity"  # "similarity", "backwards", "seasonal 364" are good choices here
+validation_method = "similarity"  # "similarity", "backwards", "seasonal 364"
 n_jobs = "auto"  # "auto" or set to number of CPU cores
 prediction_interval = 0.9  # sets the upper and lower forecast range by probability range. Bigger = wider
 initial_training = "auto"  # set this to True on first run, or on reset, 'auto' looks for existing template, if found, sets to False.
@@ -37,6 +37,8 @@ save_location = None  # "C:/Users/Colin/Downloads"  # directory to save template
 template_filename = f"autots_forecast_template_{forecast_name}.csv"
 forecast_csv_name = None  # f"autots_forecast_{forecast_name}.csv"  # or None, point forecast only is written
 model_list = "default"
+transformer_list = "fast"  # 'superfast'
+transformer_max_depth = 2
 
 if save_location is not None:
     template_filename = os.path.join(save_location, template_filename)
@@ -73,7 +75,15 @@ else:
 Begin dataset retrieval
 """
 
-df = load_live_daily(long=False, fred_key=fred_key)
+df = load_live_daily(
+    long=False,
+    fred_key=fred_key,
+    tickers=["MSFT", "PG"],
+    trends_list=["forecasting"],
+    earthquake_min_magnitude=5,
+    weather_years=2,
+    london_air_days=90,
+)
 
 df = df[df.index.year > 1999]
 start_time = datetime.datetime.now()
@@ -94,8 +104,8 @@ regr_train, regr_fcst = create_regressor(
     drop_most_recent=drop_most_recent,
     scale=True,
     summarize="auto",
-    backfill='bfill',
-    fill_na='spline',
+    backfill="bfill",
+    fill_na="spline",
     holiday_countries=["US", "UK"],  # requires holidays package
     datepart_method="recurring",
 )
@@ -110,13 +120,13 @@ Begin modeling
 """
 
 metric_weighting = {
-    'smape_weighting': 2,
-    'mae_weighting': 2,
-    'rmse_weighting': 1,
-    'containment_weighting': 0,
-    'runtime_weighting': 0,
-    'spl_weighting': 2,
-    'contour_weighting': 1,
+    "smape_weighting": 2,
+    "mae_weighting": 2,
+    "rmse_weighting": 1,
+    "containment_weighting": 0,
+    "runtime_weighting": 0,
+    "spl_weighting": 2,
+    "contour_weighting": 1,
 }
 
 model = AutoTS(
@@ -125,8 +135,8 @@ model = AutoTS(
     prediction_interval=prediction_interval,
     ensemble=ensemble,
     model_list=model_list,
-    transformer_list="fast",  # "all"
-    transformer_max_depth=4,
+    transformer_list=transformer_list,
+    transformer_max_depth=transformer_max_depth,
     max_generations=gens,
     metric_weighting=metric_weighting,
     aggfunc="sum",
@@ -147,10 +157,7 @@ model = AutoTS(
 if not initial_training:
     model.import_template(template_filename, method="only")  # "addon"
 
-model = model.fit(
-    df,
-    future_regressor=regr_train,
-)
+model = model.fit(df, future_regressor=regr_train,)
 
 prediction = model.predict(future_regressor=regr_fcst)
 
@@ -171,6 +178,7 @@ forecasts_lower_df = prediction.lower_forecast
 
 # accuracy of all tried model results
 model_results = model.results()
+validation_results = model.results("validation")
 
 # save a template of best models
 if initial_training or evolve:
@@ -179,27 +187,27 @@ if initial_training or evolve:
     )
     if archive_templates:
         arc_file = f"{template_filename.split('.csv')[0]}_{start_time.strftime('%Y%m%d%H%M')}.csv"
-        model.export_template(
-            arc_file, models="best", n=1
-        )
+        model.export_template(arc_file, models="best", n=1)
 
-model_parameters = json.loads(model.best_model['ModelParameters'].iloc[0])
+model_parameters = json.loads(model.best_model["ModelParameters"].iloc[0])
 
 if graph:
     col = model.df_wide_numeric.columns[-1]  # change column here
-    plot_df = pd.DataFrame({
-        col: model.df_wide_numeric[col],
-        'up_forecast': forecasts_upper_df[col],
-        'low_forecast': forecasts_lower_df[col],
-        'forecast': forecasts_df[col],
-    })
+    plot_df = pd.DataFrame(
+        {
+            col: model.df_wide_numeric[col],
+            "up_forecast": forecasts_upper_df[col],
+            "low_forecast": forecasts_lower_df[col],
+            "forecast": forecasts_df[col],
+        }
+    )
     plot_df[plot_df == 0] = np.nan
     plot_df.interpolate(method="cubic", inplace=True)
     fig, ax = plt.subplots(dpi=300, figsize=(8, 6))
     plot_df[plot_df.index.year >= 2021].plot(ax=ax)
     plt.show()
 
-    if model.best_model['Ensemble'].iloc[0] == 2:
+    if model.best_model["Ensemble"].iloc[0] == 2:
         # plt.subplots_adjust(bottom=0.4)
         model.plot_horizontal_transformers()
         plt.show()
@@ -207,21 +215,28 @@ if graph:
         series = model.horizontal_to_df()
         if series.shape[0] > 25:
             series = series.sample(25, replace=False)
-        series[['log(Volatility)', 'log(Mean)']] = np.log(
-            series[['Volatility', 'Mean']]
+        series[["log(Volatility)", "log(Mean)"]] = np.log(
+            series[["Volatility", "Mean"]]
         )
 
         fig, ax = plt.subplots(figsize=(6, 4.5))
-        cmap = plt.get_cmap('tab10')  # 'Pastel1, 'cividis', 'coolwarm', 'spectral'
-        names = series['Model'].unique()
+        cmap = plt.get_cmap("tab10")  # 'Pastel1, 'cividis', 'coolwarm', 'spectral'
+        names = series["Model"].unique()
         colors = dict(zip(names, cmap(np.linspace(0, 1, len(names)))))
-        grouped = series.groupby('Model')
+        grouped = series.groupby("Model")
         for key, group in grouped:
-            group.plot(ax=ax, kind='scatter', x='log(Mean)', y='log(Volatility)', label=key, color=colors[key].reshape(1, -1))
+            group.plot(
+                ax=ax,
+                kind="scatter",
+                x="log(Mean)",
+                y="log(Volatility)",
+                label=key,
+                color=colors[key].reshape(1, -1),
+            )
         plt.title("Horizontal Ensemble: models choosen by series")
         plt.show()
         # plt.savefig("horizontal.png", dpi=300)
 
-        if str(model_parameters['model_name']).lower() == 'mosaic':
+        if str(model_parameters["model_name"]).lower() == "mosaic":
             mosaic_df = model.mosaic_to_df()
             print(mosaic_df[mosaic_df.columns[0:5]].head(5))

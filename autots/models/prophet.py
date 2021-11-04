@@ -110,7 +110,7 @@ class FBProphet(ModelObject):
         self.holiday = holiday
         self.regressor_name = []
 
-    def fit(self, df, future_regressor=[]):
+    def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
 
         Args:
@@ -122,9 +122,11 @@ class FBProphet(ModelObject):
         df = self.basic_profile(df)
         self.regressor_train = None
         self.dimensionality_reducer = None
-        if self.regression_type == 'User':
-            if future_regressor.shape[0] != df.shape[0]:
-                self.regression_type = None
+        if self.regression_type in ['User', 'user']:
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type='User' but no future_regressor passed"
+                )
             else:
                 if future_regressor.ndim > 1:
                     if future_regressor.shape[1] > 1:
@@ -167,7 +169,7 @@ class FBProphet(ModelObject):
     def predict(
         self,
         forecast_length: int,
-        future_regressor=[],
+        future_regressor=None,
         just_point_forecast: bool = False,
     ):
         """Generates forecast data immediately following dates of index supplied to .fit()
@@ -189,6 +191,7 @@ class FBProphet(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         if self.verbose <= 0:
             logging.getLogger('fbprophet').setLevel(logging.WARNING)
+            logging.getLogger('prophet').setLevel(logging.WARNING)
 
         args = {
             'holiday': self.holiday,

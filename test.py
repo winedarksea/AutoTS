@@ -32,39 +32,41 @@ df = load_daily(long=long)
 n_jobs = "auto"
 verbose = 2
 validation_method = "similarity"
-frequency = 'infer'
+frequency = "infer"
 drop_most_recent = 0
 if use_template:
     generations = 5
     num_validations = 0
 else:
-    generations = 3
-    num_validations = 2
+    generations = 5
+    num_validations = 3
 
 if force_univariate:
     df = df.iloc[:, 0]
 
-transformer_list = "fast"  # ["bkfilter", "STLFilter", "HPFilter", 'StandardScaler']
+transformer_list = (
+    "superfast"  # ["bkfilter", "STLFilter", "HPFilter", 'StandardScaler']
+)
 transformer_max_depth = 1
 model_list = "default"
-model_list = 'superfast'  # fast_parallel
-# model_list = ["NVAR", "SectionalMotif"]
+model_list = "superfast"  # fast_parallel
+# model_list = ["ARDL", "UnobservedComponents", 'AverageValueNaive']
 
 metric_weighting = {
-    'smape_weighting': 3,
-    'mae_weighting': 1,
-    'rmse_weighting': 1,
-    'containment_weighting': 0,
-    'runtime_weighting': 0.1,
-    'spl_weighting': 1,
-    'contour_weighting': 1,
+    "smape_weighting": 3,
+    "mae_weighting": 1,
+    "rmse_weighting": 1,
+    "containment_weighting": 0,
+    "runtime_weighting": 0.1,
+    "spl_weighting": 1,
+    "contour_weighting": 1,
 }
 
 model = AutoTS(
     forecast_length=forecast_length,
     frequency=frequency,
     prediction_interval=0.9,
-    ensemble=['horizontal-max'],
+    ensemble=["horizontal-max", "dist", "simple"],
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,
@@ -72,7 +74,7 @@ model = AutoTS(
     model_list=model_list,
     transformer_list=transformer_list,
     transformer_max_depth=transformer_max_depth,
-    initial_template='Random',
+    initial_template="Random",
     metric_weighting=metric_weighting,
     models_to_validate=0.35,
     max_per_model_class=None,
@@ -93,8 +95,8 @@ regr_train, regr_fcst = create_regressor(
     drop_most_recent=drop_most_recent,
     scale=True,
     summarize="auto",
-    backfill='bfill',
-    fill_na='pchip',
+    backfill="bfill",
+    fill_na="pchip",
     holiday_countries=["US"],
     datepart_method="recurring",
 )
@@ -102,7 +104,9 @@ regr_train, regr_fcst = create_regressor(
 
 # model = model.import_results('test.pickle')
 if use_template:
-    model = model.import_template(example_filename, method='only', enforce_model_list=True)
+    model = model.import_template(
+        example_filename, method="only", enforce_model_list=True
+    )
 
 start_time_for = timeit.default_timer()
 model = model.fit(
@@ -110,10 +114,14 @@ model = model.fit(
     future_regressor=regr_train,
     weights="mean",
     # result_file='test.pickle',
-    validation_indexes=[pd.date_range("2021-01-01", "2022-02-02"), pd.date_range("2021-01-01", "2022-03-03")],
-    date_col='datetime' if long else None,
-    value_col='value' if long else None,
-    id_col='series_id' if long else None,
+    validation_indexes=[
+        pd.date_range("2021-01-01", "2022-05-02"),
+        pd.date_range("2021-01-01", "2022-02-02"),
+        pd.date_range("2021-01-01", "2022-03-03"),
+    ],
+    date_col="datetime" if long else None,
+    value_col="value" if long else None,
+    id_col="series_id" if long else None,
 )
 
 elapsed_for = timeit.default_timer() - start_time_for
@@ -126,28 +134,38 @@ initial_results = model.results()
 # validation results
 validation_results = model.results("validation")
 
-initial_results['TransformationRuntime'] = initial_results['TransformationRuntime'].dt.total_seconds()
-initial_results['FitRuntime'] = initial_results['FitRuntime'].dt.total_seconds()
-initial_results['PredictRuntime'] = initial_results['PredictRuntime'].dt.total_seconds()
-initial_results['TotalRuntime'] = initial_results['TotalRuntime'].dt.total_seconds()
+initial_results["TransformationRuntime"] = initial_results[
+    "TransformationRuntime"
+].dt.total_seconds()
+initial_results["FitRuntime"] = initial_results["FitRuntime"].dt.total_seconds()
+initial_results["PredictRuntime"] = initial_results["PredictRuntime"].dt.total_seconds()
+initial_results["TotalRuntime"] = initial_results["TotalRuntime"].dt.total_seconds()
 
 sleep(5)
 print(model)
+print(model.validation_test_indexes)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
 print("Slowest models:")
-print(initial_results.groupby("Model").agg({'TotalRuntimeSeconds': ['mean', 'max']}).idxmax())
+print(
+    initial_results[initial_results["Ensemble"] < 1]
+    .groupby("Model")
+    .agg({"TotalRuntime": ["mean", "max"]})
+    .idxmax()
+)
 
 initial_results.to_csv("general_template_" + str(platform.node()) + ".csv")
 
 if graph:
-    prediction.plot(model.df_wide_numeric,
-                    series=model.df_wide_numeric.columns[2],
-                    remove_zeroes=False,
-                    start_date="2018-09-26")
+    prediction.plot(
+        model.df_wide_numeric,
+        series=model.df_wide_numeric.columns[2],
+        remove_zeroes=False,
+        start_date="2018-09-26",
+    )
     plt.show()
     model.plot_generation_loss()
 
-    if model.best_model['Ensemble'].iloc[0] == 2:
+    if model.best_model["Ensemble"].iloc[0] == 2:
         plt.show()
         model.plot_horizontal_transformers(method="fillna")
         plt.show()
@@ -155,7 +173,7 @@ if graph:
         plt.show()
         model.plot_horizontal()
         plt.show()
-        if 'mosaic' in model.best_model['ModelParameters'].iloc[0].lower():
+        if "mosaic" in model.best_model["ModelParameters"].iloc[0].lower():
             mosaic_df = model.mosaic_to_df()
             print(mosaic_df[mosaic_df.columns[0:5]].head(5))
 
@@ -167,7 +185,7 @@ df_wide_numeric = model.df_wide_numeric
 
 df = df_wide_numeric.tail(100).fillna(0).astype(float)
 
-print('test run complete')
+print("test run complete")
 
 """
 # Import/Export

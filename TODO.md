@@ -13,19 +13,19 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* update validation template creation for horizontal ensembles
-* made MultivariateRegression probabilistic
-* fixed bug where weighting didn't take floats
-* pushed the evaluate options from a separate function to part of the PredictionObject
-* added 'custom' validation option
-* added "similarity" validation option
-* SectionalMotif model added
-* window functions grouped in module
-* fixed bugs in holiday_flag
-* holiday_flag now has holiday categorical encoding option and works better on sub-daily data
-* create_regressor handle categorical features
-* 'superfast' transformer_dict now adjusts fillna methods as well
-* optimizing metric calculation runtimes (feel the speed of 500 µs savings!)
+* BestN ensembles now support weighting model components
+* cluster-based and generate_score_per_series-based 'simple' ensembles
+* 'univariate' model_list added
+* similarity and custom cross validation now set initial evaluation segment
+	* validation_test_indexes and train now include initial eval segment
+* 'subsample' ensemble expansion of 'simple'
+* added Theta model from statsmodels
+* added ARDL model from statsmodels
+* expanded UnobservedComponents functionality, although it still fails on some params for unknown reasons
+* fixed bug in AutoTS.predict() where it was breaking regressors in some cases
+* transition from [] to None as default for no future_regressor
+* enforce more extensive failing if regression_type==User and no regressor passed
+* fixed regressor handling in DatepartRegression
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

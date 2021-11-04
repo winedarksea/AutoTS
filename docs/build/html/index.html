@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>AutoTS &#8212; AutoTS 0.3.9 documentation</title>
+    <title>AutoTS &#8212; AutoTS 0.3.10 documentation</title>
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
@@ -35,51 +35,6 @@
   <section id="autots">
 <h1>AutoTS<a class="headerlink" href="#autots" title="Permalink to this headline">¶</a></h1>
 <p><a class="reference internal" href="#autots">autots</a> is an automated time series forecasting package for Python.</p>
-<p>Features:</p>
-<ul class="simple">
-<li><p>Finds optimal time series forecasting model and data transformations by genetic programming optimization</p></li>
-<li><p>Handles univariate and multivariate/parallel time series</p></li>
-<li><p>Point and probabilistic upper/lower bound forecasts for all models</p></li>
-<li><dl class="simple">
-<dt>Over twenty available model classes, with tens of thousands of possible hyperparameter configurations</dt><dd><ul>
-<li><p>Includes naive, statistical, machine learning, and deep learning models</p></li>
-<li><p>Multiprocessing for univariate models for scalability on multivariate datasets</p></li>
-<li><p>Ability to add external regressors</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Over thirty time series specific data transformations</dt><dd><ul>
-<li><p>Ability to handle messy data by learning optimal NaN imputation and outlier removal</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Allows automatic ensembling of best models</dt><dd><ul>
-<li><p>‘horizontal’ ensembling on multivariate series - learning the best model for each series</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Multiple cross validation options</dt><dd><ul>
-<li><p>‘seasonal’ validation allows forecasts to be optimized for the season of your forecast period</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Subsetting and weighting to improve speed and relevance of search on large datasets</dt><dd><ul>
-<li><p>‘constraint’ parameter can be used to assure forecasts don’t drift beyond historic boundaries</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p>Option to use one or a combination of metrics for model selection</p></li>
-<li><p>Import and export of model templates for deployment and greater user customization</p></li>
-</ul>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
 <div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>pip install autots

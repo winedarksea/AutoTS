@@ -90,7 +90,9 @@ For example with daily data, forecasting for a month ahead, and `n=364`, the fir
 
 **Similarity** automatically finds the data sections most similar to the most recent data that will be used for prediction. This is the best general purpose choice but currently can be sensitive to messy data.
 
-**Custom** allows validations of any type. If used, .fit() needs `validation_indexes` passed - a list of pd.DatetimeIndex's, tail of forecast_length of each is used as test (which should be of the same length as `num_validations`).
+**Custom** allows validations of any type. If used, .fit() needs `validation_indexes` passed - a list of pd.DatetimeIndex's, tail of forecast_length of each is used as test (which should be of the same length as `num_validations` + 1).
+
+`backwards`, `even` and `seasonal` validation all perform initial evaluation on the most recent split of data. `custom` performs initial evaluation on the first index in the list provided, while `similarity` acts on the closest distance segment first.
 
 Only a subset of models are taken from initial validation to cross validation. The number of models is set such as `models_to_validate=10`. 
 If a float in 0 to 1 is provided, it is treated as a % of models to select. 
@@ -321,7 +323,7 @@ result.forecast
 
 Of these, numpy and pandas are critical. 
 Limited functionality should exist without scikit-learn. 
-	* Sklearn needed for categorical to numeric, some detrends/transformers, horizontal generalization, numerous models
+	* Sklearn needed for categorical to numeric, some detrends/transformers, horizontal generalization, numerous models, nan_euclidean distance
 Full functionality should be maintained without statsmodels, albeit with fewer available models. 
 
 Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about installation on some systems.
@@ -351,6 +353,7 @@ conda activate openblas
 python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost --exists-action i
 
 python -m pip install yfinance pytrends fredapi
+python -m pip install numexpr bottleneck
 python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily, --no-deps to pip install prophet if this fails
 python -m pip install mxnet --exists-action i     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
 python -m pip install gluonts --exists-action i
@@ -405,8 +408,8 @@ python -m pip install mxnet --no-deps
 python -m pip install gluonts
 conda install -c conda-forge prophet
 conda install spyder
-conda update intelpython3_full
-conda install -c intel statsmodels lightgbm tensorflow
+conda update -c intel intelpython3_full
+conda install -c intel numexpr statsmodels lightgbm tensorflow
 
 python -m pip install autots
 
@@ -415,23 +418,21 @@ python -m pip install autots
 
 ## Caveats and Advice
 
+### Mysterious crashes
+Usually mysterious crashes or hangs (those without clear error messages) occur when the CPU or Memory is overloaded. 
+Try setting `n_jobs=1` or an otherwise low number, which should reduce the load. Also test the 'superfast' naive models, which are generally low resource consumption. 
+GPU-accelerated models (Tensorflow in Regressions and GluonTS) are also more prone to crashes, and may be a source of problems when used. 
+If problems persist, post to the GitHub Discussion or Issues. 
+
 ### Series IDs really need to be unique (or column names need to be all unique in wide data)
 Pretty much as it says, if this isn't true, some odd things may happen that shouldn't.
 
-Also if using the model Prophet models, you can't have any columns named 'ds'
+Also if using the Prophet model, you can't have any series named 'ds'
 
 ### Short Training History
 How much data is 'too little' depends on the seasonality and volatility of the data. 
 Minimal training data most greatly impacts the ability to do proper cross validation. Set `num_validations=0` in such cases. 
 Since ensembles are based on the test dataset, it would also be wise to set `ensemble=None` if `num_validations=0`.
-
-### Too much training data.
-Too much data is already handled to some extent by the `Slice` Transformer. 
-That said, large datasets will be slower and more memory intensive, for high frequency data (say hourly) it can often be advisable to roll that up to a higher level (daily, hourly, etc.). 
-Rollup can be accomplished by specifying the frequency = your rollup frequency, and then setting the `agg_func=np.sum` or 'mean' or other appropriate statistic.
-
-### Lots of NaN in data
-Various NaN filling techniques are tested in the transformation. Rolling up data to a less-frequent frequency may also help deal with NaNs.
 
 ### Adding regressors and other information
 `future_` regressor, to make it clear this is data that will be know with high certainy about the future. 
@@ -493,7 +494,7 @@ Usually, very slow options are left out. If you are familiar with a model, you c
 To clarify, you can't usually add in entirely new parameters in this way, but you can often pass in new choices for existing parameter values.
 
 1. Run AutoTS with your desired model and export a template.
-2. Open the template in a text editor or Excel and manually change the param values to whatever you want.
+2. Open the template in a text editor or Excel and manually change the param values to what you want.
 3. Run AutoTS again, this time importing the template before running .fit().
 4. There is no guarantee it will choose the model with the given params- choices are made based on validation accuracy, but it will at least run it, and if it does well, it will be incorporated into new models in that run (that's how the genetic algorithms work).
 
@@ -561,12 +562,14 @@ Currently `MultivariateRegression` utilizes a stock GradientBoostingRegressor wi
 |  GLS                    | statsmodels  |                         |               |                 |       | True         |              |               |
 |  GLM                    | statsmodels  |                         |               |     joblib      |       |              |              | True          |
 | ETS - Exponential Smoothing | statsmodels  |                     |               |     joblib      |       |              |              |               |
-|  UnobservedComponents   | statsmodels  |                         |               |     joblib      |       |              |              | True          |
+|  UnobservedComponents   | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  VARMAX                 | statsmodels  |                         |    True       |                 |       | True         |              |               |
 |  DynamicFactor          | statsmodels  |                         |    True       |                 |       | True         |              | True          |
 |  VECM                   | statsmodels  |                         |               |                 |       | True         |              | True          |
 |  VAR                    | statsmodels  |                         |    True       |                 |       | True         |              | True          |
+|  Theta                  | statsmodels  |                         |    True       |     joblib      |       |              |              |               |
+|  ARDL                   | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  FBProphet              | fbprophet    |                         |    True       |     joblib      |       |              |              | True          |
 |  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   | True         |              | True          |
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |

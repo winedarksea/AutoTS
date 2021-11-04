@@ -243,6 +243,8 @@ def retrieve_closest_indices(
     stride_size: int = 1,
     start_index: int = None,
     include_differenced: bool = False,
+    include_last: bool = True,
+    verbose: int = 0,
 ):
     """Find next indicies closest to the final segment of forecast_length
 
@@ -261,15 +263,16 @@ def retrieve_closest_indices(
     tlt_len = array.shape[0]
     combined_window_size = window_size + forecast_length
     # remove extra so last segment not included at all
-    max_steps = array.shape[0] - combined_window_size - forecast_length
     # have the last window end evenly
-    spare_room = array.shape[0] - forecast_length - combined_window_size
+    max_steps = array.shape[0] - combined_window_size
+    if not include_last:
+        max_steps = max_steps - forecast_length
     if start_index is None:
         # handle massive stride size relative to data
         start_index = 0
         if stride_size * 6 < array.shape[0]:
-            start_index = spare_room % stride_size
-    if num_indices > (spare_room / stride_size):
+            start_index = max_steps % stride_size
+    if num_indices > (max_steps / stride_size):
         raise ValueError("num_validations/num_indices too high for this dataset")
     window_idxs = window_id_maker(
         window_size=combined_window_size,
@@ -334,7 +337,13 @@ def retrieve_closest_indices(
     # find the lowest distance historical windows
     res_sum = np.nansum(res, axis=0)
     num_top = num_indices
+    # partial then full sort
     res_idx = np.argpartition(res_sum, num_top, axis=0)[0:num_top]
+    res_idx = res_idx[np.argsort(res_sum[res_idx].flatten())]
+    if verbose > 1:
+        print(
+            f"similarity validation distance metrics: {res_sum[res_idx].flatten()} with last window: {res_sum[-1].item()}"
+        )
     select_index = index.to_numpy()[window_idxs[res_idx]]
     if select_index.ndim == 3:
         res_shape = select_index.shape

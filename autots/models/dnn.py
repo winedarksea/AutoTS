@@ -393,8 +393,7 @@ class Transformer(object):
         if optimizer == "adam":
             optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
         self.model.compile(
-            loss=loss,
-            optimizer=optimizer,
+            loss=loss, optimizer=optimizer,
         )
 
         callbacks = [

@@ -1,3 +1,4 @@
+"""Starting templates for models."""
 import pandas as pd
 
 general_template_dict = {
@@ -276,17 +277,18 @@ from autots.evaluator.auto_model import unpack_ensemble_models
 max_per_model_class = 1
 export_template = model.validation_results.model_results
 export_template = export_template[
-                export_template['Runs'] >= (model.num_validations + 1)
-            ]
+    export_template['Runs'] >= (model.num_validations + 1)
+]
 export_template = (
-                    export_template.sort_values('Score', ascending=True)
-                    .groupby('Model')
-                    .head(max_per_model_class)
-                    .reset_index()
-                )
+    export_template.sort_values('Score', ascending=True)
+    .groupby('Model')
+    .head(max_per_model_class)
+    .reset_index()
+)
 import json
 export2 = unpack_ensemble_models(model.best_model, keep_ensemble=False, recursive=True)
 export_final = pd.concat([export_template, export2])
 export_final = export_final[export_final['Ensemble'] < 1]
 export_final[["Model", "ModelParameters", "TransformationParameters", "Ensemble"]].reset_index(drop=True).to_json(orient='index')
+
 """

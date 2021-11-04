@@ -147,17 +147,7 @@ class Detrend(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = 'random'):
         if method == "fast":
-            choice = random.choices(
-                [
-                    "GLS",
-                    "Linear",
-                ],
-                [
-                    0.5,
-                    0.5,
-                ],
-                k=1,
-            )[0]
+            choice = random.choices(["GLS", "Linear"], [0.5, 0.5], k=1)[0]
         else:
             choice = random.choices(
                 [
@@ -706,13 +696,7 @@ class IntermittentOccurrence(EmptyTransformer):
             choice = "mean"
         else:
             choice = random.choices(
-                [
-                    "mean",
-                    "median",
-                    "midhinge",
-                ],
-                [0.4, 0.3, 0.3],
-                k=1,
+                ["mean", "median", "midhinge",], [0.4, 0.3, 0.3], k=1,
             )[0]
         return {
             "center": choice,
@@ -1319,17 +1303,7 @@ class ClipOutliers(EmptyTransformer):
         fillna_c = None
         if method == "fast":
             method_c = "clip"
-            choice = random.choices(
-                [
-                    "GLS",
-                    "Linear",
-                ],
-                [
-                    0.5,
-                    0.5,
-                ],
-                k=1,
-            )[0]
+            choice = random.choices(["GLS", "Linear",], [0.5, 0.5,], k=1,)[0]
         else:
             method_c = random.choice(["clip", "remove"])
             if method_c == "remove":
@@ -1480,10 +1454,7 @@ class Slice(EmptyTransformer):
     """
 
     def __init__(
-        self,
-        method: str = "100",
-        forecast_length: int = 30,
-        **kwargs,
+        self, method: str = "100", forecast_length: int = 30, **kwargs,
     ):
         super().__init__(name="Slice")
         self.method = method
@@ -1516,9 +1487,7 @@ class Slice(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         df = simple_context_slicer(
-            df,
-            method=self.method,
-            forecast_length=self.forecast_length,
+            df, method=self.method, forecast_length=self.forecast_length,
         )
         return df
 
@@ -2007,7 +1976,7 @@ class GeneralTransformer(object):
             * NAs filled will be returned with the filled value
             * Discretization, statsmodels filters, Round, Slice, ClipOutliers cannot be inversed
             * RollingMean, PctChange, CumSum, Seasonal Difference, and DifferencedTransformer will only return original or an immediately following forecast
-                - by default 'forecast' is expected, 'original' can be set in trans_method
+                * by default 'forecast' is expected, 'original' can be set in trans_method
 
     Args:
         fillNA (str): - method to fill NA, passed through to FillNA()
@@ -2498,10 +2467,10 @@ def RandomTransform(
     if fast_params:
         params_method = "fast"
         throw_away = na_prob_dict.pop('IterativeImputer', None)
+        throw_away = df_interpolate.pop('spline', None)  # noqa
         throw_away = na_prob_dict.pop('IterativeImputerExtraTrees', None)  # noqa
     if superfast_params:
         params_method = "fast"
-        throw_away = df_interpolate.pop('spline', None)  # noqa
         throw_away = na_prob_dict.pop('KNNImputer', None)  # noqa
 
     # clean na_probs dict

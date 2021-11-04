@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots package &#8212; AutoTS 0.3.9 documentation</title>
+    <title>autots package &#8212; AutoTS 0.3.10 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -161,12 +161,12 @@ if False, return a Series with dt index</p></li>
 <li><p><strong>fred_key</strong> (<em>str</em>) – <a class="reference external" href="https://fred.stlouisfed.org/docs/api/api_key.html">https://fred.stlouisfed.org/docs/api/api_key.html</a></p></li>
 <li><p><strong>fred_series</strong> (<em>list</em>) – list of FRED series IDs. This requires fredapi package</p></li>
 <li><p><strong>tickers</strong> (<em>list</em>) – list of stock tickers, requires yfinance</p></li>
-<li><p><strong>trends</strong> (<em>list</em>) – list of search keywords, requires pytrends.</p></li>
+<li><p><strong>trends_list</strong> (<em>list</em>) – list of search keywords, requires pytrends. None to skip.</p></li>
 <li><p><strong>weather_data_types</strong> (<em>list</em>) – from NCEI NOAA api data types, GHCN Daily Weather Elements
 PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG</p></li>
-<li><p><strong>weather_stations</strong> (<em>list</em>) – from NCEI NOAA api station ids</p></li>
-<li><p><strong>london_air_stations</strong> (<em>list</em>) – londonair.org.uk source station IDs</p></li>
-<li><p><strong>london_species</strong> (<em>str</em>) – what measurement to pull from London Air. Not all stations have all metrics.        earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov</p></li>
+<li><p><strong>weather_stations</strong> (<em>list</em>) – from NCEI NOAA api station ids. Pass empty list to skip.</p></li>
+<li><p><strong>london_air_stations</strong> (<em>list</em>) – londonair.org.uk source station IDs. Pass empty list to skip.</p></li>
+<li><p><strong>london_species</strong> (<em>str</em>) – what measurement to pull from London Air. Not all stations have all metrics.        earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov. Set None to skip this.</p></li>
 </ul>
 </dd>
 </dl>
@@ -195,7 +195,7 @@ It’s called <cite>max</cite> because someday there will be an auto early stopp
 <li><p><strong>no_negatives</strong> (<em>bool</em>) – if True, all negative predictions are rounded up to 0.</p></li>
 <li><p><strong>constraint</strong> (<em>float</em>) – when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.</p></li>
 <li><p><strong>ensemble</strong> (<em>str</em>) – None or list or comma-separated string containing:
-‘auto’, ‘simple’, ‘distance’, ‘horizontal’, ‘horizontal-min’, ‘horizontal-max’, “mosaic”</p></li>
+‘auto’, ‘simple’, ‘distance’, ‘horizontal’, ‘horizontal-min’, ‘horizontal-max’, “mosaic”, “subsample”</p></li>
 <li><p><strong>initial_template</strong> (<em>str</em>) – ‘Random’ - randomly generates starting template, ‘General’ uses template included in package, ‘General+Random’ - both of previous. Also can be overriden with self.import_template()</p></li>
 <li><p><strong>random_seed</strong> (<em>int</em>) – random seed allows (slightly) more consistent results.</p></li>
 <li><p><strong>holiday_country</strong> (<em>str</em>) – passed through to Holidays package for some models.</p></li>
@@ -212,14 +212,15 @@ occurs after any aggregration is applied, so will be whatever is specified by fr
 <li><p><strong>transformer_list</strong> (<em>list</em>) – list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
 can accept string aliases: “all”, “fast”, “superfast”</p></li>
 <li><p><strong>transformer_max_depth</strong> (<em>int</em>) – maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.</p></li>
-<li><p><strong>num_validations</strong> (<em>int</em>) – number of cross validations to perform. 0 for just train/test on final split.</p></li>
+<li><p><strong>num_validations</strong> (<em>int</em>) – number of cross validations to perform. 0 for just train/test on best split.
+Possible confusion: num_validations is the number of validations to perform <em>after</em> the first eval segment, so totally eval/validations will be this + 1.</p></li>
 <li><p><strong>models_to_validate</strong> (<em>int</em>) – top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
 0.99 is forced to 100% validation. 1 evaluates just 1 model.
 If horizontal or mosaic ensemble, then additional min per_series models above the number here are added to validation.</p></li>
 <li><p><strong>max_per_model_class</strong> (<em>int</em>) – of the models_to_validate what is the maximum to pass from any one model class/family.</p></li>
 <li><p><strong>validation_method</strong> (<em>str</em>) – ‘even’, ‘backwards’, or ‘seasonal n’ where n is an integer of seasonal
 ‘backwards’ is better for recency and for shorter training sets
-‘even’ splits the data into equally-sized slices best for more consistent data
+‘even’ splits the data into equally-sized slices best for more consistent data, a poetic but less effective strategy than others here
 ‘seasonal n’ for example ‘seasonal 364’ would test all data on each previous year of the forecast_length that would immediately follow the training data.
 ‘similarity’ automatically finds the data sections most similar to the most recent data that will be used for prediction
 ‘custom’ - if used, .fit() needs validation_indexes passed - a list of pd.DatetimeIndex’s, tail of each is used as test</p></li>
@@ -328,6 +329,17 @@ if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite
 </dl>
 </dd></dl>
 
+<dl class="attribute">
+<dt id="autots.AutoTS.score_per_series">
+<code class="sig-name descname">score_per_series</code><a class="headerlink" href="#autots.AutoTS.score_per_series" title="Permalink to this definition">¶</a></dt>
+<dd><p>generated score of metrics given per input series, if horizontal ensembles</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
 <dl class="method">
 <dt>
 <code class="sig-name descname">fit, predict</code></dt>
@@ -402,7 +414,7 @@ the max number of each model class to include in template</p></li>
 
 <dl class="method">
 <dt id="autots.AutoTS.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = None</em>, <em class="sig-param">value_col: str = None</em>, <em class="sig-param">id_col: str = None</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">weights: dict = {}</em>, <em class="sig-param">result_file: str = None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">validation_indexes: list = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = None</em>, <em class="sig-param">value_col: str = None</em>, <em class="sig-param">id_col: str = None</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">weights: dict = {}</em>, <em class="sig-param">result_file: str = None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">validation_indexes: list = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -522,7 +534,7 @@ Note this doesn’t capture transformers nested in simple ensembles.</p>
 
 <dl class="method">
 <dt id="autots.AutoTS.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 'self'</em>, <em class="sig-param">prediction_interval: float = 'self'</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">hierarchy=None</em>, <em class="sig-param">just_point_forecast: bool = False</em>, <em class="sig-param">verbose: int = 'self'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.predict" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 'self'</em>, <em class="sig-param">prediction_interval: float = 'self'</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">hierarchy=None</em>, <em class="sig-param">just_point_forecast: bool = False</em>, <em class="sig-param">verbose: int = 'self'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -759,7 +771,7 @@ if categorical data is provided, <cite>aggfunc=’first’</cite> is recommended
 
 <dl class="function">
 <dt id="autots.model_forecast">
-<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">model_forecast</code><span class="sig-paren">(</span><em class="sig-param">model_name, model_param_dict, model_transform_dict, df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=[], future_regressor_forecast=[], holiday_country: str = 'US', startTimeStamps=None, grouping_ids=None, random_seed: int = 2020, verbose: int = 0, n_jobs: int = 'auto', template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], horizontal_subset: list = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.model_forecast" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">model_forecast</code><span class="sig-paren">(</span><em class="sig-param">model_name, model_param_dict, model_transform_dict, df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=None, future_regressor_forecast=None, holiday_country: str = 'US', startTimeStamps=None, grouping_ids=None, random_seed: int = 2020, verbose: int = 0, n_jobs: int = 'auto', template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], horizontal_subset: list = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.model_forecast" title="Permalink to this definition">¶</a></dt>
 <dd><p>Takes numeric data, returns numeric forecasts.</p>
 <p>Only one model (albeit potentially an ensemble)!
 Horizontal ensembles can not be nested, other ensemble types can be.</p>

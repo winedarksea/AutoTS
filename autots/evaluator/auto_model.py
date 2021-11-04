@@ -1,5 +1,6 @@
 """Mid-level helper functions for AutoTS."""
 import sys
+import traceback as tb
 import random
 from math import ceil
 import numpy as np
@@ -42,6 +43,8 @@ from autots.models.statsmodels import (
     VAR,
     VECM,
     VARMAX,
+    Theta,
+    ARDL,
 )
 
 
@@ -420,7 +423,7 @@ def ModelMonster(
 
         return model
     elif model == 'MultivariateMotif':
-        model = Motif(
+        return Motif(
             frequency=frequency,
             prediction_interval=prediction_interval,
             random_seed=random_seed,
@@ -429,9 +432,8 @@ def ModelMonster(
             multivariate=True,
             **parameters,
         )
-        return model
     elif model == 'UnivariateMotif':
-        model = Motif(
+        return Motif(
             frequency=frequency,
             prediction_interval=prediction_interval,
             random_seed=random_seed,
@@ -440,25 +442,42 @@ def ModelMonster(
             multivariate=False,
             **parameters,
         )
-        return model
     elif model == 'SectionalMotif':
-        model = SectionalMotif(
+        return SectionalMotif(
             frequency=frequency,
             prediction_interval=prediction_interval,
             random_seed=random_seed,
             verbose=verbose,
             **parameters,
         )
-        return model
     elif model == 'NVAR':
-        model = NVAR(
+        return NVAR(
             frequency=frequency,
             prediction_interval=prediction_interval,
             random_seed=random_seed,
             verbose=verbose,
             **parameters,
         )
-        return model
+    elif model == 'Theta':
+        return Theta(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'ARDL':
+        return ARDL(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)
@@ -475,8 +494,8 @@ def ModelPrediction(
     prediction_interval: float = 0.9,
     no_negatives: bool = False,
     constraint: float = None,
-    future_regressor_train=[],
-    future_regressor_forecast=[],
+    future_regressor_train=None,
+    future_regressor_forecast=None,
     holiday_country: str = 'US',
     startTimeStamps=None,
     grouping_ids=None,
@@ -510,10 +529,8 @@ def ModelPrediction(
     df_train_transformed = transformer_object._fit(df_train)
 
     # make sure regressor has same length. This could be a problem if wrong size regressor is passed.
-    if len(future_regressor_train) > 0:
-        future_regressor_train = future_regressor_train.tail(
-            df_train_transformed.shape[0]
-        )
+    if future_regressor_train is not None:
+        future_regressor_train = future_regressor_train.reindex(df_train.index)
 
     transformation_runtime = datetime.datetime.now() - transformationStartTime
     # from autots.evaluator.auto_model import ModelMonster
@@ -723,8 +740,8 @@ def model_forecast(
     prediction_interval: float = 0.9,
     no_negatives: bool = False,
     constraint: float = None,
-    future_regressor_train=[],
-    future_regressor_forecast=[],
+    future_regressor_train=None,
+    future_regressor_forecast=None,
     holiday_country: str = 'US',
     startTimeStamps=None,
     grouping_ids=None,
@@ -787,7 +804,6 @@ def model_forecast(
 
     # if an ensemble
     if model_name == 'Ensemble':
-        forecasts_list = []
         forecasts_runtime = {}
         forecasts = {}
         upper_forecasts = {}
@@ -855,7 +871,6 @@ def model_forecast(
                     + df_forecast.predict_runtime
                     + df_forecast.transformation_runtime
                 )
-                forecasts_list.extend([model_id])
                 forecasts_runtime[model_id] = total_runtime
                 forecasts[model_id] = df_forecast.forecast
                 upper_forecasts[model_id] = df_forecast.upper_forecast
@@ -867,12 +882,13 @@ def model_forecast(
             except Exception as e:
                 # currently this leaves no key/value for models that fail
                 if verbose >= 1:  # 1
+                    print(tb.format_exc())
                     p = f"FAILED: Ensemble {model_param_dict['model_name']} component {index} of {total_ens} with error: {repr(e)}"
                     print(p)
         ens_forecast = EnsembleForecast(
             model_name,
             model_param_dict,
-            forecasts_list=forecasts_list,
+            forecasts_list=list(forecasts.keys()),
             forecasts=forecasts,
             lower_forecasts=lower_forecasts,
             upper_forecasts=upper_forecasts,
@@ -951,8 +967,8 @@ def TemplateWizard(
     prediction_interval: float = 0.9,
     no_negatives: bool = False,
     constraint: float = None,
-    future_regressor_train=[],
-    future_regressor_forecast=[],
+    future_regressor_train=None,
+    future_regressor_forecast=None,
     holiday_country: str = 'US',
     startTimeStamps=None,
     random_seed: int = 2020,
@@ -1032,29 +1048,24 @@ def TemplateWizard(
             template_result.model_count += 1
             if verbose > 0:
                 if validation_round >= 1:
-                    base_print = (
-                        "Model Number: {} of {} with model {} for Validation {}".format(
-                            str(template_result.model_count),
-                            template.shape[0],
-                            model_str,
-                            str(validation_round),
-                        )
+                    base_print = "Model Number: {} of {} with model {} for Validation {}".format(
+                        str(template_result.model_count),
+                        template.shape[0],
+                        model_str,
+                        str(validation_round),
                     )
                 else:
-                    base_print = (
-                        "Model Number: {} with model {} in generation {} of {}".format(
-                            str(template_result.model_count),
-                            model_str,
-                            str(current_generation),
-                            str(max_generations),
-                        )
+                    base_print = "Model Number: {} with model {} in generation {} of {}".format(
+                        str(template_result.model_count),
+                        model_str,
+                        str(current_generation),
+                        str(max_generations),
                     )
                 if verbose > 1:
                     print(
                         base_print
                         + " with params {} and transformations {}".format(
-                            json.dumps(parameter_dict),
-                            json.dumps(transformation_dict),
+                            json.dumps(parameter_dict), json.dumps(transformation_dict),
                         )
                     )
                 else:
@@ -1212,8 +1223,6 @@ def TemplateWizard(
         except Exception as e:
             if verbose >= 0:
                 if traceback:
-                    import traceback as tb
-
                     print(
                         'Template Eval Error: {} in model {}: {}'.format(
                             ''.join(tb.format_exception(None, e, e.__traceback__)),
@@ -1406,12 +1415,10 @@ def _trans_dicts(
             traditional_order=True,
         )
     r = RandomTransform(
-        transformer_list=transformer_list,
-        transformer_max_depth=transformer_max_depth,
+        transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,
     )
     r2 = RandomTransform(
-        transformer_list=transformer_list,
-        transformer_max_depth=transformer_max_depth,
+        transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,
     )
     if best is None:
         best = RandomTransform(

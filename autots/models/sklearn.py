@@ -88,12 +88,7 @@ def rolling_x_regressor(
     if add_date_part in ['simple', 'expanded', 'recurring']:
         date_part_df = date_part(df.index, method=add_date_part)
         date_part_df.index = df.index
-        X = pd.concat(
-            [
-                X,
-            ],
-            axis=1,
-        )
+        X = pd.concat([X,], axis=1,)
     if holiday:
         from autots.tools.holiday import holiday_flag
 
@@ -228,8 +223,7 @@ def retrieve_regressor(
             from sklearn.multioutput import MultiOutputRegressor
 
             regr = MultiOutputRegressor(
-                KNeighborsRegressor(**model_param_dict),
-                n_jobs=n_jobs,
+                KNeighborsRegressor(**model_param_dict), n_jobs=n_jobs,
             )
         else:
             regr = KNeighborsRegressor(**model_param_dict, n_jobs=n_jobs)
@@ -253,9 +247,7 @@ def retrieve_regressor(
             )
         else:
             regr = HistGradientBoostingRegressor(
-                verbose=int(verbose_bool),
-                random_state=random_seed,
-                **model_param_dict,
+                verbose=int(verbose_bool), random_state=random_seed, **model_param_dict,
             )
         return regr
     elif model_class == 'LightGBM':
@@ -313,8 +305,7 @@ def retrieve_regressor(
             from sklearn.multioutput import MultiOutputRegressor
 
             regr = MultiOutputRegressor(
-                xgb.XGBRegressor(verbosity=verbose, **model_param_dict),
-                n_jobs=n_jobs,
+                xgb.XGBRegressor(verbosity=verbose, **model_param_dict), n_jobs=n_jobs,
             )
         else:
             regr = xgb.XGBRegressor(
@@ -328,8 +319,7 @@ def retrieve_regressor(
             from sklearn.multioutput import MultiOutputRegressor
 
             regr = MultiOutputRegressor(
-                LinearSVR(verbose=verbose_bool, **model_param_dict),
-                n_jobs=n_jobs,
+                LinearSVR(verbose=verbose_bool, **model_param_dict), n_jobs=n_jobs,
             )
         else:
             regr = LinearSVR(verbose=verbose_bool, **model_param_dict)
@@ -462,9 +452,7 @@ datepart_model_dict: dict = {
 }
 
 
-def generate_regressor_params(
-    model_dict=None,
-):
+def generate_regressor_params(model_dict=None,):
     if model_dict is None:
         model_dict = sklearn_model_dict
     """Generate new parameters for input to regressor."""
@@ -665,21 +653,15 @@ def generate_regressor_params(
                         [2, 3, 4, 32, 64], [0.1, 0.1, 0.8, 0.05, 0.05]
                     )[0],
                     "num_transformer_blocks": random.choices(
-                        [1, 2, 4, 6],
-                        [0.2, 0.2, 0.6, 0.05],
+                        [1, 2, 4, 6], [0.2, 0.2, 0.6, 0.05],
                     )[0],
                     "mlp_units": random.choices(
-                        [32, 64, 128, 256],
-                        [0.2, 0.3, 0.8, 0.2],
+                        [32, 64, 128, 256], [0.2, 0.3, 0.8, 0.2],
                     ),
-                    "mlp_dropout": random.choices(
-                        [0.05, 0.2, 0.4],
-                        [0.2, 0.8, 0.2],
-                    )[0],
-                    "dropout": random.choices(
-                        [0.05, 0.2, 0.4],
-                        [0.2, 0.8, 0.2],
-                    )[0],
+                    "mlp_dropout": random.choices([0.05, 0.2, 0.4], [0.2, 0.8, 0.2],)[
+                        0
+                    ],
+                    "dropout": random.choices([0.05, 0.2, 0.4], [0.2, 0.8, 0.2],)[0],
                 },
             }
         elif model == 'HistGradientBoost':
@@ -721,24 +703,15 @@ def generate_regressor_params(
                         [0.4, 0.2, 0.2, 0.2, 0.2, 0.05, 0.01],
                     )[0],
                     "learning_rate": random.choices(
-                        [0.001, 0.1, 0.01],
-                        [0.1, 0.6, 0.3],
+                        [0.001, 0.1, 0.01], [0.1, 0.6, 0.3],
                     )[0],
-                    "num_leaves": random.choices(
-                        [31, 127, 70],
-                        [0.6, 0.1, 0.3],
-                    )[0],
-                    "max_depth": random.choices(
-                        [-1, 5, 10],
-                        [0.6, 0.1, 0.3],
-                    )[0],
+                    "num_leaves": random.choices([31, 127, 70], [0.6, 0.1, 0.3],)[0],
+                    "max_depth": random.choices([-1, 5, 10], [0.6, 0.1, 0.3],)[0],
                     "boosting_type": random.choices(
-                        ['gbdt', 'rf', 'dart', 'goss'],
-                        [0.6, 0, 0.2, 0.2],
+                        ['gbdt', 'rf', 'dart', 'goss'], [0.6, 0, 0.2, 0.2],
                     )[0],
                     "n_estimators": random.choices(
-                        [100, 250, 50, 500],
-                        [0.6, 0.1, 0.3, 0.0010],
+                        [100, 250, 50, 500], [0.6, 0.1, 0.3, 0.0010],
                     )[0],
                 },
             }
@@ -785,10 +758,7 @@ class RollingRegression(ModelObject):
         holiday_country: str = 'US',
         verbose: int = 0,
         random_seed: int = 2020,
-        regression_model: dict = {
-            "model": 'ExtraTrees',
-            "model_params": {},
-        },
+        regression_model: dict = {"model": 'ExtraTrees', "model_params": {},},
         holiday: bool = False,
         mean_rolling_periods: int = 30,
         macd_periods: int = None,
@@ -863,7 +833,7 @@ class RollingRegression(ModelObject):
             x_transformer = VarianceThreshold(threshold=0.0)
         return x_transformer
 
-    def fit(self, df, future_regressor=[]):
+    def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
 
         Args:
@@ -875,10 +845,11 @@ class RollingRegression(ModelObject):
 
         # if external regressor, do some check up
         if self.regression_type is not None:
-            if (np.array(future_regressor).shape[0]) != (df.shape[0]):
-                self.regression_type = None
-            else:
-                self.regressor_train = future_regressor
+            if future_regressor is None:
+                raise ValueError(
+                    "future_regressor not supplied, necessary for regression_type"
+                )
+            self.regressor_train = future_regressor
 
         # define X and Y
         self.sktraindata = self.df_train.dropna(how='all', axis=0)
@@ -946,7 +917,7 @@ class RollingRegression(ModelObject):
     def predict(
         self,
         forecast_length: int,
-        future_regressor=[],
+        future_regressor=None,
         just_point_forecast: bool = False,
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
@@ -962,7 +933,7 @@ class RollingRegression(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
-        if self.regression_type == 'User':
+        if self.regression_type in ['User', 'user']:
             complete_regressor = pd.concat(
                 [self.regressor_train, future_regressor], axis=0
             )
@@ -1077,8 +1048,7 @@ class RollingRegression(ModelObject):
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.99, 0.01])[0]
         x_transform_choice = random.choices(
-            [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
-            [0.85, 0.05, 0.05, 0.05],
+            [None, 'FastICA', 'Nystroem', 'RmZeroVariance'], [0.85, 0.05, 0.05, 0.05],
         )[0]
         regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
         parameter_dict = {
@@ -1144,10 +1114,7 @@ class WindowRegression(ModelObject):
         random_seed: int = 2022,
         verbose: int = 0,
         window_size: int = 10,
-        regression_model: dict = {
-            "model": 'RandomForest',
-            "model_params": {},
-        },
+        regression_model: dict = {"model": 'RandomForest', "model_params": {},},
         input_dim: str = 'univariate',
         output_dim: str = 'forecast_length',
         normalize_window: bool = False,
@@ -1178,7 +1145,7 @@ class WindowRegression(ModelObject):
         self.forecast_length = forecast_length
         self.max_windows = abs(int(max_windows))
 
-    def fit(self, df, future_regressor=[]):
+    def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
 
         Args:
@@ -1191,6 +1158,11 @@ class WindowRegression(ModelObject):
                 "Scale exceeds recommendation for input_dim == `multivariate`"
             )
         df = self.basic_profile(df)
+        if self.regression_type in ["User", "user"]:
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type='User' but no future_regressor passed"
+                )
         self.df_train = df
         X, Y = window_maker(
             df,
@@ -1228,7 +1200,7 @@ class WindowRegression(ModelObject):
     def predict(
         self,
         forecast_length: int,
-        future_regressor=[],
+        future_regressor=None,
         just_point_forecast: bool = False,
     ):
         """Generate forecast data immediately following dates of .fit().
@@ -1258,7 +1230,7 @@ class WindowRegression(ModelObject):
                     input_dim=self.input_dim,
                     normalize_window=self.normalize_window,
                 )
-                if str(self.regression_type).lower() == "user":
+                if self.regression_type in ["User", "user"]:
                     blasted_thing = future_regressor.iloc[x].to_frame().transpose()
                     tmerg = pd.concat([blasted_thing] * pred.shape[0], axis=0)
                     tmerg.index = pred.index
@@ -1282,7 +1254,7 @@ class WindowRegression(ModelObject):
                 input_dim=self.input_dim,
                 normalize_window=self.normalize_window,
             )
-            if str(self.regression_type).lower() == "user":
+            if self.regression_type in ["User", "user"]:
                 tmerg = future_regressor.tail(1).loc[
                     future_regressor.tail(1).index.repeat(pred.shape[0])
                 ]
@@ -1342,9 +1314,7 @@ class WindowRegression(ModelObject):
             output_dim_choice = "1step"
             regression_type_choice = None
         else:
-            output_dim_choice = random.choice(
-                ['forecast_length', '1step'],
-            )
+            output_dim_choice = random.choice(['forecast_length', '1step'],)
             regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[
                 0
             ]
@@ -1418,7 +1388,7 @@ class ComponentAnalysis(ModelObject):
         self.n_components = n_components
         self.forecast_length = forecast_length
 
-    def fit(self, df, future_regressor=[]):
+    def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
 
         Args:
@@ -1501,7 +1471,7 @@ class ComponentAnalysis(ModelObject):
     def predict(
         self,
         forecast_length: int,
-        future_regressor=[],
+        future_regressor=None,
         just_point_forecast: bool = False,
     ):
         """Generate forecast data immediately following dates of .fit().
@@ -1655,7 +1625,7 @@ class DatepartRegression(ModelObject):
         self.regression_model = regression_model
         self.datepart_method = datepart_method
 
-    def fit(self, df, future_regressor=[]):
+    def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
 
         Args:
@@ -1664,14 +1634,18 @@ class DatepartRegression(ModelObject):
         df = self.basic_profile(df)
         # if external regressor, do some check up
         if self.regression_type is not None:
-            if (np.array(future_regressor).shape[0]) != (df.shape[0]):
-                self.regression_type = None
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type='User' but no future_regressor passed"
+                )
 
         y = df.to_numpy()
 
         X = date_part(df.index, method=self.datepart_method)
-        if self.regression_type == 'User':
-            X = pd.concat([X, future_regressor], axis=0)
+        if self.regression_type in ['User', 'user']:
+            # regr = future_regressor.copy()
+            # regr.index = X.index
+            X = pd.concat([X, future_regressor], axis=1)
         X.columns = [str(xc) for xc in X.columns]
 
         multioutput = True
@@ -1696,7 +1670,7 @@ class DatepartRegression(ModelObject):
     def predict(
         self,
         forecast_length: int,
-        future_regressor=[],
+        future_regressor=None,
         just_point_forecast: bool = False,
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
@@ -1713,8 +1687,8 @@ class DatepartRegression(ModelObject):
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
         X = date_part(index, method=self.datepart_method)
-        if self.regression_type == 'User':
-            X = pd.concat([X, future_regressor], axis=0)
+        if self.regression_type in ['User', 'user']:
+            X = pd.concat([X, future_regressor], axis=1)
         X.columns = [str(xc) for xc in X.columns]
 
         forecast = pd.DataFrame(self.model.predict(X))
@@ -1797,10 +1771,7 @@ class UnivariateRegression(ModelObject):
         verbose: int = 0,
         random_seed: int = 2020,
         forecast_length: int = 7,
-        regression_model: dict = {
-            "model": 'ExtraTrees',
-            "model_params": {},
-        },
+        regression_model: dict = {"model": 'ExtraTrees', "model_params": {},},
         holiday: bool = False,
         mean_rolling_periods: int = 30,
         macd_periods: int = None,
@@ -2124,8 +2095,7 @@ class UnivariateRegression(ModelObject):
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         polynomial_degree_choice = None
         x_transform_choice = random.choices(
-            [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
-            [1.0, 0.0, 0.0, 0.0],
+            [None, 'FastICA', 'Nystroem', 'RmZeroVariance'], [1.0, 0.0, 0.0, 0.0],
         )[0]
         regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
         window_choice = random.choices([None, 3, 7, 10], [0.7, 0.2, 0.05, 0.05])[0]
@@ -2197,10 +2167,7 @@ class MultivariateRegression(ModelObject):
         verbose: int = 0,
         random_seed: int = 2020,
         forecast_length: int = 7,
-        regression_model: dict = {
-            "model": 'RandomForest',
-            "model_params": {},
-        },
+        regression_model: dict = {"model": 'RandomForest', "model_params": {},},
         holiday: bool = False,
         mean_rolling_periods: int = 30,
         macd_periods: int = None,
@@ -2453,12 +2420,7 @@ class MultivariateRegression(ModelObject):
             forecast = pd.concat([forecast, pred_clean])
             upper_forecast = pd.concat([upper_forecast, pred_upper])
             lower_forecast = pd.concat([lower_forecast, pred_lower])
-            current_x = pd.concat(
-                [
-                    current_x,
-                    pred_clean,
-                ]
-            )
+            current_x = pd.concat([current_x, pred_clean,])
 
         forecast = forecast[self.column_names]
         upper_forecast = upper_forecast[self.column_names]

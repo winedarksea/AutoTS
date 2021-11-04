@@ -1,4 +1,4 @@
-"""Higher-level backbone of auto time series modeling."""
+"""Higher-level functions of automated time series modeling."""
 import numpy as np
 import pandas as pd
 import random
@@ -51,7 +51,7 @@ class AutoTS(object):
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.
         ensemble (str): None or list or comma-separated string containing:
-            'auto', 'simple', 'distance', 'horizontal', 'horizontal-min', 'horizontal-max', "mosaic"
+            'auto', 'simple', 'distance', 'horizontal', 'horizontal-min', 'horizontal-max', "mosaic", "subsample"
         initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
         random_seed (int): random seed allows (slightly) more consistent results.
         holiday_country (str): passed through to Holidays package for some models.
@@ -68,14 +68,15 @@ class AutoTS(object):
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
             can accept string aliases: "all", "fast", "superfast"
         transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
-        num_validations (int): number of cross validations to perform. 0 for just train/test on final split.
+        num_validations (int): number of cross validations to perform. 0 for just train/test on best split.
+            Possible confusion: num_validations is the number of validations to perform *after* the first eval segment, so totally eval/validations will be this + 1.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
             0.99 is forced to 100% validation. 1 evaluates just 1 model.
             If horizontal or mosaic ensemble, then additional min per_series models above the number here are added to validation.
         max_per_model_class (int): of the models_to_validate what is the maximum to pass from any one model class/family.
         validation_method (str): 'even', 'backwards', or 'seasonal n' where n is an integer of seasonal
             'backwards' is better for recency and for shorter training sets
-            'even' splits the data into equally-sized slices best for more consistent data
+            'even' splits the data into equally-sized slices best for more consistent data, a poetic but less effective strategy than others here
             'seasonal n' for example 'seasonal 364' would test all data on each previous year of the forecast_length that would immediately follow the training data.
             'similarity' automatically finds the data sections most similar to the most recent data that will be used for prediction
             'custom' - if used, .fit() needs validation_indexes passed - a list of pd.DatetimeIndex's, tail of each is used as test
@@ -103,6 +104,7 @@ class AutoTS(object):
         regression_check (bool): If True, the best_model uses an input 'User' future_regressor
         df_wide_numeric (pd.DataFrame): dataframe containing shaped final data
         initial_results.model_results (object): contains a collection of result metrics
+        score_per_series (pd.DataFrame): generated score of metrics given per input series, if horizontal ensembles
 
     Methods:
         fit, predict
@@ -189,7 +191,7 @@ class AutoTS(object):
         # just a list of horizontal types in general
         self.h_ens_list = ['horizontal', 'probabilistic', 'hdist', "mosaic"]
         if self.ensemble == 'all':
-            self.ensemble = 'simple,distance,horizontal-max,probabilistic'
+            self.ensemble = 'simple,distance,horizontal-max,mosaic'
         elif self.ensemble == 'auto':
             if model_list in ['fast', 'default', 'all', 'multivariate']:
                 self.ensemble = 'simple,distance,horizontal-max'
@@ -333,6 +335,9 @@ class AutoTS(object):
         self.best_model_params = ""
         self.best_model_transformation_params = ""
         self.traceback = True if verbose > 1 else False
+        self.future_regressor_train = None
+        self.validation_train_indexes = []
+        self.validation_test_indexes = []
 
         if verbose > 2:
             print('"Hello. Would you like to destroy some evil today?" - Sanderson')
@@ -353,7 +358,7 @@ class AutoTS(object):
         date_col: str = None,
         value_col: str = None,
         id_col: str = None,
-        future_regressor=[],
+        future_regressor=None,
         weights: dict = {},
         result_file: str = None,
         grouping_ids=None,
@@ -393,9 +398,9 @@ class AutoTS(object):
             assert (
                 validation_indexes is not None
             ), "validation_indexes needs to be filled with 'custom' validation"
-            assert (
-                len(validation_indexes) >= self.num_validations
-            ), "validation_indexes needs to be >= num_validations with 'custom' validation"
+            assert len(validation_indexes) >= (
+                self.num_validations + 1
+            ), "validation_indexes needs to be >= num_validations + 1 with 'custom' validation"
         # flag if weights are given
         if bool(weights):
             weighted = True
@@ -467,12 +472,6 @@ class AutoTS(object):
                 "Warning: column/series names are not unique. Unique column names are highly recommended for wide data!"
             )
             time.sleep(3)  # give the message a chance to be seen
-        if len(future_regressor) > 0:
-            if future_regressor.shape[0] != df_wide_numeric.shape[0]:
-                print(
-                    "future_regressor row count does not match length of training data"
-                )
-                time.sleep(2)
 
         # remove other ensembling types if univariate
         if df_wide_numeric.shape[1] == 1:
@@ -523,20 +522,24 @@ class AutoTS(object):
             from autots.tools.transform import GeneralTransformer
 
             params = {
-                "fillna": "ffill",
-                "transformations": {"0": "QuantileTransformer", "1": "RobustScaler"},
-                "transformation_params": {
-                    "0": {"output_distribution": "uniform", "n_quantiles": 1000},
-                    "1": {},
-                },
+                "fillna": "median",  # mean or median one of few consistent things
+                "transformations": {"0": "MaxAbsScaler"},
+                "transformation_params": {"0": {},},
             }
             trans = GeneralTransformer(**params)
 
+            stride_size = round(self.forecast_length / 2)
+            stride_size = stride_size if stride_size > 0 else 1
             created_idx = retrieve_closest_indices(
                 trans.fit_transform(df_wide_numeric),
-                num_indices=num_validations,
+                num_indices=num_validations + 1,
                 forecast_length=self.forecast_length,
-                stride_size=self.forecast_length,
+                stride_size=stride_size,
+                distance_metric="nan_euclidean",
+                include_differenced=True,
+                window_size=30,
+                include_last=True,
+                verbose=self.verbose,
             )
             self.validation_indexes = [
                 df_wide_numeric.index[df_wide_numeric.index <= indx[-1]]
@@ -553,6 +556,7 @@ class AutoTS(object):
         else:
             self.subset_flag = False
 
+        #
         # take a subset of the data if working with a large number of series
         if self.subset_flag:
             df_subset = subset_series(
@@ -565,6 +569,14 @@ class AutoTS(object):
                 print(f'First subset is of: {df_subset.columns}')
         else:
             df_subset = df_wide_numeric.copy()
+        # go to first index
+        if self.validation_method in ['custom', "similarity"]:
+            first_idx = self.validation_indexes[0]
+            if max(first_idx) > max(df_subset.index):
+                raise ValueError(
+                    "provided validation index exceeds historical data period"
+                )
+            df_subset = df_subset.reindex(first_idx)
 
         # subset the weighting information as well
         if not weighted:
@@ -579,7 +591,9 @@ class AutoTS(object):
             min_allowed_train_percent=self.min_allowed_train_percent,
             verbose=self.verbose,
         )
-        try:
+        self.validation_train_indexes.append(df_train.index)
+        self.validation_test_indexes.append(df_test.index)
+        if future_regressor is not None:
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
             if future_regressor.empty:
@@ -592,9 +606,15 @@ class AutoTS(object):
             self.future_regressor_train = future_regressor
             future_regressor_train = future_regressor.reindex(index=df_train.index)
             future_regressor_test = future_regressor.reindex(index=df_test.index)
-        except Exception:
-            future_regressor_train = []
-            future_regressor_test = []
+        else:
+            future_regressor_train = None
+            future_regressor_test = None
+        if future_regressor is not None:
+            if future_regressor.shape[0] != df_wide_numeric.shape[0]:
+                print(
+                    "future_regressor row count does not match length of training data"
+                )
+                time.sleep(2)
 
         model_count = 0
 
@@ -721,10 +741,14 @@ class AutoTS(object):
         # try ensembling
         if ensemble not in [None, 'none']:
             try:
+                self.score_per_series = generate_score_per_series(
+                    self.initial_results, self.metric_weighting, 1
+                )
                 ensemble_templates = EnsembleTemplateGenerator(
                     self.initial_results,
                     forecast_length=forecast_length,
                     ensemble=ensemble,
+                    score_per_series=self.score_per_series,
                 )
                 template_result = TemplateWizard(
                     ensemble_templates,
@@ -765,10 +789,8 @@ class AutoTS(object):
                 print(f"Ensembling Error: {e}")
 
         # drop any duplicates in results
-        self.initial_results.model_results = (
-            self.initial_results.model_results.drop_duplicates(
-                subset=(['ID'] + self.template_cols)
-            )
+        self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(
+            subset=(['ID'] + self.template_cols)
         )
 
         # validations if float
@@ -843,8 +865,6 @@ class AutoTS(object):
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
         validation_template = validation_template[self.template_cols]
-        self.validation_train_indexes = []
-        self.validation_test_indexes = []
 
         # run validations
         if num_validations > 0:
@@ -876,7 +896,9 @@ class AutoTS(object):
                     val_per = df_wide_numeric.shape[0] - val_per
                     current_slice = df_wide_numeric.head(val_per)
                 elif self.validation_method in ['custom', "similarity"]:
-                    current_slice = df_wide_numeric.reindex(self.validation_indexes[y])
+                    current_slice = df_wide_numeric.reindex(
+                        self.validation_indexes[(y + 1)]
+                    )
                 else:
                     raise ValueError(
                         "Validation Method not recognized try 'even', 'backwards'"
@@ -917,16 +939,16 @@ class AutoTS(object):
                     print(f'Validation index is {val_df_train.index}')
 
                 # slice regressor into current validation slices
-                try:
+                if future_regressor is not None:
                     val_future_regressor_train = future_regressor.reindex(
                         index=val_df_train.index
                     )
                     val_future_regressor_test = future_regressor.reindex(
                         index=val_df_test.index
                     )
-                except Exception:
-                    val_future_regressor_train = []
-                    val_future_regressor_test = []
+                else:
+                    val_future_regressor_train = None
+                    val_future_regressor_test = None
 
                 # force NaN for robustness
                 if self.introduce_na or (self.introduce_na is None and self._nan_tail):
@@ -1174,7 +1196,7 @@ or otherwise increase models available."""
         self,
         forecast_length: int = "self",
         prediction_interval: float = 'self',
-        future_regressor=[],
+        future_regressor=None,
         hierarchy=None,
         just_point_forecast: bool = False,
         verbose: int = 'self',
@@ -1200,13 +1222,14 @@ or otherwise increase models available."""
         if prediction_interval == 'self':
             prediction_interval = self.prediction_interval
 
-        # if the models don't need the regressor, ignore it...
-        if not self.used_regressor_check:
-            future_regressor = []
-            self.future_regressor_train = []
-        else:
+        # checkup regressor
+        if future_regressor is not None:
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
+            if self.future_regressor_train is None:
+                raise ValueError(
+                    "regressor passed to .predict but no regressor was passed to .fit"
+                )
             # handle any non-numeric data, crudely
             future_regressor = self.regr_num_trans.transform(future_regressor)
             # make sure training regressor fits training data index
@@ -1662,11 +1685,7 @@ or otherwise increase models available."""
         b_df = self.back_forecast(column=series, n_splits=n_splits, verbose=0).forecast
         b_df = b_df.rename(columns=lambda x: str(x) + "_forecast")
         plot_df = pd.concat(
-            [
-                pd.DataFrame(self.df_wide_numeric[series]),
-                b_df,
-            ],
-            axis=1,
+            [pd.DataFrame(self.df_wide_numeric[series]), b_df,], axis=1,
         )
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
@@ -1761,7 +1780,7 @@ class AutoTSIntervals(object):
         },
         weights: dict = {},
         grouping_ids=None,
-        future_regressor=[],
+        future_regressor=None,
         model_interrupt: bool = False,
         constraint=2,
         no_negatives=False,
@@ -1855,9 +1874,9 @@ class AutoTSIntervals(object):
         self.categorical_transformer = current_model.categorical_transformer
         return self
 
-    def predict(self, future_regressor=[], verbose: int = 'self') -> dict:
+    def predict(self, future_regressor=None, verbose: int = 'self') -> dict:
         """Generate forecasts after training complete."""
-        if len(future_regressor) > 0:
+        if future_regressor is not None:
             future_regressor = pd.DataFrame(future_regressor)
             self.future_regressor_train = self.future_regressor_train.reindex(
                 index=self.df_wide_numeric.index
@@ -1922,11 +1941,7 @@ def fake_regressor(
         ), "df index is not pd.DatetimeIndex"
     else:
         df_wide = long_to_wide(
-            df,
-            date_col=date_col,
-            value_col=value_col,
-            id_col=id_col,
-            aggfunc=aggfunc,
+            df, date_col=date_col, value_col=value_col, id_col=id_col, aggfunc=aggfunc,
         )
 
     df_wide = df_cleanup(

@@ -28,6 +28,8 @@ all_models = [
     'NVAR',
     'MultivariateRegression',
     'SectionalMotif',
+    'Theta',
+    'ARDL',
 ]
 default = [
     'ZeroesNaive',
@@ -39,18 +41,20 @@ default = [
     'ETS',
     'FBProphet',
     # 'RollingRegression',  # maybe not?
-    'GluonTS',
+    'GluonTS',  # downweight if that becomes an option
     'UnobservedComponents',
     'VAR',
     'VECM',
     'WindowRegression',
     'DatepartRegression',
     'UnivariateRegression',
-    'MultivariateRegression',
+    # 'MultivariateRegression',  # downweight if that becomes an option
     'UnivariateMotif',
     'MultivariateMotif',
     'SectionalMotif',
     'NVAR',
+    'Theta',
+    'ARDL',
 ]
 # fastest models at any scale
 superfast = [
@@ -89,6 +93,8 @@ parallel = [
     "Greykite",
     'UnivariateMotif',
     'MultivariateMotif',
+    'Theta',
+    'ARDL',
 ]
 # models that should be fast given many CPU cores
 fast_parallel = list(set(parallel + fast))
@@ -116,6 +122,10 @@ probabilistic = [
     "MultivariateMotif",
     'SectionalMotif',
     'NVAR',
+    'Theta',
+    'ARDL',
+    'UnobservedComponents',
+    # 'MultivariateRegression',
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -131,6 +141,7 @@ multivariate = [
     'MultivariateRegression',
     'SectionalMotif',
 ]
+univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
 no_params = ['ZeroesNaive', 'LastValueNaive', 'GLS']
 # USED IN AUTO_MODEL, ONLY MODELS WHICH CAN ACCEPT RANDOM MIXING OF PARAMS
@@ -157,6 +168,8 @@ recombination_approved = [
     'NVAR',
     'MultivariateRegression',
     'SectionalMotif',
+    'Theta',
+    'ARDL',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -174,6 +187,8 @@ no_shared = [
     "UnivariateRegression",
     "Greykite",
     'UnivariateMotif',
+    'Theta',
+    'ARDL',
 ]
 # allow the use of a regressor
 regressor = [
@@ -191,6 +206,7 @@ regressor = [
     "UnivariateRegression",
     'MultivariateRegression',
     'SectionalMotif',  # kinda
+    'ARDL',
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {
@@ -202,6 +218,7 @@ model_lists = {
     "fast_parallel": fast_parallel,
     "probabilistic": probabilistic,
     "multivariate": multivariate,
+    "univariate": univariate,
     "no_params": no_params,
     "recombination_approved": recombination_approved,
     "no_shared": no_shared,
