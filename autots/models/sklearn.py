@@ -566,9 +566,9 @@ def generate_regressor_params(model_dict=None,):
                     "min_samples_leaf": random.choices([2, 4, 1], [0.2, 0.2, 0.8])[0],
                     "bootstrap": random.choices([True, False], [0.9, 0.1])[0],
                     # absolute_error is noticeably slower
-                    "criterion": random.choices(
-                        ["squared_error", "poisson"], [0.99, 0.001]
-                    )[0],
+                    # "criterion": random.choices(
+                    #     ["squared_error", "poisson"], [0.99, 0.001]
+                    # )[0],
                 },
             }
         elif model == 'ExtraTrees':
@@ -582,7 +582,7 @@ def generate_regressor_params(model_dict=None,):
                     "n_estimators": estimators_choice,
                     "min_samples_leaf": random.choices([2, 4, 1], [0.1, 0.1, 0.8])[0],
                     "max_depth": max_depth_choice,
-                    "criterion": "squared_error",
+                    # "criterion": "squared_error",
                 },
             }
         elif model == 'KerasRNN':
@@ -1771,7 +1771,7 @@ class UnivariateRegression(ModelObject):
         verbose: int = 0,
         random_seed: int = 2020,
         forecast_length: int = 7,
-        regression_model: dict = {"model": 'ExtraTrees', "model_params": {},},
+        regression_model: dict = {"model": 'ExtraTrees', "model_params": {}, },
         holiday: bool = False,
         mean_rolling_periods: int = 30,
         macd_periods: int = None,

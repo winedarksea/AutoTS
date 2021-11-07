@@ -13,19 +13,7 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* BestN ensembles now support weighting model components
-* cluster-based and generate_score_per_series-based 'simple' ensembles
-* 'univariate' model_list added
-* similarity and custom cross validation now set initial evaluation segment
-	* validation_test_indexes and train now include initial eval segment
-* 'subsample' ensemble expansion of 'simple'
-* added Theta model from statsmodels
-* added ARDL model from statsmodels
-* expanded UnobservedComponents functionality, although it still fails on some params for unknown reasons
-* fixed bug in AutoTS.predict() where it was breaking regressors in some cases
-* transition from [] to None as default for no future_regressor
-* enforce more extensive failing if regression_type==User and no regressor passed
-* fixed regressor handling in DatepartRegression
+
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
