@@ -309,17 +309,28 @@ result.forecast
 
 ## Installation and Dependency Versioning
 `pip install autots`
+
+Some optional packages require installing [Visual Studio C compilers](https://visualstudio.microsoft.com/visual-cpp-build-tools/) if on Windows. 
+
+On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas may install faster/more stable compilations. 
+Linux may also require `sudo apt install build-essential` for some packages.
+
+You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_config()`. Generally recommended that you double-check this after installing new packages to make sure you haven't broken the LINPACK connection. 
+
 ### Requirements:
 	Python >= 3.6
 	numpy
 		>= 1.20 (Sliding Window in Motif and WindowRegression)
 	pandas
 		>= 1.1.0 (prediction.long_form_results())
+		gluonts incompatible with 1.1, 1.2, 1.3
 	sklearn
 		>= 0.23.0 (PoissonReg)
 		>= 0.24.0 (OrdinalEncoder handle_unknown)
+		>= 1.0 for models effected by "mse" -> "squared_error" update
 		>? (IterativeImputer, HistGradientBoostingRegressor)
 	statsmodels
+		>= 0.13 ARDL and UECM
 
 Of these, numpy and pandas are critical. 
 Limited functionality should exist without scikit-learn. 
@@ -345,12 +356,13 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs. 
 
 #### Safest bet for installation:
+venv, Anaconda, or [Miniforge](https://github.com/conda-forge/miniforge/)
 ```shell
 # create a conda or venv environment
 conda create -n openblas python=3.9
 conda activate openblas
 
-python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost --exists-action i
+python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost yfinance pytrends fredapi --exists-action i
 
 python -m pip install yfinance pytrends fredapi
 python -m pip install numexpr bottleneck
@@ -363,39 +375,7 @@ python -m pip install --upgrade numpy pandas --exists-action i  # mxnet likes to
 python -m pip install autots --exists-action i
 ```
 
-### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
-If you are on an Intel CPU, download Anaconda or Miniconda. For AMD/ARM/etc use a venv environment and pip which will use OpenBLAS. 
-Intel MKL is included with `anaconda` and offers significant performance gain for Intel CPUs. Use of the Intel conda channel sometimes is necessary. 
-
-(install Visual Studio if on Windows for C compilers)
-
-If you have an Nvidia GPU and plan to use the GPU-accelerated models, download NVIDIA CUDA and CuDNN. 
-
-You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_config()`. Generally recommended that you double-check this after installing new packages to make sure you haven't broken the LINPACK connection. 
-
-On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster/more stable compilations. 
-Linux will also require `sudo apt install build-essential` for some packages.
-
-#### Some conda
-
-```shell
-conda create -n timeseries python=3.9
-conda activate timeseries
-
-# for simplicity: 
-conda install anaconda
-# elsewise: 
-conda install numpy scipy scikit-learn statsmodels  # -c conda-forge is sometimes a version ahead of main channel
-
-conda install -c conda-forge prophet
-pip install mxnet     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
-pip install gluonts
-pip install lightgbm tensorflow
-conda update anaconda
-
-pip install autots
-```
-#### Intel conda channel installation (fastest, also, more prone to bugs)
+#### Intel conda channel installation (sometime faster, also, more prone to bugs)
 https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html
 ```shell
 # create the environment
@@ -403,17 +383,24 @@ conda create -n intelpython -c intel python=3.7 intelpython3_full
 conda activate intelpython
 
 # install additional packages as desired
-python -m pip install yfinance pytrends fredapi
+python -m pip install yfinance pytrends fredapi bottleneck
 python -m pip install mxnet --no-deps
 python -m pip install gluonts
 conda install -c conda-forge prophet
-conda install spyder
 conda update -c intel intelpython3_full
 conda install -c intel numexpr statsmodels lightgbm tensorflow
 
 python -m pip install autots
 
 # MKL_NUM_THREADS, USE_DAAL4PY_SKLEARN=1
+```
+
+### Benchmark
+```python
+from autots.evaluator.benchmark import Benchmark
+bench = Benchmark()
+bench.run(n_jobs="auto", times=3)
+bench.results
 ```
 
 ## Caveats and Advice

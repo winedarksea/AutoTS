@@ -947,25 +947,23 @@ class MotifSimulation(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        comparison_choice = np.random.choice(
-            a=[
+        comparison_choice = random.choices(
+            [
                 'pct_change',
                 'pct_change_sign',
                 'magnitude_pct_change_sign',
                 'magnitude',
                 'magnitude_pct_change',
             ],
-            size=1,
-            p=[0.2, 0.1, 0.4, 0.2, 0.1],
-        ).item()
-        phrase_len_choice = np.random.choice(
-            a=[5, 10, 15, 20, 30, 90, 360],
-            p=[0.2, 0.2, 0.1, 0.25, 0.1, 0.1, 0.05],
-            size=1,
-        ).item()
-        shared_choice = np.random.choice(a=[True, False], size=1, p=[0.05, 0.95]).item()
-        distance_metric_choice = np.random.choice(
-            a=[
+            [0.2, 0.1, 0.4, 0.2, 0.1],
+        )[0]
+        phrase_len_choice = random.choices(
+            [5, 10, 15, 20, 30, 90, 360],
+            [0.2, 0.2, 0.1, 0.25, 0.1, 0.1, 0.05]
+        )[0]
+        shared_choice = random.choices([True, False], [0.05, 0.95])[0]
+        distance_metric_choice = random.choices(
+            [
                 'other',
                 'hamming',
                 'cityblock',
@@ -975,12 +973,11 @@ class MotifSimulation(ModelObject):
                 'l2',
                 'manhattan',
             ],
-            size=1,
-            p=[0.44, 0.05, 0.1, 0.1, 0.1, 0.2, 0.0, 0.01],
-        ).item()
+            [0.44, 0.05, 0.1, 0.1, 0.1, 0.2, 0.0, 0.01],
+        )[0]
         if distance_metric_choice == 'other':
-            distance_metric_choice = np.random.choice(
-                a=[
+            distance_metric_choice = random.choices(
+                [
                     'braycurtis',
                     'canberra',
                     'chebyshev',
@@ -999,29 +996,26 @@ class MotifSimulation(ModelObject):
                     'sqeuclidean',
                     'yule',
                 ],
-                size=1,
-            ).item()
+            )[0]
         max_motifs_choice = float(
-            np.random.choice(
-                a=[20, 50, 100, 200, 0.05, 0.2, 0.5],
-                size=1,
-                p=[0.4, 0.1, 0.2, 0.09, 0.1, 0.1, 0.01],
-            ).item()
+            random.choices(
+                [20, 50, 100, 200, 0.05, 0.2, 0.5],
+                [0.4, 0.1, 0.2, 0.09, 0.1, 0.1, 0.01],
+            )[0]
         )
-        recency_weighting_choice = np.random.choice(
-            a=[0, 0.5, 0.1, 0.01, -0.01, 0.001],
-            size=1,
-            p=[0.5, 0.02, 0.05, 0.35, 0.05, 0.03],
-        ).item()
+        recency_weighting_choice = random.choices(
+            [0, 0.5, 0.1, 0.01, -0.01, 0.001],
+            [0.5, 0.02, 0.05, 0.35, 0.05, 0.03],
+        )[0]
         # cutoff_threshold_choice = np.random.choice(
         #     a=[0.7, 0.9, 0.99, 1.5], size=1, p=[0.1, 0.1, 0.4, 0.4]
         # ).item()
-        cutoff_minimum_choice = np.random.choice(
-            a=[5, 10, 20, 50, 100, 200, 500], size=1, p=[0, 0, 0.2, 0.2, 0.4, 0.1, 0.1]
-        ).item()
-        point_method_choice = np.random.choice(
-            a=['median', 'mean', 'sign_biased_mean'], size=1, p=[0.59, 0.3, 0.1],
-        ).item()
+        cutoff_minimum_choice = random.choices(
+            [5, 10, 20, 50, 100, 200, 500], [0, 0, 0.2, 0.2, 0.4, 0.1, 0.1]
+        )[0]
+        point_method_choice = random.choices(
+            ['median', 'mean', 'sign_biased_mean'], [0.59, 0.3, 0.1],
+        )[0]
 
         return {
             'phrase_len': phrase_len_choice,
@@ -1923,6 +1917,10 @@ class SectionalMotif(ModelObject):
             'yule',
             "nan_euclidean",
         ]
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_choice = random.choices([None, "User"], [0.9, 0.1])[0]
         return {
             "window": random.choices(
                 [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
@@ -1936,7 +1934,7 @@ class SectionalMotif(ModelObject):
                 [1, 3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
             )[0],
             "stride_size": random.choices([1, 2, 5, 10], [0.6, 0.1, 0.1, 0.1])[0],
-            'regression_type': random.choices([None, "User"], [0.9, 0.1])[0],
+            'regression_type': regression_choice,
         }
 
     def get_params(self):

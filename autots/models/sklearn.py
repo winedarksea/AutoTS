@@ -1050,7 +1050,10 @@ class RollingRegression(ModelObject):
         x_transform_choice = random.choices(
             [None, 'FastICA', 'Nystroem', 'RmZeroVariance'], [0.85, 0.05, 0.05, 0.05],
         )[0]
-        regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
         parameter_dict = {
             'regression_model': model_choice,
             'holiday': holiday_choice,
@@ -1307,17 +1310,22 @@ class WindowRegression(ModelObject):
         """Return dict of new parameters for parameter tuning."""
         window_size_choice = random.choice([5, 10, 20, seasonal_int()])
         model_choice = generate_regressor_params()
-        input_dim_choice = random.choices(['multivariate', 'univariate'], [0.01, 0.99])[
-            0
-        ]
-        if input_dim_choice == "multivariate":
-            output_dim_choice = "1step"
-            regression_type_choice = None
-        else:
+        if "regressor" in method:
+            regression_type_choice = "User"
+            input_dim_choice = 'univariate'
             output_dim_choice = random.choice(['forecast_length', '1step'],)
-            regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[
+        else:
+            input_dim_choice = random.choices(['multivariate', 'univariate'], [0.01, 0.99])[
                 0
             ]
+            if input_dim_choice == "multivariate":
+                output_dim_choice = "1step"
+                regression_type_choice = None
+            else:
+                output_dim_choice = random.choice(['forecast_length', '1step'],)
+                regression_type_choice = random.choices([None, "User"], weights=[0.8, 0.2])[
+                    0
+                ]
         normalize_window_choice = random.choices([True, False], [0.05, 0.95])[0]
         max_windows_choice = random.choices([5000, 1000, 50000], [0.85, 0.05, 0.1])[0]
         return {
@@ -1725,12 +1733,15 @@ class DatepartRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         model_choice = generate_regressor_params(model_dict=datepart_model_dict)
-        datepart_choice = np.random.choice(
-            a=["recurring", "simple", "expanded"], size=1, p=[0.4, 0.3, 0.3]
-        ).item()
-        regression_choice = np.random.choice(
-            a=[None, 'User'], size=1, p=[0.7, 0.3]
-        ).item()
+        datepart_choice = random.choices(
+            ["recurring", "simple", "expanded"], [0.4, 0.3, 0.3]
+        )[0]
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_choice = random.choices(
+                [None, 'User'], [0.7, 0.3]
+            )[0]
         parameter_dict = {
             'regression_model': model_choice,
             'datepart_method': datepart_choice,
@@ -2097,7 +2108,10 @@ class UnivariateRegression(ModelObject):
         x_transform_choice = random.choices(
             [None, 'FastICA', 'Nystroem', 'RmZeroVariance'], [1.0, 0.0, 0.0, 0.0],
         )[0]
-        regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
         window_choice = random.choices([None, 3, 7, 10], [0.7, 0.2, 0.05, 0.05])[0]
         parameter_dict = {
             'regression_model': model_choice,
@@ -2167,7 +2181,7 @@ class MultivariateRegression(ModelObject):
         verbose: int = 0,
         random_seed: int = 2020,
         forecast_length: int = 7,
-        regression_model: dict = {"model": 'RandomForest', "model_params": {},},
+        regression_model: dict = {"model": 'RandomForest', "model_params": {}, },
         holiday: bool = False,
         mean_rolling_periods: int = 30,
         macd_periods: int = None,
@@ -2486,7 +2500,10 @@ class MultivariateRegression(ModelObject):
         )[0]
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]
-        regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
         window_choice = random.choices([None, 3, 7, 10], [0.2, 0.2, 0.05, 0.05])[0]
         parameter_dict = {
             'regression_model': model_choice,

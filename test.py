@@ -38,7 +38,7 @@ if use_template:
     generations = 5
     num_validations = 0
 else:
-    generations = 5
+    generations = 2
     num_validations = 3
 
 if force_univariate:
@@ -48,9 +48,10 @@ transformer_list = (
     "superfast"  # ["bkfilter", "STLFilter", "HPFilter", 'StandardScaler']
 )
 transformer_max_depth = 1
-model_list = "default"
-model_list = "superfast"  # fast_parallel
-# model_list = ["ARDL", "UnobservedComponents", 'AverageValueNaive']
+models_mode = "regressor"
+model_list = "superfast"
+model_list = "regressor"  # fast_parallel, all
+# model_list = ["SeasonalNaive", 'AverageValueNaive']
 
 metric_weighting = {
     "smape_weighting": 3,
@@ -66,7 +67,7 @@ model = AutoTS(
     forecast_length=forecast_length,
     frequency=frequency,
     prediction_interval=0.9,
-    ensemble=["horizontal-max", "dist", "simple"],
+    ensemble=["horizontal-max", "dist", "simple", "subsample"],
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,
@@ -85,6 +86,7 @@ model = AutoTS(
     # prefill_na=0,
     # subset=5,
     verbose=verbose,
+    models_mode=models_mode,
 )
 
 
@@ -221,6 +223,8 @@ PACKAGE RELEASE
 
 set PYTHONPATH=%PYTHONPATH%;C:/Users/Colin/Documents/AutoTS
 python -m unittest discover ./tests
+
+python ./autots/evaluator/benchmark.py
 
 cd <project dir>
 black ./autots -l 88 -S

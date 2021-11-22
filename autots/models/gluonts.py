@@ -545,10 +545,13 @@ class GluonTS(ModelObject):
         elif gluon_model_choice == 'GPVAR':
             context_length_choice = random.choice([5, 7, 12])
             epochs_choice = random.choice([20, 40, 60])
-        if gluon_model_choice in self.multivariate_mods:
-            regression_choice = None
+        if "regressor" in method:
+            regression_choice = "User"
         else:
-            regression_choice = random.choices([None, "User"], [0.8, 0.4])[0]
+            if gluon_model_choice in self.multivariate_mods:
+                regression_choice = None
+            else:
+                regression_choice = random.choices([None, "User"], [0.8, 0.4])[0]
 
         return {
             'gluon_model': gluon_model_choice,

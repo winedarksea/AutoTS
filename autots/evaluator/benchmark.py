@@ -252,6 +252,8 @@ class Benchmark(object):
             "platform": self.platform,
             "node": self.node,
             "python_version": self.python_version,
+            "n_jobs": n_jobs,
+            "times": times,
             "avg_naive_runtime": self.avg_naive_runtime / times,
             "sect_motif_runtime": self.sect_motif_runtime / times,
             "nvar_runtime": self.nvar_runtime / times,
@@ -268,7 +270,18 @@ class Benchmark(object):
 
 if __name__ == '__main__':
     import json
+    import sys
 
+    try:
+        n_jobs = sys.argv[1]
+        if str(n_jobs).isdigit():
+            n_jobs = int(n_jobs)
+    except Exception:
+        n_jobs = "auto"
+    try:
+        times = int(sys.argv[2])
+    except Exception:
+        times = 3
     bench = Benchmark()
-    bench = bench.run()
-    print(json.dumps(bench.results, indent=1)
+    bench = bench.run(n_jobs=n_jobs, times=times)
+    print(json.dumps(bench.results, indent=1))

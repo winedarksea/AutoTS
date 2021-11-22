@@ -13,12 +13,16 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-
+* added Benchmark function
+* made Prophet a bit more robust for joblib
+* motifsimulation bug fix
+* simulation forecasting mode
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
 	* add to appropriate model_lists: all, recombination_approved if so, no_shared if so
 	* add to model table in extended_tutorial.md (most columns here have an equivalent model_list)
+	* if model has regressors, make sure it meets Simulation Forecasting needs (method="regressor", fails on no regressor if "User")
 
 ## New Transformer Checklist:
 	* Make sure that if it modifies the size (more/fewer columns or rows) it returns pd.DataFrame with proper index/columns

@@ -23,6 +23,7 @@ A combination of metrics and cross-validation options, the ability to apply subs
 * [Installation](https://github.com/winedarksea/AutoTS#installation)
 * [Basic Use](https://github.com/winedarksea/AutoTS#basic-use)
 * [Tips for Speed and Large Data](https://github.com/winedarksea/AutoTS#tips-for-speed-and-large-data)
+* [Simulation Forecasting](https://github.com/winedarksea/AutoTS#simulation-forecasting)
 * Extended Tutorial [GitHub](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md) or [Docs](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html)
 * [Production Example](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
 
@@ -97,7 +98,6 @@ Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html
 
 Also take a look at the [production_example.py](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
 
-
 ## Tips for Speed and Large Data:
 * Use appropriate model lists, especially the predefined lists:
 	* `superfast` (simple naive models) and `fast` (more complex but still faster models, optimized for many series)
@@ -117,6 +117,57 @@ Also take a look at the [production_example.py](https://github.com/winedarksea/A
 * For datasets with many records, upsampling (for example, from daily to monthly frequency forecasts) can reduce training time if appropriate.
 	* this can be done by adjusting `frequency` and `aggfunc` but is probably best done before passing data into AutoTS.
 
+## Simulation Forecasting
+Simulation forecasting allows for experimenting with different potential future scenarios to examine the potential effects on the forecast. 
+This is done here by passing known values of a `future_regressor` to model `.fit` and then running `.predict` with multiple variations on the `future_regressor` future values. 
+By default in AutoTS, when a `future_regressor` is supplied, models that can utilize it are tried both with and without the regressor. 
+To enforce the use of future_regressor for simulation forecasting, a few parameters must be adjusted. 
+
+Note, this does not necessarily force the model to place any great value on the supplied features. It may be necessary to try different models from the top results models until one that responds adaquately to a regressor is found. 
+
+```python
+from autots.datasets import load_monthly
+from autots.evaluator.auto_ts import fake_regressor
+from autots import AutoTS
+
+long = False
+df = load_monthly(long=long)
+forecast_length = 14
+model = AutoTS(
+    forecast_length=forecast_length,
+    frequency='infer',
+    validation_method="backwards",
+	model_list="regressor",
+	models_mode="regressor",
+	initial_template="Random",
+    max_generations=2,
+)
+future_regressor_train2d, future_regressor_forecast2d = fake_regressor(
+    df,
+    dimensions=4,
+    forecast_length=forecast_length,
+    date_col='datetime' if long else None,
+    value_col='value' if long else None,
+    id_col='series_id' if long else None,
+    drop_most_recent=model.drop_most_recent,
+    aggfunc=model.aggfunc,
+    verbose=model.verbose,
+)
+
+model = model.fit(
+    df,
+    future_regressor=future_regressor_train2d,
+    date_col='datetime' if long else None,
+    value_col='value' if long else None,
+    id_col='series_id' if long else None,
+)
+
+prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose=0)
+forecasts_df = prediction.forecast
+
+print(model)
+print(f"Was a model choosen that used the regressor? {model.used_regressor_check}")
+```
 
 ## How to Contribute:
 * Give feedback on where you find the documentation confusing

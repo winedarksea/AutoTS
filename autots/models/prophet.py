@@ -248,11 +248,14 @@ class FBProphet(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         holiday_choice = np.random.choice(a=[True, False], size=1, p=[0.5, 0.5]).item()
-        regression_list = [None, 'User']
-        regression_probability = [0.8, 0.2]
-        regression_choice = np.random.choice(
-            a=regression_list, size=1, p=regression_probability
-        ).item()
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_list = [None, 'User']
+            regression_probability = [0.8, 0.2]
+            regression_choice = np.random.choice(
+                a=regression_list, size=1, p=regression_probability
+            ).item()
 
         parameter_dict = {
             'holiday': holiday_choice,

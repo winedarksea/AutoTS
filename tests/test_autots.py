@@ -9,6 +9,7 @@ from autots.datasets import (
 from autots import AutoTS
 from autots.evaluator.auto_ts import fake_regressor
 from autots.models.model_list import default as default_model_list
+from autots.evaluator.benchmark import Benchmark
 
 
 class AutoTSTest(unittest.TestCase):
@@ -261,6 +262,12 @@ class AutoTSTest(unittest.TestCase):
         self.assertTrue(initial_results['spl'].min() >= 0)
         self.assertTrue(initial_results['contour'].min() <= 1)
         self.assertTrue(initial_results['containment'].min() <= 1)
+
+    def test_benchmark(self):
+        bench = Benchmark()
+        bench.run(times=1)
+        self.assertGreater(bench.total_runtime, 0)
+        print(f"Benchmark total_runtime: {bench.total_runtime}")
 
         # test all same on univariate input, non-horizontal, with regressor, and different frequency, with forecast_length = 1 !
 
