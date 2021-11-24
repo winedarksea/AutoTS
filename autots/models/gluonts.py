@@ -108,6 +108,11 @@ class GluonTS(ModelObject):
         self.train_columns = df.index
 
         gluon_freq = str(self.frequency).split('-')[0]
+        if self.regression_type == "User":
+            if future_regressor is None:
+                raise ValueError(
+                    "regression_type='User' but no future_regressor supplied"
+                )
         if gluon_freq in ["MS", "1MS"]:
             gluon_freq = "M"
 
@@ -139,17 +144,26 @@ class GluonTS(ModelObject):
             'forecast_length': self.forecast_length,
         }
         if self.gluon_model in self.multivariate_mods:
-            self.test_ds = ListDataset(
-                [{"start": df.index[0], "target": gluon_train}],
-                freq=ts_metadata['freq'],
-                one_dim_target=False,
-            )
+            if self.regression_type == "User":
+                regr = future_regressor.to_numpy().T
+                self.regr_train = regr
+                self.test_ds = ListDataset(
+                    [{
+                        "start": df.index[0],
+                        "target": gluon_train,
+                        "feat_dynamic_real": regr,
+                    }],
+                    freq=ts_metadata['freq'],
+                    one_dim_target=False,
+                )
+            else:
+                self.test_ds = ListDataset(
+                    [{"start": df.index[0], "target": gluon_train}],
+                    freq=ts_metadata['freq'],
+                    one_dim_target=False,
+                )
         else:
             if self.regression_type == "User":
-                if future_regressor is None:
-                    raise ValueError(
-                        "regression_type='User' but no future_regressor supplied"
-                    )
                 self.gluon_train = gluon_train
                 regr = future_regressor.to_numpy().T
                 self.regr_train = regr

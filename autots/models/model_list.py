@@ -190,7 +190,7 @@ no_shared = [
     'Theta',
     'ARDL',
 ]
-# allow the use of a regressor
+# allow the use of a regressor, need to accept "User" (fail if not given), have 'regressor' param method
 regressor = [
     'GLM',
     'ARIMA',
