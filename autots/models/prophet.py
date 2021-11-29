@@ -119,7 +119,9 @@ class FBProphet(ModelObject):
             from prophet import Prophet
 
         # defining in function helps with Joblib it seems
-        def seek_the_oracle(current_series, args, series, forecast_length, future_regressor):
+        def seek_the_oracle(
+            current_series, args, series, forecast_length, future_regressor
+        ):
             """Prophet for for loop or parallel."""
             current_series = current_series.rename(columns={series: 'y'})
             current_series['ds'] = current_series.index
@@ -127,7 +129,9 @@ class FBProphet(ModelObject):
             if args['holiday']:
                 m.add_country_holidays(country_name=args['holiday_country'])
             if args['regression_type'] == 'User':
-                current_series = pd.concat([current_series, args['regressor_train']], axis=1)
+                current_series = pd.concat(
+                    [current_series, args['regressor_train']], axis=1
+                )
                 for nme in args['regressor_name']:
                     m.add_regressor(nme)
             m = m.fit(current_series)

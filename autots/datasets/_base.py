@@ -402,7 +402,12 @@ def load_zeroes(long=False, shape=None, start_date: str = "2021-01-01"):
 
 
 def load_linear(
-    long=False, shape=None, start_date: str = "2021-01-01", introduce_nan: float = None, introduce_random: float = None, random_seed: int = 123
+    long=False,
+    shape=None,
+    start_date: str = "2021-01-01",
+    introduce_nan: float = None,
+    introduce_random: float = None,
+    random_seed: int = 123,
 ):
     """Create a dataset of just zeroes for testing edge case.
 
@@ -420,9 +425,13 @@ def load_linear(
     df_wide = pd.DataFrame(np.ones(shape), index=idx)
     df_wide = (df_wide * list(range(0, shape[1]))).cumsum()
     if introduce_nan is not None:
-        df_wide = df_wide.sample(frac=(1 - introduce_nan), random_state=random_seed).reindex(idx)
+        df_wide = df_wide.sample(
+            frac=(1 - introduce_nan), random_state=random_seed
+        ).reindex(idx)
     if introduce_random is not None:
-        df_wide = df_wide + np.random.default_rng(random_seed).gamma(introduce_random, size=shape)
+        df_wide = df_wide + np.random.default_rng(random_seed).gamma(
+            introduce_random, size=shape
+        )
     if not long:
         return df_wide
     else:

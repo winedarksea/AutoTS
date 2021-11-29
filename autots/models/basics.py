@@ -958,8 +958,7 @@ class MotifSimulation(ModelObject):
             [0.2, 0.1, 0.4, 0.2, 0.1],
         )[0]
         phrase_len_choice = random.choices(
-            [5, 10, 15, 20, 30, 90, 360],
-            [0.2, 0.2, 0.1, 0.25, 0.1, 0.1, 0.05]
+            [5, 10, 15, 20, 30, 90, 360], [0.2, 0.2, 0.1, 0.25, 0.1, 0.1, 0.05]
         )[0]
         shared_choice = random.choices([True, False], [0.05, 0.95])[0]
         distance_metric_choice = random.choices(
@@ -1014,7 +1013,8 @@ class MotifSimulation(ModelObject):
             [5, 10, 20, 50, 100, 200, 500], [0, 0, 0.2, 0.2, 0.4, 0.1, 0.1]
         )[0]
         point_method_choice = random.choices(
-            ['median', 'mean', 'sign_biased_mean'], [0.59, 0.3, 0.1],
+            ['median', 'mean', 'sign_biased_mean'],
+            [0.59, 0.3, 0.1],
         )[0]
 
         return {
@@ -1590,17 +1590,23 @@ class NVAR(ModelObject):
                 )
             df_list_up.append(
                 pd.DataFrame(
-                    up.T, columns=self.new_col_names[srt:stop], index=the_index,
+                    up.T,
+                    columns=self.new_col_names[srt:stop],
+                    index=the_index,
                 )
             )
             df_list.append(
                 pd.DataFrame(
-                    fore.T, columns=self.new_col_names[srt:stop], index=the_index,
+                    fore.T,
+                    columns=self.new_col_names[srt:stop],
+                    index=the_index,
                 )
             )
             df_list_low.append(
                 pd.DataFrame(
-                    low.T, columns=self.new_col_names[srt:stop], index=the_index,
+                    low.T,
+                    columns=self.new_col_names[srt:stop],
+                    index=the_index,
                 )
             )
         forecast = pd.concat(df_list, axis=1)[self.column_names]

@@ -48,9 +48,9 @@ transformer_list = (
     "superfast"  # ["bkfilter", "STLFilter", "HPFilter", 'StandardScaler']
 )
 transformer_max_depth = 1
-models_mode = "regressor"
+models_mode = "default"  # "regressor"
 model_list = "superfast"
-model_list = "regressor"  # fast_parallel, all
+# model_list = "regressor"  # fast_parallel, all
 # model_list = ["SeasonalNaive", 'AverageValueNaive']
 
 metric_weighting = {

@@ -298,7 +298,10 @@ class GLM(ModelObject):
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose)(
                 delayed(glm_forecast_by_column)(
-                    current_series=df[col], X=X, Xf=Xf, args=args,
+                    current_series=df[col],
+                    X=X,
+                    Xf=Xf,
+                    args=args,
                 )
                 for col in cols
             )
@@ -792,18 +795,22 @@ class ARIMA(ModelObject):
         large p,d,q can be very slow (a p of 30 can take hours)
         """
         p_choice = random.choices(
-            [0, 1, 2, 3, 4, 5, 7, 12], [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+            [0, 1, 2, 3, 4, 5, 7, 12],
+            [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
         d_choice = random.choices([0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1])[0]
         q_choice = random.choices(
-            [0, 1, 2, 3, 4, 5, 7, 12], [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+            [0, 1, 2, 3, 4, 5, 7, 12],
+            [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
         if "regressor" in method:
             regression_choice = "User"
         else:
             regression_list = [None, 'User', 'Holiday']
             regression_probability = [0.5, 0.3, 0.2]
-            regression_choice = random.choices(regression_list, regression_probability)[0]
+            regression_choice = random.choices(regression_list, regression_probability)[
+                0
+            ]
 
         parameter_dict = {
             'p': p_choice,
@@ -1037,7 +1044,8 @@ class UnobservedComponents(ModelObject):
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
                 delayed(forecast_by_column)(
-                    current_series=self.df_train[col], args=args,
+                    current_series=self.df_train[col],
+                    args=args,
                 )
                 for col in cols
             )
@@ -1116,7 +1124,9 @@ class UnobservedComponents(ModelObject):
         else:
             regression_list = [None, 'User', 'Holiday']
             regression_probability = [0.6, 0.2, 0.2]
-            regression_choice = random.choices(regression_list, regression_probability)[0]
+            regression_choice = random.choices(regression_list, regression_probability)[
+                0
+            ]
 
         return {
             'level': level_choice,
@@ -1625,7 +1635,7 @@ class VARMAX(ModelObject):
         ar_choice = random.choices(
             [0, 1, 2, 5, 7, 10], [0.5, 0.5, 0.2, 0.01, 0.01, 0.001]
         )[0]
-        if ar_choice == 0:
+        if ar_choice == 0 or "deep" in method:
             ma_choice = random.choices([1, 2, 5, 7, 10], [0.8, 0.2, 0.01, 0.01, 0.001])[
                 0
             ]
@@ -2188,7 +2198,10 @@ class ARDL(ModelObject):
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
-                delayed(ardl_per_column)(current_series=self.df_train[col], args=args,)
+                delayed(ardl_per_column)(
+                    current_series=self.df_train[col],
+                    args=args,
+                )
                 for col in cols
             )
             complete = list(map(list, zip(*df_list)))
@@ -2222,14 +2235,15 @@ class ARDL(ModelObject):
             return prediction
 
     def get_new_params(self, method: str = 'random'):
-        """Return dict of new parameters for parameter tuning.
-        """
+        """Return dict of new parameters for parameter tuning."""
         if "regressor" in method:
             regression_choice = "user"
         else:
             regression_list = [None, 'user', 'holiday']
             regression_probability = [0.3, 0.5, 0.5]
-            regression_choice = random.choices(regression_list, regression_probability)[0]
+            regression_choice = random.choices(regression_list, regression_probability)[
+                0
+            ]
         if regression_choice is None:
             order_choice = 0
         else:

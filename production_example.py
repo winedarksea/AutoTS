@@ -139,6 +139,7 @@ model = AutoTS(
     transformer_max_depth=transformer_max_depth,
     max_generations=gens,
     metric_weighting=metric_weighting,
+    initial_template='random',
     aggfunc="sum",
     models_to_validate=models_to_validate,
     model_interrupt=True,
@@ -155,7 +156,10 @@ model = AutoTS(
 )
 
 if not initial_training:
-    model.import_template(template_filename, method="only")  # "addon"
+    if evolve:
+        model.import_template(template_filename, method="addon")
+    else:
+        model.import_template(template_filename, method="only")
 
 model = model.fit(df, future_regressor=regr_train,)
 

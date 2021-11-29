@@ -17,6 +17,7 @@
 * made Prophet a bit more robust for joblib
 * motifsimulation bug fix
 * simulation forecasting mode
+* deep param mode (not yet utilized widely)
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

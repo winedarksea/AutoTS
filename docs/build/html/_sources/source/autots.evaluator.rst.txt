@@ -20,6 +20,14 @@ autots.evaluator.auto\_ts module
    :undoc-members:
    :show-inheritance:
 
+autots.evaluator.benchmark module
+---------------------------------
+
+.. automodule:: autots.evaluator.benchmark
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.evaluator.metrics module
 -------------------------------
 
@@ -27,7 +35,6 @@ autots.evaluator.metrics module
    :members:
    :undoc-members:
    :show-inheritance:
-
 
 Module contents
 ---------------

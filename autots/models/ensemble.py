@@ -231,7 +231,10 @@ def mosaic_classifier(df_train, known):
     """CLassify unknown series with the appropriate model for mosaic ensembles."""
     known.index.name = "forecast_period"
     upload = pd.melt(
-        known, var_name="series_id", value_name="model_id", ignore_index=False,
+        known,
+        var_name="series_id",
+        value_name="model_id",
+        ignore_index=False,
     ).reset_index(drop=False)
     upload['forecast_period'] = upload['forecast_period'].astype(int)
     missing_cols = df_train.columns[
@@ -1251,7 +1254,10 @@ def MosaicEnsemble(
     final = pd.DataFrame.from_dict(all_series)
     final.index.name = "forecast_period"
     melted = pd.melt(
-        final, var_name="series_id", value_name="model_id", ignore_index=False,
+        final,
+        var_name="series_id",
+        value_name="model_id",
+        ignore_index=False,
     ).reset_index(drop=False)
     melted["forecast_period"] = melted["forecast_period"].astype(int)
     max_forecast_period = melted["forecast_period"].max()

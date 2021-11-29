@@ -29,7 +29,11 @@ def seasonal_int(include_one: bool = False, small=False):
         52: 0.01,
         84: 0.01,
     }
-    lag = random.choices(list(prob_dict.keys()), list(prob_dict.values()), k=1,)[0]
+    lag = random.choices(
+        list(prob_dict.keys()),
+        list(prob_dict.values()),
+        k=1,
+    )[0]
     if not include_one and str(lag) == '1':
         lag = 'random_int'
     if lag == 'random_int':

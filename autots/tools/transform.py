@@ -696,7 +696,13 @@ class IntermittentOccurrence(EmptyTransformer):
             choice = "mean"
         else:
             choice = random.choices(
-                ["mean", "median", "midhinge",], [0.4, 0.3, 0.3], k=1,
+                [
+                    "mean",
+                    "median",
+                    "midhinge",
+                ],
+                [0.4, 0.3, 0.3],
+                k=1,
             )[0]
         return {
             "center": choice,
@@ -1303,7 +1309,17 @@ class ClipOutliers(EmptyTransformer):
         fillna_c = None
         if method == "fast":
             method_c = "clip"
-            choice = random.choices(["GLS", "Linear",], [0.5, 0.5,], k=1,)[0]
+            choice = random.choices(
+                [
+                    "GLS",
+                    "Linear",
+                ],
+                [
+                    0.5,
+                    0.5,
+                ],
+                k=1,
+            )[0]
         else:
             method_c = random.choice(["clip", "remove"])
             if method_c == "remove":
@@ -1454,7 +1470,10 @@ class Slice(EmptyTransformer):
     """
 
     def __init__(
-        self, method: str = "100", forecast_length: int = 30, **kwargs,
+        self,
+        method: str = "100",
+        forecast_length: int = 30,
+        **kwargs,
     ):
         super().__init__(name="Slice")
         self.method = method
@@ -1487,7 +1506,9 @@ class Slice(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         df = simple_context_slicer(
-            df, method=self.method, forecast_length=self.forecast_length,
+            df,
+            method=self.method,
+            forecast_length=self.forecast_length,
         )
         return df
 

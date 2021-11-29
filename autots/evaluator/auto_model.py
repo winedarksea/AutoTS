@@ -1048,24 +1048,29 @@ def TemplateWizard(
             template_result.model_count += 1
             if verbose > 0:
                 if validation_round >= 1:
-                    base_print = "Model Number: {} of {} with model {} for Validation {}".format(
-                        str(template_result.model_count),
-                        template.shape[0],
-                        model_str,
-                        str(validation_round),
+                    base_print = (
+                        "Model Number: {} of {} with model {} for Validation {}".format(
+                            str(template_result.model_count),
+                            template.shape[0],
+                            model_str,
+                            str(validation_round),
+                        )
                     )
                 else:
-                    base_print = "Model Number: {} with model {} in generation {} of {}".format(
-                        str(template_result.model_count),
-                        model_str,
-                        str(current_generation),
-                        str(max_generations),
+                    base_print = (
+                        "Model Number: {} with model {} in generation {} of {}".format(
+                            str(template_result.model_count),
+                            model_str,
+                            str(current_generation),
+                            str(max_generations),
+                        )
                     )
                 if verbose > 1:
                     print(
                         base_print
                         + " with params {} and transformations {}".format(
-                            json.dumps(parameter_dict), json.dumps(transformation_dict),
+                            json.dumps(parameter_dict),
+                            json.dumps(transformation_dict),
                         )
                     )
                 else:
@@ -1416,10 +1421,12 @@ def _trans_dicts(
             traditional_order=True,
         )
     r = RandomTransform(
-        transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,
+        transformer_list=transformer_list,
+        transformer_max_depth=transformer_max_depth,
     )
     r2 = RandomTransform(
-        transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,
+        transformer_list=transformer_list,
+        transformer_max_depth=transformer_max_depth,
     )
     if best is None:
         best = RandomTransform(

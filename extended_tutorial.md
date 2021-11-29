@@ -10,6 +10,7 @@
 * [Installation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning)
 * [Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
 * [Adding Regressors](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information)
+* [Simulation Forecasting](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#simulation-forecasting)
 * [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id8)
 
 ## Extended Tutorial
@@ -471,9 +472,58 @@ prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose
 forecasts_df = prediction.forecast
 
 print(model)
-print(f"Was a model choosen that used the regressor? {model.used_regressor_check}")
 ```
+
 For models here in the lower level api, confusingly, regression_type="User" must be specified as well as passing future_regressor. Why? This allows the model search to easily try both with and without the regressor, because sometimes the regressor may do more harm than good.
+
+## Simulation Forecasting
+Simulation forecasting allows for experimenting with different potential future scenarios to examine the potential effects on the forecast. 
+This is done here by passing known values of a `future_regressor` to model `.fit` and then running `.predict` with multiple variations on the `future_regressor` future values. 
+By default in AutoTS, when a `future_regressor` is supplied, models that can utilize it are tried both with and without the regressor. 
+To enforce the use of future_regressor for simulation forecasting, a few parameters must be supplied as below. They are: `model_list, models_mode, initial_template`.
+
+```python
+from autots.datasets import load_monthly
+from autots.evaluator.auto_ts import fake_regressor
+from autots import AutoTS
+
+df = load_monthly(long=False)
+forecast_length = 14
+model = AutoTS(
+    forecast_length=forecast_length,
+	model_list="regressor",
+	models_mode="regressor",
+	initial_template="random",
+)
+# here these are random numbers but in the real world they could be values like weather or store holiday hours
+future_regressor_train, future_regressor_forecast = fake_regressor(
+    df,
+    dimensions=2,
+    forecast_length=forecast_length,
+    drop_most_recent=model.drop_most_recent,
+    aggfunc=model.aggfunc,
+    verbose=model.verbose,
+)
+# another simulation of regressor
+future_regressor_forecast_2 = future_regressor_forecast + 10
+
+model = model.fit(
+    df,
+    future_regressor=future_regressor_train,
+)
+# first with one version
+prediction = model.predict(future_regressor=future_regressor_forecast, verbose=0)
+forecasts_df = prediction.forecast
+
+# then with another
+prediction_2 = model.predict(future_regressor=future_regressor_forecast_2, verbose=0)
+forecasts_df_2 = prediction_2.forecast
+
+print(model)
+```
+Note, this does not necessarily force the model to place any great value on the supplied features. 
+It may be necessary to rerun multiple times until a model with satisfactory variable response is found, 
+or to try with a subset of the regressor model list like `['FBProphet', 'GLM', 'ARDL', 'DatepartRegression']`.
 
 ### A Hack for Passing in Parameters (that aren't otherwise available)
 There are a lot of parameters available here, but not always all of the options available for a particular parameter are actually used in generated templates. 
@@ -494,6 +544,7 @@ thus properly capturing the relative sequence (ie 'low'=1, 'medium'=2, 'high'=3)
 ### Custom and Unusual Frequencies
 Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects 
 Some models will support a more limited range of frequencies. 
+
 
 ## Using the Transformers independently
 The transformers expect data only in the `wide` shape with ascending date. 

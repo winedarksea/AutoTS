@@ -148,11 +148,13 @@ class GluonTS(ModelObject):
                 regr = future_regressor.to_numpy().T
                 self.regr_train = regr
                 self.test_ds = ListDataset(
-                    [{
-                        "start": df.index[0],
-                        "target": gluon_train,
-                        "feat_dynamic_real": regr,
-                    }],
+                    [
+                        {
+                            "start": df.index[0],
+                            "target": gluon_train,
+                            "feat_dynamic_real": regr,
+                        }
+                    ],
                     freq=ts_metadata['freq'],
                     one_dim_target=False,
                 )
@@ -549,7 +551,12 @@ class GluonTS(ModelObject):
             [5, 10, 30, '1ForecastLength', '2ForecastLength'],
             [0.2, 0.3, 0.1, 0.1, 0.1],
         )[0]
-        epochs_choice = random.choices([20, 40, 80, 150], [0.58, 0.35, 0.05, 0.02])[0]
+        if "deep" in method:
+            epochs_choice = random.choices(
+                [20, 40, 80, 150, 300, 500], [0.58, 0.35, 0.05, 0.05, 0.02]
+            )[0]
+        else:
+            epochs_choice = random.choices([20, 40, 80], [0.58, 0.35, 0.05])[0]
         learning_rate_choice = random.choices([0.01, 0.001, 0.0001], [0.3, 0.6, 0.1])[0]
         # NPTS doesn't use these, so just fill a constant
         if gluon_model_choice in ['NPTS', 'Rotbaum']:
@@ -558,7 +565,6 @@ class GluonTS(ModelObject):
         # this model being noticeably slower than others at scale
         elif gluon_model_choice == 'GPVAR':
             context_length_choice = random.choice([5, 7, 12])
-            epochs_choice = random.choice([20, 40, 60])
         if "regressor" in method:
             regression_choice = "User"
         else:
@@ -573,6 +579,7 @@ class GluonTS(ModelObject):
             'learning_rate': learning_rate_choice,
             'context_length': context_length_choice,
             'regression_type': regression_choice,
+            # 'additional_params':
         }
 
     def get_params(self):

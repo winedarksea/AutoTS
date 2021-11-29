@@ -40,7 +40,12 @@ def seek_the_oracle(
     **kwargs
 ):
     """Internal. For loop or parallel version of Greykite."""
-    inner_df = pd.DataFrame({'ts': df_index, 'y': series,})
+    inner_df = pd.DataFrame(
+        {
+            'ts': df_index,
+            'y': series,
+        }
+    )
     if regressors is not None:
         inner_regr = regressors.copy()
         new_names = [
@@ -87,7 +92,8 @@ def seek_the_oracle(
         computation_param=computation,
     )
     result = forecaster.run_forecast_config(  # result is also stored as `forecaster.forecast_result`.
-        df=inner_df, config=config,
+        df=inner_df,
+        config=config,
     )
     res_df = result.forecast.df.tail(forecast_length).drop(columns=['actual'])
     res_df['series_id'] = col
