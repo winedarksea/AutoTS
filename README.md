@@ -17,12 +17,13 @@ These models are all designed for integration in an AutoML feature search which 
 
 Horizontal and mosaic style ensembles are the flagship ensembling types, allowing each series to receive the most accurate possible models while still maintaining scalability.
 
-A combination of metrics and cross-validation options, the ability to apply subsets and weighting, regressor generation tools, live datasets, template import and export, plotting, and a collection of data shaping parameters round out the available feature set. 
+A combination of metrics and cross-validation options, the ability to apply subsets and weighting, regressor generation tools, simulation forecastind mode, live datasets, template import and export, plotting, and a collection of data shaping parameters round out the available feature set. 
 
 ## Table of Contents
 * [Installation](https://github.com/winedarksea/AutoTS#installation)
 * [Basic Use](https://github.com/winedarksea/AutoTS#basic-use)
 * [Tips for Speed and Large Data](https://github.com/winedarksea/AutoTS#tips-for-speed-and-large-data)
+* [Simulation Forecasting](https://github.com/winedarksea/AutoTS#simulation-forecasting)
 * Extended Tutorial [GitHub](https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md) or [Docs](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html)
 * [Production Example](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
 
@@ -97,7 +98,6 @@ Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html
 
 Also take a look at the [production_example.py](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
 
-
 ## Tips for Speed and Large Data:
 * Use appropriate model lists, especially the predefined lists:
 	* `superfast` (simple naive models) and `fast` (more complex but still faster models, optimized for many series)
@@ -116,7 +116,6 @@ Also take a look at the [production_example.py](https://github.com/winedarksea/A
 * Reducing `num_validations` and `models_to_validate` will decrease runtime but may lead to poorer model selections.
 * For datasets with many records, upsampling (for example, from daily to monthly frequency forecasts) can reduce training time if appropriate.
 	* this can be done by adjusting `frequency` and `aggfunc` but is probably best done before passing data into AutoTS.
-
 
 ## How to Contribute:
 * Give feedback on where you find the documentation confusing

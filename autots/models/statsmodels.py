@@ -298,7 +298,10 @@ class GLM(ModelObject):
         if parallel:
             df_list = Parallel(n_jobs=self.n_jobs, verbose=pool_verbose)(
                 delayed(glm_forecast_by_column)(
-                    current_series=df[col], X=X, Xf=Xf, args=args,
+                    current_series=df[col],
+                    X=X,
+                    Xf=Xf,
+                    args=args,
                 )
                 for col in cols
             )
@@ -351,9 +354,12 @@ class GLM(ModelObject):
             [0.1, 0.3, 0.1, 0.3, 0.1, 0.1],
         )[0]
         constant_choice = random.choices([False, True], [0.95, 0.05])[0]
-        regression_type_choice = random.choices(
-            [None, 'datepart', 'User'], [0.4, 0.4, 0.2]
-        )[0]
+        if "regressor" in method:
+            regression_type_choice = "User"
+        else:
+            regression_type_choice = random.choices(
+                [None, 'datepart', 'User'], [0.4, 0.4, 0.2]
+            )[0]
         return {
             'family': family_choice,
             'constant': constant_choice,
@@ -789,15 +795,22 @@ class ARIMA(ModelObject):
         large p,d,q can be very slow (a p of 30 can take hours)
         """
         p_choice = random.choices(
-            [0, 1, 2, 3, 4, 5, 7, 12], [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+            [0, 1, 2, 3, 4, 5, 7, 12],
+            [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
         d_choice = random.choices([0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1])[0]
         q_choice = random.choices(
-            [0, 1, 2, 3, 4, 5, 7, 12], [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+            [0, 1, 2, 3, 4, 5, 7, 12],
+            [0.2, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         )[0]
-        regression_list = [None, 'User', 'Holiday']
-        regression_probability = [0.5, 0.3, 0.2]
-        regression_choice = random.choices(regression_list, regression_probability)[0]
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_list = [None, 'User', 'Holiday']
+            regression_probability = [0.5, 0.3, 0.2]
+            regression_choice = random.choices(regression_list, regression_probability)[
+                0
+            ]
 
         parameter_dict = {
             'p': p_choice,
@@ -1031,7 +1044,8 @@ class UnobservedComponents(ModelObject):
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
                 delayed(forecast_by_column)(
-                    current_series=self.df_train[col], args=args,
+                    current_series=self.df_train[col],
+                    args=args,
                 )
                 for col in cols
             )
@@ -1105,9 +1119,14 @@ class UnobservedComponents(ModelObject):
         stochastic_level_choice = random.choice([True, False])
         stochastic_cycle_choice = random.choice([True, False])
         """
-        regression_list = [None, 'User', 'Holiday']
-        regression_probability = [0.6, 0.2, 0.2]
-        regression_choice = random.choices(regression_list, regression_probability)[0]
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_list = [None, 'User', 'Holiday']
+            regression_probability = [0.6, 0.2, 0.2]
+            regression_choice = random.choices(regression_list, regression_probability)[
+                0
+            ]
 
         return {
             'level': level_choice,
@@ -1303,11 +1322,14 @@ class DynamicFactor(ModelObject):
             a=[0, 1, 2, 3], size=1, p=[0.4, 0.3, 0.2, 0.1]
         ).item()
 
-        regression_list = [None, 'User', 'Holiday']
-        regression_probability = [0.6, 0.2, 0.2]
-        regression_choice = np.random.choice(
-            a=regression_list, size=1, p=regression_probability
-        ).item()
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_list = [None, 'User', 'Holiday']
+            regression_probability = [0.6, 0.2, 0.2]
+            regression_choice = np.random.choice(
+                a=regression_list, size=1, p=regression_probability
+            ).item()
 
         parameter_dict = {
             'k_factors': k_factors_choice,
@@ -1477,11 +1499,14 @@ class VECM(ModelObject):
             a=[0, 1, 2, 3], size=1, p=[0.1, 0.5, 0.2, 0.2]
         ).item()
 
-        regression_list = [None, 'User', 'Holiday']
-        regression_probability = [0.8, 0.15, 0.05]
-        regression_choice = np.random.choice(
-            a=regression_list, size=1, p=regression_probability
-        ).item()
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_list = [None, 'User', 'Holiday']
+            regression_probability = [0.8, 0.15, 0.05]
+            regression_choice = np.random.choice(
+                a=regression_list, size=1, p=regression_probability
+            ).item()
 
         parameter_dict = {
             'deterministic': deterministic_choice,
@@ -1610,7 +1635,7 @@ class VARMAX(ModelObject):
         ar_choice = random.choices(
             [0, 1, 2, 5, 7, 10], [0.5, 0.5, 0.2, 0.01, 0.01, 0.001]
         )[0]
-        if ar_choice == 0:
+        if ar_choice == 0 or "deep" in method:
             ma_choice = random.choices([1, 2, 5, 7, 10], [0.8, 0.2, 0.01, 0.01, 0.001])[
                 0
             ]
@@ -1787,11 +1812,14 @@ class VAR(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        regression_list = [None, 'User', 'Holiday']
-        regression_probability = [0.9, 0.05, 0.05]
-        regression_choice = np.random.choice(
-            a=regression_list, size=1, p=regression_probability
-        ).item()
+        if "regressor" in method:
+            regression_choice = "User"
+        else:
+            regression_list = [None, 'User', 'Holiday']
+            regression_probability = [0.9, 0.05, 0.05]
+            regression_choice = np.random.choice(
+                a=regression_list, size=1, p=regression_probability
+            ).item()
         maxlags_choice = np.random.choice([None, 5, 15], size=1).item()
         ic_choice = np.random.choice(['fpe', 'aic', 'bic', 'hqic'], size=1).item()
 
@@ -2170,7 +2198,10 @@ class ARDL(ModelObject):
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
-                delayed(ardl_per_column)(current_series=self.df_train[col], args=args,)
+                delayed(ardl_per_column)(
+                    current_series=self.df_train[col],
+                    args=args,
+                )
                 for col in cols
             )
             complete = list(map(list, zip(*df_list)))
@@ -2204,11 +2235,15 @@ class ARDL(ModelObject):
             return prediction
 
     def get_new_params(self, method: str = 'random'):
-        """Return dict of new parameters for parameter tuning.
-        """
-        regression_list = [None, 'user', 'holiday']
-        regression_probability = [0.3, 0.5, 0.5]
-        regression_choice = random.choices(regression_list, regression_probability)[0]
+        """Return dict of new parameters for parameter tuning."""
+        if "regressor" in method:
+            regression_choice = "user"
+        else:
+            regression_list = [None, 'user', 'holiday']
+            regression_probability = [0.3, 0.5, 0.5]
+            regression_choice = random.choices(regression_list, regression_probability)[
+                0
+            ]
         if regression_choice is None:
             order_choice = 0
         else:

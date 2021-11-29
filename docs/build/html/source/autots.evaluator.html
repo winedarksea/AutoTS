@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.evaluator package &#8212; AutoTS 0.3.10 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 0.3.11 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -88,7 +88,7 @@
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.NewGeneticTemplate">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">NewGeneticTemplate</code><span class="sig-paren">(</span><em class="sig-param">model_results, submitted_parameters, sort_column: str = 'smape_weighted', sort_ascending: bool = True, max_results: int = 50, max_per_model_class: int = 5, top_n: int = 50, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], transformer_list: dict = {}, transformer_max_depth: int = 8</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.NewGeneticTemplate" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">NewGeneticTemplate</code><span class="sig-paren">(</span><em class="sig-param">model_results, submitted_parameters, sort_column: str = 'smape_weighted', sort_ascending: bool = True, max_results: int = 50, max_per_model_class: int = 5, top_n: int = 50, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], transformer_list: dict = {}, transformer_max_depth: int = 8, models_mode: str = 'default'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.NewGeneticTemplate" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return new template given old template with model accuracies.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -102,7 +102,7 @@
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.RandomTemplate">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">RandomTemplate</code><span class="sig-paren">(</span><em class="sig-param">n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS', 'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor'], transformer_list: dict = 'fast', transformer_max_depth: int = 8</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.RandomTemplate" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">RandomTemplate</code><span class="sig-paren">(</span><em class="sig-param">n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'GLM', 'ETS', 'ARIMA', 'FBProphet', 'RollingRegression', 'GluonTS', 'UnobservedComponents', 'VARMAX', 'VECM', 'DynamicFactor'], transformer_list: dict = 'fast', transformer_max_depth: int = 8, models_mode: str = 'default'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.RandomTemplate" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns a template dataframe of randomly generated transformations, models, and hyperparameters.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -323,7 +323,7 @@ pass an empty dictionary if no transformations are desired.</p></li>
 <p>Higher-level functions of automated time series modeling.</p>
 <dl class="class">
 <dt id="autots.evaluator.auto_ts.AutoTS">
-<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 10</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 1</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0.05</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 2}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'fast'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'backwards'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">prefill_na: str = None</em>, <em class="sig-param">introduce_na: bool = None</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 10</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 1</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0.05</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 2}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'fast'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">models_mode: str = 'random'</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'backwards'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">prefill_na: str = None</em>, <em class="sig-param">introduce_na: bool = None</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Automate time series modeling using a genetic algorithm.</p>
 <dl class="field-list simple">
@@ -355,6 +355,8 @@ occurs after any aggregration is applied, so will be whatever is specified by fr
 <li><p><strong>transformer_list</strong> (<em>list</em>) – list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
 can accept string aliases: “all”, “fast”, “superfast”</p></li>
 <li><p><strong>transformer_max_depth</strong> (<em>int</em>) – maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.</p></li>
+<li><p><strong>models_mode</strong> (<em>str</em>) – option to adjust parameter options for newly generated models. Currently includes:
+‘default’, ‘deep’ (searches more params, likely slower), and ‘regressor’ (forces ‘User’ regressor mode in regressor capable models)</p></li>
 <li><p><strong>num_validations</strong> (<em>int</em>) – number of cross validations to perform. 0 for just train/test on best split.
 Possible confusion: num_validations is the number of validations to perform <em>after</em> the first eval segment, so totally eval/validations will be this + 1.</p></li>
 <li><p><strong>models_to_validate</strong> (<em>int</em>) – top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
@@ -759,6 +761,32 @@ Currently result_file and import only save/load initial run, no validations.</p>
 <dt id="autots.evaluator.auto_ts.fake_regressor">
 <code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">fake_regressor</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">date_col: str = None</em>, <em class="sig-param">value_col: str = None</em>, <em class="sig-param">id_col: str = None</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">na_tolerance: float = 0.95</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">dimensions: int = 1</em>, <em class="sig-param">verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.fake_regressor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a fake regressor of random numbers for testing purposes.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.evaluator.benchmark">
+<span id="autots-evaluator-benchmark-module"></span><h2>autots.evaluator.benchmark module<a class="headerlink" href="#module-autots.evaluator.benchmark" title="Permalink to this headline">¶</a></h2>
+<p>Created on Fri Nov  5 13:45:01 2021</p>
+<p>&#64;author: Colin</p>
+<dl class="class">
+<dt id="autots.evaluator.benchmark.Benchmark">
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.benchmark.</code><code class="sig-name descname">Benchmark</code><a class="headerlink" href="#autots.evaluator.benchmark.Benchmark" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="method">
+<dt id="autots.evaluator.benchmark.Benchmark.run">
+<code class="sig-name descname">run</code><span class="sig-paren">(</span><em class="sig-param">n_jobs: int = 'auto'</em>, <em class="sig-param">times: int = 3</em>, <em class="sig-param">random_seed: int = 123</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.benchmark.Benchmark.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run benchmark.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_jobs</strong> (<em>int</em>) – passed to model_forecast for n cpus</p></li>
+<li><p><strong>times</strong> (<em>int</em>) – number of times to run benchmark models (returns avg of n times)</p></li>
+<li><p><strong>random_seed</strong> (<em>int</em>) – random seed, increases consistency</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
 </dd></dl>
 
 </section>

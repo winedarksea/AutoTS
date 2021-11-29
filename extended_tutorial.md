@@ -10,6 +10,7 @@
 * [Installation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning)
 * [Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
 * [Adding Regressors](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information)
+* [Simulation Forecasting](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#simulation-forecasting)
 * [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id8)
 
 ## Extended Tutorial
@@ -309,17 +310,28 @@ result.forecast
 
 ## Installation and Dependency Versioning
 `pip install autots`
+
+Some optional packages require installing [Visual Studio C compilers](https://visualstudio.microsoft.com/visual-cpp-build-tools/) if on Windows. 
+
+On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas may install faster/more stable compilations. 
+Linux may also require `sudo apt install build-essential` for some packages.
+
+You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_config()`. Generally recommended that you double-check this after installing new packages to make sure you haven't broken the LINPACK connection. 
+
 ### Requirements:
 	Python >= 3.6
 	numpy
 		>= 1.20 (Sliding Window in Motif and WindowRegression)
 	pandas
 		>= 1.1.0 (prediction.long_form_results())
+		gluonts incompatible with 1.1, 1.2, 1.3
 	sklearn
 		>= 0.23.0 (PoissonReg)
 		>= 0.24.0 (OrdinalEncoder handle_unknown)
+		>= 1.0 for models effected by "mse" -> "squared_error" update
 		>? (IterativeImputer, HistGradientBoostingRegressor)
 	statsmodels
+		>= 0.13 ARDL and UECM
 
 Of these, numpy and pandas are critical. 
 Limited functionality should exist without scikit-learn. 
@@ -345,12 +357,13 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs. 
 
 #### Safest bet for installation:
+venv, Anaconda, or [Miniforge](https://github.com/conda-forge/miniforge/)
 ```shell
 # create a conda or venv environment
 conda create -n openblas python=3.9
 conda activate openblas
 
-python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost --exists-action i
+python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost yfinance pytrends fredapi --exists-action i
 
 python -m pip install yfinance pytrends fredapi
 python -m pip install numexpr bottleneck
@@ -363,39 +376,7 @@ python -m pip install --upgrade numpy pandas --exists-action i  # mxnet likes to
 python -m pip install autots --exists-action i
 ```
 
-### Hardware Acceleration with Intel CPU and Nvidia GPU for Ubuntu/Windows
-If you are on an Intel CPU, download Anaconda or Miniconda. For AMD/ARM/etc use a venv environment and pip which will use OpenBLAS. 
-Intel MKL is included with `anaconda` and offers significant performance gain for Intel CPUs. Use of the Intel conda channel sometimes is necessary. 
-
-(install Visual Studio if on Windows for C compilers)
-
-If you have an Nvidia GPU and plan to use the GPU-accelerated models, download NVIDIA CUDA and CuDNN. 
-
-You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_config()`. Generally recommended that you double-check this after installing new packages to make sure you haven't broken the LINPACK connection. 
-
-On Linux systems, apt-get/yum (rather than pip) installs of numpy/pandas *may* install faster/more stable compilations. 
-Linux will also require `sudo apt install build-essential` for some packages.
-
-#### Some conda
-
-```shell
-conda create -n timeseries python=3.9
-conda activate timeseries
-
-# for simplicity: 
-conda install anaconda
-# elsewise: 
-conda install numpy scipy scikit-learn statsmodels  # -c conda-forge is sometimes a version ahead of main channel
-
-conda install -c conda-forge prophet
-pip install mxnet     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
-pip install gluonts
-pip install lightgbm tensorflow
-conda update anaconda
-
-pip install autots
-```
-#### Intel conda channel installation (fastest, also, more prone to bugs)
+#### Intel conda channel installation (sometime faster, also, more prone to bugs)
 https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html
 ```shell
 # create the environment
@@ -403,17 +384,24 @@ conda create -n intelpython -c intel python=3.7 intelpython3_full
 conda activate intelpython
 
 # install additional packages as desired
-python -m pip install yfinance pytrends fredapi
+python -m pip install yfinance pytrends fredapi bottleneck
 python -m pip install mxnet --no-deps
 python -m pip install gluonts
 conda install -c conda-forge prophet
-conda install spyder
 conda update -c intel intelpython3_full
 conda install -c intel numexpr statsmodels lightgbm tensorflow
 
 python -m pip install autots
 
 # MKL_NUM_THREADS, USE_DAAL4PY_SKLEARN=1
+```
+
+### Benchmark
+```python
+from autots.evaluator.benchmark import Benchmark
+bench = Benchmark()
+bench.run(n_jobs="auto", times=3)
+bench.results
 ```
 
 ## Caveats and Advice
@@ -484,9 +472,58 @@ prediction = model.predict(future_regressor=future_regressor_forecast2d, verbose
 forecasts_df = prediction.forecast
 
 print(model)
-print(f"Was a model choosen that used the regressor? {model.used_regressor_check}")
 ```
+
 For models here in the lower level api, confusingly, regression_type="User" must be specified as well as passing future_regressor. Why? This allows the model search to easily try both with and without the regressor, because sometimes the regressor may do more harm than good.
+
+## Simulation Forecasting
+Simulation forecasting allows for experimenting with different potential future scenarios to examine the potential effects on the forecast. 
+This is done here by passing known values of a `future_regressor` to model `.fit` and then running `.predict` with multiple variations on the `future_regressor` future values. 
+By default in AutoTS, when a `future_regressor` is supplied, models that can utilize it are tried both with and without the regressor. 
+To enforce the use of future_regressor for simulation forecasting, a few parameters must be supplied as below. They are: `model_list, models_mode, initial_template`.
+
+```python
+from autots.datasets import load_monthly
+from autots.evaluator.auto_ts import fake_regressor
+from autots import AutoTS
+
+df = load_monthly(long=False)
+forecast_length = 14
+model = AutoTS(
+    forecast_length=forecast_length,
+	model_list="regressor",
+	models_mode="regressor",
+	initial_template="random",
+)
+# here these are random numbers but in the real world they could be values like weather or store holiday hours
+future_regressor_train, future_regressor_forecast = fake_regressor(
+    df,
+    dimensions=2,
+    forecast_length=forecast_length,
+    drop_most_recent=model.drop_most_recent,
+    aggfunc=model.aggfunc,
+    verbose=model.verbose,
+)
+# another simulation of regressor
+future_regressor_forecast_2 = future_regressor_forecast + 10
+
+model = model.fit(
+    df,
+    future_regressor=future_regressor_train,
+)
+# first with one version
+prediction = model.predict(future_regressor=future_regressor_forecast, verbose=0)
+forecasts_df = prediction.forecast
+
+# then with another
+prediction_2 = model.predict(future_regressor=future_regressor_forecast_2, verbose=0)
+forecasts_df_2 = prediction_2.forecast
+
+print(model)
+```
+Note, this does not necessarily force the model to place any great value on the supplied features. 
+It may be necessary to rerun multiple times until a model with satisfactory variable response is found, 
+or to try with a subset of the regressor model list like `['FBProphet', 'GLM', 'ARDL', 'DatepartRegression']`.
 
 ### A Hack for Passing in Parameters (that aren't otherwise available)
 There are a lot of parameters available here, but not always all of the options available for a particular parameter are actually used in generated templates. 
@@ -507,6 +544,7 @@ thus properly capturing the relative sequence (ie 'low'=1, 'medium'=2, 'high'=3)
 ### Custom and Unusual Frequencies
 Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects 
 Some models will support a more limited range of frequencies. 
+
 
 ## Using the Transformers independently
 The transformers expect data only in the `wide` shape with ascending date. 

@@ -1048,24 +1048,29 @@ def TemplateWizard(
             template_result.model_count += 1
             if verbose > 0:
                 if validation_round >= 1:
-                    base_print = "Model Number: {} of {} with model {} for Validation {}".format(
-                        str(template_result.model_count),
-                        template.shape[0],
-                        model_str,
-                        str(validation_round),
+                    base_print = (
+                        "Model Number: {} of {} with model {} for Validation {}".format(
+                            str(template_result.model_count),
+                            template.shape[0],
+                            model_str,
+                            str(validation_round),
+                        )
                     )
                 else:
-                    base_print = "Model Number: {} with model {} in generation {} of {}".format(
-                        str(template_result.model_count),
-                        model_str,
-                        str(current_generation),
-                        str(max_generations),
+                    base_print = (
+                        "Model Number: {} with model {} in generation {} of {}".format(
+                            str(template_result.model_count),
+                            model_str,
+                            str(current_generation),
+                            str(max_generations),
+                        )
                     )
                 if verbose > 1:
                     print(
                         base_print
                         + " with params {} and transformations {}".format(
-                            json.dumps(parameter_dict), json.dumps(transformation_dict),
+                            json.dumps(parameter_dict),
+                            json.dumps(transformation_dict),
                         )
                     )
                 else:
@@ -1287,6 +1292,7 @@ def RandomTemplate(
     ],
     transformer_list: dict = "fast",
     transformer_max_depth: int = 8,
+    models_mode: str = "default",
 ):
     """
     Returns a template dataframe of randomly generated transformations, models, and hyperparameters.
@@ -1304,7 +1310,7 @@ def RandomTemplate(
             model_str = model_list[counter]
         else:
             model_str = random.choices(model_list)[0]
-        param_dict = ModelMonster(model_str).get_new_params()
+        param_dict = ModelMonster(model_str).get_new_params(method=models_mode)
         if counter % 4 == 0:
             trans_dict = RandomTransform(
                 transformer_list=transformer_list,
@@ -1415,10 +1421,12 @@ def _trans_dicts(
             traditional_order=True,
         )
     r = RandomTransform(
-        transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,
+        transformer_list=transformer_list,
+        transformer_max_depth=transformer_max_depth,
     )
     r2 = RandomTransform(
-        transformer_list=transformer_list, transformer_max_depth=transformer_max_depth,
+        transformer_list=transformer_list,
+        transformer_max_depth=transformer_max_depth,
     )
     if best is None:
         best = RandomTransform(
@@ -1446,6 +1454,7 @@ def NewGeneticTemplate(
     ],
     transformer_list: dict = {},
     transformer_max_depth: int = 8,
+    models_mode: str = "default",
 ):
     """
     Return new template given old template with model accuracies.
@@ -1517,10 +1526,10 @@ def NewGeneticTemplate(
                 r_id = np.random.randint(1, top_r)
                 sec = json.loads(current_ops.iloc[r_id, :]['ModelParameters'])
             else:
-                sec = ModelMonster(model_type).get_new_params()
+                sec = ModelMonster(model_type).get_new_params(method=models_mode)
             # generate new random parameters ('mutations')
-            r = ModelMonster(model_type).get_new_params()
-            r2 = ModelMonster(model_type).get_new_params()
+            r = ModelMonster(model_type).get_new_params(method=models_mode)
+            r2 = ModelMonster(model_type).get_new_params(method=models_mode)
             arr = [fir, sec, r2, r]
             model_dicts = list()
             # recombine best and random to create new generation
@@ -1551,7 +1560,7 @@ def NewGeneticTemplate(
             )
             model_dicts = list()
             for _ in range(n):
-                c = ModelMonster(model_type).get_new_params()
+                c = ModelMonster(model_type).get_new_params(method=models_mode)
                 model_dicts.append(json.dumps(c))
             new_row = pd.DataFrame(
                 {

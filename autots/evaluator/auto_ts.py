@@ -68,6 +68,8 @@ class AutoTS(object):
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
             can accept string aliases: "all", "fast", "superfast"
         transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
+        models_mode (str): option to adjust parameter options for newly generated models. Currently includes:
+            'default', 'deep' (searches more params, likely slower), and 'regressor' (forces 'User' regressor mode in regressor capable models)
         num_validations (int): number of cross validations to perform. 0 for just train/test on best split.
             Possible confusion: num_validations is the number of validations to perform *after* the first eval segment, so totally eval/validations will be this + 1.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
@@ -143,6 +145,7 @@ class AutoTS(object):
         model_list: str = 'default',
         transformer_list: dict = "fast",
         transformer_max_depth: int = 6,
+        models_mode: str = "random",
         num_validations: int = 2,
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
@@ -188,6 +191,7 @@ class AutoTS(object):
         self.model_interrupt = model_interrupt
         self.verbose = int(verbose)
         self.n_jobs = n_jobs
+        self.models_mode = models_mode
         # just a list of horizontal types in general
         self.h_ens_list = ['horizontal', 'probabilistic', 'hdist', "mosaic"]
         if self.ensemble == 'all':
@@ -242,6 +246,7 @@ class AutoTS(object):
                 model_list=self.model_list,
                 transformer_list=self.transformer_list,
                 transformer_max_depth=self.transformer_max_depth,
+                models_mode=self.models_mode,
             )
         elif initial_template == 'general':
             from autots.templates.general import general_template
@@ -255,6 +260,7 @@ class AutoTS(object):
                 model_list=self.model_list,
                 transformer_list=self.transformer_list,
                 transformer_max_depth=self.transformer_max_depth,
+                models_mode=self.models_mode,
             )
             self.initial_template = pd.concat(
                 [general_template, random_template], axis=0
@@ -268,6 +274,7 @@ class AutoTS(object):
                 model_list=self.model_list,
                 transformer_list=self.transformer_list,
                 transformer_max_depth=self.transformer_max_depth,
+                models_mode=self.models_mode,
             )
 
         # remove models not in given model list
@@ -524,7 +531,9 @@ class AutoTS(object):
             params = {
                 "fillna": "median",  # mean or median one of few consistent things
                 "transformations": {"0": "MaxAbsScaler"},
-                "transformation_params": {"0": {},},
+                "transformation_params": {
+                    "0": {},
+                },
             }
             trans = GeneralTransformer(**params)
 
@@ -692,6 +701,7 @@ class AutoTS(object):
                 template_cols=template_cols,
                 transformer_list=self.transformer_list,
                 transformer_max_depth=self.transformer_max_depth,
+                models_mode=self.models_mode,
             )
             submitted_parameters = pd.concat(
                 [submitted_parameters, new_template],
@@ -789,8 +799,10 @@ class AutoTS(object):
                 print(f"Ensembling Error: {e}")
 
         # drop any duplicates in results
-        self.initial_results.model_results = self.initial_results.model_results.drop_duplicates(
-            subset=(['ID'] + self.template_cols)
+        self.initial_results.model_results = (
+            self.initial_results.model_results.drop_duplicates(
+                subset=(['ID'] + self.template_cols)
+            )
         )
 
         # validations if float
@@ -1685,7 +1697,11 @@ or otherwise increase models available."""
         b_df = self.back_forecast(column=series, n_splits=n_splits, verbose=0).forecast
         b_df = b_df.rename(columns=lambda x: str(x) + "_forecast")
         plot_df = pd.concat(
-            [pd.DataFrame(self.df_wide_numeric[series]), b_df,], axis=1,
+            [
+                pd.DataFrame(self.df_wide_numeric[series]),
+                b_df,
+            ],
+            axis=1,
         )
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
@@ -1941,7 +1957,11 @@ def fake_regressor(
         ), "df index is not pd.DatetimeIndex"
     else:
         df_wide = long_to_wide(
-            df, date_col=date_col, value_col=value_col, id_col=id_col, aggfunc=aggfunc,
+            df,
+            date_col=date_col,
+            value_col=value_col,
+            id_col=id_col,
+            aggfunc=aggfunc,
         )
 
     df_wide = df_cleanup(

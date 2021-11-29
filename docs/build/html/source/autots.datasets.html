@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.datasets package &#8212; AutoTS 0.3.10 documentation</title>
+    <title>autots.datasets package &#8212; AutoTS 0.3.11 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -147,8 +147,20 @@ PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG</p></li>
 
 <dl class="function">
 <dt id="autots.datasets.load_linear">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_linear</code><span class="sig-paren">(</span><em class="sig-param">long=False</em>, <em class="sig-param">shape=None</em>, <em class="sig-param">start_date: str = '2021-01-01'</em>, <em class="sig-param">introduce_nan: float = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_linear" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_linear</code><span class="sig-paren">(</span><em class="sig-param">long=False</em>, <em class="sig-param">shape=None</em>, <em class="sig-param">start_date: str = '2021-01-01'</em>, <em class="sig-param">introduce_nan: float = None</em>, <em class="sig-param">introduce_random: float = None</em>, <em class="sig-param">random_seed: int = 123</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_linear" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a dataset of just zeroes for testing edge case.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>long</strong> (<em>bool</em>) – whether to make long or wide</p></li>
+<li><p><strong>shape</strong> (<em>tuple</em>) – shape of output dataframe</p></li>
+<li><p><strong>start_date</strong> (<em>str</em>) – first date of index</p></li>
+<li><p><strong>introduce_nan</strong> (<em>float</em>) – percent of rows to make null. 0.2 = 20%</p></li>
+<li><p><strong>introduce_random</strong> (<em>float</em>) – shape of gamma distribution</p></li>
+<li><p><strong>random_seed</strong> (<em>int</em>) – seed for random</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="function">
