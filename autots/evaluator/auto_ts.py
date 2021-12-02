@@ -132,9 +132,10 @@ class AutoTS(object):
         aggfunc: str = 'first',
         na_tolerance: float = 1,
         metric_weighting: dict = {
-            'smape_weighting': 10,
+            'smape_weighting': 5,
             'mae_weighting': 2,
             'rmse_weighting': 2,
+            'made_weighting': 1,
             'containment_weighting': 0,
             'runtime_weighting': 0.05,
             'spl_weighting': 2,

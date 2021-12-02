@@ -8,7 +8,8 @@ import warnings
 import datetime
 import numpy as np
 import pandas as pd
-from autots.evaluator.metrics import smape, mae, rmse, containment, contour, spl, medae
+from autots.evaluator.metrics import smape, mae, rmse, containment, contour, spl, medae, mean_absolute_differential_error
+# from sklearn.metrics import r2_score
 
 
 class ModelObject(object):
@@ -328,8 +329,13 @@ class PredictionObject(object):
                 {
                     'smape': smape(A, F, self.full_mae_errors),
                     'mae': mae(self.full_mae_errors),
-                    # 'medae': medae(self.full_mae_errors),
                     'rmse': rmse(self.full_mae_errors),
+                    # 'medae': medae(self.full_mae_errors),
+                    # r2 can't handle NaN in history, also uncomment import above
+                    # 'r2': r2_score(A, F, multioutput="raw_values").flatten(),
+                    # 'correlation': pd.DataFrame(A).corrwith(pd.DataFrame(F), drop=True).to_numpy(),
+                    'made': mean_absolute_differential_error(A, F),
+                    # 'mad2e': mean_absolute_differential_error(A, F, 2),
                     'containment': containment(lower_forecast, upper_forecast, A),
                     'spl': spl(
                         A=A,
