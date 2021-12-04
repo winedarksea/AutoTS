@@ -856,7 +856,7 @@ class UnobservedComponents(ModelObject):
         random_seed: int = 2020,
         verbose: int = 0,
         n_jobs: int = 1,
-        level: bool = False,
+        level: str = "smooth trend",  # bool with other method
         trend: bool = False,
         cycle: bool = False,
         damped_cycle: bool = False,
@@ -981,7 +981,7 @@ class UnobservedComponents(ModelObject):
             series_name = current_series.name
             with warnings.catch_warnings():
                 if not args['verbose_bool']:
-                    warnings.simplefilter("ignore", category=UserWarning)
+                    warnings.simplefilter("ignore")
                 if args['regression_type'] in ["User", "Holiday"]:
                     maModel = UnobservedComponents(
                         current_series,

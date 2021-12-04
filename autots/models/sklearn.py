@@ -386,7 +386,7 @@ def retrieve_regressor(
 
 
 # models that can more quickly handle many X/Y obs, with modest number of features
-sklearn_model_dict: dict = {
+sklearn_model_dict = {
     'RandomForest': 0.02,
     'ElasticNet': 0.05,
     'MLP': 0.05,
@@ -405,10 +405,26 @@ sklearn_model_dict: dict = {
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
 }
-multivariate_model_dict = sklearn_model_dict.copy()
-del multivariate_model_dict['Transformer']
+multivariate_model_dict = {
+    'RandomForest': 0.02,
+    # 'ElasticNet': 0.05,
+    'MLP': 0.05,
+    'DecisionTree': 0.05,
+    'KNN': 0.05,
+    'Adaboost': 0.03,
+    'SVM': 0.05,  # was slow, LinearSVR seems much faster
+    # 'BayesianRidge': 0.05,
+    'xgboost': 0.01,
+    'KerasRNN': 0.02,
+    'HistGradientBoost': 0.03,
+    'LightGBM': 0.03,
+    'ExtraTrees': 0.05,
+    'RadiusNeighbors': 0.02,
+    'PoissonRegresssion': 0.03,
+    'RANSAC': 0.05,
+}
 # these should train quickly with low dimensional X/Y, and not mind being run multiple in parallel
-univariate_model_dict: dict = {
+univariate_model_dict = {
     'ElasticNet': 0.05,
     'MLP': 0.05,
     'DecisionTree': 0.05,
@@ -2509,7 +2525,10 @@ class MultivariateRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params(model_dict=multivariate_model_dict)
+        if method == "deep":
+            model_choice = generate_regressor_params(model_dict=sklearn_model_dict)
+        else:
+            model_choice = generate_regressor_params(model_dict=multivariate_model_dict)
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
         )[0]

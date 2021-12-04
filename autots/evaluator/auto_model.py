@@ -803,7 +803,7 @@ def model_forecast(
     if n_jobs == 'auto':
         from autots.tools import cpu_count
 
-        n_jobs = cpu_count()
+        n_jobs = cpu_count(modifier=0.75)
         if verbose > 0:
             print(f"Auto-detected {n_jobs} cpus for n_jobs.")
 

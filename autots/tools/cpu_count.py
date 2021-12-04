@@ -1,7 +1,7 @@
 """CPU counter for multiprocesing."""
 
 
-def cpu_count():
+def cpu_count(modifier: float = 1):
     """Find available CPU count, running on both Windows/Linux.
 
     Attempts to be very conservative:
@@ -9,6 +9,9 @@ def cpu_count():
         * Find max cores allowed to the process, if less than machine has total
 
     Runs best with psutil installed, fallsback to mkl, then os core count/2
+
+    Args:
+        modifier (float): multiple CPU count by this value
     """
     import os
 
@@ -48,4 +51,7 @@ def cpu_count():
         core_count = min(core_list)
     else:
         core_count = 1
+    if modifier != 1:
+        core_count = int(modifier * core_count)
+    core_count = 1 if core_count < 1 else core_count
     return core_count

@@ -223,13 +223,14 @@ class AutoTS(object):
             self.seasonal_val_periods = int(''.join(val_list))
 
         if self.n_jobs == 'auto':
-            self.n_jobs = int(cpu_count() * 0.75)
+            self.n_jobs = cpu_count(modifier=0.75)
             if verbose > 0:
                 print(f"Using {self.n_jobs} cpus for n_jobs.")
         elif str(self.n_jobs).isdigit():
             self.n_jobs = int(self.n_jobs)
             if self.n_jobs < 0:
-                self.n_jobs = cpu_count() + 1 - self.n_jobs
+                core_count = cpu_count() + 1 - self.n_jobs
+                self.n_jobs = core_count if core_count > 1 else 1
         if self.n_jobs == 0:
             self.n_jobs = 1
 
