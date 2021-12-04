@@ -1234,6 +1234,8 @@ def TemplateWizard(
                     ignore_index=True,
                     sort=False,
                 ).reset_index(drop=True)
+                if model_interrupt == "end_generation":
+                    break
             else:
                 sys.stdout.flush()
                 raise KeyboardInterrupt

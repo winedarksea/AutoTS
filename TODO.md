@@ -14,6 +14,8 @@
 
 # Latest
 * add MADE error metric
+* "end_generation" option to model_interrupt
+* statsmodels warning adjustment
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

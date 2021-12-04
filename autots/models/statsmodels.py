@@ -470,7 +470,8 @@ class ETS(ModelObject):
             """Run one series of ETS and return prediction."""
             series_name = current_series.name
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category='ConvergenceWarning')
+                if args['verbose'] < 2:
+                    warnings.simplefilter("ignore")
                 try:
                     # handle statsmodels 0.13 method changes
                     try:
@@ -588,7 +589,8 @@ class ETS(ModelObject):
 def arima_seek_the_oracle(current_series, args, series):
     try:
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category='ConvergenceWarning')
+            # warnings.simplefilter("ignore", category='ConvergenceWarning')
+            warnings.simplefilter("ignore")
             if args['regression_type'] in ["User", "Holiday"]:
                 maModel = SARIMAX(
                     current_series,
@@ -974,13 +976,12 @@ class UnobservedComponents(ModelObject):
             'model_kwargs': self.model_kwargs,
         }
 
-        def forecast_by_column(current_series, args):
+        def uc_forecast_by_column(current_series, args):
             """Run one series of Unobserved Components and return prediction."""
             series_name = current_series.name
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category='ConvergenceWarning')
-                warnings.simplefilter("ignore", category='ValueWarning')
-                warnings.simplefilter("ignore", category='UserWarning')
+                if not args['verbose_bool']:
+                    warnings.simplefilter("ignore", category=UserWarning)
                 if args['regression_type'] in ["User", "Holiday"]:
                     maModel = UnobservedComponents(
                         current_series,
@@ -1043,7 +1044,7 @@ class UnobservedComponents(ModelObject):
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(
-                delayed(forecast_by_column)(
+                delayed(uc_forecast_by_column)(
                     current_series=self.df_train[col],
                     args=args,
                 )
@@ -1053,7 +1054,7 @@ class UnobservedComponents(ModelObject):
         else:
             df_list = []
             for col in cols:
-                df_list.append(forecast_by_column(self.df_train[col], args))
+                df_list.append(uc_forecast_by_column(self.df_train[col], args))
             complete = list(map(list, zip(*df_list)))
         forecast = pd.concat(complete[0], axis=1)
         lower_forecast = pd.concat(complete[1], axis=1)
@@ -1927,6 +1928,7 @@ class Theta(ModelObject):
             'prediction_interval': self.prediction_interval,
             'theta': self.theta,
             'use_mle': self.use_mle,
+            'verbose': self.verbose,
         }
 
         def theta_forecast_by_column(current_series, args):
@@ -1941,8 +1943,9 @@ class Theta(ModelObject):
                 period=args['period'],
             )
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category='ConvergenceWarning')
-                warnings.simplefilter("ignore", category=UserWarning)
+                # warnings.simplefilter("ignore", category='ConvergenceWarning')
+                if args['verbose'] < 2:
+                    warnings.simplefilter("ignore")
                 # fit model
                 modelResult = esModel.fit(use_mle=args['use_mle'])
                 # generate forecasts
@@ -2127,9 +2130,10 @@ class ARDL(ModelObject):
 
         def ardl_per_column(current_series, args):
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category='ConvergenceWarning')
-                warnings.simplefilter("ignore", category='ValueWarning')
-                warnings.simplefilter("ignore", category='UserWarning')
+                # warnings.simplefilter("ignore", category='ConvergenceWarning')
+                # warnings.simplefilter("ignore", category='ValueWarning')
+                if args['verbose'] < 2:
+                    warnings.simplefilter("ignore", category=UserWarning)
                 if args['regression_type'] in ["User", "user", "holiday"]:
                     maModel = ARDL(
                         current_series,
@@ -2187,6 +2191,7 @@ class ARDL(ModelObject):
             'trend': self.trend,
             'alpha': alpha,
             'forecast_length': forecast_length,
+            'verbose': self.verbose,
         }
         parallel = True
         cols = self.df_train.columns.tolist()
