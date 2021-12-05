@@ -94,6 +94,7 @@ class AutoTS(object):
         model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
+            if "end_generation", as True and also ends entire generation of run. Note skipped models will not be tried again.
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
         n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also 'auto'.
 
@@ -132,9 +133,10 @@ class AutoTS(object):
         aggfunc: str = 'first',
         na_tolerance: float = 1,
         metric_weighting: dict = {
-            'smape_weighting': 10,
+            'smape_weighting': 5,
             'mae_weighting': 2,
             'rmse_weighting': 2,
+            'made_weighting': 0,
             'containment_weighting': 0,
             'runtime_weighting': 0.05,
             'spl_weighting': 2,
@@ -221,13 +223,14 @@ class AutoTS(object):
             self.seasonal_val_periods = int(''.join(val_list))
 
         if self.n_jobs == 'auto':
-            self.n_jobs = int(cpu_count() * 0.75)
+            self.n_jobs = cpu_count(modifier=0.75)
             if verbose > 0:
                 print(f"Using {self.n_jobs} cpus for n_jobs.")
         elif str(self.n_jobs).isdigit():
             self.n_jobs = int(self.n_jobs)
             if self.n_jobs < 0:
-                self.n_jobs = cpu_count() + 1 - self.n_jobs
+                core_count = cpu_count() + 1 - self.n_jobs
+                self.n_jobs = core_count if core_count > 1 else 1
         if self.n_jobs == 0:
             self.n_jobs = 1
 

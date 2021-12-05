@@ -1512,7 +1512,7 @@ class NVAR(ModelObject):
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
-        k: int = 2,
+        k: int = 1,
         ridge_param: float = 2.5e-6,
         warmup_pts: int = 1,
         seed_pts: int = 1,
@@ -1633,7 +1633,7 @@ class NVAR(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
-        k_choice = random.choices([1, 2, 3, 4, 5], [0.5, 0.5, 0.1, 0.001, 0.001])[0]
+        k_choice = random.choices([1, 2, 3, 4, 5], [0.5, 0.2, 0.1, 0.001, 0.001])[0]
         ridge_choice = random.choices(
             [0, -1, -2, -3, -4, -5, -6, -7, -8],
             [0.1, 0.1, 0.1, 0.5, 0.1, 0.1, 0.5, 0.1, 0.1],

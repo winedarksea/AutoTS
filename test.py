@@ -3,7 +3,7 @@ from time import sleep
 import timeit
 import platform
 import pandas as pd
-from autots.datasets import (
+from autots.datasets import (  # noqa
     load_daily,
     load_hourly,
     load_monthly,
@@ -14,7 +14,7 @@ from autots.datasets import (
     load_linear,
     load_sine,
 )
-from autots import AutoTS, create_regressor
+from autots import AutoTS, create_regressor, model_forecast  # noqa
 import matplotlib.pyplot as plt
 
 # raise ValueError("aaargh!")
@@ -49,25 +49,26 @@ transformer_list = (
 )
 transformer_max_depth = 1
 models_mode = "default"  # "regressor"
-model_list = "superfast"
+model_list = "fast"
 # model_list = "regressor"  # fast_parallel, all
 # model_list = ["SeasonalNaive", 'AverageValueNaive']
 
 metric_weighting = {
-    "smape_weighting": 3,
-    "mae_weighting": 1,
-    "rmse_weighting": 1,
-    "containment_weighting": 0,
-    "runtime_weighting": 0.1,
-    "spl_weighting": 1,
-    "contour_weighting": 1,
+    'smape_weighting': 5,
+    'mae_weighting': 2,
+    'rmse_weighting': 2,
+    'made_weighting': 1,
+    'containment_weighting': 0,
+    'runtime_weighting': 0.05,
+    'spl_weighting': 2,
+    'contour_weighting': 1,
 }
 
 model = AutoTS(
     forecast_length=forecast_length,
     frequency=frequency,
     prediction_interval=0.9,
-    ensemble=["horizontal-max", "dist", "simple", "subsample"],
+    ensemble=["horizontal-max", "dist", "simple"],  # "subsample"
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,
@@ -79,7 +80,7 @@ model = AutoTS(
     metric_weighting=metric_weighting,
     models_to_validate=0.35,
     max_per_model_class=None,
-    model_interrupt=True,
+    model_interrupt="end_generation",
     n_jobs=n_jobs,
     drop_most_recent=drop_most_recent,
     introduce_na=True,
@@ -189,6 +190,30 @@ df = df_wide_numeric.tail(100).fillna(0).astype(float)
 
 print("test run complete")
 
+
+"""
+df_forecast = model_forecast(
+    model_name="SectionalMotif",
+    model_param_dict={},
+    model_transform_dict={
+        'fillna': 'mean',
+        'transformations': {'0': 'ClipOutliers'},
+        'transformation_params': {'0': {"method": "clip", "std_threshold": 3, "fillna": None}}
+    },
+    df_train=df,
+    forecast_length=5,
+    frequency='infer',
+    prediction_interval=0.9,
+    no_negatives=False,
+    # future_regressor_train=future_regressor_train2d,
+    # future_regressor_forecast=future_regressor_forecast2d,
+    random_seed=321,
+    verbose=1,
+    n_jobs="auto",
+)
+df_forecast.forecast.head(5)
+"""
+
 """
 # Import/Export
 model.export_template(example_filename, models='all',
@@ -199,6 +224,7 @@ print("Overwrite template is: {}".format(str(model.initial_template)))
 
 # default save location of files is apparently root
 systemd-run --unit=background_cmd_service --remain-after-exit /home/colin/miniconda3/envs/openblas/bin/python /home/colin/AutoTS/test.py
+systemd-run --unit=background_cmd_service --remain-after-exit /home/colin/miniconda3/envs/openblas/bin/python /home/colin/AutoTS/local_example.py
 journalctl -r -n 10 -u background_cmd_service
 journalctl -f -u background_cmd_service
 journalctl -b -u background_cmd_service

@@ -40,16 +40,16 @@ class TestMetrics(unittest.TestCase):
         )
 
         b_avg_metrics = pd.Series(
-            [80., 4., 6.325, 0.8, 0.44, 0.5],
-            index=['smape', 'mae', 'rmse', 'containment', 'spl', 'contour']
+            [80., 4., 6.325, 10., 0.8, 0.44, 0.5],
+            index=['smape', 'mae', 'rmse', 'made', 'containment', 'spl', 'contour']
         )
         known_avg_metrics = pd.Series(
-            [40., 2., 3.162, 0.467, 0.572, 0.417],
-            index=['smape', 'mae', 'rmse', 'containment', 'spl', 'contour']
+            [40., 2., 3.162, 5.000, 0.467, 0.572, 0.417],
+            index=['smape', 'mae', 'rmse', 'made', 'containment', 'spl', 'contour']
         )
         known_avg_metrics_weighted = pd.Series(
-            [6.667, 0.333, 0.527, 0.567, 0.623, 0.667],
-            index=['smape', 'mae', 'rmse', 'containment', 'spl', 'contour']
+            [6.667, 0.333, 0.527, 0.833, 0.567, 0.623, 0.667],
+            index=['smape', 'mae', 'rmse', 'made', 'containment', 'spl', 'contour']
         )
 
         self.assertTrue((output_res.avg_metrics.round(3) == known_avg_metrics).all())

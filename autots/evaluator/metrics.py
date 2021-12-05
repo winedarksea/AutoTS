@@ -58,6 +58,24 @@ def median_absolute_error(A, F):
     return mae_result
 
 
+def mean_absolute_differential_error(A, F, order: int = 1):
+    """Expects two, 2-D numpy arrays of forecast_length * n series.
+
+    Returns a 1-D array of results in len n series
+
+    Args:
+        A (numpy.array): known true values
+        F (numpy.array): predicted values
+        order (int): order of differential
+    """
+    # scaler = np.mean(A, axis=0)  # debate over whether to make this scaled
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        return np.nanmean(
+            abs(np.diff(A, order, axis=0) - np.diff(F, order, axis=0)), axis=0
+        )
+
+
 def pinball_loss(A, F, quantile):
     """Bigger is bad-er."""
     with warnings.catch_warnings():

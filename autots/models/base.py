@@ -8,7 +8,18 @@ import warnings
 import datetime
 import numpy as np
 import pandas as pd
-from autots.evaluator.metrics import smape, mae, rmse, containment, contour, spl, medae
+from autots.evaluator.metrics import (
+    smape,
+    mae,
+    rmse,
+    containment,
+    contour,
+    spl,
+    medae,
+    mean_absolute_differential_error,
+)
+
+# from sklearn.metrics import r2_score
 
 
 class ModelObject(object):
@@ -285,15 +296,15 @@ class PredictionObject(object):
             actual (pd.DataFrame): dataframe of actual values of (forecast length * n series)
             series_weights (dict): key = column/series_id, value = weight
             df_train (pd.DataFrame): historical values of series, wide, used for setting scaler for SPL
-                if None, actuals are used instead. Suboptimal.
+                if None, actuals are used instead (suboptimal).
             per_timestamp (bool): whether to calculate and return per timestamp direction errors
 
         Returns:
-            per_series_metrics
-            per_timestamp
-            avg_metrics
-            avg_metrics_weighted
-            full_mae_error
+            per_series_metrics (pandas.DataFrame): contains a column for each series containing accuracy metrics
+            per_timestamp (pandas.DataFrame): smape accuracy for each timestamp, avg of all series
+            avg_metrics (pandas.Series): average values of accuracy across all input series
+            avg_metrics_weighted (pandas.Series): average values of accuracy across all input series weighted by series_weight, if given
+            full_mae_errors (numpy.array): abs(actual - forecast)
         """
         A = np.array(actual)
         F = np.array(self.forecast)
@@ -328,8 +339,13 @@ class PredictionObject(object):
                 {
                     'smape': smape(A, F, self.full_mae_errors),
                     'mae': mae(self.full_mae_errors),
-                    # 'medae': medae(self.full_mae_errors),
                     'rmse': rmse(self.full_mae_errors),
+                    # 'medae': medae(self.full_mae_errors),
+                    # r2 can't handle NaN in history, also uncomment import above
+                    # 'r2': r2_score(A, F, multioutput="raw_values").flatten(),
+                    # 'correlation': pd.DataFrame(A).corrwith(pd.DataFrame(F), drop=True).to_numpy(),
+                    'made': mean_absolute_differential_error(A, F),
+                    # 'mad2e': mean_absolute_differential_error(A, F, 2),
                     'containment': containment(lower_forecast, upper_forecast, A),
                     'spl': spl(
                         A=A,

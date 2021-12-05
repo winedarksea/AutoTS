@@ -611,6 +611,7 @@ class TemplateEvalObject(object):
         per_timestamp_smape=pd.DataFrame(),
         per_series_mae=pd.DataFrame(),
         per_series_rmse=pd.DataFrame(),
+        per_series_made=pd.DataFrame(),
         per_series_contour=pd.DataFrame(),
         per_series_spl=pd.DataFrame(),
         model_count: int = 0,
@@ -620,6 +621,7 @@ class TemplateEvalObject(object):
         self.per_series_mae = per_series_mae
         self.per_series_contour = per_series_contour
         self.per_series_rmse = per_series_rmse
+        self.per_series_made = per_series_made
         self.per_series_spl = per_series_spl
         self.per_timestamp_smape = per_timestamp_smape
         self.full_mae_ids = []
@@ -639,6 +641,9 @@ class TemplateEvalObject(object):
         ).reset_index(drop=True)
         self.per_series_mae = pd.concat(
             [self.per_series_mae, another_eval.per_series_mae], axis=0, sort=False
+        )
+        self.per_series_made = pd.concat(
+            [self.per_series_made, another_eval.per_series_made], axis=0, sort=False
         )
         self.per_series_contour = pd.concat(
             [self.per_series_contour, another_eval.per_series_contour],
@@ -798,7 +803,7 @@ def model_forecast(
     if n_jobs == 'auto':
         from autots.tools import cpu_count
 
-        n_jobs = cpu_count()
+        n_jobs = cpu_count(modifier=0.75)
         if verbose > 0:
             print(f"Auto-detected {n_jobs} cpus for n_jobs.")
 
@@ -1160,6 +1165,13 @@ def TemplateWizard(
                 ],
                 axis=0,
             )
+            template_result.per_series_made = pd.concat(
+                [
+                    template_result.per_series_made,
+                    _ps_metric(ps_metric, 'made', model_id),
+                ],
+                axis=0,
+            )
             template_result.per_series_contour = pd.concat(
                 [
                     template_result.per_series_contour,
@@ -1222,6 +1234,8 @@ def TemplateWizard(
                     ignore_index=True,
                     sort=False,
                 ).reset_index(drop=True)
+                if model_interrupt == "end_generation":
+                    break
             else:
                 sys.stdout.flush()
                 raise KeyboardInterrupt
@@ -1606,12 +1620,16 @@ def validation_aggregation(validation_results):
         'smape': 'mean',
         'mae': 'mean',
         'rmse': 'mean',
+        'medae': 'mean',
+        'made': 'mean',
         'containment': 'mean',
         'spl': 'mean',
         'contour': 'mean',
         'smape_weighted': 'mean',
         'mae_weighted': 'mean',
         'rmse_weighted': 'mean',
+        'medae_weighted': 'mean',
+        'made_weighted': 'mean',
         'containment_weighted': 'mean',
         'contour_weighted': 'mean',
         'spl_weighted': 'mean',
@@ -1619,6 +1637,8 @@ def validation_aggregation(validation_results):
         'TotalRuntimeSeconds': 'mean',
         'Score': 'mean',
     }
+    col_names = validation_results.model_results.columns
+    col_aggs = {x: y for x, y in col_aggs.items() if x in col_names}
     validation_results.model_results['TotalRuntimeSeconds'] = (
         validation_results.model_results['TotalRuntime'].dt.seconds + 1
     )
@@ -1657,6 +1677,7 @@ def generate_score(
     runtime_weighting = metric_weighting.get('runtime_weighting', 0)
     spl_weighting = metric_weighting.get('spl_weighting', 0)
     contour_weighting = metric_weighting.get('contour_weighting', 0)
+    made_weighting = metric_weighting.get('made_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         if 'TotalRuntime' in model_results.columns:
@@ -1706,6 +1727,12 @@ def generate_score(
             ].min()
             rmse_score = model_results['rmse_weighted'] / rmse_scaler
             overall_score = overall_score + (rmse_score * rmse_weighting)
+        if made_weighting != 0:
+            made_scaler = model_results['made_weighted'][
+                model_results['made_weighted'] != 0
+            ].min()
+            made_score = model_results['made_weighted'] / made_scaler
+            overall_score = overall_score + (made_score * made_weighting)
         if spl_weighting > 0:
             spl_scaler = model_results['spl_weighted'][
                 model_results['spl_weighted'] != 0
@@ -1748,6 +1775,7 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
     """Score generation on per_series_metrics for ensembles."""
     mae_weighting = metric_weighting.get('mae_weighting', 0)
     rmse_weighting = metric_weighting.get('rmse_weighting', 0)
+    made_weighting = metric_weighting.get('made_weighting', 0)
     spl_weighting = metric_weighting.get('spl_weighting', 0)
     contour_weighting = metric_weighting.get('contour_weighting', 0)
     if sum([mae_weighting, rmse_weighting, contour_weighting, spl_weighting]) == 0:
@@ -1768,6 +1796,14 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
         )
         rmse_score = results_object.per_series_rmse / rmse_scaler
         overall_score = overall_score + (rmse_score * rmse_weighting)
+    if made_weighting > 0:
+        made_scaler = (
+            results_object.per_series_made[results_object.per_series_made != 0]
+            .min()
+            .fillna(1)
+        )
+        made_score = results_object.per_series_made / made_scaler
+        overall_score = overall_score + (made_score * made_weighting)
     if spl_weighting > 0:
         spl_scaler = (
             results_object.per_series_spl[results_object.per_series_spl != 0]

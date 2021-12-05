@@ -13,11 +13,10 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* added Benchmark function
-* made Prophet a bit more robust for joblib
-* motifsimulation bug fix
-* simulation forecasting mode
-* deep param mode (not yet utilized widely)
+* add MADE error metric  (consider this beta, it may change)
+* "end_generation" option to model_interrupt
+* statsmodels warning adjustment (warnings now print at verbose = 2)
+* add modifier to cpu_count and use with model_forecast auto_model
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.models package &#8212; AutoTS 0.3.11 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.3.12 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -161,16 +161,19 @@
 <li><p><strong>actual</strong> (<em>pd.DataFrame</em>) – dataframe of actual values of (forecast length * n series)</p></li>
 <li><p><strong>series_weights</strong> (<em>dict</em>) – key = column/series_id, value = weight</p></li>
 <li><p><strong>df_train</strong> (<em>pd.DataFrame</em>) – historical values of series, wide, used for setting scaler for SPL
-if None, actuals are used instead. Suboptimal.</p></li>
+if None, actuals are used instead (suboptimal).</p></li>
 <li><p><strong>per_timestamp</strong> (<em>bool</em>) – whether to calculate and return per timestamp direction errors</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>per_series_metrics
-per_timestamp
-avg_metrics
-avg_metrics_weighted
-full_mae_error</p>
+<dd class="field-even"><p>contains a column for each series containing accuracy metrics
+per_timestamp (pandas.DataFrame): smape accuracy for each timestamp, avg of all series
+avg_metrics (pandas.Series): average values of accuracy across all input series
+avg_metrics_weighted (pandas.Series): average values of accuracy across all input series weighted by series_weight, if given
+full_mae_errors (numpy.array): abs(actual - forecast)</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>per_series_metrics (pandas.DataFrame)</p>
 </dd>
 </dl>
 </dd></dl>
@@ -478,7 +481,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="class">
 <dt id="autots.models.basics.NVAR">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">NVAR</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'NVAR'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">k: int = 2</em>, <em class="sig-param">ridge_param: float = 2.5e-06</em>, <em class="sig-param">warmup_pts: int = 1</em>, <em class="sig-param">seed_pts: int = 1</em>, <em class="sig-param">seed_weighted: str = None</em>, <em class="sig-param">batch_size: int = 5</em>, <em class="sig-param">batch_method: str = 'input_order'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.NVAR" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">NVAR</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'NVAR'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">k: int = 1</em>, <em class="sig-param">ridge_param: float = 2.5e-06</em>, <em class="sig-param">warmup_pts: int = 1</em>, <em class="sig-param">seed_pts: int = 1</em>, <em class="sig-param">seed_weighted: str = None</em>, <em class="sig-param">batch_size: int = 5</em>, <em class="sig-param">batch_method: str = 'input_order'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.NVAR" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Nonlinear Variable Autoregression or ‘Next-Generation Reservoir Computing’</p>
 <p>based on <a class="reference external" href="https://github.com/quantinfo/ng-rc-paper-code/">https://github.com/quantinfo/ng-rc-paper-code/</a>
@@ -2074,7 +2077,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="class">
 <dt id="autots.models.statsmodels.UnobservedComponents">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.statsmodels.</code><code class="sig-name descname">UnobservedComponents</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'UnobservedComponents'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = 1</em>, <em class="sig-param">level: bool = False</em>, <em class="sig-param">trend: bool = False</em>, <em class="sig-param">cycle: bool = False</em>, <em class="sig-param">damped_cycle: bool = False</em>, <em class="sig-param">irregular: bool = False</em>, <em class="sig-param">autoregressive: int = None</em>, <em class="sig-param">stochastic_cycle: bool = False</em>, <em class="sig-param">stochastic_trend: bool = False</em>, <em class="sig-param">stochastic_level: bool = False</em>, <em class="sig-param">maxiter: int = 100</em>, <em class="sig-param">cov_type: str = 'opg'</em>, <em class="sig-param">method: str = 'lbfgs'</em>, <em class="sig-param">model_kwargs: dict = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.UnobservedComponents" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.statsmodels.</code><code class="sig-name descname">UnobservedComponents</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'UnobservedComponents'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = 1</em>, <em class="sig-param">level: str = 'smooth trend'</em>, <em class="sig-param">trend: bool = False</em>, <em class="sig-param">cycle: bool = False</em>, <em class="sig-param">damped_cycle: bool = False</em>, <em class="sig-param">irregular: bool = False</em>, <em class="sig-param">autoregressive: int = None</em>, <em class="sig-param">stochastic_cycle: bool = False</em>, <em class="sig-param">stochastic_trend: bool = False</em>, <em class="sig-param">stochastic_level: bool = False</em>, <em class="sig-param">maxiter: int = 100</em>, <em class="sig-param">cov_type: str = 'opg'</em>, <em class="sig-param">method: str = 'lbfgs'</em>, <em class="sig-param">model_kwargs: dict = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.UnobservedComponents" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>UnobservedComponents from Statsmodels.</p>
 <dl class="field-list simple">

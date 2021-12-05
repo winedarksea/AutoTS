@@ -47,12 +47,39 @@ default = [
     'VECM',
     'WindowRegression',
     'DatepartRegression',
-    'UnivariateRegression',
+    # 'UnivariateRegression',  # this has been crashing on 1135
     # 'MultivariateRegression',  # downweight if that becomes an option
     'UnivariateMotif',
     'MultivariateMotif',
     'SectionalMotif',
     'NVAR',
+    'Theta',
+    'ARDL',
+]
+colin = [
+    'LastValueNaive',
+    'AverageValueNaive',
+    'GLS',
+    'GLM',
+    'ETS',
+    # 'ARIMA',
+    'FBProphet',
+    # 'RollingRegression',
+    'GluonTS',
+    'SeasonalNaive',
+    'UnobservedComponents',
+    # 'VARMAX',
+    'VECM',
+    # 'MotifSimulation',
+    # 'UnivariateRegression',
+    # 'MultivariateRegression',
+    'WindowRegression',
+    'VAR',
+    'DatepartRegression',
+    'UnivariateMotif',
+    'MultivariateMotif',
+    'NVAR',
+    'SectionalMotif',
     'Theta',
     'ARDL',
 ]
@@ -227,6 +254,7 @@ model_lists = {
     "slow": slow,
     "gpu": gpu,
     "regressor": regressor,
+    "colin": colin,
 }
 
 
