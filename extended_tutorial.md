@@ -10,8 +10,8 @@
 * [Installation](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning)
 * [Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
 * [Adding Regressors](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information)
-* [Simulation Forecasting](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#simulation-forecasting)
-* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id8)
+* [Simulation Forecasting](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id8)
+* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id9)
 
 ## Extended Tutorial
 
@@ -197,7 +197,7 @@ Data must already be fairly clean - all numerics (or np.nan).
 This will run Ensembles.
 
 ```python
-from AutoTS import load_daily, model_forecast
+from autots import load_daily, model_forecast
 
 
 df = load_daily(long=False)  # long or non-numeric data won't work with this function
@@ -240,6 +240,7 @@ metric_weighting = {
 	'smape_weighting': 10,
 	'mae_weighting': 1,
 	'rmse_weighting': 5,
+	'made_weighting': 0,
 	'containment_weighting': 0,
 	'runtime_weighting': 0,
 	'spl_weighting': 1,
@@ -263,6 +264,8 @@ It is best to usually use several metrics. Often the best sMAPE model, for examp
 `Containment` measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called `coverage_fraction`.
 
 `Contour` is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. Does not work with forecast_length=1. 
+
+`MADE` is mean absolute differential error. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Does not work with forecast_length = 1. 
 
 The contour metric is useful as it encourages 'wavy' forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they "don't look like they are trying hard enough" to some managers, and using contour favors non-flat forecasts that (to many) look like a more serious model.
 
@@ -491,9 +494,10 @@ df = load_monthly(long=False)
 forecast_length = 14
 model = AutoTS(
     forecast_length=forecast_length,
-	model_list="regressor",
-	models_mode="regressor",
-	initial_template="random",
+	max_generations=2,
+    model_list="regressor",
+    models_mode="regressor",
+    initial_template="random",
 )
 # here these are random numbers but in the real world they could be values like weather or store holiday hours
 future_regressor_train, future_regressor_forecast = fake_regressor(

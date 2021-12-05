@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.tools package &#8212; AutoTS 0.3.11 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.3.12 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -42,7 +42,7 @@
 <p>CPU counter for multiprocesing.</p>
 <dl class="function">
 <dt id="autots.tools.cpu_count.cpu_count">
-<code class="sig-prename descclassname">autots.tools.cpu_count.</code><code class="sig-name descname">cpu_count</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.cpu_count.cpu_count" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.cpu_count.</code><code class="sig-name descname">cpu_count</code><span class="sig-paren">(</span><em class="sig-param">modifier: float = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.cpu_count.cpu_count" title="Permalink to this definition">¶</a></dt>
 <dd><p>Find available CPU count, running on both Windows/Linux.</p>
 <dl class="simple">
 <dt>Attempts to be very conservative:</dt><dd><ul class="simple">
@@ -52,6 +52,11 @@
 </dd>
 </dl>
 <p>Runs best with psutil installed, fallsback to mkl, then os core count/2</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>modifier</strong> (<em>float</em>) – multiple CPU count by this value</p>
+</dd>
+</dl>
 </dd></dl>
 
 </section>

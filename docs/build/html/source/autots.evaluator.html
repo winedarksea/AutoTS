@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.evaluator package &#8212; AutoTS 0.3.11 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 0.3.12 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -113,7 +113,7 @@
 
 <dl class="class">
 <dt id="autots.evaluator.auto_model.TemplateEvalObject">
-<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateEvalObject</code><span class="sig-paren">(</span><em class="sig-param">model_results=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_timestamp_smape=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_mae=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_rmse=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_contour=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_spl=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">model_count: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateEvalObject" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateEvalObject</code><span class="sig-paren">(</span><em class="sig-param">model_results=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_timestamp_smape=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_mae=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_rmse=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_made=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_contour=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_spl=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">model_count: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateEvalObject" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Object to contain all the failures!.</p>
 <dl class="attribute">
@@ -323,7 +323,7 @@ pass an empty dictionary if no transformations are desired.</p></li>
 <p>Higher-level functions of automated time series modeling.</p>
 <dl class="class">
 <dt id="autots.evaluator.auto_ts.AutoTS">
-<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 10</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 1</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0.05</em>, <em class="sig-param">'smape_weighting': 10</em>, <em class="sig-param">'spl_weighting': 2}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'fast'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">models_mode: str = 'random'</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'backwards'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">prefill_na: str = None</em>, <em class="sig-param">introduce_na: bool = None</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 10</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 1</em>, <em class="sig-param">'made_weighting': 1</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0.05</em>, <em class="sig-param">'smape_weighting': 5</em>, <em class="sig-param">'spl_weighting': 2}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'fast'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">models_mode: str = 'random'</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'backwards'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">prefill_na: str = None</em>, <em class="sig-param">introduce_na: bool = None</em>, <em class="sig-param">model_interrupt: bool = False</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Automate time series modeling using a genetic algorithm.</p>
 <dl class="field-list simple">
@@ -380,7 +380,8 @@ defaults to None, which introduces NaN in last rows of validations if any NaN in
 if True, will also randomly change 20% of all rows to NaN in the validations</p></li>
 <li><p><strong>model_interrupt</strong> (<em>bool</em>) – if False, KeyboardInterrupts quit entire program.
 if True, KeyboardInterrupts attempt to only quit current model.
-if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite>result_file</cite> in the event of accidental complete termination.</p></li>
+if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite>result_file</cite> in the event of accidental complete termination.
+if “end_generation”, as True and also ends entire generation of run. Note skipped models will not be tried again.</p></li>
 <li><p><strong>verbose</strong> (<em>int</em>) – setting to 0 or lower should reduce most output. Higher numbers give more output.</p></li>
 <li><p><strong>n_jobs</strong> (<em>int</em>) – Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also ‘auto’.</p></li>
 </ul>
@@ -829,6 +830,22 @@ Returns a 1-D array of results in len n series</p>
 <dt id="autots.evaluator.metrics.mae">
 <code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">mae</code><span class="sig-paren">(</span><em class="sig-param">ae</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.mae" title="Permalink to this definition">¶</a></dt>
 <dd><p>Accepting abs error already calculated</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.evaluator.metrics.mean_absolute_differential_error">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">mean_absolute_differential_error</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em>, <em class="sig-param">order: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.mean_absolute_differential_error" title="Permalink to this definition">¶</a></dt>
+<dd><p>Expects two, 2-D numpy arrays of forecast_length * n series.</p>
+<p>Returns a 1-D array of results in len n series</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>A</strong> (<em>numpy.array</em>) – known true values</p></li>
+<li><p><strong>F</strong> (<em>numpy.array</em>) – predicted values</p></li>
+<li><p><strong>order</strong> (<em>int</em>) – order of differential</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="function">

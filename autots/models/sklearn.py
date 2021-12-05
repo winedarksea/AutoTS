@@ -408,14 +408,14 @@ sklearn_model_dict = {
 multivariate_model_dict = {
     'RandomForest': 0.02,
     # 'ElasticNet': 0.05,
-    'MLP': 0.05,
+    'MLP': 0.03,
     'DecisionTree': 0.05,
     'KNN': 0.05,
     'Adaboost': 0.03,
-    'SVM': 0.05,  # was slow, LinearSVR seems much faster
+    'SVM': 0.05,
     # 'BayesianRidge': 0.05,
     'xgboost': 0.01,
-    'KerasRNN': 0.02,
+    'KerasRNN': 0.01,
     'HistGradientBoost': 0.03,
     'LightGBM': 0.03,
     'ExtraTrees': 0.05,

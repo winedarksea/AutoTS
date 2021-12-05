@@ -120,13 +120,14 @@ Begin modeling
 """
 
 metric_weighting = {
-    "smape_weighting": 2,
-    "mae_weighting": 2,
-    "rmse_weighting": 1,
+    "smape_weighting": 0,  # 0
+    "mae_weighting": 3,  # 2
+    "rmse_weighting": 0,  # 1
     "containment_weighting": 0,
+    'made_weighting': 3,
     "runtime_weighting": 0,
-    "spl_weighting": 2,
-    "contour_weighting": 1,
+    "spl_weighting": 1,  # 2
+    "contour_weighting": 0,  # 1
 }
 
 model = AutoTS(
