@@ -259,7 +259,7 @@ It is best to usually use several metrics. Often the best sMAPE model, for examp
 
 `sMAPE` is generally the most versatile metric across multiple series, but doesn't handle forecasts with lots of zeroes well. 
 
-`SPL` is *Scaled Pinball Loss* and is the optimal metric for assessing upper/lower quantile forecast accuracies.
+`SPL` is *Scaled Pinball Loss* or *Quantile Loss* and is the optimal metric for assessing upper/lower quantile forecast accuracies.
 
 `Containment` measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called `coverage_fraction`.
 
@@ -335,6 +335,7 @@ You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_co
 		>? (IterativeImputer, HistGradientBoostingRegressor)
 	statsmodels
 		>= 0.13 ARDL and UECM
+	scipy.uniform_filter1d (for mosaic-window ensemble only)
 
 Of these, numpy and pandas are critical. 
 Limited functionality should exist without scikit-learn. 

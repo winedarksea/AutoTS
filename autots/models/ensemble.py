@@ -1129,7 +1129,7 @@ def HorizontalTemplateGenerator(
 
 
 def generate_mosaic_template(
-    initial_results, full_mae_ids, num_validations, col_names, full_mae_errors, **kwargs
+    initial_results, full_mae_ids, num_validations, col_names, full_mae_errors, smoothing_window=None, **kwargs
 ):
     """Generate an ensemble template from results."""
     total_vals = num_validations + 1
@@ -1154,6 +1154,13 @@ def generate_mosaic_template(
             if y in models_to_use
         ]
     )
+    # window across multiple time steps to smooth the result
+    name = "Mosaic"
+    if smoothing_window is not None:
+        from scipy.ndimage import uniform_filter1d
+
+        errors_array = uniform_filter1d(np.nan_to_num(errors_array), size=smoothing_window, axis=1)
+        # name = "Mosaic-window"
     slice_points = np.arange(0, errors_array.shape[0], step=total_vals)
     id_sliced = id_array[slice_points]
     best_points = np.add.reduceat(errors_array, slice_points, axis=0).argmin(axis=0)
@@ -1170,7 +1177,7 @@ def generate_mosaic_template(
         'Model': 'Ensemble',
         'ModelParameters': json.dumps(
             {
-                'model_name': "Mosaic",
+                'model_name': name,
                 'model_count': used_models_results.shape[0],
                 'model_metric': "MAE",
                 'models': used_models_results.to_dict(orient='index'),

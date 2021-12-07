@@ -1727,11 +1727,14 @@ def generate_score(
             ].min()
             rmse_score = model_results['rmse_weighted'] / rmse_scaler
             overall_score = overall_score + (rmse_score * rmse_weighting)
-        if made_weighting != 0:
+        if made_weighting > 0:
             made_scaler = model_results['made_weighted'][
                 model_results['made_weighted'] != 0
             ].min()
             made_score = model_results['made_weighted'] / made_scaler
+            # fillna, but only if all are nan (forecast_length = 1)
+            if pd.isnull(made_score.max()):
+                made_score.fillna(0, inplace=True)
             overall_score = overall_score + (made_score * made_weighting)
         if spl_weighting > 0:
             spl_scaler = model_results['spl_weighted'][
@@ -1803,6 +1806,9 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
             .fillna(1)
         )
         made_score = results_object.per_series_made / made_scaler
+        # fillna but only if ALL are NaN
+        if made_score.isnull().to_numpy().all():
+            made_score.fillna(0, inplace=True)
         overall_score = overall_score + (made_score * made_weighting)
     if spl_weighting > 0:
         spl_scaler = (

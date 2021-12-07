@@ -1492,7 +1492,7 @@ class VECM(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         deterministic_choice = np.random.choice(
-            a=["nc", "co", "ci", "lo", "li", "cili", "colo"],
+            a=["n", "co", "ci", "lo", "li", "cili", "colo"],
             size=1,
             p=[0.4, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
         ).item()
@@ -2242,9 +2242,9 @@ class ARDL(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         if "regressor" in method:
-            regression_choice = "user"
+            regression_choice = "User"
         else:
-            regression_list = [None, 'user', 'holiday']
+            regression_list = [None, 'User', 'holiday']
             regression_probability = [0.3, 0.5, 0.5]
             regression_choice = random.choices(regression_list, regression_probability)[
                 0

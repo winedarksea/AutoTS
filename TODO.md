@@ -13,10 +13,8 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest
-* add MADE error metric  (consider this beta, it may change)
-* "end_generation" option to model_interrupt
-* statsmodels warning adjustment (warnings now print at verbose = 2)
-* add modifier to cpu_count and use with model_forecast auto_model
+* fix bug where score was failing to generate if made_weighting > 0 and forecast_length = 1
+* SMAPE now in __repr__ of fit AutoTS class
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

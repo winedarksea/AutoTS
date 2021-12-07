@@ -358,7 +358,8 @@ class AutoTS(object):
             return "Uninitiated AutoTS object"
         else:
             try:
-                return f"Initiated AutoTS object with best model: \n{self.best_model_name}\n{self.best_model_transformation_params}\n{self.best_model_params}"
+                res = ", ".join(self.initial_results.model_results[self.initial_results.model_results['ID'] == self.best_model['ID'].iloc[0]]['smape'].astype(str).tolist())
+                return f"Initiated AutoTS object with best model: \n{self.best_model_name}\n{self.best_model_transformation_params}\n{self.best_model_params}\nSMAPE: {res}"
             except Exception:
                 return "Initiated AutoTS object"
 
@@ -1043,7 +1044,7 @@ or otherwise increase models available."""
                     )
             except Exception as e:
                 if self.verbose >= 0:
-                    print(f"Horizontal Ensembling Error: {repr(e)}")
+                    print(f"Horizontal Ensemble Generation Error: {repr(e)}")
                     time.sleep(5)
             try:
                 if 'mosaic' in ensemble:
@@ -1059,7 +1060,7 @@ or otherwise increase models available."""
                     )
             except Exception as e:
                 if self.verbose >= 0:
-                    print(f"Mosaic Ensembling Error: {e}")
+                    print(f"Mosaic Ensemble Generation Error: {e}")
             try:
                 # test on initial test split to make sure they work
                 template_result = TemplateWizard(
