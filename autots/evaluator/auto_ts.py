@@ -1107,10 +1107,6 @@ or otherwise increase models available."""
                 if self.verbose >= 0:
                     print(f"Ensembling Error: {e}")
                 template_result = TemplateEvalObject()
-            try:
-                template_result.model_results['smape']
-            except KeyError:
-                template_result.model_results['smape'] = 0
             # rerun validation_results aggregation with new models added
             self.validation_results = copy.copy(self.initial_results)
             self.validation_results = validation_aggregation(self.validation_results)

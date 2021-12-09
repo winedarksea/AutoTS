@@ -333,6 +333,11 @@ class PredictionObject(object):
         scaler[scaler == 0] = fill_val
         scaler[np.isnan(scaler)] = fill_val
 
+        # concat most recent history to enable full-size diffs
+        last_of_array = np.nan_to_num(df_train[df_train.shape[0] - 1: df_train.shape[0], ])
+        lA = np.concatenate([last_of_array, A])
+        lF = np.concatenate([last_of_array, F])
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
             self.per_series_metrics = pd.DataFrame(
@@ -344,8 +349,9 @@ class PredictionObject(object):
                     # r2 can't handle NaN in history, also uncomment import above
                     # 'r2': r2_score(A, F, multioutput="raw_values").flatten(),
                     # 'correlation': pd.DataFrame(A).corrwith(pd.DataFrame(F), drop=True).to_numpy(),
-                    'made': mean_absolute_differential_error(A, F),
-                    # 'mad2e': mean_absolute_differential_error(A, F, 2),
+                    'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
+                    'made_unscaled': mean_absolute_differential_error(lA, lF, 1),
+                    # 'mad2e': mean_absolute_differential_error(lA, lF, 2),
                     'containment': containment(lower_forecast, upper_forecast, A),
                     'spl': spl(
                         A=A,
@@ -359,7 +365,7 @@ class PredictionObject(object):
                         quantile=(1 - self.prediction_interval),
                         scaler=scaler,
                     ),
-                    'contour': contour(A, F),
+                    'contour': contour(lA, lF),
                 },
                 index=actual.columns,
             ).transpose()

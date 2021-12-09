@@ -58,7 +58,7 @@ def median_absolute_error(A, F):
     return mae_result
 
 
-def mean_absolute_differential_error(A, F, order: int = 1):
+def mean_absolute_differential_error(A, F, order: int = 1, df_train=None, scaler=None):
     """Expects two, 2-D numpy arrays of forecast_length * n series.
 
     Returns a 1-D array of results in len n series
@@ -67,13 +67,42 @@ def mean_absolute_differential_error(A, F, order: int = 1):
         A (numpy.array): known true values
         F (numpy.array): predicted values
         order (int): order of differential
+        df_train (np.array): if provided, uses this as starting point for first diff step.
+            Tail(1) must be most recent historical point before forecast.
+            Must be numpy Array not DataFrame.
+            Highly recommended if using this as the sole optimization metric.
+            Without, it is an "unanchored" shape fitting metric.
+            This will also allow this to work on forecast_length = 1 forecasts
+        scaler (np.array): if provided, metrics are scaled by this. 1d array of shape (num_series,)
     """
     # scaler = np.mean(A, axis=0)  # debate over whether to make this scaled
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        return np.nanmean(
-            abs(np.diff(A, order, axis=0) - np.diff(F, order, axis=0)), axis=0
-        )
+    if df_train is not None:
+        last_of_array = np.nan_to_num(df_train[df_train.shape[0] - 1: df_train.shape[0], ])
+        # last_of_array = df_train.tail(1).fillna(0).to_numpy()
+        # assigning to new because I'm paranoid about overwrite existing objects
+        lA = np.concatenate([last_of_array, A])
+        lF = np.concatenate([last_of_array, F])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            if scaler is None:
+                return np.nanmean(
+                    abs(np.diff(lA, order, axis=0) - np.diff(lF, order, axis=0)), axis=0
+                )
+            else:
+                return np.nanmean(
+                    abs(np.diff(lA, order, axis=0) - np.diff(lF, order, axis=0)), axis=0
+                ) / scaler
+    else:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            if scaler is None:
+                return np.nanmean(
+                    abs(np.diff(A, order, axis=0) - np.diff(F, order, axis=0)), axis=0
+                )
+            else:
+                return np.nanmean(
+                    abs(np.diff(A, order, axis=0) - np.diff(F, order, axis=0)), axis=0
+                ) / scaler
 
 
 def pinball_loss(A, F, quantile):
@@ -149,6 +178,8 @@ def contour(A, F):
     *Note:* If actual values are unchanging, will match positive changing forecasts.
     Expects two, 2-D numpy arrays of forecast_length * n series
     Returns a 1-D array of results in len n series
+
+    Concat the last row of history to head of both A and F (req for 1 step)
 
     Args:
         A (numpy.array): known true values

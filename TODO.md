@@ -14,7 +14,9 @@
 
 # Latest
 * fix bug where score was failing to generate if made_weighting > 0 and forecast_length = 1
+* made MADE functional on forecast_length=1 if df_train is provided
 * SMAPE now in __repr__ of fit AutoTS class
+* contour now works on forecast_length = 1
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

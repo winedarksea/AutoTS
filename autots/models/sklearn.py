@@ -1359,7 +1359,7 @@ class WindowRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         window_size_choice = random.choice([5, 10, 20, seasonal_int()])
-        model_choice = generate_regressor_params()
+        model_choice = generate_regressor_params(model_dict=sklearn_model_dict)
         if "regressor" in method:
             regression_type_choice = "User"
             input_dim_choice = 'univariate'
@@ -2216,7 +2216,7 @@ class UnivariateRegression(ModelObject):
 
 class MultivariateRegression(ModelObject):
     """Regression-framed approach to forecasting using sklearn.
-    A multiariate version of rolling regression: ie each series is agged independently but modeled together
+    A multiariate version of rolling regression: ie each series is lagged independently but modeled together
 
     Args:
         name (str): String to identify class
@@ -2251,12 +2251,12 @@ class MultivariateRegression(ModelObject):
         quantile90_rolling_periods: int = None,
         quantile10_rolling_periods: int = None,
         ewm_alpha: float = 0.5,
-        additional_lag_periods: int = 7,
+        additional_lag_periods: int = None,
         abs_energy: bool = False,
         rolling_autocorr_periods: int = None,
         datepart_method: str = None,
         polynomial_degree: int = None,
-        window: int = None,
+        window: int = 5,
         quantile_params: dict = {
             'learning_rate': 0.1,
             'max_depth': 20,
@@ -2527,8 +2527,10 @@ class MultivariateRegression(ModelObject):
         """Return dict of new parameters for parameter tuning."""
         if method == "deep":
             model_choice = generate_regressor_params(model_dict=sklearn_model_dict)
+            window_choice = random.choices([None, 3, 7, 10, 14, 28], [0.2, 0.2, 0.05, 0.05, 0.05, 0.05])[0]
         else:
             model_choice = generate_regressor_params(model_dict=multivariate_model_dict)
+            window_choice = random.choices([None, 3, 7, 10], [0.2, 0.2, 0.05, 0.05])[0]
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
         )[0]
@@ -2571,7 +2573,6 @@ class MultivariateRegression(ModelObject):
             regression_choice = "User"
         else:
             regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
-        window_choice = random.choices([None, 3, 7, 10], [0.2, 0.2, 0.05, 0.05])[0]
         parameter_dict = {
             'regression_model': model_choice,
             'mean_rolling_periods': mean_rolling_periods_choice,

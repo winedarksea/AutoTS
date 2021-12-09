@@ -1179,6 +1179,7 @@ def generate_mosaic_template(
             {
                 'model_name': name,
                 'model_count': used_models_results.shape[0],
+                'smoothing_window': smoothing_window,
                 'model_metric': "MAE",
                 'models': used_models_results.to_dict(orient='index'),
                 'series': model_id_array.to_dict(orient='dict'),

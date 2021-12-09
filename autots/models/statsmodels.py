@@ -1370,7 +1370,7 @@ class VECM(ModelObject):
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
-        deterministic: str = 'nc',
+        deterministic: str = 'n',
         k_ar_diff: int = 1,
         **kwargs,
     ):
@@ -1763,7 +1763,7 @@ class VAR(ModelObject):
         if self.regression_type in ["User", "Holiday"]:
             maModel = VAR(
                 self.df_train, freq=self.frequency, exog=self.regressor_train
-            ).fit(maxlags=15, ic='fpe', trend='nc')
+            ).fit(maxlags=self.maxlags, ic=self.ic, trend='n')
             forecast, lower_forecast, upper_forecast = maModel.forecast_interval(
                 steps=len(test_index),
                 exog_future=future_regressor,
