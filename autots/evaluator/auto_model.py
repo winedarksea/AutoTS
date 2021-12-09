@@ -265,31 +265,6 @@ def ModelMonster(
 
         return model
 
-    elif model == 'TSFreshRegressor':
-        from autots.models.tsfresh import TSFreshRegressor
-
-        if parameters == {}:
-            model = TSFreshRegressor(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-                **parameters,
-            )
-        else:
-            model = TSFreshRegressor(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-                max_timeshift=parameters['max_timeshift'],
-                regression_model=parameters['regression_model'],
-                feature_selection=parameters['feature_selection'],
-            )
-        return model
-
     elif model == 'MotifSimulation':
         model = MotifSimulation(
             frequency=frequency,
@@ -478,6 +453,19 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
+    elif model == 'NeuralProphet':
+        from autots.models.prophet import NeuralProphet
+
+        model = NeuralProphet(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=1,
+            **parameters,
+        )
+        return model
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)

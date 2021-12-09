@@ -481,7 +481,7 @@ class ETS(ModelObject):
                             trend=args['trend'],
                             seasonal=args['seasonal'],
                             seasonal_periods=args['seasonal_periods'],
-                            initialization_method=None,
+                            # initialization_method=None,
                             freq=args['freq'],
                         )
                     except Exception:

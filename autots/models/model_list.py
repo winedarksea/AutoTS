@@ -30,6 +30,7 @@ all_models = [
     'SectionalMotif',
     'Theta',
     'ARDL',
+    'NeuralProphet',
 ]
 default = [
     'ZeroesNaive',
@@ -197,6 +198,7 @@ recombination_approved = [
     'SectionalMotif',
     'Theta',
     'ARDL',
+    'NeuralProphet',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -216,6 +218,7 @@ no_shared = [
     'UnivariateMotif',
     'Theta',
     'ARDL',
+    'NeuralProphet',
 ]
 # allow the use of a regressor, need to accept "User" (fail if not given), have 'regressor' param method
 regressor = [
@@ -234,6 +237,7 @@ regressor = [
     'MultivariateRegression',
     'SectionalMotif',  # kinda
     'ARDL',
+    'NeuralProphet',
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {

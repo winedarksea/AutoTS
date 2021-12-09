@@ -17,6 +17,7 @@
 * made MADE functional on forecast_length=1 if df_train is provided
 * SMAPE now in __repr__ of fit AutoTS class
 * contour now works on forecast_length = 1
+* Added NeuralProphet model
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
