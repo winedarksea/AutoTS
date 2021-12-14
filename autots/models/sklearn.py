@@ -2257,6 +2257,7 @@ class MultivariateRegression(ModelObject):
         datepart_method: str = None,
         polynomial_degree: int = None,
         window: int = 5,
+        probabilistic: bool = True,
         quantile_params: dict = {
             'learning_rate': 0.1,
             'max_depth': 20,
@@ -2301,6 +2302,7 @@ class MultivariateRegression(ModelObject):
         self.window = window
         self.quantile_params = quantile_params
         self.regressor_train = None
+        self.probabilistic = probabilistic
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
@@ -2379,19 +2381,20 @@ class MultivariateRegression(ModelObject):
             ]
         )
         del base
-        alpha_base = (1 - self.prediction_interval) / 2
-        self.model_upper = GradientBoostingRegressor(
-            loss='quantile',
-            alpha=(1 - alpha_base),
-            random_state=self.random_seed,
-            **self.quantile_params,
-        )
-        self.model_lower = GradientBoostingRegressor(
-            loss='quantile',
-            alpha=alpha_base,
-            random_state=self.random_seed,
-            **self.quantile_params,
-        )
+        if self.probabilistic:
+            alpha_base = (1 - self.prediction_interval) / 2
+            self.model_upper = GradientBoostingRegressor(
+                loss='quantile',
+                alpha=(1 - alpha_base),
+                random_state=self.random_seed,
+                **self.quantile_params,
+            )
+            self.model_lower = GradientBoostingRegressor(
+                loss='quantile',
+                alpha=alpha_base,
+                random_state=self.random_seed,
+                **self.quantile_params,
+            )
 
         multioutput = True
         if Y.ndim < 2:
@@ -2407,8 +2410,9 @@ class MultivariateRegression(ModelObject):
             multioutput=multioutput,
         )
         self.model.fit(X.to_numpy(), Y)
-        self.model_upper.fit(X.to_numpy(), Y)
-        self.model_lower.fit(X.to_numpy(), Y)
+        if self.probabilistic:
+            self.model_upper.fit(X.to_numpy(), Y)
+            self.model_lower.fit(X.to_numpy(), Y)
         # we only need the N most recent points for predict
         self.sktraindata = df.tail(self.min_threshold)
 
@@ -2482,17 +2486,18 @@ class MultivariateRegression(ModelObject):
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
-            rfPred_upper = self.model_upper.predict(x_dat.to_numpy())
-            pred_upper = pd.DataFrame(
-                rfPred_upper, index=current_x.columns, columns=[index[fcst_step]]
-            ).transpose()
-            rfPred_lower = self.model_lower.predict(x_dat.to_numpy())
-            pred_lower = pd.DataFrame(
-                rfPred_lower, index=current_x.columns, columns=[index[fcst_step]]
-            ).transpose()
             forecast = pd.concat([forecast, pred_clean])
-            upper_forecast = pd.concat([upper_forecast, pred_upper])
-            lower_forecast = pd.concat([lower_forecast, pred_lower])
+            if self.probabilistic:
+                rfPred_upper = self.model_upper.predict(x_dat.to_numpy())
+                pred_upper = pd.DataFrame(
+                    rfPred_upper, index=current_x.columns, columns=[index[fcst_step]]
+                ).transpose()
+                rfPred_lower = self.model_lower.predict(x_dat.to_numpy())
+                pred_lower = pd.DataFrame(
+                    rfPred_lower, index=current_x.columns, columns=[index[fcst_step]]
+                ).transpose()
+                upper_forecast = pd.concat([upper_forecast, pred_upper])
+                lower_forecast = pd.concat([lower_forecast, pred_lower])
             current_x = pd.concat(
                 [
                     current_x,
@@ -2501,6 +2506,13 @@ class MultivariateRegression(ModelObject):
             )
 
         forecast = forecast[self.column_names]
+        if not self.probabilistic:
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.sktraindata,
+                forecast,
+                method='inferred_normal',
+                prediction_interval=self.prediction_interval,
+            )
         upper_forecast = upper_forecast[self.column_names]
         lower_forecast = lower_forecast[self.column_names]
 
@@ -2528,9 +2540,11 @@ class MultivariateRegression(ModelObject):
         if method == "deep":
             model_choice = generate_regressor_params(model_dict=sklearn_model_dict)
             window_choice = random.choices([None, 3, 7, 10, 14, 28], [0.2, 0.2, 0.05, 0.05, 0.05, 0.05])[0]
+            probabilistic = random.choices([True, False], [0.2, 0.8])[0]
         else:
             model_choice = generate_regressor_params(model_dict=multivariate_model_dict)
             window_choice = random.choices([None, 3, 7, 10], [0.2, 0.2, 0.05, 0.05])[0]
+            probabilistic = False
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
         )[0]
@@ -2592,6 +2606,7 @@ class MultivariateRegression(ModelObject):
             'regression_type': regression_choice,
             'window': window_choice,
             'holiday': holiday_choice,
+            "probabilistic": probabilistic,
         }
         return parameter_dict
 
@@ -2616,5 +2631,6 @@ class MultivariateRegression(ModelObject):
             'regression_type': self.regression_type,
             'window': self.window,
             'holiday': self.holiday,
+            'probabilistic': self.probabilistic,
         }
         return parameter_dict

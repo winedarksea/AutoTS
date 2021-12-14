@@ -308,6 +308,7 @@ class NeuralProphet(ModelObject):
         changepoints_range: float = 0.9,
         trend_reg: float = 0,
         trend_reg_threshold: bool = False,
+        ar_sparsity: float = None,
         yearly_seasonality: str = "auto",
         weekly_seasonality: str = "auto",
         daily_seasonality: str = "auto",
@@ -339,6 +340,7 @@ class NeuralProphet(ModelObject):
         self.changepoints_range = changepoints_range
         self.trend_reg = trend_reg
         self.trend_reg_threshold = trend_reg_threshold
+        self.ar_sparsity = ar_sparsity
         self.yearly_seasonality = yearly_seasonality
         self.weekly_seasonality = weekly_seasonality
         self.daily_seasonality = daily_seasonality
@@ -433,12 +435,14 @@ class NeuralProphet(ModelObject):
                     changepoints_range=self.changepoints_range,
                     trend_reg=self.trend_reg,
                     trend_reg_threshold=self.trend_reg_threshold,
+                    ar_sparsity=self.ar_sparsity,
                     yearly_seasonality=self.yearly_seasonality,
                     weekly_seasonality=self.weekly_seasonality,
                     daily_seasonality=self.daily_seasonality,
                     seasonality_mode=self.seasonality_mode,
                     seasonality_reg=self.seasonality_reg,
                     n_lags=self.n_lags,
+                    n_forecasts=forecast_length,
                     num_hidden_layers=self.num_hidden_layers,
                     d_hidden=self.d_hidden,
                     learning_rate=self.learning_rate,
@@ -454,12 +458,14 @@ class NeuralProphet(ModelObject):
                     changepoints_range=self.changepoints_range,
                     trend_reg=self.trend_reg,
                     trend_reg_threshold=self.trend_reg_threshold,
+                    ar_sparsity=self.ar_sparsity,
                     yearly_seasonality=self.yearly_seasonality,
                     weekly_seasonality=self.weekly_seasonality,
                     daily_seasonality=self.daily_seasonality,
                     seasonality_mode=self.seasonality_mode,
                     seasonality_reg=self.seasonality_reg,
                     n_lags=self.n_lags,
+                    n_forecasts=forecast_length,
                     num_hidden_layers=self.num_hidden_layers,
                     d_hidden=self.d_hidden,
                     learning_rate=self.learning_rate,
@@ -504,6 +510,8 @@ class NeuralProphet(ModelObject):
             fcst = m.predict(future, decompose=False)
             fcst = fcst.tail(forecast_length)  # remove the backcast
             # predicting that someday they will change back to fbprophet format
+            if "yhat2" in fcst.columns:
+                fcst['yhat1'] = fcst.fillna(0).sum(axis=1, numeric_only=True)
             try:
                 forecast = fcst['yhat1']
             except Exception:
@@ -623,21 +631,29 @@ class NeuralProphet(ModelObject):
             d_hidden = random.choices([16, 32, 64], [0.8, 0.1, 0.1])[0]
         else:
             d_hidden = 16
+        growth = random.choices(['off', 'linear', 'discontinuous'], [0.8, 0.2, 0.1])[0]
+        if growth == "off":
+            trend_reg = 0
+            trend_reg_threshold = False
+        else:
+            trend_reg = random.choices([0.01, 0.1, 0, 1, 10, 100], [0.1, 0.1, 0.5, 0.1, 0.1, 0.1])[0]
+            trend_reg_threshold = random.choices([True, False], [0.1, 0.9])[0]
 
         parameter_dict = {
             'holiday': holiday_choice,
             'regression_type': regression_choice,
-            "growth": random.choices(['off', 'linear', 'discontinuous'], [0.8, 0.2, 0.1])[0],
+            "growth": growth,
             "n_changepoints": random.choice([5, 10, 20, 30]),
             "changepoints_range": random.choice([0.8, 0.9, 0.95]),
-            "trend_reg": random.choices([0.01, 0.1, 0, 1, 10, 100], [0.1, 0.1, 0.5, 0.1, 0.1, 0.1])[0],
-            'trend_reg_threshold': random.choices([True, False], [0.1, 0.9])[0],
+            "trend_reg": trend_reg,
+            'trend_reg_threshold': trend_reg_threshold,
+            "ar_sparsity": random.choices([None, 0.01, 0.03, 0.1], [0.9, 0.1, 0.1, 0.1])[0],
             "yearly_seasonality": random.choices(["auto", False], [0.8, 0.2])[0],
             "weekly_seasonality": random.choices(["auto", False], [0.8, 0.2])[0],
             "daily_seasonality": "auto",
             "seasonality_mode": random.choice(['additive', 'multiplicative']),
             "seasonality_reg": random.choices([0, 0.1, 1, 10], [0.7, 0.1, 0.1, 0.1])[0],
-            "n_lags": 0,  # random.choices([0, 1, 2], [0.5, 0.2, 0.1])[0],
+            "n_lags": random.choices([0, 1, 2, 3], [0.8, 0.2, 0.1, 0.05])[0],
             "num_hidden_layers": num_hidden,
             'd_hidden': d_hidden,
             "learning_rate": random.choices([None, 1.0, 0.1, 0.01, 0.001], [0.7, 0.2, 0.1, 0.1, 0.1])[0],
@@ -657,6 +673,7 @@ class NeuralProphet(ModelObject):
             "changepoints_range": self.changepoints_range,
             "trend_reg": self.trend_reg,
             'trend_reg_threshold': self.trend_reg_threshold,
+            "ar_sparsity": self.ar_sparsity,
             "yearly_seasonality": self.yearly_seasonality,
             "weekly_seasonality": self.weekly_seasonality,
             "daily_seasonality": self.daily_seasonality,
