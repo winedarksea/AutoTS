@@ -483,7 +483,6 @@ class NeuralProphet(ModelObject):
                 for nme in args['regressor_name']:
                     m.add_future_regressor(nme)
             m.fit(current_series, freq=args['freq'], progress_print=False, minimal=True)
-            future = m.make_future_dataframe(current_series, periods=forecast_length)
             if args['regression_type'] == 'User':
                 if future_regressor.ndim > 1:
                     if future_regressor.shape[1] > 1:
@@ -501,12 +500,17 @@ class NeuralProphet(ModelObject):
                     ft_regr.columns = args['regressor_train'].columns
                     regr = pd.concat([args['regressor_train'], ft_regr])
                     regr.columns = args['regressor_train'].columns
-                    regr.index.name = 'ds'
-                    regr.reset_index(drop=False, inplace=True)
-                    future = future.merge(regr, on="ds", how='left')
+                    # regr.index.name = 'ds'
+                    # regr.reset_index(drop=False, inplace=True)
+                    # future = future.merge(regr, on="ds", how='left')
                 else:
-                    a = np.append(args['regressor_train'], future_regressor.values)
-                    future[args['regressor_name']] = a
+                    # a = np.append(args['regressor_train'], future_regressor.values)
+                    regr = future_regressor
+                future = m.make_future_dataframe(
+                    current_series, periods=forecast_length, regressors_df=regr
+                )
+            else:
+                future = m.make_future_dataframe(current_series, periods=forecast_length)
             fcst = m.predict(future, decompose=False)
             fcst = fcst.tail(forecast_length)  # remove the backcast
             # predicting that someday they will change back to fbprophet format
@@ -636,7 +640,7 @@ class NeuralProphet(ModelObject):
             trend_reg = 0
             trend_reg_threshold = False
         else:
-            trend_reg = random.choices([0.01, 0.1, 0, 1, 10, 100], [0.1, 0.1, 0.5, 0.1, 0.1, 0.1])[0]
+            trend_reg = random.choices([0.1, 0, 1, 10, 100], [0.1, 0.5, 0.1, 0.1, 0.1])[0]
             trend_reg_threshold = random.choices([True, False], [0.1, 0.9])[0]
 
         parameter_dict = {
@@ -648,12 +652,12 @@ class NeuralProphet(ModelObject):
             "trend_reg": trend_reg,
             'trend_reg_threshold': trend_reg_threshold,
             "ar_sparsity": random.choices([None, 0.01, 0.03, 0.1], [0.9, 0.1, 0.1, 0.1])[0],
-            "yearly_seasonality": random.choices(["auto", False], [0.8, 0.2])[0],
-            "weekly_seasonality": random.choices(["auto", False], [0.8, 0.2])[0],
-            "daily_seasonality": "auto",
+            "yearly_seasonality": random.choices(["auto", False], [0.1, 0.5])[0],
+            "weekly_seasonality": random.choices(["auto", False], [0.1, 0.5])[0],
+            "daily_seasonality": random.choices(["auto", False], [0.1, 0.5])[0],
             "seasonality_mode": random.choice(['additive', 'multiplicative']),
             "seasonality_reg": random.choices([0, 0.1, 1, 10], [0.7, 0.1, 0.1, 0.1])[0],
-            "n_lags": random.choices([0, 1, 2, 3], [0.8, 0.2, 0.1, 0.05])[0],
+            "n_lags": random.choices([0, 1, 2, 3, 7], [0.8, 0.2, 0.1, 0.05, 0.1])[0],
             "num_hidden_layers": num_hidden,
             'd_hidden': d_hidden,
             "learning_rate": random.choices([None, 1.0, 0.1, 0.01, 0.001], [0.7, 0.2, 0.1, 0.1, 0.1])[0],

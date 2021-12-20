@@ -479,7 +479,7 @@ datepart_model_dict: dict = {
 
 
 def generate_regressor_params(
-    model_dict=None,
+    model_dict=None, method="default",
 ):
     if model_dict is None:
         model_dict = sklearn_model_dict
@@ -1359,7 +1359,7 @@ class WindowRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         window_size_choice = random.choice([5, 10, 20, seasonal_int()])
-        model_choice = generate_regressor_params(model_dict=sklearn_model_dict)
+        model_choice = generate_regressor_params(model_dict=sklearn_model_dict, method=method)
         if "regressor" in method:
             regression_type_choice = "User"
             input_dim_choice = 'univariate'
@@ -2538,11 +2538,11 @@ class MultivariateRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         if method == "deep":
-            model_choice = generate_regressor_params(model_dict=sklearn_model_dict)
+            model_choice = generate_regressor_params(model_dict=sklearn_model_dict, method=method)
             window_choice = random.choices([None, 3, 7, 10, 14, 28], [0.2, 0.2, 0.05, 0.05, 0.05, 0.05])[0]
             probabilistic = random.choices([True, False], [0.2, 0.8])[0]
         else:
-            model_choice = generate_regressor_params(model_dict=multivariate_model_dict)
+            model_choice = generate_regressor_params(model_dict=multivariate_model_dict, method=method)
             window_choice = random.choices([None, 3, 7, 10], [0.2, 0.2, 0.05, 0.05])[0]
             probabilistic = False
         mean_rolling_periods_choice = random.choices(

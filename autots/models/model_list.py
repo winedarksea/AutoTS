@@ -49,7 +49,7 @@ default = [
     'WindowRegression',
     'DatepartRegression',
     # 'UnivariateRegression',  # this has been crashing on 1135
-    # 'MultivariateRegression',  # downweight if that becomes an option
+    'MultivariateRegression',  # downweight if that becomes an option
     'UnivariateMotif',
     'MultivariateMotif',
     'SectionalMotif',
@@ -73,7 +73,7 @@ colin = [
     'VECM',
     # 'MotifSimulation',
     # 'UnivariateRegression',
-    # 'MultivariateRegression',
+    'MultivariateRegression',
     'WindowRegression',
     'VAR',
     'DatepartRegression',

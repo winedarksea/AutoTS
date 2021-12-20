@@ -18,6 +18,7 @@
 * SMAPE now in __repr__ of fit AutoTS class
 * contour now works on forecast_length = 1
 * Added NeuralProphet model
+* made the probabilistic modeling of MultivariateRegression a parameter which only occurs when 'deep' mode is active (too slow)
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

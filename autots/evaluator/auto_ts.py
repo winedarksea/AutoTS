@@ -1047,7 +1047,7 @@ or otherwise increase models available."""
                     print(f"Horizontal Ensemble Generation Error: {repr(e)}")
                     time.sleep(5)
             try:
-                if 'mosaic' in ensemble:
+                if 'mosaic-window' in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
@@ -1059,7 +1059,7 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
-                if 'mosaic' in ensemble:
+                if 'mosaic-window' in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
@@ -1071,7 +1071,7 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
-                if 'mosaic' in ensemble:
+                if 'mosaic-window' in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
