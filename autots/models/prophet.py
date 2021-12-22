@@ -18,6 +18,8 @@ class FBProphet(ModelObject):
     'thou shall count to 3, no more, no less, 3 shall be the number thou shall count, and the number of the counting
     shall be 3. 4 thou shall not count, neither count thou 2, excepting that thou then preceed to 3.' -Python
 
+    For params see: https://facebook.github.io/prophet/docs/diagnostics.html
+
     Args:
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
@@ -35,6 +37,16 @@ class FBProphet(ModelObject):
         holiday: bool = False,
         regression_type: str = None,
         holiday_country: str = 'US',
+        yearly_seasonality="auto",
+        weekly_seasonality="auto",
+        daily_seasonality="auto",
+        growth: str = "linear",
+        n_changepoints: int = 25,
+        changepoint_prior_scale: float = 0.05,
+        seasonality_mode: str = "additive",
+        changepoint_range: float = 0.8,
+        seasonality_prior_scale: float = 10.0,
+        holidays_prior_scale: float = 10.0,
         random_seed: int = 2020,
         verbose: int = 0,
         n_jobs: int = None,
@@ -52,6 +64,16 @@ class FBProphet(ModelObject):
         )
         self.holiday = holiday
         self.regressor_name = []
+        self.yearly_seasonality = yearly_seasonality
+        self.weekly_seasonality = weekly_seasonality
+        self.daily_seasonality = daily_seasonality
+        self.growth = growth
+        self.n_changepoints = n_changepoints
+        self.changepoint_prior_scale = changepoint_prior_scale
+        self.seasonality_mode = seasonality_mode
+        self.changepoint_range = changepoint_range
+        self.seasonality_prior_scale = seasonality_prior_scale
+        self.holidays_prior_scale = holidays_prior_scale
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -127,7 +149,19 @@ class FBProphet(ModelObject):
             """Prophet for for loop or parallel."""
             current_series = current_series.rename(columns={series: 'y'})
             current_series['ds'] = current_series.index
-            m = Prophet(interval_width=args['prediction_interval'])
+            m = Prophet(
+                interval_width=args['prediction_interval'],
+                yearly_seasonality=self.yearly_seasonality,
+                weekly_seasonality=self.weekly_seasonality,
+                daily_seasonality=self.daily_seasonality,
+                growth=self.growth,
+                n_changepoints=self.n_changepoints,
+                changepoint_prior_scale=self.changepoint_prior_scale,
+                seasonality_mode=self.seasonality_mode,
+                changepoint_range=self.changepoint_range,
+                seasonality_prior_scale=self.seasonality_prior_scale,
+                holidays_prior_scale=self.holidays_prior_scale,
+            )
             if args['holiday']:
                 m.add_country_holidays(country_name=args['holiday_country'])
             if args['regression_type'] == 'User':
@@ -263,19 +297,40 @@ class FBProphet(ModelObject):
                 regression_list, regression_probability
             )[0]
 
-        parameter_dict = {
+        return {
             'holiday': holiday_choice,
             'regression_type': regression_choice,
+            'changepoint_prior_scale': random.choices(
+                [0.001, 0.01, 0.1, 0.05, 0.5, 1, 10, 30],  # 0.05 default
+                [0.1, 0.1, 0.1, 0.9, 0.1, 0.1, 0.1, 0.1]
+            )[0],
+            'seasonality_prior_scale': random.choices(
+                [0.01, 0.1, 1.0, 10.0, 15, 20, 25, 40],  # default 10
+                [0.05, 0.05, 0.05, 0.8, 0.05, 0.05, 0.05, 0.05]
+            )[0],
+            'holidays_prior_scale': random.choices(
+                [0.01, 0.1, 1.0, 10.0, 15, 20, 25, 40],  # default 10
+                [0.05, 0.05, 0.05, 0.8, 0.05, 0.05, 0.05, 0.05]
+            )[0],
+            'seasonality_mode': random.choice(['additive', 'multiplicative']),
+            'changepoint_range': random.choices([0.8, 0.9, 0.98], [0.9, 0.1, 0.1])[0],
+            'growth': "linear",
+            'n_changepoints': random.choices([5, 10, 20, 25, 30, 50], [0.05, 0.1, 0.1, 0.9, 0.1, 0.05])[0],
         }
-        return parameter_dict
 
     def get_params(self):
         """Return dict of current parameters."""
-        parameter_dict = {
+        return {
             'holiday': self.holiday,
             'regression_type': self.regression_type,
+            "growth": self.growth,
+            "n_changepoints": self.n_changepoints,
+            "changepoint_prior_scale": self.changepoint_prior_scale,
+            "seasonality_mode": self.seasonality_mode,
+            "changepoint_range": self.changepoint_range,
+            "seasonality_prior_scale": self.seasonality_prior_scale,
+            "holidays_prior_scale": self.holidays_prior_scale,
         }
-        return parameter_dict
 
 
 class NeuralProphet(ModelObject):

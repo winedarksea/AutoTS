@@ -19,6 +19,8 @@
 * contour now works on forecast_length = 1
 * Added NeuralProphet model
 * made the probabilistic modeling of MultivariateRegression a parameter which only occurs when 'deep' mode is active (too slow)
+* added more params to pass through to Prophet
+* add phi damping to Detrend transformer
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

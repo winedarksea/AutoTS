@@ -139,15 +139,17 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
 class Detrend(EmptyTransformer):
     """Remove a linear trend from the data."""
 
-    def __init__(self, model: str = 'GLS', **kwargs):
+    def __init__(self, model: str = 'GLS', phi: float = 1.0, **kwargs):
         super().__init__(name='Detrend')
         self.model = model
         self.need_positive = ['Poisson', 'Gamma', 'Tweedie']
+        self.phi = phi
 
     @staticmethod
     def get_new_params(method: str = 'random'):
         if method == "fast":
             choice = random.choices(["GLS", "Linear"], [0.5, 0.5], k=1)[0]
+            phi = random.choices([1, 0.999, 0.998, 0.99], [0.9, 0.05, 0.01, 0.01])[0]
         else:
             choice = random.choices(
                 [
@@ -163,8 +165,10 @@ class Detrend(EmptyTransformer):
                 [0.24, 0.2, 0.1, 0.1, 0.1, 0.02, 0.02, 0.02],
                 k=1,
             )[0]
+            phi = random.choices([1, 0.999, 0.998, 0.99], [0.9, 0.1, 0.05, 0.05])[0]
         return {
             "model": choice,
+            "phi": phi,
         }
 
     def _retrieve_detrend(self, detrend: str = "Linear"):
@@ -262,6 +266,7 @@ class Detrend(EmptyTransformer):
         if self.model != "GLS":
             X = X.reshape((-1, 1))
         # df = df.astype(float) - self.model.predict(X)
+        # pd.Series([phi] * 10).pow(range(10))
         if self.model in self.need_positive:
             temp = pd.DataFrame(
                 self.trained_model.predict(X), index=df.index, columns=df.columns
@@ -279,6 +284,7 @@ class Detrend(EmptyTransformer):
 
     def inverse_transform(self, df):
         """Return data to original form.
+        Will only match original if phi==1
 
         Args:
             df (pandas.DataFrame): input dataframe
@@ -291,14 +297,18 @@ class Detrend(EmptyTransformer):
         if self.model != "GLS":
             X = X.reshape((-1, 1))
         if self.model in self.need_positive:
-            temp = pd.DataFrame(
+            temp = self.trnd_trans.inverse_transform(pd.DataFrame(
                 self.trained_model.predict(X), index=df.index, columns=df.columns
-            )
-            df = df + self.trnd_trans.inverse_transform(temp)
+            ))
+            if self.phi != 1:
+                temp = temp.mul(pd.Series([self.phi] * df.shape[0], index=temp.index).pow(range(df.shape[0])), axis=0)
+            df = df + temp
         else:
             if self.model == "GLS" and df.shape[1] == 1:
                 pred = self.trained_model.predict(X)
                 pred = pred.reshape(-1, 1)
+                if self.phi != 1:
+                    pred = pred.mul(pd.Series([self.phi] * df.shape[0], index=pred.index).pow(range(df.shape[0])), axis=0)
                 df = df + pred
             else:
                 df = df + self.trained_model.predict(X)
