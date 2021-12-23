@@ -30,6 +30,7 @@ class Benchmark(object):
         self.datepart_svm_runtime = 0
         self.theta_runtime = 0
         self.tensorflow_rnn_runtime = 0
+        self.tensorflow_cnn_runtime = 0
         self.gluonts_runtime = 0
         self.multivariate_knn_runtime = 0
         self.prophet_runtime = 0
@@ -292,6 +293,53 @@ class Benchmark(object):
                 logging.info(f"tensorflow failed with: {repr(e)}")
 
             try:
+                logging.info("Beginning KerasCNN")
+                start_time = timeit.default_timer()
+                df_forecast = model_forecast(
+                    model_name="WindowRegression",
+                    model_param_dict={
+                        "regression_model": {
+                            "model": "KerasRNN",
+                            "model_params": {
+                                "kernel_initializer": "glorot_normal",
+                                "epochs": 50,
+                                "batch_size": 8,
+                                "optimizer": "adam",
+                                "loss": "mae",
+                                "hidden_layer_sizes": [32, 32, 32],
+                                "rnn_type": "CNN",
+                                "shape": 1,
+                            },
+                        },
+                        "window_size": 10,
+                        "input_dim": "univariate",
+                        "output_dim": "forecast_length",
+                        "normalize_window": False,
+                        "max_windows": 5000,
+                        "regression_type": None,
+                    },
+                    model_transform_dict={
+                        "fillna": "median",
+                        "transformations": {
+                            "0": "MaxAbsScaler",
+                        },
+                        "transformation_params": {"0": {}},
+                    },
+                    df_train=df,
+                    forecast_length=12,
+                    frequency='D',
+                    prediction_interval=0.9,
+                    random_seed=random_seed,
+                    verbose=0,
+                    n_jobs=n_jobs,
+                )
+                self.tensorflow_cnn_runtime = (
+                    self.tensorflow_cnn_runtime + timeit.default_timer() - start_time
+                )
+            except Exception as e:
+                logging.info(f"tensorflow CNN failed with: {repr(e)}")
+
+            try:
                 logging.info("Beginning GluonTS")
                 start_time = timeit.default_timer()
                 df_forecast = model_forecast(
@@ -355,6 +403,7 @@ class Benchmark(object):
                     "regression_type": None,
                     "window": 7,
                     "holiday": False,
+                    "probabilistic": False,
                 },
                 model_transform_dict={
                     "fillna": "fake_date",
@@ -425,6 +474,7 @@ class Benchmark(object):
             "theta_runtime": self.theta_runtime / times,
             "total_runtime": self.total_runtime,
             "tensorflow_rnn_runtime": self.tensorflow_rnn_runtime / times,
+            "tensorflow_cnn_runtime": self.tensorflow_cnn_runtime / times,
             "gluonts_runtime": self.gluonts_runtime / times,
             "prophet_runtime": self.prophet_runtime / times,
         }
