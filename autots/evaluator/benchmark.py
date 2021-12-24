@@ -29,11 +29,13 @@ class Benchmark(object):
         self.datepart_trees_runtime = 0
         self.datepart_svm_runtime = 0
         self.theta_runtime = 0
+        self.arima_runtime = 0
         self.tensorflow_rnn_runtime = 0
         self.tensorflow_cnn_runtime = 0
         self.gluonts_runtime = 0
         self.multivariate_knn_runtime = 0
         self.prophet_runtime = 0
+        self.sklearn_mlp_runtime = 0
 
     def __repr__(self):
         """Print."""
@@ -47,6 +49,10 @@ class Benchmark(object):
             times (int): number of times to run benchmark models (returns avg of n times)
             random_seed (int): random seed, increases consistency
         """
+        small_df = load_linear(
+                long=False, shape=(200, 20), introduce_random=2, random_seed=random_seed
+        )
+
         for _ in range(times):
             logging.info("Beginning AverageValueNaive")
             start_time = timeit.default_timer()
@@ -58,15 +64,15 @@ class Benchmark(object):
             )
             df_forecast = model_forecast(
                 model_name="AverageValueNaive",
-                model_param_dict={'method': 'Mean'},
+                model_param_dict={"method": "Mean"},
                 model_transform_dict={
-                    'fillna': 'mean',
-                    'transformations': {'0': 'DifferencedTransformer'},
-                    'transformation_params': {'0': {}},
+                    "fillna": "mean",
+                    "transformations": {"0": "DifferencedTransformer"},
+                    "transformation_params": {"0": {}},
                 },
                 df_train=df,
                 forecast_length=12,
-                frequency='D',
+                frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
                 verbose=0,
@@ -81,7 +87,7 @@ class Benchmark(object):
             df_forecast = model_forecast(
                 model_name="SectionalMotif",
                 model_param_dict={
-                    "window": 5,
+                    "window": 15,
                     "point_method": "mean",
                     "distance_metric": "euclidean",
                     "include_differenced": True,
@@ -99,7 +105,7 @@ class Benchmark(object):
                 },
                 df_train=df,
                 forecast_length=12,
-                frequency='D',
+                frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
                 verbose=0,
@@ -137,9 +143,9 @@ class Benchmark(object):
                         "3": {"decimals": 0, "on_transform": False, "on_inverse": True},
                     },
                 },
-                df_train=df,
+                df_train=df[df.columns[0:600]],
                 forecast_length=12,
-                frequency='D',
+                frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
                 verbose=0,
@@ -155,7 +161,7 @@ class Benchmark(object):
                     "regression_model": {
                         "model": "RandomForest",
                         "model_params": {
-                            "n_estimators": 300,
+                            "n_estimators": 1000,
                             "min_samples_leaf": 2,
                             "bootstrap": True,
                         },
@@ -169,8 +175,8 @@ class Benchmark(object):
                     "transformation_params": {"0": {}},
                 },
                 df_train=df,
-                forecast_length=12,
-                frequency='D',
+                forecast_length=15,
+                frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
                 verbose=0,
@@ -196,7 +202,7 @@ class Benchmark(object):
                 },
                 df_train=df,
                 forecast_length=12,
-                frequency='D',
+                frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
                 verbose=0,
@@ -232,9 +238,9 @@ class Benchmark(object):
                         "2": {"fixed": False, "window": 28},
                     },
                 },
-                df_train=df,
+                df_train=df[df.columns[0:150]],
                 forecast_length=12,
-                frequency='D',
+                frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
                 verbose=0,
@@ -242,6 +248,34 @@ class Benchmark(object):
             )
             self.theta_runtime = (
                 self.theta_runtime + timeit.default_timer() - start_time
+            )
+
+            logging.info("Beginning ARIMA")
+            start_time = timeit.default_timer()
+            df_forecast = model_forecast(
+                model_name="ARIMA",
+                model_param_dict={
+                    'p': 7, 'd': 1, 'q': 1, 'regression_type': None
+                },
+                model_transform_dict={
+                    "fillna": "median",
+                    "transformations": {
+                        "0": "Detrend",
+                    },
+                    "transformation_params": {
+                        "0": {'model': 'Linear'},
+                    },
+                },
+                df_train=df[df.columns[0:60]],
+                forecast_length=12,
+                frequency="D",
+                prediction_interval=0.9,
+                random_seed=random_seed,
+                verbose=0,
+                n_jobs=n_jobs,
+            )
+            self.arima_runtime = (
+                self.arima_runtime + timeit.default_timer() - start_time
             )
 
             try:
@@ -280,7 +314,7 @@ class Benchmark(object):
                     },
                     df_train=df,
                     forecast_length=12,
-                    frequency='D',
+                    frequency="D",
                     prediction_interval=0.9,
                     random_seed=random_seed,
                     verbose=0,
@@ -327,7 +361,7 @@ class Benchmark(object):
                     },
                     df_train=df,
                     forecast_length=12,
-                    frequency='D',
+                    frequency="D",
                     prediction_interval=0.9,
                     random_seed=random_seed,
                     verbose=0,
@@ -340,18 +374,61 @@ class Benchmark(object):
                 logging.info(f"tensorflow CNN failed with: {repr(e)}")
 
             try:
+                logging.info("Beginning MLP")
+                start_time = timeit.default_timer()
+                df_forecast = model_forecast(
+                    model_name="WindowRegression",
+                    model_param_dict={
+                        "regression_model": {
+                            "model": "MLP",
+                            "model_params": {
+                                'hidden_layer_sizes': (25, 15, 25),
+                                'max_iter': 200,
+                                'activation': 'tanh',
+                                'solver': 'adam',
+                                'early_stopping': True,
+                                'learning_rate_init': 0.01
+                            },
+                        },
+                        "window_size": 10,
+                        "input_dim": "univariate",
+                        "output_dim": "forecast_length",
+                        "normalize_window": False,
+                        "max_windows": 5000,
+                        "regression_type": None,
+                    },
+                    model_transform_dict={
+                        "fillna": "ffill_mean_biased",
+                        "transformations": {
+                            "0": "MaxAbsScaler",
+                        },
+                        "transformation_params": {"0": {}},
+                    },
+                    df_train=df,
+                    forecast_length=12,
+                    frequency="D",
+                    prediction_interval=0.9,
+                    random_seed=random_seed,
+                    verbose=0,
+                    n_jobs=n_jobs,
+                )
+                self.sklearn_mlp_runtime = (
+                    self.sklearn_mlp_runtime + timeit.default_timer() - start_time
+                )
+            except Exception as e:
+                logging.info(f"sklearn mlp failed with: {repr(e)}")
+
+            try:
                 logging.info("Beginning GluonTS")
                 start_time = timeit.default_timer()
                 df_forecast = model_forecast(
                     model_name="GluonTS",
                     model_param_dict={
-                        {
                             "gluon_model": "SFF",
                             "epochs": 40,
                             "learning_rate": 0.01,
                             "context_length": 10,
                             "regression_type": None,
-                        }
                     },
                     model_transform_dict={
                         "fillna": "KNNImputer",
@@ -362,7 +439,7 @@ class Benchmark(object):
                     },
                     df_train=df,
                     forecast_length=12,
-                    frequency='D',
+                    frequency="D",
                     prediction_interval=0.9,
                     random_seed=random_seed,
                     verbose=0,
@@ -374,9 +451,6 @@ class Benchmark(object):
             except Exception as e:
                 logging.info(f"gluonts failed with: {repr(e)}")
 
-            df = load_linear(
-                long=False, shape=(200, 20), introduce_random=2, random_seed=random_seed
-            )
             logging.info("Beginning Multivariate KNN")
             start_time = timeit.default_timer()
             df_forecast = model_forecast(
@@ -410,9 +484,9 @@ class Benchmark(object):
                     "transformations": {"0": "MaxAbsScaler"},
                     "transformation_params": {"0": {}},
                 },
-                df_train=df,
+                df_train=df[df.columns[0:100]],
                 forecast_length=12,
-                frequency='D',
+                frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
                 verbose=0,
@@ -435,9 +509,9 @@ class Benchmark(object):
                             "0": {"output_distribution": "uniform", "n_quantiles": 100}
                         },
                     },
-                    df_train=df,
+                    df_train=small_df,
                     forecast_length=12,
-                    frequency='D',
+                    frequency="D",
                     prediction_interval=0.9,
                     random_seed=random_seed,
                     verbose=0,
@@ -457,6 +531,8 @@ class Benchmark(object):
             + self.datepart_svm_runtime
             + self.multivariate_knn_runtime
             + self.theta_runtime
+            + self.sklearn_mlp_runtime
+            + self.arima_runtime
         ) / times
         self.results = {
             "version": self.version,
@@ -472,6 +548,8 @@ class Benchmark(object):
             "datepart_svm_runtime": self.datepart_svm_runtime / times,
             "multivariate_knn_runtime": self.multivariate_knn_runtime / times,
             "theta_runtime": self.theta_runtime / times,
+            "arima_runtime": self.arima_runtime / times,
+            "sklearn_mlp_runtime": self.sklearn_mlp_runtime / times,
             "total_runtime": self.total_runtime,
             "tensorflow_rnn_runtime": self.tensorflow_rnn_runtime / times,
             "tensorflow_cnn_runtime": self.tensorflow_cnn_runtime / times,
@@ -481,7 +559,7 @@ class Benchmark(object):
         return self
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import json
     import sys
 
