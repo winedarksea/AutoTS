@@ -6,7 +6,6 @@ Created on Fri Nov  5 13:45:01 2021
 """
 import timeit
 import platform
-import logging
 from autots import model_forecast, __version__, load_linear
 
 
@@ -54,7 +53,7 @@ class Benchmark(object):
         )
 
         for _ in range(times):
-            logging.info("Beginning AverageValueNaive")
+            print("Beginning AverageValueNaive")
             start_time = timeit.default_timer()
             df = load_linear(
                 long=False,
@@ -82,7 +81,7 @@ class Benchmark(object):
                 self.avg_naive_runtime + timeit.default_timer() - start_time
             )
 
-            logging.info("Beginning SectionalMotif")
+            print("Beginning SectionalMotif")
             start_time = timeit.default_timer()
             df_forecast = model_forecast(
                 model_name="SectionalMotif",
@@ -115,7 +114,7 @@ class Benchmark(object):
                 self.sect_motif_runtime + timeit.default_timer() - start_time
             )
 
-            logging.info("Beginning NVAR")
+            print("Beginning NVAR")
             start_time = timeit.default_timer()
             df_forecast = model_forecast(
                 model_name="NVAR",
@@ -153,7 +152,7 @@ class Benchmark(object):
             )
             self.nvar_runtime = self.nvar_runtime + timeit.default_timer() - start_time
 
-            logging.info("Beginning Datepart RandomForest")
+            print("Beginning Datepart RandomForest")
             start_time = timeit.default_timer()
             df_forecast = model_forecast(
                 model_name="DatepartRegression",
@@ -186,7 +185,7 @@ class Benchmark(object):
                 self.datepart_trees_runtime + timeit.default_timer() - start_time
             )
 
-            logging.info("Beginning Datepart SVM")
+            print("Beginning Datepart SVM")
             start_time = timeit.default_timer()
             df_forecast = model_forecast(
                 model_name="DatepartRegression",
@@ -212,7 +211,7 @@ class Benchmark(object):
                 self.datepart_svm_runtime + timeit.default_timer() - start_time
             )
 
-            logging.info("Beginning Theta")
+            print("Beginning Theta")
             start_time = timeit.default_timer()
             df_forecast = model_forecast(
                 model_name="Theta",
@@ -250,7 +249,7 @@ class Benchmark(object):
                 self.theta_runtime + timeit.default_timer() - start_time
             )
 
-            logging.info("Beginning ARIMA")
+            print("Beginning ARIMA")
             start_time = timeit.default_timer()
             df_forecast = model_forecast(
                 model_name="ARIMA",
@@ -279,7 +278,7 @@ class Benchmark(object):
             )
 
             try:
-                logging.info("Beginning KerasRNN")
+                print("Beginning KerasRNN")
                 start_time = timeit.default_timer()
                 df_forecast = model_forecast(
                     model_name="WindowRegression",
@@ -324,10 +323,10 @@ class Benchmark(object):
                     self.tensorflow_rnn_runtime + timeit.default_timer() - start_time
                 )
             except Exception as e:
-                logging.info(f"tensorflow failed with: {repr(e)}")
+                print(f"tensorflow failed with: {repr(e)}")
 
             try:
-                logging.info("Beginning KerasCNN")
+                print("Beginning KerasCNN")
                 start_time = timeit.default_timer()
                 df_forecast = model_forecast(
                     model_name="WindowRegression",
@@ -371,10 +370,10 @@ class Benchmark(object):
                     self.tensorflow_cnn_runtime + timeit.default_timer() - start_time
                 )
             except Exception as e:
-                logging.info(f"tensorflow CNN failed with: {repr(e)}")
+                print(f"tensorflow CNN failed with: {repr(e)}")
 
             try:
-                logging.info("Beginning MLP")
+                print("Beginning MLP")
                 start_time = timeit.default_timer()
                 df_forecast = model_forecast(
                     model_name="WindowRegression",
@@ -416,10 +415,10 @@ class Benchmark(object):
                     self.sklearn_mlp_runtime + timeit.default_timer() - start_time
                 )
             except Exception as e:
-                logging.info(f"sklearn mlp failed with: {repr(e)}")
+                print(f"sklearn mlp failed with: {repr(e)}")
 
             try:
-                logging.info("Beginning GluonTS")
+                print("Beginning GluonTS")
                 start_time = timeit.default_timer()
                 df_forecast = model_forecast(
                     model_name="GluonTS",
@@ -449,9 +448,9 @@ class Benchmark(object):
                     self.gluonts_runtime + timeit.default_timer() - start_time
                 )
             except Exception as e:
-                logging.info(f"gluonts failed with: {repr(e)}")
+                print(f"gluonts failed with: {repr(e)}")
 
-            logging.info("Beginning Multivariate KNN")
+            print("Beginning Multivariate KNN")
             start_time = timeit.default_timer()
             df_forecast = model_forecast(
                 model_name="MultivariateRegression",
@@ -497,7 +496,7 @@ class Benchmark(object):
             )
 
             try:
-                logging.info("Beginning Prophet")
+                print("Beginning Prophet")
                 start_time = timeit.default_timer()
                 df_forecast = model_forecast(  # noqa
                     model_name="FBProphet",
@@ -521,7 +520,7 @@ class Benchmark(object):
                     self.prophet_runtime + timeit.default_timer() - start_time
                 )
             except Exception as e:
-                logging.info(f"prophet failed with: {repr(e)}")
+                print(f"prophet failed with: {repr(e)}")
 
         self.total_runtime = (
             self.avg_naive_runtime
