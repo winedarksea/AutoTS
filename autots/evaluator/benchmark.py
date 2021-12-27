@@ -40,13 +40,14 @@ class Benchmark(object):
         """Print."""
         return f"Benchmark runtime: {self.total_runtime} see .results for details"
 
-    def run(self, n_jobs: int = "auto", times: int = 3, random_seed: int = 123):
+    def run(self, n_jobs: int = "auto", times: int = 3, random_seed: int = 123, base_models_only=False):
         """Run benchmark.
 
         Args:
             n_jobs (int): passed to model_forecast for n cpus
             times (int): number of times to run benchmark models (returns avg of n times)
             random_seed (int): random seed, increases consistency
+            base_models_only (bool): if True, doesn't attempt Tensorflow, GluonTS, or Prophet models
         """
         small_df = load_linear(
                 long=False, shape=(200, 20), introduce_random=2, random_seed=random_seed
@@ -277,101 +278,50 @@ class Benchmark(object):
                 self.arima_runtime + timeit.default_timer() - start_time
             )
 
-            try:
-                print("Beginning KerasRNN")
-                start_time = timeit.default_timer()
-                df_forecast = model_forecast(
-                    model_name="WindowRegression",
-                    model_param_dict={
-                        "regression_model": {
-                            "model": "KerasRNN",
-                            "model_params": {
-                                "kernel_initializer": "lecun_uniform",
-                                "epochs": 50,
-                                "batch_size": 8,
-                                "optimizer": "rmsprop",
-                                "loss": "Huber",
-                                "hidden_layer_sizes": [32, 64, 32],
-                                "rnn_type": "LSTM",
-                                "shape": 1,
-                            },
-                        },
-                        "window_size": 10,
-                        "input_dim": "univariate",
-                        "output_dim": "forecast_length",
-                        "normalize_window": False,
-                        "max_windows": 5000,
-                        "regression_type": None,
+            print("Beginning Multivariate KNN")
+            start_time = timeit.default_timer()
+            df_forecast = model_forecast(
+                model_name="MultivariateRegression",
+                model_param_dict={
+                    "regression_model": {
+                        "model": "KNN",
+                        "model_params": {"n_neighbors": 5, "weights": "uniform"},
                     },
-                    model_transform_dict={
-                        "fillna": "ffill_mean_biased",
-                        "transformations": {
-                            "0": "MaxAbsScaler",
-                            "1": "DifferencedTransformer",
-                        },
-                        "transformation_params": {"0": {}, "1": {}},
-                    },
-                    df_train=df,
-                    forecast_length=12,
-                    frequency="D",
-                    prediction_interval=0.9,
-                    random_seed=random_seed,
-                    verbose=0,
-                    n_jobs=n_jobs,
-                )
-                self.tensorflow_rnn_runtime = (
-                    self.tensorflow_rnn_runtime + timeit.default_timer() - start_time
-                )
-            except Exception as e:
-                print(f"tensorflow failed with: {repr(e)}")
-
-            try:
-                print("Beginning KerasCNN")
-                start_time = timeit.default_timer()
-                df_forecast = model_forecast(
-                    model_name="WindowRegression",
-                    model_param_dict={
-                        "regression_model": {
-                            "model": "KerasRNN",
-                            "model_params": {
-                                "kernel_initializer": "glorot_normal",
-                                "epochs": 50,
-                                "batch_size": 8,
-                                "optimizer": "adam",
-                                "loss": "mae",
-                                "hidden_layer_sizes": [32, 32, 32],
-                                "rnn_type": "CNN",
-                                "shape": 1,
-                            },
-                        },
-                        "window_size": 10,
-                        "input_dim": "univariate",
-                        "output_dim": "forecast_length",
-                        "normalize_window": False,
-                        "max_windows": 5000,
-                        "regression_type": None,
-                    },
-                    model_transform_dict={
-                        "fillna": "median",
-                        "transformations": {
-                            "0": "MaxAbsScaler",
-                        },
-                        "transformation_params": {"0": {}},
-                    },
-                    df_train=df,
-                    forecast_length=12,
-                    frequency="D",
-                    prediction_interval=0.9,
-                    random_seed=random_seed,
-                    verbose=0,
-                    n_jobs=n_jobs,
-                )
-                self.tensorflow_cnn_runtime = (
-                    self.tensorflow_cnn_runtime + timeit.default_timer() - start_time
-                )
-            except Exception as e:
-                print(f"tensorflow CNN failed with: {repr(e)}")
-
+                    "mean_rolling_periods": 30,
+                    "macd_periods": None,
+                    "std_rolling_periods": 7,
+                    "max_rolling_periods": 60,
+                    "min_rolling_periods": 60,
+                    "quantile90_rolling_periods": 5,
+                    "quantile10_rolling_periods": None,
+                    "ewm_alpha": None,
+                    "ewm_var_alpha": None,
+                    "additional_lag_periods": None,
+                    "abs_energy": False,
+                    "rolling_autocorr_periods": None,
+                    "datepart_method": "simple",
+                    "polynomial_degree": None,
+                    "regression_type": None,
+                    "window": 7,
+                    "holiday": False,
+                    "probabilistic": False,
+                },
+                model_transform_dict={
+                    "fillna": "fake_date",
+                    "transformations": {"0": "MaxAbsScaler"},
+                    "transformation_params": {"0": {}},
+                },
+                df_train=df[df.columns[0:100]],
+                forecast_length=12,
+                frequency="D",
+                prediction_interval=0.9,
+                random_seed=random_seed,
+                verbose=0,
+                n_jobs=n_jobs,
+            )
+            self.multivariate_knn_runtime = (
+                self.multivariate_knn_runtime + timeit.default_timer() - start_time
+            )
             try:
                 print("Beginning MLP")
                 start_time = timeit.default_timer()
@@ -417,110 +367,161 @@ class Benchmark(object):
             except Exception as e:
                 print(f"sklearn mlp failed with: {repr(e)}")
 
-            try:
-                print("Beginning GluonTS")
-                start_time = timeit.default_timer()
-                df_forecast = model_forecast(
-                    model_name="GluonTS",
-                    model_param_dict={
-                            "gluon_model": "SFF",
-                            "epochs": 40,
-                            "learning_rate": 0.01,
-                            "context_length": 10,
+            if not base_models_only:
+                try:
+                    print("Beginning KerasRNN")
+                    start_time = timeit.default_timer()
+                    df_forecast = model_forecast(
+                        model_name="WindowRegression",
+                        model_param_dict={
+                            "regression_model": {
+                                "model": "KerasRNN",
+                                "model_params": {
+                                    "kernel_initializer": "lecun_uniform",
+                                    "epochs": 50,
+                                    "batch_size": 8,
+                                    "optimizer": "rmsprop",
+                                    "loss": "Huber",
+                                    "hidden_layer_sizes": [32, 64, 32],
+                                    "rnn_type": "LSTM",
+                                    "shape": 1,
+                                },
+                            },
+                            "window_size": 10,
+                            "input_dim": "univariate",
+                            "output_dim": "forecast_length",
+                            "normalize_window": False,
+                            "max_windows": 5000,
                             "regression_type": None,
-                    },
-                    model_transform_dict={
-                        "fillna": "KNNImputer",
-                        "transformations": {"0": "QuantileTransformer"},
-                        "transformation_params": {
-                            "0": {"output_distribution": "uniform", "n_quantiles": 100}
                         },
-                    },
-                    df_train=df,
-                    forecast_length=12,
-                    frequency="D",
-                    prediction_interval=0.9,
-                    random_seed=random_seed,
-                    verbose=0,
-                    n_jobs=n_jobs,
-                )
-                self.gluonts_runtime = (
-                    self.gluonts_runtime + timeit.default_timer() - start_time
-                )
-            except Exception as e:
-                print(f"gluonts failed with: {repr(e)}")
-
-            print("Beginning Multivariate KNN")
-            start_time = timeit.default_timer()
-            df_forecast = model_forecast(
-                model_name="MultivariateRegression",
-                model_param_dict={
-                    "regression_model": {
-                        "model": "KNN",
-                        "model_params": {"n_neighbors": 5, "weights": "uniform"},
-                    },
-                    "mean_rolling_periods": 30,
-                    "macd_periods": None,
-                    "std_rolling_periods": 7,
-                    "max_rolling_periods": 60,
-                    "min_rolling_periods": 60,
-                    "quantile90_rolling_periods": 5,
-                    "quantile10_rolling_periods": None,
-                    "ewm_alpha": None,
-                    "ewm_var_alpha": None,
-                    "additional_lag_periods": None,
-                    "abs_energy": False,
-                    "rolling_autocorr_periods": None,
-                    "datepart_method": "simple",
-                    "polynomial_degree": None,
-                    "regression_type": None,
-                    "window": 7,
-                    "holiday": False,
-                    "probabilistic": False,
-                },
-                model_transform_dict={
-                    "fillna": "fake_date",
-                    "transformations": {"0": "MaxAbsScaler"},
-                    "transformation_params": {"0": {}},
-                },
-                df_train=df[df.columns[0:100]],
-                forecast_length=12,
-                frequency="D",
-                prediction_interval=0.9,
-                random_seed=random_seed,
-                verbose=0,
-                n_jobs=n_jobs,
-            )
-            self.multivariate_knn_runtime = (
-                self.multivariate_knn_runtime + timeit.default_timer() - start_time
-            )
-
-            try:
-                print("Beginning Prophet")
-                start_time = timeit.default_timer()
-                df_forecast = model_forecast(  # noqa
-                    model_name="FBProphet",
-                    model_param_dict={"holiday": False, "regression_type": None},
-                    model_transform_dict={
-                        "fillna": "KNNImputer",
-                        "transformations": {"0": "QuantileTransformer"},
-                        "transformation_params": {
-                            "0": {"output_distribution": "uniform", "n_quantiles": 100}
+                        model_transform_dict={
+                            "fillna": "ffill_mean_biased",
+                            "transformations": {
+                                "0": "MaxAbsScaler",
+                                "1": "DifferencedTransformer",
+                            },
+                            "transformation_params": {"0": {}, "1": {}},
                         },
-                    },
-                    df_train=small_df,
-                    forecast_length=12,
-                    frequency="D",
-                    prediction_interval=0.9,
-                    random_seed=random_seed,
-                    verbose=0,
-                    n_jobs=n_jobs,
-                )
-                self.prophet_runtime = (
-                    self.prophet_runtime + timeit.default_timer() - start_time
-                )
-            except Exception as e:
-                print(f"prophet failed with: {repr(e)}")
+                        df_train=df,
+                        forecast_length=12,
+                        frequency="D",
+                        prediction_interval=0.9,
+                        random_seed=random_seed,
+                        verbose=0,
+                        n_jobs=n_jobs,
+                    )
+                    self.tensorflow_rnn_runtime = (
+                        self.tensorflow_rnn_runtime + timeit.default_timer() - start_time
+                    )
+                except Exception as e:
+                    print(f"tensorflow failed with: {repr(e)}")
+
+                try:
+                    print("Beginning KerasCNN")
+                    start_time = timeit.default_timer()
+                    df_forecast = model_forecast(
+                        model_name="WindowRegression",
+                        model_param_dict={
+                            "regression_model": {
+                                "model": "KerasRNN",
+                                "model_params": {
+                                    "kernel_initializer": "glorot_normal",
+                                    "epochs": 50,
+                                    "batch_size": 8,
+                                    "optimizer": "adam",
+                                    "loss": "mae",
+                                    "hidden_layer_sizes": [32, 32, 32],
+                                    "rnn_type": "CNN",
+                                    "shape": 1,
+                                },
+                            },
+                            "window_size": 10,
+                            "input_dim": "univariate",
+                            "output_dim": "forecast_length",
+                            "normalize_window": False,
+                            "max_windows": 5000,
+                            "regression_type": None,
+                        },
+                        model_transform_dict={
+                            "fillna": "median",
+                            "transformations": {
+                                "0": "MaxAbsScaler",
+                            },
+                            "transformation_params": {"0": {}},
+                        },
+                        df_train=df,
+                        forecast_length=12,
+                        frequency="D",
+                        prediction_interval=0.9,
+                        random_seed=random_seed,
+                        verbose=0,
+                        n_jobs=n_jobs,
+                    )
+                    self.tensorflow_cnn_runtime = (
+                        self.tensorflow_cnn_runtime + timeit.default_timer() - start_time
+                    )
+                except Exception as e:
+                    print(f"tensorflow CNN failed with: {repr(e)}")
+
+                try:
+                    print("Beginning GluonTS")
+                    start_time = timeit.default_timer()
+                    df_forecast = model_forecast(
+                        model_name="GluonTS",
+                        model_param_dict={
+                                "gluon_model": "SFF",
+                                "epochs": 40,
+                                "learning_rate": 0.01,
+                                "context_length": 10,
+                                "regression_type": None,
+                        },
+                        model_transform_dict={
+                            "fillna": "KNNImputer",
+                            "transformations": {"0": "QuantileTransformer"},
+                            "transformation_params": {
+                                "0": {"output_distribution": "uniform", "n_quantiles": 100}
+                            },
+                        },
+                        df_train=df,
+                        forecast_length=12,
+                        frequency="D",
+                        prediction_interval=0.9,
+                        random_seed=random_seed,
+                        verbose=0,
+                        n_jobs=n_jobs,
+                    )
+                    self.gluonts_runtime = (
+                        self.gluonts_runtime + timeit.default_timer() - start_time
+                    )
+                except Exception as e:
+                    print(f"gluonts failed with: {repr(e)}")
+
+                try:
+                    print("Beginning Prophet")
+                    start_time = timeit.default_timer()
+                    df_forecast = model_forecast(  # noqa
+                        model_name="FBProphet",
+                        model_param_dict={"holiday": False, "regression_type": None},
+                        model_transform_dict={
+                            "fillna": "KNNImputer",
+                            "transformations": {"0": "QuantileTransformer"},
+                            "transformation_params": {
+                                "0": {"output_distribution": "uniform", "n_quantiles": 100}
+                            },
+                        },
+                        df_train=small_df,
+                        forecast_length=12,
+                        frequency="D",
+                        prediction_interval=0.9,
+                        random_seed=random_seed,
+                        verbose=0,
+                        n_jobs=n_jobs,
+                    )
+                    self.prophet_runtime = (
+                        self.prophet_runtime + timeit.default_timer() - start_time
+                    )
+                except Exception as e:
+                    print(f"prophet failed with: {repr(e)}")
 
         self.total_runtime = (
             self.avg_naive_runtime
