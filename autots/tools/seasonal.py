@@ -73,7 +73,7 @@ def date_part(DTindex, method: str = 'simple', set_index: bool = True):
                 ),  # 2 season
             }
         )
-    elif method == "simple_recurring":
+    elif method == "simple_2":
         date_part_df = pd.DataFrame(
             {
                 'month': DTindex.month,
