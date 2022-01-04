@@ -85,7 +85,7 @@ def rolling_x_regressor(
         )
         X = pd.concat([X, temp], axis=1).fillna(method='bfill')
 
-    if add_date_part in ['simple', 'expanded', 'recurring']:
+    if add_date_part in ['simple', 'expanded', 'recurring', "simple_2"]:
         date_part_df = date_part(df.index, method=add_date_part)
         date_part_df.index = df.index
         X = pd.concat(
@@ -1089,7 +1089,7 @@ class RollingRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.8, 0.05, 0.05, 0.05, 0.05]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring'], [0.7, 0.1, 0.1, 0.1]
+            [None, 'simple', 'expanded', 'recurring', "simple_2"], [0.7, 0.05, 0.1, 0.1, 0.05]
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.99, 0.01])[0]
@@ -1788,7 +1788,7 @@ class DatepartRegression(ModelObject):
         """Return dict of new parameters for parameter tuning."""
         model_choice = generate_regressor_params(model_dict=datepart_model_dict)
         datepart_choice = random.choices(
-            ["recurring", "simple", "expanded"], [0.4, 0.3, 0.3]
+            ["recurring", "simple", "expanded", "simple_2"], [0.4, 0.3, 0.3, 0.3]
         )[0]
         if "regressor" in method:
             regression_choice = "User"
@@ -2156,7 +2156,7 @@ class UnivariateRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.86, 0.01, 0.01, 0.01, 0.01]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring'], [0.7, 0.1, 0.1, 0.1]
+            [None, 'simple', 'expanded', 'recurring', "simple_2"], [0.7, 0.05, 0.1, 0.1, 0.05]
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         polynomial_degree_choice = None
@@ -2579,7 +2579,7 @@ class MultivariateRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.4, 0.01, 0.01, 0.01, 0.01]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring'], [0.4, 0.1, 0.1, 0.1]
+            [None, 'simple', 'expanded', 'recurring', "simple_2"], [0.4, 0.05, 0.1, 0.1, 0.05]
         )[0]
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]

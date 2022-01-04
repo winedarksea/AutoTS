@@ -996,7 +996,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
 
     @staticmethod
     def get_new_params(method: str = 'random'):
-        method_c = random.choice(["simple", "expanded", "recurring"])
+        method_c = random.choice(["simple", "expanded", "recurring", "simple_2"])
         from autots.models.sklearn import generate_regressor_params
 
         if method == "all":

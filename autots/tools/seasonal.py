@@ -73,6 +73,18 @@ def date_part(DTindex, method: str = 'simple', set_index: bool = True):
                 ),  # 2 season
             }
         )
+    elif method == "simple_recurring":
+        date_part_df = pd.DataFrame(
+            {
+                'month': DTindex.month,
+                'day': DTindex.day,
+                'weekday': DTindex.weekday,
+                'weekend': (DTindex.weekday > 4).astype(int),
+                'epoch': pd.to_numeric(
+                    DTindex, errors='coerce', downcast='integer'
+                ).values,
+            }
+        )
     else:
         # method == "simple"
         date_part_df = pd.DataFrame(
