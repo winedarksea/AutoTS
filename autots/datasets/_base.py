@@ -1,11 +1,10 @@
 """Loading example datasets."""
 from os.path import dirname, join
+import time
 import datetime
 import io
-import requests
 import numpy as np
 import pandas as pd
-import time
 
 
 def load_daily(long: bool = True):
@@ -302,6 +301,7 @@ def load_live_daily(
     )
     for asite in london_air_stations:
         try:
+            import requests
             # abase = "http://api.erg.ic.ac.uk/AirQuality/Data/Site/Wide/"
             # aargs = "SiteCode=CT8/StartDate=2021-07-01/EndDate=2021-07-30/csv"
             abase = 'https://www.londonair.org.uk/london/asp/downloadsite.asp'

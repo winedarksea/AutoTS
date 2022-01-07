@@ -15,6 +15,7 @@ from autots.tools.shaping import (
     NumericTransformer,
     clean_weights,
 )
+from autots.tools.transform import GeneralTransformer
 from autots.evaluator.auto_model import (
     TemplateEvalObject,
     NewGeneticTemplate,
@@ -91,6 +92,9 @@ class AutoTS(object):
         introduce_na (bool): whether to force last values in one training validation to be NaN. Helps make more robust models.
             defaults to None, which introduces NaN in last rows of validations if any NaN in tail of training data. Will not introduce NaN to all series if subset is used.
             if True, will also randomly change 20% of all rows to NaN in the validations
+        preclean (dict): if not None, a dictionary of Transformer params to be applied to input data
+            {"fillna": "median", "transformations": {}, "transformation_params": {}}
+            This will change data used in model inputs for fit and predict, and for accuracy evaluation in cross validation!
         model_interrupt (bool): if False, KeyboardInterrupts quit entire program.
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
@@ -156,6 +160,7 @@ class AutoTS(object):
         remove_leading_zeroes: bool = False,
         prefill_na: str = None,
         introduce_na: bool = None,
+        preclean: dict = None,
         model_interrupt: bool = False,
         verbose: int = 1,
         n_jobs: int = None,
@@ -190,6 +195,7 @@ class AutoTS(object):
         self.remove_leading_zeroes = remove_leading_zeroes
         self.prefill_na = prefill_na
         self.introduce_na = introduce_na
+        self.preclean = preclean
         self.model_interrupt = model_interrupt
         self.verbose = int(verbose)
         self.n_jobs = n_jobs
@@ -348,6 +354,7 @@ class AutoTS(object):
         self.future_regressor_train = None
         self.validation_train_indexes = []
         self.validation_test_indexes = []
+        self.preclean_transformer = None
 
         if verbose > 2:
             print('"Hello. Would you like to destroy some evil today?" - Sanderson')
@@ -525,26 +532,33 @@ class AutoTS(object):
         # check if NaN in last row
         self._nan_tail = df_wide_numeric.tail(2).isna().sum(axis=1).sum() > 0
 
+        # preclean data
+        if self.preclean is not None:
+            self.preclean_transformer = GeneralTransformer(**self.preclean)
+            df_wide_numeric = self.preclean_transformer.fit_transform(df_wide_numeric)
+
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
 
         # generate similarity matching indices (so it can fail now, not after all the generations)
         if self.validation_method == "similarity":
-            from autots.tools.transform import GeneralTransformer
-
-            params = {
-                "fillna": "median",  # mean or median one of few consistent things
-                "transformations": {"0": "MaxAbsScaler"},
-                "transformation_params": {
-                    "0": {},
-                },
-            }
-            trans = GeneralTransformer(**params)
+            if self.preclean is None:
+                params = {
+                    "fillna": "median",  # mean or median one of few consistent things
+                    "transformations": {"0": "MaxAbsScaler"},
+                    "transformation_params": {
+                        "0": {},
+                    },
+                }
+                trans = GeneralTransformer(**params)
+                sim_df = trans.fit_transform(df_wide_numeric)
+            else:
+                sim_df = df_wide_numeric
 
             stride_size = round(self.forecast_length / 2)
             stride_size = stride_size if stride_size > 0 else 1
             created_idx = retrieve_closest_indices(
-                trans.fit_transform(df_wide_numeric),
+                sim_df,
                 num_indices=num_validations + 1,
                 forecast_length=self.forecast_length,
                 stride_size=stride_size,
@@ -1331,6 +1345,15 @@ or otherwise increase models available."""
                 df_forecast.upper_forecast = trans.inverse_transform(
                     df_forecast.upper_forecast
                 )
+                # undo preclean transformations if necessary
+                if self.preclean is not None:
+                    df_forecast.forecast = self.preclean_transformer.inverse_transform(df_forecast.forecast)
+                    df_forecast.lower_forecast = self.preclean_transformer.inverse_transform(
+                        df_forecast.lower_forecast
+                    )
+                    df_forecast.upper_forecast = self.preclean_transformer.inverse_transform(
+                        df_forecast.upper_forecast
+                    )
                 forecast_objects[interval] = df_forecast
             return forecast_objects
         else:
@@ -1363,6 +1386,15 @@ or otherwise increase models available."""
             df_forecast.upper_forecast = trans.inverse_transform(
                 df_forecast.upper_forecast
             )
+            # undo preclean transformations if necessary
+            if self.preclean is not None:
+                df_forecast.forecast = self.preclean_transformer.inverse_transform(df_forecast.forecast)
+                df_forecast.lower_forecast = self.preclean_transformer.inverse_transform(
+                    df_forecast.lower_forecast
+                )
+                df_forecast.upper_forecast = self.preclean_transformer.inverse_transform(
+                    df_forecast.upper_forecast
+                )
             sys.stdout.flush()
             if just_point_forecast:
                 return df_forecast.forecast

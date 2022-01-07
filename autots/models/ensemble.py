@@ -69,6 +69,8 @@ def BestNEnsemble(
 ):
     """Generate mean forecast for ensemble of models.
 
+    model_weights and point_methods other than 'mean' are incompatible
+
     Args:
         ensemble_params (dict): BestN ensemble param dict
             should have "model_weights": {model_id: weight} where 1 is default weight per model
@@ -80,7 +82,9 @@ def BestNEnsemble(
     startTime = datetime.datetime.now()
     forecast_keys = list(forecasts.keys())
     model_weights = dict(ensemble_params.get("model_weights", {}))
+    point_method = ensemble_params.get("point_method", "mean")
     ensemble_params['model_weights'] = model_weights
+    ensemble_params['point_method'] = point_method
     ensemble_params['models'] = {
         k: v
         for k, v in dict(ensemble_params.get('models')).items()
@@ -94,21 +98,40 @@ def BestNEnsemble(
     columnz = sample_df.columns
     indices = sample_df.index
 
-    model_divisor = 0
-    ens_df = pd.DataFrame(0, index=indices, columns=columnz)
-    ens_df_lower = pd.DataFrame(0, index=indices, columns=columnz)
-    ens_df_upper = pd.DataFrame(0, index=indices, columns=columnz)
-    for idx, x in forecasts.items():
-        current_weight = float(model_weights.get(idx, 1))
-        ens_df = ens_df + (x * current_weight)
-        # also .get(idx, 0)
-        ens_df_lower = ens_df_lower + (lower_forecasts[idx] * current_weight)
-        ens_df_upper = ens_df_upper + (upper_forecasts[idx] * current_weight)
-        model_divisor = model_divisor + current_weight
+    if point_method in ["median", "midhinge"]:
+        if point_method == "midhinge":
+            ends_df = (np.quantile(np.array(list(forecasts.values())), q=0.25, axis=0) + np.quantile(np.array(list(forecasts.values())), q=0.75, axis=0)) / 2
+            ens_df_lower = (np.quantile(np.array(list(lower_forecasts.values())), q=0.25, axis=0) + np.quantile(np.array(list(lower_forecasts.values())), q=0.75, axis=0)) / 2
+            ens_df_upper = (np.quantile(np.array(list(upper_forecasts.values())), q=0.25, axis=0) + np.quantile(np.array(list(upper_forecasts.values())), q=0.75, axis=0)) / 2
+        else:
+            ends_df = np.median(np.array(list(forecasts.values())), axis=0)
+            ens_df_lower = np.median(np.array(list(lower_forecasts.values())), axis=0)
+            ens_df_upper = np.median(np.array(list(upper_forecasts.values())), axis=0)
 
-    ens_df = ens_df / model_divisor
-    ens_df_lower = ens_df_lower / model_divisor
-    ens_df_upper = ens_df_upper / model_divisor
+        ends_df = pd.DataFrame(ends_df, index=indices, columns=columnz)
+        ens_df_lower = pd.DataFrame(ens_df_lower, index=indices, columns=columnz)
+        ens_df_upper = pd.DataFrame(ens_df_upper, index=indices, columns=columnz)
+    else:
+        # these might be faster but the current method works fine
+        # np.average(np.array(list(forecasts.values())), axis=0, weights=model_weights.values())
+        # np.average(np.array(list(lower_forecasts.values())), axis=0, weights=model_weights.values())
+        # np.average(np.array(list(upper_forecasts.values())), axis=0, weights=model_weights.values())
+
+        model_divisor = 0
+        ens_df = pd.DataFrame(0, index=indices, columns=columnz)
+        ens_df_lower = pd.DataFrame(0, index=indices, columns=columnz)
+        ens_df_upper = pd.DataFrame(0, index=indices, columns=columnz)
+        for idx, x in forecasts.items():
+            current_weight = float(model_weights.get(idx, 1))
+            ens_df = ens_df + (x * current_weight)
+            # also .get(idx, 0)
+            ens_df_lower = ens_df_lower + (lower_forecasts[idx] * current_weight)
+            ens_df_upper = ens_df_upper + (upper_forecasts[idx] * current_weight)
+            model_divisor = model_divisor + current_weight
+
+        ens_df = ens_df / model_divisor
+        ens_df_lower = ens_df_lower / model_divisor
+        ens_df_upper = ens_df_upper / model_divisor
 
     ens_runtime = datetime.timedelta(0)
     for x in forecasts_runtime.values():
@@ -614,7 +637,7 @@ def _generate_distance_ensemble(dis_frac, forecast_length, initial_results):
     ]
     first_model = ens_per_ts.iloc[:, 0:first_bit].mean(axis=1).idxmin()
     last_model = (
-        ens_per_ts.iloc[:, first_bit : (last_bit + first_bit)].mean(axis=1).idxmin()
+        ens_per_ts.iloc[:, first_bit: (last_bit + first_bit)].mean(axis=1).idxmin()
     )
     ensemble_models = {}
     best3 = (
@@ -693,17 +716,32 @@ def EnsembleTemplateGenerator(
                 index=[0],
             )
             ensemble_templates = pd.concat([ensemble_templates, best3nu_params], axis=0)
+        # Best 5 and Median
+        best5nonunique = ens_temp.nsmallest(5, columns=['Score']).set_index("ID")[
+            ['Model', 'ModelParameters', 'TransformationParameters']
+        ]
+        best5_params = pd.DataFrame(_generate_bestn_dict(
+            best5nonunique,
+            model_name='BestN',
+            model_metric="bestn_horizontal",
+            point_method="median",
+        ), index=[0])
+        ensemble_templates = pd.concat(
+            [ensemble_templates, best5_params], axis=0, ignore_index=True
+        )
 
-        # best 3, by SMAPE, RMSE, SPL
+        # best 3 and 5, by SMAPE, RMSE, SPL, SMADE
         bestsmape = ens_temp.nsmallest(1, columns=['smape_weighted'])
         bestrmse = ens_temp.nsmallest(2, columns=['rmse_weighted'])
-        bestmae = ens_temp.nsmallest(3, columns=['spl_weighted'])
-        best3metric = pd.concat([bestsmape, bestrmse, bestmae], axis=0)
+        bestmae = ens_temp.nsmallest(2, columns=['spl_weighted'])
+        bestmade = ens_temp.nsmallest(5, columns=['made_weighted'])
+        best3metric = pd.concat([bestsmape, bestrmse, bestmae, bestmade], axis=0)
         best3metric = (
             best3metric.drop_duplicates()
-            .head(3)
             .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
         )
+        best5metric = best3metric.head(5)
+        best3metric = best3metric.head(3)
         n_models = best3metric.shape[0]
         if n_models == 3:
             best3m_params = pd.DataFrame(
@@ -713,7 +751,13 @@ def EnsembleTemplateGenerator(
                 index=[0],
             )
             ensemble_templates = pd.concat([ensemble_templates, best3m_params], axis=0)
-
+        best5m_params = pd.DataFrame(
+            _generate_bestn_dict(
+                best5metric, model_name='BestN', model_metric="mixed_metric", point_method="median",
+            ),
+            index=[0],
+        )
+        ensemble_templates = pd.concat([ensemble_templates, best5m_params], axis=0)
         # best 3, all must be of different model types
         ens_temp = (
             ens_temp.sort_values('Score', ascending=True, na_position='last')
@@ -724,8 +768,10 @@ def EnsembleTemplateGenerator(
         best3unique = ens_temp.nsmallest(3, columns=['Score']).set_index("ID")[
             ['Model', 'ModelParameters', 'TransformationParameters']
         ]
-        n_models = best3unique.shape[0]
-        if n_models == 3:
+        best5unique = ens_temp.nsmallest(5, columns=['Score']).set_index("ID")[
+            ['Model', 'ModelParameters', 'TransformationParameters']
+        ]
+        if best3unique.shape[0] == 3:
             best3u_params = pd.DataFrame(
                 _generate_bestn_dict(
                     best3unique, model_name='BestN', model_metric="best_score_unique"
@@ -734,6 +780,16 @@ def EnsembleTemplateGenerator(
             )
             ensemble_templates = pd.concat(
                 [ensemble_templates, best3u_params], axis=0, ignore_index=True
+            )
+        if best5unique.shape[0] == 5:
+            best5u_params = pd.DataFrame(
+                _generate_bestn_dict(
+                    best5unique, model_name='BestN', model_metric="best_score_unique", point_method="median",
+                ),
+                index=[0],
+            )
+            ensemble_templates = pd.concat(
+                [ensemble_templates, best5u_params], axis=0, ignore_index=True
             )
 
     if 'distance' in ensemble:
@@ -904,13 +960,18 @@ def EnsembleTemplateGenerator(
                 ].set_index("ID")[
                     ['Model', 'ModelParameters', 'TransformationParameters']
                 ]
-                model_weights = random.choice([chosen_ones.to_dict(), None])
+                point_method = random.choice(["mean", "median", "midhinge"])
+                if point_method in ["median", "midhinge"]:
+                    model_weights = None
+                else:
+                    model_weights = chosen_ones.to_dict()
                 best3u_params = pd.DataFrame(
                     _generate_bestn_dict(
                         bestn,
                         model_name='BestN',
                         model_metric=f"subsample_{samp}",
                         model_weights=model_weights,
+                        point_method=point_method,
                     ),
                     index=[0],
                 )

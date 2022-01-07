@@ -1932,6 +1932,42 @@ class ScipyFilter(EmptyTransformer):
         return df
 
 
+class EWMAFilter(EmptyTransformer):
+    """Irreversible filters of Exponential Weighted Moving Average
+
+    Args:
+        span (int): span of exponetial period to convert to alpha
+    """
+
+    def __init__(self, span: int = 7, **kwargs):
+        super().__init__(name="HPFilter")
+        self.span = span
+
+    def fit_transform(self, df):
+        """Fit and Return Detrended DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self.transform(df)
+
+    def transform(self, df):
+        """Return detrended data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df.ewm(span=self.span).mean()
+
+    @staticmethod
+    def get_new_params(method: str = 'random'):
+        if method == "fast":
+            choice = random.choice([3, 7, 10, 12])
+        else:
+            choice = seasonal_int(include_one=False)
+        return {"span": choice}
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     'None': EmptyTransformer(),
@@ -1980,6 +2016,7 @@ have_params = {
     'ScipyFilter': ScipyFilter,
     'HPFilter': HPFilter,
     'STLFilter': STLFilter,
+    "EWMAFilter": EWMAFilter,
 }
 # where will results will vary if not all series are included together
 shared_trans = ['PCA', 'FastICA', "DatepartRegression"]
@@ -2398,6 +2435,7 @@ transformer_dict = {
     "Slice": 0.02,
     "ScipyFilter": 0.02,
     "STLFilter": 0.01,
+    "EWMAFilter": 0.02,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
@@ -2422,6 +2460,7 @@ superfast_transformer_dict = {
     "ClipOutliers": 0.05,
     "Discretize": 0.03,
     "Slice": 0.02,
+    "EWMAFilter": 0.01,
 }
 
 # probability dictionary of FillNA methods
