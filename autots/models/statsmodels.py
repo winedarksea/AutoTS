@@ -482,7 +482,7 @@ class ETS(ModelObject):
                             seasonal=args['seasonal'],
                             seasonal_periods=args['seasonal_periods'],
                             # initialization_method=None,
-                            freq=args['freq'],
+                            # freq=args['freq'],
                         )
                     except Exception:
                         esModel = ExponentialSmoothing(

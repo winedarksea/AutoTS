@@ -289,11 +289,14 @@ class Detrend(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        try:
-            df = df.astype(float)
-        except Exception:
-            raise ValueError("Data Cannot Be Converted to Numeric Float")
-        X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
+        # try:
+        #     df = df.astype(float)
+        # except Exception:
+        #     raise ValueError("Data Cannot Be Converted to Numeric Float")
+        x_in = df.index
+        if not isinstance(x_in, pd.DatetimeIndex):
+            x_in = pd.DatetimeIndex(x_in)
+        X = pd.to_numeric(x_in, errors='coerce', downcast='integer').values
         if self.model != "GLS":
             X = X.reshape((-1, 1))
         if self.model in self.need_positive:
@@ -2091,7 +2094,8 @@ class GeneralTransformer(object):
             'DatepartRegression' - move a trend trained on datetime index
             "ScipyFilter" - filter data (lose information but smoother!) from scipy
             "HPFilter" - statsmodels hp_filter
-            "STLFilter" - seasonal decompose and keep just one part of decomposition.
+            "STLFilter" - seasonal decompose and keep just one part of decomposition
+            "EWMAFilter" - use an exponential weighted moving average to smooth data
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -2282,25 +2286,27 @@ class GeneralTransformer(object):
 
         self.df_index = df.index
         self.df_colnames = df.columns
-        for i in sorted(self.transformations.keys()):
-            transformation = self.transformations[i]
-            self.transformers[i] = self.retrieve_transformer(
-                transformation=transformation,
-                df=df,
-                param=self.transformation_params[i],
-                random_seed=self.random_seed,
-            )
-            df = self.transformers[i].fit_transform(df)
-            # convert to DataFrame only if it isn't already
-            if not isinstance(df, pd.DataFrame):
-                df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-            # update index reference if sliced
-            if transformation in ['Slice']:
-                self.df_index = df.index
-                self.df_colnames = df.columns
-            # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
-
-        df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+        try:
+            for i in sorted(self.transformations.keys()):
+                transformation = self.transformations[i]
+                self.transformers[i] = self.retrieve_transformer(
+                    transformation=transformation,
+                    df=df,
+                    param=self.transformation_params[i],
+                    random_seed=self.random_seed,
+                )
+                df = self.transformers[i].fit_transform(df)
+                # convert to DataFrame only if it isn't already
+                if not isinstance(df, pd.DataFrame):
+                    df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
+                # update index reference if sliced
+                if transformation in ['Slice']:
+                    self.df_index = df.index
+                    self.df_colnames = df.columns
+                # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+        except Exception as e:
+            raise Exception(f"Transformer {self.transformations[i]} failed on fit") from e
+        # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         return df
 
     def fit(self, df):
@@ -2329,19 +2335,18 @@ class GeneralTransformer(object):
         self.df_index = df.index
         self.df_colnames = df.columns
         # transformations
+        i = 0
         for i in sorted(self.transformations.keys()):
             transformation = self.transformations[i]
             df = self.transformers[i].transform(df)
             # convert to DataFrame only if it isn't already
             if not isinstance(df, pd.DataFrame):
-                df = pd.DataFrame(df)
-                df.index = self.df_index
-                df.columns = self.df_colnames
+                df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
             # update index reference if sliced
             if transformation in ['Slice']:
                 self.df_index = df.index
                 self.df_colnames = df.columns
-        df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+        # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         return df
 
     def inverse_transform(
@@ -2356,28 +2361,24 @@ class GeneralTransformer(object):
         """
         self.df_index = df.index
         self.df_colnames = df.columns
-        df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
-
-        for i in sorted(self.transformations.keys(), reverse=True):
-            if self.transformations[i] in self.oddities_list:
-                df = self.transformers[i].inverse_transform(
-                    df, trans_method=trans_method
-                )
-            else:
-                df = self.transformers[i].inverse_transform(df)
-            if not isinstance(df, pd.DataFrame):
-                df = pd.DataFrame(df)
-                df.index = self.df_index
-                df.columns = self.df_colnames
-            df = df.replace([np.inf, -np.inf], 0)
+        # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+        try:
+            for i in sorted(self.transformations.keys(), reverse=True):
+                if self.transformations[i] in self.oddities_list:
+                    df = self.transformers[i].inverse_transform(
+                        df, trans_method=trans_method
+                    )
+                else:
+                    df = self.transformers[i].inverse_transform(df)
+                if not isinstance(df, pd.DataFrame):
+                    df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
+                # df = df.replace([np.inf, -np.inf], 0)
+        except Exception as e:
+            raise Exception(f"Transformer {self.transformations[i]} failed on inverse") from e
 
         if fillzero:
             df = df.fillna(0)
 
-        """
-        if self.grouping is not None:
-            df = self.hier.reconcile(df)
-        """
         return df
 
 
