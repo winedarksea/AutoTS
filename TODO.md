@@ -21,6 +21,13 @@
 * made the probabilistic modeling of MultivariateRegression a parameter which only occurs when 'deep' mode is active (too slow)
 * added more params to pass through to Prophet
 * add phi damping to Detrend transformer
+* added 'simple_2" datepart method
+* added package to conda-forge
+* preclean method added to AutoTS
+* added median and midhinge point_methods to BestN Ensembles
+* removed datasets requests dependency
+* Added EWMAFilter
+* improved NaN in forecast check
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
@@ -33,5 +40,5 @@
 	* depth of recombination is?
 	* add to "all" transformer_dict
 	* add to no_params or external if so
-	* add to no_shared if so, in auto_model.py
+	* add to no_shared if so, in auto_model.py (shared_trans)
 	* oddities_list for those with forecast/original transform difference

@@ -539,7 +539,7 @@ def ModelPrediction(
     )
 
     # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
-    if df_forecast.forecast.isnull().all(axis=0).astype(int).sum() > 0:
+    if df_forecast.forecast.isnull().any().astype(int).sum() > 0:
         raise ValueError(
             "Model {} returned NaN for one or more series".format(model_str)
         )

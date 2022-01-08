@@ -98,17 +98,18 @@ def BestNEnsemble(
     columnz = sample_df.columns
     indices = sample_df.index
 
+    # this is expected to have to handle NaN
     if point_method in ["median", "midhinge"]:
         if point_method == "midhinge":
-            ends_df = (np.quantile(np.array(list(forecasts.values())), q=0.25, axis=0) + np.quantile(np.array(list(forecasts.values())), q=0.75, axis=0)) / 2
-            ens_df_lower = (np.quantile(np.array(list(lower_forecasts.values())), q=0.25, axis=0) + np.quantile(np.array(list(lower_forecasts.values())), q=0.75, axis=0)) / 2
-            ens_df_upper = (np.quantile(np.array(list(upper_forecasts.values())), q=0.25, axis=0) + np.quantile(np.array(list(upper_forecasts.values())), q=0.75, axis=0)) / 2
+            ens_df = (np.nanquantile(np.array(list(forecasts.values())), q=0.25, axis=0) + np.quantile(np.array(list(forecasts.values())), q=0.75, axis=0)) / 2
+            ens_df_lower = (np.nanquantile(np.array(list(lower_forecasts.values())), q=0.25, axis=0) + np.quantile(np.array(list(lower_forecasts.values())), q=0.75, axis=0)) / 2
+            ens_df_upper = (np.nanquantile(np.array(list(upper_forecasts.values())), q=0.25, axis=0) + np.quantile(np.array(list(upper_forecasts.values())), q=0.75, axis=0)) / 2
         else:
-            ends_df = np.median(np.array(list(forecasts.values())), axis=0)
-            ens_df_lower = np.median(np.array(list(lower_forecasts.values())), axis=0)
-            ens_df_upper = np.median(np.array(list(upper_forecasts.values())), axis=0)
+            ens_df = np.nanmedian(np.array(list(forecasts.values())), axis=0)
+            ens_df_lower = np.nanmedian(np.array(list(lower_forecasts.values())), axis=0)
+            ens_df_upper = np.nanmedian(np.array(list(upper_forecasts.values())), axis=0)
 
-        ends_df = pd.DataFrame(ends_df, index=indices, columns=columnz)
+        ens_df = pd.DataFrame(ens_df, index=indices, columns=columnz)
         ens_df_lower = pd.DataFrame(ens_df_lower, index=indices, columns=columnz)
         ens_df_upper = pd.DataFrame(ens_df_upper, index=indices, columns=columnz)
     else:
@@ -673,6 +674,7 @@ def _generate_bestn_dict(
     model_name: str = 'BestN',
     model_metric: str = "best_score",
     model_weights: dict = None,
+    point_method: str = None,
 ):
     ensemble_models = best.to_dict(orient='index')
     model_parms = {
@@ -683,6 +685,8 @@ def _generate_bestn_dict(
     }
     if model_weights is not None:
         model_parms['model_weights'] = model_weights
+    if point_method is not None:
+        model_parms['point_method'] = point_method
     return {
         'Model': 'Ensemble',
         'ModelParameters': json.dumps(model_parms),
@@ -784,7 +788,7 @@ def EnsembleTemplateGenerator(
         if best5unique.shape[0] == 5:
             best5u_params = pd.DataFrame(
                 _generate_bestn_dict(
-                    best5unique, model_name='BestN', model_metric="best_score_unique", point_method="median",
+                    best5unique, model_name='BestN', model_metric="best_score_unique", point_method="midhinge",
                 ),
                 index=[0],
             )
