@@ -263,9 +263,9 @@ It is best to usually use several metrics. Often the best sMAPE model, for examp
 
 `Containment` measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called `coverage_fraction`.
 
-`Contour` is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. Does not work with forecast_length=1. 
+`Contour` is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. 
 
-`MADE` is mean absolute differential error. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Does not work with forecast_length = 1. 
+`MADE` is mean absolute (scaled) differential error. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Equivalent to 'MAE' when forecast_length=1. 
 
 The contour metric is useful as it encourages 'wavy' forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they "don't look like they are trying hard enough" to some managers, and using contour favors non-flat forecasts that (to many) look like a more serious model.
 
@@ -346,6 +346,7 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 
 `pip install autots['additional']`
 ### Optional Packages
+	requests
 	psutil
 	holidays
 	prophet
@@ -367,15 +368,17 @@ venv, Anaconda, or [Miniforge](https://github.com/conda-forge/miniforge/)
 conda create -n openblas python=3.9
 conda activate openblas
 
-python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost yfinance pytrends fredapi --exists-action i
+python -m pip install numpy scipy scikit-learn statsmodels lightgbm xgboost yfinance pytrends fredapi --exists-action i
 
-python -m pip install yfinance pytrends fredapi
 python -m pip install numexpr bottleneck
 python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily, --no-deps to pip install prophet if this fails
+python -m pip install tensorflow
 python -m pip install mxnet --exists-action i     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
 python -m pip install gluonts --exists-action i
 python -m pip install holidays-ext pmdarima dill greykite --exists-action i --no-deps
 python -m pip install --upgrade numpy pandas --exists-action i  # mxnet likes to (pointlessly seeming) install old versions of numpy
+# install pytorch
+python -m pip install neuralprophet
 
 python -m pip install autots --exists-action i
 ```
@@ -613,7 +616,7 @@ Currently `MultivariateRegression` utilizes a stock GradientBoostingRegressor wi
 |  VAR                    | statsmodels  |                         |    True       |                 |       | True         |              | True          |
 |  Theta                  | statsmodels  |                         |    True       |     joblib      |       |              |              |               |
 |  ARDL                   | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
-|  FBProphet              | fbprophet    |                         |    True       |     joblib      |       |              |              | True          |
+|  FBProphet              | prophet      |                         |    True       |     joblib      |       |              |              | True          |
 |  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   | True         |              | True          |
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
@@ -623,6 +626,7 @@ Currently `MultivariateRegression` utilizes a stock GradientBoostingRegressor wi
 | UnivariateMotif/MultivariateMotif | scipy.distaince.cdist |      |    True       |     joblib      |       | *            |              |               |
 |  SectionalMotif         | scipy.distaince.cdist |  sklearn       |    True       |                 |       | True         |              | True          |
 |  NVAR                   |              |                         |    True       |   blas/lapack   |       | True         |              |               |
+|  NeuralProphet          | neuralprophet |                        |    tbd        |     pytorch     | yes   |              |              | True          |
 |  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |   *           |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |

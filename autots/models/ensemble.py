@@ -100,23 +100,26 @@ def BestNEnsemble(
 
     # this is expected to have to handle NaN
     if point_method in ["median", "midhinge"]:
+        forecast_array = np.array([x.values.reshape(1, -1) if x.ndim == 1 else x for x in forecasts.values()])
+        l_forecast_array = np.array([x.values.reshape(1, -1) if x.ndim == 1 else x for x in lower_forecasts.values()])
+        u_forecast_array = np.array([x.values.reshape(1, -1) if x.ndim == 1 else x for x in upper_forecasts.values()])
         if point_method == "midhinge":
-            ens_df = (np.nanquantile(np.array(list(forecasts.values())), q=0.25, axis=0) + np.quantile(np.array(list(forecasts.values())), q=0.75, axis=0)) / 2
-            ens_df_lower = (np.nanquantile(np.array(list(lower_forecasts.values())), q=0.25, axis=0) + np.quantile(np.array(list(lower_forecasts.values())), q=0.75, axis=0)) / 2
-            ens_df_upper = (np.nanquantile(np.array(list(upper_forecasts.values())), q=0.25, axis=0) + np.quantile(np.array(list(upper_forecasts.values())), q=0.75, axis=0)) / 2
+            ens_df = (np.nanquantile(forecast_array, q=0.25, axis=0) + np.quantile(forecast_array, q=0.75, axis=0)) / 2
+            ens_df_lower = (np.nanquantile(l_forecast_array, q=0.25, axis=0) + np.quantile(l_forecast_array, q=0.75, axis=0)) / 2
+            ens_df_upper = (np.nanquantile(u_forecast_array, q=0.25, axis=0) + np.quantile(u_forecast_array, q=0.75, axis=0)) / 2
         else:
-            ens_df = np.nanmedian(np.array(list(forecasts.values())), axis=0)
-            ens_df_lower = np.nanmedian(np.array(list(lower_forecasts.values())), axis=0)
-            ens_df_upper = np.nanmedian(np.array(list(upper_forecasts.values())), axis=0)
+            ens_df = np.nanmedian(forecast_array, axis=0)
+            ens_df_lower = np.nanmedian(l_forecast_array, axis=0)
+            ens_df_upper = np.nanmedian(u_forecast_array, axis=0)
 
         ens_df = pd.DataFrame(ens_df, index=indices, columns=columnz)
         ens_df_lower = pd.DataFrame(ens_df_lower, index=indices, columns=columnz)
         ens_df_upper = pd.DataFrame(ens_df_upper, index=indices, columns=columnz)
     else:
         # these might be faster but the current method works fine
-        # np.average(np.array(list(forecasts.values())), axis=0, weights=model_weights.values())
-        # np.average(np.array(list(lower_forecasts.values())), axis=0, weights=model_weights.values())
-        # np.average(np.array(list(upper_forecasts.values())), axis=0, weights=model_weights.values())
+        # np.average(forecast_array, axis=0, weights=model_weights.values())
+        # np.average(l_forecast_array, axis=0, weights=model_weights.values())
+        # np.average(u_forecast_array, axis=0, weights=model_weights.values())
 
         model_divisor = 0
         ens_df = pd.DataFrame(0, index=indices, columns=columnz)

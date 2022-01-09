@@ -28,6 +28,9 @@
 * removed datasets requests dependency
 * Added EWMAFilter
 * improved NaN in forecast check
+* fixed bug where Detrend failing with non-datetime index
+* improved error handling in Transformers to explicitly reference which failed
+* added random.seed() setting in AutoTS which actually seems to standardize the runs
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

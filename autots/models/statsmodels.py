@@ -484,7 +484,9 @@ class ETS(ModelObject):
                             # initialization_method=None,
                             # freq=args['freq'],
                         )
-                    except Exception:
+                    except Exception as e:
+                        if args['verbose'] > 0:
+                            print(f"ETS error {repr(e)}")
                         esModel = ExponentialSmoothing(
                             current_series,
                             damped=args['damped_trend'],

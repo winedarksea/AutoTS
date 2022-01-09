@@ -876,7 +876,7 @@ def model_forecast(
                 # currently this leaves no key/value for models that fail
                 if verbose >= 1:  # 1
                     print(tb.format_exc())
-                    p = f"FAILED: Ensemble {model_param_dict['model_name']} component {index} of {total_ens} with error: {repr(e)}"
+                    p = f"FAILED: Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} with error: {repr(e)}"
                     print(p)
         ens_forecast = EnsembleForecast(
             model_name,
