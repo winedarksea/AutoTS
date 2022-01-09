@@ -131,19 +131,19 @@ class AutoTS(object):
         constraint: float = None,
         ensemble: str = 'auto',
         initial_template: str = 'General+Random',
-        random_seed: int = 2020,
+        random_seed: int = 2022,
         holiday_country: str = 'US',
         subset: int = None,
         aggfunc: str = 'first',
         na_tolerance: float = 1,
         metric_weighting: dict = {
             'smape_weighting': 5,
-            'mae_weighting': 2,
+            'mae_weighting': 1,
             'rmse_weighting': 2,
-            'made_weighting': 0,
+            'made_weighting': 1,
             'containment_weighting': 0,
             'runtime_weighting': 0.05,
-            'spl_weighting': 2,
+            'spl_weighting': 3,
             'contour_weighting': 1,
         },
         drop_most_recent: int = 0,
@@ -200,6 +200,7 @@ class AutoTS(object):
         self.verbose = int(verbose)
         self.n_jobs = n_jobs
         self.models_mode = models_mode
+        random.seed(self.random_seed)
         # just a list of horizontal types in general
         self.h_ens_list = ['horizontal', 'probabilistic', 'hdist', "mosaic"]
         if self.ensemble == 'all':

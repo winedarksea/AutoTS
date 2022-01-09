@@ -301,21 +301,16 @@ class Detrend(EmptyTransformer):
             X = X.reshape((-1, 1))
         if self.model in self.need_positive:
             temp = self.trnd_trans.inverse_transform(pd.DataFrame(
-                self.trained_model.predict(X), index=df.index, columns=df.columns
+                self.trained_model.predict(X), index=x_in, columns=df.columns
             ))
             if self.phi != 1:
                 temp = temp.mul(pd.Series([self.phi] * df.shape[0], index=temp.index).pow(range(df.shape[0])), axis=0)
             df = df + temp
         else:
-            if self.model == "GLS" and df.shape[1] == 1:
-                pred = self.trained_model.predict(X)
-                pred = pred.reshape(-1, 1)
-                if self.phi != 1:
-                    pred = pred.mul(pd.Series([self.phi] * df.shape[0], index=pred.index).pow(range(df.shape[0])), axis=0)
-                df = df + pred
-            else:
-                df = df + self.trained_model.predict(X)
-        # df = df.astype(float) + self.trained_model.predict(X)
+            pred = pd.DataFrame(self.trained_model.predict(X), index=x_in, columns=df.columns)
+            if self.phi != 1:
+                pred = pred.mul(pd.Series([self.phi] * df.shape[0], index=pred.index).pow(range(df.shape[0])), axis=0)
+            df = df + pred
         return df
 
 

@@ -501,7 +501,8 @@ class ETS(ModelObject):
                     )
                     esPred = pd.Series(esPred)
                 except Exception as e:
-                    if args['verbose'] > 1:
+                    # this error handling is meant for horizontal ensembles where it will only then be needed for select series
+                    if args['verbose'] > 0:
                         print(f"ETS failed on {series_name} with {repr(e)}")
                     esPred = pd.Series((np.zeros((forecast_length,))), index=test_index)
             esPred.name = series_name
