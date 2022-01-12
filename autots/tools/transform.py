@@ -2100,7 +2100,7 @@ class GeneralTransformer(object):
 
     def __init__(
         self,
-        fillna: str = 'ffill',
+        fillna: str = None,
         transformations: dict = {},
         transformation_params: dict = {},
         grouping: str = None,

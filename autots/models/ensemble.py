@@ -407,27 +407,27 @@ def HorizontalEnsemble(
 
     org_idx = df_train.columns
 
-    forecast_df, u_forecast_df, l_forecast_df = (
-        pd.DataFrame(),
-        pd.DataFrame(),
-        pd.DataFrame(),
-    )
+    forelist, forelist_l, forelist_u = [], [], []
+    """
+    # forelist = [forecasts.get(mod_id)[series] for series, mod_id in all_series.items()]
     for series, mod_id in all_series.items():
-        try:
-            c_fore = forecasts[mod_id][series]
-            forecast_df = pd.concat([forecast_df, c_fore], axis=1)
-        except Exception as e:
-            print(f"Horizontal ensemble unable to add model {mod_id} {repr(e)}")
-        # upper
-        c_fore = upper_forecasts[mod_id][series]
-        u_forecast_df = pd.concat([u_forecast_df, c_fore], axis=1)
-        # lower
-        c_fore = lower_forecasts[mod_id][series]
-        l_forecast_df = pd.concat([l_forecast_df, c_fore], axis=1)
+        forelist.append(forecasts[mod_id][series])
+        forelist_l.append(lower_forecasts[mod_id][series])
+        forelist_u.append(upper_forecasts[mod_id][series])
+    """
+    # this should be faster if models are reused, but columns won't be in order
+    final = pd.DataFrame.from_dict({"0": all_series})
+    final = final.reset_index(drop=False).groupby("0").agg(list)
+    for row in final.itertuples():
+        forelist.append(forecasts[row[0]][row[1]])
+        forelist_l.append(lower_forecasts[row[0]][row[1]])
+        forelist_u.append(upper_forecasts[row[0]][row[1]])
     # make sure columns align to original
-    forecast_df = forecast_df.reindex(columns=org_idx)
-    u_forecast_df = u_forecast_df.reindex(columns=org_idx)
-    l_forecast_df = l_forecast_df.reindex(columns=org_idx)
+    # reindexing took 170 microseconds for 500 columns so shouldn't be a concern
+    forecast_df = pd.concat(forelist, axis=1).reindex(columns=org_idx)
+    l_forecast_df = pd.concat(forelist_l, axis=1).reindex(columns=org_idx)
+    u_forecast_df = pd.concat(forelist_u, axis=1).reindex(columns=org_idx)
+
     # combine runtimes
     try:
         ens_runtime = sum(list(forecasts_runtime.values()), datetime.timedelta())

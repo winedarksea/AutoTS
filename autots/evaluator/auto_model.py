@@ -870,13 +870,13 @@ def model_forecast(
                 lower_forecasts[model_id] = df_forecast.lower_forecast
                 # print(f"{model_param_dict['model_name']} with shape {df_forecast.forecast.shape}")
                 if verbose >= 2:
-                    p = f"Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} succeeded"
+                    p = f"Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} {row['Model']} succeeded"
                     print(p)
             except Exception as e:
                 # currently this leaves no key/value for models that fail
                 if verbose >= 1:  # 1
                     print(tb.format_exc())
-                    p = f"FAILED: Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} with error: {repr(e)}"
+                    p = f"FAILED: Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} {row['Model']} with error: {repr(e)}"
                     print(p)
         ens_forecast = EnsembleForecast(
             model_name,
