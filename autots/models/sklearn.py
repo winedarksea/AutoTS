@@ -228,7 +228,7 @@ def retrieve_regressor(
             from sklearn.multioutput import MultiOutputRegressor
 
             regr = MultiOutputRegressor(
-                KNeighborsRegressor(**model_param_dict),
+                KNeighborsRegressor(**model_param_dict, n_jobs=1),
                 n_jobs=n_jobs,
             )
         else:
@@ -576,12 +576,18 @@ def generate_regressor_params(
             param_dict = {
                 "model": 'KNN',
                 "model_params": {
-                    "n_neighbors": np.random.choice(
-                        [3, 5, 10], p=[0.2, 0.7, 0.1], size=1
-                    ).item(),
-                    "weights": np.random.choice(
-                        ['uniform', 'distance'], p=[0.7, 0.3], size=1
-                    ).item(),
+                    "n_neighbors": random.choices(
+                        [3, 5, 10, 14], [0.2, 0.7, 0.1, 0.1]
+                    )[0],
+                    "weights": random.choices(
+                        ['uniform', 'distance'], [0.7, 0.3]
+                    )[0],
+                    'p': random.choices(
+                        [2, 1, 1.5], [0.7, 0.1, 0.1]
+                    )[0],
+                    'leaf_size': random.choices(
+                        [30, 10, 50], [0.8, 0.1, 0.1]
+                    )[0],
                 },
             }
         elif model == 'RandomForest':
@@ -1670,6 +1676,7 @@ class DatepartRegression(ModelObject):
             "model_params": {"max_depth": 5, "min_samples_split": 2},
         },
         datepart_method: str = 'expanded',
+        polynomial_degree: int = None,
         regression_type: str = None,
         **kwargs,
     ):
@@ -1686,6 +1693,7 @@ class DatepartRegression(ModelObject):
         )
         self.regression_model = regression_model
         self.datepart_method = datepart_method
+        self.polynomial_degree = polynomial_degree
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -1703,7 +1711,7 @@ class DatepartRegression(ModelObject):
 
         y = df.to_numpy()
 
-        X = date_part(df.index, method=self.datepart_method)
+        X = date_part(df.index, method=self.datepart_method, polynomial_degree=self.polynomial_degree)
         if self.regression_type in ['User', 'user']:
             # regr = future_regressor.copy()
             # regr.index = X.index
@@ -1748,15 +1756,14 @@ class DatepartRegression(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
-        X = date_part(index, method=self.datepart_method)
+        X = date_part(index, method=self.datepart_method, polynomial_degree=self.polynomial_degree)
         if self.regression_type in ['User', 'user']:
             X = pd.concat([X, future_regressor], axis=1)
+            if X.shape[0] > index.shape[0]:
+                raise ValueError("future_regressor and X index failed to align")
         X.columns = [str(xc) for xc in X.columns]
 
-        forecast = pd.DataFrame(self.model.predict(X))
-
-        forecast.columns = self.column_names
-        forecast.index = index
+        forecast = pd.DataFrame(self.model.predict(X), index=index, columns=self.column_names)
 
         if just_point_forecast:
             return forecast
@@ -1790,6 +1797,10 @@ class DatepartRegression(ModelObject):
         datepart_choice = random.choices(
             ["recurring", "simple", "expanded", "simple_2"], [0.4, 0.3, 0.3, 0.3]
         )[0]
+        if datepart_choice in ["simple", "simple_2", "recurring"]:
+            polynomial_choice = random.choices([None, 2, 3], [0.5, 0.2, 0.01])[0]
+        else:
+            polynomial_choice = None
         if "regressor" in method:
             regression_choice = "User"
         else:
@@ -1797,6 +1808,7 @@ class DatepartRegression(ModelObject):
         parameter_dict = {
             'regression_model': model_choice,
             'datepart_method': datepart_choice,
+            'polynomial_degree': polynomial_choice,
             'regression_type': regression_choice,
         }
         return parameter_dict
@@ -1806,6 +1818,7 @@ class DatepartRegression(ModelObject):
         parameter_dict = {
             'regression_model': self.regression_model,
             'datepart_method': self.datepart_method,
+            'polynomial_degree': self.polynomial_degree,
             'regression_type': self.regression_type,
         }
         return parameter_dict
@@ -2156,7 +2169,7 @@ class UnivariateRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.86, 0.01, 0.01, 0.01, 0.01]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring', "simple_2"], [0.7, 0.05, 0.1, 0.1, 0.05]
+            [None, 'simple', 'expanded', 'recurring', "simple_2", "simple_2_poly"], [0.8, 0.05, 0.1, 0.1, 0.05, 0.05]
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         polynomial_degree_choice = None
@@ -2579,7 +2592,7 @@ class MultivariateRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.4, 0.01, 0.01, 0.01, 0.01]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring', "simple_2"], [0.4, 0.05, 0.1, 0.1, 0.05]
+            [None, 'simple', 'expanded', 'recurring', "simple_2", "simple_2_poly"], [0.5, 0.05, 0.1, 0.1, 0.05, 0.1]
         )[0]
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]

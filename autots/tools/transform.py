@@ -139,14 +139,16 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
 class Detrend(EmptyTransformer):
     """Remove a linear trend from the data."""
 
-    def __init__(self, model: str = 'GLS', phi: float = 1.0, **kwargs):
+    def __init__(self, model: str = 'GLS', phi: float = 1.0, window: int = None, **kwargs):
         super().__init__(name='Detrend')
         self.model = model
         self.need_positive = ['Poisson', 'Gamma', 'Tweedie']
         self.phi = phi
+        self.window = window
 
     @staticmethod
     def get_new_params(method: str = 'random'):
+        window = random.choices([None, 365, 900, 30, 90, 10], [2.0, 0.1, 0.1, 0.1, 0.1, 0.1])[0]
         if method == "fast":
             choice = random.choices(["GLS", "Linear"], [0.5, 0.5], k=1)[0]
             phi = random.choices([1, 0.999, 0.998, 0.99], [0.9, 0.05, 0.01, 0.01])[0]
@@ -169,6 +171,7 @@ class Detrend(EmptyTransformer):
         return {
             "model": choice,
             "phi": phi,
+            "window": window,
         }
 
     def _retrieve_detrend(self, detrend: str = "Linear"):
@@ -227,6 +230,9 @@ class Detrend(EmptyTransformer):
 
         Y = df.to_numpy()
         X = pd.to_numeric(df.index, errors='coerce', downcast='integer').to_numpy()
+        if self.window is not None:
+            Y = Y[-self.window:]
+            X = X[-self.window:]
         if self.model == 'GLS':
             from statsmodels.regression.linear_model import GLS
 
@@ -977,7 +983,7 @@ class SeasonalDifference(EmptyTransformer):
 
 
 class DatepartRegressionTransformer(EmptyTransformer):
-    """Remove a regression on datepart from the data."""
+    """Remove a regression on datepart from the data. See tools.seasonal.date_part"""
 
     def __init__(
         self,
@@ -986,15 +992,21 @@ class DatepartRegressionTransformer(EmptyTransformer):
             "model_params": {"max_depth": 5, "min_samples_split": 2},
         },
         datepart_method: str = 'expanded',
+        polynomial_degree: int = None,
         **kwargs,
     ):
         super().__init__(name="DatepartRegressionTransformer")
         self.regression_model = regression_model
         self.datepart_method = datepart_method
+        self.polynomial_degree = polynomial_degree
 
     @staticmethod
     def get_new_params(method: str = 'random'):
-        method_c = random.choice(["simple", "expanded", "recurring", "simple_2"])
+        datepart_choice = random.choice(["simple", "expanded", "recurring", "simple_2"])
+        if datepart_choice in ["simple", "simple_2", "recurring"]:
+            polynomial_choice = random.choices([None, 2], [0.5, 0.2])[0]
+        else:
+            polynomial_choice = None
         from autots.models.sklearn import generate_regressor_params
 
         if method == "all":
@@ -1021,7 +1033,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
                 }
             )
 
-        return {"regression_model": choice, "datepart_method": method_c}
+        return {"regression_model": choice, "datepart_method": datepart_choice, "polynomial_degree": polynomial_choice}
 
     def fit(self, df):
         """Fits trend for later detrending.
@@ -1037,7 +1049,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
         y = df.values
         if y.shape[1] == 1:
             y = y.ravel()
-        X = date_part(df.index, method=self.datepart_method)
+        X = date_part(df.index, method=self.datepart_method, polynomial_degree=self.polynomial_degree)
         from autots.models.sklearn import retrieve_regressor
 
         multioutput = True
@@ -1076,10 +1088,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
-        X = date_part(df.index, method=self.datepart_method)
-        y = pd.DataFrame(self.model.predict(X))
-        y.columns = df.columns
-        y.index = df.index
+        X = date_part(df.index, method=self.datepart_method, polynomial_degree=self.polynomial_degree)
+        # X.columns = [str(xc) for xc in X.columns]
+        y = pd.DataFrame(self.model.predict(X), columns=df.columns, index=df.index)
         df = df - y
         return df
 
@@ -1094,10 +1105,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
-        X = date_part(df.index, method=self.datepart_method)
-        y = pd.DataFrame(self.model.predict(X))
-        y.columns = df.columns
-        y.index = df.index
+        X = date_part(df.index, method=self.datepart_method, polynomial_degree=self.polynomial_degree)
+        y = pd.DataFrame(self.model.predict(X), columns=df.columns, index=df.index)
         df = df + y
         return df
 

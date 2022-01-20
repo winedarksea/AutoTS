@@ -14,6 +14,7 @@ from autots.tools.shaping import (
     simple_train_test_split,
     NumericTransformer,
     clean_weights,
+    infer_frequency,
 )
 from autots.tools.transform import GeneralTransformer
 from autots.evaluator.auto_model import (
@@ -2056,12 +2057,11 @@ def fake_regressor(
         verbose=verbose,
     )
     if frequency == 'infer':
-        frequency = pd.infer_freq(df_wide.index, warn=True)
+        frequency = infer_frequency(df_wide)
 
     forecast_index = pd.date_range(
         freq=frequency, start=df_wide.index[-1], periods=forecast_length + 1
-    )
-    forecast_index = forecast_index[1:]
+    )[1:]
 
     if dimensions <= 1:
         future_regressor_train = pd.Series(

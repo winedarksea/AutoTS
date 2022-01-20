@@ -8,6 +8,7 @@ import warnings
 import datetime
 import numpy as np
 import pandas as pd
+from autots.tools.shaping import infer_frequency
 from autots.evaluator.metrics import (
     smape,
     mae,
@@ -71,7 +72,7 @@ class ModelObject(object):
         self.column_names = df.columns
         self.train_last_date = df.index[-1]
         if self.frequency == 'infer':
-            self.frequency = pd.infer_freq(df.index, warn=False)
+            self.frequency = infer_frequency(df.index)
 
         return df
 
@@ -81,12 +82,12 @@ class ModelObject(object):
         Warnings:
             Requires ModelObject.basic_profile() being called as part of .fit()
         """
-        forecast_index = pd.date_range(
+        if self.frequency == 'infer':
+            raise ValueError("create_forecast_index run without specific frequency, run basic_profile first or pass proper frequency to model init")
+        self.forecast_index = pd.date_range(
             freq=self.frequency, start=self.train_last_date, periods=forecast_length + 1
-        )
-        forecast_index = forecast_index[1:]
-        self.forecast_index = forecast_index
-        return forecast_index
+        )[1:]  # note the disposal of the first (already extant) date
+        return self.forecast_index
 
     def get_params(self):
         """Return dict of current parameters."""

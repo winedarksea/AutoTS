@@ -21,6 +21,7 @@
 * made the probabilistic modeling of MultivariateRegression a parameter which only occurs when 'deep' mode is active (too slow)
 * added more params to pass through to Prophet
 * add phi damping to Detrend transformer
+* add window slice to Detrend transformer
 * added 'simple_2" datepart method
 * added package to conda-forge
 * preclean method added to AutoTS
@@ -32,6 +33,9 @@
 * improved error handling in Transformers to explicitly reference which failed
 * added random.seed() setting in AutoTS which actually seems to standardize the runs
 * sped up assembling/concat of horizontal ensembles for large numbers of series
+* added polynomial_degree to date_part (and Transformer and Regression)
+* updated infer_frequency and utilized in model base class
+* added additional datasets (analytics.gov and severe weather) to load_lively_daily and modified pytrends load
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

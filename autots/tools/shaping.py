@@ -3,15 +3,26 @@ import numpy as np
 import pandas as pd
 
 
-def infer_frequency(df_wide):
-    """Infer the frequency in a slightly more robust way."""
-    frequency = pd.infer_freq(df_wide.index, warn=True)
+def infer_frequency(df_wide, warn=True, **kwargs):
+    """Infer the frequency in a slightly more robust way.
+
+    Args:
+        df_wide (pd.Dataframe or pd.DatetimeIndex): input to pull frequency from
+        warn (bool): unused, here to make swappable with pd.infer_freq
+    """
+    if isinstance(df_wide, pd.DataFrame):
+        DTindex = df_wide.index
+    elif isinstance(df_wide, pd.DatetimeIndex):
+        DTindex = df_wide
+    else:
+        raise ValueError("infer_frequency failed due to input not being pandas DF or DT index")
+    frequency = pd.infer_freq(DTindex, warn=True)
     if frequency is None:
         # hack to get around data which has a few oddities
-        frequency = pd.infer_freq(df_wide.tail(10).index, warn=True)
+        frequency = pd.infer_freq(DTindex[-10:], warn=True)
     if frequency is None:
         # hack to get around data which has a few oddities
-        frequency = pd.infer_freq(df_wide.head(10).index, warn=True)
+        frequency = pd.infer_freq(DTindex[:10], warn=True)
     return frequency
 
 
