@@ -487,6 +487,7 @@ def ModelPrediction(
     holiday_country: str = 'US',
     startTimeStamps=None,
     grouping_ids=None,
+    fail_on_forecast_nan: bool = True,
     random_seed: int = 2020,
     verbose: int = 0,
     n_jobs: int = None,
@@ -506,6 +507,7 @@ def ModelPrediction(
         future_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
+        fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast
         n_jobs (int): number of processes
 
     Returns:
@@ -539,10 +541,11 @@ def ModelPrediction(
     )
 
     # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
-    if df_forecast.forecast.isnull().any().astype(int).sum() > 0:
-        raise ValueError(
-            "Model {} returned NaN for one or more series".format(model_str)
-        )
+    if fail_on_forecast_nan:
+        if df_forecast.forecast.isnull().any().astype(int).sum() > 0:
+            raise ValueError(
+                "Model {} returned NaN for one or more series. fail_on_forecast_nan=True".format(model_str)
+            )
 
     # CHECK Forecasts are proper length!
     if df_forecast.forecast.shape[0] != forecast_length:
@@ -738,6 +741,7 @@ def model_forecast(
     holiday_country: str = 'US',
     startTimeStamps=None,
     grouping_ids=None,
+    fail_on_forecast_nan: bool = True,
     random_seed: int = 2020,
     verbose: int = 0,
     n_jobs: int = "auto",
@@ -775,6 +779,7 @@ def model_forecast(
         n_jobs (int): number of CPUs to use when available.
         template_cols (list): column names of columns used as model template
         horizontal_subset (list): columns of df_train to use for forecast, meant for internal use for horizontal ensembling
+        fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast. True is recommended.
 
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
@@ -848,6 +853,7 @@ def model_forecast(
                     holiday_country=holiday_country,
                     startTimeStamps=startTimeStamps,
                     grouping_ids=grouping_ids,
+                    fail_on_forecast_nan=fail_on_forecast_nan,
                     random_seed=random_seed,
                     verbose=verbose,
                     n_jobs=n_jobs,
@@ -933,6 +939,7 @@ def model_forecast(
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
+            fail_on_forecast_nan=fail_on_forecast_nan,
             startTimeStamps=startTimeStamps,
             n_jobs=n_jobs,
         )

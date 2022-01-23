@@ -26,14 +26,16 @@
 * added package to conda-forge
 * preclean method added to AutoTS
 * added median and midhinge point_methods to BestN Ensembles
-* removed datasets requests dependency
+* added additional model selections to 'simple' and 'subsample' ensemble
+* removed top-level datasets `requests` dependency
 * Added EWMAFilter
 * improved NaN in forecast check
+* added fail_on_forecast_nan (bool) to AutoTS.predict and model_forecast, if False, can now allow forecasts with NaN to be returned
 * fixed bug where Detrend failing with non-datetime index
 * improved error handling in Transformers to explicitly reference which failed
 * added random.seed() setting in AutoTS which actually seems to standardize the runs
 * sped up assembling/concat of horizontal ensembles for large numbers of series
-* added polynomial_degree to date_part (and Transformer and Regression)
+* added polynomial_degree to date_part (and ~Transformer and ~Regression)
 * updated infer_frequency and utilized in model base class
 * added additional datasets (analytics.gov and severe weather) to load_lively_daily and modified pytrends load
 

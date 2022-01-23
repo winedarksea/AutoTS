@@ -398,7 +398,12 @@ def load_live_daily(
             for event_type in weather_event_types:
                 # appears to have a fixed max of 500 records
                 url = f"https://www.ncdc.noaa.gov/stormevents/csv?eventType={event_type}&beginDate_mm=01&beginDate_dd=01&beginDate_yyyy=2000&endDate_mm=09&endDate_dd=30&endDate_yyyy=9999&hailfilter=0.00&tornfilter=2&windfilter=000&sort=DN&statefips=-999%2CALL"
-                df = pd.read_csv(io.StringIO(s.get(url, timeout=timeout).text), low_memory=False, on_bad_lines='skip')
+                csv_in = io.StringIO(s.get(url, timeout=timeout).text)
+                try:
+                    # new in 1.3.0 of pandas
+                    df = pd.read_csv(csv_in, low_memory=False, on_bad_lines='skip')
+                except Exception:
+                    df = pd.read_csv(csv_in, low_memory=False, error_bad_lines=False)
                 df['BEGIN_DATE'] = pd.to_datetime(df['BEGIN_DATE'], infer_datetime_format=True)
                 df['END_DATE'] = pd.to_datetime(df['END_DATE'], infer_datetime_format=True)
                 df['day'] = df.apply(lambda row: pd.date_range(row["BEGIN_DATE"], row['END_DATE'], freq='D'), axis=1)

@@ -301,8 +301,8 @@ class FBProphet(ModelObject):
             'holiday': holiday_choice,
             'regression_type': regression_choice,
             'changepoint_prior_scale': random.choices(
-                [0.001, 0.01, 0.1, 0.05, 0.5, 1, 10, 30],  # 0.05 default
-                [0.1, 0.1, 0.1, 0.9, 0.1, 0.1, 0.1, 0.1]
+                [0.001, 0.01, 0.1, 0.05, 0.5, 1, 10, 30, 50],  # 0.05 default
+                [0.1, 0.1, 0.1, 0.9, 0.1, 0.1, 0.1, 0.1, 0.05]
             )[0],
             'seasonality_prior_scale': random.choices(
                 [0.01, 0.1, 1.0, 10.0, 15, 20, 25, 40],  # default 10
@@ -313,9 +313,9 @@ class FBProphet(ModelObject):
                 [0.05, 0.05, 0.05, 0.8, 0.05, 0.05, 0.05, 0.05]
             )[0],
             'seasonality_mode': random.choice(['additive', 'multiplicative']),
-            'changepoint_range': random.choices([0.8, 0.9, 0.98], [0.9, 0.1, 0.1])[0],
+            'changepoint_range': random.choices([0.8, 0.85, 0.9, 0.98], [0.9, 0.1, 0.1, 0.1])[0],
             'growth': "linear",
-            'n_changepoints': random.choices([5, 10, 20, 25, 30, 50], [0.05, 0.1, 0.1, 0.9, 0.1, 0.05])[0],
+            'n_changepoints': random.choices([5, 10, 20, 25, 30, 40, 50], [0.05, 0.1, 0.1, 0.9, 0.1, 0.05, 0.05])[0],
         }
 
     def get_params(self):

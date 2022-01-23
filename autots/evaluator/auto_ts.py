@@ -139,9 +139,9 @@ class AutoTS(object):
         na_tolerance: float = 1,
         metric_weighting: dict = {
             'smape_weighting': 5,
-            'mae_weighting': 1,
+            'mae_weighting': 2,
             'rmse_weighting': 2,
-            'made_weighting': 1,
+            'made_weighting': 0.5,
             'containment_weighting': 0,
             'runtime_weighting': 0.05,
             'spl_weighting': 3,
@@ -212,9 +212,6 @@ class AutoTS(object):
             else:
                 self.ensemble = 'simple'
 
-        if self.forecast_length == 1:
-            if metric_weighting['contour_weighting'] > 0:
-                print("Contour metric does not work with forecast_length == 1")
         # check metric weights are valid
         metric_weighting_values = self.metric_weighting.values()
         if min(metric_weighting_values) < 0:
@@ -1276,6 +1273,7 @@ or otherwise increase models available."""
         future_regressor=None,
         hierarchy=None,
         just_point_forecast: bool = False,
+        fail_on_forecast_nan: bool = True,
         verbose: int = 'self',
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
@@ -1288,6 +1286,7 @@ or otherwise increase models available."""
             future_regressor (numpy.Array): additional regressor
             hierarchy: Not yet implemented
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+            fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast
 
         Return:
             Either a PredictionObject of forecasts and metadata, or
@@ -1333,6 +1332,7 @@ or otherwise increase models available."""
                     holiday_country=self.holiday_country,
                     startTimeStamps=self.startTimeStamps,
                     grouping_ids=self.grouping_ids,
+                    fail_on_forecast_nan=fail_on_forecast_nan,
                     random_seed=self.random_seed,
                     verbose=verbose,
                     n_jobs=self.n_jobs,
@@ -1374,6 +1374,7 @@ or otherwise increase models available."""
                 holiday_country=self.holiday_country,
                 startTimeStamps=self.startTimeStamps,
                 grouping_ids=self.grouping_ids,
+                fail_on_forecast_nan=fail_on_forecast_nan,
                 random_seed=self.random_seed,
                 verbose=verbose,
                 n_jobs=self.n_jobs,
