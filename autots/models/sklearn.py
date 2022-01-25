@@ -268,6 +268,21 @@ def retrieve_regressor(
             **model_param_dict,
         )
         if multioutput:
+            from sklearn.multioutput import MultiOutputRegressor
+
+            return MultiOutputRegressor(regr)
+        else:
+            return regr
+    elif model_class == "LightGBMRegressorChain":
+        from lightgbm import LGBMRegressor
+
+        regr = LGBMRegressor(
+            verbose=int(verbose_bool),
+            random_state=random_seed,
+            n_jobs=n_jobs,
+            **model_param_dict,
+        )
+        if multioutput:
             from sklearn.multioutput import RegressorChain
 
             return RegressorChain(regr)
@@ -334,6 +349,11 @@ def retrieve_regressor(
         else:
             regr = LinearSVR(verbose=verbose_bool, **model_param_dict)
         return regr
+    elif model_class == 'Ridge':
+        from sklearn.linear_model import Ridge
+
+        regr = Ridge(random_state=random_seed, **model_param_dict)
+        return regr
     elif model_class == 'BayesianRidge':
         from sklearn.linear_model import BayesianRidge
 
@@ -372,6 +392,28 @@ def retrieve_regressor(
         from sklearn.linear_model import RANSACRegressor
 
         return RANSACRegressor(random_state=random_seed, **model_param_dict)
+    elif model_class == "GaussianProcessRegressor":
+        from sklearn.gaussian_process import GaussianProcessRegressor
+
+        kernel = model_param_dict.pop("kernel", None)
+        if kernel is not None:
+            if kernel == "DotWhite":
+                from sklearn.gaussian_process.kernels import DotProduct, WhiteKernel
+
+                kernel = DotProduct() + WhiteKernel()
+            elif kernel == "White":
+                from sklearn.gaussian_process.kernels import WhiteKernel
+
+                kernel = WhiteKernel()
+            elif kernel == "ExpSineSquared":
+                from sklearn.gaussian_process.kernels import ExpSineSquared
+
+                kernel = ExpSineSquared()
+            else:
+                from sklearn.gaussian_process.kernels import RBF
+
+                kernel = RBF()
+        return GaussianProcessRegressor(kernel=kernel, **model_param_dict)
     else:
         regression_model['model'] = 'RandomForest'
         from sklearn.ensemble import RandomForestRegressor
@@ -400,10 +442,13 @@ sklearn_model_dict = {
     'Transformer': 0.02,
     'HistGradientBoost': 0.03,
     'LightGBM': 0.03,
+    'LightGBMRegressorChain': 0.03,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.02,
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
+    'Ridge': 0.02,
+    'GaussianProcessRegressor': 0.02,
 }
 multivariate_model_dict = {
     'RandomForest': 0.02,
@@ -418,6 +463,7 @@ multivariate_model_dict = {
     'KerasRNN': 0.01,
     'HistGradientBoost': 0.03,
     'LightGBM': 0.03,
+    'LightGBMRegressorChain': 0.03,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.02,
     'PoissonRegresssion': 0.03,
@@ -434,6 +480,7 @@ univariate_model_dict = {
     'BayesianRidge': 0.03,
     'HistGradientBoost': 0.02,
     'LightGBM': 0.01,
+    'LightGBMRegressorChain': 0.01,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.05,
     'RANSAC': 0.02,
@@ -449,10 +496,12 @@ rolling_regression_dict = {
     'SVM': 0.05,
     'KerasRNN': 0.02,
     'LightGBM': 0.03,
+    'LightGBMRegressorChain': 0.03,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.01,
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
+    'Ridge': 0.02,
 }
 # models where we can be sure the model isn't sharing information across multiple Y's...
 no_shared_model_dict = {
@@ -460,6 +509,7 @@ no_shared_model_dict = {
     'Adaboost': 0.1,
     'SVM': 0.1,
     'xgboost': 0.1,
+    'LightGBM': 0.1,
     'HistGradientBoost': 0.1,
     'PoissonRegresssion': 0.05,
 }
@@ -490,6 +540,7 @@ def generate_regressor_params(
         'Adaboost',
         'DecisionTree',
         'LightGBM',
+        'LightGBMRegressorChain',
         'MLP',
         'KNN',
         'KerasRNN',
@@ -497,6 +548,8 @@ def generate_regressor_params(
         'HistGradientBoost',
         'RandomForest',
         'ExtraTrees',
+        'Ridge',
+        'GaussianProcessRegressor',
     ]:
         if model == 'Adaboost':
             param_dict = {
@@ -726,7 +779,7 @@ def generate_regressor_params(
                     )[0],
                 },
             }
-        elif model == 'LightGBM':
+        elif model in ['LightGBM', "LightGBMRegressorChain"]:
             param_dict = {
                 "model": 'LightGBM',
                 "model_params": {
@@ -763,6 +816,18 @@ def generate_regressor_params(
                         [0.6, 0.1, 0.3, 0.0010],
                     )[0],
                 },
+            }
+        elif model == 'Ridge':
+            param_dict = {
+                'alpha': random.choice([1.0, 10.0, 0.1, 0.00001]),
+            }
+        elif model == 'GaussianProcessRegressor':
+            param_dict = {
+                'alpha': random.choice([0.0000000001, 0.00001]),
+                'kernel': random.choices(
+                    [None, "DotWhite", "White", "RBF", "ExpSineSquared"],
+                    [0.4, 0.1, 0.1, 0.1, 0.1],
+                )[0],
             }
         else:
             min_samples = np.random.choice(

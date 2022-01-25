@@ -27,6 +27,7 @@
 * preclean method added to AutoTS
 * added median and midhinge point_methods to BestN Ensembles
 * added additional model selections to 'simple' and 'subsample' ensemble
+* switch LightGBM back to MultiOutputRegressor from RegressorChain for speed (with LightGBMRegressorChain replacing)
 * removed top-level datasets `requests` dependency
 * Added EWMAFilter
 * improved NaN in forecast check
@@ -38,6 +39,8 @@
 * added polynomial_degree to date_part (and ~Transformer and ~Regression)
 * updated infer_frequency and utilized in model base class
 * added additional datasets (analytics.gov and severe weather) to load_lively_daily and modified pytrends load
+* added rps to metrics (although no plans to build it into evaluation)
+* added 'Ridge' and 'GaussianProcessRegressor' as model options for Regressions
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

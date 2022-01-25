@@ -20,8 +20,10 @@ def symmetric_mean_absolute_percentage_error(actual, forecast):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         smape = (
-            np.nansum((abs(forecast - actual) / (abs(forecast) + abs(actual))), axis=0)
-            * 200
+            np.nansum(
+                (abs(forecast - actual) / (abs(forecast) + abs(actual))),
+                axis=0
+            ) * 200
         ) / np.count_nonzero(~np.isnan(actual), axis=0)
     return smape
 
@@ -168,8 +170,7 @@ def containment(lower_forecast, upper_forecast, actual):
     return (
         np.count_nonzero(
             (upper_forecast >= actual) & (lower_forecast <= actual), axis=0
-        )
-        / actual.shape[0]
+        ) / actual.shape[0]
     )
 
 
@@ -201,6 +202,23 @@ def contour(A, F):
     return contour_result
 
 
+def rps(predictions, observed):
+    """Vectorized version of Ranked Probability Score.
+    A lower value is a better score.
+    From: Colin Catlin, https://syllepsis.live/2022/01/22/ranked-probability-score-in-python/
+
+    Args:
+        predictions (pd.DataFrame): each column is an outcome category, with values as the 0 to 1 probability of that category
+        observed (pd.DataFrame): each column is an outcome category, with values of 0 OR 1 with 1 being that category occurred
+    """
+    ncat = predictions.shape[1] - 1
+    return (
+        np.sum(
+            (np.cumsum(predictions, axis=1) - np.cumsum(observed, axis=1)) ** 2, axis=1
+        ) / ncat
+    )
+
+
 def rmse(ae):
     """Accepting abs error already calculated"""
     return np.sqrt(np.nanmean((ae ** 2), axis=0))
@@ -228,6 +246,5 @@ def spl(A, F, quantile, scaler):
     return (
         np.nanmean(
             np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A)), axis=0
-        )
-        / scaler
+        ) / scaler
     )
