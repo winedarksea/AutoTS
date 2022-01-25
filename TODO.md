@@ -41,6 +41,7 @@
 * added additional datasets (analytics.gov and severe weather) to load_lively_daily and modified pytrends load
 * added rps to metrics (although no plans to build it into evaluation)
 * added 'Ridge' and 'GaussianProcessRegressor' as model options for Regressions
+* enforcing consistency on inner n_jobs with MultiOutputRegressor
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

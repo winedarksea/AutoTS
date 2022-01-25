@@ -1237,7 +1237,7 @@ def TemplateWizard(
                     ignore_index=True,
                     sort=False,
                 ).reset_index(drop=True)
-                if model_interrupt == "end_generation":
+                if model_interrupt == "end_generation" and current_generation > 0:
                     break
             else:
                 sys.stdout.flush()

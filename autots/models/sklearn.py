@@ -261,18 +261,22 @@ def retrieve_regressor(
     elif model_class == 'LightGBM':
         from lightgbm import LGBMRegressor
 
-        regr = LGBMRegressor(
-            verbose=int(verbose_bool),
-            random_state=random_seed,
-            n_jobs=n_jobs,
-            **model_param_dict,
-        )
         if multioutput:
             from sklearn.multioutput import MultiOutputRegressor
 
-            return MultiOutputRegressor(regr)
+            return MultiOutputRegressor(LGBMRegressor(
+                verbose=int(verbose_bool),
+                random_state=random_seed,
+                n_jobs=1,
+                **model_param_dict,
+            ), n_jobs=n_jobs)
         else:
-            return regr
+            return LGBMRegressor(
+                verbose=int(verbose_bool),
+                random_state=random_seed,
+                n_jobs=n_jobs,
+                **model_param_dict,
+            )
     elif model_class == "LightGBMRegressorChain":
         from lightgbm import LGBMRegressor
 
@@ -328,7 +332,7 @@ def retrieve_regressor(
             from sklearn.multioutput import MultiOutputRegressor
 
             regr = MultiOutputRegressor(
-                xgb.XGBRegressor(verbosity=verbose, **model_param_dict),
+                xgb.XGBRegressor(verbosity=verbose, **model_param_dict, n_jobs=1),
                 n_jobs=n_jobs,
             )
         else:
@@ -352,8 +356,7 @@ def retrieve_regressor(
     elif model_class == 'Ridge':
         from sklearn.linear_model import Ridge
 
-        regr = Ridge(random_state=random_seed, **model_param_dict)
-        return regr
+        return Ridge(random_state=random_seed, **model_param_dict)
     elif model_class == 'BayesianRidge':
         from sklearn.linear_model import BayesianRidge
 
@@ -413,7 +416,7 @@ def retrieve_regressor(
                 from sklearn.gaussian_process.kernels import RBF
 
                 kernel = RBF()
-        return GaussianProcessRegressor(kernel=kernel, **model_param_dict)
+        return GaussianProcessRegressor(kernel=kernel, random_state=random_seed, **model_param_dict)
     else:
         regression_model['model'] = 'RandomForest'
         from sklearn.ensemble import RandomForestRegressor
@@ -468,6 +471,7 @@ multivariate_model_dict = {
     'RadiusNeighbors': 0.02,
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
+    'Ridge': 0.02,
 }
 # these should train quickly with low dimensional X/Y, and not mind being run multiple in parallel
 univariate_model_dict = {
@@ -819,15 +823,21 @@ def generate_regressor_params(
             }
         elif model == 'Ridge':
             param_dict = {
-                'alpha': random.choice([1.0, 10.0, 0.1, 0.00001]),
+                "model": 'Ridge',
+                "model_params": {
+                    'alpha': random.choice([1.0, 10.0, 0.1, 0.00001]),
+                }
             }
         elif model == 'GaussianProcessRegressor':
             param_dict = {
-                'alpha': random.choice([0.0000000001, 0.00001]),
-                'kernel': random.choices(
-                    [None, "DotWhite", "White", "RBF", "ExpSineSquared"],
-                    [0.4, 0.1, 0.1, 0.1, 0.1],
-                )[0],
+                "model": 'GaussianProcessRegressor',
+                "model_params": {
+                    'alpha': random.choice([0.0000000001, 0.00001]),
+                    'kernel': random.choices(
+                        [None, "DotWhite", "White", "RBF", "ExpSineSquared"],
+                        [0.4, 0.1, 0.1, 0.1, 0.1],
+                    )[0],
+                }
             }
         else:
             min_samples = np.random.choice(
