@@ -1237,9 +1237,10 @@ class Motif(ModelObject):
         complete = list(map(list, zip(*df_list)))
         forecast = pd.concat(complete[0], axis=1)
         forecast.index = test_index
-        lower_forecast = pd.concat(complete[1], axis=1)
+        # these were swapped in an earlier version, huge mistake!
+        lower_forecast = pd.concat(complete[2], axis=1)
         lower_forecast.index = test_index
-        upper_forecast = pd.concat(complete[2], axis=1)
+        upper_forecast = pd.concat(complete[1], axis=1)
         upper_forecast.index = test_index
         if just_point_forecast:
             return forecast
