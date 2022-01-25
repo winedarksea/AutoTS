@@ -454,7 +454,7 @@ class AutoTS(object):
 
         # convert data to wide format
         if date_col is None and value_col is None:
-            df_wide = pd.DataFrame(df)
+            df_wide = pd.DataFrame(df).copy()
             assert (
                 type(df_wide.index) is pd.DatetimeIndex
             ), "df index is not pd.DatetimeIndex"
@@ -481,12 +481,13 @@ class AutoTS(object):
         # handle categorical data if present
         self.categorical_transformer = NumericTransformer(verbose=self.verbose)
         df_wide_numeric = self.categorical_transformer.fit_transform(df_wide)
+        del df_wide
 
         # check that column names are unique:
         if not df_wide_numeric.columns.is_unique:
             # maybe should make this an actual error in the future
             print(
-                "Warning: column/series names are not unique. Unique column names are highly recommended for wide data!"
+                "Warning: column/series names are not unique. Unique column names are required for some features!"
             )
             time.sleep(3)  # give the message a chance to be seen
 
@@ -541,6 +542,7 @@ class AutoTS(object):
 
         # generate similarity matching indices (so it can fail now, not after all the generations)
         if self.validation_method == "similarity":
+            sim_df = df_wide_numeric.copy()
             if self.preclean is None:
                 params = {
                     "fillna": "median",  # mean or median one of few consistent things
@@ -550,9 +552,7 @@ class AutoTS(object):
                     },
                 }
                 trans = GeneralTransformer(**params)
-                sim_df = trans.fit_transform(df_wide_numeric)
-            else:
-                sim_df = df_wide_numeric
+                sim_df = trans.fit_transform(sim_df)
 
             stride_size = round(self.forecast_length / 2)
             stride_size = stride_size if stride_size > 0 else 1
@@ -571,6 +571,7 @@ class AutoTS(object):
                 df_wide_numeric.index[df_wide_numeric.index <= indx[-1]]
                 for indx in created_idx
             ]
+            del sim_df
 
         # record if subset or not
         if self.subset is not None:
@@ -1060,6 +1061,7 @@ or otherwise increase models available."""
                     print(f"Horizontal Ensemble Generation Error: {repr(e)}")
                     time.sleep(5)
             try:
+                # eventually plan to allow window size to be controlled by params
                 if 'mosaic-window' in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
@@ -1072,7 +1074,6 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
-                if 'mosaic-window' in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
@@ -1084,7 +1085,6 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
-                if 'mosaic-window' in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
@@ -1096,7 +1096,6 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
-                if 'mosaic-window' in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
@@ -1104,6 +1103,17 @@ or otherwise increase models available."""
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
                         smoothing_window=3,
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=self.initial_results.full_mae_errors,
+                        smoothing_window=2,
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
@@ -1152,12 +1162,15 @@ or otherwise increase models available."""
                 template_result.model_results['TotalRuntime'].fillna(
                     pd.Timedelta(seconds=60), inplace=True
                 )
+                self.initial_results = self.initial_results.concat(template_result)
+                """
                 self.initial_results.model_results = pd.concat(
                     [self.initial_results.model_results, template_result.model_results],
                     axis=0,
                     ignore_index=True,
                     sort=False,
                 ).reset_index(drop=True)
+                """
                 self.initial_results.model_results['Score'] = generate_score(
                     self.initial_results.model_results,
                     metric_weighting=metric_weighting,
@@ -1224,6 +1237,7 @@ or otherwise increase models available."""
                 raise ValueError(error_msg_template)
         # give a more convenient dict option
         self.best_model_name = self.best_model['Model'].iloc[0]
+        self.best_model_id = self.best_model['ID'].iloc[0]
         self.best_model_params = json.loads(self.best_model['ModelParameters'].iloc[0])
         self.best_model_transformation_params = json.loads(
             self.best_model['TransformationParameters'].iloc[0]

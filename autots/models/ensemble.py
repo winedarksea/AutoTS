@@ -602,11 +602,11 @@ def EnsembleForecast(
         ens_forecast = MosaicEnsemble(
             ensemble_params,
             forecasts_list,
-            forecasts,
-            lower_forecasts,
-            upper_forecasts,
-            forecasts_runtime,
-            prediction_interval,
+            forecasts=forecasts,
+            lower_forecasts=lower_forecasts,
+            upper_forecasts=upper_forecasts,
+            forecasts_runtime=forecasts_runtime,
+            prediction_interval=prediction_interval,
             df_train=df_train,
             prematched_series=prematched_series,
         )
@@ -1392,7 +1392,7 @@ def MosaicEnsemble(
     l_forecast_df = melted.pivot(
         values="lower_forecast", columns="series_id", index="forecast_period"
     )
-    l_forecast_df.index = sample_idx.index = sample_idx
+    l_forecast_df.index = sample_idx
     # make sure columns align to original
     forecast_df = forecast_df.reindex(columns=org_idx)
     u_forecast_df = u_forecast_df.reindex(columns=org_idx)
@@ -1406,8 +1406,8 @@ def MosaicEnsemble(
     ens_result = PredictionObject(
         model_name="Ensemble",
         forecast_length=len(sample_idx),
-        forecast_index=forecast_df.index,
-        forecast_columns=forecast_df.columns,
+        forecast_index=sample_idx,
+        forecast_columns=org_idx,
         lower_forecast=l_forecast_df,
         forecast=forecast_df,
         upper_forecast=u_forecast_df,

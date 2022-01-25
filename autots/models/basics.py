@@ -1085,7 +1085,7 @@ def looped_motif(
         q2 = np.nanquantile(results, q=0.75, axis=0)
         forecast = (q1 + q2) / 2
 
-    pred_int = (1 - prediction_interval) / 2
+    pred_int = round((1 - prediction_interval) / 2, 5)
     upper_forecast = np.nanquantile(results, q=(1 - pred_int), axis=0)
     lower_forecast = np.nanquantile(results, q=pred_int, axis=0)
     forecast = pd.Series(forecast)
@@ -1865,7 +1865,7 @@ class SectionalMotif(ModelObject):
             q2 = np.nanquantile(results, q=0.75, axis=0)
             forecast = (q1 + q2) / 2
 
-        pred_int = (1 - self.prediction_interval) / 2
+        pred_int = round((1 - self.prediction_interval) / 2, 5)
         upper_forecast = np.nanquantile(results, q=(1 - pred_int), axis=0)
         lower_forecast = np.nanquantile(results, q=pred_int, axis=0)
 
