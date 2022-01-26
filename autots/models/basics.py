@@ -1085,7 +1085,7 @@ def looped_motif(
         q2 = np.nanquantile(results, q=0.75, axis=0)
         forecast = (q1 + q2) / 2
 
-    pred_int = round((1 - prediction_interval) / 2, 5)
+    pred_int = (1 - prediction_interval) / 2
     upper_forecast = np.nanquantile(results, q=(1 - pred_int), axis=0)
     lower_forecast = np.nanquantile(results, q=pred_int, axis=0)
     forecast = pd.Series(forecast)
@@ -1289,7 +1289,7 @@ class Motif(ModelObject):
             'yule',
         ]
         return {
-            "window": random.choices([5, 7, 10, 15, 30], [0.01, 0.1, 0.5, 0.1, 0.1])[0],
+            "window": random.choices([3, 5, 7, 10, 14, 28, 60], [0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01])[0],
             "point_method": random.choices(
                 ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
             )[0],

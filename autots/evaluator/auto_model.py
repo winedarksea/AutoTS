@@ -45,6 +45,7 @@ from autots.models.statsmodels import (
     VARMAX,
     Theta,
     ARDL,
+    DynamicFactorMQ,
 )
 
 
@@ -137,7 +138,7 @@ def ModelMonster(
         )
         return model
 
-    elif model == 'FBProphet':
+    elif model in ['FBProphet', "Prophet"]:
         from autots.models.prophet import FBProphet
 
         model = FBProphet(
@@ -456,7 +457,7 @@ def ModelMonster(
     elif model == 'NeuralProphet':
         from autots.models.prophet import NeuralProphet
 
-        model = NeuralProphet(
+        return NeuralProphet(
             frequency=frequency,
             prediction_interval=prediction_interval,
             holiday_country=holiday_country,
@@ -465,7 +466,15 @@ def ModelMonster(
             n_jobs=1,
             **parameters,
         )
-        return model
+    elif model == 'DynamicFactorMQ':
+        return DynamicFactorMQ(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            **parameters,
+        )
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)

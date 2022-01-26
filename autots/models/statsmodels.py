@@ -1319,21 +1319,21 @@ class DynamicFactor(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        k_factors_choice = np.random.choice(
-            a=[0, 1, 2, 3, 10], size=1, p=[0.1, 0.4, 0.2, 0.2, 0.1]
-        ).item()
-        factor_order_choice = np.random.choice(
-            a=[0, 1, 2, 3], size=1, p=[0.4, 0.3, 0.2, 0.1]
-        ).item()
+        k_factors_choice = random.choices(
+            [0, 1, 2, 3, 10], [0.1, 0.4, 0.2, 0.2, 0.1]
+        )[0]
+        factor_order_choice = random.choices(
+            [0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1]
+        )[0]
 
         if "regressor" in method:
             regression_choice = "User"
         else:
             regression_list = [None, 'User', 'Holiday']
             regression_probability = [0.6, 0.2, 0.2]
-            regression_choice = np.random.choice(
-                a=regression_list, size=1, p=regression_probability
-            ).item()
+            regression_choice = random.choices(
+                regression_list, regression_probability
+            )[0]
 
         parameter_dict = {
             'k_factors': k_factors_choice,
@@ -2272,3 +2272,149 @@ class ARDL(ModelObject):
             'order': self.order,
             'regression_type': self.regression_type,
         }
+
+
+class DynamicFactorMQ(ModelObject):
+    """DynamicFactorMQ from Statsmodels
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+
+    """
+
+    def __init__(
+        self,
+        name: str = "DynamicFactorMQ",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        regression_type: str = None,
+        holiday_country: str = 'US',
+        random_seed: int = 2020,
+        verbose: int = 0,
+        factors: int = 1,
+        factor_orders: int = 2,
+        factor_multiplicities: int = None,
+        idiosyncratic_ar1: bool = False,
+        maxiter: int = 1000,
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            regression_type=regression_type,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+        )
+        self.factors = factors
+        self.factor_orders = factor_orders
+        self.factor_multiplicities = factor_multiplicities
+        self.idiosyncratic_ar1 = idiosyncratic_ar1
+        self.maxiter = maxiter
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        df = self.basic_profile(df)
+        if self.verbose > 2:
+            self.verbose = True
+        else:
+            self.verbose = False
+        self.df_train = df
+
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        from statsmodels.tsa.statespace.dynamic_factor_mq import DynamicFactorMQ
+
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+
+        maModel = DynamicFactorMQ(
+            self.df_train,
+            freq=self.frequency,
+            factors=self.factors,
+            factor_orders=self.factor_orders,
+            factor_multiplicities=self.factor_multiplicities,
+            idiosyncratic_ar1=self.idiosyncratic_ar1,
+        ).fit(disp=self.verbose, maxiter=self.maxiter)
+        forecast = maModel.predict(start=test_index[0], end=test_index[-1])
+
+        if just_point_forecast:
+            return forecast
+        else:
+            # outer forecasts
+            alpha = 1 - self.prediction_interval
+            # predict_results = maModel.get_prediction(start='2020',end='2021')
+            outer_forecasts = maModel.get_forecast(steps=forecast_length)
+            outer_forecasts_df = outer_forecasts.conf_int(alpha=alpha)
+            df_size = int(outer_forecasts_df.shape[1] / 2)
+            lower_df = outer_forecasts_df.iloc[:, 0:df_size]
+            lower_df = lower_df.rename(columns=lambda x: x[6:])
+            upper_df = outer_forecasts_df.iloc[:, df_size:]
+            upper_df = upper_df.rename(columns=lambda x: x[6:])
+
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=test_index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_df,
+                forecast=forecast,
+                upper_forecast=upper_df,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Return dict of new parameters for parameter tuning."""
+        k_factors_choice = random.choices(
+            [1, 2, 3, 10], [0.4, 0.2, 0.2, 0.1]
+        )[0]
+        factor_order_choice = random.choices(
+            [1, 2, 3, 4], [0.3, 0.2, 0.1, 0.02]
+        )[0]
+
+        parameter_dict = {
+            'factors': k_factors_choice,
+            'factor_orders': factor_order_choice,
+            "factor_multiplicities": random.choice([None, 2]),
+            'idiosyncratic_ar1': random.choice([True, False]),
+        }
+        return parameter_dict
+
+    def get_params(self):
+        """Return dict of current parameters."""
+        parameter_dict = {
+            'factors': self.factors,
+            'factor_orders': self.factor_orders,
+            'factor_multiplicities': self.factor_multiplicities,
+            'idiosyncratic_ar1': self.idiosyncratic_ar1,
+        }
+        return parameter_dict

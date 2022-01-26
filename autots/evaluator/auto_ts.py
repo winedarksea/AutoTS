@@ -1718,7 +1718,7 @@ or otherwise increase models available."""
         lookup = {k: v['Model'] for k, v in ModelParameters['models'].items()}
         return series.replace(lookup)
 
-    def plot_horizontal(self, max_series: int = 20, **kwargs):
+    def plot_horizontal(self, max_series: int = 20, title="Model Types Chosen by Series", **kwargs):
         """Simple plot to visualize assigned series: models.
 
         Note that for 'mosiac' ensembles, it only plots the type of the most common model_id for that series, or the first if all are mode.
@@ -1738,7 +1738,7 @@ or otherwise increase models available."""
         # plot
         series.set_index(['Model', 'log(Mean)']).unstack('Model')[
             'log(Volatility)'
-        ].plot(style='o', **kwargs)
+        ].plot(style='o', title=title, **kwargs)
 
     def plot_horizontal_transformers(
         self, method="transformers", color_list=None, **kwargs
@@ -1754,17 +1754,19 @@ or otherwise increase models available."""
         series = self.horizontal_to_df()
         if str(method).lower() == "fillna":
             transformers = series['FillNA'].value_counts()
+            title = "Most Frequently Chosen FillNA Method"
         else:
             transformers = pd.Series(
                 ",".join(series['Transformers']).split(",")
             ).value_counts()
+            title = "Most Frequently Chosen Preprocessing"
         if color_list is None:
             color_list = colors_list
         colors = random.sample(color_list, transformers.shape[0])
         # plot
-        transformers.plot(kind='bar', color=colors, **kwargs)
+        transformers.plot(kind='bar', color=colors, title=title, **kwargs)
 
-    def plot_generation_loss(self, **kwargs):
+    def plot_generation_loss(self, title="Single Model Accuracy Gain Over Generations", **kwargs):
         """Plot improvement in accuracy over generations.
         Note: this is only "one size fits all" accuracy and
         doesn't account for the benefits seen for ensembling.
@@ -1777,7 +1779,7 @@ or otherwise increase models available."""
             & (self.initial_results.model_results['Ensemble'] < 1)
         ]
         for_gens.groupby("Generation")['Score'].min().cummin().plot(
-            ylabel="Lowest Score", **kwargs
+            ylabel="Lowest Score", title=title, **kwargs
         )
 
     def plot_backforecast(
@@ -1805,6 +1807,59 @@ or otherwise increase models available."""
             plot_df = plot_df[plot_df.index >= start_date]
         plot_df = remove_leading_zeros(plot_df)
         plot_df.plot(**kwargs)
+
+    def list_failed_model_types(self):
+        """Return a list of model types (ie ETS, LastValueNaive) that failed.
+        If all had at least one success, then return an empty list.
+        """
+        if self.best_model.empty:
+            raise ValueError("No best_model. AutoTS .fit() needs to be run.")
+        temp = self.initial_results.model_results[['Model', 'Exceptions']].copy()
+        temp['Exceptions'] = temp['Exceptions'].isnull().astype(int)
+        temp = temp.groupby("Model")['Exceptions'].sum()
+        return temp[temp <= 0].to_list()
+
+    def plot_per_series_smape(
+            self,
+            title: str = "Top Series Contributing SMAPE Error",
+            max_series: int = 10,
+            max_name_chars: int = 25,
+            color: str = "#ff9912",
+            figsize=(12, 4),
+            kind: str = "bar",
+            **kwargs
+    ):
+        """Plot which series are contributing most to SMAPE of final model.
+
+        Args:
+            title (str): plot title
+            max_series (int): max number of series to show on plot (sorted)
+            max_name_chars (str): if horizontal ensemble, will chop series names to this
+            color (str): hex or name of color of plot
+            figsize (tuple): passed through to plot axis
+            kind (str): bar or pie
+            **kwargs passed to pandas.plot()
+        """
+        if self.best_model.empty:
+            raise ValueError("No best_model. AutoTS .fit() needs to be run.")
+        best_model_per_series_mae = self.initial_results.per_series_mae[self.initial_results.per_series_mae.index == self.best_model_id].mean(axis=0)
+        # obsess over avoiding division by zero
+        scaler = self.df_wide_numeric.mean(axis=0)
+        scaler[scaler == 0] == np.nan
+        scaler = scaler.fillna(self.df_wide_numeric.max(axis=0))
+        scaler[scaler == 0] == 1
+        temp = ((best_model_per_series_mae / scaler) * 100).round(2).sort_values(ascending=False).head(max_series)
+        temp = temp.reset_index()
+        temp.columns = ["Series", "SMAPE"]
+        if self.best_model["Ensemble"].iloc[0] == 2:
+            series = self.horizontal_to_df()
+            temp = temp.merge(series, on='Series')
+            temp['Series'] = temp['Series'].str.slice(0, max_name_chars) + " (" + temp["Model"] + ")"
+
+        if kind == "pie":
+            temp.set_index("Series").plot(y="SMAPE", kind="pie", title=title, figsize=figsize, **kwargs)
+        else:
+            temp.plot(x="Series", y="SMAPE", kind=kind, title=title, color=color, figsize=figsize, **kwargs)
 
 
 colors_list = [

@@ -31,6 +31,7 @@ all_models = [
     'Theta',
     'ARDL',
     'NeuralProphet',
+    'DynamicFactorMQ',
 ]
 default = [
     'ZeroesNaive',
@@ -56,6 +57,7 @@ default = [
     'NVAR',
     'Theta',
     'ARDL',
+    'DynamicFactorMQ',
 ]
 colin = [
     'LastValueNaive',
@@ -153,6 +155,7 @@ probabilistic = [
     'Theta',
     'ARDL',
     'UnobservedComponents',
+    'DynamicFactorMQ',
     # 'MultivariateRegression',
 ]
 # models that use the shared information of multiple series to improve accuracy
@@ -168,6 +171,7 @@ multivariate = [
     'NVAR',
     'MultivariateRegression',
     'SectionalMotif',
+    'DynamicFactorMQ',
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -199,6 +203,7 @@ recombination_approved = [
     'Theta',
     'ARDL',
     'NeuralProphet',
+    'DynamicFactorMQ',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [

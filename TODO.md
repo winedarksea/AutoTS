@@ -42,6 +42,8 @@
 * added rps to metrics (although no plans to build it into evaluation)
 * added 'Ridge' and 'GaussianProcessRegressor' as model options for Regressions
 * enforcing consistency on inner n_jobs with MultiOutputRegressor
+* add DynamicFactorMQ model from Statsmodels
+* added plot_per_series_smape and list_failed_model_types to output more run information from AutoTS class
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
