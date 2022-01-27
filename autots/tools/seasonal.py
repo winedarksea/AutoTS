@@ -101,7 +101,7 @@ def date_part(DTindex, method: str = 'simple', set_index: bool = True, polynomia
         )
         if method == 'expanded':
             try:
-                weekyear = pd.Int64Index(DTindex.isocalendar().week)
+                weekyear = DTindex.isocalendar().week.to_numpy()
             except Exception:
                 weekyear = DTindex.week
             date_part_df2 = pd.DataFrame(

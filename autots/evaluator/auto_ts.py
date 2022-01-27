@@ -364,8 +364,11 @@ class AutoTS(object):
             return "Uninitiated AutoTS object"
         else:
             try:
-                res = ", ".join(self.initial_results.model_results[self.initial_results.model_results['ID'] == self.best_model['ID'].iloc[0]]['smape'].astype(str).tolist())
-                return f"Initiated AutoTS object with best model: \n{self.best_model_name}\n{self.best_model_transformation_params}\n{self.best_model_params}\nSMAPE: {res}"
+                base_res = self.initial_results.model_results[self.initial_results.model_results['ID'] == self.best_model_id]
+                res = ", ".join(base_res['smape'].astype(str).tolist())
+                res2 = ", ".join(base_res['mae'].astype(str).tolist())
+                res3 = ", ".join(base_res['spl'].astype(str).tolist())
+                return f"Initiated AutoTS object with best model: \n{self.best_model_name}\n{self.best_model_transformation_params}\n{self.best_model_params}\nSMAPE: {res}\nMAE: {res2}\nSPL: {res3}"
             except Exception:
                 return "Initiated AutoTS object"
 
@@ -882,9 +885,21 @@ class AutoTS(object):
         # add on best per_series models (which may not be in the top scoring)
         if any(x in ensemble for x in self.h_ens_list):
             model_results = self.initial_results.model_results
+            """
             mods = generate_score_per_series(
                 self.initial_results, self.metric_weighting, 1
             ).idxmin()
+            """
+            if self.models_to_validate < 50:
+                n_per_series = 1
+            elif self.models_to_validate > 250:
+                n_per_series = 5
+            else:
+                n_per_series = 3
+            score_per_series = generate_score_per_series(
+                self.initial_results, self.metric_weighting, 1
+            )
+            mods = score_per_series.index[np.argsort(-score_per_series.values, axis=0)[-1:-1 - n_per_series:-1].flatten()]
             per_series_val = model_results[
                 model_results['ID'].isin(mods.unique().tolist())
             ]
@@ -1297,6 +1312,7 @@ or otherwise increase models available."""
             prediction_interval (float): interval of upper/lower forecasts.
                 defaults to 'self' ie the interval specified in __init__()
                 if prediction_interval is a list, then returns a dict of forecast objects.
+                    {str(interval): prediction_object}
             future_regressor (numpy.Array): additional regressor
             hierarchy: Not yet implemented
             just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
@@ -1370,7 +1386,7 @@ or otherwise increase models available."""
                     df_forecast.upper_forecast = self.preclean_transformer.inverse_transform(
                         df_forecast.upper_forecast
                     )
-                forecast_objects[interval] = df_forecast
+                forecast_objects[str(interval)] = df_forecast
             return forecast_objects
         else:
             df_forecast = model_forecast(
@@ -1829,7 +1845,7 @@ or otherwise increase models available."""
             kind: str = "bar",
             **kwargs
     ):
-        """Plot which series are contributing most to SMAPE of final model.
+        """Plot which series are contributing most to SMAPE of final model. Avg of validations for best_model
 
         Args:
             title (str): plot title

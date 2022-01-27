@@ -136,6 +136,7 @@ class PredictionObject(object):
         avg_metrics=np.nan,
         avg_metrics_weighted=np.nan,
         full_mae_error=None,
+        model=None,
     ):
         self.model_name = model_name
         self.model_parameters = model_parameters

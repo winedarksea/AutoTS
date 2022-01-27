@@ -497,6 +497,7 @@ def ModelPrediction(
     startTimeStamps=None,
     grouping_ids=None,
     fail_on_forecast_nan: bool = True,
+    return_model: bool = False,
     random_seed: int = 2020,
     verbose: int = 0,
     n_jobs: int = None,
@@ -593,6 +594,9 @@ def ModelPrediction(
         datetime.datetime.now() - transformationStartTime
     )
     df_forecast.transformation_runtime = transformation_runtime
+
+    if return_model:
+        df_forecast.model = model
 
     # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
     if fail_on_forecast_nan:
@@ -769,6 +773,7 @@ def model_forecast(
         'Ensemble',
     ],
     horizontal_subset: list = None,
+    return_model: bool = False,
 ):
     """Takes numeric data, returns numeric forecasts.
 
@@ -797,6 +802,7 @@ def model_forecast(
         template_cols (list): column names of columns used as model template
         horizontal_subset (list): columns of df_train to use for forecast, meant for internal use for horizontal ensembling
         fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast. True is recommended.
+        return_model (bool): if True, forecast will have .model attribute set to model object. Only works for non-ensembles.
 
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
@@ -959,6 +965,7 @@ def model_forecast(
             fail_on_forecast_nan=fail_on_forecast_nan,
             startTimeStamps=startTimeStamps,
             n_jobs=n_jobs,
+            return_model=return_model,
         )
 
         sys.stdout.flush()

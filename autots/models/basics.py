@@ -1053,6 +1053,7 @@ def looped_motif(
     k=10,
     point_method="mean",
     prediction_interval=0.9,
+    return_result_windows=False,
 ):
     """inner function for Motif model."""
     if r_arr is None:
@@ -1094,7 +1095,10 @@ def looped_motif(
     upper_forecast.name = name
     lower_forecast = pd.Series(lower_forecast)
     lower_forecast.name = name
-    return (forecast, upper_forecast, lower_forecast)
+    if return_result_windows:
+        return (forecast, upper_forecast, lower_forecast, results)
+    else:
+        return (forecast, upper_forecast, lower_forecast)
 
 
 class Motif(ModelObject):
@@ -1113,6 +1117,7 @@ class Motif(ModelObject):
         k (int): number of closest neighbors to consider
         max_windows (int): max number of windows to consider (a speed/accuracy tradeoff)
         multivariate (bool): if True, utilizes matches from all provided series for each series forecast. Else just own history of series.
+        return_result_windows (bool): if True, result windows (all motifs gathered for forecast) will be saved in dict to result_windows attribute
     """
 
     def __init__(
@@ -1130,6 +1135,7 @@ class Motif(ModelObject):
         k: int = 10,
         max_windows: int = 5000,
         multivariate: bool = False,
+        return_result_windows: bool = False,
         **kwargs
     ):
         ModelObject.__init__(
@@ -1148,6 +1154,7 @@ class Motif(ModelObject):
         self.k = k
         self.max_windows = max_windows
         self.multivariate = multivariate
+        self.return_result_windows = return_result_windows
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -1215,6 +1222,7 @@ class Motif(ModelObject):
                     k=self.k,
                     point_method=self.point_method,
                     prediction_interval=self.prediction_interval,
+                    return_result_windows=self.return_result_windows,
                 )
                 for i in range(self.df.shape[1])
             )
@@ -1232,6 +1240,7 @@ class Motif(ModelObject):
                         k=self.k,
                         point_method=self.point_method,
                         prediction_interval=self.prediction_interval,
+                        return_result_windows=self.return_result_windows,
                     )
                 )
         complete = list(map(list, zip(*df_list)))
@@ -1242,6 +1251,8 @@ class Motif(ModelObject):
         lower_forecast.index = test_index
         upper_forecast = pd.concat(complete[1], axis=1)
         upper_forecast.index = test_index
+        if self.return_result_windows:
+            self.result_windows = dict(zip(forecast.columns, complete[3]))
         if just_point_forecast:
             return forecast
         else:
@@ -1288,15 +1299,21 @@ class Motif(ModelObject):
             'sqeuclidean',
             'yule',
         ]
+        if method == "event_risk":
+            k_choice = random.choices(
+                [10, 15, 20, 100], [0.5, 0.1, 0.1, 0.1]
+            )[0]
+        else:
+            k_choice = random.choices(
+                [3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0]
         return {
             "window": random.choices([3, 5, 7, 10, 14, 28, 60], [0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01])[0],
             "point_method": random.choices(
                 ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
             )[0],
             "distance_metric": random.choice(metric_list),
-            "k": random.choices(
-                [3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
-            )[0],
+            "k": k_choice,
             "max_windows": random.choices([None, 1000, 10000], [0.01, 0.1, 0.8])[0],
         }
 
@@ -1877,6 +1894,7 @@ class SectionalMotif(ModelObject):
         upper_forecast = pd.DataFrame(
             upper_forecast, index=test_index, columns=self.column_names
         )
+        self.result_windows = results
         if just_point_forecast:
             return forecast
         else:

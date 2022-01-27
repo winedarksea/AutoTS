@@ -32,6 +32,7 @@
 * Added EWMAFilter
 * improved NaN in forecast check
 * added fail_on_forecast_nan (bool) to AutoTS.predict and model_forecast, if False, can now allow forecasts with NaN to be returned
+* add return_model to model_forecast
 * fixed bug where Detrend failing with non-datetime index
 * improved error handling in Transformers to explicitly reference which failed
 * added random.seed() setting in AutoTS which actually seems to standardize the runs
@@ -44,6 +45,7 @@
 * enforcing consistency on inner n_jobs with MultiOutputRegressor
 * add DynamicFactorMQ model from Statsmodels
 * added plot_per_series_smape and list_failed_model_types to output more run information from AutoTS class
+* increased number of best per series models added to models to validate (models to validate has become more of a baseline than a firm number)
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
