@@ -187,18 +187,16 @@ def contour(A, F):
         F (numpy.array): predicted values
     """
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        try:
-            X = np.nan_to_num(np.diff(A, axis=0))
-            Y = np.nan_to_num(np.diff(F, axis=0))
-            # On the assumption flat lines common in forecasts,
-            # but exceedingly rare in real world
-            X = X >= 0
-            Y = Y > 0
-            contour_result = np.sum(X == Y, axis=0) / X.shape[0]
-        except Exception:
-            contour_result = np.nan
+    try:
+        X = np.nan_to_num(np.diff(A, axis=0))
+        Y = np.nan_to_num(np.diff(F, axis=0))
+        # On the assumption flat lines common in forecasts,
+        # but exceedingly rare in real world
+        X = X >= 0
+        Y = Y > 0
+        contour_result = np.sum(X == Y, axis=0) / X.shape[0]
+    except Exception:
+        contour_result = np.nan
     return contour_result
 
 
@@ -219,9 +217,9 @@ def rps(predictions, observed):
     )
 
 
-def rmse(ae):
-    """Accepting abs error already calculated"""
-    return np.sqrt(np.nanmean((ae ** 2), axis=0))
+def rmse(sqe):
+    """Accepting squared error already calculated"""
+    return np.sqrt(np.nanmean(sqe, axis=0))
 
 
 def mae(ae):
@@ -241,10 +239,27 @@ def smape(actual, forecast, ae):
     ) / np.count_nonzero(~np.isnan(actual), axis=0)
 
 
-def spl(A, F, quantile, scaler):
+def _spl(A, F, quantile, scaler):
     """Accepting scaler already calculated"""
     return (
         np.nanmean(
             np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A)), axis=0
         ) / scaler
     )
+
+
+def spl(precomputed_spl, scaler):
+    """Accepting most of it already calculated"""
+    return (
+        np.nanmean(
+            precomputed_spl, axis=0
+        ) / scaler
+    )
+
+
+def msle(full_errors, ae, le):
+    """input is array of y_pred - y_true to over-penalize underestimate.
+    Use instead y_true - y_pred to over-penalize overestimate.
+    AE used here for the log just to avoid divide by zero warnings (values aren't used either way)
+    """
+    return np.nanmean(np.where(full_errors > 0, le, ae), axis=0)

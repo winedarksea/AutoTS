@@ -985,7 +985,7 @@ def TemplateWizard(
     df_test,
     weights,
     model_count: int = 0,
-    ensemble: str = True,
+    ensemble: list = ["mosaic", "distance"],
     forecast_length: int = 14,
     frequency: str = 'infer',
     prediction_interval: float = 0.9,
@@ -1021,7 +1021,7 @@ def TemplateWizard(
         df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
         df_test (pandas.DataFrame): dataframe of actual values of (forecast length * n series)
         weights (dict): key = column/series_id, value = weight
-        ensemble (str): desc of ensemble types to prepare metric collection
+        ensemble (list): list of ensemble types to prepare metric collection
         forecast_length (int): number of periods to forecast
         transformation_dict (dict): a dictionary of outlier, fillNA, and transformation methods to be used
         model_str (str): a string to be direct to the appropriate model, used in ModelMonster
@@ -1043,7 +1043,6 @@ def TemplateWizard(
     Returns:
         TemplateEvalObject
     """
-    ensemble = str(ensemble)
     template_result = TemplateEvalObject()
     template_result.model_count = model_count
     if isinstance(template, pd.Series):
@@ -1061,6 +1060,13 @@ def TemplateWizard(
                 return MemObjecty()
 
     # template = unpack_ensemble_models(template, template_cols, keep_ensemble = False)
+
+    # precompute scaler to save a few miliseconds (saves very little time)
+    scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
+    fill_val = np.nanmax(scaler)
+    fill_val = fill_val if fill_val > 0 else 1
+    scaler[scaler == 0] = fill_val
+    scaler[np.isnan(scaler)] = fill_val
 
     for index, row in template.iterrows():
         template_start_time = datetime.datetime.now()
@@ -1121,13 +1127,14 @@ def TemplateWizard(
                 post_memory_percent = virtual_memory().percent
 
             per_ts = True if 'distance' in ensemble else False
-            full_mae = True if "mosaic" in ensemble else False
+            full_mae = True if "mosaic" in ensemble or "mosaic-window" in ensemble else False
             model_error = df_forecast.evaluate(
                 df_test,
                 series_weights=weights,
                 df_train=df_train,
                 per_timestamp_errors=per_ts,
                 full_mae_error=full_mae,
+                scaler=scaler,
             )
             if validation_round >= 1 and verbose > 0:
                 validation_accuracy_print = "{} - {} with avg smape {}: ".format(
@@ -1220,7 +1227,7 @@ def TemplateWizard(
                 template_result.per_timestamp_smape = pd.concat(
                     [template_result.per_timestamp_smape, cur_smape], axis=0
                 )
-            if 'mosaic' in ensemble:
+            if 'mosaic' in ensemble or 'mosaic-window' in ensemble:
                 template_result.full_mae_errors.extend([model_error.full_mae_errors])
                 template_result.full_mae_ids.extend([model_id])
 

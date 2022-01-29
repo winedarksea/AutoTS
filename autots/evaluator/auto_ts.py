@@ -176,9 +176,6 @@ class AutoTS(object):
         self.constraint = constraint
         self.random_seed = random_seed
         self.holiday_country = holiday_country
-        if isinstance(ensemble, list):
-            ensemble = str(",".join(ensemble)).lower()
-        self.ensemble = str(ensemble).lower()
         self.subset = subset
         self.na_tolerance = na_tolerance
         self.metric_weighting = metric_weighting
@@ -203,14 +200,24 @@ class AutoTS(object):
         self.models_mode = models_mode
         random.seed(self.random_seed)
         # just a list of horizontal types in general
-        self.h_ens_list = ['horizontal', 'probabilistic', 'hdist', "mosaic"]
-        if self.ensemble == 'all':
-            self.ensemble = 'simple,distance,horizontal-max,mosaic'
-        elif self.ensemble == 'auto':
-            if model_list in ['fast', 'default', 'all', 'multivariate']:
-                self.ensemble = 'simple,distance,horizontal-max'
+        self.h_ens_list = ['horizontal', 'probabilistic', 'hdist', "mosaic", 'mosaic-window', 'horizontal-max', 'horizontal-min']
+        if isinstance(ensemble, str):
+            ensemble = str(ensemble).lower()
+        if ensemble == 'all':
+            ensemble = ['simple', "distance", "horizontal-max", "mosaic"]
+        elif ensemble == 'auto':
+            if model_list in ['superfast']:
+                ensemble = ['simple']
             else:
-                self.ensemble = 'simple'
+                ensemble = ['simple', "distance", "horizontal-max"]
+        if isinstance(ensemble, str):
+            self.ensemble = ensemble.split(",")
+        elif isinstance(ensemble, list):
+            self.ensemble = ensemble
+        elif ensemble is None or not ensemble:
+            self.ensemble = []
+        else:
+            raise ValueError(f"ensemble arg: {ensemble} not a recognized string or list")
 
         # check metric weights are valid
         metric_weighting_values = self.metric_weighting.values()
@@ -354,6 +361,15 @@ class AutoTS(object):
         self.validation_train_indexes = []
         self.validation_test_indexes = []
         self.preclean_transformer = None
+        # this is temporary until proper validation param passing is sorted out
+        stride_size = round(self.forecast_length / 2)
+        stride_size = stride_size if stride_size > 0 else 1
+        self.similarity_validation_params = {
+            "stride_size": stride_size,
+            "distance_metric": "nan_euclidean",
+            "include_differenced": True,
+            "window_size": 30,
+        }
 
         if verbose > 2:
             print('"Hello. Would you like to destroy some evil today?" - Sanderson')
@@ -508,7 +524,8 @@ class AutoTS(object):
                 ens_piece3 = "mosaic"
             else:
                 ens_piece3 = ""
-            self.ensemble = ens_piece1 + "," + ens_piece2 + "," + ens_piece3
+            # self.ensemble = ens_piece1 + "," + ens_piece2 + "," + ens_piece3
+            self.ensemble = [ens_piece1, ens_piece2, ens_piece3]
         ensemble = self.ensemble
         # because horizontal cannot handle non-string columns/series_ids
         if any(x in ensemble for x in self.h_ens_list):
@@ -557,18 +574,13 @@ class AutoTS(object):
                 trans = GeneralTransformer(**params)
                 sim_df = trans.fit_transform(sim_df)
 
-            stride_size = round(self.forecast_length / 2)
-            stride_size = stride_size if stride_size > 0 else 1
             created_idx = retrieve_closest_indices(
                 sim_df,
                 num_indices=num_validations + 1,
                 forecast_length=self.forecast_length,
-                stride_size=stride_size,
-                distance_metric="nan_euclidean",
-                include_differenced=True,
-                window_size=30,
                 include_last=True,
                 verbose=self.verbose,
+                **self.similarity_validation_params
             )
             self.validation_indexes = [
                 df_wide_numeric.index[df_wide_numeric.index <= indx[-1]]
@@ -770,7 +782,7 @@ class AutoTS(object):
                 self.initial_results.save(result_file)
 
         # try ensembling
-        if ensemble not in [None, 'none']:
+        if self.ensemble:
             try:
                 self.score_per_series = generate_score_per_series(
                     self.initial_results, self.metric_weighting, 1
@@ -892,7 +904,7 @@ class AutoTS(object):
             """
             if self.models_to_validate < 50:
                 n_per_series = 1
-            elif self.models_to_validate > 250:
+            elif self.models_to_validate > 500:
                 n_per_series = 5
             else:
                 n_per_series = 3
@@ -952,7 +964,7 @@ class AutoTS(object):
                 # subset series (if used) and take a new train/test split
                 if self.subset_flag:
                     # mosaic can't handle different cols in each validation
-                    if "mosaic" in self.ensemble:
+                    if "mosaic" in self.ensemble or "mosaic-window" in self.ensemble:
                         rand_st = random_seed
                     else:
                         rand_st = random_seed + y + 1
@@ -1053,24 +1065,21 @@ or otherwise increase models available."""
         if any(x in ensemble for x in self.h_ens_list):
             ensemble_templates = pd.DataFrame()
             try:
-                if 'horizontal' in ensemble or 'probabilistic' in ensemble:
-                    self.score_per_series = generate_score_per_series(
-                        self.initial_results,
-                        metric_weighting=metric_weighting,
-                        total_validations=(num_validations + 1),
-                    )
-                    ens_templates = HorizontalTemplateGenerator(
-                        self.score_per_series,
-                        model_results=self.initial_results.model_results,
-                        forecast_length=forecast_length,
-                        ensemble=ensemble.replace('probabilistic', ' ').replace(
-                            'hdist', ' '
-                        ),
-                        subset_flag=self.subset_flag,
-                    )
-                    ensemble_templates = pd.concat(
-                        [ensemble_templates, ens_templates], axis=0
-                    )
+                self.score_per_series = generate_score_per_series(
+                    self.initial_results,
+                    metric_weighting=metric_weighting,
+                    total_validations=(num_validations + 1),
+                )
+                ens_templates = HorizontalTemplateGenerator(
+                    self.score_per_series,
+                    model_results=self.initial_results.model_results,
+                    forecast_length=forecast_length,
+                    ensemble=ensemble,
+                    subset_flag=self.subset_flag,
+                )
+                ensemble_templates = pd.concat(
+                    [ensemble_templates, ens_templates], axis=0
+                )
             except Exception as e:
                 if self.verbose >= 0:
                     print(f"Horizontal Ensemble Generation Error: {repr(e)}")
@@ -1246,7 +1255,7 @@ or otherwise increase models available."""
                         by="Score", ascending=True, na_position='last'
                     )
                     .drop_duplicates(subset=self.template_cols)
-                    .head(1)[template_cols]
+                    .head(1)[self.template_cols_id]
                 )
             except IndexError:
                 raise ValueError(error_msg_template)
@@ -1833,7 +1842,7 @@ or otherwise increase models available."""
         temp = self.initial_results.model_results[['Model', 'Exceptions']].copy()
         temp['Exceptions'] = temp['Exceptions'].isnull().astype(int)
         temp = temp.groupby("Model")['Exceptions'].sum()
-        return temp[temp <= 0].to_list()
+        return temp[temp <= 0].index.to_list()
 
     def plot_per_series_smape(
             self,
@@ -1984,7 +1993,7 @@ class AutoTSIntervals(object):
             current_model = AutoTS(
                 forecast_length=forecast_length,
                 prediction_interval=interval,
-                ensemble="probabilistic-max",
+                ensemble="horizontal-max",
                 max_generations=max_generations,
                 model_list=model_list,
                 constraint=constraint,
@@ -2038,7 +2047,7 @@ class AutoTSIntervals(object):
             per_series_spl,
             model_results=overall_results.model_results,
             forecast_length=forecast_length,
-            ensemble='probabilistic-max',
+            ensemble='horizontal-max',
             subset_flag=False,
         )
         self.per_series_spl = per_series_spl

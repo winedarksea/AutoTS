@@ -46,6 +46,9 @@
 * add DynamicFactorMQ model from Statsmodels
 * added plot_per_series_smape and list_failed_model_types to output more run information from AutoTS class
 * increased number of best per series models added to models to validate (models to validate has become more of a baseline than a firm number)
+* finally transitioned `ensemble` parameter fully to a list from the original comma-sep string list
+* mle and imle logarithmic metrics for targeting over- and under-estimation
+* MAGE metric for error on rollup forecasts
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

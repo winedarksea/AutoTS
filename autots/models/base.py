@@ -18,6 +18,7 @@ from autots.evaluator.metrics import (
     spl,
     medae,
     mean_absolute_differential_error,
+    msle,
 )
 
 # from sklearn.metrics import r2_score
@@ -289,6 +290,7 @@ class PredictionObject(object):
         df_train=None,
         per_timestamp_errors: bool = False,
         full_mae_error: bool = True,
+        scaler=None,
     ):
         """Evalute prediction against test actual. Fills out attributes of base object.
 
@@ -307,6 +309,7 @@ class PredictionObject(object):
             avg_metrics (pandas.Series): average values of accuracy across all input series
             avg_metrics_weighted (pandas.Series): average values of accuracy across all input series weighted by series_weight, if given
             full_mae_errors (numpy.array): abs(actual - forecast)
+            scaler (numpy.array): precomputed scaler for efficiency, avg value of series in order of columns
         """
         A = np.array(actual)
         F = np.array(self.forecast)
@@ -325,20 +328,31 @@ class PredictionObject(object):
         if len(series_weights) != F.shape[1]:
             series_weights = {col: series_weights[col] for col in self.forecast.columns}
 
-        # reuse this in several metrics
-        self.full_mae_errors = abs(A - F)
+        # reuse this in several metrics so precalculate
+        full_errors = F - A
+        self.full_mae_errors = abs(full_errors)
+        squared_errors = full_errors ** 2
+        log_errors = np.log1p(self.full_mae_errors)
 
-        # calculate scaler once for spl
-        scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
-        fill_val = np.nanmax(scaler)
-        fill_val = fill_val if fill_val > 0 else 1
-        scaler[scaler == 0] = fill_val
-        scaler[np.isnan(scaler)] = fill_val
+        # calculate scaler once
+        if scaler is None:
+            scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
+            fill_val = np.nanmax(scaler)
+            fill_val = fill_val if fill_val > 0 else 1
+            scaler[scaler == 0] = fill_val
+            scaler[np.isnan(scaler)] = fill_val
 
         # concat most recent history to enable full-size diffs
         last_of_array = np.nan_to_num(df_train[df_train.shape[0] - 1: df_train.shape[0], ])
         lA = np.concatenate([last_of_array, A])
         lF = np.concatenate([last_of_array, F])
+
+        mage = np.nansum(full_errors, axis=None) / A.shape[1]
+
+        # np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A))
+        self.upper_spl = np.where(A >= upper_forecast, self.prediction_interval * (A - upper_forecast), (1 - self.prediction_interval) * (upper_forecast - A))
+        # note that the quantile here is the lower quantile
+        self.lower_spl = np.where(A >= lower_forecast, (1 - self.prediction_interval) * (A - lower_forecast), (1 - (1 - self.prediction_interval)) * (lower_forecast - A))
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
@@ -346,28 +360,26 @@ class PredictionObject(object):
                 {
                     'smape': smape(A, F, self.full_mae_errors),
                     'mae': mae(self.full_mae_errors),
-                    'rmse': rmse(self.full_mae_errors),
-                    # 'medae': medae(self.full_mae_errors),
+                    'rmse': rmse(squared_errors),
+                    'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
+                    'mle': msle(full_errors, self.full_mae_errors, log_errors),
+                    'imle': msle(-full_errors, self.full_mae_errors, log_errors),
+                    'mage': mage,
+                    'spl': spl(
+                        self.upper_spl,
+                        scaler=scaler,
+                    ) + spl(
+                        self.lower_spl,
+                        scaler=scaler,
+                    ),
+                    'containment': containment(lower_forecast, upper_forecast, A),
+                    'contour': contour(lA, lF),
+                    # 'medae': medae(self.full_mae_errors),  # median
+                    # 'made_unscaled': mean_absolute_differential_error(lA, lF, 1),
+                    # 'mad2e': mean_absolute_differential_error(lA, lF, 2),
                     # r2 can't handle NaN in history, also uncomment import above
                     # 'r2': r2_score(A, F, multioutput="raw_values").flatten(),
                     # 'correlation': pd.DataFrame(A).corrwith(pd.DataFrame(F), drop=True).to_numpy(),
-                    'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
-                    'made_unscaled': mean_absolute_differential_error(lA, lF, 1),
-                    # 'mad2e': mean_absolute_differential_error(lA, lF, 2),
-                    'containment': containment(lower_forecast, upper_forecast, A),
-                    'spl': spl(
-                        A=A,
-                        F=upper_forecast,
-                        quantile=self.prediction_interval,
-                        scaler=scaler,
-                    )
-                    + spl(
-                        A=A,
-                        F=lower_forecast,
-                        quantile=(1 - self.prediction_interval),
-                        scaler=scaler,
-                    ),
-                    'contour': contour(lA, lF),
                 },
                 index=actual.columns,
             ).transpose()

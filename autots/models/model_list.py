@@ -57,7 +57,7 @@ default = [
     'NVAR',
     'Theta',
     'ARDL',
-    'DynamicFactorMQ',
+    # 'DynamicFactorMQ',
 ]
 colin = [
     'LastValueNaive',
