@@ -299,7 +299,9 @@ class PredictionObject(object):
         Args:
             actual (pd.DataFrame): dataframe of actual values of (forecast length * n series)
             series_weights (dict): key = column/series_id, value = weight
-            df_train (pd.DataFrame): historical values of series, wide, used for setting scaler for SPL
+            df_train (pd.DataFrame): historical values of series, wide,
+                used for setting scaler for SPL
+                necessary for MADE and Contour if forecast_length == 1
                 if None, actuals are used instead (suboptimal).
             per_timestamp (bool): whether to calculate and return per timestamp direction errors
 
@@ -330,8 +332,8 @@ class PredictionObject(object):
 
         # reuse this in several metrics so precalculate
         full_errors = F - A
-        self.full_mae_errors = abs(full_errors)
-        squared_errors = full_errors ** 2
+        self.full_mae_errors = np.abs(full_errors)
+        self.squared_errors = full_errors ** 2
         log_errors = np.log1p(self.full_mae_errors)
 
         # calculate scaler once
@@ -347,12 +349,13 @@ class PredictionObject(object):
         lA = np.concatenate([last_of_array, A])
         lF = np.concatenate([last_of_array, F])
 
-        mage = np.nansum(full_errors, axis=None) / A.shape[1]
+        # mage = np.nansum(full_errors, axis=None) / A.shape[1]
+        mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
 
         # np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A))
-        self.upper_spl = np.where(A >= upper_forecast, self.prediction_interval * (A - upper_forecast), (1 - self.prediction_interval) * (upper_forecast - A))
+        self.upper_pl = np.where(A >= upper_forecast, self.prediction_interval * (A - upper_forecast), (1 - self.prediction_interval) * (upper_forecast - A))
         # note that the quantile here is the lower quantile
-        self.lower_spl = np.where(A >= lower_forecast, (1 - self.prediction_interval) * (A - lower_forecast), (1 - (1 - self.prediction_interval)) * (lower_forecast - A))
+        self.lower_pl = np.where(A >= lower_forecast, (1 - self.prediction_interval) * (A - lower_forecast), (1 - (1 - self.prediction_interval)) * (lower_forecast - A))
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
@@ -360,16 +363,13 @@ class PredictionObject(object):
                 {
                     'smape': smape(A, F, self.full_mae_errors),
                     'mae': mae(self.full_mae_errors),
-                    'rmse': rmse(squared_errors),
+                    'rmse': rmse(self.squared_errors),
                     'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
+                    'mage': mage,
                     'mle': msle(full_errors, self.full_mae_errors, log_errors),
                     'imle': msle(-full_errors, self.full_mae_errors, log_errors),
-                    'mage': mage,
                     'spl': spl(
-                        self.upper_spl,
-                        scaler=scaler,
-                    ) + spl(
-                        self.lower_spl,
+                        self.upper_pl + self.lower_pl,
                         scaler=scaler,
                     ),
                     'containment': containment(lower_forecast, upper_forecast, A),

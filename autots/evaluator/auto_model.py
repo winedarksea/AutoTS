@@ -626,6 +626,8 @@ class TemplateEvalObject(object):
         per_series_made=pd.DataFrame(),
         per_series_contour=pd.DataFrame(),
         per_series_spl=pd.DataFrame(),
+        per_series_mle=pd.DataFrame(),
+        per_series_imle=pd.DataFrame(),
         model_count: int = 0,
     ):
         self.model_results = model_results
@@ -636,8 +638,12 @@ class TemplateEvalObject(object):
         self.per_series_made = per_series_made
         self.per_series_spl = per_series_spl
         self.per_timestamp_smape = per_timestamp_smape
+        self.per_series_mle = per_series_mle
+        self.per_series_imle = per_series_imle
         self.full_mae_ids = []
         self.full_mae_errors = []
+        self.full_pl_errors = []
+        self.squared_errors = []
 
     def __repr__(self):
         """Print."""
@@ -673,7 +679,15 @@ class TemplateEvalObject(object):
             axis=0,
             sort=False,
         )
+        self.per_series_mle = pd.concat(
+            [self.per_series_mle, another_eval.per_series_mle], axis=0, sort=False
+        )
+        self.per_series_imle = pd.concat(
+            [self.per_series_imle, another_eval.per_series_imle], axis=0, sort=False
+        )
         self.full_mae_errors.extend(another_eval.full_mae_errors)
+        self.full_pl_errors.extend(another_eval.full_pl_errors)
+        self.squared_errors.extend(another_eval.squared_errors)
         self.full_mae_ids.extend(another_eval.full_mae_ids)
         self.model_count = self.model_count + another_eval.model_count
         return self
@@ -1219,6 +1233,20 @@ def TemplateWizard(
                 ],
                 axis=0,
             )
+            template_result.per_series_mle = pd.concat(
+                [
+                    template_result.per_series_mle,
+                    _ps_metric(ps_metric, 'mle', model_id),
+                ],
+                axis=0,
+            )
+            template_result.per_series_imle = pd.concat(
+                [
+                    template_result.per_series_imle,
+                    _ps_metric(ps_metric, 'imle', model_id),
+                ],
+                axis=0,
+            )
 
             if 'distance' in ensemble:
                 cur_smape = model_error.per_timestamp.loc['weighted_smape']
@@ -1229,6 +1257,8 @@ def TemplateWizard(
                 )
             if 'mosaic' in ensemble or 'mosaic-window' in ensemble:
                 template_result.full_mae_errors.extend([model_error.full_mae_errors])
+                template_result.squared_errors.extend([model_error.squared_errors])
+                template_result.full_pl_errors.extend([model_error.upper_pl + model_error.lower_pl])
                 template_result.full_mae_ids.extend([model_id])
 
         except KeyboardInterrupt:
@@ -1648,18 +1678,23 @@ def validation_aggregation(validation_results):
         'rmse': 'mean',
         'medae': 'mean',
         'made': 'mean',
-        'containment': 'mean',
+        'mage': 'mean',
+        'mle': 'mean',
+        'imle': 'mean',
         'spl': 'mean',
+        'containment': 'mean',
         'contour': 'mean',
         'smape_weighted': 'mean',
         'mae_weighted': 'mean',
         'rmse_weighted': 'mean',
         'medae_weighted': 'mean',
         'made_weighted': 'mean',
-        'containment_weighted': 'mean',
-        'contour_weighted': 'mean',
+        'mage_weighted': 'mean',
+        'mle_weighted': 'mean',
+        'imle_weighted': 'mean',
         'spl_weighted': 'mean',
         'containment_weighted': 'mean',
+        'contour_weighted': 'mean',
         'TotalRuntimeSeconds': 'mean',
         'Score': 'mean',
     }
@@ -1691,6 +1726,9 @@ def generate_score(
     SMAPE - smaller is better
     MAE - smaller is better
     RMSE -  smaller is better
+    MADE - smaller is better
+    MLE - smaller is better
+    MAGE - smaller is better
     SPL - smaller is better
     Contour - bigger is better (is 0 to 1)
     Containment - bigger is better (is 0 to 1)
@@ -1704,6 +1742,9 @@ def generate_score(
     spl_weighting = metric_weighting.get('spl_weighting', 0)
     contour_weighting = metric_weighting.get('contour_weighting', 0)
     made_weighting = metric_weighting.get('made_weighting', 0)
+    mage_weighting = metric_weighting.get('mage_weighting', 0)
+    mle_weighting = metric_weighting.get('mle_weighting', 0)
+    imle_weighting = metric_weighting.get('imle_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         if 'TotalRuntime' in model_results.columns:
@@ -1759,9 +1800,27 @@ def generate_score(
             ].min()
             made_score = model_results['made_weighted'] / made_scaler
             # fillna, but only if all are nan (forecast_length = 1)
-            if pd.isnull(made_score.max()):
-                made_score.fillna(0, inplace=True)
+            # if pd.isnull(made_score.max()):
+            #     made_score.fillna(0, inplace=True)
             overall_score = overall_score + (made_score * made_weighting)
+        if mage_weighting > 0:
+            mage_scaler = model_results['mage_weighted'][
+                model_results['mage_weighted'] != 0
+            ].min()
+            mage_score = model_results['mage_weighted'] / mage_scaler
+            overall_score = overall_score + (mage_score * mage_weighting)
+        if mle_weighting > 0:
+            mle_scaler = model_results['mle_weighted'][
+                model_results['mle_weighted'] != 0
+            ].min()
+            mle_score = model_results['mle_weighted'] / mle_scaler
+            overall_score = overall_score + (mle_score * mle_weighting)
+        if imle_weighting > 0:
+            imle_scaler = model_results['imle_weighted'][
+                model_results['imle_weighted'] != 0
+            ].min()
+            imle_score = model_results['imle_weighted'] / imle_scaler
+            overall_score = overall_score + (imle_score * imle_weighting)
         if spl_weighting > 0:
             spl_scaler = model_results['spl_weighted'][
                 model_results['spl_weighted'] != 0
@@ -1807,6 +1866,8 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
     made_weighting = metric_weighting.get('made_weighting', 0)
     spl_weighting = metric_weighting.get('spl_weighting', 0)
     contour_weighting = metric_weighting.get('contour_weighting', 0)
+    mle_weighting = metric_weighting.get('mle_weighting', 0)
+    imle_weighting = metric_weighting.get('imle_weighting', 0)
     if sum([mae_weighting, rmse_weighting, contour_weighting, spl_weighting]) == 0:
         mae_weighting = 1
 
@@ -1833,9 +1894,25 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
         )
         made_score = results_object.per_series_made / made_scaler
         # fillna but only if ALL are NaN
-        if made_score.isnull().to_numpy().all():
-            made_score.fillna(0, inplace=True)
+        # if made_score.isnull().to_numpy().all():
+        #     made_score.fillna(0, inplace=True)
         overall_score = overall_score + (made_score * made_weighting)
+    if mle_weighting > 0:
+        mle_scaler = (
+            results_object.per_series_mle[results_object.per_series_mle != 0]
+            .min()
+            .fillna(1)
+        )
+        mle_score = results_object.per_series_mle / mle_scaler
+        overall_score = overall_score + (mle_score * mle_weighting)
+    if imle_weighting > 0:
+        imle_scaler = (
+            results_object.per_series_imle[results_object.per_series_imle != 0]
+            .min()
+            .fillna(1)
+        )
+        imle_score = results_object.per_series_imle / imle_scaler
+        overall_score = overall_score + (imle_score * imle_weighting)
     if spl_weighting > 0:
         spl_scaler = (
             results_object.per_series_spl[results_object.per_series_spl != 0]

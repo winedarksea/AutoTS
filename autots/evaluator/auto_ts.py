@@ -142,10 +142,13 @@ class AutoTS(object):
             'mae_weighting': 2,
             'rmse_weighting': 2,
             'made_weighting': 0.5,
-            'containment_weighting': 0,
-            'runtime_weighting': 0.05,
+            'mage_weighting': 0,
+            'mle_weighting': 0,
+            'imle_weighting': 0,
             'spl_weighting': 3,
+            'containment_weighting': 0,
             'contour_weighting': 1,
+            'runtime_weighting': 0.05,
         },
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
@@ -1086,6 +1089,12 @@ or otherwise increase models available."""
                     time.sleep(5)
             try:
                 # eventually plan to allow window size to be controlled by params
+                if 'mosaic-window' in ensemble or 'mosaic' in ensemble:
+                    weight_per_value = (
+                        self.initial_results.full_mae_errors * metric_weighting.get('mae_weighting', 0) +
+                        self.initial_results.full_pl_errors * metric_weighting.get('spl_weighting', 0) +
+                        self.initial_results.squared_errors * metric_weighting.get('rmse_weighting', 0)
+                    )
                 if 'mosaic-window' in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
@@ -1093,7 +1102,31 @@ or otherwise increase models available."""
                         num_validations=num_validations,
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
-                        smoothing_window=13,
+                        smoothing_window=14,
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=self.initial_results.full_pl_errors,
+                        smoothing_window=10,
+                        metric_name="SPL",
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=self.initial_results.full_mae_errors,
+                        smoothing_window=7,
+                        metric_name="MAE",
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
@@ -1108,14 +1141,6 @@ or otherwise increase models available."""
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
-                    )
-                    ens_templates = generate_mosaic_template(
-                        initial_results=self.initial_results.model_results,
-                        full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
-                        col_names=df_subset.columns,
-                        full_mae_errors=self.initial_results.full_mae_errors,
-                        smoothing_window=5,
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
@@ -1136,8 +1161,21 @@ or otherwise increase models available."""
                         full_mae_ids=self.initial_results.full_mae_ids,
                         num_validations=num_validations,
                         col_names=df_subset.columns,
-                        full_mae_errors=self.initial_results.full_mae_errors,
-                        smoothing_window=2,
+                        full_mae_errors=weight_per_value,
+                        smoothing_window=3,
+                        metric_name="Weighted",
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=weight_per_value,
+                        smoothing_window=10,
+                        metric_name="Weighted",
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
@@ -1150,6 +1188,30 @@ or otherwise increase models available."""
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
                         smoothing_window=None,
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=self.initial_results.squared_errors,
+                        smoothing_window=None,
+                        metric_name="SE",
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=weight_per_value,
+                        smoothing_window=None,
+                        metric_name="Weighted",
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
@@ -1168,6 +1230,7 @@ or otherwise increase models available."""
                     forecast_length=forecast_length,
                     frequency=frequency,
                     prediction_interval=prediction_interval,
+                    ensemble=ensemble,
                     no_negatives=no_negatives,
                     constraint=self.constraint,
                     future_regressor_train=future_regressor_train,

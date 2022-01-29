@@ -49,7 +49,7 @@ class AutoTSTest(unittest.TestCase):
             forecast_length=forecast_length,
             frequency='infer',
             prediction_interval=0.9,
-            ensemble=["horizontal-max,horizontal-min"],
+            ensemble=["horizontal-max", "horizontal-min"],
             constraint=None,
             max_generations=generations,
             num_validations=num_validations,

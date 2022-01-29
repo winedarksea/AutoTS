@@ -1195,7 +1195,8 @@ def HorizontalTemplateGenerator(
 
 
 def generate_mosaic_template(
-    initial_results, full_mae_ids, num_validations, col_names, full_mae_errors, smoothing_window=None, **kwargs
+    initial_results, full_mae_ids, num_validations, col_names, full_mae_errors,
+    smoothing_window=None, metric_name="MAE", **kwargs
 ):
     """Generate an ensemble template from results."""
     total_vals = num_validations + 1
@@ -1246,7 +1247,7 @@ def generate_mosaic_template(
                 'model_name': name,
                 'model_count': used_models_results.shape[0],
                 'smoothing_window': smoothing_window,
-                'model_metric': "MAE",
+                'model_metric': metric_name,
                 'models': used_models_results.to_dict(orient='index'),
                 'series': model_id_array.to_dict(orient='dict'),
             }

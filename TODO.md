@@ -47,8 +47,9 @@
 * added plot_per_series_smape and list_failed_model_types to output more run information from AutoTS class
 * increased number of best per series models added to models to validate (models to validate has become more of a baseline than a firm number)
 * finally transitioned `ensemble` parameter fully to a list from the original comma-sep string list
-* mle and imle logarithmic metrics for targeting over- and under-estimation
+* MLE and iMLE logarithmic metrics for targeting over- and under-estimation
 * MAGE metric for error on rollup forecasts
+* Mosaic ensembles now include a metric_weighting variation including MAE, RMSE and SPL weighting (abs error, square error, pl error) (unscaled)
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
@@ -63,3 +64,12 @@
 	* add to no_params or external if so
 	* add to no_shared if so, in auto_model.py (shared_trans)
 	* oddities_list for those with forecast/original transform difference
+
+## New Metric Checklist:
+	* Create function in metrics.py
+	* Add to mode base .evaluate()  (benchmark to make sure it is still fast)
+	* Add to concat in TemplateWizard (if per_series metrics will be used)
+	* Add to concat in TemplateEvalObject (if per_series metrics will be used)
+	* Add to generate_score
+	* Add to generate_score_per_series (if per_series metrics will be used)
+	* Add to validation_aggregation
