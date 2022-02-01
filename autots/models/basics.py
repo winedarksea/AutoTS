@@ -1301,7 +1301,7 @@ class Motif(ModelObject):
         ]
         if method == "event_risk":
             k_choice = random.choices(
-                [10, 15, 20, 100], [0.5, 0.1, 0.1, 0.1]
+                [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
             )[0]
         else:
             k_choice = random.choices(
@@ -1942,6 +1942,14 @@ class SectionalMotif(ModelObject):
             'yule',
             "nan_euclidean",
         ]
+        if method == "event_risk":
+            k_choice = random.choices(
+                [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
+            )[0]
+        else:
+            random.choices(
+                [1, 3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0]
         if "regressor" in method:
             regression_choice = "User"
         else:
@@ -1955,9 +1963,7 @@ class SectionalMotif(ModelObject):
             )[0],
             "distance_metric": random.choice(metric_list),
             "include_differenced": random.choices([True, False], [0.9, 0.1])[0],
-            "k": random.choices(
-                [1, 3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
-            )[0],
+            "k": k_choice,
             "stride_size": random.choices([1, 2, 5, 10], [0.6, 0.1, 0.1, 0.1])[0],
             'regression_type': regression_choice,
         }

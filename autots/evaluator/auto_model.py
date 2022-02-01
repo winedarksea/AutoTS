@@ -518,6 +518,7 @@ def ModelPrediction(
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
         fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast
+        return_model (bool): if True, forecast will have .model and .tranformer attributes set to model object.
         n_jobs (int): number of processes
 
     Returns:
@@ -597,6 +598,7 @@ def ModelPrediction(
 
     if return_model:
         df_forecast.model = model
+        df_forecast.transformer = transformer_object
 
     # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
     if fail_on_forecast_nan:
@@ -816,7 +818,7 @@ def model_forecast(
         template_cols (list): column names of columns used as model template
         horizontal_subset (list): columns of df_train to use for forecast, meant for internal use for horizontal ensembling
         fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast. True is recommended.
-        return_model (bool): if True, forecast will have .model attribute set to model object. Only works for non-ensembles.
+        return_model (bool): if True, forecast will have .model and .tranformer attributes set to model object. Only works for non-ensembles.
 
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
@@ -1057,7 +1059,15 @@ def TemplateWizard(
     Returns:
         TemplateEvalObject
     """
-    template_result = TemplateEvalObject()
+    template_result = TemplateEvalObject(
+        per_series_mae=[],
+        per_series_made=[],
+        per_series_contour=[],
+        per_series_rmse=[],
+        per_series_spl=[],
+        per_series_mle=[],
+        per_series_imle=[],
+    )
     template_result.model_count = model_count
     if isinstance(template, pd.Series):
         template = template.to_frame()
@@ -1082,7 +1092,8 @@ def TemplateWizard(
     scaler[scaler == 0] = fill_val
     scaler[np.isnan(scaler)] = fill_val
 
-    for index, row in template.iterrows():
+    template_dict = template.to_dict('records')
+    for row in template_dict:
         template_start_time = datetime.datetime.now()
         try:
             model_str = row['Model']
@@ -1198,55 +1209,14 @@ def TemplateWizard(
             ).reset_index(drop=True)
 
             ps_metric = model_error.per_series_metrics
-            template_result.per_series_mae = pd.concat(
-                [
-                    template_result.per_series_mae,
-                    _ps_metric(ps_metric, 'mae', model_id),
-                ],
-                axis=0,
-            )
-            template_result.per_series_made = pd.concat(
-                [
-                    template_result.per_series_made,
-                    _ps_metric(ps_metric, 'made', model_id),
-                ],
-                axis=0,
-            )
-            template_result.per_series_contour = pd.concat(
-                [
-                    template_result.per_series_contour,
-                    _ps_metric(ps_metric, 'contour', model_id),
-                ],
-                axis=0,
-            )
-            template_result.per_series_rmse = pd.concat(
-                [
-                    template_result.per_series_rmse,
-                    _ps_metric(ps_metric, 'rmse', model_id),
-                ],
-                axis=0,
-            )
-            template_result.per_series_spl = pd.concat(
-                [
-                    template_result.per_series_spl,
-                    _ps_metric(ps_metric, 'spl', model_id),
-                ],
-                axis=0,
-            )
-            template_result.per_series_mle = pd.concat(
-                [
-                    template_result.per_series_mle,
-                    _ps_metric(ps_metric, 'mle', model_id),
-                ],
-                axis=0,
-            )
-            template_result.per_series_imle = pd.concat(
-                [
-                    template_result.per_series_imle,
-                    _ps_metric(ps_metric, 'imle', model_id),
-                ],
-                axis=0,
-            )
+
+            template_result.per_series_mae.append(_ps_metric(ps_metric, 'mae', model_id))
+            template_result.per_series_made.append(_ps_metric(ps_metric, 'made', model_id))
+            template_result.per_series_contour.append(_ps_metric(ps_metric, 'contour', model_id))
+            template_result.per_series_rmse.append(_ps_metric(ps_metric, 'rmse', model_id))
+            template_result.per_series_spl.append(_ps_metric(ps_metric, 'spl', model_id))
+            template_result.per_series_mle.append(_ps_metric(ps_metric, 'mle', model_id))
+            template_result.per_series_imle.append(_ps_metric(ps_metric, 'imle', model_id))
 
             if 'distance' in ensemble:
                 cur_smape = model_error.per_timestamp.loc['weighted_smape']
@@ -1338,7 +1308,24 @@ def TemplateWizard(
                 ignore_index=True,
                 sort=False,
             ).reset_index(drop=True)
-
+    if template_result.per_series_mae:
+        template_result.per_series_mae = pd.concat(template_result.per_series_mae, axis=0)
+        template_result.per_series_made = pd.concat(template_result.per_series_made, axis=0)
+        template_result.per_series_contour = pd.concat(template_result.per_series_contour, axis=0)
+        template_result.per_series_rmse = pd.concat(template_result.per_series_rmse, axis=0)
+        template_result.per_series_spl = pd.concat(template_result.per_series_spl, axis=0)
+        template_result.per_series_mle = pd.concat(template_result.per_series_mle, axis=0)
+        template_result.per_series_imle = pd.concat(template_result.per_series_imle, axis=0)
+        if verbose > 0 and not template.empty:
+            print(f"Generation {current_generation} had all new models fail")
+    else:
+        template_result.per_series_mae = pd.DataFrame()
+        template_result.per_series_made = pd.DataFrame()
+        template_result.per_series_contour = pd.DataFrame()
+        template_result.per_series_rmse = pd.DataFrame()
+        template_result.per_series_spl = pd.DataFrame()
+        template_result.per_series_mle = pd.DataFrame()
+        template_result.per_series_imle = pd.DataFrame()
     return template_result
 
 
@@ -1351,14 +1338,6 @@ def RandomTemplate(
         'GLS',
         'GLM',
         'ETS',
-        'ARIMA',
-        'FBProphet',
-        'RollingRegression',
-        'GluonTS',
-        'UnobservedComponents',
-        'VARMAX',
-        'VECM',
-        'DynamicFactor',
     ],
     transformer_list: dict = "fast",
     transformer_max_depth: int = 8,

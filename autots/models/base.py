@@ -138,6 +138,7 @@ class PredictionObject(object):
         avg_metrics_weighted=np.nan,
         full_mae_error=None,
         model=None,
+        transformer=None,
     ):
         self.model_name = model_name
         self.model_parameters = model_parameters
@@ -158,6 +159,9 @@ class PredictionObject(object):
         self.avg_metrics = avg_metrics
         self.avg_metrics_weighted = avg_metrics_weighted
         self.full_mae_error = full_mae_error
+        # model attributes, not normally used
+        self.model = model
+        self.transformer = transformer
 
     def __repr__(self):
         """Print."""

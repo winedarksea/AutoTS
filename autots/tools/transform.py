@@ -584,14 +584,14 @@ class SinTrend(EmptyTransformer):
             raise ValueError("Data Cannot Be Converted to Numeric Float")
         X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
 
-        sin_df = pd.DataFrame()
+        sin_df = []
         # make this faster
         for index, row in self.sin_params.iterrows():
-            yy = pd.DataFrame(
+            sin_df.append(pd.DataFrame(
                 row['amp'] * np.sin(row['omega'] * X + row['phase']) + row['offset'],
                 columns=[index],
-            )
-            sin_df = pd.concat([sin_df, yy], axis=1)
+            ))
+        sin_df = pd.concat(sin_df, axis=1)
         df_index = df.index
         df = df.astype(float).reset_index(drop=True) - sin_df.reset_index(drop=True)
         df.index = df_index

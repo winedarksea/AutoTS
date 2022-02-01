@@ -165,9 +165,9 @@ class AutoTS(object):
         prefill_na: str = None,
         introduce_na: bool = None,
         preclean: dict = None,
-        model_interrupt: bool = False,
+        model_interrupt: bool = True,
         verbose: int = 1,
-        n_jobs: int = None,
+        n_jobs: int = -2,
     ):
         assert forecast_length > 0, "forecast_length must be greater than 0"
         assert transformer_max_depth > 0, "transformer_max_depth must be greater than 0"
