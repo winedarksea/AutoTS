@@ -1992,8 +1992,8 @@ def back_forecast(
                     df.index[int_idx:int_idx_1]
                 )
         else:
-            split_regr = []
-            split_regr_future = []
+            split_regr = None
+            split_regr_future = None
         try:
             df_forecast = model_forecast(
                 model_name=model_name,

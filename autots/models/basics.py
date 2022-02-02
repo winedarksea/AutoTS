@@ -353,7 +353,7 @@ class SeasonalNaive(ModelObject):
         verbose: int = 0,
         lag_1: int = 7,
         lag_2: int = None,
-        method: str = 'LastValue',
+        method: str = 'lastvalue',
         **kwargs
     ):
         ModelObject.__init__(
@@ -371,7 +371,7 @@ class SeasonalNaive(ModelObject):
             self.lag_2 = abs(int(self.lag_2))
             if str(self.lag_2) == str(self.lag_1):
                 self.lag_2 = 1
-        self.method = method
+        self.method = str(method).lower()
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -384,13 +384,13 @@ class SeasonalNaive(ModelObject):
 
         df_length = self.train_shape[0]
         self.tile_values_lag_2 = None
-        if self.method in ['Mean', 'Median']:
+        if self.method in ['mean', 'median']:
             tile_index = np.tile(
                 np.arange(self.lag_1), int(np.ceil(df_length / self.lag_1))
             )
-            tile_index = tile_index[len(tile_index) - (df_length) :]
+            tile_index = tile_index[len(tile_index) - (df_length):]
             df.index = tile_index
-            if self.method == "Median":
+            if self.method == "median":
                 self.tile_values_lag_1 = df.groupby(level=0, axis=0).median()
             else:
                 self.tile_values_lag_1 = df.groupby(level=0, axis=0).mean()
@@ -401,14 +401,14 @@ class SeasonalNaive(ModelObject):
                     tile_index = np.tile(
                         np.arange(self.lag_2), int(np.ceil(df_length / self.lag_2))
                     )
-                    tile_index = tile_index[len(tile_index) - (df_length) :]
+                    tile_index = tile_index[len(tile_index) - (df_length):]
                     df.index = tile_index
-                    if self.method == "Median":
+                    if self.method == "median":
                         self.tile_values_lag_2 = df.groupby(level=0, axis=0).median()
                     else:
                         self.tile_values_lag_2 = df.groupby(level=0, axis=0).mean()
         else:
-            self.method == 'LastValue'
+            self.method == 'lastvalue'
             self.tile_values_lag_1 = df.tail(self.lag_1)
             if str(self.lag_2).isdigit():
                 self.tile_values_lag_2 = df.tail(self.lag_2)
@@ -493,7 +493,7 @@ class SeasonalNaive(ModelObject):
         if str(lag_2_choice) == str(lag_1_choice):
             lag_2_choice = 1
         method_choice = random.choices(
-            ['Mean', 'Median', 'LastValue'], [0.4, 0.2, 0.4]
+            ['mean', 'median', 'lastvalue'], [0.4, 0.2, 0.4]
         )[0]
         return {'method': method_choice, 'lag_1': lag_1_choice, 'lag_2': lag_2_choice}
 

@@ -2420,7 +2420,7 @@ transformer_dict = {
     'Detrend': 0.1,  # slow with some params, but that's handled in get_params
     'RollingMeanTransformer': 0.02,
     'RollingMean100thN': 0.01,  # old
-    'DifferencedTransformer': 0.1,
+    'DifferencedTransformer': 0.07,
     'SinTrend': 0.01,
     'PctChangeTransformer': 0.01,
     'CumSumTransformer': 0.02,
