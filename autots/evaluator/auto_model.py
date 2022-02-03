@@ -790,6 +790,7 @@ def model_forecast(
     ],
     horizontal_subset: list = None,
     return_model: bool = False,
+    **kwargs
 ):
     """Takes numeric data, returns numeric forecasts.
 
@@ -1316,8 +1317,6 @@ def TemplateWizard(
         template_result.per_series_spl = pd.concat(template_result.per_series_spl, axis=0)
         template_result.per_series_mle = pd.concat(template_result.per_series_mle, axis=0)
         template_result.per_series_imle = pd.concat(template_result.per_series_imle, axis=0)
-        if verbose > 0 and not template.empty:
-            print(f"Generation {current_generation} had all new models fail")
     else:
         template_result.per_series_mae = pd.DataFrame()
         template_result.per_series_made = pd.DataFrame()
@@ -1326,6 +1325,8 @@ def TemplateWizard(
         template_result.per_series_spl = pd.DataFrame()
         template_result.per_series_mle = pd.DataFrame()
         template_result.per_series_imle = pd.DataFrame()
+        if verbose > 0 and not template.empty:
+            print(f"Generation {current_generation} had all new models fail")
     return template_result
 
 
