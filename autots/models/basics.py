@@ -1947,7 +1947,7 @@ class SectionalMotif(ModelObject):
                 [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
             )[0]
         else:
-            random.choices(
+            k_choice = random.choices(
                 [1, 3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
             )[0]
         if "regressor" in method:

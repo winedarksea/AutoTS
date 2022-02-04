@@ -1944,6 +1944,8 @@ def back_forecast(
     random_seed=123,
     n_jobs="auto",
     verbose=0,
+    eval_periods: int = None,
+    **kwargs
 ):
     """Create forecasts for the historical training data, ie. backcast or back forecast.
 
@@ -1955,8 +1957,18 @@ def back_forecast(
     n_splits(int): how many pieces to split data into. Pass 2 for fastest, or "auto" for best accuracy
 
     Returns a standard prediction object (access .forecast, .lower_forecast, .upper_forecast)
+
+    Args:
+        eval_period (int): if passed, only returns results for this many time steps of recent history
     """
-    max_chunk = int(ceil(df.index.shape[0] / forecast_length))
+    df_train_shape = df.index.shape[0]
+    if eval_periods is not None:
+        assert eval_periods < df_train_shape, "eval_periods must be less than length of history"
+        fore_length = eval_periods
+        eval_start = df_train_shape - eval_periods
+    else:
+        fore_length = df_train_shape
+    max_chunk = int(ceil(fore_length / forecast_length))
     if not str(n_splits).isdigit():
         n_splits = max_chunk
     elif n_splits > max_chunk or n_splits < 2:
@@ -1964,7 +1976,7 @@ def back_forecast(
     else:
         n_splits = int(n_splits)
 
-    chunk_size = df.index.shape[0] / n_splits
+    chunk_size = fore_length / n_splits
     b_forecast, b_forecast_up, b_forecast_low = (
         pd.DataFrame(),
         pd.DataFrame(),
@@ -1974,8 +1986,11 @@ def back_forecast(
         int_idx = int(n * chunk_size)
         int_idx_1 = int((n + 1) * chunk_size)
         inner_forecast_length = int_idx_1 - int_idx
+        if eval_periods is not None:
+            int_idx = int_idx + eval_start
+            int_idx_1 = int_idx_1 + eval_start
         # flip to forecast backwards for the first split
-        if n == 0:
+        if n == 0 and eval_periods is None:
             df_split = df.iloc[int_idx_1:].copy()
             df_split = df_split.iloc[::-1]
             df_split.index = df_split.index[::-1]
@@ -1984,7 +1999,7 @@ def back_forecast(
             df_split = df.iloc[0:int_idx].copy()
         # handle appropriate regressors
         if isinstance(future_regressor_train, pd.DataFrame):
-            if n == 0:
+            if n == 0 and eval_periods is None:
                 split_regr = future_regressor_train.reindex(df_split.index[::-1])
                 split_regr_future = future_regressor_train.reindex(result_idx)
             else:
@@ -2017,7 +2032,7 @@ def back_forecast(
             b_forecast_up = pd.concat([b_forecast_up, df_forecast.upper_forecast])
             b_forecast_low = pd.concat([b_forecast_low, df_forecast.lower_forecast])
             # handle index being wrong for the flipped forecast which comes first
-            if n == 0:
+            if n == 0 and eval_periods is None:
                 b_forecast = b_forecast.iloc[::-1]
                 b_forecast_up = b_forecast_up.iloc[::-1]
                 b_forecast_low = b_forecast_low.iloc[::-1]

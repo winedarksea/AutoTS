@@ -5,7 +5,7 @@ Created on Thu Jan 27 13:36:18 2022
 import random
 import numpy as np
 import pandas as pd
-from autots.evaluator.auto_model import model_forecast
+from autots.evaluator.auto_model import model_forecast, back_forecast
 from autots.evaluator.auto_ts import AutoTS
 
 
@@ -69,9 +69,9 @@ def set_limit_forecast_historic(
     },
     future_regressor_train=None,
     future_regressor_forecast=None,
+    eval_periods=None,
 ):
     """Helper function for forecast limits set by forecast algorithms."""
-    from autots.evaluator.auto_model import back_forecast
     forecasts = back_forecast(
         df=df_train,
         n_splits="auto",
@@ -82,6 +82,7 @@ def set_limit_forecast_historic(
         frequency=frequency,
         prediction_interval=prediction_interval,
         future_regressor_train=future_regressor_train,
+        eval_periods=eval_periods,
         **model_forecast_kwargs
     )
     return forecasts.upper_forecast.values, forecasts.lower_forecast.values
@@ -315,7 +316,7 @@ class EventRiskForecast(object):
         return result_windows, forecasts.forecast, upper_forecast, lower_forecast
 
     @staticmethod
-    def set_limit(limit, target_shape, df_train, direction="upper", period="forecast", forecast_length=None):
+    def set_limit(limit, target_shape, df_train, direction="upper", period="forecast", forecast_length=None, eval_periods=None):
         """Handles all limit input styles and returns numpy array.
 
         Args:
@@ -325,6 +326,7 @@ class EventRiskForecast(object):
             direction (str): whether it is the "upper" or "lower" limit
             periods (str): "forecast" or "historic" only used for limits defined by forecast algorithm params
             forecast_length (int): needed only for historic of forecast algorithm defined limit
+            eval_periods (int): only for historic forecast limit, only runs on the tail n (this) of data
         """
         # handle a predefined array
         if isinstance(limit, np.ndarray):
@@ -356,6 +358,7 @@ class EventRiskForecast(object):
                     }),
                     future_regressor_train=limit.get("future_regressor_train", None),
                     future_regressor_forecast=limit.get("future_regressor_forecast", None),
+                    eval_periods=eval_periods,
                 )
             else:
                 upper, lower = set_limit_forecast(
@@ -434,17 +437,32 @@ class EventRiskForecast(object):
             self.lower_risk_array, columns=self.outcome_columns, index=self.outcome_index
         )
 
-    def predict_historic(self, upper_limit=None, lower_limit=None):
-        """Returns upper, lower risk probability arrays for input limits for the historic data."""
+    def predict_historic(self, upper_limit=None, lower_limit=None, eval_periods=None):
+        """Returns upper, lower risk probability arrays for input limits for the historic data.
+        If manual numpy array limits are used, the limits will need to be appropriate shape (for df_train and eval_periods if used)
+
+        Args:
+            upper_limit: if different than the version passed to init
+            lower_limit: if different than the version passed to init
+            eval_periods (int): only assess the n most recent periods of history
+        """
         upper_limit = self.upper_limit if upper_limit is None else upper_limit
         lower_limit = self.lower_limit if lower_limit is None else lower_limit
+        if eval_periods is not None:
+            target_shape = (eval_periods, self.df_train.shape[1])
+            train_df = self.df_train.tail(eval_periods)
+        else:
+            target_shape = self.df_train.shape
+            train_df = self.df_train
         self.historic_upper_limit_2d = self.set_limit(
-            upper_limit, self.df_train.shape, self.df_train, direction="upper",
+            upper_limit, target_shape, self.df_train, direction="upper",
             period="historic", forecast_length=self.forecast_length,
+            eval_periods=eval_periods,
         )
         self.historic_lower_limit_2d = self.set_limit(
-            lower_limit, self.df_train.shape, self.df_train, direction="lower",
+            lower_limit, target_shape, self.df_train, direction="lower",
             period="historic", forecast_length=self.forecast_length,
+            eval_periods=eval_periods,
         )
         if self.historic_upper_limit_2d is None and self.historic_lower_limit_2d is None:
             raise ValueError("both upper and lower limits are None, at least one must be specified")
@@ -452,19 +470,19 @@ class EventRiskForecast(object):
         self.historic_upper_risk_array = None
         if self.historic_upper_limit_2d is not None:
             self.historic_upper_risk_array = self.generate_historic_risk_array(
-                self.df_train, self.historic_upper_limit_2d, direction="upper"
+                train_df, self.historic_upper_limit_2d, direction="upper"
             )
 
         self.historic_lower_risk_array = None
         if self.historic_lower_limit_2d is not None:
             self.historic_lower_risk_array = self.generate_historic_risk_array(
-                self.df_train, self.historic_lower_limit_2d, direction="lower"
+                train_df, self.historic_lower_limit_2d, direction="lower"
             )
 
         return pd.DataFrame(
-            self.historic_upper_risk_array, columns=self.outcome_columns, index=self.df_train.index
+            self.historic_upper_risk_array, columns=self.outcome_columns, index=train_df.index
         ), pd.DataFrame(
-            self.historic_lower_risk_array, columns=self.outcome_columns, index=self.df_train.index
+            self.historic_lower_risk_array, columns=self.outcome_columns, index=train_df.index
         )
 
     def plot(

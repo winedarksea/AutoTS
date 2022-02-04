@@ -1721,6 +1721,7 @@ or otherwise increase models available."""
         n_splits(int): how many pieces to split data into. Pass 2 for fastest, or "auto" for best accuracy
         column (str): if to run on only one column, pass column name. Faster than full.
         tail (int): df.tail() of the dataset, back_forecast is only run on n most recent observations.
+            which points at eval_periods of lower-level back_forecast function
 
         Returns a standard prediction object (access .forecast, .lower_forecast, .upper_forecast)
         """
@@ -1730,8 +1731,9 @@ or otherwise increase models available."""
             input_df = pd.DataFrame(self.df_wide_numeric[column])
         else:
             input_df = self.df_wide_numeric
+        eval_periods = None
         if tail is not None:
-            input_df = input_df.tail(tail)
+            eval_periods = tail
         result = back_forecast(
             df=input_df,
             model_name=self.best_model_name,
@@ -1748,6 +1750,7 @@ or otherwise increase models available."""
             random_seed=self.random_seed,
             n_jobs=self.n_jobs,
             verbose=verbose,
+            eval_periods=eval_periods,
         )
         return result
 
@@ -1882,7 +1885,12 @@ or otherwise increase models available."""
         """
         if series is None:
             series = random.choice(self.df_wide_numeric.columns)
-        b_df = self.back_forecast(column=series, n_splits=n_splits, verbose=0).forecast
+        tail = None
+        if start_date is not None:
+            tail = len(self.df_wide_numeric.index[self.df_wide_numeric.index >= start_date])
+            if tail == len(self.df_wide_numeric.index):
+                tail = None
+        b_df = self.back_forecast(column=series, n_splits=n_splits, verbose=0, tail=tail).forecast
         b_df = b_df.rename(columns=lambda x: str(x) + "_forecast")
         plot_df = pd.concat(
             [

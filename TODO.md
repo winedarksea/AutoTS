@@ -53,6 +53,7 @@
 * Mosaic ensembles now include a metric_weighting variation including MAE, RMSE and SPL weighting (abs error, square error, pl error) (unscaled)
 * minor but noticeable speedups to TemplateWizard and inferred_normal functions
 * added EventRiskForecast for determing risk of exceeding limits (should be considered in beta for now)
+* back_forecast now has tail/eval_periods configured
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
