@@ -94,7 +94,7 @@ class EventRiskForecast(object):
     Upper and lower limits can be one of four types, and may each be different.
     1. None (no risk score calculated for this direction)
     2. Float in range [0, 1] historic quantile of series (which is historic min and max at edges) is chosen as limit.
-    3. A dictionary of {"model_name"=x,  "model_param_dict"=y, "model_transform_dict": z, "prediction_interval": 0.9} to generate a forecast as the limits
+    3. A dictionary of {"model_name": x,  "model_param_dict": y, "model_transform_dict": z, "prediction_interval": 0.9} to generate a forecast as the limits
         Primarily intended for simple forecasts like SeasonalNaive, but can be used with any AutoTS model
     4. a custom input numpy array of shape (forecast_length, num_series)
 
@@ -176,10 +176,11 @@ class EventRiskForecast(object):
         self.outcome_shape = (forecast_length, df_train.shape[1])
         self.outcome_columns = df_train.columns
         self.outcome_index = None
+        self.result_windows = None
 
     def __repr__(self):
         """Print."""
-        print(f"{self.name} object")
+        return f"{self.name} object"
 
     def fit(
         self,
@@ -312,7 +313,7 @@ class EventRiskForecast(object):
         return result_windows, forecasts.forecast, upper_forecast, lower_forecast
 
     @staticmethod
-    def set_limit(limit, target_shape, df_train, direction="upper", period="forecast"):
+    def set_limit(limit, target_shape, df_train, direction="upper", period="forecast", forecast_length=None):
         """Handles all limit input styles and returns numpy array.
 
         Args:
@@ -321,6 +322,7 @@ class EventRiskForecast(object):
             df_train (pd.DataFrame): training data
             direction (str): whether it is the "upper" or "lower" limit
             periods (str): "forecast" or "historic" only used for limits defined by forecast algorithm params
+            forecast_length (int): needed only for historic of forecast algorithm defined limit
         """
         # handle a predefined array
         if isinstance(limit, np.ndarray):
@@ -337,9 +339,39 @@ class EventRiskForecast(object):
         # handle a limit defined by a forecast algorithm
         elif isinstance(limit, dict):
             if period == "historic":
-                upper, lower = set_limit_forecast_historic()
+                upper, lower = set_limit_forecast_historic(
+                    df_train=df_train,
+                    forecast_length=forecast_length,
+                    model_name=limit.get("model_name", "SeasonalNaive"),
+                    model_param_dict=limit.get("model_param_dict", {}),
+                    model_transform_dict=limit.get("model_transform_dict", {}),
+                    prediction_interval=limit.get("prediction_interval", 0.9),
+                    frequency=limit.get("frequency", 'infer'),
+                    model_forecast_kwargs=limit.get("model_forecast_kwargs", {
+                        "verbose": 1,
+                        "n_jobs": "auto",
+                        "random_seed": 321,
+                    }),
+                    future_regressor_train=limit.get("future_regressor_train", None),
+                    future_regressor_forecast=limit.get("future_regressor_forecast", None),
+                )
             else:
-                upper, lower = set_limit_forecast()
+                upper, lower = set_limit_forecast(
+                    df_train=df_train,
+                    forecast_length=target_shape[0],
+                    model_name=limit.get("model_name", "SeasonalNaive"),
+                    model_param_dict=limit.get("model_param_dict", {}),
+                    model_transform_dict=limit.get("model_transform_dict", {}),
+                    prediction_interval=limit.get("prediction_interval", 0.9),
+                    frequency=limit.get("frequency", 'infer'),
+                    model_forecast_kwargs=limit.get("model_forecast_kwargs", {
+                        "verbose": 1,
+                        "n_jobs": "auto",
+                        "random_seed": 321,
+                    }),
+                    future_regressor_train=limit.get("future_regressor_train", None),
+                    future_regressor_forecast=limit.get("future_regressor_forecast", None),
+                )
             if direction == "upper":
                 return upper
             elif direction == "lower":
@@ -405,10 +437,12 @@ class EventRiskForecast(object):
         upper_limit = self.upper_limit if upper_limit is None else upper_limit
         lower_limit = self.lower_limit if lower_limit is None else lower_limit
         self.historic_upper_limit_2d = self.set_limit(
-            upper_limit, self.df_train.shape, self.df_train, direction="upper", period="historic"
+            upper_limit, self.df_train.shape, self.df_train, direction="upper",
+            period="historic", forecast_length=self.forecast_length,
         )
         self.historic_lower_limit_2d = self.set_limit(
-            lower_limit, self.df_train.shape, self.df_train, direction="lower", period="historic"
+            lower_limit, self.df_train.shape, self.df_train, direction="lower",
+            period="historic", forecast_length=self.forecast_length,
         )
         if self.historic_upper_limit_2d is None and self.historic_lower_limit_2d is None:
             raise ValueError("both upper and lower limits are None, at least one must be specified")
@@ -433,6 +467,13 @@ class EventRiskForecast(object):
 
     def plot(
             self, column_idx=0,
+            grays=[
+                "#838996", "#c0c0c0", "#dcdcdc", "#a9a9a9", "#808080", "#989898", "#808080",
+                "#757575", "#696969", "#c9c0bb", "#c8c8c8", "#323232", "#e5e4e2", "#778899",
+                "#4f666a", "#848482", "#414a4c", "#8a7f80", "#c4c3d0", "#bebebe", "#dbd7d2",
+            ],
+            up_low_color=["#ff4500", "#ff5349"],
+            bar_color="#6495ED",
             result_windows=None, lower_limit_2d=None, upper_limit_2d=None,
             upper_risk_array=None, lower_risk_array=None,
     ):
@@ -440,6 +481,9 @@ class EventRiskForecast(object):
 
         Args:
             column_idx (int): positional index of series to sample for plot
+            grays (list of str): list of hex codes for colors for the potential forecasts
+            up_low_colors (list of str): two hex code colors for lower and upper
+            bar_color (str): hex color for bar graph
         """
         import matplotlib.pyplot as plt
 
@@ -456,16 +500,11 @@ class EventRiskForecast(object):
         plot_df = pd.DataFrame(result_windows[:, :, column_idx].T, self.outcome_index)
         plot_df['lower_limit'] = lower_limit_2d[:, column_idx]  # np.nanquantile(df, 0.6, axis=0)[column_idx]
         plot_df['upper_limt'] = upper_limit_2d[:, column_idx]  # np.nanquantile(df, 0.85, axis=0)[column_idx]
-        grays = [
-            "#838996", "#c0c0c0", "#dcdcdc", "#a9a9a9", "#808080", "#989898", "#808080",
-            "#757575", "#696969", "#c9c0bb", "#c8c8c8", "#323232", "#e5e4e2", "#778899",
-            "#4f666a", "#848482", "#414a4c", "#8a7f80", "#c4c3d0", "#bebebe", "#dbd7d2",
-        ]
-        colors = random.choices(grays, k=plot_df.shape[1] - 2) + ["#ff4500", "#ff5349"]
+        colors = random.choices(grays, k=plot_df.shape[1] - 2) + up_low_color
         plot_df.plot(color=colors, ax=ax1, legend=False)
         plot_df["upper & lower risk"] = upper_risk_array[:, column_idx] + lower_risk_array[:, column_idx]
         # #0095a4   #FA9632  # 3264C8   #6495ED
-        plot_df["upper & lower risk"].plot(kind="bar", xticks=[], title="Combined Risk Score", ax=ax2, color="#6495ED")
+        plot_df["upper & lower risk"].plot(kind="bar", xticks=[], title="Combined Risk Score", ax=ax2, color=bar_color)
 
 
 """
