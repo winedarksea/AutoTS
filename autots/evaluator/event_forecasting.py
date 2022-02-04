@@ -5,7 +5,8 @@ Created on Thu Jan 27 13:36:18 2022
 import random
 import numpy as np
 import pandas as pd
-from autots import AutoTS, model_forecast
+from autots.evaluator.auto_model import model_forecast
+from autots.evaluator.auto_ts import AutoTS
 
 
 def set_limit_forecast(
@@ -87,9 +88,7 @@ def set_limit_forecast_historic(
 
 
 class EventRiskForecast(object):
-    """Generate a risk score for an event exceeding upper or lower bounds.
-    This can be used to find the "middle" limit too, flip so upper=lower and lower=upper, then abs(U - (1 - L)).
-    In some cases it may help to drop the results from the first forecast timestep or two.
+    """Generate a risk score (0 to 1, but usually close to 0) for a future event exceeding user specified upper or lower bounds.
 
     Upper and lower limits can be one of four types, and may each be different.
     1. None (no risk score calculated for this direction)
@@ -97,6 +96,9 @@ class EventRiskForecast(object):
     3. A dictionary of {"model_name": x,  "model_param_dict": y, "model_transform_dict": z, "prediction_interval": 0.9} to generate a forecast as the limits
         Primarily intended for simple forecasts like SeasonalNaive, but can be used with any AutoTS model
     4. a custom input numpy array of shape (forecast_length, num_series)
+
+    This can be used to find the "middle" limit too, flip so upper=lower and lower=upper, then abs(U - (1 - L)).
+    In some cases it may help to drop the results from the first forecast timestep or two.
 
     This functions by generating multiple outcome forecast possiblities in two ways.
     If a 'Motif' type model is passed, it uses all the k neighbors motifs as outcome paths (recommended)
@@ -180,7 +182,7 @@ class EventRiskForecast(object):
 
     def __repr__(self):
         """Print."""
-        return f"{self.name} object"
+        return f"{self.name} object with window generating model: {self.model_name, self.model_param_dict, self.model_transform_dict}"
 
     def fit(
         self,
@@ -498,32 +500,25 @@ class EventRiskForecast(object):
         fig.suptitle(f'{column} Event Risk Forecasting')
         # index=pd.date_range("2022-01-01", periods=result_windows.shape[1], freq="D")
         plot_df = pd.DataFrame(result_windows[:, :, column_idx].T, self.outcome_index)
-        plot_df['lower_limit'] = lower_limit_2d[:, column_idx]  # np.nanquantile(df, 0.6, axis=0)[column_idx]
-        plot_df['upper_limt'] = upper_limit_2d[:, column_idx]  # np.nanquantile(df, 0.85, axis=0)[column_idx]
+        if lower_limit_2d is not None:
+            plot_df['lower_limit'] = lower_limit_2d[:, column_idx]  # np.nanquantile(df, 0.6, axis=0)[column_idx]
+        else:
+            plot_df['lower_limit'] = np.nan
+        if upper_limit_2d is not None:
+            plot_df['upper_limt'] = upper_limit_2d[:, column_idx]  # np.nanquantile(df, 0.85, axis=0)[column_idx]
+        else:
+            plot_df['upper_limt'] = np.nan
         colors = random.choices(grays, k=plot_df.shape[1] - 2) + up_low_color
         plot_df.plot(color=colors, ax=ax1, legend=False)
-        plot_df["upper & lower risk"] = upper_risk_array[:, column_idx] + lower_risk_array[:, column_idx]
+        # handle one being None
+        try:
+            up_risk = upper_risk_array[:, column_idx]
+        except Exception:
+            up_risk = 0
+        try:
+            low_risk = lower_risk_array[:, column_idx]
+        except Exception:
+            low_risk = 0
+        plot_df["upper & lower risk"] = up_risk + low_risk
         # #0095a4   #FA9632  # 3264C8   #6495ED
         plot_df["upper & lower risk"].plot(kind="bar", xticks=[], title="Combined Risk Score", ax=ax2, color=bar_color)
-
-
-"""
-result_array = np.array(list(result_windows.values()))
-test_array = np.array(list(result_windows.values()))[3, :, :]
-temp = np.moveaxis(result_array, 0, -1)
-
-result_windows_sect[:, :, 3] == np.moveaxis(result_windows_sect, 2, -3)[3, :, :]
-np.moveaxis(result_windows_sect, 2, -3)[3, :, :].shape == np.array(list(result_windows.values()))[3, :, :].shape
-result_windows_sect[:, :, 3].shape == np.moveaxis(result_array, 0, -1)[:, :, 3].shape
-
-lower_limit = np.repeat([78960720], 7)
-# as desired:
-(test_array < lower_limit).astype(int).sum(axis=0) / test_array.shape[0]
-
-
-lower_limit_2d = np.nanquantile(result_windows_sect, 0.25, axis=0)
-lower_anomaly_risk = (result_windows_sect < lower_limit_2d).astype(int).sum(axis=0) / result_windows_sect.shape[0]
-
-upper_limit_2d = np.nanquantile(result_windows_sect, 0.75, axis=0)
-upper_anomaly_risk = (result_windows_sect > upper_limit_2d).astype(int).sum(axis=0) / result_windows_sect.shape[0]
-"""

@@ -568,6 +568,66 @@ Note, this does not necessarily force the model to place any great value on the 
 It may be necessary to rerun multiple times until a model with satisfactory variable response is found, 
 or to try with a subset of the regressor model list like `['FBProphet', 'GLM', 'ARDL', 'DatepartRegression']`.
 
+## Event Risk Forecasting
+Generate a risk score (0 to 1, but usually close to 0) for a future event exceeding user specified upper or lower bounds.
+
+Upper and lower limits can be one of four types, and may each be different.
+1. None (no risk score calculated for this direction)
+2. Float in range [0, 1] historic quantile of series (which is historic min and max at edges) is chosen as limit.
+3. A dictionary of {"model_name": x,  "model_param_dict": y, "model_transform_dict": z, "prediction_interval": 0.9} to generate a forecast as the limits
+	Primarily intended for simple forecasts like SeasonalNaive, but can be used with any AutoTS model
+4. a custom input numpy array of shape (forecast_length, num_series)
+
+```python
+import numpy as np
+from autots import (
+    load_daily,
+    EventRiskForecast,
+)
+from sklearn.metrics import multilabel_confusion_matrix, classification_report
+
+forecast_length = 6
+df_full = load_daily(long=False)
+df = df_full[0: (df_full.shape[0] - forecast_length)]
+df_test = df[(df.shape[0] - forecast_length):]
+
+upper_limit = 0.95
+# if using manual array limits, historic limit must be defined separately (if used)
+lower_limit = np.ones((forecast_length, df.shape[1]))
+historic_lower_limit = np.ones(df.shape)
+
+model = EventRiskForecast(
+    df,
+    forecast_length=forecast_length,
+    upper_limit=upper_limit,
+    lower_limit=lower_limit,
+)
+# .fit() is optional if model_name, model_param_dict, model_transform_dict are already defined (overwrites)
+model.fit()
+risk_df_upper, risk_df_lower = model.predict()
+historic_upper_risk_df, historic_lower_risk_df = model.predict_historic(lower_limit=historic_lower_limit)
+model.plot(0)
+
+threshold = 0.1
+eval_lower = EventRiskForecast.generate_historic_risk_array(df_test, model.lower_limit_2d, direction="lower")
+eval_upper = EventRiskForecast.generate_historic_risk_array(df_test, model.upper_limit_2d, direction="upper")
+pred_lower = np.where(model.lower_risk_array > threshold, 1, 0)
+pred_upper = np.where(model.upper_risk_array > threshold, 1, 0)
+
+multilabel_confusion_matrix(eval_upper, pred_upper).sum(axis=0)
+print(classification_report(eval_upper, pred_upper, zero_division=1))  # target_names=df.columns
+```
+A limit specified by a forecast can be used to use one type of model to judge the risk of another production model's bounds (here ARIMA) being exceeded. 
+This is also useful for visualizing the effectivness of a particular model's probabilistic forecasts. 
+```python
+lower_limit = {
+	"model_name": "ARIMA",
+	"model_param_dict": {'p': 1, "d": 0, "q": 1},
+	"model_transform_dict": {},
+	"prediction_interval": 0.9,
+}
+```
+
 ### A Hack for Passing in Parameters (that aren't otherwise available)
 There are a lot of parameters available here, but not always all of the options available for a particular parameter are actually used in generated templates. 
 Usually, very slow options are left out. If you are familiar with a model, you can try manualy adding those parameter values in for a run in this way... 
@@ -629,8 +689,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 * MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series `i` are used to predict next step for series `i`, with a model trained on all data from all series.
 * UnivariateRegression is the same as MultivariateRegression but trains an independent model on each series, thus not capable of learning from the patterns of other series. This performs well in horizontal ensembles as it can be parsed down to one series with the same performance on that series. 
 
-How the upper and lower forecast bounds are created for these models will likely change in the future. 
-Currently `MultivariateRegression` utilizes a stock GradientBoostingRegressor with quantile loss for probabilistic estimates, while others utilize point to probabilistic estimates.
+Currently `MultivariateRegression` has the option to utilize a stock GradientBoostingRegressor with quantile loss for probabilistic estimates, while others utilize point to probabilistic estimates.
 
 ## Models
 
