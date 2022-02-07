@@ -12,13 +12,6 @@ from autots.tools import seasonal_int
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 from autots.tools.window_functions import window_id_maker
 
-# optional requirement
-try:
-    from scipy.spatial.distance import cdist
-except Exception:
-    pass
-
-
 class ZeroesNaive(ModelObject):
     """Naive forecasting predicting a dataframe of zeroes (0's)
 
@@ -1066,6 +1059,7 @@ def looped_motif(
     # model = NearestNeighbors(n_neighbors=10, algorithm='auto', metric='minkowski', n_jobs=1)
     # model.fit(Xa)
     # model.kneighbors(Xb)
+    from scipy.spatial.distance import cdist
 
     A = cdist(Xa, Xb, metric=distance_metric)
     # lowest values
@@ -1784,6 +1778,10 @@ class SectionalMotif(ModelObject):
         point_method = self.point_method
         distance_metric = self.distance_metric
         regression_type = str(self.regression_type).lower()
+        try:
+            from scipy.spatial.distance import cdist
+        except Exception:
+            pass
 
         # the regressor can be tacked on to provide (minor) influence to the distance metric
         if regression_type == "user":
