@@ -20,10 +20,8 @@ def symmetric_mean_absolute_percentage_error(actual, forecast):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         smape = (
-            np.nansum(
-                (abs(forecast - actual) / (abs(forecast) + abs(actual))),
-                axis=0
-            ) * 200
+            np.nansum((abs(forecast - actual) / (abs(forecast) + abs(actual))), axis=0)
+            * 200
         ) / np.count_nonzero(~np.isnan(actual), axis=0)
     return smape
 
@@ -79,7 +77,11 @@ def mean_absolute_differential_error(A, F, order: int = 1, df_train=None, scaler
     """
     # scaler = np.mean(A, axis=0)  # debate over whether to make this scaled
     if df_train is not None:
-        last_of_array = np.nan_to_num(df_train[df_train.shape[0] - 1: df_train.shape[0], ])
+        last_of_array = np.nan_to_num(
+            df_train[
+                df_train.shape[0] - 1 : df_train.shape[0],
+            ]
+        )
         # last_of_array = df_train.tail(1).fillna(0).to_numpy()
         # assigning to new because I'm paranoid about overwrite existing objects
         lA = np.concatenate([last_of_array, A])
@@ -91,9 +93,13 @@ def mean_absolute_differential_error(A, F, order: int = 1, df_train=None, scaler
                     abs(np.diff(lA, order, axis=0) - np.diff(lF, order, axis=0)), axis=0
                 )
             else:
-                return np.nanmean(
-                    abs(np.diff(lA, order, axis=0) - np.diff(lF, order, axis=0)), axis=0
-                ) / scaler
+                return (
+                    np.nanmean(
+                        abs(np.diff(lA, order, axis=0) - np.diff(lF, order, axis=0)),
+                        axis=0,
+                    )
+                    / scaler
+                )
     else:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
@@ -102,9 +108,13 @@ def mean_absolute_differential_error(A, F, order: int = 1, df_train=None, scaler
                     abs(np.diff(A, order, axis=0) - np.diff(F, order, axis=0)), axis=0
                 )
             else:
-                return np.nanmean(
-                    abs(np.diff(A, order, axis=0) - np.diff(F, order, axis=0)), axis=0
-                ) / scaler
+                return (
+                    np.nanmean(
+                        abs(np.diff(A, order, axis=0) - np.diff(F, order, axis=0)),
+                        axis=0,
+                    )
+                    / scaler
+                )
 
 
 def pinball_loss(A, F, quantile):
@@ -170,7 +180,8 @@ def containment(lower_forecast, upper_forecast, actual):
     return (
         np.count_nonzero(
             (upper_forecast >= actual) & (lower_forecast <= actual), axis=0
-        ) / actual.shape[0]
+        )
+        / actual.shape[0]
     )
 
 
@@ -213,7 +224,8 @@ def rps(predictions, observed):
     return (
         np.sum(
             (np.cumsum(predictions, axis=1) - np.cumsum(observed, axis=1)) ** 2, axis=1
-        ) / ncat
+        )
+        / ncat
     )
 
 
@@ -244,17 +256,14 @@ def _spl(A, F, quantile, scaler):
     return (
         np.nanmean(
             np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A)), axis=0
-        ) / scaler
+        )
+        / scaler
     )
 
 
 def spl(precomputed_spl, scaler):
     """Accepting most of it already calculated"""
-    return (
-        np.nanmean(
-            precomputed_spl, axis=0
-        ) / scaler
-    )
+    return np.nanmean(precomputed_spl, axis=0) / scaler
 
 
 def msle(full_errors, ae, le):

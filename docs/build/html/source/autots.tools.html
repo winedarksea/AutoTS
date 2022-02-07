@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.tools package &#8212; AutoTS 0.3.12 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.4.0 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -389,7 +389,7 @@ categorical features will be discard for this, if present</p></li>
 <p>&#64;author: Colin</p>
 <dl class="function">
 <dt id="autots.tools.seasonal.date_part">
-<code class="sig-prename descclassname">autots.tools.seasonal.</code><code class="sig-name descname">date_part</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em>, <em class="sig-param">method: str = 'simple'</em>, <em class="sig-param">set_index: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.seasonal.date_part" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.seasonal.</code><code class="sig-name descname">date_part</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em>, <em class="sig-param">method: str = 'simple'</em>, <em class="sig-param">set_index: bool = True</em>, <em class="sig-param">polynomial_degree: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.seasonal.date_part" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create date part columns from pd.DatetimeIndex.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -400,6 +400,7 @@ simple - just day, year, month, weekday
 expanded - all available futures
 recurring - all features that should commonly repeat without aging</p></li>
 <li><p><strong>set_index</strong> (<em>bool</em>) – if True, return DTindex as index of df</p></li>
+<li><p><strong>polynomial_degree</strong> (<em>int</em>) – add this degree of sklearn polynomial features if not None</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -519,8 +520,16 @@ If new categorical series or levels are present in .transform() it won’t work!
 
 <dl class="function">
 <dt id="autots.tools.shaping.infer_frequency">
-<code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">infer_frequency</code><span class="sig-paren">(</span><em class="sig-param">df_wide</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.infer_frequency" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">infer_frequency</code><span class="sig-paren">(</span><em class="sig-param">df_wide</em>, <em class="sig-param">warn=True</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.infer_frequency" title="Permalink to this definition">¶</a></dt>
 <dd><p>Infer the frequency in a slightly more robust way.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df_wide</strong> (<em>pd.Dataframe</em><em> or </em><em>pd.DatetimeIndex</em>) – input to pull frequency from</p></li>
+<li><p><strong>warn</strong> (<em>bool</em>) – unused, here to make swappable with pd.infer_freq</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="function">
@@ -783,9 +792,9 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="class">
 <dt id="autots.tools.transform.DatepartRegressionTransformer">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">DatepartRegressionTransformer</code><span class="sig-paren">(</span><em class="sig-param">regression_model: dict = {'model': 'DecisionTree'</em>, <em class="sig-param">'model_params': {'max_depth': 5</em>, <em class="sig-param">'min_samples_split': 2}}</em>, <em class="sig-param">datepart_method: str = 'expanded'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">DatepartRegressionTransformer</code><span class="sig-paren">(</span><em class="sig-param">regression_model: dict = {'model': 'DecisionTree'</em>, <em class="sig-param">'model_params': {'max_depth': 5</em>, <em class="sig-param">'min_samples_split': 2}}</em>, <em class="sig-param">datepart_method: str = 'expanded'</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
-<p>Remove a regression on datepart from the data.</p>
+<p>Remove a regression on datepart from the data. See tools.seasonal.date_part</p>
 <dl class="method">
 <dt id="autots.tools.transform.DatepartRegressionTransformer.fit">
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer.fit" title="Permalink to this definition">¶</a></dt>
@@ -840,7 +849,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="class">
 <dt id="autots.tools.transform.Detrend">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">Detrend</code><span class="sig-paren">(</span><em class="sig-param">model: str = 'GLS'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Detrend" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">Detrend</code><span class="sig-paren">(</span><em class="sig-param">model: str = 'GLS'</em>, <em class="sig-param">phi: float = 1.0</em>, <em class="sig-param">window: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Detrend" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
 <p>Remove a linear trend from the data.</p>
 <dl class="method">
@@ -874,7 +883,8 @@ inverse_transform can only be applied to the original series, or an immediately 
 <dl class="method">
 <dt id="autots.tools.transform.Detrend.inverse_transform">
 <code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Detrend.inverse_transform" title="Permalink to this definition">¶</a></dt>
-<dd><p>Return data to original form.</p>
+<dd><p>Return data to original form.
+Will only match original if phi==1</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
@@ -1022,6 +1032,46 @@ None - no discretization
 </dd></dl>
 
 <dl class="class">
+<dt id="autots.tools.transform.EWMAFilter">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">EWMAFilter</code><span class="sig-paren">(</span><em class="sig-param">span: int = 7</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.EWMAFilter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
+<p>Irreversible filters of Exponential Weighted Moving Average</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>span</strong> (<em>int</em>) – span of exponetial period to convert to alpha</p>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.tools.transform.EWMAFilter.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.EWMAFilter.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit and Return Detrended DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.EWMAFilter.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.EWMAFilter.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate new random parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.EWMAFilter.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.EWMAFilter.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return detrended data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
 <dt id="autots.tools.transform.EmptyTransformer">
 <em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">EmptyTransformer</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'EmptyTransformer'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.EmptyTransformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
@@ -1080,7 +1130,7 @@ None - no discretization
 
 <dl class="class">
 <dt id="autots.tools.transform.GeneralTransformer">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">GeneralTransformer</code><span class="sig-paren">(</span><em class="sig-param">fillna: str = 'ffill'</em>, <em class="sig-param">transformations: dict = {}</em>, <em class="sig-param">transformation_params: dict = {}</em>, <em class="sig-param">grouping: str = None</em>, <em class="sig-param">reconciliation: str = None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">random_seed: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">GeneralTransformer</code><span class="sig-paren">(</span><em class="sig-param">fillna: str = None</em>, <em class="sig-param">transformations: dict = {}</em>, <em class="sig-param">transformation_params: dict = {}</em>, <em class="sig-param">grouping: str = None</em>, <em class="sig-param">reconciliation: str = None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">random_seed: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Remove fillNA and then mathematical transformations.</p>
 <p>Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a ‘wide’ (one column per series) shape.</p>
@@ -1156,7 +1206,8 @@ most of the interpolate methods from pandas.interpolate</p>
 ‘DatepartRegression’ - move a trend trained on datetime index
 “ScipyFilter” - filter data (lose information but smoother!) from scipy
 “HPFilter” - statsmodels hp_filter
-“STLFilter” - seasonal decompose and keep just one part of decomposition.</p>
+“STLFilter” - seasonal decompose and keep just one part of decomposition
+“EWMAFilter” - use an exponential weighted moving average to smooth data</p>
 </p></li>
 <li><p><strong>transformation_params</strong> (<em>dict</em>) – params of transformers {0: {}, 1: {‘model’: ‘Poisson’}, …}
 pass through dictionary of empty dictionaries to utilize defaults</p></li>
@@ -1459,7 +1510,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="function">
 <dt id="autots.tools.transform.RandomTransform">
-<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.1</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.02</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.03</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.3</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.2</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.1</em>, <em class="sig-param">'mean': 0.05</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.05</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.5</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">superfast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.07</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.02</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.03</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01</em>, <em class="sig-param">'EWMAFilter': 0.02}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.3</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.2</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.1</em>, <em class="sig-param">'mean': 0.05</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.05</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.5</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">superfast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a dict of randomly choosen transformation selections.</p>
 <p>SinTrend is used as a signal that slow parameters are allowed.</p>
 </dd></dl>
@@ -2181,7 +2232,7 @@ Note that this returns a different orientation than window_maker_2</p>
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2021, Colin Catlin.
+      &copy;2022, Colin Catlin.
       
       |
       <a href="../_sources/source/autots.tools.rst.txt"

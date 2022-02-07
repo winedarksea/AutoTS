@@ -556,7 +556,9 @@ class GluonTS(ModelObject):
                 [20, 40, 80, 150, 300, 500], [0.58, 0.35, 0.05, 0.05, 0.02]
             )[0]
         else:
-            epochs_choice = random.choices([10, 20, 40, 80], [0.02, 0.58, 0.35, 0.05])[0]
+            epochs_choice = random.choices([10, 20, 40, 80], [0.02, 0.58, 0.35, 0.05])[
+                0
+            ]
         learning_rate_choice = random.choices([0.01, 0.001, 0.0001], [0.3, 0.6, 0.1])[0]
         # NPTS doesn't use these, so just fill a constant
         if gluon_model_choice in ['NPTS', 'Rotbaum']:

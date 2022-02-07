@@ -54,6 +54,7 @@
 * minor but noticeable speedups to TemplateWizard and inferred_normal functions
 * added EventRiskForecast for determing risk of exceeding limits (should be considered in beta for now)
 * back_forecast now has tail/eval_periods configured
+* changed behavior of import_template, by default simple ensembles are unpacked but no longer included in template unless include_ensemble is True.
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

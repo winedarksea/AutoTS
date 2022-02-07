@@ -556,7 +556,9 @@ def ModelPrediction(
     if fail_on_forecast_nan:
         if df_forecast.forecast.isnull().any().astype(int).sum() > 0:
             raise ValueError(
-                "Model {} returned NaN for one or more series. fail_on_forecast_nan=True".format(model_str)
+                "Model {} returned NaN for one or more series. fail_on_forecast_nan=True".format(
+                    model_str
+                )
             )
 
     # CHECK Forecasts are proper length!
@@ -604,7 +606,9 @@ def ModelPrediction(
     if fail_on_forecast_nan:
         if df_forecast.forecast.isnull().any().astype(int).sum() > 0:
             raise ValueError(
-                "Model returned NaN due to a preprocessing transformer {}. fail_on_forecast_nan=True".format(str(transformation_dict))
+                "Model returned NaN due to a preprocessing transformer {}. fail_on_forecast_nan=True".format(
+                    str(transformation_dict)
+                )
             )
 
     return df_forecast
@@ -790,7 +794,7 @@ def model_forecast(
     ],
     horizontal_subset: list = None,
     return_model: bool = False,
-    **kwargs
+    **kwargs,
 ):
     """Takes numeric data, returns numeric forecasts.
 
@@ -1153,7 +1157,9 @@ def TemplateWizard(
                 post_memory_percent = virtual_memory().percent
 
             per_ts = True if 'distance' in ensemble else False
-            full_mae = True if "mosaic" in ensemble or "mosaic-window" in ensemble else False
+            full_mae = (
+                True if "mosaic" in ensemble or "mosaic-window" in ensemble else False
+            )
             model_error = df_forecast.evaluate(
                 df_test,
                 series_weights=weights,
@@ -1211,13 +1217,27 @@ def TemplateWizard(
 
             ps_metric = model_error.per_series_metrics
 
-            template_result.per_series_mae.append(_ps_metric(ps_metric, 'mae', model_id))
-            template_result.per_series_made.append(_ps_metric(ps_metric, 'made', model_id))
-            template_result.per_series_contour.append(_ps_metric(ps_metric, 'contour', model_id))
-            template_result.per_series_rmse.append(_ps_metric(ps_metric, 'rmse', model_id))
-            template_result.per_series_spl.append(_ps_metric(ps_metric, 'spl', model_id))
-            template_result.per_series_mle.append(_ps_metric(ps_metric, 'mle', model_id))
-            template_result.per_series_imle.append(_ps_metric(ps_metric, 'imle', model_id))
+            template_result.per_series_mae.append(
+                _ps_metric(ps_metric, 'mae', model_id)
+            )
+            template_result.per_series_made.append(
+                _ps_metric(ps_metric, 'made', model_id)
+            )
+            template_result.per_series_contour.append(
+                _ps_metric(ps_metric, 'contour', model_id)
+            )
+            template_result.per_series_rmse.append(
+                _ps_metric(ps_metric, 'rmse', model_id)
+            )
+            template_result.per_series_spl.append(
+                _ps_metric(ps_metric, 'spl', model_id)
+            )
+            template_result.per_series_mle.append(
+                _ps_metric(ps_metric, 'mle', model_id)
+            )
+            template_result.per_series_imle.append(
+                _ps_metric(ps_metric, 'imle', model_id)
+            )
 
             if 'distance' in ensemble:
                 cur_smape = model_error.per_timestamp.loc['weighted_smape']
@@ -1229,7 +1249,9 @@ def TemplateWizard(
             if 'mosaic' in ensemble or 'mosaic-window' in ensemble:
                 template_result.full_mae_errors.extend([model_error.full_mae_errors])
                 template_result.squared_errors.extend([model_error.squared_errors])
-                template_result.full_pl_errors.extend([model_error.upper_pl + model_error.lower_pl])
+                template_result.full_pl_errors.extend(
+                    [model_error.upper_pl + model_error.lower_pl]
+                )
                 template_result.full_mae_ids.extend([model_id])
 
         except KeyboardInterrupt:
@@ -1310,13 +1332,27 @@ def TemplateWizard(
                 sort=False,
             ).reset_index(drop=True)
     if template_result.per_series_mae:
-        template_result.per_series_mae = pd.concat(template_result.per_series_mae, axis=0)
-        template_result.per_series_made = pd.concat(template_result.per_series_made, axis=0)
-        template_result.per_series_contour = pd.concat(template_result.per_series_contour, axis=0)
-        template_result.per_series_rmse = pd.concat(template_result.per_series_rmse, axis=0)
-        template_result.per_series_spl = pd.concat(template_result.per_series_spl, axis=0)
-        template_result.per_series_mle = pd.concat(template_result.per_series_mle, axis=0)
-        template_result.per_series_imle = pd.concat(template_result.per_series_imle, axis=0)
+        template_result.per_series_mae = pd.concat(
+            template_result.per_series_mae, axis=0
+        )
+        template_result.per_series_made = pd.concat(
+            template_result.per_series_made, axis=0
+        )
+        template_result.per_series_contour = pd.concat(
+            template_result.per_series_contour, axis=0
+        )
+        template_result.per_series_rmse = pd.concat(
+            template_result.per_series_rmse, axis=0
+        )
+        template_result.per_series_spl = pd.concat(
+            template_result.per_series_spl, axis=0
+        )
+        template_result.per_series_mle = pd.concat(
+            template_result.per_series_mle, axis=0
+        )
+        template_result.per_series_imle = pd.concat(
+            template_result.per_series_imle, axis=0
+        )
     else:
         template_result.per_series_mae = pd.DataFrame()
         template_result.per_series_made = pd.DataFrame()
@@ -1945,7 +1981,7 @@ def back_forecast(
     n_jobs="auto",
     verbose=0,
     eval_periods: int = None,
-    **kwargs
+    **kwargs,
 ):
     """Create forecasts for the historical training data, ie. backcast or back forecast.
 
@@ -1963,7 +1999,9 @@ def back_forecast(
     """
     df_train_shape = df.index.shape[0]
     if eval_periods is not None:
-        assert eval_periods < df_train_shape, "eval_periods must be less than length of history"
+        assert (
+            eval_periods < df_train_shape
+        ), "eval_periods must be less than length of history"
         fore_length = eval_periods
         eval_start = df_train_shape - eval_periods
     else:

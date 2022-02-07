@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Tutorial &#8212; AutoTS 0.3.12 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.4.0 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -49,8 +49,9 @@
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#installation-and-dependency-versioning">Installation</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice">Caveats</a></p></li>
 <li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information">Adding Regressors</a></p></li>
-<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#simulation-forecasting">Simulation Forecasting</a></p></li>
-<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id8">Models</a></p></li>
+<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id8">Simulation Forecasting</a></p></li>
+<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id9">Event Risk Forecasting</a></p></li>
+<li><p><a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id10">Models</a></p></li>
 </ul>
 </section>
 <section id="extended-tutorial">
@@ -107,7 +108,10 @@ Dropping series which are mostly missing, or using <code class="docutils literal
 <ol class="arabic simple">
 <li><p>Bad data (sudden drops or missing values) in the <em>most recent</em> data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts.</p></li>
 <li><p>Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don’t accurately represent the series, a poor model may be chosen. Choose a good method and as many validations as possible.</p></li>
+<li><p>Anomalies that won’t be repeated. Manual anomaly removal can be more effective than any automatic methods.</p></li>
+<li><p>Artifical historical events, a simple example being sales promotions. Use of regressors is the most common method for dealing with this and may be critical for modeling these types of events.</p></li>
 </ol>
+<p>What you don’t need to do before the automated forecasting is any typical preprocessing. It is best to leave it up to the model selection process to choose, as different models do better with different types of preprocessing.</p>
 </section>
 <section id="id2">
 <h3>Validation and Cross Validation<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h3>
@@ -260,14 +264,17 @@ model.best_model_transformation_params
 Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights must be numbers greater than or equal to 0.
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">metric_weighting</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s1">&#39;smape_weighting&#39;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-    <span class="s1">&#39;mae_weighting&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-    <span class="s1">&#39;rmse_weighting&#39;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
-    <span class="s1">&#39;made_weighting&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="s1">&#39;smape_weighting&#39;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="s1">&#39;mae_weighting&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="s1">&#39;rmse_weighting&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="s1">&#39;made_weighting&#39;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span>
+    <span class="s1">&#39;mage_weighting&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="s1">&#39;mle_weighting&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="s1">&#39;imle_weighting&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="s1">&#39;spl_weighting&#39;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
     <span class="s1">&#39;containment_weighting&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
-    <span class="s1">&#39;runtime_weighting&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
-    <span class="s1">&#39;spl_weighting&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
     <span class="s1">&#39;contour_weighting&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="s1">&#39;runtime_weighting&#39;</span><span class="p">:</span> <span class="mf">0.05</span><span class="p">,</span>
 <span class="p">}</span>
 
 <span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">(</span>
@@ -277,14 +284,35 @@ This weighting is not to be confused with series weighting, which effects how eq
 <span class="p">)</span>
 </pre></div>
 </div>
-<p>It is best to usually use several metrics. Often the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE.</p>
-<p><em>Horizontal</em> style ensembles use <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code> for series selection, but only the values passed for <code class="docutils literal notranslate"><span class="pre">mae,</span> <span class="pre">rmse,</span> <span class="pre">contour,</span> <span class="pre">spl</span></code>. If all of these are 0, mae is used for selection.</p>
-<p><code class="docutils literal notranslate"><span class="pre">sMAPE</span></code> is generally the most versatile metric across multiple series, but doesn’t handle forecasts with lots of zeroes well.</p>
-<p><code class="docutils literal notranslate"><span class="pre">SPL</span></code> is <em>Scaled Pinball Loss</em> and is the optimal metric for assessing upper/lower quantile forecast accuracies.</p>
+<p>It is best to use several metrics for several reasons. The first is to avoid overfitting - a model that does well on many metrics is less likely to be overfit.
+Secondly, forecasts often have to meet multiple expectations. Using a composite score allows balancing the
+quality of point forecast, quality of probabilistic forecast, overestimation or underestimation, visual fit, and speed of runtime.</p>
+<p>Some metrics are scaled and some are not. MAE, RMSE, MAGE, MLE, iMLE are unscaled and accordingly in multivariate forecasting will favor model performance on the largest scale input series.</p>
+<p><em>Horizontal</em> style ensembles use <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code> for series selection, but only the values passed for <code class="docutils literal notranslate"><span class="pre">mae,</span> <span class="pre">rmse,</span> <span class="pre">made,</span> <span class="pre">mle,</span> <span class="pre">imle,</span> <span class="pre">contour,</span> <span class="pre">spl</span></code>. If all of these are 0, mae is used for selection.</p>
+<p><code class="docutils literal notranslate"><span class="pre">sMAPE</span></code> is <em>Symmetric Mean Absolute Percentage Loss</em> and is generally the most versatile metric across multiple series as it is scaled. It doesn’t handle forecasts with lots of zeroes well.</p>
+<p><code class="docutils literal notranslate"><span class="pre">SPL</span></code> is <em>Scaled Pinball Loss</em> or <em>Quantile Loss</em> and is the optimal metric for assessing upper/lower quantile forecast accuracies.</p>
 <p><code class="docutils literal notranslate"><span class="pre">Containment</span></code> measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called <code class="docutils literal notranslate"><span class="pre">coverage_fraction</span></code>.</p>
-<p><code class="docutils literal notranslate"><span class="pre">Contour</span></code> is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but <em>not</em> the magnitude of that difference. Does not work with forecast_length=1.</p>
-<p><code class="docutils literal notranslate"><span class="pre">MADE</span></code> is mean absolute differential error. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Does not work with forecast_length = 1.</p>
-<p>The contour metric is useful as it encourages ‘wavy’ forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they “don’t look like they are trying hard enough” to some managers, and using contour favors non-flat forecasts that (to many) look like a more serious model.</p>
+<p><code class="docutils literal notranslate"><span class="pre">MLE</span></code> and <code class="docutils literal notranslate"><span class="pre">iMLE</span></code> are <em>Mean Logarithmic Error</em> inspired by the <code class="docutils literal notranslate"><span class="pre">mean</span> <span class="pre">squared</span> <span class="pre">log</span> <span class="pre">error</span></code>. They are used to target over or underestimation with MAE of the penalized direction and log(error) for the less-penalized (and less outlier sensitive) direction.
+<code class="docutils literal notranslate"><span class="pre">MLE</span></code> penalizes an under-predicted forecast greater than an over-predicted forecast.
+<code class="docutils literal notranslate"><span class="pre">iMLE</span></code> is the inverse, and penalizes an over-prediction more.</p>
+<p><code class="docutils literal notranslate"><span class="pre">MAGE</span></code> is <em>Mean Absolute aGgregate Error</em> which measures the error of a rollup of the forecasts. This is helpful in hiearchial/grouped forecasts for selecting series that have minimal overestimation or underestimation when summed.</p>
+<p><code class="docutils literal notranslate"><span class="pre">Contour</span></code> is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but <em>not</em> the magnitude of that difference. It is more human-readable than MADE for this information.</p>
+<p><code class="docutils literal notranslate"><span class="pre">MADE</span></code> is <em>(Scaled) Mean Absolute Differential Error</em>. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Equivalent to ‘MAE’ when forecast_length=1. It is better for optimization than contour.</p>
+<p>The contour and MADE metrics are useful as they encourages ‘wavy’ forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they “don’t look like they are trying hard enough” to some managers, and using them favors non-flat forecasts that (to many) look like a more serious model.</p>
+</section>
+<section id="hierarchial-and-grouped-forecasts">
+<h3>Hierarchial and Grouped Forecasts<a class="headerlink" href="#hierarchial-and-grouped-forecasts" title="Permalink to this headline">¶</a></h3>
+<p>Hiearchial and grouping refer to multivariate forecast situations where the individual series are aggregated.
+A common example of this is product sales forecasting, where individual products are forecast and then also aggregated for a view on demand across all products.
+Aggregation combines the errors of individual series, however, potentially resulting in major over- or -under estimation of the overall demand.
+Traditionally to solve this problem, reconciliation is used where a top-level and lower-level forecasts are averaged or otherwise adjusted to produce a less exaggerated final result.</p>
+<p>Unfortunately, any reconciliation approach is inherently sub-optimal.
+On real world data with optimized forecasts, the error contributions of individual series and the direction of the error (over- or under- estimate) are usually unstable,
+not only from forecast to forecast but from timestep to timestep inside each forecast. Thus reconciliation often reassigns the wrong amount of error to the wrong place.</p>
+<p>The suggestion here for this problem is to target the problem from the beginning and utilize the <code class="docutils literal notranslate"><span class="pre">MAGE</span></code> metric across validations.
+This assesses how well the forecasts aggregate, and when used as part of metric_weighting drives model selection towards forecasts that aggregate well.
+<code class="docutils literal notranslate"><span class="pre">MAGE</span></code> assesses all series present, so if very distinct sub-groups are present, it may be sometimes necessary to model those groups in separate runs.
+Additionally, <code class="docutils literal notranslate"><span class="pre">MLE</span></code> or <code class="docutils literal notranslate"><span class="pre">iMLE</span></code> can be used if either underestimation or overestimation respectively has been identified as a problem.</p>
 </section>
 <section id="id7">
 <h3>Ensembles<a class="headerlink" href="#id7" title="Permalink to this headline">¶</a></h3>
@@ -305,9 +333,8 @@ These ensembles are choosen based on per series accuracy on <code class="docutil
 <p><code class="docutils literal notranslate"><span class="pre">mosaic</span></code> enembles are an extension of <code class="docutils literal notranslate"><span class="pre">horizontal</span></code> ensembles, but with a specific model choosen for each series <em>and</em> for each forecast period.
 As this means the maximum number of models can be <code class="docutils literal notranslate"><span class="pre">number</span> <span class="pre">of</span> <span class="pre">series</span> <span class="pre">*</span> <span class="pre">forecast_length</span></code>, this obviously may get quite slow.
 Theoretically, this style of ensembling offers the highest accuracy.
-However, <code class="docutils literal notranslate"><span class="pre">mosaic</span></code> models only utilize MAE for model selection, and as such upper and lower forecast performance may be poor.
-They are also more prone to over-fitting, so use this with more validations and more stable data.
-Unlike <code class="docutils literal notranslate"><span class="pre">horizontal</span></code> ensembles, which only work on multivariate datasets, <code class="docutils literal notranslate"><span class="pre">mosaic</span></code> can be run on a single time series.</p>
+They are much more prone to over-fitting, so use this with more validations and more stable data.
+Unlike <code class="docutils literal notranslate"><span class="pre">horizontal</span></code> ensembles, which only work on multivariate datasets, <code class="docutils literal notranslate"><span class="pre">mosaic</span></code> can be run on a single time series with a horizon &gt; 1.</p>
 <p>One thing you can do with <code class="docutils literal notranslate"><span class="pre">mosaic</span></code> ensembles if you only care about the accuracy of one forecast point, but want to run a forecast for the full forecast length, you can convert the mosaic to horizontal for just that forecast period.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">from</span> <span class="nn">autots.models.ensemble</span> <span class="kn">import</span> <span class="n">mosaic_to_horizontal</span><span class="p">,</span> <span class="n">model_forecast</span>
@@ -348,6 +375,7 @@ sklearn
     &gt;? (IterativeImputer, HistGradientBoostingRegressor)
 statsmodels
     &gt;= 0.13 ARDL and UECM
+scipy.uniform_filter1d (for mosaic-window ensemble only)
 </pre></div>
 </div>
 <p>Of these, numpy and pandas are critical.
@@ -361,7 +389,8 @@ Limited functionality should exist without scikit-learn.</p>
 </section>
 <section id="optional-packages">
 <h3>Optional Packages<a class="headerlink" href="#optional-packages" title="Permalink to this headline">¶</a></h3>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>psutil
+<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>requests
+psutil
 holidays
 prophet
 gluonts (requires mxnet)
@@ -377,22 +406,29 @@ greykite
 <p>Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs.</p>
 <section id="safest-bet-for-installation">
 <h4>Safest bet for installation:<a class="headerlink" href="#safest-bet-for-installation" title="Permalink to this headline">¶</a></h4>
-<p>venv, Anaconda, or <a class="reference external" href="https://github.com/conda-forge/miniforge/">Miniforge</a></p>
+<p>venv, Anaconda, or <a class="reference external" href="https://github.com/conda-forge/miniforge/">Miniforge</a> with some more tips <a class="reference external" href="https://syllepsis.live/2022/01/17/setting-up-and-optimizing-python-for-data-science-on-intel-amd-and-arm-including-apple-computers/">here</a>.</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a conda or venv environment</span>
-conda create -n openblas <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9
-conda activate openblas
+conda create -n timeseries <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.9
+conda activate timeseries
 
-python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost yfinance pytrends fredapi --exists-action i
+python -m pip install numpy scipy scikit-learn statsmodels lightgbm xgboost numexpr bottleneck yfinance pytrends fredapi --exists-action i
 
-python -m pip install yfinance pytrends fredapi
-python -m pip install numexpr bottleneck
 python -m pip install pystan prophet --exists-action i  <span class="c1"># conda-forge option below works more easily, --no-deps to pip install prophet if this fails</span>
-python -m pip install mxnet --exists-action i     <span class="c1"># check the mxnet documentation for more install options, also try pip install mxnet --no-deps</span>
-python -m pip install gluonts --exists-action i
+python -m pip install tensorflow
+python -m pip install mxnet --no-deps     <span class="c1"># check the mxnet documentation for more install options, also try pip install mxnet --no-deps</span>
+python -m pip install gluonts
 python -m pip install holidays-ext pmdarima dill greykite --exists-action i --no-deps
+<span class="c1"># install pytorch</span>
+python -m pip install neuralprophet
 python -m pip install --upgrade numpy pandas --exists-action i  <span class="c1"># mxnet likes to (pointlessly seeming) install old versions of numpy</span>
 
 python -m pip install autots --exists-action i
+</pre></div>
+</div>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>conda install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
+pip install mxnet --no-deps
+pip install intel-tensorflow scikit-learn-intelex yfinance pytrends fredapi gluonts
+pip install spyder
 </pre></div>
 </div>
 </section>
@@ -413,13 +449,13 @@ conda install -c intel numexpr statsmodels lightgbm tensorflow
 
 python -m pip install autots
 
-<span class="c1"># MKL_NUM_THREADS, USE_DAAL4PY_SKLEARN=1</span>
+<span class="c1"># OMP_NUM_THREADS, USE_DAAL4PY_SKLEARN=1</span>
 </pre></div>
 </div>
 </section>
 </section>
-<section id="benchmark">
-<h3>Benchmark<a class="headerlink" href="#benchmark" title="Permalink to this headline">¶</a></h3>
+<section id="speed-benchmark">
+<h3>Speed Benchmark<a class="headerlink" href="#speed-benchmark" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">autots.evaluator.benchmark</span> <span class="kn">import</span> <span class="n">Benchmark</span>
 <span class="n">bench</span> <span class="o">=</span> <span class="n">Benchmark</span><span class="p">()</span>
 <span class="n">bench</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">n_jobs</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="n">times</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
@@ -433,7 +469,8 @@ python -m pip install autots
 <section id="mysterious-crashes">
 <h3>Mysterious crashes<a class="headerlink" href="#mysterious-crashes" title="Permalink to this headline">¶</a></h3>
 <p>Usually mysterious crashes or hangs (those without clear error messages) occur when the CPU or Memory is overloaded.
-Try setting <code class="docutils literal notranslate"><span class="pre">n_jobs=1</span></code> or an otherwise low number, which should reduce the load. Also test the ‘superfast’ naive models, which are generally low resource consumption.
+<code class="docutils literal notranslate"><span class="pre">UnivariateRegression</span></code> is usually the most prone to these issues, removing it from the model_list may help.</p>
+<p>Try setting <code class="docutils literal notranslate"><span class="pre">n_jobs=1</span></code> or an otherwise low number, which should reduce the load. Also test the ‘superfast’ naive models, which are generally low resource consumption.
 GPU-accelerated models (Tensorflow in Regressions and GluonTS) are also more prone to crashes, and may be a source of problems when used.
 If problems persist, post to the GitHub Discussion or Issues.</p>
 </section>
@@ -550,6 +587,73 @@ To enforce the use of future_regressor for simulation forecasting, a few paramet
 <p>Note, this does not necessarily force the model to place any great value on the supplied features.
 It may be necessary to rerun multiple times until a model with satisfactory variable response is found,
 or to try with a subset of the regressor model list like <code class="docutils literal notranslate"><span class="pre">['FBProphet',</span> <span class="pre">'GLM',</span> <span class="pre">'ARDL',</span> <span class="pre">'DatepartRegression']</span></code>.</p>
+</section>
+<section id="id9">
+<h2>Event Risk Forecasting<a class="headerlink" href="#id9" title="Permalink to this headline">¶</a></h2>
+<p>Generate a risk score (0 to 1, but usually close to 0) for a future event exceeding user specified upper or lower bounds.</p>
+<p>Upper and lower limits can be one of four types, and may each be different.</p>
+<ol class="arabic simple">
+<li><p>None (no risk score calculated for this direction)</p></li>
+<li><p>Float in range [0, 1] historic quantile of series (which is historic min and max at edges) is chosen as limit.</p></li>
+<li><dl class="simple">
+<dt>A dictionary of {“model_name”: x,  “model_param_dict”: y, “model_transform_dict”: z, “prediction_interval”: 0.9} to generate a forecast as the limits</dt><dd><p>Primarily intended for simple forecasts like SeasonalNaive, but can be used with any AutoTS model</p>
+</dd>
+</dl>
+</li>
+<li><p>a custom input numpy array of shape (forecast_length, num_series)</p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">autots</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">load_daily</span><span class="p">,</span>
+    <span class="n">EventRiskForecast</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">multilabel_confusion_matrix</span><span class="p">,</span> <span class="n">classification_report</span>
+
+<span class="n">forecast_length</span> <span class="o">=</span> <span class="mi">6</span>
+<span class="n">df_full</span> <span class="o">=</span> <span class="n">load_daily</span><span class="p">(</span><span class="n">long</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">df_full</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span> <span class="p">(</span><span class="n">df_full</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">forecast_length</span><span class="p">)]</span>
+<span class="n">df_test</span> <span class="o">=</span> <span class="n">df</span><span class="p">[(</span><span class="n">df</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">forecast_length</span><span class="p">):]</span>
+
+<span class="n">upper_limit</span> <span class="o">=</span> <span class="mf">0.95</span>
+<span class="c1"># if using manual array limits, historic limit must be defined separately (if used)</span>
+<span class="n">lower_limit</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">forecast_length</span><span class="p">,</span> <span class="n">df</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+<span class="n">historic_lower_limit</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">EventRiskForecast</span><span class="p">(</span>
+    <span class="n">df</span><span class="p">,</span>
+    <span class="n">forecast_length</span><span class="o">=</span><span class="n">forecast_length</span><span class="p">,</span>
+    <span class="n">upper_limit</span><span class="o">=</span><span class="n">upper_limit</span><span class="p">,</span>
+    <span class="n">lower_limit</span><span class="o">=</span><span class="n">lower_limit</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="c1"># .fit() is optional if model_name, model_param_dict, model_transform_dict are already defined (overwrites)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">()</span>
+<span class="n">risk_df_upper</span><span class="p">,</span> <span class="n">risk_df_lower</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">()</span>
+<span class="n">historic_upper_risk_df</span><span class="p">,</span> <span class="n">historic_lower_risk_df</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict_historic</span><span class="p">(</span><span class="n">lower_limit</span><span class="o">=</span><span class="n">historic_lower_limit</span><span class="p">)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="n">threshold</span> <span class="o">=</span> <span class="mf">0.1</span>
+<span class="n">eval_lower</span> <span class="o">=</span> <span class="n">EventRiskForecast</span><span class="o">.</span><span class="n">generate_historic_risk_array</span><span class="p">(</span><span class="n">df_test</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">lower_limit_2d</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="s2">&quot;lower&quot;</span><span class="p">)</span>
+<span class="n">eval_upper</span> <span class="o">=</span> <span class="n">EventRiskForecast</span><span class="o">.</span><span class="n">generate_historic_risk_array</span><span class="p">(</span><span class="n">df_test</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">upper_limit_2d</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="s2">&quot;upper&quot;</span><span class="p">)</span>
+<span class="n">pred_lower</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">lower_risk_array</span> <span class="o">&gt;</span> <span class="n">threshold</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">pred_upper</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">upper_risk_array</span> <span class="o">&gt;</span> <span class="n">threshold</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+
+<span class="n">multilabel_confusion_matrix</span><span class="p">(</span><span class="n">eval_upper</span><span class="p">,</span> <span class="n">pred_upper</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">classification_report</span><span class="p">(</span><span class="n">eval_upper</span><span class="p">,</span> <span class="n">pred_upper</span><span class="p">,</span> <span class="n">zero_division</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>  <span class="c1"># target_names=df.columns</span>
+</pre></div>
+</div>
+<p>A limit specified by a forecast can be used to use one type of model to judge the risk of another production model’s bounds (here ARIMA) being exceeded.
+This is also useful for visualizing the effectivness of a particular model’s probabilistic forecasts.</p>
+<p>Using forecasts as a limit is also a common method of detecting anomalies in historic data - looking for data points that exceeded what a forecast would have expected.
+Forecast_length effects how far ahead each forecast step is. Larger is faster, smaller means tighter accuracy (only the most extreme outliers are flagged).
+<code class="docutils literal notranslate"><span class="pre">predict_historic</span></code> is used for looking back on the training dataset. Use <code class="docutils literal notranslate"><span class="pre">eval_periods</span></code> to look at only a portion.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">lower_limit</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;model_name&quot;</span><span class="p">:</span> <span class="s2">&quot;ARIMA&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;model_param_dict&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;p&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;d&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;q&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+    <span class="s2">&quot;model_transform_dict&quot;</span><span class="p">:</span> <span class="p">{},</span>
+    <span class="s2">&quot;prediction_interval&quot;</span><span class="p">:</span> <span class="mf">0.9</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
 <section id="a-hack-for-passing-in-parameters-that-aren-t-otherwise-available">
 <h3>A Hack for Passing in Parameters (that aren’t otherwise available)<a class="headerlink" href="#a-hack-for-passing-in-parameters-that-aren-t-otherwise-available" title="Permalink to this headline">¶</a></h3>
 <p>There are a lot of parameters available here, but not always all of the options available for a particular parameter are actually used in generated templates.
@@ -613,12 +717,11 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <li><p>MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series <code class="docutils literal notranslate"><span class="pre">i</span></code> are used to predict next step for series <code class="docutils literal notranslate"><span class="pre">i</span></code>, with a model trained on all data from all series.</p></li>
 <li><p>UnivariateRegression is the same as MultivariateRegression but trains an independent model on each series, thus not capable of learning from the patterns of other series. This performs well in horizontal ensembles as it can be parsed down to one series with the same performance on that series.</p></li>
 </ul>
-<p>How the upper and lower forecast bounds are created for these models will likely change in the future.
-Currently <code class="docutils literal notranslate"><span class="pre">MultivariateRegression</span></code> utilizes a stock GradientBoostingRegressor with quantile loss for probabilistic estimates, while others utilize point to probabilistic estimates.</p>
+<p>Currently <code class="docutils literal notranslate"><span class="pre">MultivariateRegression</span></code> has the option to utilize a stock GradientBoostingRegressor with quantile loss for probabilistic estimates, while others utilize point to probabilistic estimates.</p>
 </section>
 </section>
-<section id="id9">
-<h2>Models<a class="headerlink" href="#id9" title="Permalink to this headline">¶</a></h2>
+<section id="id10">
+<h2>Models<a class="headerlink" href="#id10" title="Permalink to this headline">¶</a></h2>
 <table class="docutils align-default">
 <colgroup>
 <col style="width: 11%" />
@@ -754,7 +857,17 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>VECM</p></td>
+<tr class="row-odd"><td><p>DynamicFactorMQ</p></td>
+<td><p>statsmodels</p></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>VECM</p></td>
 <td><p>statsmodels</p></td>
 <td></td>
 <td></td>
@@ -764,7 +877,7 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>VAR</p></td>
+<tr class="row-odd"><td><p>VAR</p></td>
 <td><p>statsmodels</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -774,7 +887,7 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>Theta</p></td>
+<tr class="row-even"><td><p>Theta</p></td>
 <td><p>statsmodels</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -784,7 +897,7 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>ARDL</p></td>
+<tr class="row-odd"><td><p>ARDL</p></td>
 <td><p>statsmodels</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -794,8 +907,8 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>FBProphet</p></td>
-<td><p>fbprophet</p></td>
+<tr class="row-even"><td><p>FBProphet</p></td>
+<td><p>prophet</p></td>
 <td></td>
 <td><p>True</p></td>
 <td><p>joblib</p></td>
@@ -804,7 +917,7 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>GluonTS</p></td>
+<tr class="row-odd"><td><p>GluonTS</p></td>
 <td><p>gluonts, mxnet</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -814,7 +927,7 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>RollingRegression</p></td>
+<tr class="row-even"><td><p>RollingRegression</p></td>
 <td><p>sklearn</p></td>
 <td><p>lightgbm, tensorflow</p></td>
 <td></td>
@@ -824,7 +937,7 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>WindowRegression</p></td>
+<tr class="row-odd"><td><p>WindowRegression</p></td>
 <td><p>sklearn</p></td>
 <td><p>lightgbm, tensorflow</p></td>
 <td></td>
@@ -834,7 +947,7 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>DatepartRegression</p></td>
+<tr class="row-even"><td><p>DatepartRegression</p></td>
 <td><p>sklearn</p></td>
 <td><p>lightgbm, tensorflow</p></td>
 <td></td>
@@ -844,7 +957,7 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>MultivariateRegression</p></td>
+<tr class="row-odd"><td><p>MultivariateRegression</p></td>
 <td><p>sklearn</p></td>
 <td><p>lightgbm, tensorflow</p></td>
 <td><p>True</p></td>
@@ -854,7 +967,7 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>UnivariateRegression</p></td>
+<tr class="row-even"><td><p>UnivariateRegression</p></td>
 <td><p>sklearn</p></td>
 <td><p>lightgbm, tensorflow</p></td>
 <td></td>
@@ -864,8 +977,8 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>UnivariateMotif/MultivariateMotif</p></td>
-<td><p>scipy.distaince.cdist</p></td>
+<tr class="row-odd"><td><p>Univariate/MultivariateMotif</p></td>
+<td><p>scipy.distance.cdist</p></td>
 <td></td>
 <td><p>True</p></td>
 <td><p>joblib</p></td>
@@ -877,8 +990,8 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>SectionalMotif</p></td>
-<td><p>scipy.distaince.cdist</p></td>
+<tr class="row-even"><td><p>SectionalMotif</p></td>
+<td><p>scipy.distance.cdist</p></td>
 <td><p>sklearn</p></td>
 <td><p>True</p></td>
 <td></td>
@@ -887,7 +1000,7 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-even"><td><p>NVAR</p></td>
+<tr class="row-odd"><td><p>NVAR</p></td>
 <td></td>
 <td></td>
 <td><p>True</p></td>
@@ -896,6 +1009,16 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td><p>True</p></td>
 <td></td>
 <td></td>
+</tr>
+<tr class="row-even"><td><p>NeuralProphet</p></td>
+<td><p>neuralprophet</p></td>
+<td></td>
+<td><p>tbd</p></td>
+<td><p>pytorch</p></td>
+<td><p>yes</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
 </tr>
 <tr class="row-odd"><td><p>Greykite</p></td>
 <td><p>greykite</p></td>
@@ -916,7 +1039,7 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <td><p>True</p></td>
 <td><p>joblib</p></td>
 <td></td>
-<td><p>True*</p></td>
+<td><p>True</p></td>
 <td><p>True</p></td>
 <td></td>
 </tr>
@@ -996,8 +1119,9 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
 <li class="toctree-l2"><a class="reference internal" href="#installation-and-dependency-versioning">Installation and Dependency Versioning</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#caveats-and-advice">Caveats and Advice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#id8">Simulation Forecasting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id9">Event Risk Forecasting</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#using-the-transformers-independently">Using the Transformers independently</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#id9">Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id10">Models</a></li>
 </ul>
 </li>
 </ul>
@@ -1037,7 +1161,7 @@ Currently <code class="docutils literal notranslate"><span class="pre">Multivari
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2021, Colin Catlin.
+      &copy;2022, Colin Catlin.
       
       |
       <a href="../_sources/source/tutorial.rst.txt"

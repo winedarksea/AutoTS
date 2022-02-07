@@ -15,7 +15,14 @@ else:
     _has_fred = True
 
 
-def get_fred_data(fredkey: str, SeriesNameDict: dict = None, long=True, observation_start=None, sleep_seconds: int = 1, **kwargs):
+def get_fred_data(
+    fredkey: str,
+    SeriesNameDict: dict = None,
+    long=True,
+    observation_start=None,
+    sleep_seconds: int = 1,
+    **kwargs
+):
     """Imports Data from Federal Reserve.
     For simplest results, make sure requested series are all of the same frequency.
 

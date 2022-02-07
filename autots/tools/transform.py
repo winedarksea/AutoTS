@@ -139,7 +139,9 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
 class Detrend(EmptyTransformer):
     """Remove a linear trend from the data."""
 
-    def __init__(self, model: str = 'GLS', phi: float = 1.0, window: int = None, **kwargs):
+    def __init__(
+        self, model: str = 'GLS', phi: float = 1.0, window: int = None, **kwargs
+    ):
         super().__init__(name='Detrend')
         self.model = model
         self.need_positive = ['Poisson', 'Gamma', 'Tweedie']
@@ -148,7 +150,9 @@ class Detrend(EmptyTransformer):
 
     @staticmethod
     def get_new_params(method: str = 'random'):
-        window = random.choices([None, 365, 900, 30, 90, 10], [2.0, 0.1, 0.1, 0.1, 0.1, 0.1])[0]
+        window = random.choices(
+            [None, 365, 900, 30, 90, 10], [2.0, 0.1, 0.1, 0.1, 0.1, 0.1]
+        )[0]
         if method == "fast":
             choice = random.choices(["GLS", "Linear"], [0.5, 0.5], k=1)[0]
             phi = random.choices([1, 0.999, 0.998, 0.99], [0.9, 0.05, 0.01, 0.01])[0]
@@ -231,8 +235,8 @@ class Detrend(EmptyTransformer):
         Y = df.to_numpy()
         X = pd.to_numeric(df.index, errors='coerce', downcast='integer').to_numpy()
         if self.window is not None:
-            Y = Y[-self.window:]
-            X = X[-self.window:]
+            Y = Y[-self.window :]
+            X = X[-self.window :]
         if self.model == 'GLS':
             from statsmodels.regression.linear_model import GLS
 
@@ -306,16 +310,30 @@ class Detrend(EmptyTransformer):
         if self.model != "GLS":
             X = X.reshape((-1, 1))
         if self.model in self.need_positive:
-            temp = self.trnd_trans.inverse_transform(pd.DataFrame(
-                self.trained_model.predict(X), index=x_in, columns=df.columns
-            ))
+            temp = self.trnd_trans.inverse_transform(
+                pd.DataFrame(
+                    self.trained_model.predict(X), index=x_in, columns=df.columns
+                )
+            )
             if self.phi != 1:
-                temp = temp.mul(pd.Series([self.phi] * df.shape[0], index=temp.index).pow(range(df.shape[0])), axis=0)
+                temp = temp.mul(
+                    pd.Series([self.phi] * df.shape[0], index=temp.index).pow(
+                        range(df.shape[0])
+                    ),
+                    axis=0,
+                )
             df = df + temp
         else:
-            pred = pd.DataFrame(self.trained_model.predict(X), index=x_in, columns=df.columns)
+            pred = pd.DataFrame(
+                self.trained_model.predict(X), index=x_in, columns=df.columns
+            )
             if self.phi != 1:
-                pred = pred.mul(pd.Series([self.phi] * df.shape[0], index=pred.index).pow(range(df.shape[0])), axis=0)
+                pred = pred.mul(
+                    pd.Series([self.phi] * df.shape[0], index=pred.index).pow(
+                        range(df.shape[0])
+                    ),
+                    axis=0,
+                )
             df = df + pred
         return df
 
@@ -587,10 +605,13 @@ class SinTrend(EmptyTransformer):
         sin_df = []
         # make this faster
         for index, row in self.sin_params.iterrows():
-            sin_df.append(pd.DataFrame(
-                row['amp'] * np.sin(row['omega'] * X + row['phase']) + row['offset'],
-                columns=[index],
-            ))
+            sin_df.append(
+                pd.DataFrame(
+                    row['amp'] * np.sin(row['omega'] * X + row['phase'])
+                    + row['offset'],
+                    columns=[index],
+                )
+            )
         sin_df = pd.concat(sin_df, axis=1)
         df_index = df.index
         df = df.astype(float).reset_index(drop=True) - sin_df.reset_index(drop=True)
@@ -1033,7 +1054,11 @@ class DatepartRegressionTransformer(EmptyTransformer):
                 }
             )
 
-        return {"regression_model": choice, "datepart_method": datepart_choice, "polynomial_degree": polynomial_choice}
+        return {
+            "regression_model": choice,
+            "datepart_method": datepart_choice,
+            "polynomial_degree": polynomial_choice,
+        }
 
     def fit(self, df):
         """Fits trend for later detrending.
@@ -1049,7 +1074,11 @@ class DatepartRegressionTransformer(EmptyTransformer):
         y = df.values
         if y.shape[1] == 1:
             y = y.ravel()
-        X = date_part(df.index, method=self.datepart_method, polynomial_degree=self.polynomial_degree)
+        X = date_part(
+            df.index,
+            method=self.datepart_method,
+            polynomial_degree=self.polynomial_degree,
+        )
         from autots.models.sklearn import retrieve_regressor
 
         multioutput = True
@@ -1088,7 +1117,11 @@ class DatepartRegressionTransformer(EmptyTransformer):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
-        X = date_part(df.index, method=self.datepart_method, polynomial_degree=self.polynomial_degree)
+        X = date_part(
+            df.index,
+            method=self.datepart_method,
+            polynomial_degree=self.polynomial_degree,
+        )
         # X.columns = [str(xc) for xc in X.columns]
         y = pd.DataFrame(self.model.predict(X), columns=df.columns, index=df.index)
         df = df - y
@@ -1105,7 +1138,11 @@ class DatepartRegressionTransformer(EmptyTransformer):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
-        X = date_part(df.index, method=self.datepart_method, polynomial_degree=self.polynomial_degree)
+        X = date_part(
+            df.index,
+            method=self.datepart_method,
+            polynomial_degree=self.polynomial_degree,
+        )
         y = pd.DataFrame(self.model.predict(X), columns=df.columns, index=df.index)
         df = df + y
         return df
@@ -2309,7 +2346,9 @@ class GeneralTransformer(object):
                     self.df_colnames = df.columns
                 # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         except Exception as e:
-            raise Exception(f"Transformer {self.transformations[i]} failed on fit") from e
+            raise Exception(
+                f"Transformer {self.transformations[i]} failed on fit"
+            ) from e
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         return df
 
@@ -2378,7 +2417,9 @@ class GeneralTransformer(object):
                     df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
                 # df = df.replace([np.inf, -np.inf], 0)
         except Exception as e:
-            raise Exception(f"Transformer {self.transformations[i]} failed on inverse") from e
+            raise Exception(
+                f"Transformer {self.transformations[i]} failed on inverse"
+            ) from e
 
         if fillzero:
             df = df.fillna(0)

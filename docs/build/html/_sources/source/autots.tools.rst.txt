@@ -92,7 +92,6 @@ autots.tools.window\_functions module
    :undoc-members:
    :show-inheritance:
 
-
 Module contents
 ---------------
 

@@ -203,7 +203,15 @@ class AutoTS(object):
         self.models_mode = models_mode
         random.seed(self.random_seed)
         # just a list of horizontal types in general
-        self.h_ens_list = ['horizontal', 'probabilistic', 'hdist', "mosaic", 'mosaic-window', 'horizontal-max', 'horizontal-min']
+        self.h_ens_list = [
+            'horizontal',
+            'probabilistic',
+            'hdist',
+            "mosaic",
+            'mosaic-window',
+            'horizontal-max',
+            'horizontal-min',
+        ]
         if isinstance(ensemble, str):
             ensemble = str(ensemble).lower()
         if ensemble == 'all':
@@ -220,7 +228,9 @@ class AutoTS(object):
         elif ensemble is None or not ensemble:
             self.ensemble = []
         else:
-            raise ValueError(f"ensemble arg: {ensemble} not a recognized string or list")
+            raise ValueError(
+                f"ensemble arg: {ensemble} not a recognized string or list"
+            )
 
         # check metric weights are valid
         metric_weighting_values = self.metric_weighting.values()
@@ -383,7 +393,9 @@ class AutoTS(object):
             return "Uninitiated AutoTS object"
         else:
             try:
-                base_res = self.initial_results.model_results[self.initial_results.model_results['ID'] == self.best_model_id]
+                base_res = self.initial_results.model_results[
+                    self.initial_results.model_results['ID'] == self.best_model_id
+                ]
                 res = ", ".join(base_res['smape'].astype(str).tolist())
                 res2 = ", ".join(base_res['mae'].astype(str).tolist())
                 res3 = ", ".join(base_res['spl'].astype(str).tolist())
@@ -583,7 +595,7 @@ class AutoTS(object):
                 forecast_length=self.forecast_length,
                 include_last=True,
                 verbose=self.verbose,
-                **self.similarity_validation_params
+                **self.similarity_validation_params,
             )
             self.validation_indexes = [
                 df_wide_numeric.index[df_wide_numeric.index <= indx[-1]]
@@ -914,7 +926,11 @@ class AutoTS(object):
             score_per_series = generate_score_per_series(
                 self.initial_results, self.metric_weighting, 1
             )
-            mods = score_per_series.index[np.argsort(-score_per_series.values, axis=0)[-1:-1 - n_per_series:-1].flatten()]
+            mods = score_per_series.index[
+                np.argsort(-score_per_series.values, axis=0)[
+                    -1 : -1 - n_per_series : -1
+                ].flatten()
+            ]
             per_series_val = model_results[
                 model_results['ID'].isin(mods.unique().tolist())
             ]
@@ -1091,9 +1107,12 @@ or otherwise increase models available."""
                 # eventually plan to allow window size to be controlled by params
                 if 'mosaic-window' in ensemble or 'mosaic' in ensemble:
                     weight_per_value = (
-                        self.initial_results.full_mae_errors * metric_weighting.get('mae_weighting', 0) +
-                        self.initial_results.full_pl_errors * metric_weighting.get('spl_weighting', 0) +
-                        self.initial_results.squared_errors * metric_weighting.get('rmse_weighting', 0)
+                        self.initial_results.full_mae_errors
+                        * metric_weighting.get('mae_weighting', 0)
+                        + self.initial_results.full_pl_errors
+                        * metric_weighting.get('spl_weighting', 0)
+                        + self.initial_results.squared_errors
+                        * metric_weighting.get('rmse_weighting', 0)
                     )
                 if 'mosaic-window' in ensemble:
                     ens_templates = generate_mosaic_template(
@@ -1451,12 +1470,18 @@ or otherwise increase models available."""
                 )
                 # undo preclean transformations if necessary
                 if self.preclean is not None:
-                    df_forecast.forecast = self.preclean_transformer.inverse_transform(df_forecast.forecast)
-                    df_forecast.lower_forecast = self.preclean_transformer.inverse_transform(
-                        df_forecast.lower_forecast
+                    df_forecast.forecast = self.preclean_transformer.inverse_transform(
+                        df_forecast.forecast
                     )
-                    df_forecast.upper_forecast = self.preclean_transformer.inverse_transform(
-                        df_forecast.upper_forecast
+                    df_forecast.lower_forecast = (
+                        self.preclean_transformer.inverse_transform(
+                            df_forecast.lower_forecast
+                        )
+                    )
+                    df_forecast.upper_forecast = (
+                        self.preclean_transformer.inverse_transform(
+                            df_forecast.upper_forecast
+                        )
                     )
                 forecast_objects[str(interval)] = df_forecast
             return forecast_objects
@@ -1493,12 +1518,18 @@ or otherwise increase models available."""
             )
             # undo preclean transformations if necessary
             if self.preclean is not None:
-                df_forecast.forecast = self.preclean_transformer.inverse_transform(df_forecast.forecast)
-                df_forecast.lower_forecast = self.preclean_transformer.inverse_transform(
-                    df_forecast.lower_forecast
+                df_forecast.forecast = self.preclean_transformer.inverse_transform(
+                    df_forecast.forecast
                 )
-                df_forecast.upper_forecast = self.preclean_transformer.inverse_transform(
-                    df_forecast.upper_forecast
+                df_forecast.lower_forecast = (
+                    self.preclean_transformer.inverse_transform(
+                        df_forecast.lower_forecast
+                    )
+                )
+                df_forecast.upper_forecast = (
+                    self.preclean_transformer.inverse_transform(
+                        df_forecast.upper_forecast
+                    )
                 )
             sys.stdout.flush()
             if just_point_forecast:
@@ -1607,7 +1638,11 @@ or otherwise increase models available."""
             )
 
     def import_template(
-        self, filename: str, method: str = "add_on", enforce_model_list: bool = True
+        self,
+        filename: str,
+        method: str = "add_on",
+        enforce_model_list: bool = True,
+        include_ensemble: bool = False,
     ):
         """Import a previously exported template of model parameters.
         Must be done before the AutoTS object is .fit().
@@ -1616,6 +1651,7 @@ or otherwise increase models available."""
             filename (str): file location (or a pd.DataFrame already loaded)
             method (str): 'add_on' or 'only' - "add_on" keeps `initial_template` generated in init. "only" uses only this template.
             enforce_model_list (bool): if True, remove model types not in model_list
+            include_ensemble (bool): if enforce_model_list is True, this specifies whether to allow ensembles anyway (otherwise they are unpacked and parts kept)
         """
         if isinstance(filename, pd.DataFrame):
             import_template = filename.copy()
@@ -1641,7 +1677,10 @@ or otherwise increase models available."""
 
         if enforce_model_list:
             # remove models not in given model list
-            mod_list = self.model_list + ['Ensemble']
+            if include_ensemble:
+                mod_list = self.model_list + ['Ensemble']
+            else:
+                mod_list = self.model_list
             import_template = import_template[import_template['Model'].isin(mod_list)]
             if import_template.shape[0] == 0:
                 raise ValueError(
@@ -1809,7 +1848,9 @@ or otherwise increase models available."""
         lookup = {k: v['Model'] for k, v in ModelParameters['models'].items()}
         return series.replace(lookup)
 
-    def plot_horizontal(self, max_series: int = 20, title="Model Types Chosen by Series", **kwargs):
+    def plot_horizontal(
+        self, max_series: int = 20, title="Model Types Chosen by Series", **kwargs
+    ):
         """Simple plot to visualize assigned series: models.
 
         Note that for 'mosiac' ensembles, it only plots the type of the most common model_id for that series, or the first if all are mode.
@@ -1857,7 +1898,9 @@ or otherwise increase models available."""
         # plot
         transformers.plot(kind='bar', color=colors, title=title, **kwargs)
 
-    def plot_generation_loss(self, title="Single Model Accuracy Gain Over Generations", **kwargs):
+    def plot_generation_loss(
+        self, title="Single Model Accuracy Gain Over Generations", **kwargs
+    ):
         """Plot improvement in accuracy over generations.
         Note: this is only "one size fits all" accuracy and
         doesn't account for the benefits seen for ensembling.
@@ -1887,10 +1930,14 @@ or otherwise increase models available."""
             series = random.choice(self.df_wide_numeric.columns)
         tail = None
         if start_date is not None:
-            tail = len(self.df_wide_numeric.index[self.df_wide_numeric.index >= start_date])
+            tail = len(
+                self.df_wide_numeric.index[self.df_wide_numeric.index >= start_date]
+            )
             if tail == len(self.df_wide_numeric.index):
                 tail = None
-        b_df = self.back_forecast(column=series, n_splits=n_splits, verbose=0, tail=tail).forecast
+        b_df = self.back_forecast(
+            column=series, n_splits=n_splits, verbose=0, tail=tail
+        ).forecast
         b_df = b_df.rename(columns=lambda x: str(x) + "_forecast")
         plot_df = pd.concat(
             [
@@ -1916,14 +1963,14 @@ or otherwise increase models available."""
         return temp[temp <= 0].index.to_list()
 
     def plot_per_series_smape(
-            self,
-            title: str = "Top Series Contributing SMAPE Error",
-            max_series: int = 10,
-            max_name_chars: int = 25,
-            color: str = "#ff9912",
-            figsize=(12, 4),
-            kind: str = "bar",
-            **kwargs
+        self,
+        title: str = "Top Series Contributing SMAPE Error",
+        max_series: int = 10,
+        max_name_chars: int = 25,
+        color: str = "#ff9912",
+        figsize=(12, 4),
+        kind: str = "bar",
+        **kwargs,
     ):
         """Plot which series are contributing most to SMAPE of final model. Avg of validations for best_model
 
@@ -1938,24 +1985,43 @@ or otherwise increase models available."""
         """
         if self.best_model.empty:
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
-        best_model_per_series_mae = self.initial_results.per_series_mae[self.initial_results.per_series_mae.index == self.best_model_id].mean(axis=0)
+        best_model_per_series_mae = self.initial_results.per_series_mae[
+            self.initial_results.per_series_mae.index == self.best_model_id
+        ].mean(axis=0)
         # obsess over avoiding division by zero
         scaler = self.df_wide_numeric.mean(axis=0)
         scaler[scaler == 0] == np.nan
         scaler = scaler.fillna(self.df_wide_numeric.max(axis=0))
         scaler[scaler == 0] == 1
-        temp = ((best_model_per_series_mae / scaler) * 100).round(2).sort_values(ascending=False).head(max_series)
+        temp = (
+            ((best_model_per_series_mae / scaler) * 100)
+            .round(2)
+            .sort_values(ascending=False)
+            .head(max_series)
+        )
         temp = temp.reset_index()
         temp.columns = ["Series", "SMAPE"]
         if self.best_model["Ensemble"].iloc[0] == 2:
             series = self.horizontal_to_df()
             temp = temp.merge(series, on='Series')
-            temp['Series'] = temp['Series'].str.slice(0, max_name_chars) + " (" + temp["Model"] + ")"
+            temp['Series'] = (
+                temp['Series'].str.slice(0, max_name_chars) + " (" + temp["Model"] + ")"
+            )
 
         if kind == "pie":
-            temp.set_index("Series").plot(y="SMAPE", kind="pie", title=title, figsize=figsize, **kwargs)
+            temp.set_index("Series").plot(
+                y="SMAPE", kind="pie", title=title, figsize=figsize, **kwargs
+            )
         else:
-            temp.plot(x="Series", y="SMAPE", kind=kind, title=title, color=color, figsize=figsize, **kwargs)
+            temp.plot(
+                x="Series",
+                y="SMAPE",
+                kind=kind,
+                title=title,
+                color=color,
+                figsize=figsize,
+                **kwargs,
+            )
 
 
 colors_list = [

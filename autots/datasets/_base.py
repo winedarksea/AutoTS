@@ -269,7 +269,13 @@ def load_live_daily(
             from fredapi import Fred  # noqa
             from autots.datasets.fred import get_fred_data
 
-            fred_df = get_fred_data(fred_key, fred_series, long=False, observation_start=observation_start, sleep_seconds=sleep_seconds)
+            fred_df = get_fred_data(
+                fred_key,
+                fred_series,
+                long=False,
+                observation_start=observation_start,
+                sleep_seconds=sleep_seconds,
+            )
             fred_df.index = fred_df.index.tz_localize(None)
             dataset_lists.append(fred_df)
     except ModuleNotFoundError:
@@ -285,7 +291,9 @@ def load_live_daily(
                 msft = yf.Ticker(ticker)
                 # get historical market data
                 msft_hist = msft.history(start=observation_start)
-                msft_hist = msft_hist.rename(columns=lambda x: x.lower().replace(" ", "_"))
+                msft_hist = msft_hist.rename(
+                    columns=lambda x: x.lower().replace(" ", "_")
+                )
                 msft_hist = msft_hist.rename(columns=lambda x: ticker.lower() + "_" + x)
                 try:
                     msft_hist.index = msft_hist.index.tz_localize(None)
@@ -311,7 +319,9 @@ def load_live_daily(
                     wargs
                     + f"&startDate={start_date}&endDate={str_end_time}&boundingBox=90,-180,-90,180&units=standard&format=csv"
                 )
-                wdf = pd.read_csv(io.StringIO(s.get(wbase + wargs, timeout=timeout).text))
+                wdf = pd.read_csv(
+                    io.StringIO(s.get(wbase + wargs, timeout=timeout).text)
+                )
                 wdf['DATE'] = pd.to_datetime(wdf['DATE'], infer_datetime_format=True)
                 wdf = wdf.set_index('DATE').drop(columns=['STATION'])
                 wdf.rename(columns=lambda x: wstation + "_" + x, inplace=True)
@@ -404,9 +414,18 @@ def load_live_daily(
                     df = pd.read_csv(csv_in, low_memory=False, on_bad_lines='skip')
                 except Exception:
                     df = pd.read_csv(csv_in, low_memory=False, error_bad_lines=False)
-                df['BEGIN_DATE'] = pd.to_datetime(df['BEGIN_DATE'], infer_datetime_format=True)
-                df['END_DATE'] = pd.to_datetime(df['END_DATE'], infer_datetime_format=True)
-                df['day'] = df.apply(lambda row: pd.date_range(row["BEGIN_DATE"], row['END_DATE'], freq='D'), axis=1)
+                df['BEGIN_DATE'] = pd.to_datetime(
+                    df['BEGIN_DATE'], infer_datetime_format=True
+                )
+                df['END_DATE'] = pd.to_datetime(
+                    df['END_DATE'], infer_datetime_format=True
+                )
+                df['day'] = df.apply(
+                    lambda row: pd.date_range(
+                        row["BEGIN_DATE"], row['END_DATE'], freq='D'
+                    ),
+                    axis=1,
+                )
                 df = df.explode('day')
                 swresult = df.groupby(["day"])["EVENT_ID"].count()
                 swresult.name = "_".join(event_type.split("+")[1:]) + "_Events"

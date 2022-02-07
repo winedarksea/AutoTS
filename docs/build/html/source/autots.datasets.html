@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.datasets package &#8212; AutoTS 0.3.12 documentation</title>
+    <title>autots.datasets package &#8212; AutoTS 0.4.0 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -45,7 +45,7 @@
 and pip install fredapi</p>
 <dl class="function">
 <dt id="autots.datasets.fred.get_fred_data">
-<code class="sig-prename descclassname">autots.datasets.fred.</code><code class="sig-name descname">get_fred_data</code><span class="sig-paren">(</span><em class="sig-param">fredkey: str</em>, <em class="sig-param">SeriesNameDict: dict = None</em>, <em class="sig-param">long=True</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.fred.get_fred_data" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.datasets.fred.</code><code class="sig-name descname">get_fred_data</code><span class="sig-paren">(</span><em class="sig-param">fredkey: str</em>, <em class="sig-param">SeriesNameDict: dict = None</em>, <em class="sig-param">long=True</em>, <em class="sig-param">observation_start=None</em>, <em class="sig-param">sleep_seconds: int = 1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.fred.get_fred_data" title="Permalink to this definition">¶</a></dt>
 <dd><p>Imports Data from Federal Reserve.
 For simplest results, make sure requested series are all of the same frequency.</p>
 <dl class="field-list simple">
@@ -56,6 +56,8 @@ For simplest results, make sure requested series are all of the same frequency.<
 Series id must match Fred IDs, but name can be anything
 if None, several default series are returned</p></li>
 <li><p><strong>long</strong> (<em>bool</em>) – if True, return long style data, else return wide style data with dt index</p></li>
+<li><p><strong>observation_start</strong> (<em>datetime</em>) – passed to Fred get_series</p></li>
+<li><p><strong>sleep_seconds</strong> (<em>int</em>) – seconds to sleep between each series call, reduces failure chance usually</p></li>
 </ul>
 </dd>
 </dl>
@@ -119,21 +121,31 @@ if False, return a Series with dt index</p></li>
 
 <dl class="function">
 <dt id="autots.datasets.load_live_daily">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_live_daily</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False, fred_key: str = None, fred_series: list = ['DGS10', 'T5YIE', 'SP500', 'DCOILWTICO', 'DEXUSEU'], tickers: list = ['MSFT'], trends_list: list = ['forecasting', 'cycling', 'cpu', 'microsoft'], weather_data_types: list = ['AWND', 'WSF2', 'TAVG'], weather_stations: list = ['USW00094846', 'USW00014925'], weather_years: int = 10, london_air_stations: list = ['CT3', 'SK8'], london_air_species: str = 'PM25', london_air_days: int = 180, earthquake_days: int = 180, earthquake_min_magnitude: int = 5</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_live_daily" title="Permalink to this definition">¶</a></dt>
-<dd><p>Generates a dataframe of data up to the present day.</p>
+<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_live_daily</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False, fred_key: str = None, fred_series=['DGS10', 'T5YIE', 'SP500', 'DCOILWTICO', 'DEXUSEU', 'WPU0911'], observation_start: str = '2000-01-01', tickers: list = ['MSFT'], trends_list: list = ['forecasting', 'cycling', 'microsoft'], trends_geo: str = 'US', weather_data_types: list = ['AWND', 'WSF2', 'TAVG'], weather_stations: list = ['USW00094846', 'USW00014925'], weather_years: int = 10, london_air_stations: list = ['CT3', 'SK8'], london_air_species: str = 'PM25', london_air_days: int = 180, earthquake_days: int = 180, earthquake_min_magnitude: int = 5, gsa_key: str = None, gov_domain_list=['nasa.gov'], gov_domain_limit: int = 600, weather_event_types=['%28Z%29+Winter+Weather', '%28Z%29+Winter+Storm'], timeout: float = 300.05, sleep_seconds: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_live_daily" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates a dataframe of data up to the present day. Requires active internet connection.
+Pass None instead of specification lists to exclude a data source.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>long</strong> (<em>bool</em>) – whether to return in long format or wide</p></li>
 <li><p><strong>fred_key</strong> (<em>str</em>) – <a class="reference external" href="https://fred.stlouisfed.org/docs/api/api_key.html">https://fred.stlouisfed.org/docs/api/api_key.html</a></p></li>
 <li><p><strong>fred_series</strong> (<em>list</em>) – list of FRED series IDs. This requires fredapi package</p></li>
+<li><p><strong>observation_start</strong> (<em>datetime</em>) – earliest day to retrieve, passed to Fred.get_series and yfinance.history</p></li>
 <li><p><strong>tickers</strong> (<em>list</em>) – list of stock tickers, requires yfinance</p></li>
 <li><p><strong>trends_list</strong> (<em>list</em>) – list of search keywords, requires pytrends. None to skip.</p></li>
 <li><p><strong>weather_data_types</strong> (<em>list</em>) – from NCEI NOAA api data types, GHCN Daily Weather Elements
 PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG</p></li>
 <li><p><strong>weather_stations</strong> (<em>list</em>) – from NCEI NOAA api station ids. Pass empty list to skip.</p></li>
 <li><p><strong>london_air_stations</strong> (<em>list</em>) – londonair.org.uk source station IDs. Pass empty list to skip.</p></li>
-<li><p><strong>london_species</strong> (<em>str</em>) – what measurement to pull from London Air. Not all stations have all metrics.        earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov. Set None to skip this.</p></li>
+<li><p><strong>london_species</strong> (<em>str</em>) – what measurement to pull from London Air. Not all stations have all metrics.</p></li>
+<li><p><strong>earthquake_min_magnitude</strong> (<em>int</em>) – smallest earthquake magnitude to pull from earthquake.usgs.gov. Set None to skip this.</p></li>
+<li><p><strong>gsa_key</strong> (<em>str</em>) – api key from <a class="reference external" href="https://open.gsa.gov/api/dap/">https://open.gsa.gov/api/dap/</a></p></li>
+<li><p><strong>gov_domain_list</strong> (<em>list</em>) – dist of government run domains to get traffic data for. Can be very slow, so fewer is better.
+some examples: [‘usps.com’, ‘ncbi.nlm.nih.gov’, ‘cdc.gov’, ‘weather.gov’, ‘irs.gov’, “usajobs.gov”, “studentaid.gov”, ‘nasa.gov’, “uk.usembassy.gov”, “tsunami.gov”]</p></li>
+<li><p><strong>gov_domain_limit</strong> (<em>int</em>) – max number of records. Smaller will be faster. Max is currently 10000.</p></li>
+<li><p><strong>weather_event_types</strong> (<em>list</em>) – list of html encoded severe weather event types <a class="reference external" href="https://www1.ncdc.noaa.gov/pub/data/swdi/stormevents/csvfiles/Storm-Data-Export-Format.pdf">https://www1.ncdc.noaa.gov/pub/data/swdi/stormevents/csvfiles/Storm-Data-Export-Format.pdf</a></p></li>
+<li><p><strong>timeout</strong> (<em>float</em>) – used by some queries</p></li>
+<li><p><strong>sleep_seconds</strong> (<em>int</em>) – increasing this may reduce probability of server download failures</p></li>
 </ul>
 </dd>
 </dl>
@@ -251,7 +263,7 @@ PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG</p></li>
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2021, Colin Catlin.
+      &copy;2022, Colin Catlin.
       
       |
       <a href="../_sources/source/autots.datasets.rst.txt"

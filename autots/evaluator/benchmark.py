@@ -40,7 +40,13 @@ class Benchmark(object):
         """Print."""
         return f"Benchmark runtime: {self.total_runtime} see .results for details"
 
-    def run(self, n_jobs: int = "auto", times: int = 3, random_seed: int = 123, base_models_only=False):
+    def run(
+        self,
+        n_jobs: int = "auto",
+        times: int = 3,
+        random_seed: int = 123,
+        base_models_only=False,
+    ):
         """Run benchmark.
 
         Args:
@@ -50,7 +56,7 @@ class Benchmark(object):
             base_models_only (bool): if True, doesn't attempt Tensorflow, GluonTS, or Prophet models
         """
         small_df = load_linear(
-                long=False, shape=(200, 20), introduce_random=2, random_seed=random_seed
+            long=False, shape=(200, 20), introduce_random=2, random_seed=random_seed
         )
 
         for _ in range(times):
@@ -254,9 +260,7 @@ class Benchmark(object):
             start_time = timeit.default_timer()
             df_forecast = model_forecast(
                 model_name="ARIMA",
-                model_param_dict={
-                    'p': 7, 'd': 1, 'q': 1, 'regression_type': None
-                },
+                model_param_dict={'p': 7, 'd': 1, 'q': 1, 'regression_type': None},
                 model_transform_dict={
                     "fillna": "median",
                     "transformations": {
@@ -336,7 +340,7 @@ class Benchmark(object):
                                 'activation': 'tanh',
                                 'solver': 'adam',
                                 'early_stopping': True,
-                                'learning_rate_init': 0.01
+                                'learning_rate_init': 0.01,
                             },
                         },
                         "window_size": 10,
@@ -411,7 +415,9 @@ class Benchmark(object):
                         n_jobs=n_jobs,
                     )
                     self.tensorflow_rnn_runtime = (
-                        self.tensorflow_rnn_runtime + timeit.default_timer() - start_time
+                        self.tensorflow_rnn_runtime
+                        + timeit.default_timer()
+                        - start_time
                     )
                 except Exception as e:
                     print(f"tensorflow failed with: {repr(e)}")
@@ -458,7 +464,9 @@ class Benchmark(object):
                         n_jobs=n_jobs,
                     )
                     self.tensorflow_cnn_runtime = (
-                        self.tensorflow_cnn_runtime + timeit.default_timer() - start_time
+                        self.tensorflow_cnn_runtime
+                        + timeit.default_timer()
+                        - start_time
                     )
                 except Exception as e:
                     print(f"tensorflow CNN failed with: {repr(e)}")
@@ -469,17 +477,20 @@ class Benchmark(object):
                     df_forecast = model_forecast(
                         model_name="GluonTS",
                         model_param_dict={
-                                "gluon_model": "SFF",
-                                "epochs": 40,
-                                "learning_rate": 0.01,
-                                "context_length": 10,
-                                "regression_type": None,
+                            "gluon_model": "SFF",
+                            "epochs": 40,
+                            "learning_rate": 0.01,
+                            "context_length": 10,
+                            "regression_type": None,
                         },
                         model_transform_dict={
                             "fillna": "KNNImputer",
                             "transformations": {"0": "QuantileTransformer"},
                             "transformation_params": {
-                                "0": {"output_distribution": "uniform", "n_quantiles": 100}
+                                "0": {
+                                    "output_distribution": "uniform",
+                                    "n_quantiles": 100,
+                                }
                             },
                         },
                         df_train=df,
@@ -506,7 +517,10 @@ class Benchmark(object):
                             "fillna": "KNNImputer",
                             "transformations": {"0": "QuantileTransformer"},
                             "transformation_params": {
-                                "0": {"output_distribution": "uniform", "n_quantiles": 100}
+                                "0": {
+                                    "output_distribution": "uniform",
+                                    "n_quantiles": 100,
+                                }
                             },
                         },
                         df_train=small_df,

@@ -293,29 +293,33 @@ class FBProphet(ModelObject):
         else:
             regression_list = [None, 'User']
             regression_probability = [0.8, 0.2]
-            regression_choice = random.choices(
-                regression_list, regression_probability
-            )[0]
+            regression_choice = random.choices(regression_list, regression_probability)[
+                0
+            ]
 
         return {
             'holiday': holiday_choice,
             'regression_type': regression_choice,
             'changepoint_prior_scale': random.choices(
                 [0.001, 0.01, 0.1, 0.05, 0.5, 1, 10, 30, 50],  # 0.05 default
-                [0.1, 0.1, 0.1, 0.9, 0.1, 0.1, 0.1, 0.1, 0.05]
+                [0.1, 0.1, 0.1, 0.9, 0.1, 0.1, 0.1, 0.1, 0.05],
             )[0],
             'seasonality_prior_scale': random.choices(
                 [0.01, 0.1, 1.0, 10.0, 15, 20, 25, 40],  # default 10
-                [0.05, 0.05, 0.05, 0.8, 0.05, 0.05, 0.05, 0.05]
+                [0.05, 0.05, 0.05, 0.8, 0.05, 0.05, 0.05, 0.05],
             )[0],
             'holidays_prior_scale': random.choices(
                 [0.01, 0.1, 1.0, 10.0, 15, 20, 25, 40],  # default 10
-                [0.05, 0.05, 0.05, 0.8, 0.05, 0.05, 0.05, 0.05]
+                [0.05, 0.05, 0.05, 0.8, 0.05, 0.05, 0.05, 0.05],
             )[0],
             'seasonality_mode': random.choice(['additive', 'multiplicative']),
-            'changepoint_range': random.choices([0.8, 0.85, 0.9, 0.98], [0.9, 0.1, 0.1, 0.1])[0],
+            'changepoint_range': random.choices(
+                [0.8, 0.85, 0.9, 0.98], [0.9, 0.1, 0.1, 0.1]
+            )[0],
             'growth': "linear",
-            'n_changepoints': random.choices([5, 10, 20, 25, 30, 40, 50], [0.05, 0.1, 0.1, 0.9, 0.1, 0.05, 0.05])[0],
+            'n_changepoints': random.choices(
+                [5, 10, 20, 25, 30, 40, 50], [0.05, 0.1, 0.1, 0.9, 0.1, 0.05, 0.05]
+            )[0],
         }
 
     def get_params(self):
@@ -565,7 +569,9 @@ class NeuralProphet(ModelObject):
                     current_series, periods=forecast_length, regressors_df=regr
                 )
             else:
-                future = m.make_future_dataframe(current_series, periods=forecast_length)
+                future = m.make_future_dataframe(
+                    current_series, periods=forecast_length
+                )
             fcst = m.predict(future, decompose=False)
             fcst = fcst.tail(forecast_length)  # remove the backcast
             # predicting that someday they will change back to fbprophet format
@@ -682,9 +688,9 @@ class NeuralProphet(ModelObject):
         else:
             regression_list = [None, 'User']
             regression_probability = [0.8, 0.2]
-            regression_choice = random.choices(
-                regression_list, regression_probability
-            )[0]
+            regression_choice = random.choices(regression_list, regression_probability)[
+                0
+            ]
         num_hidden = random.choices([0, 1, 2, 3, 4], [0.5, 0.1, 0.1, 0.1, 0.2])[0]
         if num_hidden > 0:
             d_hidden = random.choices([16, 32, 64], [0.8, 0.1, 0.1])[0]
@@ -695,7 +701,9 @@ class NeuralProphet(ModelObject):
             trend_reg = 0
             trend_reg_threshold = False
         else:
-            trend_reg = random.choices([0.1, 0, 1, 10, 100], [0.1, 0.5, 0.1, 0.1, 0.1])[0]
+            trend_reg = random.choices([0.1, 0, 1, 10, 100], [0.1, 0.5, 0.1, 0.1, 0.1])[
+                0
+            ]
             trend_reg_threshold = random.choices([True, False], [0.1, 0.9])[0]
 
         parameter_dict = {
@@ -706,7 +714,9 @@ class NeuralProphet(ModelObject):
             "changepoints_range": random.choice([0.8, 0.9, 0.95]),
             "trend_reg": trend_reg,
             'trend_reg_threshold': trend_reg_threshold,
-            "ar_sparsity": random.choices([None, 0.01, 0.03, 0.1], [0.9, 0.1, 0.1, 0.1])[0],
+            "ar_sparsity": random.choices(
+                [None, 0.01, 0.03, 0.1], [0.9, 0.1, 0.1, 0.1]
+            )[0],
             "yearly_seasonality": random.choices(["auto", False], [0.1, 0.5])[0],
             "weekly_seasonality": random.choices(["auto", False], [0.1, 0.5])[0],
             "daily_seasonality": random.choices(["auto", False], [0.1, 0.5])[0],
@@ -715,9 +725,13 @@ class NeuralProphet(ModelObject):
             "n_lags": random.choices([0, 1, 2, 3, 7], [0.8, 0.2, 0.1, 0.05, 0.1])[0],
             "num_hidden_layers": num_hidden,
             'd_hidden': d_hidden,
-            "learning_rate": random.choices([None, 1.0, 0.1, 0.01, 0.001], [0.7, 0.2, 0.1, 0.1, 0.1])[0],
+            "learning_rate": random.choices(
+                [None, 1.0, 0.1, 0.01, 0.001], [0.7, 0.2, 0.1, 0.1, 0.1]
+            )[0],
             "loss_func": random.choice(['Huber', "MAE", "MSE"]),
-            "train_speed": random.choices([None, -1, -2, -3, 1, 2, 3], [0.9, 0.01, 0.01, 0.01, 0.05, 0.05, 0.05])[0],
+            "train_speed": random.choices(
+                [None, -1, -2, -3, 1, 2, 3], [0.9, 0.01, 0.01, 0.01, 0.05, 0.05, 0.05]
+            )[0],
             "normalize": random.choices(['off', 'auto', 'soft1'], [0.4, 0.3, 0.3])[0],
         }
         return parameter_dict

@@ -11,7 +11,8 @@
 * [Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
 * [Adding Regressors](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information)
 * [Simulation Forecasting](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id8)
-* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id9)
+* [Event Risk Forecasting](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id9)
+* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id10)
 
 ## Extended Tutorial
 
@@ -70,6 +71,10 @@ There are some basic things to beware of that can commonly lead to poor results:
 
 1. Bad data (sudden drops or missing values) in the *most recent* data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. 
 2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be chosen. Choose a good method and as many validations as possible. 
+3. Anomalies that won't be repeated. Manual anomaly removal can be more effective than any automatic methods. 
+4. Artifical historical events, a simple example being sales promotions. Use of regressors is the most common method for dealing with this and may be critical for modeling these types of events. 
+
+What you don't need to do before the automated forecasting is any typical preprocessing. It is best to leave it up to the model selection process to choose, as different models do better with different types of preprocessing. 
 
 ### Validation and Cross Validation
 Cross validation helps assure that the optimal model is stable over the dynamics of a time series. 
@@ -619,6 +624,10 @@ print(classification_report(eval_upper, pred_upper, zero_division=1))  # target_
 ```
 A limit specified by a forecast can be used to use one type of model to judge the risk of another production model's bounds (here ARIMA) being exceeded. 
 This is also useful for visualizing the effectivness of a particular model's probabilistic forecasts. 
+
+Using forecasts as a limit is also a common method of detecting anomalies in historic data - looking for data points that exceeded what a forecast would have expected. 
+Forecast_length effects how far ahead each forecast step is. Larger is faster, smaller means tighter accuracy (only the most extreme outliers are flagged). 
+`predict_historic` is used for looking back on the training dataset. Use `eval_periods` to look at only a portion. 
 ```python
 lower_limit = {
 	"model_name": "ARIMA",
@@ -647,7 +656,6 @@ thus properly capturing the relative sequence (ie 'low'=1, 'medium'=2, 'high'=3)
 ### Custom and Unusual Frequencies
 Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects 
 Some models will support a more limited range of frequencies. 
-
 
 ## Using the Transformers independently
 The transformers expect data only in the `wide` shape with ascending date. 

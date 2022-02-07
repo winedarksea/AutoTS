@@ -14,7 +14,9 @@ def set_limit_forecast(
     forecast_length,
     model_name="SeasonalNaive",
     model_param_dict={
-        'method': "median", "lag_1": 28, "lag_2": None,
+        'method': "median",
+        "lag_1": 28,
+        "lag_2": None,
     },
     model_transform_dict={
         'fillna': 'nearest',
@@ -43,7 +45,7 @@ def set_limit_forecast(
         future_regressor_train=future_regressor_train,
         future_regressor_forecast=future_regressor_forecast,
         return_model=True,
-        **model_forecast_kwargs
+        **model_forecast_kwargs,
     )
     return forecasts.upper_forecast.values, forecasts.lower_forecast.values
 
@@ -53,12 +55,14 @@ def set_limit_forecast_historic(
     forecast_length,
     model_name="SeasonalNaive",
     model_param_dict={
-        'method': "median", "lag_1": 28, "lag_2": None,
+        'method': "median",
+        "lag_1": 28,
+        "lag_2": None,
     },
     model_transform_dict={
         'fillna': 'nearest',
         'transformations': {},
-        'transformation_params': {}
+        'transformation_params': {},
     },
     prediction_interval=0.9,
     frequency='infer',
@@ -83,7 +87,7 @@ def set_limit_forecast_historic(
         prediction_interval=prediction_interval,
         future_regressor_train=future_regressor_train,
         eval_periods=eval_periods,
-        **model_forecast_kwargs
+        **model_forecast_kwargs,
     )
     return forecasts.upper_forecast.values, forecasts.lower_forecast.values
 
@@ -146,13 +150,26 @@ class EventRiskForecast(object):
         upper_limit=0.95,
         model_name="UnivariateMotif",
         model_param_dict={
-            'window': 14, "pointed_method": "median", "distance_metric": "euclidean",
-            "k": 10, "return_result_windows": True
+            'window': 14,
+            "pointed_method": "median",
+            "distance_metric": "euclidean",
+            "k": 10,
+            "return_result_windows": True,
         },
         model_transform_dict={
             'fillna': 'pchip',
-            'transformations': {"0": "Slice", "1": "DifferencedTransformer", "2": "RollingMeanTransformer", "3": "MaxAbsScaler"},
-            'transformation_params': {"0": {"method": 0.5}, "1": {}, "2": {"fixed": False, "window": 7}, "3": {}}
+            'transformations': {
+                "0": "Slice",
+                "1": "DifferencedTransformer",
+                "2": "RollingMeanTransformer",
+                "3": "MaxAbsScaler",
+            },
+            'transformation_params': {
+                "0": {"method": 0.5},
+                "1": {},
+                "2": {"fixed": False, "window": 7},
+                "3": {},
+            },
         },
         model_forecast_kwargs={
             "max_generations": 30,
@@ -208,19 +225,34 @@ class EventRiskForecast(object):
             autots_kwargs (dict): all other args passed in as kwargs
                 if None, defaults to class model_forecast_kwargs, for blank pass empty dict
         """
-        autots_kwargs = self.model_forecast_kwargs if autots_kwargs is None else autots_kwargs
-        future_regressor_train = self.future_regressor_train if future_regressor_train is None else future_regressor_train
-        prediction_interval = self.prediction_interval if prediction_interval is None else prediction_interval
+        autots_kwargs = (
+            self.model_forecast_kwargs if autots_kwargs is None else autots_kwargs
+        )
+        future_regressor_train = (
+            self.future_regressor_train
+            if future_regressor_train is None
+            else future_regressor_train
+        )
+        prediction_interval = (
+            self.prediction_interval
+            if prediction_interval is None
+            else prediction_interval
+        )
         if isinstance(prediction_interval, list):
             prediction_interval = prediction_interval[0]
         model = AutoTS(
-            forecast_length=self.forecast_length if forecast_length is None else forecast_length,
+            forecast_length=self.forecast_length
+            if forecast_length is None
+            else forecast_length,
             prediction_interval=prediction_interval,
             models_mode=models_mode,
             model_list=model_list,
             ensemble=ensemble,
-            **autots_kwargs
-        ).fit(self.df_train if df_train is None else df_train, future_regressor=future_regressor_train)
+            **autots_kwargs,
+        ).fit(
+            self.df_train if df_train is None else df_train,
+            future_regressor=future_regressor_train,
+        )
         self.model_name = model.best_model_name
         self.model_param_dict = model.best_model_params
         self.model_transform_dict = model.best_model_transformation_params
@@ -245,23 +277,55 @@ class EventRiskForecast(object):
             result_windows (numpy.array): (num_samples/k, forecast_length, num_series/columns)
         """
         df_train = self.df_train if df_train is None else df_train
-        forecast_length = self.forecast_length if forecast_length is None else forecast_length
-        prediction_interval = self.prediction_interval if prediction_interval is None else prediction_interval
+        forecast_length = (
+            self.forecast_length if forecast_length is None else forecast_length
+        )
+        prediction_interval = (
+            self.prediction_interval
+            if prediction_interval is None
+            else prediction_interval
+        )
         frequency = self.frequency if frequency is None else frequency
         model_name = self.model_name if model_name is None else model_name
-        model_param_dict = self.model_param_dict if model_param_dict is None else model_param_dict
-        model_transform_dict = self.model_transform_dict if model_transform_dict is None else model_transform_dict
-        model_forecast_kwargs = self.model_forecast_kwargs if model_forecast_kwargs is None else model_forecast_kwargs
-        future_regressor_train = self.future_regressor_train if future_regressor_train is None else future_regressor_train
-        future_regressor_forecast = self.future_regressor_forecast if future_regressor_forecast is None else future_regressor_forecast
+        model_param_dict = (
+            self.model_param_dict if model_param_dict is None else model_param_dict
+        )
+        model_transform_dict = (
+            self.model_transform_dict
+            if model_transform_dict is None
+            else model_transform_dict
+        )
+        model_forecast_kwargs = (
+            self.model_forecast_kwargs
+            if model_forecast_kwargs is None
+            else model_forecast_kwargs
+        )
+        future_regressor_train = (
+            self.future_regressor_train
+            if future_regressor_train is None
+            else future_regressor_train
+        )
+        future_regressor_forecast = (
+            self.future_regressor_forecast
+            if future_regressor_forecast is None
+            else future_regressor_forecast
+        )
 
-        all_motif_list = ["UnivariateMotif", "MultivariateMotif", "SectionalMotif", "Motif"]
+        all_motif_list = [
+            "UnivariateMotif",
+            "MultivariateMotif",
+            "SectionalMotif",
+            "Motif",
+        ]
         diff_window_motif_list = ["UnivariateMotif", "MultivariateMotif", "Motif"]
         if model_name in all_motif_list:
             if isinstance(prediction_interval, list):
                 prediction_interval = prediction_interval[0]
             if model_name in diff_window_motif_list:
-                model_param_dict = {**model_param_dict, **{"return_result_windows": True}}
+                model_param_dict = {
+                    **model_param_dict,
+                    **{"return_result_windows": True},
+                }
             forecasts = model_forecast(
                 model_name=model_name,
                 model_param_dict=model_param_dict,
@@ -273,16 +337,24 @@ class EventRiskForecast(object):
                 future_regressor_train=future_regressor_train,
                 future_regressor_forecast=future_regressor_forecast,
                 return_model=True,
-                **model_forecast_kwargs
+                **model_forecast_kwargs,
             )
             result_windows = forecasts.model.result_windows
             if model_name in diff_window_motif_list:
-                result_windows = np.moveaxis(np.array(list(result_windows.values())), 0, -1)
+                result_windows = np.moveaxis(
+                    np.array(list(result_windows.values())), 0, -1
+                )
             transformed_array = []
             for samp in result_windows:
-                transformed_array.append(forecasts.transformer.inverse_transform(pd.DataFrame(
-                    samp, index=forecasts.forecast.index, columns=forecasts.forecast.columns
-                )))
+                transformed_array.append(
+                    forecasts.transformer.inverse_transform(
+                        pd.DataFrame(
+                            samp,
+                            index=forecasts.forecast.index,
+                            columns=forecasts.forecast.columns,
+                        )
+                    )
+                )
             result_windows = np.array(transformed_array)
             lower_forecast = forecasts.lower_forecast
             upper_forecast = forecasts.upper_forecast
@@ -303,7 +375,7 @@ class EventRiskForecast(object):
                     future_regressor_train=future_regressor_train,
                     future_regressor_forecast=future_regressor_forecast,
                     return_model=True,
-                    **model_forecast_kwargs
+                    **model_forecast_kwargs,
                 )
                 if not point_included:
                     result_windows_list.append(forecasts.forecast)
@@ -316,7 +388,15 @@ class EventRiskForecast(object):
         return result_windows, forecasts.forecast, upper_forecast, lower_forecast
 
     @staticmethod
-    def set_limit(limit, target_shape, df_train, direction="upper", period="forecast", forecast_length=None, eval_periods=None):
+    def set_limit(
+        limit,
+        target_shape,
+        df_train,
+        direction="upper",
+        period="forecast",
+        forecast_length=None,
+        eval_periods=None,
+    ):
         """Handles all limit input styles and returns numpy array.
 
         Args:
@@ -330,13 +410,23 @@ class EventRiskForecast(object):
         """
         # handle a predefined array
         if isinstance(limit, np.ndarray):
-            assert limit.ndim == 2, f"{direction}_limit, if array, must be 2d np array of shape forecast_length, n_series"
-            assert limit.shape == target_shape, f"{direction}_limit, if array, must be 2d np array of shape forecast_length, n_series"
+            assert (
+                limit.ndim == 2
+            ), f"{direction}_limit, if array, must be 2d np array of shape forecast_length, n_series"
+            assert (
+                limit.shape == target_shape
+            ), f"{direction}_limit, if array, must be 2d np array of shape forecast_length, n_series"
             return limit
         # handle a limit as a quantile defined by float
         elif isinstance(limit, float) or isinstance(limit, int):
-            assert limit >= 0 and limit <= 1, f"{direction}_limit if float must be in the range [0, 1], received {limit}"
-            return np.repeat(np.nanquantile(df_train, limit, axis=0).reshape(1, -1), target_shape[0], axis=0)
+            assert (
+                limit >= 0 and limit <= 1
+            ), f"{direction}_limit if float must be in the range [0, 1], received {limit}"
+            return np.repeat(
+                np.nanquantile(df_train, limit, axis=0).reshape(1, -1),
+                target_shape[0],
+                axis=0,
+            )
         # handle None
         elif limit is None:
             return None
@@ -351,13 +441,18 @@ class EventRiskForecast(object):
                     model_transform_dict=limit.get("model_transform_dict", {}),
                     prediction_interval=limit.get("prediction_interval", 0.9),
                     frequency=limit.get("frequency", 'infer'),
-                    model_forecast_kwargs=limit.get("model_forecast_kwargs", {
-                        "verbose": 1,
-                        "n_jobs": "auto",
-                        "random_seed": 321,
-                    }),
+                    model_forecast_kwargs=limit.get(
+                        "model_forecast_kwargs",
+                        {
+                            "verbose": 1,
+                            "n_jobs": "auto",
+                            "random_seed": 321,
+                        },
+                    ),
                     future_regressor_train=limit.get("future_regressor_train", None),
-                    future_regressor_forecast=limit.get("future_regressor_forecast", None),
+                    future_regressor_forecast=limit.get(
+                        "future_regressor_forecast", None
+                    ),
                     eval_periods=eval_periods,
                 )
             else:
@@ -369,13 +464,18 @@ class EventRiskForecast(object):
                     model_transform_dict=limit.get("model_transform_dict", {}),
                     prediction_interval=limit.get("prediction_interval", 0.9),
                     frequency=limit.get("frequency", 'infer'),
-                    model_forecast_kwargs=limit.get("model_forecast_kwargs", {
-                        "verbose": 1,
-                        "n_jobs": "auto",
-                        "random_seed": 321,
-                    }),
+                    model_forecast_kwargs=limit.get(
+                        "model_forecast_kwargs",
+                        {
+                            "verbose": 1,
+                            "n_jobs": "auto",
+                            "random_seed": 321,
+                        },
+                    ),
                     future_regressor_train=limit.get("future_regressor_train", None),
-                    future_regressor_forecast=limit.get("future_regressor_forecast", None),
+                    future_regressor_forecast=limit.get(
+                        "future_regressor_forecast", None
+                    ),
                 )
             if direction == "upper":
                 return upper
@@ -384,17 +484,25 @@ class EventRiskForecast(object):
             elif direction == "both":
                 return upper, lower
         else:
-            raise ValueError(f"{direction}_limit was not recognized dtype, input was {limit}")
+            raise ValueError(
+                f"{direction}_limit was not recognized dtype, input was {limit}"
+            )
 
     @staticmethod
     def generate_risk_array(result_windows, limit, direction="upper"):
         """Given a df and a limit, returns a 0/1 array of whether limit was equaled or exceeded."""
         if direction == "upper":
-            return (result_windows >= limit).astype(int).sum(axis=0) / result_windows.shape[0]
+            return (result_windows >= limit).astype(int).sum(
+                axis=0
+            ) / result_windows.shape[0]
         elif direction == "lower":
-            return (result_windows <= limit).astype(int).sum(axis=0) / result_windows.shape[0]
+            return (result_windows <= limit).astype(int).sum(
+                axis=0
+            ) / result_windows.shape[0]
         else:
-            raise ValueError(f"arg `direction`: {direction} not recognized in generate_risk_array")
+            raise ValueError(
+                f"arg `direction`: {direction} not recognized in generate_risk_array"
+            )
 
     @staticmethod
     def generate_historic_risk_array(df, limit, direction="upper"):
@@ -404,7 +512,9 @@ class EventRiskForecast(object):
         elif direction == "lower":
             return (df <= limit).astype(int)
         else:
-            raise ValueError(f"arg `direction`: {direction} not recognized in generate_risk_array")
+            raise ValueError(
+                f"arg `direction`: {direction} not recognized in generate_risk_array"
+            )
 
     def predict(self):
         """Returns forecast upper, lower risk probability arrays for input limits."""
@@ -415,9 +525,16 @@ class EventRiskForecast(object):
             self.lower_limit, self.outcome_shape, self.df_train, direction="lower"
         )
         if self.upper_limit_2d is None and self.lower_limit_2d is None:
-            raise ValueError("both upper and lower limits are None, at least one must be specified")
+            raise ValueError(
+                "both upper and lower limits are None, at least one must be specified"
+            )
 
-        self.result_windows, self.forecast_df, self.up_forecast_df, self.low_forecast_df = self.generate_result_windows()
+        (
+            self.result_windows,
+            self.forecast_df,
+            self.up_forecast_df,
+            self.low_forecast_df,
+        ) = self.generate_result_windows()
         self.outcome_index = self.forecast_df.index
 
         self.upper_risk_array = None
@@ -432,9 +549,13 @@ class EventRiskForecast(object):
                 self.result_windows, self.lower_limit_2d, direction="lower"
             )
         return pd.DataFrame(
-            self.upper_risk_array, columns=self.outcome_columns, index=self.outcome_index
+            self.upper_risk_array,
+            columns=self.outcome_columns,
+            index=self.outcome_index,
         ), pd.DataFrame(
-            self.lower_risk_array, columns=self.outcome_columns, index=self.outcome_index
+            self.lower_risk_array,
+            columns=self.outcome_columns,
+            index=self.outcome_index,
         )
 
     def predict_historic(self, upper_limit=None, lower_limit=None, eval_periods=None):
@@ -455,17 +576,30 @@ class EventRiskForecast(object):
             target_shape = self.df_train.shape
             train_df = self.df_train
         self.historic_upper_limit_2d = self.set_limit(
-            upper_limit, target_shape, self.df_train, direction="upper",
-            period="historic", forecast_length=self.forecast_length,
+            upper_limit,
+            target_shape,
+            self.df_train,
+            direction="upper",
+            period="historic",
+            forecast_length=self.forecast_length,
             eval_periods=eval_periods,
         )
         self.historic_lower_limit_2d = self.set_limit(
-            lower_limit, target_shape, self.df_train, direction="lower",
-            period="historic", forecast_length=self.forecast_length,
+            lower_limit,
+            target_shape,
+            self.df_train,
+            direction="lower",
+            period="historic",
+            forecast_length=self.forecast_length,
             eval_periods=eval_periods,
         )
-        if self.historic_upper_limit_2d is None and self.historic_lower_limit_2d is None:
-            raise ValueError("both upper and lower limits are None, at least one must be specified")
+        if (
+            self.historic_upper_limit_2d is None
+            and self.historic_lower_limit_2d is None
+        ):
+            raise ValueError(
+                "both upper and lower limits are None, at least one must be specified"
+            )
 
         self.historic_upper_risk_array = None
         if self.historic_upper_limit_2d is not None:
@@ -480,22 +614,48 @@ class EventRiskForecast(object):
             )
 
         return pd.DataFrame(
-            self.historic_upper_risk_array, columns=self.outcome_columns, index=train_df.index
+            self.historic_upper_risk_array,
+            columns=self.outcome_columns,
+            index=train_df.index,
         ), pd.DataFrame(
-            self.historic_lower_risk_array, columns=self.outcome_columns, index=train_df.index
+            self.historic_lower_risk_array,
+            columns=self.outcome_columns,
+            index=train_df.index,
         )
 
     def plot(
-            self, column_idx=0,
-            grays=[
-                "#838996", "#c0c0c0", "#dcdcdc", "#a9a9a9", "#808080", "#989898", "#808080",
-                "#757575", "#696969", "#c9c0bb", "#c8c8c8", "#323232", "#e5e4e2", "#778899",
-                "#4f666a", "#848482", "#414a4c", "#8a7f80", "#c4c3d0", "#bebebe", "#dbd7d2",
-            ],
-            up_low_color=["#ff4500", "#ff5349"],
-            bar_color="#6495ED",
-            result_windows=None, lower_limit_2d=None, upper_limit_2d=None,
-            upper_risk_array=None, lower_risk_array=None,
+        self,
+        column_idx=0,
+        grays=[
+            "#838996",
+            "#c0c0c0",
+            "#dcdcdc",
+            "#a9a9a9",
+            "#808080",
+            "#989898",
+            "#808080",
+            "#757575",
+            "#696969",
+            "#c9c0bb",
+            "#c8c8c8",
+            "#323232",
+            "#e5e4e2",
+            "#778899",
+            "#4f666a",
+            "#848482",
+            "#414a4c",
+            "#8a7f80",
+            "#c4c3d0",
+            "#bebebe",
+            "#dbd7d2",
+        ],
+        up_low_color=["#ff4500", "#ff5349"],
+        bar_color="#6495ED",
+        result_windows=None,
+        lower_limit_2d=None,
+        upper_limit_2d=None,
+        upper_risk_array=None,
+        lower_risk_array=None,
     ):
         """Plot a sample of the risk forecast outcomes.
 
@@ -507,23 +667,39 @@ class EventRiskForecast(object):
         """
         import matplotlib.pyplot as plt
 
-        result_windows = self.result_windows if result_windows is None else result_windows
-        lower_limit_2d = self.lower_limit_2d if lower_limit_2d is None else lower_limit_2d
-        upper_limit_2d = self.upper_limit_2d if upper_limit_2d is None else upper_limit_2d
-        upper_risk_array = self.upper_risk_array if upper_risk_array is None else upper_risk_array
-        lower_risk_array = self.lower_risk_array if lower_risk_array is None else lower_risk_array
+        result_windows = (
+            self.result_windows if result_windows is None else result_windows
+        )
+        lower_limit_2d = (
+            self.lower_limit_2d if lower_limit_2d is None else lower_limit_2d
+        )
+        upper_limit_2d = (
+            self.upper_limit_2d if upper_limit_2d is None else upper_limit_2d
+        )
+        upper_risk_array = (
+            self.upper_risk_array if upper_risk_array is None else upper_risk_array
+        )
+        lower_risk_array = (
+            self.lower_risk_array if lower_risk_array is None else lower_risk_array
+        )
 
         column = self.outcome_columns[column_idx]
-        fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios': [2, 1]}, figsize=(14, 8))
+        fig, (ax1, ax2) = plt.subplots(
+            nrows=2, ncols=1, gridspec_kw={'height_ratios': [2, 1]}, figsize=(14, 8)
+        )
         fig.suptitle(f'{column} Event Risk Forecasting')
         # index=pd.date_range("2022-01-01", periods=result_windows.shape[1], freq="D")
         plot_df = pd.DataFrame(result_windows[:, :, column_idx].T, self.outcome_index)
         if lower_limit_2d is not None:
-            plot_df['lower_limit'] = lower_limit_2d[:, column_idx]  # np.nanquantile(df, 0.6, axis=0)[column_idx]
+            plot_df['lower_limit'] = lower_limit_2d[
+                :, column_idx
+            ]  # np.nanquantile(df, 0.6, axis=0)[column_idx]
         else:
             plot_df['lower_limit'] = np.nan
         if upper_limit_2d is not None:
-            plot_df['upper_limt'] = upper_limit_2d[:, column_idx]  # np.nanquantile(df, 0.85, axis=0)[column_idx]
+            plot_df['upper_limt'] = upper_limit_2d[
+                :, column_idx
+            ]  # np.nanquantile(df, 0.85, axis=0)[column_idx]
         else:
             plot_df['upper_limt'] = np.nan
         colors = random.choices(grays, k=plot_df.shape[1] - 2) + up_low_color
@@ -539,4 +715,6 @@ class EventRiskForecast(object):
             low_risk = 0
         plot_df["upper & lower risk"] = up_risk + low_risk
         # #0095a4   #FA9632  # 3264C8   #6495ED
-        plot_df["upper & lower risk"].plot(kind="bar", xticks=[], title="Combined Risk Score", ax=ax2, color=bar_color)
+        plot_df["upper & lower risk"].plot(
+            kind="bar", xticks=[], title="Combined Risk Score", ax=ax2, color=bar_color
+        )

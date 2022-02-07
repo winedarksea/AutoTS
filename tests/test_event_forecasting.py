@@ -59,7 +59,7 @@ class TestEventRisk(unittest.TestCase):
             "model_name": "ARIMA",
             "model_param_dict": {'p': 1, "d": 0, "q": 1},
             "model_transform_dict": {},
-            "prediction_interval": 0.9,
+            "prediction_interval": 0.5,
         }
         forecast_length = 6
 

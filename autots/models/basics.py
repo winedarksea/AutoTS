@@ -388,7 +388,7 @@ class SeasonalNaive(ModelObject):
             tile_index = np.tile(
                 np.arange(self.lag_1), int(np.ceil(df_length / self.lag_1))
             )
-            tile_index = tile_index[len(tile_index) - (df_length):]
+            tile_index = tile_index[len(tile_index) - (df_length) :]
             df.index = tile_index
             if self.method == "median":
                 self.tile_values_lag_1 = df.groupby(level=0, axis=0).median()
@@ -401,7 +401,7 @@ class SeasonalNaive(ModelObject):
                     tile_index = np.tile(
                         np.arange(self.lag_2), int(np.ceil(df_length / self.lag_2))
                     )
-                    tile_index = tile_index[len(tile_index) - (df_length):]
+                    tile_index = tile_index[len(tile_index) - (df_length) :]
                     df.index = tile_index
                     if self.method == "median":
                         self.tile_values_lag_2 = df.groupby(level=0, axis=0).median()
@@ -1308,7 +1308,9 @@ class Motif(ModelObject):
                 [3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
             )[0]
         return {
-            "window": random.choices([3, 5, 7, 10, 14, 28, 60], [0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01])[0],
+            "window": random.choices(
+                [3, 5, 7, 10, 14, 28, 60], [0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01]
+            )[0],
             "point_method": random.choices(
                 ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
             )[0],

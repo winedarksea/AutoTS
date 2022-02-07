@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.models package &#8212; AutoTS 0.3.12 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.4.0 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -95,7 +95,7 @@
 
 <dl class="class">
 <dt id="autots.models.base.PredictionObject">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.base.</code><code class="sig-name descname">PredictionObject</code><span class="sig-paren">(</span><em class="sig-param">model_name: str = 'Uninitiated'</em>, <em class="sig-param">forecast_length: int = 0</em>, <em class="sig-param">forecast_index=nan</em>, <em class="sig-param">forecast_columns=nan</em>, <em class="sig-param">lower_forecast=nan</em>, <em class="sig-param">forecast=nan</em>, <em class="sig-param">upper_forecast=nan</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">predict_runtime=datetime.timedelta(0)</em>, <em class="sig-param">fit_runtime=datetime.timedelta(0)</em>, <em class="sig-param">model_parameters={}</em>, <em class="sig-param">transformation_parameters={}</em>, <em class="sig-param">transformation_runtime=datetime.timedelta(0)</em>, <em class="sig-param">per_series_metrics=nan</em>, <em class="sig-param">per_timestamp=nan</em>, <em class="sig-param">avg_metrics=nan</em>, <em class="sig-param">avg_metrics_weighted=nan</em>, <em class="sig-param">full_mae_error=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.base.</code><code class="sig-name descname">PredictionObject</code><span class="sig-paren">(</span><em class="sig-param">model_name: str = 'Uninitiated'</em>, <em class="sig-param">forecast_length: int = 0</em>, <em class="sig-param">forecast_index=nan</em>, <em class="sig-param">forecast_columns=nan</em>, <em class="sig-param">lower_forecast=nan</em>, <em class="sig-param">forecast=nan</em>, <em class="sig-param">upper_forecast=nan</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">predict_runtime=datetime.timedelta(0)</em>, <em class="sig-param">fit_runtime=datetime.timedelta(0)</em>, <em class="sig-param">model_parameters={}</em>, <em class="sig-param">transformation_parameters={}</em>, <em class="sig-param">transformation_runtime=datetime.timedelta(0)</em>, <em class="sig-param">per_series_metrics=nan</em>, <em class="sig-param">per_timestamp=nan</em>, <em class="sig-param">avg_metrics=nan</em>, <em class="sig-param">avg_metrics_weighted=nan</em>, <em class="sig-param">full_mae_error=None</em>, <em class="sig-param">model=None</em>, <em class="sig-param">transformer=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Generic class for holding forecast information.</p>
 <dl class="attribute">
@@ -152,7 +152,7 @@
 
 <dl class="method">
 <dt>
-<code class="sig-name descname">evaluate</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">series_weights: dict = None</em>, <em class="sig-param">df_train=None</em>, <em class="sig-param">per_timestamp_errors: bool = False</em>, <em class="sig-param">full_mae_error: bool = True</em><span class="sig-paren">)</span></dt>
+<code class="sig-name descname">evaluate</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">series_weights: dict = None</em>, <em class="sig-param">df_train=None</em>, <em class="sig-param">per_timestamp_errors: bool = False</em>, <em class="sig-param">full_mae_error: bool = True</em>, <em class="sig-param">scaler=None</em><span class="sig-paren">)</span></dt>
 <dd><p>Evalute prediction against test actual. Fills out attributes of base object.</p>
 <p>This fails with pd.NA values supplied.</p>
 <dl class="field-list simple">
@@ -160,7 +160,9 @@
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>actual</strong> (<em>pd.DataFrame</em>) – dataframe of actual values of (forecast length * n series)</p></li>
 <li><p><strong>series_weights</strong> (<em>dict</em>) – key = column/series_id, value = weight</p></li>
-<li><p><strong>df_train</strong> (<em>pd.DataFrame</em>) – historical values of series, wide, used for setting scaler for SPL
+<li><p><strong>df_train</strong> (<em>pd.DataFrame</em>) – historical values of series, wide,
+used for setting scaler for SPL
+necessary for MADE and Contour if forecast_length == 1
 if None, actuals are used instead (suboptimal).</p></li>
 <li><p><strong>per_timestamp</strong> (<em>bool</em>) – whether to calculate and return per timestamp direction errors</p></li>
 </ul>
@@ -170,7 +172,8 @@ if None, actuals are used instead (suboptimal).</p></li>
 per_timestamp (pandas.DataFrame): smape accuracy for each timestamp, avg of all series
 avg_metrics (pandas.Series): average values of accuracy across all input series
 avg_metrics_weighted (pandas.Series): average values of accuracy across all input series weighted by series_weight, if given
-full_mae_errors (numpy.array): abs(actual - forecast)</p>
+full_mae_errors (numpy.array): abs(actual - forecast)
+scaler (numpy.array): precomputed scaler for efficiency, avg value of series in order of columns</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>per_series_metrics (pandas.DataFrame)</p>
@@ -345,7 +348,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="class">
 <dt id="autots.models.basics.Motif">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">Motif</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'Motif'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = 1</em>, <em class="sig-param">window: int = 5</em>, <em class="sig-param">point_method: str = 'weighted_mean'</em>, <em class="sig-param">distance_metric: str = 'minkowski'</em>, <em class="sig-param">k: int = 10</em>, <em class="sig-param">max_windows: int = 5000</em>, <em class="sig-param">multivariate: bool = False</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.Motif" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">Motif</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'Motif'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = 1</em>, <em class="sig-param">window: int = 5</em>, <em class="sig-param">point_method: str = 'weighted_mean'</em>, <em class="sig-param">distance_metric: str = 'minkowski'</em>, <em class="sig-param">k: int = 10</em>, <em class="sig-param">max_windows: int = 5000</em>, <em class="sig-param">multivariate: bool = False</em>, <em class="sig-param">return_result_windows: bool = False</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.Motif" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Forecasts using a nearest neighbors type model adapted for probabilistic time series.</p>
 <dl class="field-list simple">
@@ -363,6 +366,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <li><p><strong>k</strong> (<em>int</em>) – number of closest neighbors to consider</p></li>
 <li><p><strong>max_windows</strong> (<em>int</em>) – max number of windows to consider (a speed/accuracy tradeoff)</p></li>
 <li><p><strong>multivariate</strong> (<em>bool</em>) – if True, utilizes matches from all provided series for each series forecast. Else just own history of series.</p></li>
+<li><p><strong>return_result_windows</strong> (<em>bool</em>) – if True, result windows (all motifs gathered for forecast) will be saved in dict to result_windows attribute</p></li>
 </ul>
 </dd>
 </dl>
@@ -548,7 +552,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="class">
 <dt id="autots.models.basics.SeasonalNaive">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">SeasonalNaive</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'SeasonalNaive'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">lag_1: int = 7</em>, <em class="sig-param">lag_2: int = None</em>, <em class="sig-param">method: str = 'LastValue'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SeasonalNaive" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">SeasonalNaive</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'SeasonalNaive'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">lag_1: int = 7</em>, <em class="sig-param">lag_2: int = None</em>, <em class="sig-param">method: str = 'lastvalue'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SeasonalNaive" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Naive forecasting predicting a dataframe with seasonal (lag) forecasts.</p>
 <p>Concerto No. 2 in G minor, Op. 8, RV 315</p>
@@ -738,7 +742,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="function">
 <dt id="autots.models.basics.looped_motif">
-<code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">looped_motif</code><span class="sig-paren">(</span><em class="sig-param">Xa</em>, <em class="sig-param">Xb</em>, <em class="sig-param">name</em>, <em class="sig-param">r_arr=None</em>, <em class="sig-param">window=10</em>, <em class="sig-param">distance_metric='minkowski'</em>, <em class="sig-param">k=10</em>, <em class="sig-param">point_method='mean'</em>, <em class="sig-param">prediction_interval=0.9</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.looped_motif" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">looped_motif</code><span class="sig-paren">(</span><em class="sig-param">Xa</em>, <em class="sig-param">Xb</em>, <em class="sig-param">name</em>, <em class="sig-param">r_arr=None</em>, <em class="sig-param">window=10</em>, <em class="sig-param">distance_metric='minkowski'</em>, <em class="sig-param">k=10</em>, <em class="sig-param">point_method='mean'</em>, <em class="sig-param">prediction_interval=0.9</em>, <em class="sig-param">return_result_windows=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.looped_motif" title="Permalink to this definition">¶</a></dt>
 <dd><p>inner function for Motif model.</p>
 </dd></dl>
 
@@ -859,6 +863,7 @@ if &gt; 10, also increases search space of probabilistic forecast</p></li>
 <dt id="autots.models.ensemble.BestNEnsemble">
 <code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">BestNEnsemble</code><span class="sig-paren">(</span><em class="sig-param">ensemble_params</em>, <em class="sig-param">forecasts</em>, <em class="sig-param">lower_forecasts</em>, <em class="sig-param">upper_forecasts</em>, <em class="sig-param">forecasts_runtime: dict</em>, <em class="sig-param">prediction_interval: float = 0.9</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.BestNEnsemble" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate mean forecast for ensemble of models.</p>
+<p>model_weights and point_methods other than ‘mean’ are incompatible</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -938,7 +943,7 @@ same for lower_forecasts, upper_forecasts</p></li>
 
 <dl class="function">
 <dt id="autots.models.ensemble.generate_mosaic_template">
-<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">generate_mosaic_template</code><span class="sig-paren">(</span><em class="sig-param">initial_results</em>, <em class="sig-param">full_mae_ids</em>, <em class="sig-param">num_validations</em>, <em class="sig-param">col_names</em>, <em class="sig-param">full_mae_errors</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.generate_mosaic_template" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">generate_mosaic_template</code><span class="sig-paren">(</span><em class="sig-param">initial_results</em>, <em class="sig-param">full_mae_ids</em>, <em class="sig-param">num_validations</em>, <em class="sig-param">col_names</em>, <em class="sig-param">full_mae_errors</em>, <em class="sig-param">smoothing_window=None</em>, <em class="sig-param">metric_name='MAE'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.generate_mosaic_template" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate an ensemble template from results.</p>
 </dd></dl>
 
@@ -1175,11 +1180,12 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <p>Since Prophet install can be finicky on Windows, it will be an optional dependency.</p>
 <dl class="class">
 <dt id="autots.models.prophet.FBProphet">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.prophet.</code><code class="sig-name descname">FBProphet</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'FBProphet'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.FBProphet" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.prophet.</code><code class="sig-name descname">FBProphet</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'FBProphet'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">yearly_seasonality='auto'</em>, <em class="sig-param">weekly_seasonality='auto'</em>, <em class="sig-param">daily_seasonality='auto'</em>, <em class="sig-param">growth: str = 'linear'</em>, <em class="sig-param">n_changepoints: int = 25</em>, <em class="sig-param">changepoint_prior_scale: float = 0.05</em>, <em class="sig-param">seasonality_mode: str = 'additive'</em>, <em class="sig-param">changepoint_range: float = 0.8</em>, <em class="sig-param">seasonality_prior_scale: float = 10.0</em>, <em class="sig-param">holidays_prior_scale: float = 10.0</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.FBProphet" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Facebook’s Prophet</p>
 <p>‘thou shall count to 3, no more, no less, 3 shall be the number thou shall count, and the number of the counting
 shall be 3. 4 thou shall not count, neither count thou 2, excepting that thou then preceed to 3.’ -Python</p>
+<p>For params see: <a class="reference external" href="https://facebook.github.io/prophet/docs/diagnostics.html">https://facebook.github.io/prophet/docs/diagnostics.html</a></p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -1217,6 +1223,67 @@ shall be 3. 4 thou shall not count, neither count thou 2, excepting that thou th
 <dl class="method">
 <dt id="autots.models.prophet.FBProphet.predict">
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.FBProphet.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.models.prophet.NeuralProphet">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.prophet.</code><code class="sig-name descname">NeuralProphet</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'NeuralProphet'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">growth: str = 'off'</em>, <em class="sig-param">n_changepoints: int = 10</em>, <em class="sig-param">changepoints_range: float = 0.9</em>, <em class="sig-param">trend_reg: float = 0</em>, <em class="sig-param">trend_reg_threshold: bool = False</em>, <em class="sig-param">ar_sparsity: float = None</em>, <em class="sig-param">yearly_seasonality: str = 'auto'</em>, <em class="sig-param">weekly_seasonality: str = 'auto'</em>, <em class="sig-param">daily_seasonality: str = 'auto'</em>, <em class="sig-param">seasonality_mode: str = 'additive'</em>, <em class="sig-param">seasonality_reg: float = 0</em>, <em class="sig-param">n_lags: int = 0</em>, <em class="sig-param">num_hidden_layers: int = 0</em>, <em class="sig-param">d_hidden: int = None</em>, <em class="sig-param">learning_rate: float = None</em>, <em class="sig-param">loss_func: str = 'Huber'</em>, <em class="sig-param">train_speed: int = None</em>, <em class="sig-param">normalize: str = 'auto'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.NeuralProphet" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>Facebook’s Prophet got caught in a net.</p>
+<p>n_jobs is implemented here but it should be set to 1. PyTorch already maxes out cores in all observed cases.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>holiday</strong> (<em>bool</em>) – If true, include holidays</p></li>
+<li><p><strong>regression_type</strong> (<em>str</em>) – type of regression (None, ‘User’)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.prophet.NeuralProphet.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.NeuralProphet.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.prophet.NeuralProphet.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.NeuralProphet.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.prophet.NeuralProphet.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.NeuralProphet.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.prophet.NeuralProphet.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.NeuralProphet.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1304,7 +1371,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="class">
 <dt id="autots.models.sklearn.DatepartRegression">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">DatepartRegression</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'DatepartRegression'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">forecast_length: int = 1</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">regression_model: dict = {'model': 'DecisionTree'</em>, <em class="sig-param">'model_params': {'max_depth': 5</em>, <em class="sig-param">'min_samples_split': 2}}</em>, <em class="sig-param">datepart_method: str = 'expanded'</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.DatepartRegression" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">DatepartRegression</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'DatepartRegression'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">forecast_length: int = 1</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">regression_model: dict = {'model': 'DecisionTree'</em>, <em class="sig-param">'model_params': {'max_depth': 5</em>, <em class="sig-param">'min_samples_split': 2}}</em>, <em class="sig-param">datepart_method: str = 'expanded'</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.DatepartRegression" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Regression not on series but datetime</p>
 <dl class="field-list simple">
@@ -1362,10 +1429,10 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="class">
 <dt id="autots.models.sklearn.MultivariateRegression">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">MultivariateRegression</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'MultivariateRegression'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">forecast_length: int = 7</em>, <em class="sig-param">regression_model: dict = {'model': 'RandomForest'</em>, <em class="sig-param">'model_params': {}}</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = 7</em>, <em class="sig-param">min_rolling_periods: int = 7</em>, <em class="sig-param">ewm_var_alpha: float = None</em>, <em class="sig-param">quantile90_rolling_periods: int = None</em>, <em class="sig-param">quantile10_rolling_periods: int = None</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">additional_lag_periods: int = 7</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">datepart_method: str = None</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">window: int = None</em>, <em class="sig-param">quantile_params: dict = {'learning_rate': 0.1</em>, <em class="sig-param">'max_depth': 20</em>, <em class="sig-param">'min_samples_leaf': 4</em>, <em class="sig-param">'min_samples_split': 5</em>, <em class="sig-param">'n_estimators': 250}</em>, <em class="sig-param">n_jobs: int = -1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.MultivariateRegression" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">MultivariateRegression</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'MultivariateRegression'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">forecast_length: int = 7</em>, <em class="sig-param">regression_model: dict = {'model': 'RandomForest'</em>, <em class="sig-param">'model_params': {}}</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = 7</em>, <em class="sig-param">min_rolling_periods: int = 7</em>, <em class="sig-param">ewm_var_alpha: float = None</em>, <em class="sig-param">quantile90_rolling_periods: int = None</em>, <em class="sig-param">quantile10_rolling_periods: int = None</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">additional_lag_periods: int = None</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">datepart_method: str = None</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">window: int = 5</em>, <em class="sig-param">probabilistic: bool = True</em>, <em class="sig-param">quantile_params: dict = {'learning_rate': 0.1</em>, <em class="sig-param">'max_depth': 20</em>, <em class="sig-param">'min_samples_leaf': 4</em>, <em class="sig-param">'min_samples_split': 5</em>, <em class="sig-param">'n_estimators': 250}</em>, <em class="sig-param">n_jobs: int = -1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.MultivariateRegression" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Regression-framed approach to forecasting using sklearn.
-A multiariate version of rolling regression: ie each series is agged independently but modeled together</p>
+A multiariate version of rolling regression: ie each series is lagged independently but modeled together</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
@@ -1616,7 +1683,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="function">
 <dt id="autots.models.sklearn.generate_regressor_params">
-<code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">generate_regressor_params</code><span class="sig-paren">(</span><em class="sig-param">model_dict=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.generate_regressor_params" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">generate_regressor_params</code><span class="sig-paren">(</span><em class="sig-param">model_dict=None</em>, <em class="sig-param">method='default'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.generate_regressor_params" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1831,6 +1898,64 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <p>maModel = DynamicFactor(df_train, freq = ‘MS’, k_factors = 2, factor_order=2).fit()
 maPred = maModel.predict()</p>
 </p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.models.statsmodels.DynamicFactorMQ">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.statsmodels.</code><code class="sig-name descname">DynamicFactorMQ</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'DynamicFactorMQ'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">factors: int = 1</em>, <em class="sig-param">factor_orders: int = 2</em>, <em class="sig-param">factor_multiplicities: int = None</em>, <em class="sig-param">idiosyncratic_ar1: bool = False</em>, <em class="sig-param">maxiter: int = 1000</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.DynamicFactorMQ" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>DynamicFactorMQ from Statsmodels</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.statsmodels.DynamicFactorMQ.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.DynamicFactorMQ.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.statsmodels.DynamicFactorMQ.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.DynamicFactorMQ.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.statsmodels.DynamicFactorMQ.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.DynamicFactorMQ.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.statsmodels.DynamicFactorMQ.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.DynamicFactorMQ.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2255,7 +2380,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="class">
 <dt id="autots.models.statsmodels.VECM">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.statsmodels.</code><code class="sig-name descname">VECM</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'VECM'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">deterministic: str = 'nc'</em>, <em class="sig-param">k_ar_diff: int = 1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VECM" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.statsmodels.</code><code class="sig-name descname">VECM</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'VECM'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">deterministic: str = 'n'</em>, <em class="sig-param">k_ar_diff: int = 1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VECM" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>VECM from Statsmodels</p>
 <dl class="field-list simple">
@@ -2564,7 +2689,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2021, Colin Catlin.
+      &copy;2022, Colin Catlin.
       
       |
       <a href="../_sources/source/autots.models.rst.txt"

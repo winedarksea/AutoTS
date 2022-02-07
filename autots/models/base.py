@@ -84,10 +84,14 @@ class ModelObject(object):
             Requires ModelObject.basic_profile() being called as part of .fit()
         """
         if self.frequency == 'infer':
-            raise ValueError("create_forecast_index run without specific frequency, run basic_profile first or pass proper frequency to model init")
+            raise ValueError(
+                "create_forecast_index run without specific frequency, run basic_profile first or pass proper frequency to model init"
+            )
         self.forecast_index = pd.date_range(
             freq=self.frequency, start=self.train_last_date, periods=forecast_length + 1
-        )[1:]  # note the disposal of the first (already extant) date
+        )[
+            1:
+        ]  # note the disposal of the first (already extant) date
         return self.forecast_index
 
     def get_params(self):
@@ -349,7 +353,11 @@ class PredictionObject(object):
             scaler[np.isnan(scaler)] = fill_val
 
         # concat most recent history to enable full-size diffs
-        last_of_array = np.nan_to_num(df_train[df_train.shape[0] - 1: df_train.shape[0], ])
+        last_of_array = np.nan_to_num(
+            df_train[
+                df_train.shape[0] - 1 : df_train.shape[0],
+            ]
+        )
         lA = np.concatenate([last_of_array, A])
         lF = np.concatenate([last_of_array, F])
 
@@ -357,9 +365,17 @@ class PredictionObject(object):
         mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
 
         # np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A))
-        self.upper_pl = np.where(A >= upper_forecast, self.prediction_interval * (A - upper_forecast), (1 - self.prediction_interval) * (upper_forecast - A))
+        self.upper_pl = np.where(
+            A >= upper_forecast,
+            self.prediction_interval * (A - upper_forecast),
+            (1 - self.prediction_interval) * (upper_forecast - A),
+        )
         # note that the quantile here is the lower quantile
-        self.lower_pl = np.where(A >= lower_forecast, (1 - self.prediction_interval) * (A - lower_forecast), (1 - (1 - self.prediction_interval)) * (lower_forecast - A))
+        self.lower_pl = np.where(
+            A >= lower_forecast,
+            (1 - self.prediction_interval) * (A - lower_forecast),
+            (1 - (1 - self.prediction_interval)) * (lower_forecast - A),
+        )
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)

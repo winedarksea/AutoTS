@@ -264,12 +264,15 @@ def retrieve_regressor(
         if multioutput:
             from sklearn.multioutput import MultiOutputRegressor
 
-            return MultiOutputRegressor(LGBMRegressor(
-                verbose=int(verbose_bool),
-                random_state=random_seed,
-                n_jobs=1,
-                **model_param_dict,
-            ), n_jobs=n_jobs)
+            return MultiOutputRegressor(
+                LGBMRegressor(
+                    verbose=int(verbose_bool),
+                    random_state=random_seed,
+                    n_jobs=1,
+                    **model_param_dict,
+                ),
+                n_jobs=n_jobs,
+            )
         else:
             return LGBMRegressor(
                 verbose=int(verbose_bool),
@@ -416,7 +419,9 @@ def retrieve_regressor(
                 from sklearn.gaussian_process.kernels import RBF
 
                 kernel = RBF()
-        return GaussianProcessRegressor(kernel=kernel, random_state=random_seed, **model_param_dict)
+        return GaussianProcessRegressor(
+            kernel=kernel, random_state=random_seed, **model_param_dict
+        )
     else:
         regression_model['model'] = 'RandomForest'
         from sklearn.ensemble import RandomForestRegressor
@@ -533,7 +538,8 @@ datepart_model_dict: dict = {
 
 
 def generate_regressor_params(
-    model_dict=None, method="default",
+    model_dict=None,
+    method="default",
 ):
     if model_dict is None:
         model_dict = sklearn_model_dict
@@ -633,18 +639,12 @@ def generate_regressor_params(
             param_dict = {
                 "model": 'KNN',
                 "model_params": {
-                    "n_neighbors": random.choices(
-                        [3, 5, 10, 14], [0.2, 0.7, 0.1, 0.1]
-                    )[0],
-                    "weights": random.choices(
-                        ['uniform', 'distance'], [0.7, 0.3]
-                    )[0],
-                    'p': random.choices(
-                        [2, 1, 1.5], [0.7, 0.1, 0.1]
-                    )[0],
-                    'leaf_size': random.choices(
-                        [30, 10, 50], [0.8, 0.1, 0.1]
-                    )[0],
+                    "n_neighbors": random.choices([3, 5, 10, 14], [0.2, 0.7, 0.1, 0.1])[
+                        0
+                    ],
+                    "weights": random.choices(['uniform', 'distance'], [0.7, 0.3])[0],
+                    'p': random.choices([2, 1, 1.5], [0.7, 0.1, 0.1])[0],
+                    'leaf_size': random.choices([30, 10, 50], [0.8, 0.1, 0.1])[0],
                 },
             }
         elif model == 'RandomForest':
@@ -826,7 +826,7 @@ def generate_regressor_params(
                 "model": 'Ridge',
                 "model_params": {
                     'alpha': random.choice([1.0, 10.0, 0.1, 0.00001]),
-                }
+                },
             }
         elif model == 'GaussianProcessRegressor':
             param_dict = {
@@ -837,7 +837,7 @@ def generate_regressor_params(
                         [None, "DotWhite", "White", "RBF", "ExpSineSquared"],
                         [0.4, 0.1, 0.1, 0.1, 0.1],
                     )[0],
-                }
+                },
             }
         else:
             min_samples = np.random.choice(
@@ -1170,7 +1170,8 @@ class RollingRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.8, 0.05, 0.05, 0.05, 0.05]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring', "simple_2"], [0.7, 0.05, 0.1, 0.1, 0.05]
+            [None, 'simple', 'expanded', 'recurring', "simple_2"],
+            [0.7, 0.05, 0.1, 0.1, 0.05],
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.99, 0.01])[0]
@@ -1440,7 +1441,9 @@ class WindowRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         window_size_choice = random.choice([5, 10, 20, seasonal_int()])
-        model_choice = generate_regressor_params(model_dict=sklearn_model_dict, method=method)
+        model_choice = generate_regressor_params(
+            model_dict=sklearn_model_dict, method=method
+        )
         if "regressor" in method:
             regression_type_choice = "User"
             input_dim_choice = 'univariate'
@@ -1786,7 +1789,11 @@ class DatepartRegression(ModelObject):
 
         y = df.to_numpy()
 
-        X = date_part(df.index, method=self.datepart_method, polynomial_degree=self.polynomial_degree)
+        X = date_part(
+            df.index,
+            method=self.datepart_method,
+            polynomial_degree=self.polynomial_degree,
+        )
         if self.regression_type in ['User', 'user']:
             # regr = future_regressor.copy()
             # regr.index = X.index
@@ -1831,14 +1838,18 @@ class DatepartRegression(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
-        X = date_part(index, method=self.datepart_method, polynomial_degree=self.polynomial_degree)
+        X = date_part(
+            index, method=self.datepart_method, polynomial_degree=self.polynomial_degree
+        )
         if self.regression_type in ['User', 'user']:
             X = pd.concat([X, future_regressor], axis=1)
             if X.shape[0] > index.shape[0]:
                 raise ValueError("future_regressor and X index failed to align")
         X.columns = [str(xc) for xc in X.columns]
 
-        forecast = pd.DataFrame(self.model.predict(X), index=index, columns=self.column_names)
+        forecast = pd.DataFrame(
+            self.model.predict(X), index=index, columns=self.column_names
+        )
 
         if just_point_forecast:
             return forecast
@@ -2244,7 +2255,8 @@ class UnivariateRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.86, 0.01, 0.01, 0.01, 0.01]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring', "simple_2", "simple_2_poly"], [0.8, 0.05, 0.1, 0.1, 0.05, 0.05]
+            [None, 'simple', 'expanded', 'recurring', "simple_2", "simple_2_poly"],
+            [0.8, 0.05, 0.1, 0.1, 0.05, 0.05],
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         polynomial_degree_choice = None
@@ -2626,11 +2638,17 @@ class MultivariateRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         if method == "deep":
-            model_choice = generate_regressor_params(model_dict=sklearn_model_dict, method=method)
-            window_choice = random.choices([None, 3, 7, 10, 14, 28], [0.2, 0.2, 0.05, 0.05, 0.05, 0.05])[0]
+            model_choice = generate_regressor_params(
+                model_dict=sklearn_model_dict, method=method
+            )
+            window_choice = random.choices(
+                [None, 3, 7, 10, 14, 28], [0.2, 0.2, 0.05, 0.05, 0.05, 0.05]
+            )[0]
             probabilistic = random.choices([True, False], [0.2, 0.8])[0]
         else:
-            model_choice = generate_regressor_params(model_dict=multivariate_model_dict, method=method)
+            model_choice = generate_regressor_params(
+                model_dict=multivariate_model_dict, method=method
+            )
             window_choice = random.choices([None, 3, 7, 10], [0.2, 0.2, 0.05, 0.05])[0]
             probabilistic = False
         mean_rolling_periods_choice = random.choices(
@@ -2667,7 +2685,8 @@ class MultivariateRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.4, 0.01, 0.01, 0.01, 0.01]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring', "simple_2", "simple_2_poly"], [0.5, 0.05, 0.1, 0.1, 0.05, 0.1]
+            [None, 'simple', 'expanded', 'recurring', "simple_2", "simple_2_poly"],
+            [0.5, 0.05, 0.1, 0.1, 0.05, 0.1],
         )[0]
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]

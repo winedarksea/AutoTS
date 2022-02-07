@@ -5,7 +5,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Index &#8212; AutoTS 0.3.12 documentation</title>
+    <title>Index &#8212; AutoTS 0.4.0 documentation</title>
     <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
@@ -90,6 +90,8 @@
 </li>
       <li><a href="source/autots.evaluator.html#module-autots.evaluator.benchmark">autots.evaluator.benchmark (module)</a>
 </li>
+      <li><a href="source/autots.evaluator.html#module-autots.evaluator.event_forecasting">autots.evaluator.event_forecasting (module)</a>
+</li>
       <li><a href="source/autots.evaluator.html#module-autots.evaluator.metrics">autots.evaluator.metrics (module)</a>
 </li>
       <li><a href="source/autots.models.html#module-autots.models">autots.models (module)</a>
@@ -104,10 +106,10 @@
 </li>
       <li><a href="source/autots.models.html#module-autots.models.gluonts">autots.models.gluonts (module)</a>
 </li>
-      <li><a href="source/autots.models.html#module-autots.models.greykite">autots.models.greykite (module)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.models.html#module-autots.models.greykite">autots.models.greykite (module)</a>
+</li>
       <li><a href="source/autots.models.html#module-autots.models.model_list">autots.models.model_list (module)</a>
 </li>
       <li><a href="source/autots.models.html#module-autots.models.prophet">autots.models.prophet (module)</a>
@@ -224,10 +226,10 @@
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.containment">containment() (in module autots.evaluator.metrics)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.contour">contour() (in module autots.evaluator.metrics)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.tools.html#autots.tools.cpu_count.cpu_count">cpu_count() (in module autots.tools.cpu_count)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.base.ModelObject.create_forecast_index">create_forecast_index() (autots.models.base.ModelObject method)</a>
@@ -240,8 +242,12 @@
       </ul></li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.create_model_id">create_model_id() (in module autots.evaluator.auto_model)</a>
 </li>
-      <li><a href="source/autots.tools.html#autots.tools.regressor.create_regressor">create_regressor() (in module autots.tools.regressor)</a>
+      <li><a href="source/autots.html#autots.create_regressor">create_regressor() (in module autots)</a>
+
+      <ul>
+        <li><a href="source/autots.tools.html#autots.tools.regressor.create_regressor">(in module autots.tools.regressor)</a>
 </li>
+      </ul></li>
       <li><a href="source/autots.tools.html#autots.tools.transform.CumSumTransformer">CumSumTransformer (class in autots.tools.transform)</a>
 </li>
   </ul></td>
@@ -284,6 +290,8 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.statsmodels.DynamicFactor">DynamicFactor (class in autots.models.statsmodels)</a>
 </li>
+      <li><a href="source/autots.models.html#autots.models.statsmodels.DynamicFactorMQ">DynamicFactorMQ (class in autots.models.statsmodels)</a>
+</li>
   </ul></td>
 </tr></table>
 
@@ -298,11 +306,19 @@
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.error_correlations">error_correlations() (in module autots.evaluator.auto_ts)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#autots.models.statsmodels.ETS">ETS (class in autots.models.statsmodels)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#autots.models.base.PredictionObject.evaluate">evaluate() (autots.models.base.PredictionObject method)</a>, <a href="source/autots.models.html#autots.models.base.PredictionObject.evaluate">[1]</a>
+</li>
+      <li><a href="source/autots.html#autots.EventRiskForecast">EventRiskForecast (class in autots)</a>
+
+      <ul>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast">(class in autots.evaluator.event_forecasting)</a>
+</li>
+      </ul></li>
+      <li><a href="source/autots.tools.html#autots.tools.transform.EWMAFilter">EWMAFilter (class in autots.tools.transform)</a>
 </li>
       <li><a href="source/autots.html#autots.AutoTS.export_template">export_template() (autots.AutoTS method)</a>
 
@@ -351,6 +367,10 @@
 </li>
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTSIntervals.fit">(autots.evaluator.auto_ts.AutoTSIntervals method)</a>
 </li>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.fit">(autots.evaluator.event_forecasting.EventRiskForecast method)</a>, <a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.fit">[1]</a>
+</li>
+        <li><a href="source/autots.html#autots.EventRiskForecast.fit">(autots.EventRiskForecast method)</a>, <a href="source/autots.html#autots.EventRiskForecast.fit">[1]</a>
+</li>
         <li><a href="source/autots.html#autots.GeneralTransformer.fit">(autots.GeneralTransformer method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.basics.AverageValueNaive.fit">(autots.models.basics.AverageValueNaive method)</a>
@@ -379,6 +399,8 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.prophet.FBProphet.fit">(autots.models.prophet.FBProphet method)</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.prophet.NeuralProphet.fit">(autots.models.prophet.NeuralProphet method)</a>
+</li>
         <li><a href="source/autots.models.html#autots.models.sklearn.ComponentAnalysis.fit">(autots.models.sklearn.ComponentAnalysis method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.sklearn.DatepartRegression.fit">(autots.models.sklearn.DatepartRegression method)</a>
@@ -396,6 +418,8 @@
         <li><a href="source/autots.models.html#autots.models.statsmodels.ARIMA.fit">(autots.models.statsmodels.ARIMA method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.statsmodels.DynamicFactor.fit">(autots.models.statsmodels.DynamicFactor method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.statsmodels.DynamicFactorMQ.fit">(autots.models.statsmodels.DynamicFactorMQ method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.statsmodels.ETS.fit">(autots.models.statsmodels.ETS method)</a>
 </li>
@@ -485,6 +509,8 @@
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.EmptyTransformer.fit_transform">(autots.tools.transform.EmptyTransformer method)</a>
 </li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.EWMAFilter.fit_transform">(autots.tools.transform.EWMAFilter method)</a>
+</li>
         <li><a href="source/autots.tools.html#autots.tools.transform.GeneralTransformer.fit_transform">(autots.tools.transform.GeneralTransformer method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.HPFilter.fit_transform">(autots.tools.transform.HPFilter method)</a>
@@ -534,10 +560,36 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.GeneralTransformer">(class in autots.tools.transform)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.generate_historic_risk_array">generate_historic_risk_array() (autots.evaluator.event_forecasting.EventRiskForecast method)</a>
+
+      <ul>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.generate_historic_risk_array">(autots.evaluator.event_forecasting.EventRiskForecast static method)</a>
+</li>
+        <li><a href="source/autots.html#autots.EventRiskForecast.generate_historic_risk_array">(autots.EventRiskForecast method)</a>
+</li>
+        <li><a href="source/autots.html#autots.EventRiskForecast.generate_historic_risk_array">(autots.EventRiskForecast static method)</a>
+</li>
+      </ul></li>
       <li><a href="source/autots.models.html#autots.models.ensemble.generate_mosaic_template">generate_mosaic_template() (in module autots.models.ensemble)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.sklearn.generate_regressor_params">generate_regressor_params() (in module autots.models.sklearn)</a>
 </li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.generate_result_windows">generate_result_windows() (autots.evaluator.event_forecasting.EventRiskForecast method)</a>, <a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.generate_result_windows">[1]</a>
+
+      <ul>
+        <li><a href="source/autots.html#autots.EventRiskForecast.generate_result_windows">(autots.EventRiskForecast method)</a>, <a href="source/autots.html#autots.EventRiskForecast.generate_result_windows">[1]</a>
+</li>
+      </ul></li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.generate_risk_array">generate_risk_array() (autots.evaluator.event_forecasting.EventRiskForecast method)</a>
+
+      <ul>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.generate_risk_array">(autots.evaluator.event_forecasting.EventRiskForecast static method)</a>
+</li>
+        <li><a href="source/autots.html#autots.EventRiskForecast.generate_risk_array">(autots.EventRiskForecast method)</a>
+</li>
+        <li><a href="source/autots.html#autots.EventRiskForecast.generate_risk_array">(autots.EventRiskForecast static method)</a>
+</li>
+      </ul></li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.generate_score">generate_score() (in module autots.evaluator.auto_model)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.generate_score_per_series">generate_score_per_series() (in module autots.evaluator.auto_model)</a>
@@ -569,6 +621,8 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.prophet.FBProphet.get_new_params">(autots.models.prophet.FBProphet method)</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.prophet.NeuralProphet.get_new_params">(autots.models.prophet.NeuralProphet method)</a>
+</li>
         <li><a href="source/autots.models.html#autots.models.sklearn.ComponentAnalysis.get_new_params">(autots.models.sklearn.ComponentAnalysis method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.sklearn.DatepartRegression.get_new_params">(autots.models.sklearn.DatepartRegression method)</a>
@@ -586,6 +640,8 @@
         <li><a href="source/autots.models.html#autots.models.statsmodels.ARIMA.get_new_params">(autots.models.statsmodels.ARIMA method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.statsmodels.DynamicFactor.get_new_params">(autots.models.statsmodels.DynamicFactor method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.statsmodels.DynamicFactorMQ.get_new_params">(autots.models.statsmodels.DynamicFactorMQ method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.statsmodels.ETS.get_new_params">(autots.models.statsmodels.ETS method)</a>
 </li>
@@ -618,6 +674,8 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.Discretize.get_new_params">(autots.tools.transform.Discretize static method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.EmptyTransformer.get_new_params">(autots.tools.transform.EmptyTransformer static method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.EWMAFilter.get_new_params">(autots.tools.transform.EWMAFilter static method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.HPFilter.get_new_params">(autots.tools.transform.HPFilter static method)</a>
 </li>
@@ -663,6 +721,8 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.prophet.FBProphet.get_params">(autots.models.prophet.FBProphet method)</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.prophet.NeuralProphet.get_params">(autots.models.prophet.NeuralProphet method)</a>
+</li>
         <li><a href="source/autots.models.html#autots.models.sklearn.ComponentAnalysis.get_params">(autots.models.sklearn.ComponentAnalysis method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.sklearn.DatepartRegression.get_params">(autots.models.sklearn.DatepartRegression method)</a>
@@ -680,6 +740,8 @@
         <li><a href="source/autots.models.html#autots.models.statsmodels.ARIMA.get_params">(autots.models.statsmodels.ARIMA method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.statsmodels.DynamicFactor.get_params">(autots.models.statsmodels.DynamicFactor method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.statsmodels.DynamicFactorMQ.get_params">(autots.models.statsmodels.DynamicFactorMQ method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.statsmodels.ETS.get_params">(autots.models.statsmodels.ETS method)</a>
 </li>
@@ -828,6 +890,12 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.basics.LastValueNaive">LastValueNaive (class in autots.models.basics)</a>
 </li>
+      <li><a href="source/autots.html#autots.AutoTS.list_failed_model_types">list_failed_model_types() (autots.AutoTS method)</a>
+
+      <ul>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.list_failed_model_types">(autots.evaluator.auto_ts.AutoTS method)</a>
+</li>
+      </ul></li>
       <li><a href="source/autots.html#autots.load_daily">load_daily() (in module autots)</a>
 
       <ul>
@@ -926,10 +994,10 @@
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.initial_results.model_results">(autots.evaluator.auto_ts.AutoTS.initial_results attribute)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelMonster">ModelMonster() (in module autots.evaluator.auto_model)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#autots.models.base.ModelObject">ModelObject (class in autots.models.base)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.ModelPrediction">ModelPrediction() (in module autots.evaluator.auto_model)</a>
@@ -952,6 +1020,8 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.basics.MotifSimulation">MotifSimulation (class in autots.models.basics)</a>
 </li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.msle">msle() (in module autots.evaluator.metrics)</a>
+</li>
       <li><a href="source/autots.models.html#autots.models.sklearn.MultivariateRegression">MultivariateRegression (class in autots.models.sklearn)</a>
 </li>
   </ul></td>
@@ -960,6 +1030,8 @@
 <h2 id="N">N</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.models.html#autots.models.prophet.NeuralProphet">NeuralProphet (class in autots.models.prophet)</a>
+</li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.auto_model.NewGeneticTemplate">NewGeneticTemplate() (in module autots.evaluator.auto_model)</a>
 </li>
   </ul></td>
@@ -982,8 +1054,14 @@
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.pinball_loss">pinball_loss() (in module autots.evaluator.metrics)</a>
 </li>
-      <li><a href="source/autots.models.html#autots.models.base.PredictionObject.plot">plot() (autots.models.base.PredictionObject method)</a>, <a href="source/autots.models.html#autots.models.base.PredictionObject.plot">[1]</a>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.plot">plot() (autots.evaluator.event_forecasting.EventRiskForecast method)</a>, <a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.plot">[1]</a>
+
+      <ul>
+        <li><a href="source/autots.html#autots.EventRiskForecast.plot">(autots.EventRiskForecast method)</a>, <a href="source/autots.html#autots.EventRiskForecast.plot">[1]</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.base.PredictionObject.plot">(autots.models.base.PredictionObject method)</a>, <a href="source/autots.models.html#autots.models.base.PredictionObject.plot">[1]</a>
+</li>
+      </ul></li>
       <li><a href="source/autots.html#autots.AutoTS.plot_backforecast">plot_backforecast() (autots.AutoTS method)</a>
 
       <ul>
@@ -1008,6 +1086,12 @@
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.plot_horizontal_transformers">(autots.evaluator.auto_ts.AutoTS method)</a>
 </li>
       </ul></li>
+      <li><a href="source/autots.html#autots.AutoTS.plot_per_series_smape">plot_per_series_smape() (autots.AutoTS method)</a>
+
+      <ul>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.plot_per_series_smape">(autots.evaluator.auto_ts.AutoTS method)</a>
+</li>
+      </ul></li>
       <li><a href="source/autots.tools.html#autots.tools.probabilistic.Point_to_Probability">Point_to_Probability() (in module autots.tools.probabilistic)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.transform.PositiveShift">PositiveShift (class in autots.tools.transform)</a>
@@ -1018,6 +1102,10 @@
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTS.predict">(autots.evaluator.auto_ts.AutoTS method)</a>
 </li>
         <li><a href="source/autots.evaluator.html#autots.evaluator.auto_ts.AutoTSIntervals.predict">(autots.evaluator.auto_ts.AutoTSIntervals method)</a>
+</li>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.predict">(autots.evaluator.event_forecasting.EventRiskForecast method)</a>, <a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.predict">[1]</a>
+</li>
+        <li><a href="source/autots.html#autots.EventRiskForecast.predict">(autots.EventRiskForecast method)</a>, <a href="source/autots.html#autots.EventRiskForecast.predict">[1]</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.basics.AverageValueNaive.predict">(autots.models.basics.AverageValueNaive method)</a>
 </li>
@@ -1045,6 +1133,8 @@
 </li>
         <li><a href="source/autots.models.html#autots.models.prophet.FBProphet.predict">(autots.models.prophet.FBProphet method)</a>
 </li>
+        <li><a href="source/autots.models.html#autots.models.prophet.NeuralProphet.predict">(autots.models.prophet.NeuralProphet method)</a>
+</li>
         <li><a href="source/autots.models.html#autots.models.sklearn.ComponentAnalysis.predict">(autots.models.sklearn.ComponentAnalysis method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.sklearn.DatepartRegression.predict">(autots.models.sklearn.DatepartRegression method)</a>
@@ -1062,6 +1152,8 @@
         <li><a href="source/autots.models.html#autots.models.statsmodels.ARIMA.predict">(autots.models.statsmodels.ARIMA method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.statsmodels.DynamicFactor.predict">(autots.models.statsmodels.DynamicFactor method)</a>
+</li>
+        <li><a href="source/autots.models.html#autots.models.statsmodels.DynamicFactorMQ.predict">(autots.models.statsmodels.DynamicFactorMQ method)</a>
 </li>
         <li><a href="source/autots.models.html#autots.models.statsmodels.ETS.predict">(autots.models.statsmodels.ETS method)</a>
 </li>
@@ -1088,6 +1180,12 @@
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.predict_historic">predict_historic() (autots.evaluator.event_forecasting.EventRiskForecast method)</a>, <a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.predict_historic">[1]</a>
+
+      <ul>
+        <li><a href="source/autots.html#autots.EventRiskForecast.predict_historic">(autots.EventRiskForecast method)</a>, <a href="source/autots.html#autots.EventRiskForecast.predict_historic">[1]</a>
+</li>
+      </ul></li>
       <li><a href="source/autots.models.html#autots.models.basics.predict_reservoir">predict_reservoir() (in module autots.models.basics)</a>
 </li>
       <li><a href="source/autots.models.html#autots.models.base.PredictionObject">PredictionObject (class in autots.models.base)</a>
@@ -1134,10 +1232,10 @@
       </ul></li>
       <li><a href="source/autots.tools.html#autots.tools.window_functions.retrieve_closest_indices">retrieve_closest_indices() (in module autots.tools.window_functions)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.models.html#autots.models.sklearn.retrieve_regressor">retrieve_regressor() (in module autots.models.sklearn)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="source/autots.html#autots.GeneralTransformer.retrieve_transformer">retrieve_transformer() (autots.GeneralTransformer class method)</a>
 
       <ul>
@@ -1159,6 +1257,8 @@
       <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.root_mean_square_error">root_mean_square_error() (in module autots.evaluator.metrics)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.transform.Round">Round (class in autots.tools.transform)</a>
+</li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.metrics.rps">rps() (in module autots.evaluator.metrics)</a>
 </li>
       <li><a href="source/autots.evaluator.html#autots.evaluator.benchmark.Benchmark.run">run() (autots.evaluator.benchmark.Benchmark method)</a>
 </li>
@@ -1190,8 +1290,22 @@
 </li>
       <li><a href="source/autots.models.html#autots.models.greykite.seek_the_oracle">seek_the_oracle() (in module autots.models.greykite)</a>
 </li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.set_limit">set_limit() (autots.evaluator.event_forecasting.EventRiskForecast method)</a>
+
+      <ul>
+        <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.EventRiskForecast.set_limit">(autots.evaluator.event_forecasting.EventRiskForecast static method)</a>
+</li>
+        <li><a href="source/autots.html#autots.EventRiskForecast.set_limit">(autots.EventRiskForecast method)</a>
+</li>
+        <li><a href="source/autots.html#autots.EventRiskForecast.set_limit">(autots.EventRiskForecast static method)</a>
+</li>
+      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.set_limit_forecast">set_limit_forecast() (in module autots.evaluator.event_forecasting)</a>
+</li>
+      <li><a href="source/autots.evaluator.html#autots.evaluator.event_forecasting.set_limit_forecast_historic">set_limit_forecast_historic() (in module autots.evaluator.event_forecasting)</a>
+</li>
       <li><a href="source/autots.tools.html#autots.tools.transform.simple_context_slicer">simple_context_slicer() (in module autots.tools.transform)</a>
 </li>
       <li><a href="source/autots.tools.html#autots.tools.shaping.simple_train_test_split">simple_train_test_split() (in module autots.tools.shaping)</a>
@@ -1258,6 +1372,8 @@
         <li><a href="source/autots.tools.html#autots.tools.transform.Discretize.transform">(autots.tools.transform.Discretize method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.EmptyTransformer.transform">(autots.tools.transform.EmptyTransformer method)</a>
+</li>
+        <li><a href="source/autots.tools.html#autots.tools.transform.EWMAFilter.transform">(autots.tools.transform.EWMAFilter method)</a>
 </li>
         <li><a href="source/autots.tools.html#autots.tools.transform.GeneralTransformer.transform">(autots.tools.transform.GeneralTransformer method)</a>
 </li>
@@ -1436,7 +1552,7 @@
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2021, Colin Catlin.
+      &copy;2022, Colin Catlin.
       
     </div>
 

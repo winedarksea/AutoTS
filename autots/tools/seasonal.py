@@ -43,7 +43,12 @@ def seasonal_int(include_one: bool = False, small=False):
     return int(lag)
 
 
-def date_part(DTindex, method: str = 'simple', set_index: bool = True, polynomial_degree: int = None):
+def date_part(
+    DTindex,
+    method: str = 'simple',
+    set_index: bool = True,
+    polynomial_degree: int = None,
+):
     """Create date part columns from pd.DatetimeIndex.
 
     Args:
@@ -131,9 +136,9 @@ def date_part(DTindex, method: str = 'simple', set_index: bool = True, polynomia
         from sklearn.preprocessing import PolynomialFeatures
 
         date_part_df = pd.DataFrame(
-            PolynomialFeatures(
-                polynomial_degree, include_bias=False
-            ).fit_transform(date_part_df)
+            PolynomialFeatures(polynomial_degree, include_bias=False).fit_transform(
+                date_part_df
+            )
         )
         date_part_df.columns = ['dp' + str(x) for x in date_part_df.columns]
     if set_index:

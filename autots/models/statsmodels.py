@@ -1319,21 +1319,19 @@ class DynamicFactor(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        k_factors_choice = random.choices(
-            [0, 1, 2, 3, 10], [0.1, 0.4, 0.2, 0.2, 0.1]
-        )[0]
-        factor_order_choice = random.choices(
-            [0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1]
-        )[0]
+        k_factors_choice = random.choices([0, 1, 2, 3, 10], [0.1, 0.4, 0.2, 0.2, 0.1])[
+            0
+        ]
+        factor_order_choice = random.choices([0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1])[0]
 
         if "regressor" in method:
             regression_choice = "User"
         else:
             regression_list = [None, 'User', 'Holiday']
             regression_probability = [0.6, 0.2, 0.2]
-            regression_choice = random.choices(
-                regression_list, regression_probability
-            )[0]
+            regression_choice = random.choices(regression_list, regression_probability)[
+                0
+            ]
 
         parameter_dict = {
             'k_factors': k_factors_choice,
@@ -2394,12 +2392,8 @@ class DynamicFactorMQ(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        k_factors_choice = random.choices(
-            [1, 2, 3, 10], [0.4, 0.2, 0.2, 0.1]
-        )[0]
-        factor_order_choice = random.choices(
-            [1, 2, 3, 4], [0.3, 0.2, 0.1, 0.02]
-        )[0]
+        k_factors_choice = random.choices([1, 2, 3, 10], [0.4, 0.2, 0.2, 0.1])[0]
+        factor_order_choice = random.choices([1, 2, 3, 4], [0.3, 0.2, 0.1, 0.02])[0]
 
         parameter_dict = {
             'factors': k_factors_choice,

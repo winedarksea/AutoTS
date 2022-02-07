@@ -25,10 +25,12 @@ graph = True
 
 # this is the template file imported:
 example_filename = "example_export.csv"  # .csv/.json
-forecast_length = 8
+random_seed = 2022
+forecast_length = 10
 long = False
-# df = load_linear(long=long, shape=(200, 500), introduce_nan=0.2)
+# df = load_linear(long=long, shape=(200, 500), introduce_nan=0.2, introduce_random=100)
 df = load_daily(long=long)
+prediction_interval = 0.9
 n_jobs = "auto"
 verbose = 2
 validation_method = "similarity"
@@ -38,37 +40,47 @@ if use_template:
     generations = 5
     num_validations = 0
 else:
-    generations = 2
-    num_validations = 3
+    generations = 20
+    num_validations = 2
 
 if force_univariate:
     df = df.iloc[:, 0]
 
-transformer_list = (
-    "superfast"  # ["bkfilter", "STLFilter", "HPFilter", 'StandardScaler']
-)
-transformer_max_depth = 1
+transformer_list = "fast"
+# transformer_list = ["Round", "Slice", "SinTrend", 'StandardScaler']
+transformer_max_depth = 2
 models_mode = "default"  # "regressor"
-model_list = "fast"
+model_list = "superfast"
 # model_list = "regressor"  # fast_parallel, all
-# model_list = ["SeasonalNaive", 'AverageValueNaive']
-
+# model_list = ["MultivariateMotif", "LastValueNaive"]
+preclean = None
+{
+    "fillna": None,  # mean or median one of few consistent things
+    "transformations": {"0": "EWMAFilter"},
+    "transformation_params": {
+        "0": {"span": 14},
+    },
+}
+ensemble = ["simple", "horizontal-max", "mosaic", "mosaic-window"]  # "dist", "subsample", "mosaic-window", "horizontal-max"
 metric_weighting = {
     'smape_weighting': 5,
     'mae_weighting': 2,
     'rmse_weighting': 2,
     'made_weighting': 1,
+    'mage_weighting': 0,
+    'mle_weighting': 0,
+    'imle_weighting': 0,
+    'spl_weighting': 3,
     'containment_weighting': 0,
+    'contour_weighting': 0,
     'runtime_weighting': 0.05,
-    'spl_weighting': 2,
-    'contour_weighting': 1,
 }
 
 model = AutoTS(
     forecast_length=forecast_length,
     frequency=frequency,
-    prediction_interval=0.9,
-    ensemble=["horizontal-max", "dist", "simple"],  # "subsample"
+    prediction_interval=prediction_interval,
+    ensemble=ensemble,
     constraint=None,
     max_generations=generations,
     num_validations=num_validations,
@@ -84,10 +96,12 @@ model = AutoTS(
     n_jobs=n_jobs,
     drop_most_recent=drop_most_recent,
     introduce_na=True,
+    preclean=preclean,
     # prefill_na=0,
     # subset=5,
     verbose=verbose,
     models_mode=models_mode,
+    random_seed=random_seed,
 )
 
 
@@ -115,7 +129,7 @@ start_time_for = timeit.default_timer()
 model = model.fit(
     df,
     future_regressor=regr_train,
-    weights="mean",
+    # weights="mean",
     # result_file='test.pickle',
     validation_indexes=[
         pd.date_range("2021-01-01", "2022-05-02"),
@@ -129,7 +143,7 @@ model = model.fit(
 
 elapsed_for = timeit.default_timer() - start_time_for
 
-prediction = model.predict(future_regressor=regr_fcst, verbose=1)
+prediction = model.predict(future_regressor=regr_fcst, verbose=1, fail_on_forecast_nan=True)
 # point forecasts dataframe
 forecasts_df = prediction.forecast
 # accuracy of all tried model results (not including cross validation)
@@ -148,6 +162,7 @@ sleep(5)
 print(model)
 print(model.validation_test_indexes)
 print(f"Model failure rate is {model.failure_rate() * 100:.1f}%")
+print(f'The following model types failed completely {model.list_failed_model_types()}')
 print("Slowest models:")
 print(
     initial_results[initial_results["Ensemble"] < 1]
@@ -167,6 +182,9 @@ if graph:
     )
     plt.show()
     model.plot_generation_loss()
+
+    model.plot_per_series_smape(kind="pie")
+    plt.show()
 
     if model.best_model["Ensemble"].iloc[0] == 2:
         plt.show()
@@ -192,26 +210,31 @@ print("test run complete")
 
 
 """
-df_forecast = model_forecast(
-    model_name="SectionalMotif",
-    model_param_dict={},
+forecasts = model_forecast(
+    model_name="UnivariateMotif",
+    model_param_dict={'window': 10, "pointed_method":"weighted_mean", "distance_metric": "cosine", "k": 10, "return_result_windows": True},
     model_transform_dict={
-        'fillna': 'mean',
-        'transformations': {'0': 'ClipOutliers'},
-        'transformation_params': {'0': {"method": "clip", "std_threshold": 3, "fillna": None}}
+        'fillna': 'rolling_mean',
+        'transformations': {'0': 'MinMaxScaler', "1": "DifferencedTransformer"},
+        'transformation_params': {'0': {}, '1': {}}
     },
-    df_train=df,
-    forecast_length=5,
+    df_train=model.df_wide_numeric,
+    forecast_length=forecast_length,
     frequency='infer',
-    prediction_interval=0.9,
+    prediction_interval=prediction_interval,
     no_negatives=False,
     # future_regressor_train=future_regressor_train2d,
     # future_regressor_forecast=future_regressor_forecast2d,
     random_seed=321,
     verbose=1,
     n_jobs="auto",
+    return_model=True,
 )
-df_forecast.forecast.head(5)
+result = forecasts.forecast.head(5)
+print(result)
+print(forecasts.upper_forecast.head(5))
+print(forecasts.lower_forecast.head(5))
+result_windows = forecasts.model.result_windows
 """
 
 """
@@ -276,6 +299,8 @@ python setup.py sdist bdist_wheel
 twine upload dist/*
 
 Merge dev to master on GitHub and create release (include .tar.gz)
+Update conda-forge
+Update fb third-party (and default)
 """
 
 # Help correlate errors with parameters

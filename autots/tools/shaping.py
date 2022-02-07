@@ -15,7 +15,9 @@ def infer_frequency(df_wide, warn=True, **kwargs):
     elif isinstance(df_wide, pd.DatetimeIndex):
         DTindex = df_wide
     else:
-        raise ValueError("infer_frequency failed due to input not being pandas DF or DT index")
+        raise ValueError(
+            "infer_frequency failed due to input not being pandas DF or DT index"
+        )
     frequency = pd.infer_freq(DTindex, warn=True)
     if frequency is None:
         # hack to get around data which has a few oddities

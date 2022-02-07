@@ -100,13 +100,34 @@ def BestNEnsemble(
 
     # this is expected to have to handle NaN
     if point_method in ["median", "midhinge"]:
-        forecast_array = np.array([x.values.reshape(1, -1) if x.ndim == 1 else x for x in forecasts.values()])
-        l_forecast_array = np.array([x.values.reshape(1, -1) if x.ndim == 1 else x for x in lower_forecasts.values()])
-        u_forecast_array = np.array([x.values.reshape(1, -1) if x.ndim == 1 else x for x in upper_forecasts.values()])
+        forecast_array = np.array(
+            [x.values.reshape(1, -1) if x.ndim == 1 else x for x in forecasts.values()]
+        )
+        l_forecast_array = np.array(
+            [
+                x.values.reshape(1, -1) if x.ndim == 1 else x
+                for x in lower_forecasts.values()
+            ]
+        )
+        u_forecast_array = np.array(
+            [
+                x.values.reshape(1, -1) if x.ndim == 1 else x
+                for x in upper_forecasts.values()
+            ]
+        )
         if point_method == "midhinge":
-            ens_df = (np.nanquantile(forecast_array, q=0.25, axis=0) + np.quantile(forecast_array, q=0.75, axis=0)) / 2
-            ens_df_lower = (np.nanquantile(l_forecast_array, q=0.25, axis=0) + np.quantile(l_forecast_array, q=0.75, axis=0)) / 2
-            ens_df_upper = (np.nanquantile(u_forecast_array, q=0.25, axis=0) + np.quantile(u_forecast_array, q=0.75, axis=0)) / 2
+            ens_df = (
+                np.nanquantile(forecast_array, q=0.25, axis=0)
+                + np.quantile(forecast_array, q=0.75, axis=0)
+            ) / 2
+            ens_df_lower = (
+                np.nanquantile(l_forecast_array, q=0.25, axis=0)
+                + np.quantile(l_forecast_array, q=0.75, axis=0)
+            ) / 2
+            ens_df_upper = (
+                np.nanquantile(u_forecast_array, q=0.25, axis=0)
+                + np.quantile(u_forecast_array, q=0.75, axis=0)
+            ) / 2
         else:
             ens_df = np.nanmedian(forecast_array, axis=0)
             ens_df_lower = np.nanmedian(l_forecast_array, axis=0)
@@ -641,7 +662,7 @@ def _generate_distance_ensemble(dis_frac, forecast_length, initial_results):
     ]
     first_model = ens_per_ts.iloc[:, 0:first_bit].mean(axis=1).idxmin()
     last_model = (
-        ens_per_ts.iloc[:, first_bit: (last_bit + first_bit)].mean(axis=1).idxmin()
+        ens_per_ts.iloc[:, first_bit : (last_bit + first_bit)].mean(axis=1).idxmin()
     )
     ensemble_models = {}
     best3 = (
@@ -727,12 +748,15 @@ def EnsembleTemplateGenerator(
         best5nonunique = ens_temp.nsmallest(5, columns=['Score']).set_index("ID")[
             ['Model', 'ModelParameters', 'TransformationParameters']
         ]
-        best5_params = pd.DataFrame(_generate_bestn_dict(
-            best5nonunique,
-            model_name='BestN',
-            model_metric="bestn_horizontal",
-            point_method="median",
-        ), index=[0])
+        best5_params = pd.DataFrame(
+            _generate_bestn_dict(
+                best5nonunique,
+                model_name='BestN',
+                model_metric="bestn_horizontal",
+                point_method="median",
+            ),
+            index=[0],
+        )
         ensemble_templates = pd.concat(
             [ensemble_templates, best5_params], axis=0, ignore_index=True
         )
@@ -743,10 +767,9 @@ def EnsembleTemplateGenerator(
         bestmae = ens_temp.nsmallest(2, columns=['spl_weighted'])
         bestmade = ens_temp.nsmallest(5, columns=['made_weighted'])
         best3metric = pd.concat([bestsmape, bestrmse, bestmae, bestmade], axis=0)
-        best3metric = (
-            best3metric.drop_duplicates()
-            .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
-        )
+        best3metric = best3metric.drop_duplicates().set_index("ID")[
+            ['Model', 'ModelParameters', 'TransformationParameters']
+        ]
         best5metric = best3metric.head(5)
         best3metric = best3metric.head(3)
         n_models = best3metric.shape[0]
@@ -760,7 +783,10 @@ def EnsembleTemplateGenerator(
             ensemble_templates = pd.concat([ensemble_templates, best3m_params], axis=0)
         best5m_params = pd.DataFrame(
             _generate_bestn_dict(
-                best5metric, model_name='BestN', model_metric="mixed_metric", point_method="median",
+                best5metric,
+                model_name='BestN',
+                model_metric="mixed_metric",
+                point_method="median",
             ),
             index=[0],
         )
@@ -791,7 +817,10 @@ def EnsembleTemplateGenerator(
         if best5unique.shape[0] == 5:
             best5u_params = pd.DataFrame(
                 _generate_bestn_dict(
-                    best5unique, model_name='BestN', model_metric="best_score_unique", point_method="midhinge",
+                    best5unique,
+                    model_name='BestN',
+                    model_metric="best_score_unique",
+                    point_method="midhinge",
                 ),
                 index=[0],
             )
@@ -1009,9 +1038,7 @@ def HorizontalTemplateGenerator(
             .drop_duplicates(
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
-            .set_index("ID")[
-                ['Model', 'ModelParameters', 'TransformationParameters']
-            ]
+            .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
         )
         nomen = 'Horizontal'
         metric = 'Score-max'
@@ -1042,9 +1069,7 @@ def HorizontalTemplateGenerator(
             .drop_duplicates(
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
-            .set_index("ID")[
-                ['Model', 'ModelParameters', 'TransformationParameters']
-            ]
+            .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
         )
         nomen = 'hdist'
         best5_params = {
@@ -1071,9 +1096,7 @@ def HorizontalTemplateGenerator(
         no_shared_select = model_results['Model'].isin(no_shared)
         shared_mod_lst = model_results[~no_shared_select]['ID'].tolist()
         no_shared_mod_lst = model_results[no_shared_select]['ID'].tolist()
-        lowest_score_mod = [
-            model_results.iloc[model_results['Score'].idxmin()]['ID']
-        ]
+        lowest_score_mod = [model_results.iloc[model_results['Score'].idxmin()]['ID']]
         per_series[per_series.index.isin(shared_mod_lst)]
         # remove those where idxmin is in no_shared
         shared_maxes = per_series.idxmin().isin(shared_mod_lst)
@@ -1106,9 +1129,7 @@ def HorizontalTemplateGenerator(
             .drop_duplicates(
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
-            .set_index("ID")[
-                ['Model', 'ModelParameters', 'TransformationParameters']
-            ]
+            .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
         )
         nomen = 'Horizontal'
         metric = 'Score'
@@ -1138,9 +1159,7 @@ def HorizontalTemplateGenerator(
         for x in range(n_models):
             n_dep = x + 1
             n_dep = (
-                n_dep
-                if per_series_des.shape[0] > n_dep
-                else per_series_des.shape[0]
+                n_dep if per_series_des.shape[0] > n_dep else per_series_des.shape[0]
             )
             models_pos = []
             tr_df = pd.DataFrame()
@@ -1161,15 +1180,11 @@ def HorizontalTemplateGenerator(
 
         mods_per_series = per_series.loc[mods.index].idxmin()
         best5 = (
-            model_results[
-                model_results['ID'].isin(mods_per_series.unique().tolist())
-            ]
+            model_results[model_results['ID'].isin(mods_per_series.unique().tolist())]
             .drop_duplicates(
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
-            .set_index("ID")[
-                ['Model', 'ModelParameters', 'TransformationParameters']
-            ]
+            .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
         )
         nomen = 'Horizontal'
         metric = 'Score-min'
@@ -1195,8 +1210,14 @@ def HorizontalTemplateGenerator(
 
 
 def generate_mosaic_template(
-    initial_results, full_mae_ids, num_validations, col_names, full_mae_errors,
-    smoothing_window=None, metric_name="MAE", **kwargs
+    initial_results,
+    full_mae_ids,
+    num_validations,
+    col_names,
+    full_mae_errors,
+    smoothing_window=None,
+    metric_name="MAE",
+    **kwargs,
 ):
     """Generate an ensemble template from results."""
     total_vals = num_validations + 1
@@ -1226,7 +1247,9 @@ def generate_mosaic_template(
     if smoothing_window is not None:
         from scipy.ndimage import uniform_filter1d
 
-        errors_array = uniform_filter1d(np.nan_to_num(errors_array), size=smoothing_window, axis=1)
+        errors_array = uniform_filter1d(
+            np.nan_to_num(errors_array), size=smoothing_window, axis=1
+        )
         # name = "Mosaic-window"
     slice_points = np.arange(0, errors_array.shape[0], step=total_vals)
     id_sliced = id_array[slice_points]
