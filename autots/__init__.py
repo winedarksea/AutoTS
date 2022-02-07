@@ -15,12 +15,13 @@ from autots.datasets import (
 )
 
 from autots.evaluator.auto_ts import AutoTS
+from autots.evaluator.event_forecasting import EventRiskForecast
 from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.tools.shaping import long_to_wide
 from autots.tools.regressor import create_lagged_regressor, create_regressor
 from autots.evaluator.auto_model import model_forecast
 
-__version__ = '0.3.12'
+__version__ = '0.4.0'
 
 TransformTS = GeneralTransformer
 
@@ -40,4 +41,6 @@ __all__ = [
     'long_to_wide',
     'model_forecast',
     'create_lagged_regressor',
+    'create_regressor',
+    'EventRiskForecast',
 ]

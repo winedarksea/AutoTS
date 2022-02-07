@@ -17,7 +17,7 @@ These models are all designed for integration in an AutoML feature search which 
 
 Horizontal and mosaic style ensembles are the flagship ensembling types, allowing each series to receive the most accurate possible models while still maintaining scalability.
 
-A combination of metrics and cross-validation options, the ability to apply subsets and weighting, regressor generation tools, simulation forecastind mode, live datasets, template import and export, plotting, and a collection of data shaping parameters round out the available feature set. 
+A combination of metrics and cross-validation options, the ability to apply subsets and weighting, regressor generation tools, simulation forecasting mode, event risk forecasting, live datasets, template import and export, plotting, and a collection of data shaping parameters round out the available feature set. 
 
 ## Table of Contents
 * [Installation](https://github.com/winedarksea/AutoTS#installation)
@@ -93,7 +93,7 @@ validation_results = model.results("validation")
 
 The lower-level API, in particular the large section of time series transformers in the scikit-learn style, can also be utilized independently from the AutoML framework.
 
-Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html) for a more detailed guide to features!
+Check out [extended_tutorial.md](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html) for a more detailed guide to features.
 
 Also take a look at the [production_example.py](https://github.com/winedarksea/AutoTS/blob/master/production_example.py)
 
@@ -122,7 +122,7 @@ Also take a look at the [production_example.py](https://github.com/winedarksea/A
 	* Report errors and request features by adding Issues on GitHub
 	* Posting the top model templates for your data (to help improve the starting templates)
 	* Feel free to recommend different search grid parameters for your favorite models
-* And, of course, contributing to the codebase directly on GitHub!
+* And, of course, contributing to the codebase directly on GitHub.
 
 
 *Also known as Project CATS (Catlin's Automated Time Series) hence the logo.*

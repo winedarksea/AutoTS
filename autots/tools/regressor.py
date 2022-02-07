@@ -82,7 +82,7 @@ def create_regressor(
         fill_na=fill_na,
     )
     # datepart
-    if datepart_method in ['simple', 'expanded', 'recurring']:
+    if datepart_method in ['simple', 'expanded', 'recurring', "simple_2"]:
         regr_train = pd.concat(
             [regr_train, date_part(regr_train.index, method=datepart_method)],
             axis=1,

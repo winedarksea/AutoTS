@@ -4,6 +4,7 @@ FRED (Federal Reserve Economic Data) Data Import
 requires API key from FRED
 and pip install fredapi
 """
+import time
 import pandas as pd
 
 try:
@@ -14,7 +15,14 @@ else:
     _has_fred = True
 
 
-def get_fred_data(fredkey: str, SeriesNameDict: dict = None, long=True, **kwargs):
+def get_fred_data(
+    fredkey: str,
+    SeriesNameDict: dict = None,
+    long=True,
+    observation_start=None,
+    sleep_seconds: int = 1,
+    **kwargs
+):
     """Imports Data from Federal Reserve.
     For simplest results, make sure requested series are all of the same frequency.
 
@@ -24,6 +32,8 @@ def get_fred_data(fredkey: str, SeriesNameDict: dict = None, long=True, **kwargs
             Series id must match Fred IDs, but name can be anything
             if None, several default series are returned
         long (bool): if True, return long style data, else return wide style data with dt index
+        observation_start (datetime): passed to Fred get_series
+        sleep_seconds (int): seconds to sleep between each series call, reduces failure chance usually
     """
     if not _has_fred:
         raise ImportError("Package fredapi is required")
@@ -57,7 +67,7 @@ def get_fred_data(fredkey: str, SeriesNameDict: dict = None, long=True, **kwargs
         fred_timeseries = pd.DataFrame()
 
     for series in series_desired:
-        data = fred.get_series(series)
+        data = fred.get_series(series, observation_start=observation_start)
         try:
             series_name = SeriesNameDict[series]
         except Exception:
@@ -81,5 +91,6 @@ def get_fred_data(fredkey: str, SeriesNameDict: dict = None, long=True, **kwargs
             fred_timeseries = fred_timeseries.merge(
                 data, how="outer", left_index=True, right_index=True
             )
+        time.sleep(sleep_seconds)
 
     return fred_timeseries

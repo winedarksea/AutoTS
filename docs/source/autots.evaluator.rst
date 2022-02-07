@@ -28,6 +28,14 @@ autots.evaluator.benchmark module
    :undoc-members:
    :show-inheritance:
 
+autots.evaluator.event\_forecasting module
+------------------------------------------
+
+.. automodule:: autots.evaluator.event_forecasting
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.evaluator.metrics module
 -------------------------------
 
@@ -35,7 +43,6 @@ autots.evaluator.metrics module
    :members:
    :undoc-members:
    :show-inheritance:
-
 
 Module contents
 ---------------

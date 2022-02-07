@@ -30,6 +30,8 @@ all_models = [
     'SectionalMotif',
     'Theta',
     'ARDL',
+    'NeuralProphet',
+    'DynamicFactorMQ',
 ]
 default = [
     'ZeroesNaive',
@@ -48,13 +50,14 @@ default = [
     'WindowRegression',
     'DatepartRegression',
     # 'UnivariateRegression',  # this has been crashing on 1135
-    # 'MultivariateRegression',  # downweight if that becomes an option
+    'MultivariateRegression',  # downweight if that becomes an option
     'UnivariateMotif',
     'MultivariateMotif',
     'SectionalMotif',
     'NVAR',
     'Theta',
     'ARDL',
+    # 'DynamicFactorMQ',
 ]
 colin = [
     'LastValueNaive',
@@ -72,7 +75,7 @@ colin = [
     'VECM',
     # 'MotifSimulation',
     # 'UnivariateRegression',
-    # 'MultivariateRegression',
+    'MultivariateRegression',
     'WindowRegression',
     'VAR',
     'DatepartRegression',
@@ -152,6 +155,7 @@ probabilistic = [
     'Theta',
     'ARDL',
     'UnobservedComponents',
+    'DynamicFactorMQ',
     # 'MultivariateRegression',
 ]
 # models that use the shared information of multiple series to improve accuracy
@@ -167,6 +171,7 @@ multivariate = [
     'NVAR',
     'MultivariateRegression',
     'SectionalMotif',
+    'DynamicFactorMQ',
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -197,6 +202,8 @@ recombination_approved = [
     'SectionalMotif',
     'Theta',
     'ARDL',
+    'NeuralProphet',
+    'DynamicFactorMQ',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -216,6 +223,7 @@ no_shared = [
     'UnivariateMotif',
     'Theta',
     'ARDL',
+    'NeuralProphet',
 ]
 # allow the use of a regressor, need to accept "User" (fail if not given), have 'regressor' param method
 regressor = [
@@ -234,6 +242,7 @@ regressor = [
     'MultivariateRegression',
     'SectionalMotif',  # kinda
     'ARDL',
+    'NeuralProphet',
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {

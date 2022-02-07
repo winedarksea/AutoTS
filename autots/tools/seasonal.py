@@ -43,7 +43,12 @@ def seasonal_int(include_one: bool = False, small=False):
     return int(lag)
 
 
-def date_part(DTindex, method: str = 'simple', set_index: bool = True):
+def date_part(
+    DTindex,
+    method: str = 'simple',
+    set_index: bool = True,
+    polynomial_degree: int = None,
+):
     """Create date part columns from pd.DatetimeIndex.
 
     Args:
@@ -53,10 +58,14 @@ def date_part(DTindex, method: str = 'simple', set_index: bool = True):
             expanded - all available futures
             recurring - all features that should commonly repeat without aging
         set_index (bool): if True, return DTindex as index of df
+        polynomial_degree (int): add this degree of sklearn polynomial features if not None
 
     Returns:
         pd.Dataframe with DTindex
     """
+    if "_poly" in method:
+        method = method.replace("_poly", "")
+        polynomial_degree = 2
     if method == 'recurring':
         date_part_df = pd.DataFrame(
             {
@@ -73,6 +82,18 @@ def date_part(DTindex, method: str = 'simple', set_index: bool = True):
                 ),  # 2 season
             }
         )
+    elif method in ["simple_2", "simple_2_poly"]:
+        date_part_df = pd.DataFrame(
+            {
+                'month': DTindex.month,
+                'day': DTindex.day,
+                'weekday': DTindex.weekday,
+                'weekend': (DTindex.weekday > 4).astype(int),
+                'epoch': pd.to_numeric(
+                    DTindex, errors='coerce', downcast='integer'
+                ).values,
+            }
+        )
     else:
         # method == "simple"
         date_part_df = pd.DataFrame(
@@ -85,7 +106,7 @@ def date_part(DTindex, method: str = 'simple', set_index: bool = True):
         )
         if method == 'expanded':
             try:
-                weekyear = pd.Int64Index(DTindex.isocalendar().week)
+                weekyear = DTindex.isocalendar().week.to_numpy()
             except Exception:
                 weekyear = DTindex.week
             date_part_df2 = pd.DataFrame(
@@ -111,6 +132,15 @@ def date_part(DTindex, method: str = 'simple', set_index: bool = True):
                 }
             )
             date_part_df = pd.concat([date_part_df, date_part_df2], axis=1)
+    if polynomial_degree is not None:
+        from sklearn.preprocessing import PolynomialFeatures
+
+        date_part_df = pd.DataFrame(
+            PolynomialFeatures(polynomial_degree, include_bias=False).fit_transform(
+                date_part_df
+            )
+        )
+        date_part_df.columns = ['dp' + str(x) for x in date_part_df.columns]
     if set_index:
         date_part_df.index = DTindex
     return date_part_df

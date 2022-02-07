@@ -11,7 +11,8 @@
 * [Caveats](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#caveats-and-advice)
 * [Adding Regressors](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#adding-regressors-and-other-information)
 * [Simulation Forecasting](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id8)
-* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id9)
+* [Event Risk Forecasting](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id9)
+* [Models](https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html#id10)
 
 ## Extended Tutorial
 
@@ -70,6 +71,10 @@ There are some basic things to beware of that can commonly lead to poor results:
 
 1. Bad data (sudden drops or missing values) in the *most recent* data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. 
 2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be chosen. Choose a good method and as many validations as possible. 
+3. Anomalies that won't be repeated. Manual anomaly removal can be more effective than any automatic methods. 
+4. Artifical historical events, a simple example being sales promotions. Use of regressors is the most common method for dealing with this and may be critical for modeling these types of events. 
+
+What you don't need to do before the automated forecasting is any typical preprocessing. It is best to leave it up to the model selection process to choose, as different models do better with different types of preprocessing. 
 
 ### Validation and Cross Validation
 Cross validation helps assure that the optimal model is stable over the dynamics of a time series. 
@@ -237,14 +242,17 @@ Higher weighting increases the importance of that metric, while 0 removes that m
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series. 
 ```python
 metric_weighting = {
-	'smape_weighting': 10,
-	'mae_weighting': 1,
-	'rmse_weighting': 5,
-	'made_weighting': 0,
+	'smape_weighting': 5,
+	'mae_weighting': 2,
+	'rmse_weighting': 2,
+	'made_weighting': 0.5,
+	'mage_weighting': 1,
+	'mle_weighting': 0,
+	'imle_weighting': 0,
+	'spl_weighting': 3,
 	'containment_weighting': 0,
-	'runtime_weighting': 0,
-	'spl_weighting': 1,
 	'contour_weighting': 1,
+	'runtime_weighting': 0.05,
 }
 
 model = AutoTS(
@@ -252,22 +260,47 @@ model = AutoTS(
 	frequency='infer',
 	metric_weighting=metric_weighting,
 )
-```		
-It is best to usually use several metrics. Often the best sMAPE model, for example, is only slightly better in sMAPE than the next place model, but that next place model has a much better MAE and RMSE. 
+```
+It is best to use several metrics for several reasons. The first is to avoid overfitting - a model that does well on many metrics is less likely to be overfit. 
+Secondly, forecasts often have to meet multiple expectations. Using a composite score allows balancing the 
+quality of point forecast, quality of probabilistic forecast, overestimation or underestimation, visual fit, and speed of runtime.
 
-*Horizontal* style ensembles use `metric_weighting` for series selection, but only the values passed for `mae, rmse, contour, spl`. If all of these are 0, mae is used for selection. 
+Some metrics are scaled and some are not. MAE, RMSE, MAGE, MLE, iMLE are unscaled and accordingly in multivariate forecasting will favor model performance on the largest scale input series. 
 
-`sMAPE` is generally the most versatile metric across multiple series, but doesn't handle forecasts with lots of zeroes well. 
+*Horizontal* style ensembles use `metric_weighting` for series selection, but only the values passed for `mae, rmse, made, mle, imle, contour, spl`. If all of these are 0, mae is used for selection. 
+
+`sMAPE` is *Symmetric Mean Absolute Percentage Loss* and is generally the most versatile metric across multiple series as it is scaled. It doesn't handle forecasts with lots of zeroes well. 
 
 `SPL` is *Scaled Pinball Loss* or *Quantile Loss* and is the optimal metric for assessing upper/lower quantile forecast accuracies.
 
 `Containment` measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called `coverage_fraction`.
 
-`Contour` is a unique measure. It is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. Does not work with forecast_length=1. 
+`MLE` and `iMLE` are *Mean Logarithmic Error* inspired by the `mean squared log error`. They are used to target over or underestimation with MAE of the penalized direction and log(error) for the less-penalized (and less outlier sensitive) direction.
+`MLE` penalizes an under-predicted forecast greater than an over-predicted forecast. 
+`iMLE` is the inverse, and penalizes an over-prediction more.
 
-`MADE` is mean absolute differential error. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Does not work with forecast_length = 1. 
+`MAGE` is *Mean Absolute aGgregate Error* which measures the error of a rollup of the forecasts. This is helpful in hiearchial/grouped forecasts for selecting series that have minimal overestimation or underestimation when summed.
 
-The contour metric is useful as it encourages 'wavy' forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they "don't look like they are trying hard enough" to some managers, and using contour favors non-flat forecasts that (to many) look like a more serious model.
+`Contour` is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. It is more human-readable than MADE for this information.
+
+`MADE` is *(Scaled) Mean Absolute Differential Error*. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Equivalent to 'MAE' when forecast_length=1. It is better for optimization than contour.
+
+The contour and MADE metrics are useful as they encourages 'wavy' forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they "don't look like they are trying hard enough" to some managers, and using them favors non-flat forecasts that (to many) look like a more serious model.
+
+### Hierarchial and Grouped Forecasts
+Hiearchial and grouping refer to multivariate forecast situations where the individual series are aggregated. 
+A common example of this is product sales forecasting, where individual products are forecast and then also aggregated for a view on demand across all products. 
+Aggregation combines the errors of individual series, however, potentially resulting in major over- or -under estimation of the overall demand. 
+Traditionally to solve this problem, reconciliation is used where a top-level and lower-level forecasts are averaged or otherwise adjusted to produce a less exaggerated final result. 
+
+Unfortunately, any reconciliation approach is inherently sub-optimal. 
+On real world data with optimized forecasts, the error contributions of individual series and the direction of the error (over- or under- estimate) are usually unstable, 
+not only from forecast to forecast but from timestep to timestep inside each forecast. Thus reconciliation often reassigns the wrong amount of error to the wrong place. 
+
+The suggestion here for this problem is to target the problem from the beginning and utilize the `MAGE` metric across validations. 
+This assesses how well the forecasts aggregate, and when used as part of metric_weighting drives model selection towards forecasts that aggregate well. 
+`MAGE` assesses all series present, so if very distinct sub-groups are present, it may be sometimes necessary to model those groups in separate runs. 
+Additionally, `MLE` or `iMLE` can be used if either underestimation or overestimation respectively has been identified as a problem. 
 
 ### Ensembles
 Ensemble methods are specified by the `ensemble=` parameter. It can be either a list or a comma-separated string.
@@ -290,9 +323,8 @@ These ensembles are choosen based on per series accuracy on `mae, rmse, contour,
 `mosaic` enembles are an extension of `horizontal` ensembles, but with a specific model choosen for each series *and* for each forecast period. 
 As this means the maximum number of models can be `number of series * forecast_length`, this obviously may get quite slow. 
 Theoretically, this style of ensembling offers the highest accuracy. 
-However, `mosaic` models only utilize MAE for model selection, and as such upper and lower forecast performance may be poor. 
-They are also more prone to over-fitting, so use this with more validations and more stable data. 
-Unlike `horizontal` ensembles, which only work on multivariate datasets, `mosaic` can be run on a single time series. 
+They are much more prone to over-fitting, so use this with more validations and more stable data. 
+Unlike `horizontal` ensembles, which only work on multivariate datasets, `mosaic` can be run on a single time series with a horizon > 1. 
 
 One thing you can do with `mosaic` ensembles if you only care about the accuracy of one forecast point, but want to run a forecast for the full forecast length, you can convert the mosaic to horizontal for just that forecast period. 
 ```python
@@ -346,6 +378,7 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 
 `pip install autots['additional']`
 ### Optional Packages
+	requests
 	psutil
 	holidays
 	prophet
@@ -361,23 +394,31 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs. 
 
 #### Safest bet for installation:
-venv, Anaconda, or [Miniforge](https://github.com/conda-forge/miniforge/)
+venv, Anaconda, or [Miniforge](https://github.com/conda-forge/miniforge/) with some more tips [here](https://syllepsis.live/2022/01/17/setting-up-and-optimizing-python-for-data-science-on-intel-amd-and-arm-including-apple-computers/).
 ```shell
 # create a conda or venv environment
-conda create -n openblas python=3.9
-conda activate openblas
+conda create -n timeseries python=3.9
+conda activate timeseries
 
-python -m pip install numpy scipy scikit-learn statsmodels tensorflow lightgbm xgboost yfinance pytrends fredapi --exists-action i
+python -m pip install numpy scipy scikit-learn statsmodels lightgbm xgboost numexpr bottleneck yfinance pytrends fredapi --exists-action i
 
-python -m pip install yfinance pytrends fredapi
-python -m pip install numexpr bottleneck
 python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily, --no-deps to pip install prophet if this fails
-python -m pip install mxnet --exists-action i     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
-python -m pip install gluonts --exists-action i
+python -m pip install tensorflow
+python -m pip install mxnet --no-deps     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
+python -m pip install gluonts
 python -m pip install holidays-ext pmdarima dill greykite --exists-action i --no-deps
+# install pytorch
+python -m pip install neuralprophet
 python -m pip install --upgrade numpy pandas --exists-action i  # mxnet likes to (pointlessly seeming) install old versions of numpy
 
 python -m pip install autots --exists-action i
+```
+
+```shell
+conda install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
+pip install mxnet --no-deps
+pip install intel-tensorflow scikit-learn-intelex yfinance pytrends fredapi gluonts
+pip install spyder
 ```
 
 #### Intel conda channel installation (sometime faster, also, more prone to bugs)
@@ -397,10 +438,10 @@ conda install -c intel numexpr statsmodels lightgbm tensorflow
 
 python -m pip install autots
 
-# MKL_NUM_THREADS, USE_DAAL4PY_SKLEARN=1
+# OMP_NUM_THREADS, USE_DAAL4PY_SKLEARN=1
 ```
 
-### Benchmark
+### Speed Benchmark
 ```python
 from autots.evaluator.benchmark import Benchmark
 bench = Benchmark()
@@ -412,6 +453,8 @@ bench.results
 
 ### Mysterious crashes
 Usually mysterious crashes or hangs (those without clear error messages) occur when the CPU or Memory is overloaded. 
+`UnivariateRegression` is usually the most prone to these issues, removing it from the model_list may help. 
+
 Try setting `n_jobs=1` or an otherwise low number, which should reduce the load. Also test the 'superfast' naive models, which are generally low resource consumption. 
 GPU-accelerated models (Tensorflow in Regressions and GluonTS) are also more prone to crashes, and may be a source of problems when used. 
 If problems persist, post to the GitHub Discussion or Issues. 
@@ -530,6 +573,70 @@ Note, this does not necessarily force the model to place any great value on the 
 It may be necessary to rerun multiple times until a model with satisfactory variable response is found, 
 or to try with a subset of the regressor model list like `['FBProphet', 'GLM', 'ARDL', 'DatepartRegression']`.
 
+## Event Risk Forecasting
+Generate a risk score (0 to 1, but usually close to 0) for a future event exceeding user specified upper or lower bounds.
+
+Upper and lower limits can be one of four types, and may each be different.
+1. None (no risk score calculated for this direction)
+2. Float in range [0, 1] historic quantile of series (which is historic min and max at edges) is chosen as limit.
+3. A dictionary of {"model_name": x,  "model_param_dict": y, "model_transform_dict": z, "prediction_interval": 0.9} to generate a forecast as the limits
+	Primarily intended for simple forecasts like SeasonalNaive, but can be used with any AutoTS model
+4. a custom input numpy array of shape (forecast_length, num_series)
+
+```python
+import numpy as np
+from autots import (
+    load_daily,
+    EventRiskForecast,
+)
+from sklearn.metrics import multilabel_confusion_matrix, classification_report
+
+forecast_length = 6
+df_full = load_daily(long=False)
+df = df_full[0: (df_full.shape[0] - forecast_length)]
+df_test = df[(df.shape[0] - forecast_length):]
+
+upper_limit = 0.95
+# if using manual array limits, historic limit must be defined separately (if used)
+lower_limit = np.ones((forecast_length, df.shape[1]))
+historic_lower_limit = np.ones(df.shape)
+
+model = EventRiskForecast(
+    df,
+    forecast_length=forecast_length,
+    upper_limit=upper_limit,
+    lower_limit=lower_limit,
+)
+# .fit() is optional if model_name, model_param_dict, model_transform_dict are already defined (overwrites)
+model.fit()
+risk_df_upper, risk_df_lower = model.predict()
+historic_upper_risk_df, historic_lower_risk_df = model.predict_historic(lower_limit=historic_lower_limit)
+model.plot(0)
+
+threshold = 0.1
+eval_lower = EventRiskForecast.generate_historic_risk_array(df_test, model.lower_limit_2d, direction="lower")
+eval_upper = EventRiskForecast.generate_historic_risk_array(df_test, model.upper_limit_2d, direction="upper")
+pred_lower = np.where(model.lower_risk_array > threshold, 1, 0)
+pred_upper = np.where(model.upper_risk_array > threshold, 1, 0)
+
+multilabel_confusion_matrix(eval_upper, pred_upper).sum(axis=0)
+print(classification_report(eval_upper, pred_upper, zero_division=1))  # target_names=df.columns
+```
+A limit specified by a forecast can be used to use one type of model to judge the risk of another production model's bounds (here ARIMA) being exceeded. 
+This is also useful for visualizing the effectivness of a particular model's probabilistic forecasts. 
+
+Using forecasts as a limit is also a common method of detecting anomalies in historic data - looking for data points that exceeded what a forecast would have expected. 
+Forecast_length effects how far ahead each forecast step is. Larger is faster, smaller means tighter accuracy (only the most extreme outliers are flagged). 
+`predict_historic` is used for looking back on the training dataset. Use `eval_periods` to look at only a portion. 
+```python
+lower_limit = {
+	"model_name": "ARIMA",
+	"model_param_dict": {'p': 1, "d": 0, "q": 1},
+	"model_transform_dict": {},
+	"prediction_interval": 0.9,
+}
+```
+
 ### A Hack for Passing in Parameters (that aren't otherwise available)
 There are a lot of parameters available here, but not always all of the options available for a particular parameter are actually used in generated templates. 
 Usually, very slow options are left out. If you are familiar with a model, you can try manualy adding those parameter values in for a run in this way... 
@@ -549,7 +656,6 @@ thus properly capturing the relative sequence (ie 'low'=1, 'medium'=2, 'high'=3)
 ### Custom and Unusual Frequencies
 Data must be coercible to a regular frequency. It is recommended the frequency be specified as a datetime offset as per pandas documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects 
 Some models will support a more limited range of frequencies. 
-
 
 ## Using the Transformers independently
 The transformers expect data only in the `wide` shape with ascending date. 
@@ -591,8 +697,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 * MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series `i` are used to predict next step for series `i`, with a model trained on all data from all series.
 * UnivariateRegression is the same as MultivariateRegression but trains an independent model on each series, thus not capable of learning from the patterns of other series. This performs well in horizontal ensembles as it can be parsed down to one series with the same performance on that series. 
 
-How the upper and lower forecast bounds are created for these models will likely change in the future. 
-Currently `MultivariateRegression` utilizes a stock GradientBoostingRegressor with quantile loss for probabilistic estimates, while others utilize point to probabilistic estimates.
+Currently `MultivariateRegression` has the option to utilize a stock GradientBoostingRegressor with quantile loss for probabilistic estimates, while others utilize point to probabilistic estimates.
 
 ## Models
 
@@ -609,22 +714,24 @@ Currently `MultivariateRegression` utilizes a stock GradientBoostingRegressor wi
 |  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  VARMAX                 | statsmodels  |                         |    True       |                 |       | True         |              |               |
 |  DynamicFactor          | statsmodels  |                         |    True       |                 |       | True         |              | True          |
+|  DynamicFactorMQ        | statsmodels  |                         |    True       |                 |       | True         |              |               |
 |  VECM                   | statsmodels  |                         |               |                 |       | True         |              | True          |
 |  VAR                    | statsmodels  |                         |    True       |                 |       | True         |              | True          |
 |  Theta                  | statsmodels  |                         |    True       |     joblib      |       |              |              |               |
 |  ARDL                   | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
-|  FBProphet              | fbprophet    |                         |    True       |     joblib      |       |              |              | True          |
+|  FBProphet              | prophet      |                         |    True       |     joblib      |       |              |              | True          |
 |  GluonTS                | gluonts, mxnet |                       |    True       |                 | yes   | True         |              | True          |
 |  RollingRegression      | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  WindowRegression       | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  | True         |              | True          |
 |  DatepartRegression     | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 |  MultivariateRegression | sklearn      | lightgbm, tensorflow    |    True       |     sklearn     | some  | True         |              | True          |
 |  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
-| UnivariateMotif/MultivariateMotif | scipy.distaince.cdist |      |    True       |     joblib      |       | *            |              |               |
-|  SectionalMotif         | scipy.distaince.cdist |  sklearn       |    True       |                 |       | True         |              | True          |
+| Univariate/MultivariateMotif | scipy.distance.cdist |            |    True       |     joblib      |       | *            |              |               |
+|  SectionalMotif         | scipy.distance.cdist |  sklearn        |    True       |                 |       | True         |              | True          |
 |  NVAR                   |              |                         |    True       |   blas/lapack   |       | True         |              |               |
+|  NeuralProphet          | neuralprophet |                        |    tbd        |     pytorch     | yes   |              |              | True          |
 |  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |   *           |
-|  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True*        | True         |               |
+|  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |
 |  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |               |

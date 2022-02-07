@@ -85,7 +85,7 @@ def rolling_x_regressor(
         )
         X = pd.concat([X, temp], axis=1).fillna(method='bfill')
 
-    if add_date_part in ['simple', 'expanded', 'recurring']:
+    if add_date_part in ['simple', 'expanded', 'recurring', "simple_2"]:
         date_part_df = date_part(df.index, method=add_date_part)
         date_part_df.index = df.index
         X = pd.concat(
@@ -228,7 +228,7 @@ def retrieve_regressor(
             from sklearn.multioutput import MultiOutputRegressor
 
             regr = MultiOutputRegressor(
-                KNeighborsRegressor(**model_param_dict),
+                KNeighborsRegressor(**model_param_dict, n_jobs=1),
                 n_jobs=n_jobs,
             )
         else:
@@ -259,6 +259,28 @@ def retrieve_regressor(
             )
         return regr
     elif model_class == 'LightGBM':
+        from lightgbm import LGBMRegressor
+
+        if multioutput:
+            from sklearn.multioutput import MultiOutputRegressor
+
+            return MultiOutputRegressor(
+                LGBMRegressor(
+                    verbose=int(verbose_bool),
+                    random_state=random_seed,
+                    n_jobs=1,
+                    **model_param_dict,
+                ),
+                n_jobs=n_jobs,
+            )
+        else:
+            return LGBMRegressor(
+                verbose=int(verbose_bool),
+                random_state=random_seed,
+                n_jobs=n_jobs,
+                **model_param_dict,
+            )
+    elif model_class == "LightGBMRegressorChain":
         from lightgbm import LGBMRegressor
 
         regr = LGBMRegressor(
@@ -313,7 +335,7 @@ def retrieve_regressor(
             from sklearn.multioutput import MultiOutputRegressor
 
             regr = MultiOutputRegressor(
-                xgb.XGBRegressor(verbosity=verbose, **model_param_dict),
+                xgb.XGBRegressor(verbosity=verbose, **model_param_dict, n_jobs=1),
                 n_jobs=n_jobs,
             )
         else:
@@ -334,6 +356,10 @@ def retrieve_regressor(
         else:
             regr = LinearSVR(verbose=verbose_bool, **model_param_dict)
         return regr
+    elif model_class == 'Ridge':
+        from sklearn.linear_model import Ridge
+
+        return Ridge(random_state=random_seed, **model_param_dict)
     elif model_class == 'BayesianRidge':
         from sklearn.linear_model import BayesianRidge
 
@@ -372,6 +398,30 @@ def retrieve_regressor(
         from sklearn.linear_model import RANSACRegressor
 
         return RANSACRegressor(random_state=random_seed, **model_param_dict)
+    elif model_class == "GaussianProcessRegressor":
+        from sklearn.gaussian_process import GaussianProcessRegressor
+
+        kernel = model_param_dict.pop("kernel", None)
+        if kernel is not None:
+            if kernel == "DotWhite":
+                from sklearn.gaussian_process.kernels import DotProduct, WhiteKernel
+
+                kernel = DotProduct() + WhiteKernel()
+            elif kernel == "White":
+                from sklearn.gaussian_process.kernels import WhiteKernel
+
+                kernel = WhiteKernel()
+            elif kernel == "ExpSineSquared":
+                from sklearn.gaussian_process.kernels import ExpSineSquared
+
+                kernel = ExpSineSquared()
+            else:
+                from sklearn.gaussian_process.kernels import RBF
+
+                kernel = RBF()
+        return GaussianProcessRegressor(
+            kernel=kernel, random_state=random_seed, **model_param_dict
+        )
     else:
         regression_model['model'] = 'RandomForest'
         from sklearn.ensemble import RandomForestRegressor
@@ -400,10 +450,13 @@ sklearn_model_dict = {
     'Transformer': 0.02,
     'HistGradientBoost': 0.03,
     'LightGBM': 0.03,
+    'LightGBMRegressorChain': 0.03,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.02,
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
+    'Ridge': 0.02,
+    'GaussianProcessRegressor': 0.02,
 }
 multivariate_model_dict = {
     'RandomForest': 0.02,
@@ -418,10 +471,12 @@ multivariate_model_dict = {
     'KerasRNN': 0.01,
     'HistGradientBoost': 0.03,
     'LightGBM': 0.03,
+    'LightGBMRegressorChain': 0.03,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.02,
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
+    'Ridge': 0.02,
 }
 # these should train quickly with low dimensional X/Y, and not mind being run multiple in parallel
 univariate_model_dict = {
@@ -434,6 +489,7 @@ univariate_model_dict = {
     'BayesianRidge': 0.03,
     'HistGradientBoost': 0.02,
     'LightGBM': 0.01,
+    'LightGBMRegressorChain': 0.01,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.05,
     'RANSAC': 0.02,
@@ -449,10 +505,12 @@ rolling_regression_dict = {
     'SVM': 0.05,
     'KerasRNN': 0.02,
     'LightGBM': 0.03,
+    'LightGBMRegressorChain': 0.03,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.01,
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
+    'Ridge': 0.02,
 }
 # models where we can be sure the model isn't sharing information across multiple Y's...
 no_shared_model_dict = {
@@ -460,6 +518,7 @@ no_shared_model_dict = {
     'Adaboost': 0.1,
     'SVM': 0.1,
     'xgboost': 0.1,
+    'LightGBM': 0.1,
     'HistGradientBoost': 0.1,
     'PoissonRegresssion': 0.05,
 }
@@ -480,6 +539,7 @@ datepart_model_dict: dict = {
 
 def generate_regressor_params(
     model_dict=None,
+    method="default",
 ):
     if model_dict is None:
         model_dict = sklearn_model_dict
@@ -490,6 +550,7 @@ def generate_regressor_params(
         'Adaboost',
         'DecisionTree',
         'LightGBM',
+        'LightGBMRegressorChain',
         'MLP',
         'KNN',
         'KerasRNN',
@@ -497,6 +558,8 @@ def generate_regressor_params(
         'HistGradientBoost',
         'RandomForest',
         'ExtraTrees',
+        'Ridge',
+        'GaussianProcessRegressor',
     ]:
         if model == 'Adaboost':
             param_dict = {
@@ -576,12 +639,12 @@ def generate_regressor_params(
             param_dict = {
                 "model": 'KNN',
                 "model_params": {
-                    "n_neighbors": np.random.choice(
-                        [3, 5, 10], p=[0.2, 0.7, 0.1], size=1
-                    ).item(),
-                    "weights": np.random.choice(
-                        ['uniform', 'distance'], p=[0.7, 0.3], size=1
-                    ).item(),
+                    "n_neighbors": random.choices([3, 5, 10, 14], [0.2, 0.7, 0.1, 0.1])[
+                        0
+                    ],
+                    "weights": random.choices(['uniform', 'distance'], [0.7, 0.3])[0],
+                    'p': random.choices([2, 1, 1.5], [0.7, 0.1, 0.1])[0],
+                    'leaf_size': random.choices([30, 10, 50], [0.8, 0.1, 0.1])[0],
                 },
             }
         elif model == 'RandomForest':
@@ -720,7 +783,7 @@ def generate_regressor_params(
                     )[0],
                 },
             }
-        elif model == 'LightGBM':
+        elif model in ['LightGBM', "LightGBMRegressorChain"]:
             param_dict = {
                 "model": 'LightGBM',
                 "model_params": {
@@ -755,6 +818,24 @@ def generate_regressor_params(
                     "n_estimators": random.choices(
                         [100, 250, 50, 500],
                         [0.6, 0.1, 0.3, 0.0010],
+                    )[0],
+                },
+            }
+        elif model == 'Ridge':
+            param_dict = {
+                "model": 'Ridge',
+                "model_params": {
+                    'alpha': random.choice([1.0, 10.0, 0.1, 0.00001]),
+                },
+            }
+        elif model == 'GaussianProcessRegressor':
+            param_dict = {
+                "model": 'GaussianProcessRegressor',
+                "model_params": {
+                    'alpha': random.choice([0.0000000001, 0.00001]),
+                    'kernel': random.choices(
+                        [None, "DotWhite", "White", "RBF", "ExpSineSquared"],
+                        [0.4, 0.1, 0.1, 0.1, 0.1],
                     )[0],
                 },
             }
@@ -1089,7 +1170,8 @@ class RollingRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.8, 0.05, 0.05, 0.05, 0.05]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring'], [0.7, 0.1, 0.1, 0.1]
+            [None, 'simple', 'expanded', 'recurring', "simple_2"],
+            [0.7, 0.05, 0.1, 0.1, 0.05],
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.99, 0.01])[0]
@@ -1359,7 +1441,9 @@ class WindowRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         window_size_choice = random.choice([5, 10, 20, seasonal_int()])
-        model_choice = generate_regressor_params()
+        model_choice = generate_regressor_params(
+            model_dict=sklearn_model_dict, method=method
+        )
         if "regressor" in method:
             regression_type_choice = "User"
             input_dim_choice = 'univariate'
@@ -1670,6 +1754,7 @@ class DatepartRegression(ModelObject):
             "model_params": {"max_depth": 5, "min_samples_split": 2},
         },
         datepart_method: str = 'expanded',
+        polynomial_degree: int = None,
         regression_type: str = None,
         **kwargs,
     ):
@@ -1686,6 +1771,7 @@ class DatepartRegression(ModelObject):
         )
         self.regression_model = regression_model
         self.datepart_method = datepart_method
+        self.polynomial_degree = polynomial_degree
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -1703,7 +1789,11 @@ class DatepartRegression(ModelObject):
 
         y = df.to_numpy()
 
-        X = date_part(df.index, method=self.datepart_method)
+        X = date_part(
+            df.index,
+            method=self.datepart_method,
+            polynomial_degree=self.polynomial_degree,
+        )
         if self.regression_type in ['User', 'user']:
             # regr = future_regressor.copy()
             # regr.index = X.index
@@ -1748,15 +1838,18 @@ class DatepartRegression(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
-        X = date_part(index, method=self.datepart_method)
+        X = date_part(
+            index, method=self.datepart_method, polynomial_degree=self.polynomial_degree
+        )
         if self.regression_type in ['User', 'user']:
             X = pd.concat([X, future_regressor], axis=1)
+            if X.shape[0] > index.shape[0]:
+                raise ValueError("future_regressor and X index failed to align")
         X.columns = [str(xc) for xc in X.columns]
 
-        forecast = pd.DataFrame(self.model.predict(X))
-
-        forecast.columns = self.column_names
-        forecast.index = index
+        forecast = pd.DataFrame(
+            self.model.predict(X), index=index, columns=self.column_names
+        )
 
         if just_point_forecast:
             return forecast
@@ -1788,8 +1881,12 @@ class DatepartRegression(ModelObject):
         """Return dict of new parameters for parameter tuning."""
         model_choice = generate_regressor_params(model_dict=datepart_model_dict)
         datepart_choice = random.choices(
-            ["recurring", "simple", "expanded"], [0.4, 0.3, 0.3]
+            ["recurring", "simple", "expanded", "simple_2"], [0.4, 0.3, 0.3, 0.3]
         )[0]
+        if datepart_choice in ["simple", "simple_2", "recurring"]:
+            polynomial_choice = random.choices([None, 2, 3], [0.5, 0.2, 0.01])[0]
+        else:
+            polynomial_choice = None
         if "regressor" in method:
             regression_choice = "User"
         else:
@@ -1797,6 +1894,7 @@ class DatepartRegression(ModelObject):
         parameter_dict = {
             'regression_model': model_choice,
             'datepart_method': datepart_choice,
+            'polynomial_degree': polynomial_choice,
             'regression_type': regression_choice,
         }
         return parameter_dict
@@ -1806,6 +1904,7 @@ class DatepartRegression(ModelObject):
         parameter_dict = {
             'regression_model': self.regression_model,
             'datepart_method': self.datepart_method,
+            'polynomial_degree': self.polynomial_degree,
             'regression_type': self.regression_type,
         }
         return parameter_dict
@@ -2156,7 +2255,8 @@ class UnivariateRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.86, 0.01, 0.01, 0.01, 0.01]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring'], [0.7, 0.1, 0.1, 0.1]
+            [None, 'simple', 'expanded', 'recurring', "simple_2", "simple_2_poly"],
+            [0.8, 0.05, 0.1, 0.1, 0.05, 0.05],
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         polynomial_degree_choice = None
@@ -2216,7 +2316,7 @@ class UnivariateRegression(ModelObject):
 
 class MultivariateRegression(ModelObject):
     """Regression-framed approach to forecasting using sklearn.
-    A multiariate version of rolling regression: ie each series is agged independently but modeled together
+    A multiariate version of rolling regression: ie each series is lagged independently but modeled together
 
     Args:
         name (str): String to identify class
@@ -2251,12 +2351,13 @@ class MultivariateRegression(ModelObject):
         quantile90_rolling_periods: int = None,
         quantile10_rolling_periods: int = None,
         ewm_alpha: float = 0.5,
-        additional_lag_periods: int = 7,
+        additional_lag_periods: int = None,
         abs_energy: bool = False,
         rolling_autocorr_periods: int = None,
         datepart_method: str = None,
         polynomial_degree: int = None,
-        window: int = None,
+        window: int = 5,
+        probabilistic: bool = True,
         quantile_params: dict = {
             'learning_rate': 0.1,
             'max_depth': 20,
@@ -2301,6 +2402,7 @@ class MultivariateRegression(ModelObject):
         self.window = window
         self.quantile_params = quantile_params
         self.regressor_train = None
+        self.probabilistic = probabilistic
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
@@ -2379,19 +2481,20 @@ class MultivariateRegression(ModelObject):
             ]
         )
         del base
-        alpha_base = (1 - self.prediction_interval) / 2
-        self.model_upper = GradientBoostingRegressor(
-            loss='quantile',
-            alpha=(1 - alpha_base),
-            random_state=self.random_seed,
-            **self.quantile_params,
-        )
-        self.model_lower = GradientBoostingRegressor(
-            loss='quantile',
-            alpha=alpha_base,
-            random_state=self.random_seed,
-            **self.quantile_params,
-        )
+        if self.probabilistic:
+            alpha_base = (1 - self.prediction_interval) / 2
+            self.model_upper = GradientBoostingRegressor(
+                loss='quantile',
+                alpha=(1 - alpha_base),
+                random_state=self.random_seed,
+                **self.quantile_params,
+            )
+            self.model_lower = GradientBoostingRegressor(
+                loss='quantile',
+                alpha=alpha_base,
+                random_state=self.random_seed,
+                **self.quantile_params,
+            )
 
         multioutput = True
         if Y.ndim < 2:
@@ -2407,8 +2510,9 @@ class MultivariateRegression(ModelObject):
             multioutput=multioutput,
         )
         self.model.fit(X.to_numpy(), Y)
-        self.model_upper.fit(X.to_numpy(), Y)
-        self.model_lower.fit(X.to_numpy(), Y)
+        if self.probabilistic:
+            self.model_upper.fit(X.to_numpy(), Y)
+            self.model_lower.fit(X.to_numpy(), Y)
         # we only need the N most recent points for predict
         self.sktraindata = df.tail(self.min_threshold)
 
@@ -2482,17 +2586,18 @@ class MultivariateRegression(ModelObject):
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
-            rfPred_upper = self.model_upper.predict(x_dat.to_numpy())
-            pred_upper = pd.DataFrame(
-                rfPred_upper, index=current_x.columns, columns=[index[fcst_step]]
-            ).transpose()
-            rfPred_lower = self.model_lower.predict(x_dat.to_numpy())
-            pred_lower = pd.DataFrame(
-                rfPred_lower, index=current_x.columns, columns=[index[fcst_step]]
-            ).transpose()
             forecast = pd.concat([forecast, pred_clean])
-            upper_forecast = pd.concat([upper_forecast, pred_upper])
-            lower_forecast = pd.concat([lower_forecast, pred_lower])
+            if self.probabilistic:
+                rfPred_upper = self.model_upper.predict(x_dat.to_numpy())
+                pred_upper = pd.DataFrame(
+                    rfPred_upper, index=current_x.columns, columns=[index[fcst_step]]
+                ).transpose()
+                rfPred_lower = self.model_lower.predict(x_dat.to_numpy())
+                pred_lower = pd.DataFrame(
+                    rfPred_lower, index=current_x.columns, columns=[index[fcst_step]]
+                ).transpose()
+                upper_forecast = pd.concat([upper_forecast, pred_upper])
+                lower_forecast = pd.concat([lower_forecast, pred_lower])
             current_x = pd.concat(
                 [
                     current_x,
@@ -2501,6 +2606,13 @@ class MultivariateRegression(ModelObject):
             )
 
         forecast = forecast[self.column_names]
+        if not self.probabilistic:
+            upper_forecast, lower_forecast = Point_to_Probability(
+                self.sktraindata,
+                forecast,
+                method='inferred_normal',
+                prediction_interval=self.prediction_interval,
+            )
         upper_forecast = upper_forecast[self.column_names]
         lower_forecast = lower_forecast[self.column_names]
 
@@ -2526,9 +2638,19 @@ class MultivariateRegression(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         if method == "deep":
-            model_choice = generate_regressor_params(model_dict=sklearn_model_dict)
+            model_choice = generate_regressor_params(
+                model_dict=sklearn_model_dict, method=method
+            )
+            window_choice = random.choices(
+                [None, 3, 7, 10, 14, 28], [0.2, 0.2, 0.05, 0.05, 0.05, 0.05]
+            )[0]
+            probabilistic = random.choices([True, False], [0.2, 0.8])[0]
         else:
-            model_choice = generate_regressor_params(model_dict=multivariate_model_dict)
+            model_choice = generate_regressor_params(
+                model_dict=multivariate_model_dict, method=method
+            )
+            window_choice = random.choices([None, 3, 7, 10], [0.2, 0.2, 0.05, 0.05])[0]
+            probabilistic = False
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30, 90], [0.3, 0.1, 0.1, 0.1, 0.1, 0.05]
         )[0]
@@ -2563,7 +2685,8 @@ class MultivariateRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.4, 0.01, 0.01, 0.01, 0.01]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring'], [0.4, 0.1, 0.1, 0.1]
+            [None, 'simple', 'expanded', 'recurring', "simple_2", "simple_2_poly"],
+            [0.5, 0.05, 0.1, 0.1, 0.05, 0.1],
         )[0]
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]
@@ -2571,7 +2694,6 @@ class MultivariateRegression(ModelObject):
             regression_choice = "User"
         else:
             regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
-        window_choice = random.choices([None, 3, 7, 10], [0.2, 0.2, 0.05, 0.05])[0]
         parameter_dict = {
             'regression_model': model_choice,
             'mean_rolling_periods': mean_rolling_periods_choice,
@@ -2591,6 +2713,7 @@ class MultivariateRegression(ModelObject):
             'regression_type': regression_choice,
             'window': window_choice,
             'holiday': holiday_choice,
+            "probabilistic": probabilistic,
         }
         return parameter_dict
 
@@ -2615,5 +2738,6 @@ class MultivariateRegression(ModelObject):
             'regression_type': self.regression_type,
             'window': self.window,
             'holiday': self.holiday,
+            'probabilistic': self.probabilistic,
         }
         return parameter_dict

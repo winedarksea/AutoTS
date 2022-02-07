@@ -139,15 +139,23 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
 class Detrend(EmptyTransformer):
     """Remove a linear trend from the data."""
 
-    def __init__(self, model: str = 'GLS', **kwargs):
+    def __init__(
+        self, model: str = 'GLS', phi: float = 1.0, window: int = None, **kwargs
+    ):
         super().__init__(name='Detrend')
         self.model = model
         self.need_positive = ['Poisson', 'Gamma', 'Tweedie']
+        self.phi = phi
+        self.window = window
 
     @staticmethod
     def get_new_params(method: str = 'random'):
+        window = random.choices(
+            [None, 365, 900, 30, 90, 10], [2.0, 0.1, 0.1, 0.1, 0.1, 0.1]
+        )[0]
         if method == "fast":
             choice = random.choices(["GLS", "Linear"], [0.5, 0.5], k=1)[0]
+            phi = random.choices([1, 0.999, 0.998, 0.99], [0.9, 0.05, 0.01, 0.01])[0]
         else:
             choice = random.choices(
                 [
@@ -163,8 +171,11 @@ class Detrend(EmptyTransformer):
                 [0.24, 0.2, 0.1, 0.1, 0.1, 0.02, 0.02, 0.02],
                 k=1,
             )[0]
+            phi = random.choices([1, 0.999, 0.998, 0.99], [0.9, 0.1, 0.05, 0.05])[0]
         return {
             "model": choice,
+            "phi": phi,
+            "window": window,
         }
 
     def _retrieve_detrend(self, detrend: str = "Linear"):
@@ -223,6 +234,9 @@ class Detrend(EmptyTransformer):
 
         Y = df.to_numpy()
         X = pd.to_numeric(df.index, errors='coerce', downcast='integer').to_numpy()
+        if self.window is not None:
+            Y = Y[-self.window :]
+            X = X[-self.window :]
         if self.model == 'GLS':
             from statsmodels.regression.linear_model import GLS
 
@@ -262,6 +276,7 @@ class Detrend(EmptyTransformer):
         if self.model != "GLS":
             X = X.reshape((-1, 1))
         # df = df.astype(float) - self.model.predict(X)
+        # pd.Series([phi] * 10).pow(range(10))
         if self.model in self.need_positive:
             temp = pd.DataFrame(
                 self.trained_model.predict(X), index=df.index, columns=df.columns
@@ -279,30 +294,47 @@ class Detrend(EmptyTransformer):
 
     def inverse_transform(self, df):
         """Return data to original form.
+        Will only match original if phi==1
 
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        try:
-            df = df.astype(float)
-        except Exception:
-            raise ValueError("Data Cannot Be Converted to Numeric Float")
-        X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
+        # try:
+        #     df = df.astype(float)
+        # except Exception:
+        #     raise ValueError("Data Cannot Be Converted to Numeric Float")
+        x_in = df.index
+        if not isinstance(x_in, pd.DatetimeIndex):
+            x_in = pd.DatetimeIndex(x_in)
+        X = pd.to_numeric(x_in, errors='coerce', downcast='integer').values
         if self.model != "GLS":
             X = X.reshape((-1, 1))
         if self.model in self.need_positive:
-            temp = pd.DataFrame(
-                self.trained_model.predict(X), index=df.index, columns=df.columns
+            temp = self.trnd_trans.inverse_transform(
+                pd.DataFrame(
+                    self.trained_model.predict(X), index=x_in, columns=df.columns
+                )
             )
-            df = df + self.trnd_trans.inverse_transform(temp)
+            if self.phi != 1:
+                temp = temp.mul(
+                    pd.Series([self.phi] * df.shape[0], index=temp.index).pow(
+                        range(df.shape[0])
+                    ),
+                    axis=0,
+                )
+            df = df + temp
         else:
-            if self.model == "GLS" and df.shape[1] == 1:
-                pred = self.trained_model.predict(X)
-                pred = pred.reshape(-1, 1)
-                df = df + pred
-            else:
-                df = df + self.trained_model.predict(X)
-        # df = df.astype(float) + self.trained_model.predict(X)
+            pred = pd.DataFrame(
+                self.trained_model.predict(X), index=x_in, columns=df.columns
+            )
+            if self.phi != 1:
+                pred = pred.mul(
+                    pd.Series([self.phi] * df.shape[0], index=pred.index).pow(
+                        range(df.shape[0])
+                    ),
+                    axis=0,
+                )
+            df = df + pred
         return df
 
 
@@ -570,14 +602,17 @@ class SinTrend(EmptyTransformer):
             raise ValueError("Data Cannot Be Converted to Numeric Float")
         X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
 
-        sin_df = pd.DataFrame()
+        sin_df = []
         # make this faster
         for index, row in self.sin_params.iterrows():
-            yy = pd.DataFrame(
-                row['amp'] * np.sin(row['omega'] * X + row['phase']) + row['offset'],
-                columns=[index],
+            sin_df.append(
+                pd.DataFrame(
+                    row['amp'] * np.sin(row['omega'] * X + row['phase'])
+                    + row['offset'],
+                    columns=[index],
+                )
             )
-            sin_df = pd.concat([sin_df, yy], axis=1)
+        sin_df = pd.concat(sin_df, axis=1)
         df_index = df.index
         df = df.astype(float).reset_index(drop=True) - sin_df.reset_index(drop=True)
         df.index = df_index
@@ -969,7 +1004,7 @@ class SeasonalDifference(EmptyTransformer):
 
 
 class DatepartRegressionTransformer(EmptyTransformer):
-    """Remove a regression on datepart from the data."""
+    """Remove a regression on datepart from the data. See tools.seasonal.date_part"""
 
     def __init__(
         self,
@@ -978,15 +1013,21 @@ class DatepartRegressionTransformer(EmptyTransformer):
             "model_params": {"max_depth": 5, "min_samples_split": 2},
         },
         datepart_method: str = 'expanded',
+        polynomial_degree: int = None,
         **kwargs,
     ):
         super().__init__(name="DatepartRegressionTransformer")
         self.regression_model = regression_model
         self.datepart_method = datepart_method
+        self.polynomial_degree = polynomial_degree
 
     @staticmethod
     def get_new_params(method: str = 'random'):
-        method_c = random.choice(["simple", "expanded", "recurring"])
+        datepart_choice = random.choice(["simple", "expanded", "recurring", "simple_2"])
+        if datepart_choice in ["simple", "simple_2", "recurring"]:
+            polynomial_choice = random.choices([None, 2], [0.5, 0.2])[0]
+        else:
+            polynomial_choice = None
         from autots.models.sklearn import generate_regressor_params
 
         if method == "all":
@@ -1013,7 +1054,11 @@ class DatepartRegressionTransformer(EmptyTransformer):
                 }
             )
 
-        return {"regression_model": choice, "datepart_method": method_c}
+        return {
+            "regression_model": choice,
+            "datepart_method": datepart_choice,
+            "polynomial_degree": polynomial_choice,
+        }
 
     def fit(self, df):
         """Fits trend for later detrending.
@@ -1029,7 +1074,11 @@ class DatepartRegressionTransformer(EmptyTransformer):
         y = df.values
         if y.shape[1] == 1:
             y = y.ravel()
-        X = date_part(df.index, method=self.datepart_method)
+        X = date_part(
+            df.index,
+            method=self.datepart_method,
+            polynomial_degree=self.polynomial_degree,
+        )
         from autots.models.sklearn import retrieve_regressor
 
         multioutput = True
@@ -1068,10 +1117,13 @@ class DatepartRegressionTransformer(EmptyTransformer):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
-        X = date_part(df.index, method=self.datepart_method)
-        y = pd.DataFrame(self.model.predict(X))
-        y.columns = df.columns
-        y.index = df.index
+        X = date_part(
+            df.index,
+            method=self.datepart_method,
+            polynomial_degree=self.polynomial_degree,
+        )
+        # X.columns = [str(xc) for xc in X.columns]
+        y = pd.DataFrame(self.model.predict(X), columns=df.columns, index=df.index)
         df = df - y
         return df
 
@@ -1086,10 +1138,12 @@ class DatepartRegressionTransformer(EmptyTransformer):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
-        X = date_part(df.index, method=self.datepart_method)
-        y = pd.DataFrame(self.model.predict(X))
-        y.columns = df.columns
-        y.index = df.index
+        X = date_part(
+            df.index,
+            method=self.datepart_method,
+            polynomial_degree=self.polynomial_degree,
+        )
+        y = pd.DataFrame(self.model.predict(X), columns=df.columns, index=df.index)
         df = df + y
         return df
 
@@ -1922,6 +1976,42 @@ class ScipyFilter(EmptyTransformer):
         return df
 
 
+class EWMAFilter(EmptyTransformer):
+    """Irreversible filters of Exponential Weighted Moving Average
+
+    Args:
+        span (int): span of exponetial period to convert to alpha
+    """
+
+    def __init__(self, span: int = 7, **kwargs):
+        super().__init__(name="HPFilter")
+        self.span = span
+
+    def fit_transform(self, df):
+        """Fit and Return Detrended DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self.transform(df)
+
+    def transform(self, df):
+        """Return detrended data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df.ewm(span=self.span).mean()
+
+    @staticmethod
+    def get_new_params(method: str = 'random'):
+        if method == "fast":
+            choice = random.choice([3, 7, 10, 12])
+        else:
+            choice = seasonal_int(include_one=False)
+        return {"span": choice}
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     'None': EmptyTransformer(),
@@ -1970,6 +2060,7 @@ have_params = {
     'ScipyFilter': ScipyFilter,
     'HPFilter': HPFilter,
     'STLFilter': STLFilter,
+    "EWMAFilter": EWMAFilter,
 }
 # where will results will vary if not all series are included together
 shared_trans = ['PCA', 'FastICA', "DatepartRegression"]
@@ -2044,7 +2135,8 @@ class GeneralTransformer(object):
             'DatepartRegression' - move a trend trained on datetime index
             "ScipyFilter" - filter data (lose information but smoother!) from scipy
             "HPFilter" - statsmodels hp_filter
-            "STLFilter" - seasonal decompose and keep just one part of decomposition.
+            "STLFilter" - seasonal decompose and keep just one part of decomposition
+            "EWMAFilter" - use an exponential weighted moving average to smooth data
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -2054,7 +2146,7 @@ class GeneralTransformer(object):
 
     def __init__(
         self,
-        fillna: str = 'ffill',
+        fillna: str = None,
         transformations: dict = {},
         transformation_params: dict = {},
         grouping: str = None,
@@ -2235,25 +2327,29 @@ class GeneralTransformer(object):
 
         self.df_index = df.index
         self.df_colnames = df.columns
-        for i in sorted(self.transformations.keys()):
-            transformation = self.transformations[i]
-            self.transformers[i] = self.retrieve_transformer(
-                transformation=transformation,
-                df=df,
-                param=self.transformation_params[i],
-                random_seed=self.random_seed,
-            )
-            df = self.transformers[i].fit_transform(df)
-            # convert to DataFrame only if it isn't already
-            if not isinstance(df, pd.DataFrame):
-                df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-            # update index reference if sliced
-            if transformation in ['Slice']:
-                self.df_index = df.index
-                self.df_colnames = df.columns
-            # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
-
-        df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+        try:
+            for i in sorted(self.transformations.keys()):
+                transformation = self.transformations[i]
+                self.transformers[i] = self.retrieve_transformer(
+                    transformation=transformation,
+                    df=df,
+                    param=self.transformation_params[i],
+                    random_seed=self.random_seed,
+                )
+                df = self.transformers[i].fit_transform(df)
+                # convert to DataFrame only if it isn't already
+                if not isinstance(df, pd.DataFrame):
+                    df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
+                # update index reference if sliced
+                if transformation in ['Slice']:
+                    self.df_index = df.index
+                    self.df_colnames = df.columns
+                # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+        except Exception as e:
+            raise Exception(
+                f"Transformer {self.transformations[i]} failed on fit"
+            ) from e
+        # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         return df
 
     def fit(self, df):
@@ -2282,19 +2378,18 @@ class GeneralTransformer(object):
         self.df_index = df.index
         self.df_colnames = df.columns
         # transformations
+        i = 0
         for i in sorted(self.transformations.keys()):
             transformation = self.transformations[i]
             df = self.transformers[i].transform(df)
             # convert to DataFrame only if it isn't already
             if not isinstance(df, pd.DataFrame):
-                df = pd.DataFrame(df)
-                df.index = self.df_index
-                df.columns = self.df_colnames
+                df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
             # update index reference if sliced
             if transformation in ['Slice']:
                 self.df_index = df.index
                 self.df_colnames = df.columns
-        df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+        # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         return df
 
     def inverse_transform(
@@ -2309,28 +2404,26 @@ class GeneralTransformer(object):
         """
         self.df_index = df.index
         self.df_colnames = df.columns
-        df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
-
-        for i in sorted(self.transformations.keys(), reverse=True):
-            if self.transformations[i] in self.oddities_list:
-                df = self.transformers[i].inverse_transform(
-                    df, trans_method=trans_method
-                )
-            else:
-                df = self.transformers[i].inverse_transform(df)
-            if not isinstance(df, pd.DataFrame):
-                df = pd.DataFrame(df)
-                df.index = self.df_index
-                df.columns = self.df_colnames
-            df = df.replace([np.inf, -np.inf], 0)
+        # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
+        try:
+            for i in sorted(self.transformations.keys(), reverse=True):
+                if self.transformations[i] in self.oddities_list:
+                    df = self.transformers[i].inverse_transform(
+                        df, trans_method=trans_method
+                    )
+                else:
+                    df = self.transformers[i].inverse_transform(df)
+                if not isinstance(df, pd.DataFrame):
+                    df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
+                # df = df.replace([np.inf, -np.inf], 0)
+        except Exception as e:
+            raise Exception(
+                f"Transformer {self.transformations[i]} failed on inverse"
+            ) from e
 
         if fillzero:
             df = df.fillna(0)
 
-        """
-        if self.grouping is not None:
-            df = self.hier.reconcile(df)
-        """
         return df
 
 
@@ -2368,7 +2461,7 @@ transformer_dict = {
     'Detrend': 0.1,  # slow with some params, but that's handled in get_params
     'RollingMeanTransformer': 0.02,
     'RollingMean100thN': 0.01,  # old
-    'DifferencedTransformer': 0.1,
+    'DifferencedTransformer': 0.07,
     'SinTrend': 0.01,
     'PctChangeTransformer': 0.01,
     'CumSumTransformer': 0.02,
@@ -2388,6 +2481,7 @@ transformer_dict = {
     "Slice": 0.02,
     "ScipyFilter": 0.02,
     "STLFilter": 0.01,
+    "EWMAFilter": 0.02,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
@@ -2412,6 +2506,7 @@ superfast_transformer_dict = {
     "ClipOutliers": 0.05,
     "Discretize": 0.03,
     "Slice": 0.02,
+    "EWMAFilter": 0.01,
 }
 
 # probability dictionary of FillNA methods

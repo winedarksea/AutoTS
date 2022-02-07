@@ -8,7 +8,7 @@ from autots.models.model_list import no_shared
 from autots.tools.impute import fill_median
 
 
-horizontal_aliases = ['horizontal', 'probabilistic']
+horizontal_aliases = ['horizontal', 'probabilistic', 'horizontal-max', 'horizontal-min']
 
 
 def summarize_series(df):
@@ -69,6 +69,8 @@ def BestNEnsemble(
 ):
     """Generate mean forecast for ensemble of models.
 
+    model_weights and point_methods other than 'mean' are incompatible
+
     Args:
         ensemble_params (dict): BestN ensemble param dict
             should have "model_weights": {model_id: weight} where 1 is default weight per model
@@ -80,7 +82,9 @@ def BestNEnsemble(
     startTime = datetime.datetime.now()
     forecast_keys = list(forecasts.keys())
     model_weights = dict(ensemble_params.get("model_weights", {}))
+    point_method = ensemble_params.get("point_method", "mean")
     ensemble_params['model_weights'] = model_weights
+    ensemble_params['point_method'] = point_method
     ensemble_params['models'] = {
         k: v
         for k, v in dict(ensemble_params.get('models')).items()
@@ -94,21 +98,65 @@ def BestNEnsemble(
     columnz = sample_df.columns
     indices = sample_df.index
 
-    model_divisor = 0
-    ens_df = pd.DataFrame(0, index=indices, columns=columnz)
-    ens_df_lower = pd.DataFrame(0, index=indices, columns=columnz)
-    ens_df_upper = pd.DataFrame(0, index=indices, columns=columnz)
-    for idx, x in forecasts.items():
-        current_weight = float(model_weights.get(idx, 1))
-        ens_df = ens_df + (x * current_weight)
-        # also .get(idx, 0)
-        ens_df_lower = ens_df_lower + (lower_forecasts[idx] * current_weight)
-        ens_df_upper = ens_df_upper + (upper_forecasts[idx] * current_weight)
-        model_divisor = model_divisor + current_weight
+    # this is expected to have to handle NaN
+    if point_method in ["median", "midhinge"]:
+        forecast_array = np.array(
+            [x.values.reshape(1, -1) if x.ndim == 1 else x for x in forecasts.values()]
+        )
+        l_forecast_array = np.array(
+            [
+                x.values.reshape(1, -1) if x.ndim == 1 else x
+                for x in lower_forecasts.values()
+            ]
+        )
+        u_forecast_array = np.array(
+            [
+                x.values.reshape(1, -1) if x.ndim == 1 else x
+                for x in upper_forecasts.values()
+            ]
+        )
+        if point_method == "midhinge":
+            ens_df = (
+                np.nanquantile(forecast_array, q=0.25, axis=0)
+                + np.quantile(forecast_array, q=0.75, axis=0)
+            ) / 2
+            ens_df_lower = (
+                np.nanquantile(l_forecast_array, q=0.25, axis=0)
+                + np.quantile(l_forecast_array, q=0.75, axis=0)
+            ) / 2
+            ens_df_upper = (
+                np.nanquantile(u_forecast_array, q=0.25, axis=0)
+                + np.quantile(u_forecast_array, q=0.75, axis=0)
+            ) / 2
+        else:
+            ens_df = np.nanmedian(forecast_array, axis=0)
+            ens_df_lower = np.nanmedian(l_forecast_array, axis=0)
+            ens_df_upper = np.nanmedian(u_forecast_array, axis=0)
 
-    ens_df = ens_df / model_divisor
-    ens_df_lower = ens_df_lower / model_divisor
-    ens_df_upper = ens_df_upper / model_divisor
+        ens_df = pd.DataFrame(ens_df, index=indices, columns=columnz)
+        ens_df_lower = pd.DataFrame(ens_df_lower, index=indices, columns=columnz)
+        ens_df_upper = pd.DataFrame(ens_df_upper, index=indices, columns=columnz)
+    else:
+        # these might be faster but the current method works fine
+        # np.average(forecast_array, axis=0, weights=model_weights.values())
+        # np.average(l_forecast_array, axis=0, weights=model_weights.values())
+        # np.average(u_forecast_array, axis=0, weights=model_weights.values())
+
+        model_divisor = 0
+        ens_df = pd.DataFrame(0, index=indices, columns=columnz)
+        ens_df_lower = pd.DataFrame(0, index=indices, columns=columnz)
+        ens_df_upper = pd.DataFrame(0, index=indices, columns=columnz)
+        for idx, x in forecasts.items():
+            current_weight = float(model_weights.get(idx, 1))
+            ens_df = ens_df + (x * current_weight)
+            # also .get(idx, 0)
+            ens_df_lower = ens_df_lower + (lower_forecasts[idx] * current_weight)
+            ens_df_upper = ens_df_upper + (upper_forecasts[idx] * current_weight)
+            model_divisor = model_divisor + current_weight
+
+        ens_df = ens_df / model_divisor
+        ens_df_lower = ens_df_lower / model_divisor
+        ens_df_upper = ens_df_upper / model_divisor
 
     ens_runtime = datetime.timedelta(0)
     for x in forecasts_runtime.values():
@@ -380,27 +428,27 @@ def HorizontalEnsemble(
 
     org_idx = df_train.columns
 
-    forecast_df, u_forecast_df, l_forecast_df = (
-        pd.DataFrame(),
-        pd.DataFrame(),
-        pd.DataFrame(),
-    )
+    forelist, forelist_l, forelist_u = [], [], []
+    """
+    # forelist = [forecasts.get(mod_id)[series] for series, mod_id in all_series.items()]
     for series, mod_id in all_series.items():
-        try:
-            c_fore = forecasts[mod_id][series]
-            forecast_df = pd.concat([forecast_df, c_fore], axis=1)
-        except Exception as e:
-            print(f"Horizontal ensemble unable to add model {mod_id} {repr(e)}")
-        # upper
-        c_fore = upper_forecasts[mod_id][series]
-        u_forecast_df = pd.concat([u_forecast_df, c_fore], axis=1)
-        # lower
-        c_fore = lower_forecasts[mod_id][series]
-        l_forecast_df = pd.concat([l_forecast_df, c_fore], axis=1)
+        forelist.append(forecasts[mod_id][series])
+        forelist_l.append(lower_forecasts[mod_id][series])
+        forelist_u.append(upper_forecasts[mod_id][series])
+    """
+    # this should be faster if models are reused, but columns won't be in order
+    final = pd.DataFrame.from_dict({"0": all_series})
+    final = final.reset_index(drop=False).groupby("0").agg(list)
+    for row in final.itertuples():
+        forelist.append(forecasts[row[0]][row[1]])
+        forelist_l.append(lower_forecasts[row[0]][row[1]])
+        forelist_u.append(upper_forecasts[row[0]][row[1]])
     # make sure columns align to original
-    forecast_df = forecast_df.reindex(columns=org_idx)
-    u_forecast_df = u_forecast_df.reindex(columns=org_idx)
-    l_forecast_df = l_forecast_df.reindex(columns=org_idx)
+    # reindexing took 170 microseconds for 500 columns so shouldn't be a concern
+    forecast_df = pd.concat(forelist, axis=1).reindex(columns=org_idx)
+    l_forecast_df = pd.concat(forelist_l, axis=1).reindex(columns=org_idx)
+    u_forecast_df = pd.concat(forelist_u, axis=1).reindex(columns=org_idx)
+
     # combine runtimes
     try:
         ens_runtime = sum(list(forecasts_runtime.values()), datetime.timedelta())
@@ -575,11 +623,11 @@ def EnsembleForecast(
         ens_forecast = MosaicEnsemble(
             ensemble_params,
             forecasts_list,
-            forecasts,
-            lower_forecasts,
-            upper_forecasts,
-            forecasts_runtime,
-            prediction_interval,
+            forecasts=forecasts,
+            lower_forecasts=lower_forecasts,
+            upper_forecasts=upper_forecasts,
+            forecasts_runtime=forecasts_runtime,
+            prediction_interval=prediction_interval,
             df_train=df_train,
             prematched_series=prematched_series,
         )
@@ -650,6 +698,7 @@ def _generate_bestn_dict(
     model_name: str = 'BestN',
     model_metric: str = "best_score",
     model_weights: dict = None,
+    point_method: str = None,
 ):
     ensemble_models = best.to_dict(orient='index')
     model_parms = {
@@ -660,6 +709,8 @@ def _generate_bestn_dict(
     }
     if model_weights is not None:
         model_parms['model_weights'] = model_weights
+    if point_method is not None:
+        model_parms['point_method'] = point_method
     return {
         'Model': 'Ensemble',
         'ModelParameters': json.dumps(model_parms),
@@ -693,17 +744,34 @@ def EnsembleTemplateGenerator(
                 index=[0],
             )
             ensemble_templates = pd.concat([ensemble_templates, best3nu_params], axis=0)
+        # Best 5 and Median
+        best5nonunique = ens_temp.nsmallest(5, columns=['Score']).set_index("ID")[
+            ['Model', 'ModelParameters', 'TransformationParameters']
+        ]
+        best5_params = pd.DataFrame(
+            _generate_bestn_dict(
+                best5nonunique,
+                model_name='BestN',
+                model_metric="bestn_horizontal",
+                point_method="median",
+            ),
+            index=[0],
+        )
+        ensemble_templates = pd.concat(
+            [ensemble_templates, best5_params], axis=0, ignore_index=True
+        )
 
-        # best 3, by SMAPE, RMSE, SPL
+        # best 3 and 5, by SMAPE, RMSE, SPL, SMADE
         bestsmape = ens_temp.nsmallest(1, columns=['smape_weighted'])
         bestrmse = ens_temp.nsmallest(2, columns=['rmse_weighted'])
-        bestmae = ens_temp.nsmallest(3, columns=['spl_weighted'])
-        best3metric = pd.concat([bestsmape, bestrmse, bestmae], axis=0)
-        best3metric = (
-            best3metric.drop_duplicates()
-            .head(3)
-            .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
-        )
+        bestmae = ens_temp.nsmallest(2, columns=['spl_weighted'])
+        bestmade = ens_temp.nsmallest(5, columns=['made_weighted'])
+        best3metric = pd.concat([bestsmape, bestrmse, bestmae, bestmade], axis=0)
+        best3metric = best3metric.drop_duplicates().set_index("ID")[
+            ['Model', 'ModelParameters', 'TransformationParameters']
+        ]
+        best5metric = best3metric.head(5)
+        best3metric = best3metric.head(3)
         n_models = best3metric.shape[0]
         if n_models == 3:
             best3m_params = pd.DataFrame(
@@ -713,7 +781,16 @@ def EnsembleTemplateGenerator(
                 index=[0],
             )
             ensemble_templates = pd.concat([ensemble_templates, best3m_params], axis=0)
-
+        best5m_params = pd.DataFrame(
+            _generate_bestn_dict(
+                best5metric,
+                model_name='BestN',
+                model_metric="mixed_metric",
+                point_method="median",
+            ),
+            index=[0],
+        )
+        ensemble_templates = pd.concat([ensemble_templates, best5m_params], axis=0)
         # best 3, all must be of different model types
         ens_temp = (
             ens_temp.sort_values('Score', ascending=True, na_position='last')
@@ -724,8 +801,10 @@ def EnsembleTemplateGenerator(
         best3unique = ens_temp.nsmallest(3, columns=['Score']).set_index("ID")[
             ['Model', 'ModelParameters', 'TransformationParameters']
         ]
-        n_models = best3unique.shape[0]
-        if n_models == 3:
+        best5unique = ens_temp.nsmallest(5, columns=['Score']).set_index("ID")[
+            ['Model', 'ModelParameters', 'TransformationParameters']
+        ]
+        if best3unique.shape[0] == 3:
             best3u_params = pd.DataFrame(
                 _generate_bestn_dict(
                     best3unique, model_name='BestN', model_metric="best_score_unique"
@@ -734,6 +813,19 @@ def EnsembleTemplateGenerator(
             )
             ensemble_templates = pd.concat(
                 [ensemble_templates, best3u_params], axis=0, ignore_index=True
+            )
+        if best5unique.shape[0] == 5:
+            best5u_params = pd.DataFrame(
+                _generate_bestn_dict(
+                    best5unique,
+                    model_name='BestN',
+                    model_metric="best_score_unique",
+                    point_method="midhinge",
+                ),
+                index=[0],
+            )
+            ensemble_templates = pd.concat(
+                [ensemble_templates, best5u_params], axis=0, ignore_index=True
             )
 
     if 'distance' in ensemble:
@@ -904,13 +996,18 @@ def EnsembleTemplateGenerator(
                 ].set_index("ID")[
                     ['Model', 'ModelParameters', 'TransformationParameters']
                 ]
-                model_weights = random.choice([chosen_ones.to_dict(), None])
+                point_method = random.choice(["mean", "median", "midhinge"])
+                if point_method in ["median", "midhinge"]:
+                    model_weights = None
+                else:
+                    model_weights = chosen_ones.to_dict()
                 best3u_params = pd.DataFrame(
                     _generate_bestn_dict(
                         bestn,
                         model_name='BestN',
                         model_metric=f"subsample_{samp}",
                         model_weights=model_weights,
+                        point_method=point_method,
                     ),
                     index=[0],
                 )
@@ -933,203 +1030,194 @@ def HorizontalTemplateGenerator(
 ):
     """Generate horizontal ensemble templates given a table of results."""
     ensemble_templates = pd.DataFrame()
-    ensy = ['horizontal', 'probabilistic', 'hdist']
-    if any(x in ensemble for x in ensy):
-        if ('horizontal-max' in ensemble) or ('probabilistic-max' in ensemble):
-            mods_per_series = per_series.idxmin()
-            mods = mods_per_series.unique()
-            best5 = (
-                model_results[model_results['ID'].isin(mods.tolist())]
-                .drop_duplicates(
-                    subset=['Model', 'ModelParameters', 'TransformationParameters']
-                )
-                .set_index("ID")[
-                    ['Model', 'ModelParameters', 'TransformationParameters']
-                ]
+    if 'horizontal-max' in ensemble:
+        mods_per_series = per_series.idxmin()
+        mods = mods_per_series.unique()
+        best5 = (
+            model_results[model_results['ID'].isin(mods.tolist())]
+            .drop_duplicates(
+                subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
-            nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
-            metric = 'Score-max' if 'horizontal' in ensemble else 'SPL'
-            best5_params = {
-                'Model': 'Ensemble',
-                'ModelParameters': json.dumps(
-                    {
-                        'model_name': nomen,
-                        'model_count': mods.shape[0],
-                        'model_metric': metric,
-                        'models': best5.to_dict(orient='index'),
-                        'series': mods_per_series.to_dict(),
-                    }
-                ),
-                'TransformationParameters': '{}',
-                'Ensemble': 2,
-            }
-            best5_params = pd.DataFrame(best5_params, index=[0])
-            ensemble_templates = pd.concat(
-                [ensemble_templates, best5_params], axis=0, ignore_index=True
+            .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+        )
+        nomen = 'Horizontal'
+        metric = 'Score-max'
+        best5_params = {
+            'Model': 'Ensemble',
+            'ModelParameters': json.dumps(
+                {
+                    'model_name': nomen,
+                    'model_count': mods.shape[0],
+                    'model_metric': metric,
+                    'models': best5.to_dict(orient='index'),
+                    'series': mods_per_series.to_dict(),
+                }
+            ),
+            'TransformationParameters': '{}',
+            'Ensemble': 2,
+        }
+        best5_params = pd.DataFrame(best5_params, index=[0])
+        ensemble_templates = pd.concat(
+            [ensemble_templates, best5_params], axis=0, ignore_index=True
+        )
+    if 'hdist' in ensemble and not subset_flag:
+        mods_per_series = per_series.idxmin()
+        mods_per_series2 = per_series2.idxmin()
+        mods = pd.concat([mods_per_series, mods_per_series2]).unique()
+        best5 = (
+            model_results[model_results['ID'].isin(mods.tolist())]
+            .drop_duplicates(
+                subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
-        if 'hdist' in ensemble and not subset_flag:
-            mods_per_series = per_series.idxmin()
-            mods_per_series2 = per_series2.idxmin()
-            mods = pd.concat([mods_per_series, mods_per_series2]).unique()
-            best5 = (
-                model_results[model_results['ID'].isin(mods.tolist())]
-                .drop_duplicates(
-                    subset=['Model', 'ModelParameters', 'TransformationParameters']
-                )
-                .set_index("ID")[
-                    ['Model', 'ModelParameters', 'TransformationParameters']
-                ]
+            .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+        )
+        nomen = 'hdist'
+        best5_params = {
+            'Model': 'Ensemble',
+            'ModelParameters': json.dumps(
+                {
+                    'model_name': nomen,
+                    'model_count': mods.shape[0],
+                    'models': best5.to_dict(orient='index'),
+                    'dis_frac': 0.3,
+                    'series1': mods_per_series.to_dict(),
+                    'series2': mods_per_series2.to_dict(),
+                }
+            ),
+            'TransformationParameters': '{}',
+            'Ensemble': 2,
+        }
+        best5_params = pd.DataFrame(best5_params, index=[0])
+        ensemble_templates = pd.concat(
+            [ensemble_templates, best5_params], axis=0, ignore_index=True
+        )
+    if 'horizontal' in ensemble or 'horizontal-max' in ensemble:
+        # first generate lists of models by ID that are in shared and no_shared
+        no_shared_select = model_results['Model'].isin(no_shared)
+        shared_mod_lst = model_results[~no_shared_select]['ID'].tolist()
+        no_shared_mod_lst = model_results[no_shared_select]['ID'].tolist()
+        lowest_score_mod = [model_results.iloc[model_results['Score'].idxmin()]['ID']]
+        per_series[per_series.index.isin(shared_mod_lst)]
+        # remove those where idxmin is in no_shared
+        shared_maxes = per_series.idxmin().isin(shared_mod_lst)
+        shr_mx_cols = shared_maxes[shared_maxes].index
+        per_series_shareds = per_series.filter(shr_mx_cols, axis=1)
+        # select best n shared models (NEEDS improvement)
+        n_md = 5
+        use_shared_lst = (
+            per_series_shareds.median(axis=1).nsmallest(n_md).index.tolist()
+        )
+        # combine all of the above as allowed mods
+        allowed_list = no_shared_mod_lst + lowest_score_mod + use_shared_lst
+        per_series_filter = per_series[per_series.index.isin(allowed_list)]
+        # first select a few of the best shared models
+        # Option A: Best overall per model type (by different metrics?)
+        # Option B: Best per different clusters...
+        # Rank position in score for EACH series
+        # Lowest median ranking
+        # Lowest Quartile 1 of rankings
+        # Normalize and then take Min, Median, or IQ1
+        # then choose min from series of these + no_shared
+        # make sure no models are included that don't match to any series
+        # ENSEMBLE and NO_SHARED (it could be or it could not be)
+        # need to TEST cases where all columns are either shared or no_shared!
+        # concern: choose lots of models, slower to run initial
+        mods_per_series = per_series_filter.idxmin()
+        mods = mods_per_series.unique()
+        best5 = (
+            model_results[model_results['ID'].isin(mods.tolist())]
+            .drop_duplicates(
+                subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
-            nomen = 'hdist'
-            best5_params = {
-                'Model': 'Ensemble',
-                'ModelParameters': json.dumps(
-                    {
-                        'model_name': nomen,
-                        'model_count': mods.shape[0],
-                        'models': best5.to_dict(orient='index'),
-                        'dis_frac': 0.3,
-                        'series1': mods_per_series.to_dict(),
-                        'series2': mods_per_series2.to_dict(),
-                    }
-                ),
-                'TransformationParameters': '{}',
-                'Ensemble': 2,
-            }
-            best5_params = pd.DataFrame(best5_params, index=[0])
-            ensemble_templates = pd.concat(
-                [ensemble_templates, best5_params], axis=0, ignore_index=True
+            .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+        )
+        nomen = 'Horizontal'
+        metric = 'Score'
+        best5_params = {
+            'Model': 'Ensemble',
+            'ModelParameters': json.dumps(
+                {
+                    'model_name': nomen,
+                    'model_count': mods.shape[0],
+                    'model_metric': metric,
+                    'models': best5.to_dict(orient='index'),
+                    'series': mods_per_series.to_dict(),
+                }
+            ),
+            'TransformationParameters': '{}',
+            'Ensemble': 2,
+        }
+        best5_params = pd.DataFrame(best5_params, index=[0])
+        ensemble_templates = pd.concat(
+            [ensemble_templates, best5_params], axis=0, ignore_index=True
+        )
+    if 'horizontal-min' in ensemble:
+        mods = pd.Series()
+        per_series_des = per_series.copy()
+        n_models = 15
+        # choose best per series, remove those series, then choose next best
+        for x in range(n_models):
+            n_dep = x + 1
+            n_dep = (
+                n_dep if per_series_des.shape[0] > n_dep else per_series_des.shape[0]
             )
-        if ('horizontal' in ensemble) or ('probabilistic' in ensemble):
-            # first generate lists of models by ID that are in shared and no_shared
-            no_shared_select = model_results['Model'].isin(no_shared)
-            shared_mod_lst = model_results[~no_shared_select]['ID'].tolist()
-            no_shared_mod_lst = model_results[no_shared_select]['ID'].tolist()
-            lowest_score_mod = [
-                model_results.iloc[model_results['Score'].idxmin()]['ID']
-            ]
-            per_series[per_series.index.isin(shared_mod_lst)]
-            # remove those where idxmin is in no_shared
-            shared_maxes = per_series.idxmin().isin(shared_mod_lst)
-            shr_mx_cols = shared_maxes[shared_maxes].index
-            per_series_shareds = per_series.filter(shr_mx_cols, axis=1)
-            # select best n shared models (NEEDS improvement)
-            n_md = 5
-            use_shared_lst = (
-                per_series_shareds.median(axis=1).nsmallest(n_md).index.tolist()
-            )
-            # combine all of the above as allowed mods
-            allowed_list = no_shared_mod_lst + lowest_score_mod + use_shared_lst
-            per_series_filter = per_series[per_series.index.isin(allowed_list)]
-            # first select a few of the best shared models
-            # Option A: Best overall per model type (by different metrics?)
-            # Option B: Best per different clusters...
-            # Rank position in score for EACH series
-            # Lowest median ranking
-            # Lowest Quartile 1 of rankings
-            # Normalize and then take Min, Median, or IQ1
-            # then choose min from series of these + no_shared
-            # make sure no models are included that don't match to any series
-            # ENSEMBLE and NO_SHARED (it could be or it could not be)
-            # need to TEST cases where all columns are either shared or no_shared!
-            # concern: choose lots of models, slower to run initial
-            mods_per_series = per_series_filter.idxmin()
-            mods = mods_per_series.unique()
-            best5 = (
-                model_results[model_results['ID'].isin(mods.tolist())]
-                .drop_duplicates(
-                    subset=['Model', 'ModelParameters', 'TransformationParameters']
-                )
-                .set_index("ID")[
-                    ['Model', 'ModelParameters', 'TransformationParameters']
-                ]
-            )
-            nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
-            metric = 'Score' if 'horizontal' in ensemble else 'SPL'
-            best5_params = {
-                'Model': 'Ensemble',
-                'ModelParameters': json.dumps(
-                    {
-                        'model_name': nomen,
-                        'model_count': mods.shape[0],
-                        'model_metric': metric,
-                        'models': best5.to_dict(orient='index'),
-                        'series': mods_per_series.to_dict(),
-                    }
-                ),
-                'TransformationParameters': '{}',
-                'Ensemble': 2,
-            }
-            best5_params = pd.DataFrame(best5_params, index=[0])
-            ensemble_templates = pd.concat(
-                [ensemble_templates, best5_params], axis=0, ignore_index=True
-            )
-        if ('horizontal-min' in ensemble) or ('probabilistic-min' in ensemble):
-            mods = pd.Series()
-            per_series_des = per_series.copy()
-            n_models = 15
-            # choose best per series, remove those series, then choose next best
-            for x in range(n_models):
-                n_dep = x + 1
-                n_dep = (
-                    n_dep
-                    if per_series_des.shape[0] > n_dep
-                    else per_series_des.shape[0]
-                )
-                models_pos = []
-                tr_df = pd.DataFrame()
-                for _ in range(n_dep):
-                    cr_df = pd.DataFrame(per_series_des.idxmin()).transpose()
-                    tr_df = pd.concat([tr_df, cr_df], axis=0)
-                    models_pos.extend(per_series_des.idxmin().tolist())
-                    per_series_des[per_series_des == per_series_des.min()] = np.nan
-                cur_mods = pd.Series(models_pos).value_counts()
-                cur_mods = cur_mods.sort_values(ascending=False).head(1)
-                mods = mods.combine(cur_mods, max, fill_value=0)
-                rm_cols = tr_df[tr_df.isin(mods.index.tolist())]
-                rm_cols = rm_cols.dropna(how='all', axis=1).columns
+            models_pos = []
+            tr_df = pd.DataFrame()
+            for _ in range(n_dep):
+                cr_df = pd.DataFrame(per_series_des.idxmin()).transpose()
+                tr_df = pd.concat([tr_df, cr_df], axis=0)
+                models_pos.extend(per_series_des.idxmin().tolist())
+                per_series_des[per_series_des == per_series_des.min()] = np.nan
+            cur_mods = pd.Series(models_pos).value_counts()
+            cur_mods = cur_mods.sort_values(ascending=False).head(1)
+            mods = mods.combine(cur_mods, max, fill_value=0)
+            rm_cols = tr_df[tr_df.isin(mods.index.tolist())]
+            rm_cols = rm_cols.dropna(how='all', axis=1).columns
+            per_series_des = per_series.copy().drop(mods.index, axis=0)
+            per_series_des = per_series_des.drop(rm_cols, axis=1)
+            if per_series_des.shape[1] == 0:
                 per_series_des = per_series.copy().drop(mods.index, axis=0)
-                per_series_des = per_series_des.drop(rm_cols, axis=1)
-                if per_series_des.shape[1] == 0:
-                    per_series_des = per_series.copy().drop(mods.index, axis=0)
 
-            mods_per_series = per_series.loc[mods.index].idxmin()
-            best5 = (
-                model_results[
-                    model_results['ID'].isin(mods_per_series.unique().tolist())
-                ]
-                .drop_duplicates(
-                    subset=['Model', 'ModelParameters', 'TransformationParameters']
-                )
-                .set_index("ID")[
-                    ['Model', 'ModelParameters', 'TransformationParameters']
-                ]
+        mods_per_series = per_series.loc[mods.index].idxmin()
+        best5 = (
+            model_results[model_results['ID'].isin(mods_per_series.unique().tolist())]
+            .drop_duplicates(
+                subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
-            nomen = 'Horizontal' if 'horizontal' in ensemble else 'Probabilistic'
-            metric = 'Score-min' if 'horizontal' in ensemble else 'SPL'
-            best5_params = {
-                'Model': 'Ensemble',
-                'ModelParameters': json.dumps(
-                    {
-                        'model_name': nomen,
-                        'model_count': mods_per_series.unique().shape[0],
-                        'model_metric': metric,
-                        'models': best5.to_dict(orient='index'),
-                        'series': mods_per_series.to_dict(),
-                    }
-                ),
-                'TransformationParameters': '{}',
-                'Ensemble': 2,
-            }
-            best5_params = pd.DataFrame(best5_params, index=[0])
-            ensemble_templates = pd.concat(
-                [ensemble_templates, best5_params], axis=0, ignore_index=True
-            )
+            .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
+        )
+        nomen = 'Horizontal'
+        metric = 'Score-min'
+        best5_params = {
+            'Model': 'Ensemble',
+            'ModelParameters': json.dumps(
+                {
+                    'model_name': nomen,
+                    'model_count': mods_per_series.unique().shape[0],
+                    'model_metric': metric,
+                    'models': best5.to_dict(orient='index'),
+                    'series': mods_per_series.to_dict(),
+                }
+            ),
+            'TransformationParameters': '{}',
+            'Ensemble': 2,
+        }
+        best5_params = pd.DataFrame(best5_params, index=[0])
+        ensemble_templates = pd.concat(
+            [ensemble_templates, best5_params], axis=0, ignore_index=True
+        )
     return ensemble_templates
 
 
 def generate_mosaic_template(
-    initial_results, full_mae_ids, num_validations, col_names, full_mae_errors, smoothing_window=None, **kwargs
+    initial_results,
+    full_mae_ids,
+    num_validations,
+    col_names,
+    full_mae_errors,
+    smoothing_window=None,
+    metric_name="MAE",
+    **kwargs,
 ):
     """Generate an ensemble template from results."""
     total_vals = num_validations + 1
@@ -1159,7 +1247,9 @@ def generate_mosaic_template(
     if smoothing_window is not None:
         from scipy.ndimage import uniform_filter1d
 
-        errors_array = uniform_filter1d(np.nan_to_num(errors_array), size=smoothing_window, axis=1)
+        errors_array = uniform_filter1d(
+            np.nan_to_num(errors_array), size=smoothing_window, axis=1
+        )
         # name = "Mosaic-window"
     slice_points = np.arange(0, errors_array.shape[0], step=total_vals)
     id_sliced = id_array[slice_points]
@@ -1179,7 +1269,8 @@ def generate_mosaic_template(
             {
                 'model_name': name,
                 'model_count': used_models_results.shape[0],
-                'model_metric': "MAE",
+                'smoothing_window': smoothing_window,
+                'model_metric': metric_name,
                 'models': used_models_results.to_dict(orient='index'),
                 'series': model_id_array.to_dict(orient='dict'),
             }
@@ -1323,7 +1414,7 @@ def MosaicEnsemble(
     l_forecast_df = melted.pivot(
         values="lower_forecast", columns="series_id", index="forecast_period"
     )
-    l_forecast_df.index = sample_idx.index = sample_idx
+    l_forecast_df.index = sample_idx
     # make sure columns align to original
     forecast_df = forecast_df.reindex(columns=org_idx)
     u_forecast_df = u_forecast_df.reindex(columns=org_idx)
@@ -1337,8 +1428,8 @@ def MosaicEnsemble(
     ens_result = PredictionObject(
         model_name="Ensemble",
         forecast_length=len(sample_idx),
-        forecast_index=forecast_df.index,
-        forecast_columns=forecast_df.columns,
+        forecast_index=sample_idx,
+        forecast_columns=org_idx,
         lower_forecast=l_forecast_df,
         forecast=forecast_df,
         upper_forecast=u_forecast_df,

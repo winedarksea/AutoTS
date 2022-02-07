@@ -353,7 +353,7 @@ class SeasonalNaive(ModelObject):
         verbose: int = 0,
         lag_1: int = 7,
         lag_2: int = None,
-        method: str = 'LastValue',
+        method: str = 'lastvalue',
         **kwargs
     ):
         ModelObject.__init__(
@@ -371,7 +371,7 @@ class SeasonalNaive(ModelObject):
             self.lag_2 = abs(int(self.lag_2))
             if str(self.lag_2) == str(self.lag_1):
                 self.lag_2 = 1
-        self.method = method
+        self.method = str(method).lower()
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -384,13 +384,13 @@ class SeasonalNaive(ModelObject):
 
         df_length = self.train_shape[0]
         self.tile_values_lag_2 = None
-        if self.method in ['Mean', 'Median']:
+        if self.method in ['mean', 'median']:
             tile_index = np.tile(
                 np.arange(self.lag_1), int(np.ceil(df_length / self.lag_1))
             )
             tile_index = tile_index[len(tile_index) - (df_length) :]
             df.index = tile_index
-            if self.method == "Median":
+            if self.method == "median":
                 self.tile_values_lag_1 = df.groupby(level=0, axis=0).median()
             else:
                 self.tile_values_lag_1 = df.groupby(level=0, axis=0).mean()
@@ -403,12 +403,12 @@ class SeasonalNaive(ModelObject):
                     )
                     tile_index = tile_index[len(tile_index) - (df_length) :]
                     df.index = tile_index
-                    if self.method == "Median":
+                    if self.method == "median":
                         self.tile_values_lag_2 = df.groupby(level=0, axis=0).median()
                     else:
                         self.tile_values_lag_2 = df.groupby(level=0, axis=0).mean()
         else:
-            self.method == 'LastValue'
+            self.method == 'lastvalue'
             self.tile_values_lag_1 = df.tail(self.lag_1)
             if str(self.lag_2).isdigit():
                 self.tile_values_lag_2 = df.tail(self.lag_2)
@@ -493,7 +493,7 @@ class SeasonalNaive(ModelObject):
         if str(lag_2_choice) == str(lag_1_choice):
             lag_2_choice = 1
         method_choice = random.choices(
-            ['Mean', 'Median', 'LastValue'], [0.4, 0.2, 0.4]
+            ['mean', 'median', 'lastvalue'], [0.4, 0.2, 0.4]
         )[0]
         return {'method': method_choice, 'lag_1': lag_1_choice, 'lag_2': lag_2_choice}
 
@@ -1053,6 +1053,7 @@ def looped_motif(
     k=10,
     point_method="mean",
     prediction_interval=0.9,
+    return_result_windows=False,
 ):
     """inner function for Motif model."""
     if r_arr is None:
@@ -1094,7 +1095,10 @@ def looped_motif(
     upper_forecast.name = name
     lower_forecast = pd.Series(lower_forecast)
     lower_forecast.name = name
-    return (forecast, upper_forecast, lower_forecast)
+    if return_result_windows:
+        return (forecast, upper_forecast, lower_forecast, results)
+    else:
+        return (forecast, upper_forecast, lower_forecast)
 
 
 class Motif(ModelObject):
@@ -1113,6 +1117,7 @@ class Motif(ModelObject):
         k (int): number of closest neighbors to consider
         max_windows (int): max number of windows to consider (a speed/accuracy tradeoff)
         multivariate (bool): if True, utilizes matches from all provided series for each series forecast. Else just own history of series.
+        return_result_windows (bool): if True, result windows (all motifs gathered for forecast) will be saved in dict to result_windows attribute
     """
 
     def __init__(
@@ -1130,6 +1135,7 @@ class Motif(ModelObject):
         k: int = 10,
         max_windows: int = 5000,
         multivariate: bool = False,
+        return_result_windows: bool = False,
         **kwargs
     ):
         ModelObject.__init__(
@@ -1148,6 +1154,7 @@ class Motif(ModelObject):
         self.k = k
         self.max_windows = max_windows
         self.multivariate = multivariate
+        self.return_result_windows = return_result_windows
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -1215,6 +1222,7 @@ class Motif(ModelObject):
                     k=self.k,
                     point_method=self.point_method,
                     prediction_interval=self.prediction_interval,
+                    return_result_windows=self.return_result_windows,
                 )
                 for i in range(self.df.shape[1])
             )
@@ -1232,15 +1240,19 @@ class Motif(ModelObject):
                         k=self.k,
                         point_method=self.point_method,
                         prediction_interval=self.prediction_interval,
+                        return_result_windows=self.return_result_windows,
                     )
                 )
         complete = list(map(list, zip(*df_list)))
         forecast = pd.concat(complete[0], axis=1)
         forecast.index = test_index
-        lower_forecast = pd.concat(complete[1], axis=1)
+        # these were swapped in an earlier version, huge mistake!
+        lower_forecast = pd.concat(complete[2], axis=1)
         lower_forecast.index = test_index
-        upper_forecast = pd.concat(complete[2], axis=1)
+        upper_forecast = pd.concat(complete[1], axis=1)
         upper_forecast.index = test_index
+        if self.return_result_windows:
+            self.result_windows = dict(zip(forecast.columns, complete[3]))
         if just_point_forecast:
             return forecast
         else:
@@ -1287,15 +1299,23 @@ class Motif(ModelObject):
             'sqeuclidean',
             'yule',
         ]
+        if method == "event_risk":
+            k_choice = random.choices(
+                [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
+            )[0]
+        else:
+            k_choice = random.choices(
+                [3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0]
         return {
-            "window": random.choices([5, 7, 10, 15, 30], [0.01, 0.1, 0.5, 0.1, 0.1])[0],
+            "window": random.choices(
+                [3, 5, 7, 10, 14, 28, 60], [0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01]
+            )[0],
             "point_method": random.choices(
                 ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
             )[0],
             "distance_metric": random.choice(metric_list),
-            "k": random.choices(
-                [3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
-            )[0],
+            "k": k_choice,
             "max_windows": random.choices([None, 1000, 10000], [0.01, 0.1, 0.8])[0],
         }
 
@@ -1865,7 +1885,7 @@ class SectionalMotif(ModelObject):
             q2 = np.nanquantile(results, q=0.75, axis=0)
             forecast = (q1 + q2) / 2
 
-        pred_int = (1 - self.prediction_interval) / 2
+        pred_int = round((1 - self.prediction_interval) / 2, 5)
         upper_forecast = np.nanquantile(results, q=(1 - pred_int), axis=0)
         lower_forecast = np.nanquantile(results, q=pred_int, axis=0)
 
@@ -1876,6 +1896,7 @@ class SectionalMotif(ModelObject):
         upper_forecast = pd.DataFrame(
             upper_forecast, index=test_index, columns=self.column_names
         )
+        self.result_windows = results
         if just_point_forecast:
             return forecast
         else:
@@ -1923,6 +1944,14 @@ class SectionalMotif(ModelObject):
             'yule',
             "nan_euclidean",
         ]
+        if method == "event_risk":
+            k_choice = random.choices(
+                [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
+            )[0]
+        else:
+            k_choice = random.choices(
+                [1, 3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0]
         if "regressor" in method:
             regression_choice = "User"
         else:
@@ -1936,9 +1965,7 @@ class SectionalMotif(ModelObject):
             )[0],
             "distance_metric": random.choice(metric_list),
             "include_differenced": random.choices([True, False], [0.9, 0.1])[0],
-            "k": random.choices(
-                [1, 3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
-            )[0],
+            "k": k_choice,
             "stride_size": random.choices([1, 2, 5, 10], [0.6, 0.1, 0.1, 0.1])[0],
             'regression_type': regression_choice,
         }

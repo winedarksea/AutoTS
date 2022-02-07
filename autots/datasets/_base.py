@@ -1,11 +1,10 @@
 """Loading example datasets."""
 from os.path import dirname, join
+import time
 import datetime
 import io
-import requests
 import numpy as np
 import pandas as pd
-import time
 
 
 def load_daily(long: bool = True):
@@ -212,9 +211,11 @@ def load_weekdays(long: bool = False, categorical: bool = True, periods: int = 1
 def load_live_daily(
     long: bool = False,
     fred_key: str = None,
-    fred_series: list = ["DGS10", "T5YIE", "SP500", "DCOILWTICO", "DEXUSEU"],
+    fred_series=["DGS10", "T5YIE", "SP500", "DCOILWTICO", "DEXUSEU", "WPU0911"],
+    observation_start: str = "2000-01-01",
     tickers: list = ["MSFT"],
-    trends_list: list = ["forecasting", "cycling", "cpu", "microsoft"],
+    trends_list: list = ["forecasting", "cycling", "microsoft"],
+    trends_geo: str = "US",
     weather_data_types: list = ["AWND", "WSF2", "TAVG"],
     weather_stations: list = ["USW00094846", "USW00014925"],
     weather_years: int = 10,
@@ -223,31 +224,58 @@ def load_live_daily(
     london_air_days: int = 180,
     earthquake_days: int = 180,
     earthquake_min_magnitude: int = 5,
+    gsa_key: str = None,  # https://open.gsa.gov/api/dap/
+    gov_domain_list=['nasa.gov'],
+    gov_domain_limit: int = 600,
+    weather_event_types=["%28Z%29+Winter+Weather", "%28Z%29+Winter+Storm"],
+    timeout: float = 300.05,
+    sleep_seconds: int = 1,
 ):
-    """Generates a dataframe of data up to the present day.
+    """Generates a dataframe of data up to the present day. Requires active internet connection.
+    Pass None instead of specification lists to exclude a data source.
 
     Args:
         long (bool): whether to return in long format or wide
         fred_key (str): https://fred.stlouisfed.org/docs/api/api_key.html
         fred_series (list): list of FRED series IDs. This requires fredapi package
+        observation_start (datetime): earliest day to retrieve, passed to Fred.get_series and yfinance.history
         tickers (list): list of stock tickers, requires yfinance
         trends_list (list): list of search keywords, requires pytrends. None to skip.
         weather_data_types (list): from NCEI NOAA api data types, GHCN Daily Weather Elements
             PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG
         weather_stations (list): from NCEI NOAA api station ids. Pass empty list to skip.
         london_air_stations (list): londonair.org.uk source station IDs. Pass empty list to skip.
-        london_species (str): what measurement to pull from London Air. Not all stations have all metrics.\
+        london_species (str): what measurement to pull from London Air. Not all stations have all metrics.
         earthquake_min_magnitude (int): smallest earthquake magnitude to pull from earthquake.usgs.gov. Set None to skip this.
+        gsa_key (str): api key from https://open.gsa.gov/api/dap/
+        gov_domain_list (list): dist of government run domains to get traffic data for. Can be very slow, so fewer is better.
+            some examples: ['usps.com', 'ncbi.nlm.nih.gov', 'cdc.gov', 'weather.gov', 'irs.gov', "usajobs.gov", "studentaid.gov", 'nasa.gov', "uk.usembassy.gov", "tsunami.gov"]
+        gov_domain_limit (int): max number of records. Smaller will be faster. Max is currently 10000.
+        weather_event_types (list): list of html encoded severe weather event types https://www1.ncdc.noaa.gov/pub/data/swdi/stormevents/csvfiles/Storm-Data-Export-Format.pdf
+        timeout (float): used by some queries
+        sleep_seconds (int): increasing this may reduce probability of server download failures
     """
     dataset_lists = []
     current_date = datetime.datetime.utcnow()
+    try:
+        import requests
+
+        s = requests.Session()
+    except Exception as e:
+        print(f"requests Session creation failed {repr(e)}")
 
     try:
-        if fred_key is not None:
+        if fred_key is not None and fred_series is not None:
             from fredapi import Fred  # noqa
             from autots.datasets.fred import get_fred_data
 
-            fred_df = get_fred_data(fred_key, fred_series, long=False)
+            fred_df = get_fred_data(
+                fred_key,
+                fred_series,
+                long=False,
+                observation_start=observation_start,
+                sleep_seconds=sleep_seconds,
+            )
             fred_df.index = fred_df.index.tz_localize(None)
             dataset_lists.append(fred_df)
     except ModuleNotFoundError:
@@ -255,67 +283,74 @@ def load_live_daily(
     except Exception as e:
         print(f"FRED data failed: {repr(e)}")
 
-    for ticker in tickers:
-        try:
-            import yfinance as yf
-
-            msft = yf.Ticker(ticker)
-            # get historical market data
-            msft_hist = msft.history(period="max")
-            msft_hist = msft_hist.rename(columns=lambda x: x.lower().replace(" ", "_"))
-            msft_hist = msft_hist.rename(columns=lambda x: ticker.lower() + "_" + x)
+    if tickers is not None:
+        for ticker in tickers:
             try:
-                msft_hist.index = msft_hist.index.tz_localize(None)
-            except Exception:
-                pass
-            dataset_lists.append(msft_hist)
-            time.sleep(1)
-        except ModuleNotFoundError:
-            print("You need to: pip install yfinance")
-        except Exception as e:
-            print(f"yfinance data failed: {repr(e)}")
+                import yfinance as yf
+
+                msft = yf.Ticker(ticker)
+                # get historical market data
+                msft_hist = msft.history(start=observation_start)
+                msft_hist = msft_hist.rename(
+                    columns=lambda x: x.lower().replace(" ", "_")
+                )
+                msft_hist = msft_hist.rename(columns=lambda x: ticker.lower() + "_" + x)
+                try:
+                    msft_hist.index = msft_hist.index.tz_localize(None)
+                except Exception:
+                    pass
+                dataset_lists.append(msft_hist)
+                time.sleep(sleep_seconds)
+            except ModuleNotFoundError:
+                print("You need to: pip install yfinance")
+            except Exception as e:
+                print(f"yfinance data failed: {repr(e)}")
 
     str_end_time = current_date.strftime("%Y-%m-%d")
     start_date = (current_date - datetime.timedelta(days=360 * weather_years)).strftime(
         "%Y-%m-%d"
     )
-    for wstation in weather_stations:
-        try:
-            wbase = "https://www.ncei.noaa.gov/access/services/data/v1/?dataset=daily-summaries"
-            wargs = f"&dataTypes={','.join(weather_data_types)}&stations={wstation}"
-            wargs = (
-                wargs
-                + f"&startDate={start_date}&endDate={str_end_time}&boundingBox=90,-180,-90,180&units=standard&format=csv"
-            )
-            wdf = pd.read_csv(wbase + wargs)
-            wdf['DATE'] = pd.to_datetime(wdf['DATE'], infer_datetime_format=True)
-            wdf = wdf.set_index('DATE').drop(columns=['STATION'])
-            wdf.rename(columns=lambda x: wstation + "_" + x, inplace=True)
-            dataset_lists.append(wdf)
-            time.sleep(1)
-        except Exception as e:
-            print(f"weather data failed: {repr(e)}")
+    if weather_stations is not None:
+        for wstation in weather_stations:
+            try:
+                wbase = "https://www.ncei.noaa.gov/access/services/data/v1/?dataset=daily-summaries"
+                wargs = f"&dataTypes={','.join(weather_data_types)}&stations={wstation}"
+                wargs = (
+                    wargs
+                    + f"&startDate={start_date}&endDate={str_end_time}&boundingBox=90,-180,-90,180&units=standard&format=csv"
+                )
+                wdf = pd.read_csv(
+                    io.StringIO(s.get(wbase + wargs, timeout=timeout).text)
+                )
+                wdf['DATE'] = pd.to_datetime(wdf['DATE'], infer_datetime_format=True)
+                wdf = wdf.set_index('DATE').drop(columns=['STATION'])
+                wdf.rename(columns=lambda x: wstation + "_" + x, inplace=True)
+                dataset_lists.append(wdf)
+                time.sleep(sleep_seconds)
+            except Exception as e:
+                print(f"weather data failed: {repr(e)}")
 
     str_end_time = current_date.strftime("%d-%b-%Y")
     start_date = (current_date - datetime.timedelta(days=london_air_days)).strftime(
         "%d-%b-%Y"
     )
-    for asite in london_air_stations:
-        try:
-            # abase = "http://api.erg.ic.ac.uk/AirQuality/Data/Site/Wide/"
-            # aargs = "SiteCode=CT8/StartDate=2021-07-01/EndDate=2021-07-30/csv"
-            abase = 'https://www.londonair.org.uk/london/asp/downloadsite.asp'
-            aargs = f"?site={asite}&species1={london_air_species}m&species2=&species3=&species4=&species5=&species6=&start={start_date}&end={str_end_time}&res=6&period=daily&units=ugm3"
-            s = requests.get(abase + aargs).content
-            adf = pd.read_csv(io.StringIO(s.decode('utf-8')))
-            acol = adf['Site'].iloc[0] + "_" + adf['Species'].iloc[0]
-            adf['Datetime'] = pd.to_datetime(adf['ReadingDateTime'], dayfirst=True)
-            adf[acol] = adf['Value']
-            dataset_lists.append(adf[['Datetime', acol]].set_index("Datetime"))
-            time.sleep(1)
-            # "/Data/Traffic/Site/SiteCode={SiteCode}/StartDate={StartDate}/EndDate={EndDate}/Json"
-        except Exception as e:
-            print(f"London Air data failed: {repr(e)}")
+    if london_air_stations is not None:
+        for asite in london_air_stations:
+            try:
+                # abase = "http://api.erg.ic.ac.uk/AirQuality/Data/Site/Wide/"
+                # aargs = "SiteCode=CT8/StartDate=2021-07-01/EndDate=2021-07-30/csv"
+                abase = 'https://www.londonair.org.uk/london/asp/downloadsite.asp'
+                aargs = f"?site={asite}&species1={london_air_species}m&species2=&species3=&species4=&species5=&species6=&start={start_date}&end={str_end_time}&res=6&period=daily&units=ugm3"
+                data = s.get(abase + aargs, timeout=timeout).content
+                adf = pd.read_csv(io.StringIO(data.decode('utf-8')))
+                acol = adf['Site'].iloc[0] + "_" + adf['Species'].iloc[0]
+                adf['Datetime'] = pd.to_datetime(adf['ReadingDateTime'], dayfirst=True)
+                adf[acol] = adf['Value']
+                dataset_lists.append(adf[['Datetime', acol]].set_index("Datetime"))
+                time.sleep(sleep_seconds)
+                # "/Data/Traffic/Site/SiteCode={SiteCode}/StartDate={StartDate}/EndDate={EndDate}/Json"
+            except Exception as e:
+                print(f"London Air data failed: {repr(e)}")
 
     if earthquake_min_magnitude is not None:
         try:
@@ -346,13 +381,66 @@ def load_live_daily(
         except Exception as e:
             print(f"earthquake data failed: {repr(e)}")
 
+    if gov_domain_list is not None:
+        try:
+            # print because this one is slow, and point people at that fact
+            if gsa_key is None:
+                gsa_key = "DEMO_KEY2"
+            # only run 1 if demo_key1
+            if "DEMO_KEY" in gsa_key:
+                gov_domain_list = gov_domain_list[0:1]
+            for domain in gov_domain_list:
+                report = "domain"  # site, domain, download, second-level-domain
+                url = f"https://api.gsa.gov/analytics/dap/v1.1/domain/{domain}/reports/{report}/data?api_key={gsa_key}&limit={gov_domain_limit}&after={observation_start}"
+                data = s.get(url, timeout=timeout)
+                gdf = pd.read_json(data.text, orient="records")
+                gdf['date'] = pd.to_datetime(gdf['date'])
+                # essentially duplicates brought by agency and null agency
+                gresult = gdf.groupby('date')['visits'].first()
+                gresult.name = domain
+                dataset_lists.append(gresult.to_frame())
+                time.sleep(sleep_seconds)
+        except Exception as e:
+            print(f"analytics.gov data failed with {repr(e)}")
+
+    if weather_event_types is not None:
+        try:
+            for event_type in weather_event_types:
+                # appears to have a fixed max of 500 records
+                url = f"https://www.ncdc.noaa.gov/stormevents/csv?eventType={event_type}&beginDate_mm=01&beginDate_dd=01&beginDate_yyyy=2000&endDate_mm=09&endDate_dd=30&endDate_yyyy=9999&hailfilter=0.00&tornfilter=2&windfilter=000&sort=DN&statefips=-999%2CALL"
+                csv_in = io.StringIO(s.get(url, timeout=timeout).text)
+                try:
+                    # new in 1.3.0 of pandas
+                    df = pd.read_csv(csv_in, low_memory=False, on_bad_lines='skip')
+                except Exception:
+                    df = pd.read_csv(csv_in, low_memory=False, error_bad_lines=False)
+                df['BEGIN_DATE'] = pd.to_datetime(
+                    df['BEGIN_DATE'], infer_datetime_format=True
+                )
+                df['END_DATE'] = pd.to_datetime(
+                    df['END_DATE'], infer_datetime_format=True
+                )
+                df['day'] = df.apply(
+                    lambda row: pd.date_range(
+                        row["BEGIN_DATE"], row['END_DATE'], freq='D'
+                    ),
+                    axis=1,
+                )
+                df = df.explode('day')
+                swresult = df.groupby(["day"])["EVENT_ID"].count()
+                swresult.name = "_".join(event_type.split("+")[1:]) + "_Events"
+                dataset_lists.append(swresult.to_frame())
+                time.sleep(sleep_seconds)
+        except Exception as e:
+            print(f"Severe Weather data failed with {repr(e)}")
+
     if trends_list is not None:
         try:
             from pytrends.request import TrendReq
 
             pytrends = TrendReq(hl="en-US", tz=360)
-            # pytrends.build_payload(kw_list, cat=0, timeframe='today 5-y', geo='', gprop='')
-            pytrends.build_payload(trends_list, timeframe="all")
+            pytrends.build_payload(trends_list, geo=trends_geo)
+            # pytrends.build_payload(trends_list, timeframe="all")  # 'today 12-m'
             gtrends = pytrends.interest_over_time()
             gtrends.index = gtrends.index.tz_localize(None)
             gtrends.drop(columns="isPartial", inplace=True, errors="ignore")

@@ -45,6 +45,7 @@ from autots.models.statsmodels import (
     VARMAX,
     Theta,
     ARDL,
+    DynamicFactorMQ,
 )
 
 
@@ -137,7 +138,7 @@ def ModelMonster(
         )
         return model
 
-    elif model == 'FBProphet':
+    elif model in ['FBProphet', "Prophet"]:
         from autots.models.prophet import FBProphet
 
         model = FBProphet(
@@ -263,31 +264,6 @@ def ModelMonster(
             **parameters,
         )
 
-        return model
-
-    elif model == 'TSFreshRegressor':
-        from autots.models.tsfresh import TSFreshRegressor
-
-        if parameters == {}:
-            model = TSFreshRegressor(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-                **parameters,
-            )
-        else:
-            model = TSFreshRegressor(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-                max_timeshift=parameters['max_timeshift'],
-                regression_model=parameters['regression_model'],
-                feature_selection=parameters['feature_selection'],
-            )
         return model
 
     elif model == 'MotifSimulation':
@@ -478,6 +454,27 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
+    elif model == 'NeuralProphet':
+        from autots.models.prophet import NeuralProphet
+
+        return NeuralProphet(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=1,
+            **parameters,
+        )
+    elif model == 'DynamicFactorMQ':
+        return DynamicFactorMQ(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            **parameters,
+        )
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)
@@ -499,6 +496,8 @@ def ModelPrediction(
     holiday_country: str = 'US',
     startTimeStamps=None,
     grouping_ids=None,
+    fail_on_forecast_nan: bool = True,
+    return_model: bool = False,
     random_seed: int = 2020,
     verbose: int = 0,
     n_jobs: int = None,
@@ -518,6 +517,8 @@ def ModelPrediction(
         future_regressor_forecast (pd.Series): with datetime index, of known in advance data, section matching test data
         holiday_country (str): passed through to holiday package, used by a few models as 0/1 regressor.
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
+        fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast
+        return_model (bool): if True, forecast will have .model and .tranformer attributes set to model object.
         n_jobs (int): number of processes
 
     Returns:
@@ -551,10 +552,14 @@ def ModelPrediction(
     )
 
     # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
-    if df_forecast.forecast.isnull().all(axis=0).astype(int).sum() > 0:
-        raise ValueError(
-            "Model {} returned NaN for one or more series".format(model_str)
-        )
+    # can maybe remove this eventually and just keep the later one
+    if fail_on_forecast_nan:
+        if df_forecast.forecast.isnull().any().astype(int).sum() > 0:
+            raise ValueError(
+                "Model {} returned NaN for one or more series. fail_on_forecast_nan=True".format(
+                    model_str
+                )
+            )
 
     # CHECK Forecasts are proper length!
     if df_forecast.forecast.shape[0] != forecast_length:
@@ -593,6 +598,19 @@ def ModelPrediction(
     )
     df_forecast.transformation_runtime = transformation_runtime
 
+    if return_model:
+        df_forecast.model = model
+        df_forecast.transformer = transformer_object
+
+    # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
+    if fail_on_forecast_nan:
+        if df_forecast.forecast.isnull().any().astype(int).sum() > 0:
+            raise ValueError(
+                "Model returned NaN due to a preprocessing transformer {}. fail_on_forecast_nan=True".format(
+                    str(transformation_dict)
+                )
+            )
+
     return df_forecast
 
 
@@ -614,6 +632,8 @@ class TemplateEvalObject(object):
         per_series_made=pd.DataFrame(),
         per_series_contour=pd.DataFrame(),
         per_series_spl=pd.DataFrame(),
+        per_series_mle=pd.DataFrame(),
+        per_series_imle=pd.DataFrame(),
         model_count: int = 0,
     ):
         self.model_results = model_results
@@ -624,8 +644,12 @@ class TemplateEvalObject(object):
         self.per_series_made = per_series_made
         self.per_series_spl = per_series_spl
         self.per_timestamp_smape = per_timestamp_smape
+        self.per_series_mle = per_series_mle
+        self.per_series_imle = per_series_imle
         self.full_mae_ids = []
         self.full_mae_errors = []
+        self.full_pl_errors = []
+        self.squared_errors = []
 
     def __repr__(self):
         """Print."""
@@ -661,7 +685,15 @@ class TemplateEvalObject(object):
             axis=0,
             sort=False,
         )
+        self.per_series_mle = pd.concat(
+            [self.per_series_mle, another_eval.per_series_mle], axis=0, sort=False
+        )
+        self.per_series_imle = pd.concat(
+            [self.per_series_imle, another_eval.per_series_imle], axis=0, sort=False
+        )
         self.full_mae_errors.extend(another_eval.full_mae_errors)
+        self.full_pl_errors.extend(another_eval.full_pl_errors)
+        self.squared_errors.extend(another_eval.squared_errors)
         self.full_mae_ids.extend(another_eval.full_mae_ids)
         self.model_count = self.model_count + another_eval.model_count
         return self
@@ -750,6 +782,7 @@ def model_forecast(
     holiday_country: str = 'US',
     startTimeStamps=None,
     grouping_ids=None,
+    fail_on_forecast_nan: bool = True,
     random_seed: int = 2020,
     verbose: int = 0,
     n_jobs: int = "auto",
@@ -760,6 +793,8 @@ def model_forecast(
         'Ensemble',
     ],
     horizontal_subset: list = None,
+    return_model: bool = False,
+    **kwargs,
 ):
     """Takes numeric data, returns numeric forecasts.
 
@@ -787,6 +822,8 @@ def model_forecast(
         n_jobs (int): number of CPUs to use when available.
         template_cols (list): column names of columns used as model template
         horizontal_subset (list): columns of df_train to use for forecast, meant for internal use for horizontal ensembling
+        fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast. True is recommended.
+        return_model (bool): if True, forecast will have .model and .tranformer attributes set to model object. Only works for non-ensembles.
 
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
@@ -860,6 +897,7 @@ def model_forecast(
                     holiday_country=holiday_country,
                     startTimeStamps=startTimeStamps,
                     grouping_ids=grouping_ids,
+                    fail_on_forecast_nan=fail_on_forecast_nan,
                     random_seed=random_seed,
                     verbose=verbose,
                     n_jobs=n_jobs,
@@ -882,13 +920,13 @@ def model_forecast(
                 lower_forecasts[model_id] = df_forecast.lower_forecast
                 # print(f"{model_param_dict['model_name']} with shape {df_forecast.forecast.shape}")
                 if verbose >= 2:
-                    p = f"Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} succeeded"
+                    p = f"Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} {row['Model']} succeeded"
                     print(p)
             except Exception as e:
                 # currently this leaves no key/value for models that fail
                 if verbose >= 1:  # 1
                     print(tb.format_exc())
-                    p = f"FAILED: Ensemble {model_param_dict['model_name']} component {index} of {total_ens} with error: {repr(e)}"
+                    p = f"FAILED: Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} {row['Model']} with error: {repr(e)}"
                     print(p)
         ens_forecast = EnsembleForecast(
             model_name,
@@ -945,8 +983,10 @@ def model_forecast(
             holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
+            fail_on_forecast_nan=fail_on_forecast_nan,
             startTimeStamps=startTimeStamps,
             n_jobs=n_jobs,
+            return_model=return_model,
         )
 
         sys.stdout.flush()
@@ -966,7 +1006,7 @@ def TemplateWizard(
     df_test,
     weights,
     model_count: int = 0,
-    ensemble: str = True,
+    ensemble: list = ["mosaic", "distance"],
     forecast_length: int = 14,
     frequency: str = 'infer',
     prediction_interval: float = 0.9,
@@ -1002,7 +1042,7 @@ def TemplateWizard(
         df_train (pandas.DataFrame): numeric training dataset of DatetimeIndex and series as cols
         df_test (pandas.DataFrame): dataframe of actual values of (forecast length * n series)
         weights (dict): key = column/series_id, value = weight
-        ensemble (str): desc of ensemble types to prepare metric collection
+        ensemble (list): list of ensemble types to prepare metric collection
         forecast_length (int): number of periods to forecast
         transformation_dict (dict): a dictionary of outlier, fillNA, and transformation methods to be used
         model_str (str): a string to be direct to the appropriate model, used in ModelMonster
@@ -1024,8 +1064,15 @@ def TemplateWizard(
     Returns:
         TemplateEvalObject
     """
-    ensemble = str(ensemble)
-    template_result = TemplateEvalObject()
+    template_result = TemplateEvalObject(
+        per_series_mae=[],
+        per_series_made=[],
+        per_series_contour=[],
+        per_series_rmse=[],
+        per_series_spl=[],
+        per_series_mle=[],
+        per_series_imle=[],
+    )
     template_result.model_count = model_count
     if isinstance(template, pd.Series):
         template = template.to_frame()
@@ -1043,7 +1090,15 @@ def TemplateWizard(
 
     # template = unpack_ensemble_models(template, template_cols, keep_ensemble = False)
 
-    for index, row in template.iterrows():
+    # precompute scaler to save a few miliseconds (saves very little time)
+    scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
+    fill_val = np.nanmax(scaler)
+    fill_val = fill_val if fill_val > 0 else 1
+    scaler[scaler == 0] = fill_val
+    scaler[np.isnan(scaler)] = fill_val
+
+    template_dict = template.to_dict('records')
+    for row in template_dict:
         template_start_time = datetime.datetime.now()
         try:
             model_str = row['Model']
@@ -1102,13 +1157,16 @@ def TemplateWizard(
                 post_memory_percent = virtual_memory().percent
 
             per_ts = True if 'distance' in ensemble else False
-            full_mae = True if "mosaic" in ensemble else False
+            full_mae = (
+                True if "mosaic" in ensemble or "mosaic-window" in ensemble else False
+            )
             model_error = df_forecast.evaluate(
                 df_test,
                 series_weights=weights,
                 df_train=df_train,
                 per_timestamp_errors=per_ts,
                 full_mae_error=full_mae,
+                scaler=scaler,
             )
             if validation_round >= 1 and verbose > 0:
                 validation_accuracy_print = "{} - {} with avg smape {}: ".format(
@@ -1158,40 +1216,27 @@ def TemplateWizard(
             ).reset_index(drop=True)
 
             ps_metric = model_error.per_series_metrics
-            template_result.per_series_mae = pd.concat(
-                [
-                    template_result.per_series_mae,
-                    _ps_metric(ps_metric, 'mae', model_id),
-                ],
-                axis=0,
+
+            template_result.per_series_mae.append(
+                _ps_metric(ps_metric, 'mae', model_id)
             )
-            template_result.per_series_made = pd.concat(
-                [
-                    template_result.per_series_made,
-                    _ps_metric(ps_metric, 'made', model_id),
-                ],
-                axis=0,
+            template_result.per_series_made.append(
+                _ps_metric(ps_metric, 'made', model_id)
             )
-            template_result.per_series_contour = pd.concat(
-                [
-                    template_result.per_series_contour,
-                    _ps_metric(ps_metric, 'contour', model_id),
-                ],
-                axis=0,
+            template_result.per_series_contour.append(
+                _ps_metric(ps_metric, 'contour', model_id)
             )
-            template_result.per_series_rmse = pd.concat(
-                [
-                    template_result.per_series_rmse,
-                    _ps_metric(ps_metric, 'rmse', model_id),
-                ],
-                axis=0,
+            template_result.per_series_rmse.append(
+                _ps_metric(ps_metric, 'rmse', model_id)
             )
-            template_result.per_series_spl = pd.concat(
-                [
-                    template_result.per_series_spl,
-                    _ps_metric(ps_metric, 'spl', model_id),
-                ],
-                axis=0,
+            template_result.per_series_spl.append(
+                _ps_metric(ps_metric, 'spl', model_id)
+            )
+            template_result.per_series_mle.append(
+                _ps_metric(ps_metric, 'mle', model_id)
+            )
+            template_result.per_series_imle.append(
+                _ps_metric(ps_metric, 'imle', model_id)
             )
 
             if 'distance' in ensemble:
@@ -1201,8 +1246,12 @@ def TemplateWizard(
                 template_result.per_timestamp_smape = pd.concat(
                     [template_result.per_timestamp_smape, cur_smape], axis=0
                 )
-            if 'mosaic' in ensemble:
+            if 'mosaic' in ensemble or 'mosaic-window' in ensemble:
                 template_result.full_mae_errors.extend([model_error.full_mae_errors])
+                template_result.squared_errors.extend([model_error.squared_errors])
+                template_result.full_pl_errors.extend(
+                    [model_error.upper_pl + model_error.lower_pl]
+                )
                 template_result.full_mae_ids.extend([model_id])
 
         except KeyboardInterrupt:
@@ -1234,7 +1283,7 @@ def TemplateWizard(
                     ignore_index=True,
                     sort=False,
                 ).reset_index(drop=True)
-                if model_interrupt == "end_generation":
+                if model_interrupt == "end_generation" and current_generation > 0:
                     break
             else:
                 sys.stdout.flush()
@@ -1282,7 +1331,38 @@ def TemplateWizard(
                 ignore_index=True,
                 sort=False,
             ).reset_index(drop=True)
-
+    if template_result.per_series_mae:
+        template_result.per_series_mae = pd.concat(
+            template_result.per_series_mae, axis=0
+        )
+        template_result.per_series_made = pd.concat(
+            template_result.per_series_made, axis=0
+        )
+        template_result.per_series_contour = pd.concat(
+            template_result.per_series_contour, axis=0
+        )
+        template_result.per_series_rmse = pd.concat(
+            template_result.per_series_rmse, axis=0
+        )
+        template_result.per_series_spl = pd.concat(
+            template_result.per_series_spl, axis=0
+        )
+        template_result.per_series_mle = pd.concat(
+            template_result.per_series_mle, axis=0
+        )
+        template_result.per_series_imle = pd.concat(
+            template_result.per_series_imle, axis=0
+        )
+    else:
+        template_result.per_series_mae = pd.DataFrame()
+        template_result.per_series_made = pd.DataFrame()
+        template_result.per_series_contour = pd.DataFrame()
+        template_result.per_series_rmse = pd.DataFrame()
+        template_result.per_series_spl = pd.DataFrame()
+        template_result.per_series_mle = pd.DataFrame()
+        template_result.per_series_imle = pd.DataFrame()
+        if verbose > 0 and not template.empty:
+            print(f"Generation {current_generation} had all new models fail")
     return template_result
 
 
@@ -1295,14 +1375,6 @@ def RandomTemplate(
         'GLS',
         'GLM',
         'ETS',
-        'ARIMA',
-        'FBProphet',
-        'RollingRegression',
-        'GluonTS',
-        'UnobservedComponents',
-        'VARMAX',
-        'VECM',
-        'DynamicFactor',
     ],
     transformer_list: dict = "fast",
     transformer_max_depth: int = 8,
@@ -1622,18 +1694,23 @@ def validation_aggregation(validation_results):
         'rmse': 'mean',
         'medae': 'mean',
         'made': 'mean',
-        'containment': 'mean',
+        'mage': 'mean',
+        'mle': 'mean',
+        'imle': 'mean',
         'spl': 'mean',
+        'containment': 'mean',
         'contour': 'mean',
         'smape_weighted': 'mean',
         'mae_weighted': 'mean',
         'rmse_weighted': 'mean',
         'medae_weighted': 'mean',
         'made_weighted': 'mean',
-        'containment_weighted': 'mean',
-        'contour_weighted': 'mean',
+        'mage_weighted': 'mean',
+        'mle_weighted': 'mean',
+        'imle_weighted': 'mean',
         'spl_weighted': 'mean',
         'containment_weighted': 'mean',
+        'contour_weighted': 'mean',
         'TotalRuntimeSeconds': 'mean',
         'Score': 'mean',
     }
@@ -1665,6 +1742,9 @@ def generate_score(
     SMAPE - smaller is better
     MAE - smaller is better
     RMSE -  smaller is better
+    MADE - smaller is better
+    MLE - smaller is better
+    MAGE - smaller is better
     SPL - smaller is better
     Contour - bigger is better (is 0 to 1)
     Containment - bigger is better (is 0 to 1)
@@ -1678,6 +1758,9 @@ def generate_score(
     spl_weighting = metric_weighting.get('spl_weighting', 0)
     contour_weighting = metric_weighting.get('contour_weighting', 0)
     made_weighting = metric_weighting.get('made_weighting', 0)
+    mage_weighting = metric_weighting.get('mage_weighting', 0)
+    mle_weighting = metric_weighting.get('mle_weighting', 0)
+    imle_weighting = metric_weighting.get('imle_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         if 'TotalRuntime' in model_results.columns:
@@ -1733,9 +1816,27 @@ def generate_score(
             ].min()
             made_score = model_results['made_weighted'] / made_scaler
             # fillna, but only if all are nan (forecast_length = 1)
-            if pd.isnull(made_score.max()):
-                made_score.fillna(0, inplace=True)
+            # if pd.isnull(made_score.max()):
+            #     made_score.fillna(0, inplace=True)
             overall_score = overall_score + (made_score * made_weighting)
+        if mage_weighting > 0:
+            mage_scaler = model_results['mage_weighted'][
+                model_results['mage_weighted'] != 0
+            ].min()
+            mage_score = model_results['mage_weighted'] / mage_scaler
+            overall_score = overall_score + (mage_score * mage_weighting)
+        if mle_weighting > 0:
+            mle_scaler = model_results['mle_weighted'][
+                model_results['mle_weighted'] != 0
+            ].min()
+            mle_score = model_results['mle_weighted'] / mle_scaler
+            overall_score = overall_score + (mle_score * mle_weighting)
+        if imle_weighting > 0:
+            imle_scaler = model_results['imle_weighted'][
+                model_results['imle_weighted'] != 0
+            ].min()
+            imle_score = model_results['imle_weighted'] / imle_scaler
+            overall_score = overall_score + (imle_score * imle_weighting)
         if spl_weighting > 0:
             spl_scaler = model_results['spl_weighted'][
                 model_results['spl_weighted'] != 0
@@ -1781,6 +1882,8 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
     made_weighting = metric_weighting.get('made_weighting', 0)
     spl_weighting = metric_weighting.get('spl_weighting', 0)
     contour_weighting = metric_weighting.get('contour_weighting', 0)
+    mle_weighting = metric_weighting.get('mle_weighting', 0)
+    imle_weighting = metric_weighting.get('imle_weighting', 0)
     if sum([mae_weighting, rmse_weighting, contour_weighting, spl_weighting]) == 0:
         mae_weighting = 1
 
@@ -1807,9 +1910,25 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
         )
         made_score = results_object.per_series_made / made_scaler
         # fillna but only if ALL are NaN
-        if made_score.isnull().to_numpy().all():
-            made_score.fillna(0, inplace=True)
+        # if made_score.isnull().to_numpy().all():
+        #     made_score.fillna(0, inplace=True)
         overall_score = overall_score + (made_score * made_weighting)
+    if mle_weighting > 0:
+        mle_scaler = (
+            results_object.per_series_mle[results_object.per_series_mle != 0]
+            .min()
+            .fillna(1)
+        )
+        mle_score = results_object.per_series_mle / mle_scaler
+        overall_score = overall_score + (mle_score * mle_weighting)
+    if imle_weighting > 0:
+        imle_scaler = (
+            results_object.per_series_imle[results_object.per_series_imle != 0]
+            .min()
+            .fillna(1)
+        )
+        imle_score = results_object.per_series_imle / imle_scaler
+        overall_score = overall_score + (imle_score * imle_weighting)
     if spl_weighting > 0:
         spl_scaler = (
             results_object.per_series_spl[results_object.per_series_spl != 0]
@@ -1861,6 +1980,8 @@ def back_forecast(
     random_seed=123,
     n_jobs="auto",
     verbose=0,
+    eval_periods: int = None,
+    **kwargs,
 ):
     """Create forecasts for the historical training data, ie. backcast or back forecast.
 
@@ -1872,8 +1993,20 @@ def back_forecast(
     n_splits(int): how many pieces to split data into. Pass 2 for fastest, or "auto" for best accuracy
 
     Returns a standard prediction object (access .forecast, .lower_forecast, .upper_forecast)
+
+    Args:
+        eval_period (int): if passed, only returns results for this many time steps of recent history
     """
-    max_chunk = int(ceil(df.index.shape[0] / forecast_length))
+    df_train_shape = df.index.shape[0]
+    if eval_periods is not None:
+        assert (
+            eval_periods < df_train_shape
+        ), "eval_periods must be less than length of history"
+        fore_length = eval_periods
+        eval_start = df_train_shape - eval_periods
+    else:
+        fore_length = df_train_shape
+    max_chunk = int(ceil(fore_length / forecast_length))
     if not str(n_splits).isdigit():
         n_splits = max_chunk
     elif n_splits > max_chunk or n_splits < 2:
@@ -1881,7 +2014,7 @@ def back_forecast(
     else:
         n_splits = int(n_splits)
 
-    chunk_size = df.index.shape[0] / n_splits
+    chunk_size = fore_length / n_splits
     b_forecast, b_forecast_up, b_forecast_low = (
         pd.DataFrame(),
         pd.DataFrame(),
@@ -1891,8 +2024,11 @@ def back_forecast(
         int_idx = int(n * chunk_size)
         int_idx_1 = int((n + 1) * chunk_size)
         inner_forecast_length = int_idx_1 - int_idx
+        if eval_periods is not None:
+            int_idx = int_idx + eval_start
+            int_idx_1 = int_idx_1 + eval_start
         # flip to forecast backwards for the first split
-        if n == 0:
+        if n == 0 and eval_periods is None:
             df_split = df.iloc[int_idx_1:].copy()
             df_split = df_split.iloc[::-1]
             df_split.index = df_split.index[::-1]
@@ -1901,7 +2037,7 @@ def back_forecast(
             df_split = df.iloc[0:int_idx].copy()
         # handle appropriate regressors
         if isinstance(future_regressor_train, pd.DataFrame):
-            if n == 0:
+            if n == 0 and eval_periods is None:
                 split_regr = future_regressor_train.reindex(df_split.index[::-1])
                 split_regr_future = future_regressor_train.reindex(result_idx)
             else:
@@ -1910,8 +2046,8 @@ def back_forecast(
                     df.index[int_idx:int_idx_1]
                 )
         else:
-            split_regr = []
-            split_regr_future = []
+            split_regr = None
+            split_regr_future = None
         try:
             df_forecast = model_forecast(
                 model_name=model_name,
@@ -1934,7 +2070,7 @@ def back_forecast(
             b_forecast_up = pd.concat([b_forecast_up, df_forecast.upper_forecast])
             b_forecast_low = pd.concat([b_forecast_low, df_forecast.lower_forecast])
             # handle index being wrong for the flipped forecast which comes first
-            if n == 0:
+            if n == 0 and eval_periods is None:
                 b_forecast = b_forecast.iloc[::-1]
                 b_forecast_up = b_forecast_up.iloc[::-1]
                 b_forecast_low = b_forecast_low.iloc[::-1]

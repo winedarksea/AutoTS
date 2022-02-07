@@ -8,6 +8,7 @@ import warnings
 import datetime
 import numpy as np
 import pandas as pd
+from autots.tools.shaping import infer_frequency
 from autots.evaluator.metrics import (
     smape,
     mae,
@@ -17,6 +18,7 @@ from autots.evaluator.metrics import (
     spl,
     medae,
     mean_absolute_differential_error,
+    msle,
 )
 
 # from sklearn.metrics import r2_score
@@ -71,7 +73,7 @@ class ModelObject(object):
         self.column_names = df.columns
         self.train_last_date = df.index[-1]
         if self.frequency == 'infer':
-            self.frequency = pd.infer_freq(df.index, warn=False)
+            self.frequency = infer_frequency(df.index)
 
         return df
 
@@ -81,12 +83,16 @@ class ModelObject(object):
         Warnings:
             Requires ModelObject.basic_profile() being called as part of .fit()
         """
-        forecast_index = pd.date_range(
+        if self.frequency == 'infer':
+            raise ValueError(
+                "create_forecast_index run without specific frequency, run basic_profile first or pass proper frequency to model init"
+            )
+        self.forecast_index = pd.date_range(
             freq=self.frequency, start=self.train_last_date, periods=forecast_length + 1
-        )
-        forecast_index = forecast_index[1:]
-        self.forecast_index = forecast_index
-        return forecast_index
+        )[
+            1:
+        ]  # note the disposal of the first (already extant) date
+        return self.forecast_index
 
     def get_params(self):
         """Return dict of current parameters."""
@@ -135,6 +141,8 @@ class PredictionObject(object):
         avg_metrics=np.nan,
         avg_metrics_weighted=np.nan,
         full_mae_error=None,
+        model=None,
+        transformer=None,
     ):
         self.model_name = model_name
         self.model_parameters = model_parameters
@@ -155,6 +163,9 @@ class PredictionObject(object):
         self.avg_metrics = avg_metrics
         self.avg_metrics_weighted = avg_metrics_weighted
         self.full_mae_error = full_mae_error
+        # model attributes, not normally used
+        self.model = model
+        self.transformer = transformer
 
     def __repr__(self):
         """Print."""
@@ -287,6 +298,7 @@ class PredictionObject(object):
         df_train=None,
         per_timestamp_errors: bool = False,
         full_mae_error: bool = True,
+        scaler=None,
     ):
         """Evalute prediction against test actual. Fills out attributes of base object.
 
@@ -295,7 +307,9 @@ class PredictionObject(object):
         Args:
             actual (pd.DataFrame): dataframe of actual values of (forecast length * n series)
             series_weights (dict): key = column/series_id, value = weight
-            df_train (pd.DataFrame): historical values of series, wide, used for setting scaler for SPL
+            df_train (pd.DataFrame): historical values of series, wide,
+                used for setting scaler for SPL
+                necessary for MADE and Contour if forecast_length == 1
                 if None, actuals are used instead (suboptimal).
             per_timestamp (bool): whether to calculate and return per timestamp direction errors
 
@@ -305,6 +319,7 @@ class PredictionObject(object):
             avg_metrics (pandas.Series): average values of accuracy across all input series
             avg_metrics_weighted (pandas.Series): average values of accuracy across all input series weighted by series_weight, if given
             full_mae_errors (numpy.array): abs(actual - forecast)
+            scaler (numpy.array): precomputed scaler for efficiency, avg value of series in order of columns
         """
         A = np.array(actual)
         F = np.array(self.forecast)
@@ -323,15 +338,44 @@ class PredictionObject(object):
         if len(series_weights) != F.shape[1]:
             series_weights = {col: series_weights[col] for col in self.forecast.columns}
 
-        # reuse this in several metrics
-        self.full_mae_errors = abs(A - F)
+        # reuse this in several metrics so precalculate
+        full_errors = F - A
+        self.full_mae_errors = np.abs(full_errors)
+        self.squared_errors = full_errors ** 2
+        log_errors = np.log1p(self.full_mae_errors)
 
-        # calculate scaler once for spl
-        scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
-        fill_val = np.nanmax(scaler)
-        fill_val = fill_val if fill_val > 0 else 1
-        scaler[scaler == 0] = fill_val
-        scaler[np.isnan(scaler)] = fill_val
+        # calculate scaler once
+        if scaler is None:
+            scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
+            fill_val = np.nanmax(scaler)
+            fill_val = fill_val if fill_val > 0 else 1
+            scaler[scaler == 0] = fill_val
+            scaler[np.isnan(scaler)] = fill_val
+
+        # concat most recent history to enable full-size diffs
+        last_of_array = np.nan_to_num(
+            df_train[
+                df_train.shape[0] - 1 : df_train.shape[0],
+            ]
+        )
+        lA = np.concatenate([last_of_array, A])
+        lF = np.concatenate([last_of_array, F])
+
+        # mage = np.nansum(full_errors, axis=None) / A.shape[1]
+        mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
+
+        # np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A))
+        self.upper_pl = np.where(
+            A >= upper_forecast,
+            self.prediction_interval * (A - upper_forecast),
+            (1 - self.prediction_interval) * (upper_forecast - A),
+        )
+        # note that the quantile here is the lower quantile
+        self.lower_pl = np.where(
+            A >= lower_forecast,
+            (1 - self.prediction_interval) * (A - lower_forecast),
+            (1 - (1 - self.prediction_interval)) * (lower_forecast - A),
+        )
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
@@ -339,27 +383,23 @@ class PredictionObject(object):
                 {
                     'smape': smape(A, F, self.full_mae_errors),
                     'mae': mae(self.full_mae_errors),
-                    'rmse': rmse(self.full_mae_errors),
-                    # 'medae': medae(self.full_mae_errors),
+                    'rmse': rmse(self.squared_errors),
+                    'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
+                    'mage': mage,
+                    'mle': msle(full_errors, self.full_mae_errors, log_errors),
+                    'imle': msle(-full_errors, self.full_mae_errors, log_errors),
+                    'spl': spl(
+                        self.upper_pl + self.lower_pl,
+                        scaler=scaler,
+                    ),
+                    'containment': containment(lower_forecast, upper_forecast, A),
+                    'contour': contour(lA, lF),
+                    # 'medae': medae(self.full_mae_errors),  # median
+                    # 'made_unscaled': mean_absolute_differential_error(lA, lF, 1),
+                    # 'mad2e': mean_absolute_differential_error(lA, lF, 2),
                     # r2 can't handle NaN in history, also uncomment import above
                     # 'r2': r2_score(A, F, multioutput="raw_values").flatten(),
                     # 'correlation': pd.DataFrame(A).corrwith(pd.DataFrame(F), drop=True).to_numpy(),
-                    'made': mean_absolute_differential_error(A, F),
-                    # 'mad2e': mean_absolute_differential_error(A, F, 2),
-                    'containment': containment(lower_forecast, upper_forecast, A),
-                    'spl': spl(
-                        A=A,
-                        F=upper_forecast,
-                        quantile=self.prediction_interval,
-                        scaler=scaler,
-                    )
-                    + spl(
-                        A=A,
-                        F=lower_forecast,
-                        quantile=(1 - self.prediction_interval),
-                        scaler=scaler,
-                    ),
-                    'contour': contour(A, F),
                 },
                 index=actual.columns,
             ).transpose()

@@ -40,26 +40,32 @@ def historic_quantile(df_train, prediction_interval: float = 0.9):
 def inferred_normal(train, forecast, n: int = 5, prediction_interval: float = 0.9):
     """A corruption of Bayes theorem.
     It will be sensitive to the transformations of the data."""
-    prior_mu = train.mean()
-    prior_sigma = train.std()
+    prior_mu = train.mean().values
+    prior_sigma = train.std().values
+    idx = forecast.index
+    columns = forecast.columns
     from scipy.stats import norm
 
     p_int = 1 - ((1 - prediction_interval) / 2)
     adj = norm.ppf(p_int)
-    upper_forecast, lower_forecast = pd.DataFrame(), pd.DataFrame()
-    for index, row in forecast.iterrows():
+    upper_forecast, lower_forecast = [], []
+
+    for row in forecast.values:
         data_mu = row
+        reshape_row = data_mu.reshape(1, -1)
         post_mu = (
             (prior_mu / prior_sigma ** 2) + ((n * data_mu) / prior_sigma ** 2)
         ) / ((1 / prior_sigma ** 2) + (n / prior_sigma ** 2))
-        lower = pd.DataFrame(post_mu - adj * prior_sigma).transpose()
-        lower = lower.where(lower <= data_mu, data_mu, axis=1)
-        upper = pd.DataFrame(post_mu + adj * prior_sigma).transpose()
-        upper = upper.where(upper >= data_mu, data_mu, axis=1)
-        lower_forecast = pd.concat([lower_forecast, lower], axis=0)
-        upper_forecast = pd.concat([upper_forecast, upper], axis=0)
-    lower_forecast.index = forecast.index
-    upper_forecast.index = forecast.index
+        lower = pd.DataFrame(post_mu - adj * prior_sigma, index=columns).transpose()
+        lower = lower.where(lower <= data_mu, reshape_row, axis=1)
+        upper = pd.DataFrame(post_mu + adj * prior_sigma, index=columns).transpose()
+        upper = upper.where(upper >= data_mu, reshape_row, axis=1)
+        lower_forecast.append(lower)
+        upper_forecast.append(upper)
+    lower_forecast = pd.concat(lower_forecast, axis=0)
+    upper_forecast = pd.concat(upper_forecast, axis=0)
+    lower_forecast.index = idx
+    upper_forecast.index = idx
     return upper_forecast, lower_forecast
 
 
