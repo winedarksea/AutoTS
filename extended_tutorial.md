@@ -618,6 +618,7 @@ eval_lower = EventRiskForecast.generate_historic_risk_array(df_test, model.lower
 eval_upper = EventRiskForecast.generate_historic_risk_array(df_test, model.upper_limit_2d, direction="upper")
 pred_lower = np.where(model.lower_risk_array > threshold, 1, 0)
 pred_upper = np.where(model.upper_risk_array > threshold, 1, 0)
+model.plot_eval(df_test, 0)
 
 multilabel_confusion_matrix(eval_upper, pred_upper).sum(axis=0)
 print(classification_report(eval_upper, pred_upper, zero_division=1))  # target_names=df.columns
