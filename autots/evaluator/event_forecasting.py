@@ -404,7 +404,7 @@ class EventRiskForecast(object):
             target_shape (tuple): of (forecast_length, num_series)
             df_train (pd.DataFrame): training data
             direction (str): whether it is the "upper" or "lower" limit
-            periods (str): "forecast" or "historic" only used for limits defined by forecast algorithm params
+            period (str): "forecast" or "historic" only used for limits defined by forecast algorithm params
             forecast_length (int): needed only for historic of forecast algorithm defined limit
             eval_periods (int): only for historic forecast limit, only runs on the tail n (this) of data
         """
