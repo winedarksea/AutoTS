@@ -271,9 +271,9 @@ Some metrics are scaled and some are not. MAE, RMSE, MAGE, MLE, iMLE are unscale
 
 `sMAPE` is *Symmetric Mean Absolute Percentage Loss* and is generally the most versatile metric across multiple series as it is scaled. It doesn't handle forecasts with lots of zeroes well. 
 
-`SPL` is *Scaled Pinball Loss* or *Quantile Loss* and is the optimal metric for assessing upper/lower quantile forecast accuracies.
+`SPL` is *Scaled Pinball Loss*, sometimes called *Quantile Loss*, and is the optimal metric for optimizing upper/lower quantile forecast accuracies.
 
-`Containment` measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called `coverage_fraction`.
+`Containment` measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called `coverage_fraction` in other places.
 
 `MLE` and `iMLE` are *Mean Logarithmic Error* inspired by the `mean squared log error`. They are used to target over or underestimation with MAE of the penalized direction and log(error) for the less-penalized (and less outlier sensitive) direction.
 `MLE` penalizes an under-predicted forecast greater than an over-predicted forecast. 
@@ -415,10 +415,11 @@ python -m pip install autots --exists-action i
 ```
 
 ```shell
-conda install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
+mamba install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
 pip install mxnet --no-deps
 pip install intel-tensorflow scikit-learn-intelex yfinance pytrends fredapi gluonts
 pip install spyder
+mamba install autots -c conda-forge
 ```
 
 #### Intel conda channel installation (sometime faster, also, more prone to bugs)
