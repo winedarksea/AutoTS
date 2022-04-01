@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt  # required only for graphs
 from autots import AutoTS, load_live_daily, create_regressor
 
 fred_key = None  # https://fred.stlouisfed.org/docs/api/api_key.html
+gsa_key = None
 forecast_name = "example"
 graph = True  # whether to plot graphs
 # https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects
