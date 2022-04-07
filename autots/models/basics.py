@@ -12,24 +12,25 @@ from autots.tools import seasonal_int
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 from autots.tools.window_functions import window_id_maker
 
-class ZeroesNaive(ModelObject):
+class ConstantNaive(ModelObject):
     """Naive forecasting predicting a dataframe of zeroes (0's)
 
     Args:
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
-
+        constant (float): value to fill with
     """
 
     def __init__(
         self,
-        name: str = "ZeroesNaive",
+        name: str = "ConstantNaive",
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
+        constant: float = 0,
         **kwargs
     ):
         ModelObject.__init__(
@@ -41,6 +42,7 @@ class ZeroesNaive(ModelObject):
             random_seed=random_seed,
             verbose=verbose,
         )
+        self.constant = constant
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied
@@ -68,7 +70,7 @@ class ZeroesNaive(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         df = pd.DataFrame(
-            np.zeros((forecast_length, (self.train_shape[1]))),
+            np.zeros((forecast_length, (self.train_shape[1])))  + self.constant,
             columns=self.column_names,
             index=self.create_forecast_index(forecast_length=forecast_length),
         )
@@ -94,11 +96,21 @@ class ZeroesNaive(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
-        return {}
+        return {
+            'constant': random.choices(
+                [0, 1, -1, 0.1],
+                [0.6, 0.25, 0.1, 0.05],
+            )[0]
+        }
 
     def get_params(self):
         """Return dict of current parameters"""
-        return {}
+        return {
+            'constant': self.constant
+        }
+
+
+ZeroesNaive = ConstantNaive
 
 
 class LastValueNaive(ModelObject):
@@ -214,6 +226,7 @@ class AverageValueNaive(ModelObject):
         random_seed: int = 2020,
         verbose: int = 0,
         method: str = 'Median',
+        window: int = None,
         **kwargs
     ):
         ModelObject.__init__(
@@ -226,6 +239,7 @@ class AverageValueNaive(ModelObject):
             verbose=verbose,
         )
         self.method = method
+        self.window = window
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -235,28 +249,33 @@ class AverageValueNaive(ModelObject):
         """
         df = self.basic_profile(df)
         method = str(self.method).lower()
+        if self.window is not None:
+            df_used = df[-self.window:]
+        else:
+            df_used = df
+
         if method == 'median':
-            self.average_values = df.median(axis=0).to_numpy()
+            self.average_values = df_used.median(axis=0).to_numpy()
         elif method == 'mean':
-            self.average_values = df.mean(axis=0).to_numpy()
+            self.average_values = df_used.mean(axis=0).to_numpy()
         elif method == 'mode':
             self.average_values = (
-                df.mode(axis=0).iloc[0].fillna(df.median(axis=0)).to_numpy()
+                df_used.mode(axis=0).iloc[0].fillna(df_used.median(axis=0)).to_numpy()
             )
         elif method == "midhinge":
-            results = df.to_numpy()
+            results = df_used.to_numpy()
             q1 = np.nanquantile(results, q=0.25, axis=0)
             q2 = np.nanquantile(results, q=0.75, axis=0)
             self.average_values = (q1 + q2) / 2
         elif method in ["weighted_mean", "exp_weighted_mean"]:
-            weights = pd.to_numeric(df.index)
+            weights = pd.to_numeric(df_used.index)
             weights = weights - weights.min()
             if method == "exp_weighted_mean":
                 weights = (weights / weights[weights != 0].min()) ** 2
-            self.average_values = np.average(df.to_numpy(), axis=0, weights=weights)
+            self.average_values = np.average(df_used.to_numpy(), axis=0, weights=weights)
         self.fit_runtime = datetime.datetime.now() - self.startTime
         self.lower, self.upper = historic_quantile(
-            df, prediction_interval=self.prediction_interval
+            df_used, prediction_interval=self.prediction_interval
         )
         return self
 
@@ -314,11 +333,21 @@ class AverageValueNaive(ModelObject):
             ],
             [0.3, 0.3, 0.01, 0.1, 0.4, 0.1],
         )[0]
-        return {'method': method_choice}
+        
+        return {
+            'method': method_choice,
+            'window': random.choices(
+                [None, seasonal_int()],
+                [0.8, 0.2]
+            )[0]
+        }
 
     def get_params(self):
         """Return dict of current parameters."""
-        return {'method': self.method}
+        return {
+            'method': self.method,
+            'window': self.window,
+        }
 
 
 class SeasonalNaive(ModelObject):

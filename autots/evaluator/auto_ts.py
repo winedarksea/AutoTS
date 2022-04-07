@@ -1682,6 +1682,9 @@ or otherwise increase models available."""
             else:
                 mod_list = self.model_list
             import_template = import_template[import_template['Model'].isin(mod_list)]
+            # double method of removing Ensemble
+            if not include_ensemble and "Ensemble" in import_template.columns:
+                import_template = import_template[import_template["Ensemble"] == 0]
             if import_template.shape[0] == 0:
                 raise ValueError(
                     "Len 0. Model_list does not match models in template! Try enforce_model_list=False."

@@ -12,6 +12,7 @@ from autots.datasets._base import (
     load_zeroes,
     load_linear,
     load_sine,
+    load_artificial,
 )
 
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     'load_zeroes',
     'load_linear',
     'load_sine',
+    'load_artificial',
 ]

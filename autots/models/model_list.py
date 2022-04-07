@@ -1,6 +1,6 @@
 """Lists of models grouped by aspects."""
 all_models = [
-    'ZeroesNaive',
+    'ConstantNaive',
     'LastValueNaive',
     'AverageValueNaive',
     'GLS',
@@ -34,7 +34,7 @@ all_models = [
     'DynamicFactorMQ',
 ]
 default = [
-    'ZeroesNaive',
+    'ConstantNaive',
     'LastValueNaive',
     'AverageValueNaive',
     'GLS',
@@ -88,7 +88,7 @@ colin = [
 ]
 # fastest models at any scale
 superfast = [
-    'ZeroesNaive',
+    'ConstantNaive',
     'LastValueNaive',
     'AverageValueNaive',
     'GLS',
@@ -96,7 +96,7 @@ superfast = [
 ]
 # relatively fast
 fast = [
-    'ZeroesNaive',
+    'ConstantNaive',
     'LastValueNaive',
     'AverageValueNaive',
     'GLS',
@@ -175,7 +175,7 @@ multivariate = [
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
-no_params = ['ZeroesNaive', 'LastValueNaive', 'GLS']
+no_params = ['LastValueNaive', 'GLS']
 # USED IN AUTO_MODEL, ONLY MODELS WHICH CAN ACCEPT RANDOM MIXING OF PARAMS
 recombination_approved = [
     'SeasonalNaive',
@@ -207,7 +207,7 @@ recombination_approved = [
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
-    'ZeroesNaive',
+    'ConstantNaive',
     'LastValueNaive',
     'AverageValueNaive',
     'GLM',

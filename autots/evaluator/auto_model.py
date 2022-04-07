@@ -28,7 +28,7 @@ from autots.models.basics import (
     LastValueNaive,
     AverageValueNaive,
     SeasonalNaive,
-    ZeroesNaive,
+    ConstantNaive,
     Motif,
     SectionalMotif,
     NVAR,
@@ -82,8 +82,8 @@ def ModelMonster(
     """
     model = str(model)
 
-    if model == 'ZeroesNaive':
-        return ZeroesNaive(frequency=frequency, prediction_interval=prediction_interval)
+    if model in ['ZeroesNaive', 'ConstantNaive']:
+        return ConstantNaive(frequency=frequency, prediction_interval=prediction_interval, **parameters)
 
     elif model == 'LastValueNaive':
         return LastValueNaive(

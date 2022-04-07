@@ -705,7 +705,7 @@ Currently `MultivariateRegression` has the option to utilize a stock GradientBoo
 
 | Model                   | Dependencies | Optional Dependencies   | Probabilistic | Multiprocessing | GPU   | Multivariate | Experimental | Use Regressor |
 | :-------------          | :----------: | :---------------------: | :-----------  | :-------------- | :---- | :----------: | :----------: | :-----------: |
-|  ZeroesNaive            |              |                         |               |                 |       |              |              |               |
+|  ConstantNaive          |              |                         |               |                 |       |              |              |               |
 |  LastValueNaive         |              |                         |               |                 |       |              |              |               |
 |  AverageValueNaive      |              |                         |    True       |                 |       |              |              |               |
 |  SeasonalNaive          |              |                         |               |                 |       |              |              |               |
