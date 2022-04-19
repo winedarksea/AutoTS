@@ -43,7 +43,7 @@ default = [
     'ETS',
     'FBProphet',
     # 'RollingRegression',  # maybe not?
-    'GluonTS',  # downweight if that becomes an option
+    # 'GluonTS',  # downweight if that becomes an option
     'UnobservedComponents',
     'VAR',
     'VECM',
@@ -59,7 +59,7 @@ default = [
     'ARDL',
     # 'DynamicFactorMQ',
 ]
-colin = [
+best = [
     'LastValueNaive',
     'AverageValueNaive',
     'GLS',
@@ -263,7 +263,7 @@ model_lists = {
     "slow": slow,
     "gpu": gpu,
     "regressor": regressor,
-    "colin": colin,
+    "best": best,
 }
 
 

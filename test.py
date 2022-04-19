@@ -1,6 +1,7 @@
 """Informal testing script."""
 from time import sleep
 import timeit
+import os
 import platform
 import pandas as pd
 from autots.datasets import (  # noqa
@@ -13,46 +14,53 @@ from autots.datasets import (  # noqa
     load_zeroes,
     load_linear,
     load_sine,
+    load_artificial,
 )
 from autots import AutoTS, create_regressor, model_forecast  # noqa
 import matplotlib.pyplot as plt
 
 # raise ValueError("aaargh!")
-use_template = False
+use_template = True
+save_template = True
+template_import_method = "addon"  # "only"
 force_univariate = False  # long = False
 back_forecast = False
 graph = True
 
 # this is the template file imported:
-example_filename = "example_export.csv"  # .csv/.json
+template_filename = "template_" + str(platform.node()) + ".csv"
+template_filename = "template_categories.csv"
 random_seed = 2022
 forecast_length = 10
 long = False
 # df = load_linear(long=long, shape=(200, 500), introduce_nan=0.2, introduce_random=100)
-df = load_daily(long=long)
+df = load_artificial(long=long)
 prediction_interval = 0.9
 n_jobs = "auto"
 verbose = 2
 validation_method = "similarity"
 frequency = "infer"
 drop_most_recent = 0
+generations = 50
+num_validations = 2
+initial_template = "General+Random"
 if use_template:
-    generations = 5
-    num_validations = 0
-else:
-    generations = 20
-    num_validations = 2
+    initial_training = not os.path.exists(template_filename)
+    if initial_training:
+        print("No existing template found.")
+    else:
+        print("Existing template found.")
 
 if force_univariate:
     df = df.iloc[:, 0]
 
-transformer_list = "fast"
+transformer_list = "fast"  # "fast", "all", "superfast"
 # transformer_list = ["Round", "Slice", "SinTrend", 'StandardScaler']
 transformer_max_depth = 2
 models_mode = "default"  # "regressor"
-model_list = "superfast"
+model_list = "default"
 # model_list = "regressor"  # fast_parallel, all
-# model_list = ["MultivariateMotif", "LastValueNaive"]
+# model_list = ["NVAR", "Theta"]
 preclean = None
 {
     "fillna": None,  # mean or median one of few consistent things
@@ -88,7 +96,7 @@ model = AutoTS(
     model_list=model_list,
     transformer_list=transformer_list,
     transformer_max_depth=transformer_max_depth,
-    initial_template="Random",
+    initial_template=initial_template,
     metric_weighting=metric_weighting,
     models_to_validate=0.35,
     max_per_model_class=None,
@@ -122,7 +130,7 @@ regr_train, regr_fcst = create_regressor(
 # model = model.import_results('test.pickle')
 if use_template:
     model = model.import_template(
-        example_filename, method="only", enforce_model_list=True
+        template_filename, method=template_import_method, enforce_model_list=True
     )
 
 start_time_for = timeit.default_timer()
@@ -171,7 +179,10 @@ print(
     .idxmax()
 )
 
-initial_results.to_csv("general_template_" + str(platform.node()) + ".csv")
+if save_template:
+    model.export_template(
+        template_filename, models="best", n=20, max_per_model_class=5
+    )
 
 if graph:
     prediction.plot(
@@ -208,6 +219,24 @@ df = df_wide_numeric.tail(100).fillna(0).astype(float)
 
 print("test run complete")
 
+if model.best_model["Ensemble"].iloc[0] == 2:
+    interest_series = ['arima220_outliers', 'lumpy', 'out-of-stock', "sine_seasonality_monthweek", "intermittent_weekly", "arima017", "old_to_new"]
+    interest_models = []
+    for x, y in model.best_model_params['series'].items():
+        if x in interest_series:
+            if isinstance(y, str):
+                interest_models.append(y)
+            else:
+                interest_models.extend(list(y.values()))
+            prediction.plot(
+                model.df_wide_numeric,
+                series=x,
+                remove_zeroes=False,
+                start_date="2018-09-26",
+            )
+    interest_models = pd.Series(interest_models).value_counts().head(10)
+    print(interest_models)
+    print([y for x, y in model.best_model_params['models'].items() if x in interest_models.index.to_list()])
 
 """
 forecasts = model_forecast(
@@ -238,13 +267,6 @@ result_windows = forecasts.model.result_windows
 """
 
 """
-# Import/Export
-model.export_template(example_filename, models='all',
-                      n=15, max_per_model_class=3)
-del(model)
-model = model.import_template(example_filename, method='only')
-print("Overwrite template is: {}".format(str(model.initial_template)))
-
 # default save location of files is apparently root
 systemd-run --unit=background_cmd_service --remain-after-exit /home/colin/miniconda3/envs/openblas/bin/python /home/colin/AutoTS/test.py
 systemd-run --unit=background_cmd_service --remain-after-exit /home/colin/miniconda3/envs/openblas/bin/python /home/colin/AutoTS/local_example.py
@@ -258,13 +280,6 @@ systemctl kill background_cmd_service
 
 scp colin@192.168.1.122:/home/colin/AutoTS/general_template_colin-1135.csv ./Documents/AutoTS
 scp colin@192.168.1.122:/general_template_colin-1135.csv ./Documents/AutoTS
-
-
-Edgey Cases:
-    Single Time Series
-    Forecast Length of 1
-    Very short training data
-    Lots of NaN
 
 
 PACKAGE RELEASE

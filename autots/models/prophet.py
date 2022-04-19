@@ -316,7 +316,7 @@ class FBProphet(ModelObject):
             'changepoint_range': random.choices(
                 [0.8, 0.85, 0.9, 0.98], [0.9, 0.1, 0.1, 0.1]
             )[0],
-            'growth': "linear",
+            'growth': random.choices(["linear", "flat"], [0.9, 0.1])[0],
             'n_changepoints': random.choices(
                 [5, 10, 20, 25, 30, 40, 50], [0.05, 0.1, 0.1, 0.9, 0.1, 0.05, 0.05]
             )[0],

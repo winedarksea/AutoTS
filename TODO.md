@@ -17,6 +17,7 @@
 * updated the General starting template
 * added 'window' to AverageValueNaive
 * added load_artificial sample dataset
+* fixed bug in plot_horizontal where not handling negative series
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

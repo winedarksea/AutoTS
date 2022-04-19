@@ -1867,9 +1867,9 @@ or otherwise increase models available."""
         max_series = series.shape[0] if series.shape[0] < max_series else max_series
         series = series.sample(max_series, replace=False)
         # sklearn.preprocessing.normalizer also might work
-        series[['log(Volatility)', 'log(Mean)']] = np.log(
+        series[['log(Volatility)', 'log(Mean)']] = np.log1p(np.abs(
             series[['Volatility', 'Mean']]
-        )
+        ))
         # plot
         series.set_index(['Model', 'log(Mean)']).unstack('Model')[
             'log(Volatility)'

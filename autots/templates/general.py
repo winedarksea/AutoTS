@@ -357,6 +357,18 @@ general_template_dict = {
         "TransformationParameters": "{\"fillna\": \"ffill\", \"transformations\": {\"0\": \"QuantileTransformer\", \"1\": \"Detrend\", \"2\": \"RobustScaler\"}, \"transformation_params\": {\"0\": {\"output_distribution\": \"normal\", \"n_quantiles\": 20}, \"1\": {\"model\": \"Linear\", \"phi\": 1, \"window\": null}, \"2\": {}}}",
         "Ensemble": 0
     },
+    "59": {
+        'Model': 'NVAR',
+        'ModelParameters': '{"k": 1, "ridge_param": 0.002, "warmup_pts": 1, "seed_pts": 1, "seed_weighted": null, "batch_size": 5, "batch_method": "input_order"}', 
+        'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "MinMaxScaler"}, "transformation_params": {"0": {}}}',
+        "Ensemble": 0
+    },
+    "60": {
+        'Model': 'Theta',
+        'ModelParameters': '{"deseasonalize": true, "difference": false, "use_test": false, "method": "auto", "period": null, "theta": 2.5, "use_mle": true}',
+        'TransformationParameters': '{"fillna": "mean", "transformations": {"0": "Detrend"}, "transformation_params": {"0": {"model": "Linear", "phi": 1, "window": 90}}}',
+        "Ensemble": 0,
+    },
 }
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')
 
