@@ -103,6 +103,111 @@ class ModelObject(object):
         return {}
 
 
+def apply_constraints(
+        forecast, lower_forecast, upper_forecast,
+        constraint_method, constraint_regularization,
+        upper_constraint, lower_constraint,
+        bounds, df_train=None,
+):
+    """Use constraint thresholds to adjust outputs by limit.
+    
+    Args:
+        forecast (pd.DataFrame): forecast df
+        lower_forecast (pd.DataFrame): lower bound forecast df
+            if bounds is False, upper and lower forecast dataframes are unused and can be empty
+        upper_forecast (pd.DataFrame): upper bound forecast df
+        constraint_method (str): one of 
+            stdev_min - min or max + constraint * st dev of data
+            stdev - mean + constraint * st dev of data
+            absolute - input is array of length series with threshold as final value
+            quantile - constraint is the quantile of historic data to use as threshold
+        constraint_regularization (float): 0 to 1
+            where 0 means no constraint, 1 is hard threshold, and in between is penalty term
+        upper_constraint (float): or array, depending on method
+        lower_constraint (float): or array, depending on method
+        bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
+        df_train (pd.DataFrame): required for quantile/stdev methods to find threshold values
+
+    Returns:
+        forecast, lower, upper (pd.DataFrame)
+    """
+    if constraint_method == "stdev_min":
+        train_std = df_train.std(axis=0)
+        if lower_constraint is not None:
+            train_min = df_train.min(axis=0) - (lower_constraint * train_std)
+        if upper_constraint is not None:
+            train_max = df_train.max(axis=0) + (upper_constraint * train_std)
+    elif constraint_method == "stdev":
+        train_std = df_train.std(axis=0)
+        train_mean = df_train.mean(axis=0)
+        if lower_constraint is not None:
+            train_min = train_mean - (lower_constraint * train_std)
+        if upper_constraint is not None:
+            train_max = train_mean + (upper_constraint * train_std)
+    elif constraint_method == "absolute":
+        train_min = lower_constraint
+        train_max = upper_constraint
+    elif constraint_method == "quantile":
+        if lower_constraint is not None:
+            train_min = df_train.quantile(lower_constraint, axis=0)
+        if upper_constraint is not None:
+            train_max = df_train.quantile(upper_constraint, axis=0)
+    else:
+        raise ValueError("constraint_method not recognized, adjust constraint")
+
+    if constraint_regularization == 1:
+        if lower_constraint is not None:
+            forecast = forecast.clip(lower=train_min, axis=1)
+        if upper_constraint is not None:
+            forecast = forecast.clip(upper=train_max, axis=1)
+        if bounds:
+            if lower_constraint is not None:
+                lower_forecast = lower_forecast.clip(lower=train_min, axis=1)
+                upper_forecast = upper_forecast.clip(lower=train_min, axis=1)
+            if upper_constraint is not None:
+                lower_forecast = lower_forecast.clip(upper=train_max, axis=1)
+                upper_forecast = upper_forecast.clip(upper=train_max, axis=1)
+    else:
+        if lower_constraint is not None:
+            forecast.where(
+                forecast >= train_min,
+                forecast + (train_min - forecast) * constraint_regularization,
+                inplace=True,
+            )
+        if upper_constraint is not None:
+            forecast.where(
+                forecast <= train_max,
+                forecast + (train_max - forecast) * constraint_regularization,
+                inplace=True,
+            )
+        if bounds:
+            if lower_constraint is not None:
+                lower_forecast.where(
+                    lower_forecast >= train_min,
+                    lower_forecast + (train_min - lower_forecast) * constraint_regularization,
+                    inplace=True,
+                )
+                upper_forecast.where(
+                    upper_forecast >= train_min,
+                    upper_forecast + (train_min - upper_forecast) * constraint_regularization,
+                    inplace=True,
+                )
+            if upper_constraint is not None:
+                lower_forecast.where(
+                    lower_forecast <= train_max,
+                    lower_forecast + (train_max - lower_forecast) * constraint_regularization,
+                    inplace=True,
+                )
+
+                upper_forecast.where(
+                    upper_forecast <= train_max,
+                    upper_forecast + (train_max - upper_forecast) * constraint_regularization,
+                    inplace=True,
+                )
+    return forecast, lower_forecast, upper_forecast
+
+
+
 class PredictionObject(object):
     """Generic class for holding forecast information.
 
@@ -420,4 +525,17 @@ class PredictionObject(object):
             axis=1, skipna=True
         ) / sum(series_weights.values())
         self.avg_metrics = self.per_series_metrics.mean(axis=1, skipna=True)
+        return self
+
+    def apply_constraints(self,
+        constraint_method, constraint_regularization,
+        upper_constraint, lower_constraint,
+        bounds, df_train=None,
+    ):
+        self.forecast, self.lower_forecast, self.upper_forecast = apply_constraints(
+            self.forecast, self.lower_forecast, self.upper_forecast,
+            constraint_method, constraint_regularization,
+            upper_constraint, lower_constraint,
+            bounds, df_train
+        )
         return self

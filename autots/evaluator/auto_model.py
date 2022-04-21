@@ -584,15 +584,29 @@ def ModelPrediction(
         df_forecast.lower_forecast = df_forecast.lower_forecast.clip(lower=0)
         df_forecast.forecast = df_forecast.forecast.clip(lower=0)
         df_forecast.upper_forecast = df_forecast.upper_forecast.clip(lower=0)
+
     if constraint is not None:
+        if isinstance(constraint, dict):
+            constraint_method = constraint.get("method", "quantile")
+            constraint_regularization = constraint.get("regularization", 1)
+            lower_constraint = constraint.get("lower_constraint", 0)
+            upper_constraint = constraint.get("upper_constraint", 1)
+            bounds = constraint.get("bounds", False)
+        else:
+            constraint_method = "stdev_min"
+            lower_constraint = float(constraint)
+            upper_constraint = float(constraint)
+            constraint_regularization = 1
+            bounds = False
         if verbose > 2:
-            print("Using constraint.")
-        constraint = float(constraint)
-        train_std = df_train.std(axis=0)
-        train_min = df_train.min(axis=0) - (constraint * train_std)
-        train_max = df_train.max(axis=0) + (constraint * train_std)
-        df_forecast.forecast = df_forecast.forecast.clip(lower=train_min, axis=1)
-        df_forecast.forecast = df_forecast.forecast.clip(upper=train_max, axis=1)
+            print(f"Using constraint with method: {constraint_method}")
+
+        df_forecast = df_forecast.apply_constraint(
+            constraint_method, constraint_regularization,
+            upper_constraint, lower_constraint,
+            bounds, df_train,
+        )
+
     transformation_runtime = transformation_runtime + (
         datetime.datetime.now() - transformationStartTime
     )
