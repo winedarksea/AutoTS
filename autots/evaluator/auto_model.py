@@ -587,8 +587,8 @@ def ModelPrediction(
 
     if constraint is not None:
         if isinstance(constraint, dict):
-            constraint_method = constraint.get("method", "quantile")
-            constraint_regularization = constraint.get("regularization", 1)
+            constraint_method = constraint.get("constraint_method", "quantile")
+            constraint_regularization = constraint.get("constraint_regularization", 1)
             lower_constraint = constraint.get("lower_constraint", 0)
             upper_constraint = constraint.get("upper_constraint", 1)
             bounds = constraint.get("bounds", False)
@@ -599,9 +599,9 @@ def ModelPrediction(
             constraint_regularization = 1
             bounds = False
         if verbose > 2:
-            print(f"Using constraint with method: {constraint_method}")
+            print(f"Using constraint with method: {constraint_method}, {constraint_regularization}, {lower_constraint}, {upper_constraint}, {bounds}")
 
-        df_forecast = df_forecast.apply_constraint(
+        df_forecast = df_forecast.apply_constraints(
             constraint_method, constraint_regularization,
             upper_constraint, lower_constraint,
             bounds, df_train,

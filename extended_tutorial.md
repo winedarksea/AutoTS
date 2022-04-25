@@ -82,6 +82,7 @@ Cross validation can be tricky in time series data due to the necessity of preve
 
 Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future. 
 With very small datasets, there may be not be enough data for cross validation, in which case `num_validations` may be set to 0. This can also speed up quick tests. 
+Note that when `num_validations=0` *one evaluation* is still run. It's just not cross validation. `num_validations` is the number of **cross** validations to be done in addition. 
 In general, the safest approach is to have as many validations as possible, as long as there is sufficient data for it. 
 
 Here are the available methods:

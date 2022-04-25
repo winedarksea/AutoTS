@@ -51,7 +51,18 @@ class AutoTS(object):
             More runs = longer runtime, generally better accuracy.
             It's called `max` because someday there will be an auto early stopping option, but for now this is just the exact number of generations to run.
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
-        constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.
+        constraint (float): when not None, use this float value * data st dev above max or below min for constraining forecast values.
+            now also instead accepts a dictionary containing the following key/values:
+                constraint_method (str): one of 
+                    stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
+                    stdev - threshold is the mean of historic data +/- constraint * st dev of data
+                    absolute - input is array of length series containing the threshold's final value for each
+                    quantile - constraint is the quantile of historic data to use as threshold
+                constraint_regularization (float): 0 to 1
+                    where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
+                upper_constraint (float): or array, depending on method, None if unused
+                lower_constraint (float): or array, depending on method, None if unused
+                bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
         ensemble (str): None or list or comma-separated string containing:
             'auto', 'simple', 'distance', 'horizontal', 'horizontal-min', 'horizontal-max', "mosaic", "subsample"
         initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()

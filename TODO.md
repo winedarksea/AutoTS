@@ -18,6 +18,8 @@
 * added 'window' to AverageValueNaive
 * added load_artificial sample dataset
 * fixed bug in plot_horizontal where not handling negative series
+* major update to Constraint functionality
+* GluonTS is no longer part of the default model list (faster tests this way) but is now part of 'best'
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

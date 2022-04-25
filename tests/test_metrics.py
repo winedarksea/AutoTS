@@ -55,3 +55,46 @@ class TestMetrics(unittest.TestCase):
         self.assertTrue((output_res.avg_metrics.round(3) == known_avg_metrics).all())
         self.assertTrue((output_res.avg_metrics_weighted.round(3) == known_avg_metrics_weighted).all())
         self.assertTrue((output_res.per_series_metrics['b'].round(3) == b_avg_metrics).all())
+
+
+class TestConstraint(unittest.TestCase):
+
+    def test_constraints(self):
+        """This at least assures no changes in behavior go unnoticed, hopefully."""
+        predictions = PredictionObject()
+        predictions.forecast = pd.DataFrame({
+            'a': [-10, 10, 10, -10, 0],  # perfect forecast
+            'b': [0, 0, 0, 10, 10],
+        }).astype(float)
+        df_train = predictions.forecast.copy() + 1
+        predictions.upper_forecast = pd.DataFrame({
+            'a': [10, 20, -10, 10, 20],
+            'b': [0, 0, 0, 10, 10],
+        }).astype(float)
+        predictions.lower_forecast = pd.DataFrame({
+            'a': [-10, 0, 10, 10, 0],
+            'b': [-10, -10, -10, -10, -5],
+        }).astype(float)
+        predictions = predictions.apply_constraints(
+            constraint_method="quantile", constraint_regularization=1,
+            upper_constraint=None, lower_constraint=0.0,
+            bounds=True, df_train=df_train
+        )
+        predictions = predictions.apply_constraints(
+            constraint_method="absolute", constraint_regularization=1,
+            upper_constraint=[5.0, 5.0], lower_constraint=None,
+            bounds=False, df_train=df_train
+        )
+        self.assertTrue(10.0 == predictions.lower_forecast.max().max())
+        predictions = predictions.apply_constraints(
+            constraint_method="stdev", constraint_regularization=0.5,
+            upper_constraint=0.5, lower_constraint=None,
+            bounds=True, df_train=df_train
+        )
+        # test lower constraint
+        self.assertTrue((df_train.min() == predictions.lower_forecast.min()).all())
+        self.assertTrue((df_train.min() == predictions.forecast.min()).all())
+        self.assertTrue((df_train.min() == predictions.upper_forecast.min()).all())
+        # test upper constraint
+        self.assertTrue(10.0 == predictions.forecast.max().sum())
+        self.assertTrue((predictions.upper_forecast.round(2).max() == np.array([13.00, 8.87])).all())

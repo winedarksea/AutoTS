@@ -26,7 +26,7 @@ class AutoTSTest(unittest.TestCase):
         models_to_validate = 0.35  # must be a decimal percent for this test
 
         model_list = [
-            'ZeroesNaive',
+            'ConstantNaive',
             'LastValueNaive',
             'AverageValueNaive',
             'SeasonalNaive',

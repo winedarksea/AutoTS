@@ -68,6 +68,8 @@ class ModelObject(object):
 
     def basic_profile(self, df):
         """Capture basic training details."""
+        if 0 in df.shape:
+            raise ValueError(f"{self.name} training dataframe has no data: {df.shape}")
         self.startTime = datetime.datetime.now()
         self.train_shape = df.shape
         self.column_names = df.columns
@@ -110,21 +112,23 @@ def apply_constraints(
         bounds, df_train=None,
 ):
     """Use constraint thresholds to adjust outputs by limit.
+    Note that only one method of constraint can be used here, but if different methods are desired,
+    this can be run twice, with None passed to the upper or lower constraint not being used.
     
     Args:
-        forecast (pd.DataFrame): forecast df
+        forecast (pd.DataFrame): forecast df, wide style
         lower_forecast (pd.DataFrame): lower bound forecast df
             if bounds is False, upper and lower forecast dataframes are unused and can be empty
         upper_forecast (pd.DataFrame): upper bound forecast df
         constraint_method (str): one of 
-            stdev_min - min or max + constraint * st dev of data
-            stdev - mean + constraint * st dev of data
-            absolute - input is array of length series with threshold as final value
+            stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
+            stdev - threshold is the mean of historic data +/- constraint * st dev of data
+            absolute - input is array of length series containing the threshold's final value for each
             quantile - constraint is the quantile of historic data to use as threshold
         constraint_regularization (float): 0 to 1
-            where 0 means no constraint, 1 is hard threshold, and in between is penalty term
-        upper_constraint (float): or array, depending on method
-        lower_constraint (float): or array, depending on method
+            where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
+        upper_constraint (float): or array, depending on method, None if unused
+        lower_constraint (float): or array, depending on method, None if unused
         bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
         df_train (pd.DataFrame): required for quantile/stdev methods to find threshold values
 
@@ -224,6 +228,7 @@ class PredictionObject(object):
         total_runtime: return runtime for all model components in seconds
         plot
         evaluate
+        apply_constraints
     """
 
     def __init__(
@@ -528,10 +533,30 @@ class PredictionObject(object):
         return self
 
     def apply_constraints(self,
-        constraint_method, constraint_regularization,
-        upper_constraint, lower_constraint,
-        bounds, df_train=None,
+        constraint_method="quantile", constraint_regularization=0.5,
+        upper_constraint=1.0, lower_constraint=0.0,
+        bounds=True, df_train=None,
     ):
+        """Use constraint thresholds to adjust outputs by limit.
+        Note that only one method of constraint can be used here, but if different methods are desired,
+        this can be run twice, with None passed to the upper or lower constraint not being used.
+        
+        Args:
+            constraint_method (str): one of 
+                stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
+                stdev - threshold is the mean of historic data +/- constraint * st dev of data
+                absolute - input is array of length series containing the threshold's final value for each
+                quantile - constraint is the quantile of historic data to use as threshold
+            constraint_regularization (float): 0 to 1
+                where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
+            upper_constraint (float): or array, depending on method, None if unused
+            lower_constraint (float): or array, depending on method, None if unused
+            bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
+            df_train (pd.DataFrame): required for quantile/stdev methods to find threshold values
+
+        Returns:
+            self
+        """
         self.forecast, self.lower_forecast, self.upper_forecast = apply_constraints(
             self.forecast, self.lower_forecast, self.upper_forecast,
             constraint_method, constraint_regularization,
