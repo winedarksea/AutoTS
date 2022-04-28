@@ -61,6 +61,16 @@ def create_model_id(
     return hashed
 
 
+def horizontal_template_to_model_list(template):
+    """helper function to take template dataframe of ensembles to a single list of models."""
+    if "ModelParameters" not in template.columns:
+        raise ValueError("Template input does not match expected for models")
+    model_list = []
+    for idx, row in template.iterrows():
+        model_list.extend(list(json.loads(row["ModelParameters"])['models'].keys()))
+    return model_list
+
+
 def ModelMonster(
     model: str,
     parameters: dict = {},

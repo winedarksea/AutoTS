@@ -1217,6 +1217,7 @@ def generate_mosaic_template(
     full_mae_errors,
     smoothing_window=None,
     metric_name="MAE",
+    models_to_use=None,
     **kwargs,
 ):
     """Generate an ensemble template from results."""
@@ -1230,7 +1231,8 @@ def generate_mosaic_template(
     # remove slow models... tbd
     # select only models run through all validations
     run_count = local_results[['Model', 'ID']].groupby("ID").count()
-    models_to_use = run_count[run_count['Model'] == total_vals].index.tolist()
+    if models_to_use is None:
+        models_to_use = run_count[run_count['Model'] == total_vals].index.tolist()
     # begin figuring out which are the min models for each point
     id_array = np.array([y for y in sorted(full_mae_ids) if y in models_to_use])
     errors_array = np.array(

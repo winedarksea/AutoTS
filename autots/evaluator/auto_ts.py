@@ -29,6 +29,7 @@ from autots.evaluator.auto_model import (
     validation_aggregation,
     back_forecast,
     remove_leading_zeros,
+    horizontal_template_to_model_list,
 )
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
@@ -1092,6 +1093,7 @@ Try increasing models_to_validate, max_per_model_class
 or otherwise increase models available."""
 
         # Construct horizontal style ensembles
+        models_to_use = None
         if any(x in ensemble for x in self.h_ens_list):
             ensemble_templates = pd.DataFrame()
             try:
@@ -1110,6 +1112,7 @@ or otherwise increase models available."""
                 ensemble_templates = pd.concat(
                     [ensemble_templates, ens_templates], axis=0
                 )
+                models_to_use = horizontal_template_to_model_list(ens_templates)
             except Exception as e:
                 if self.verbose >= 0:
                     print(f"Horizontal Ensemble Generation Error: {repr(e)}")
@@ -1133,6 +1136,7 @@ or otherwise increase models available."""
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
                         smoothing_window=14,
+                        metric_name="MAE",
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
@@ -1167,7 +1171,9 @@ or otherwise increase models available."""
                         num_validations=num_validations,
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
+                        models_to_use=models_to_use,
                         smoothing_window=7,
+                        metric_name="H-MAE",
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
@@ -1182,6 +1188,7 @@ or otherwise increase models available."""
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
                         smoothing_window=3,
+                        metric_name="MAE",
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
@@ -1246,6 +1253,20 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
+                    if models_to_use is not None:
+                        ens_templates = generate_mosaic_template(
+                            initial_results=self.initial_results.model_results,
+                            full_mae_ids=self.initial_results.full_mae_ids,
+                            num_validations=num_validations,
+                            col_names=df_subset.columns,
+                            full_mae_errors=weight_per_value,
+                            smoothing_window=None,
+                            models_to_use=models_to_use,
+                            metric_name="Horiz-Weighted",
+                        )
+                        ensemble_templates = pd.concat(
+                            [ensemble_templates, ens_templates], axis=0
+                        )
             except Exception as e:
                 if self.verbose >= 0:
                     print(f"Mosaic Ensemble Generation Error: {e}")
@@ -1715,7 +1736,7 @@ or otherwise increase models available."""
         elif method.lower() in ['only', 'user only', 'user_only', 'import_only']:
             self.initial_template = import_template
         else:
-            return ValueError("method must be 'add_on' or 'only'")
+            return ValueError("method must be 'addon' or 'only'")
 
         return self
 
