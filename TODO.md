@@ -21,6 +21,7 @@
 * major update to Constraint functionality
 * GluonTS is no longer part of the default model list (faster tests this way) but is now part of 'best'
 * horizontal models_to_use for Mosaic ensembles
+* added some intel optimizations to sklearn code
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

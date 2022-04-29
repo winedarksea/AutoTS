@@ -7,10 +7,20 @@ import datetime
 import random
 import numpy as np
 import pandas as pd
+try:  # needs to go first
+    from sklearnex import patch_sklearn
+    patch_sklearn()
+except Exception:
+    pass
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.seasonal import date_part, seasonal_int
 from autots.tools.window_functions import window_maker, last_window
+try:
+    import dpctl
+    from dpctl.tensor import from_numpy
+except Exception:
+    pass
 
 
 def rolling_x_regressor(
@@ -1036,7 +1046,20 @@ class RollingRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
-        self.regr = self.regr.fit(X, Y)
+        try:
+            device = dpctl.SyclDevice("gpu,cpu")
+            if self.verbose > 0:
+                print(f"{'GPU' if device.is_gpu else 'CPU'} targeted: ", device)
+            try:
+                x_device = from_numpy(X, usm_type='device', queue=dpctl.SyclQueue(device))
+                y_device = from_numpy(Y, usm_type='device', queue=dpctl.SyclQueue(device))
+            except Exception:
+                x_device = from_numpy(X, usm_type='device', device=device, sycl_queue=dpctl.SyclQueue(device))
+                y_device = from_numpy(Y, usm_type='device', device=device, sycl_queue=dpctl.SyclQueue(device))
+        except Exception:
+            x_device = X
+            y_device = Y
+        self.regr = self.regr.fit(x_device, y_device)
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -2479,7 +2502,7 @@ class MultivariateRegression(ModelObject):
                 )
                 for x_col in base.columns
             ]
-        )
+        ).to_numpy()
         del base
         if self.probabilistic:
             alpha_base = (1 - self.prediction_interval) / 2
@@ -2509,10 +2532,24 @@ class MultivariateRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
-        self.model.fit(X.to_numpy(), Y)
+        try:
+            device = dpctl.SyclDevice("gpu,cpu")
+            if self.verbose > 0:
+                print(f"{'GPU' if device.is_gpu else 'CPU'} targeted: ", device)
+            try:
+                x_device = from_numpy(X, usm_type='device', queue=dpctl.SyclQueue(device))
+                y_device = from_numpy(Y, usm_type='device', queue=dpctl.SyclQueue(device))
+            except Exception:
+                x_device = from_numpy(X, usm_type='device', device=device, sycl_queue=dpctl.SyclQueue(device))
+                y_device = from_numpy(Y, usm_type='device', device=device, sycl_queue=dpctl.SyclQueue(device))
+        except Exception:
+            x_device = X
+            y_device = Y
+        self.model.fit(x_device, y_device)
+
         if self.probabilistic:
-            self.model_upper.fit(X.to_numpy(), Y)
-            self.model_lower.fit(X.to_numpy(), Y)
+            self.model_upper.fit(X, Y)
+            self.model_lower.fit(X, Y)
         # we only need the N most recent points for predict
         self.sktraindata = df.tail(self.min_threshold)
 
