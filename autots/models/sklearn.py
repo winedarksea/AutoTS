@@ -1046,6 +1046,7 @@ class RollingRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
+        use_device = False
         try:
             device = dpctl.SyclDevice("gpu,cpu")
             if self.verbose > 0:
@@ -1056,10 +1057,13 @@ class RollingRegression(ModelObject):
             except Exception:
                 x_device = from_numpy(X, usm_type='device', device=device, sycl_queue=dpctl.SyclQueue(device))
                 y_device = from_numpy(Y, usm_type='device', device=device, sycl_queue=dpctl.SyclQueue(device))
+            use_device = True
         except Exception:
             x_device = X
             y_device = Y
         self.regr = self.regr.fit(x_device, y_device)
+        if use_device:
+            del device, x_device, y_device
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -2532,6 +2536,7 @@ class MultivariateRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
+        use_device = False
         try:
             device = dpctl.SyclDevice("gpu,cpu")
             if self.verbose > 0:
@@ -2542,6 +2547,7 @@ class MultivariateRegression(ModelObject):
             except Exception:
                 x_device = from_numpy(X, usm_type='device', device=device, sycl_queue=dpctl.SyclQueue(device))
                 y_device = from_numpy(Y, usm_type='device', device=device, sycl_queue=dpctl.SyclQueue(device))
+            use_device = True
         except Exception:
             x_device = X
             y_device = Y
@@ -2552,6 +2558,8 @@ class MultivariateRegression(ModelObject):
             self.model_lower.fit(X, Y)
         # we only need the N most recent points for predict
         self.sktraindata = df.tail(self.min_threshold)
+        if use_device:
+            del device, x_device, y_device
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
