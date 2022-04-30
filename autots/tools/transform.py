@@ -2276,7 +2276,6 @@ class GeneralTransformer(object):
                 raise ValueError("FastICA fails with > 500 series")
             transformer = FastICA(
                 n_components=df.shape[1],
-                whiten=True,
                 random_state=random_seed,
                 **param,
             )
@@ -2435,6 +2434,8 @@ def get_transformer_params(transformer: str = "EmptyTransformer", method: str = 
         return {
             "algorithm": random.choice(["parallel", "deflation"]),
             "fun": random.choice(["logcosh", "exp", "cube"]),
+            "max_iter": random.choices([100, 250, 500], [0.2, 0.7, 0.1])[0],
+            "whiten": random.choices([True, False], [0.8, 0.2])[0],
         }
     elif transformer == "QuantileTransformer":
         return {

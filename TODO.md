@@ -21,7 +21,9 @@
 * major update to Constraint functionality
 * GluonTS is no longer part of the default model list (faster tests this way) but is now part of 'best'
 * horizontal models_to_use for Mosaic ensembles
-* added some intel optimizations to sklearn code
+* added some intel optimizations to sklearn code if scikit-learn-intelex installed
+* fixed a bug in rolling_x_regressor where datepart method wasn't actually getting appended
+* sped up rolling_x_regressor by reducing concats
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

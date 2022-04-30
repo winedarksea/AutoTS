@@ -16,11 +16,6 @@ from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.seasonal import date_part, seasonal_int
 from autots.tools.window_functions import window_maker, last_window
-try:
-    import dpctl
-    from dpctl.tensor import from_numpy
-except Exception:
-    pass
 
 
 def rolling_x_regressor(
@@ -50,60 +45,47 @@ def rolling_x_regressor(
 
     Returns a dataframe of statistical features. Will need to be shifted by 1 or more to match Y for forecast.
     """
-    X = df.copy()
+    X = [df.copy()]
     if str(mean_rolling_periods).isdigit():
         temp = df.rolling(int(mean_rolling_periods), min_periods=1).median()
-        X = pd.concat([X, temp], axis=1)
+        X.append(temp)
         if str(macd_periods).isdigit():
             temp = df.rolling(int(macd_periods), min_periods=1).median() - temp
-            X = pd.concat([X, temp], axis=1)
+            X.append(temp)
     if str(std_rolling_periods).isdigit():
-        X = pd.concat([X, df.rolling(std_rolling_periods, min_periods=1).std()], axis=1)
+        X.append(df.rolling(std_rolling_periods, min_periods=1).std())
     if str(max_rolling_periods).isdigit():
-        X = pd.concat([X, df.rolling(max_rolling_periods, min_periods=1).max()], axis=1)
+        X.append(df.rolling(max_rolling_periods, min_periods=1).max())
     if str(min_rolling_periods).isdigit():
-        X = pd.concat([X, df.rolling(min_rolling_periods, min_periods=1).min()], axis=1)
+        X.append(df.rolling(min_rolling_periods, min_periods=1).min())
     if str(quantile90_rolling_periods).isdigit():
-        X = pd.concat(
-            [X, df.rolling(quantile90_rolling_periods, min_periods=1).quantile(0.9)],
-            axis=1,
-        )
+        X.append(df.rolling(quantile90_rolling_periods, min_periods=1).quantile(0.9))
     if str(quantile10_rolling_periods).isdigit():
-        X = pd.concat(
-            [X, df.rolling(quantile10_rolling_periods, min_periods=1).quantile(0.1)],
-            axis=1,
-        )
-
+        X.append(df.rolling(quantile10_rolling_periods, min_periods=1).quantile(0.1))
     if str(ewm_alpha).replace('.', '').isdigit():
-        X = pd.concat(
-            [X, df.ewm(alpha=ewm_alpha, ignore_na=True, min_periods=1).mean()], axis=1
-        )
+        X.append(df.ewm(alpha=ewm_alpha, ignore_na=True, min_periods=1).mean())
     if str(ewm_var_alpha).replace('.', '').isdigit():
-        X = pd.concat(
-            [X, df.ewm(alpha=ewm_var_alpha, ignore_na=True, min_periods=1).var()],
-            axis=1,
-        )
+        X.append(df.ewm(alpha=ewm_var_alpha, ignore_na=True, min_periods=1).var())
     if str(additional_lag_periods).isdigit():
-        X = pd.concat([X, df.shift(additional_lag_periods)], axis=1).fillna(
-            method='bfill'
-        )
+        X.append(df.shift(additional_lag_periods))
     if abs_energy:
-        X = pd.concat([X, df.pow(other=([2] * len(df.columns))).cumsum()], axis=1)
+        X.append(df.pow(other=([2] * len(df.columns))).cumsum())
     if str(rolling_autocorr_periods).isdigit():
         temp = df.rolling(rolling_autocorr_periods).apply(
             lambda x: x.autocorr(), raw=False
         )
-        X = pd.concat([X, temp], axis=1).fillna(method='bfill')
-
+        X.append(temp)
     if add_date_part in ['simple', 'expanded', 'recurring', "simple_2"]:
         date_part_df = date_part(df.index, method=add_date_part)
         date_part_df.index = df.index
-        X = pd.concat(
-            [
-                X,
-            ],
-            axis=1,
-        )
+        X.append(date_part_df)
+    # unlike the others, this pulls the entire window, not just one lag
+    if str(window).isdigit():
+        # we already have lag 1 using this
+        for curr_shift in range(1, window):
+            X.append(df.shift(curr_shift))
+    X = pd.concat(X, axis=1)
+
     if holiday:
         from autots.tools.holiday import holiday_flag
 
@@ -117,14 +99,10 @@ def rolling_x_regressor(
 
         poly = PolynomialFeatures(polynomial_degree)
         X = pd.DataFrame(poly.fit_transform(X))
-    # unlike the others, this pulls the entire window, not just one lag
-    if str(window).isdigit():
-        # we already have lag 1 using this
-        for curr_shift in range(1, window):
-            X = pd.concat([X, df.shift(curr_shift)], axis=1).fillna(method='bfill')
+    
 
-    X = X.replace([np.inf, -np.inf], np.nan)
-    X = X.fillna(method='ffill').fillna(method='bfill')
+    # X = X.replace([np.inf, -np.inf], np.nan)
+    X.fillna(method='bfill', inplace=True)
 
     X.columns = [str(x) for x in range(len(X.columns))]
 
@@ -1046,6 +1024,7 @@ class RollingRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
+        """
         use_device = False
         try:
             device = dpctl.SyclDevice("gpu,cpu")
@@ -1061,9 +1040,8 @@ class RollingRegression(ModelObject):
         except Exception:
             x_device = X
             y_device = Y
-        self.regr = self.regr.fit(x_device, y_device)
-        if use_device:
-            del device, x_device, y_device
+        """
+        self.regr = self.regr.fit(X, Y)
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -2536,30 +2514,13 @@ class MultivariateRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
-        use_device = False
-        try:
-            device = dpctl.SyclDevice("gpu,cpu")
-            if self.verbose > 0:
-                print(f"{'GPU' if device.is_gpu else 'CPU'} targeted: ", device)
-            try:
-                x_device = from_numpy(X, usm_type='device', queue=dpctl.SyclQueue(device))
-                y_device = from_numpy(Y, usm_type='device', queue=dpctl.SyclQueue(device))
-            except Exception:
-                x_device = from_numpy(X, usm_type='device', device=device, sycl_queue=dpctl.SyclQueue(device))
-                y_device = from_numpy(Y, usm_type='device', device=device, sycl_queue=dpctl.SyclQueue(device))
-            use_device = True
-        except Exception:
-            x_device = X
-            y_device = Y
-        self.model.fit(x_device, y_device)
+        self.model.fit(X, Y)
 
         if self.probabilistic:
             self.model_upper.fit(X, Y)
             self.model_lower.fit(X, Y)
         # we only need the N most recent points for predict
         self.sktraindata = df.tail(self.min_threshold)
-        if use_device:
-            del device, x_device, y_device
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -2626,18 +2587,18 @@ class MultivariateRegression(ModelObject):
                     ).tail(1)
                     for x_col in current_x.columns
                 ]
-            )
-            rfPred = self.model.predict(x_dat.to_numpy())
+            ).to_numpy()
+            rfPred = self.model.predict(x_dat)
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
             forecast = pd.concat([forecast, pred_clean])
             if self.probabilistic:
-                rfPred_upper = self.model_upper.predict(x_dat.to_numpy())
+                rfPred_upper = self.model_upper.predict(x_dat)
                 pred_upper = pd.DataFrame(
                     rfPred_upper, index=current_x.columns, columns=[index[fcst_step]]
                 ).transpose()
-                rfPred_lower = self.model_lower.predict(x_dat.to_numpy())
+                rfPred_lower = self.model_lower.predict(x_dat)
                 pred_lower = pd.DataFrame(
                     rfPred_lower, index=current_x.columns, columns=[index[fcst_step]]
                 ).transpose()
