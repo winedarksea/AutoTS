@@ -511,6 +511,7 @@ def ModelPrediction(
     random_seed: int = 2020,
     verbose: int = 0,
     n_jobs: int = None,
+    current_model_file: str = None,
 ):
     """Feed parameters into modeling pipeline
 
@@ -530,11 +531,22 @@ def ModelPrediction(
         fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast
         return_model (bool): if True, forecast will have .model and .tranformer attributes set to model object.
         n_jobs (int): number of processes
+        current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
 
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
     """
     transformationStartTime = datetime.datetime.now()
+    if current_model_file is not None:
+        try:
+            with open(f'{current_model_file}.json', 'w') as f:
+                json.dump({
+                    "model_name": model_str,
+                    "model_param_dict": parameter_dict,
+                    "model_transform_dict": transformation_dict,
+                }, f)
+        except Exception as e:
+            print(f"failed to write {current_model_file} with error {repr(e)}")
 
     transformer_object = GeneralTransformer(**transformation_dict)
     df_train_transformed = transformer_object._fit(df_train)
@@ -818,6 +830,7 @@ def model_forecast(
     ],
     horizontal_subset: list = None,
     return_model: bool = False,
+    current_model_file: str = None,
     **kwargs,
 ):
     """Takes numeric data, returns numeric forecasts.
@@ -848,6 +861,7 @@ def model_forecast(
         horizontal_subset (list): columns of df_train to use for forecast, meant for internal use for horizontal ensembling
         fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast. True is recommended.
         return_model (bool): if True, forecast will have .model and .tranformer attributes set to model object. Only works for non-ensembles.
+        current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
 
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
@@ -927,6 +941,7 @@ def model_forecast(
                     n_jobs=n_jobs,
                     template_cols=template_cols,
                     horizontal_subset=horizontal_subset,
+                    current_model_file=current_model_file,
                 )
                 model_id = create_model_id(
                     df_forecast.model_name,
@@ -1011,6 +1026,7 @@ def model_forecast(
             startTimeStamps=startTimeStamps,
             n_jobs=n_jobs,
             return_model=return_model,
+            current_model_file=current_model_file,
         )
 
         sys.stdout.flush()
@@ -1055,6 +1071,7 @@ def TemplateWizard(
         'Ensemble',
     ],
     traceback: bool = False,
+    current_model_file: str = None,
 ):
     """
     Take Template, returns Results.
@@ -1084,6 +1101,7 @@ def TemplateWizard(
         model_interrupt (bool): if True, keyboard interrupts are caught and only break current model eval.
         template_cols (list): column names of columns used as model template
         traceback (bool): include tracebook over just error representation
+        current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
 
     Returns:
         TemplateEvalObject
@@ -1176,6 +1194,7 @@ def TemplateWizard(
                 verbose=verbose,
                 n_jobs=n_jobs,
                 template_cols=template_cols,
+                current_model_file=current_model_file,
             )
             if verbose > 1:
                 post_memory_percent = virtual_memory().percent
@@ -2005,6 +2024,7 @@ def back_forecast(
     n_jobs="auto",
     verbose=0,
     eval_periods: int = None,
+    current_model_file: str = None,
     **kwargs,
 ):
     """Create forecasts for the historical training data, ie. backcast or back forecast.
@@ -2089,6 +2109,7 @@ def back_forecast(
                 random_seed=random_seed,
                 verbose=verbose,
                 n_jobs=n_jobs,
+                current_model_file=current_model_file,
             )
             b_forecast = pd.concat([b_forecast, df_forecast.forecast])
             b_forecast_up = pd.concat([b_forecast_up, df_forecast.upper_forecast])

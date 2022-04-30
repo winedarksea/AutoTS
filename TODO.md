@@ -24,6 +24,7 @@
 * added some intel optimizations to sklearn code if scikit-learn-intelex installed
 * fixed a bug in rolling_x_regressor where datepart method wasn't actually getting appended
 * sped up rolling_x_regressor by reducing concats
+* added current_model_file as an option for additional debugging information
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

@@ -1170,7 +1170,7 @@ class RollingRegression(ModelObject):
         ewm_choice = random.choices(
             [None, 0.05, 0.1, 0.2, 0.5, 0.8], [0.4, 0.01, 0.05, 0.1, 0.1, 0.05]
         )[0]
-        abs_energy_choice = random.choices([True, False], [0.3, 0.7])[0]
+        abs_energy_choice = random.choices([True, False], [0.1, 0.9])[0]
         rolling_autocorr_periods_choice = random.choices(
             [None, 2, 7, 12, 30], [0.8, 0.05, 0.05, 0.05, 0.05]
         )[0]

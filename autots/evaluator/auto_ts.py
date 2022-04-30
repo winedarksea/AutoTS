@@ -112,6 +112,7 @@ class AutoTS(object):
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
             if "end_generation", as True and also ends entire generation of run. Note skipped models will not be tried again.
+        current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
         n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also 'auto'.
 
@@ -178,6 +179,7 @@ class AutoTS(object):
         introduce_na: bool = None,
         preclean: dict = None,
         model_interrupt: bool = True,
+        current_model_file: str = None,
         verbose: int = 1,
         n_jobs: int = -2,
     ):
@@ -213,6 +215,7 @@ class AutoTS(object):
         self.verbose = int(verbose)
         self.n_jobs = n_jobs
         self.models_mode = models_mode
+        self.current_model_file = current_model_file
         random.seed(self.random_seed)
         # just a list of horizontal types in general
         self.h_ens_list = [
@@ -725,6 +728,7 @@ class AutoTS(object):
             n_jobs=self.n_jobs,
             max_generations=self.max_generations,
             traceback=self.traceback,
+            current_model_file=self.current_model_file,
         )
         model_count = template_result.model_count
 
@@ -795,6 +799,7 @@ class AutoTS(object):
                 current_generation=current_generation,
                 max_generations=self.max_generations,
                 traceback=self.traceback,
+                current_model_file=self.current_model_file,
             )
             model_count = template_result.model_count
 
@@ -844,6 +849,7 @@ class AutoTS(object):
                     verbose=verbose,
                     n_jobs=self.n_jobs,
                     traceback=self.traceback,
+                    current_model_file=self.current_model_file,
                 )
                 model_count = template_result.model_count
                 # capture results from lower-level template run
@@ -1075,6 +1081,7 @@ class AutoTS(object):
                     n_jobs=self.n_jobs,
                     validation_round=(y + 1),
                     traceback=self.traceback,
+                    current_model_file=self.current_model_file,
                 )
                 model_count = template_result.model_count
                 # gather results of template run
@@ -1295,6 +1302,7 @@ or otherwise increase models available."""
                     verbose=verbose,
                     n_jobs=self.n_jobs,
                     traceback=self.traceback,
+                    current_model_file=self.current_model_file,
                 )
                 # capture results from lower-level template run
                 template_result.model_results['TotalRuntime'].fillna(
@@ -1490,6 +1498,7 @@ or otherwise increase models available."""
                     verbose=verbose,
                     n_jobs=self.n_jobs,
                     template_cols=self.template_cols,
+                    current_model_file=self.current_model_file,
                 )
                 # convert categorical back to numeric
                 trans = self.categorical_transformer
@@ -1538,6 +1547,7 @@ or otherwise increase models available."""
                 verbose=verbose,
                 n_jobs=self.n_jobs,
                 template_cols=self.template_cols,
+                current_model_file=self.current_model_file,
             )
             # convert categorical back to numeric
             trans = self.categorical_transformer
@@ -2270,6 +2280,7 @@ class AutoTSIntervals(object):
                 random_seed=self.random_seed,
                 verbose=verbose,
                 template_cols=self.template_cols,
+                current_model_file=self.current_model_file,
             )
 
             trans = self.categorical_transformer
