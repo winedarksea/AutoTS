@@ -25,6 +25,7 @@
 * fixed a bug in rolling_x_regressor where datepart method wasn't actually getting appended
 * sped up rolling_x_regressor by reducing concats
 * added current_model_file as an option for additional debugging information
+* updated PCA and FastICA to be more flexible on n_components
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

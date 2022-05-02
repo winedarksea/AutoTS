@@ -2228,7 +2228,21 @@ class UnivariateRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params(model_dict=univariate_model_dict)
+        if method == "deep":
+            x_transform_choice = random.choices(
+                [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
+                [0.9, 0.03, 0.03, 0.04],
+            )[0]
+            window_choice = random.choices([None, 3, 7, 10, 24], [0.7, 0.2, 0.05, 0.05, 0.05])[0]
+        else:
+            x_transform_choice = random.choices(
+                [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
+                [1.0, 0.0, 0.0, 0.0],
+            )[0]
+            window_choice = random.choices([None, 3, 7, 10], [0.7, 0.2, 0.05, 0.05])[0]
+        model_choice = generate_regressor_params(
+            model_dict=univariate_model_dict, method=method
+        )
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30], [0.6, 0.1, 0.1, 0.1, 0.1]
         )[0]
@@ -2255,7 +2269,7 @@ class UnivariateRegression(ModelObject):
         ewm_var_alpha = random.choices(
             [None, 0.05, 0.1, 0.2, 0.5, 0.8], [0.7, 0.01, 0.05, 0.1, 0.1, 0.05]
         )[0]
-        abs_energy_choice = random.choices([True, False], [0.1, 0.9])[0]
+        abs_energy_choice = random.choices([True, False], [0.05, 0.95])[0]
         rolling_autocorr_periods_choice = random.choices(
             [None, 2, 7, 12, 30], [0.86, 0.01, 0.01, 0.01, 0.01]
         )[0]
@@ -2265,15 +2279,12 @@ class UnivariateRegression(ModelObject):
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         polynomial_degree_choice = None
-        x_transform_choice = random.choices(
-            [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
-            [1.0, 0.0, 0.0, 0.0],
-        )[0]
+
         if "regressor" in method:
             regression_choice = "User"
         else:
             regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
-        window_choice = random.choices([None, 3, 7, 10], [0.7, 0.2, 0.05, 0.05])[0]
+
         parameter_dict = {
             'regression_model': model_choice,
             'holiday': holiday_choice,
