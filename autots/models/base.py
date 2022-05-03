@@ -464,9 +464,7 @@ class PredictionObject(object):
 
         # concat most recent history to enable full-size diffs
         last_of_array = np.nan_to_num(
-            df_train[
-                df_train.shape[0] - 1 : df_train.shape[0],
-            ]
+            df_train[-1:, :]
         )
         lA = np.concatenate([last_of_array, A])
         lF = np.concatenate([last_of_array, F])
@@ -504,6 +502,10 @@ class PredictionObject(object):
                     ),
                     'containment': containment(lower_forecast, upper_forecast, A),
                     'contour': contour(lA, lF),
+                    # 'maxe': np.max(self.full_mae_errors, axis=0), # TAKE MAX for AGG
+                    # 'qae': np.quantile(self.full_mae_errors, 0.9, axis=0),
+                    # 'god': np.sum(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0) / F.shape[0],
+                    # maxe 12 us, qae 200 us, god 35 us
                     # 'medae': medae(self.full_mae_errors),  # median
                     # 'made_unscaled': mean_absolute_differential_error(lA, lF, 1),
                     # 'mad2e': mean_absolute_differential_error(lA, lF, 2),

@@ -759,31 +759,38 @@ def unpack_ensemble_models(
     recursive: bool = False,
 ):
     """Take ensemble models from template and add as new rows.
+    Some confusion may exist as Ensembles require both 'Ensemble' column > 0 and model name 'Ensemble'
 
     Args:
         template (pd.DataFrame): AutoTS template containing template_cols
         keep_ensemble (bool): if False, drop row containing original ensemble
         recursive (bool): if True, unnest ensembles of ensembles...
     """
-    ensemble_template = pd.DataFrame()
+    if 'Ensemble' not in template.columns:
+        template['Ensemble'] = 0
+    # handle the fact that recursively, nested Ensembles ensemble flag is set to 0 below
     template['Ensemble'] = np.where(
         ((template['Model'] == 'Ensemble') & (template['Ensemble'] < 1)),
         1,
         template['Ensemble'],
     )
-    for index, value in template[template['Ensemble'] != 0][
-        'ModelParameters'
-    ].iteritems():
+    # alternatively the below could read from 'Model' == 'Ensemble'
+    models_to_iterate = template[template['Ensemble'] != 0]['ModelParameters'].copy()
+    for index, value in models_to_iterate.iteritems():
         model_dict = json.loads(value)['models']
         model_df = pd.DataFrame.from_dict(model_dict, orient='index')
+        # it might be wise to just drop the ID column, but keeping for now
         model_df = model_df.rename_axis('ID').reset_index(drop=False)
-        model_df['Ensemble'] = 0
+        # this next line is necessary, albeit confusing
+        if 'Ensemble' not in model_df.columns:
+            model_df['Ensemble'] = 0
         # unpack nested ensembles, if recursive specified
         if recursive and 'Ensemble' in model_df['Model'].tolist():
             model_df = pd.concat(
                 [
                     unpack_ensemble_models(
-                        model_df, recursive=True, template_cols=template_cols
+                        model_df, recursive=True,
+                        keep_ensemble=keep_ensemble, template_cols=template_cols
                     ),
                     model_df,
                 ],
@@ -791,14 +798,11 @@ def unpack_ensemble_models(
                 ignore_index=True,
                 sort=False,
             ).reset_index(drop=True)
-        ensemble_template = pd.concat(
-            [ensemble_template, model_df], axis=0, ignore_index=True, sort=False
+        template = pd.concat(
+            [template, model_df], axis=0, ignore_index=True, sort=False
         ).reset_index(drop=True)
     if not keep_ensemble:
         template = template[template['Ensemble'] == 0]
-    template = pd.concat(
-        [template, ensemble_template], axis=0, ignore_index=True, sort=False
-    ).reset_index(drop=True)
     template = template.drop_duplicates(subset=template_cols)
     return template
 
