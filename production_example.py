@@ -11,6 +11,11 @@ evolve = True allows the timeseries to automatically adapt to changes.
 There is a slight risk of it getting caught in suboptimal position however.
 It should probably be coupled with some basic data sanity checks.
 """
+try:  # needs to go first
+    from sklearnex import patch_sklearn
+    patch_sklearn()
+except Exception as e:
+    print(repr(e))
 import json
 import datetime
 import os
@@ -177,6 +182,7 @@ model = AutoTS(
     # subset=100,
     # prefill_na=0,
     # remove_leading_zeroes=True,
+    current_model_file=f"current_model_{forecast_name}",
     n_jobs=n_jobs,
     verbose=1,
 )
@@ -225,7 +231,7 @@ print("Slowest models:")
 print(
     model_results[model_results["Ensemble"] < 1]
     .groupby("Model")
-    .agg({"TotalRuntime": ["mean", "max"]})
+    .agg({"TotalRuntimeSeconds": ["mean", "max"]})
     .idxmax()
 )
 print(f"Completed at system time: {datetime.datetime.now()}")
