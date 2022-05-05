@@ -1,5 +1,5 @@
 """Fill NA."""
-# import numpy as np
+import numpy as np
 import pandas as pd
 
 
@@ -8,24 +8,43 @@ def fill_zero(df):
     df = df.fillna(0)
     return df
 
+def fillna_np(array, values):
+    if np.isnan(array.sum()):
+        array = np.nan_to_num(array) + np.isnan(array) * values
+    return array
+
+def fill_forward_alt(df):
+    """Fill NaN with previous values."""
+    # this is faster if only some columns have NaN
+    df2 = df.copy()
+    for i in df2.columns[df2.isnull().any(axis=0)]:
+        df2[i] = df2[i].fillna(method='ffill').fillna(method='bfill').fillna(0)
+    return df2
 
 def fill_forward(df):
     """Fill NaN with previous values."""
     df = df.fillna(method='ffill')
-    df = df.fillna(method='bfill').fillna(0)
-    return df
+    return df.fillna(method='bfill').fillna(0)
 
-
-def fill_mean(df):
+def fill_mean_old(df):
     """Fill NaN with mean."""
     df = df.fillna(df.mean().fillna(0).to_dict())
     return df
 
+def fill_mean(df):
+    arr = np.array(df)
+    arr = np.nan_to_num(arr) + np.isnan(arr) * np.nan_to_num(np.nanmean(arr, axis=0))
+    return pd.DataFrame(arr, index=df.index, columns=df.columns)
 
-def fill_median(df):
+def fill_median_old(df):
     """Fill NaN with median."""
     df = df.fillna(df.median().fillna(0).to_dict())
     return df
+
+def fill_median(df):
+    arr = np.array(df)
+    arr = np.nan_to_num(arr) + np.isnan(arr) * np.nan_to_num(np.nanmedian(arr, axis=0))
+    return pd.DataFrame(arr, index=df.index, columns=df.columns)
 
 
 def rolling_mean(df, window: int = 10):
@@ -55,12 +74,11 @@ def fake_date_fill(df, back_method: str = 'slice'):
             - 'slice' - drop any rows with any na
             - 'keepna' - keep the lagging na
     """
-    df_index = df.index.to_series().copy()
     df2 = df.sort_index(ascending=False).copy()
     df2 = df2.apply(lambda x: pd.Series(x.dropna().values))
     df2 = df2.sort_index(ascending=False)
-    df2.index = df_index.tail(len(df2.index))
-    df2 = df2.dropna(how='all', axis=0)
+    df2.index = df.index[-df2.shape[0]:]
+    # df2 = df2.dropna(how='all', axis=0)
     if df2.empty:
         df2 = df.fillna(0)
 
@@ -68,14 +86,14 @@ def fake_date_fill(df, back_method: str = 'slice'):
         df2 = fill_forward(df2)
         return df
     elif back_method == 'slice':
+        # cut until half of columns are not NaN then backfill
         thresh = int(df.shape[1] * 0.5)
         thresh = thresh if thresh > 1 else 1
         df3 = df2.dropna(thresh=thresh, axis=0)
         if df3.empty or df3.shape[0] < 8:
-            df3 = fill_forward(df2)
+            return fill_forward(df2)
         else:
-            df3 = fill_forward(df3)
-        return df3
+            return fill_forward(df3)
     elif back_method == 'keepna':
         return df2
     else:

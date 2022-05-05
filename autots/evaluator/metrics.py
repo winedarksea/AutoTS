@@ -191,6 +191,8 @@ def contour(A, F):
     Expects two, 2-D numpy arrays of forecast_length * n series
     Returns a 1-D array of results in len n series
 
+    NaNs diffs are filled with 0, essentially equiavelent to assuming a forward fill of NaN
+
     Concat the last row of history to head of both A and F (req for 1 step)
 
     Args:
@@ -199,16 +201,33 @@ def contour(A, F):
     """
 
     try:
-        X = np.nan_to_num(np.diff(A, axis=0))
-        Y = np.nan_to_num(np.diff(F, axis=0))
         # On the assumption flat lines common in forecasts,
         # but exceedingly rare in real world
-        X = X >= 0
-        Y = Y > 0
-        contour_result = np.sum(X == Y, axis=0) / X.shape[0]
+        contour_result = np.sum(
+            (np.nan_to_num(np.diff(A, axis=0)) >= 0) == (np.nan_to_num(np.diff(F, axis=0)) > 0), axis=0
+        ) / (F.shape[0] - 1)
     except Exception:
         contour_result = np.nan
     return contour_result
+
+
+def mda(A, F):
+    """A measure of how well the actual and forecast follow the same pattern of change.
+    Expects two, 2-D numpy arrays of forecast_length * n series
+    Returns a 1-D array of results in len n series
+
+    NaNs diffs are filled with 0, essentially equiavelent to assuming a forward fill of NaN
+
+    Concat the last row of history to head of both A and F (req for 1 step)
+
+    Args:
+        A (numpy.array): known true values
+        F (numpy.array): predicted values
+    """
+
+    X = np.nan_to_num(np.diff(A, axis=0))
+    Y = np.nan_to_num(np.diff(F, axis=0))
+    return np.sum(np.sign(X) == np.sign(Y), axis=0) / F.shape[0]
 
 
 def rps(predictions, observed):
@@ -239,16 +258,24 @@ def mae(ae):
     return np.nanmean(ae, axis=0)
 
 
-def medae(ae):
+def medae(ae, nan_flag=True):
     """Accepting abs error already calculated"""
-    return np.nanmedian(ae, axis=0)
+    if nan_flag:
+        return np.nanmedian(ae, axis=0)
+    else:
+        return np.median(ae, axis=0)
 
 
-def smape(actual, forecast, ae):
+def smape(actual, forecast, ae, nan_flag=True):
     """Accepting abs error already calculated"""
-    return (
-        np.nansum((ae / (abs(forecast) + abs(actual))), axis=0) * 200
-    ) / np.count_nonzero(~np.isnan(actual), axis=0)
+    if nan_flag:
+        return (
+            np.nansum((ae / (abs(forecast) + abs(actual))), axis=0) * 200
+        ) / np.count_nonzero(~np.isnan(actual), axis=0)
+    else:
+        return (
+            np.sum((ae / (abs(forecast) + abs(actual))), axis=0) * 200
+        ) / actual.shape[0]
 
 
 def _spl(A, F, quantile, scaler):
@@ -266,9 +293,20 @@ def spl(precomputed_spl, scaler):
     return np.nanmean(precomputed_spl, axis=0) / scaler
 
 
-def msle(full_errors, ae, le):
+def msle(full_errors, ae, le, nan_flag=True):
     """input is array of y_pred - y_true to over-penalize underestimate.
     Use instead y_true - y_pred to over-penalize overestimate.
     AE used here for the log just to avoid divide by zero warnings (values aren't used either way)
     """
-    return np.nanmean(np.where(full_errors > 0, le, ae), axis=0)
+    if nan_flag:
+        return np.nanmean(np.where(full_errors > 0, le, ae), axis=0)
+    else:
+        return np.mean(np.where(full_errors > 0, le, ae), axis=0)
+
+
+def qae(ae, q=0.9, nan_flag=True):
+    """Return the q quantile of the errors per series."""
+    if nan_flag:
+        return np.quantile(np.nan_to_num(ae), q, axis=0)
+    else:
+        return np.quantile(ae, q, axis=0)

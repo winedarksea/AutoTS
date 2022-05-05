@@ -8,7 +8,7 @@ import warnings
 import datetime
 import numpy as np
 import pandas as pd
-from autots.tools.shaping import infer_frequency
+from autots.tools.shaping import infer_frequency, clean_weights
 from autots.evaluator.metrics import (
     smape,
     mae,
@@ -19,6 +19,7 @@ from autots.evaluator.metrics import (
     medae,
     mean_absolute_differential_error,
     msle,
+    qae,
 )
 
 # from sklearn.metrics import r2_score
@@ -441,8 +442,6 @@ class PredictionObject(object):
 
         # check series_weights information
         if series_weights is None:
-            from autots.tools.shaping import clean_weights
-
             series_weights = clean_weights(weights=False, series=self.forecast.columns)
         # make sure the series_weights are passed correctly to metrics
         if len(series_weights) != F.shape[1]:
@@ -469,44 +468,54 @@ class PredictionObject(object):
         lA = np.concatenate([last_of_array, A])
         lF = np.concatenate([last_of_array, F])
 
-        # mage = np.nansum(full_errors, axis=None) / A.shape[1]
-        mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
-
         # np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A))
+        inv_prediction_interval = 1 - self.prediction_interval
+        upper_diff = A - upper_forecast
         self.upper_pl = np.where(
             A >= upper_forecast,
-            self.prediction_interval * (A - upper_forecast),
-            (1 - self.prediction_interval) * (upper_forecast - A),
+            self.prediction_interval * upper_diff,
+            inv_prediction_interval * -1 * upper_diff,
         )
         # note that the quantile here is the lower quantile
+        low_diff = A - lower_forecast
         self.lower_pl = np.where(
             A >= lower_forecast,
-            (1 - self.prediction_interval) * (A - lower_forecast),
-            (1 - (1 - self.prediction_interval)) * (lower_forecast - A),
+            inv_prediction_interval * low_diff,
+            self.prediction_interval * -1 * low_diff,
         )
+
+        # test for NaN, this allows faster calculations if no nan
+        nan_flag = np.isnan(np.min(full_errors))
+
+        # mage = np.nansum(full_errors, axis=None) / A.shape[1]
+        if nan_flag:
+            mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
+        else:
+            mage = np.mean(np.abs(np.sum(full_errors, axis=1)))
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
             self.per_series_metrics = pd.DataFrame(
                 {
-                    'smape': smape(A, F, self.full_mae_errors),
+                    'smape': smape(A, F, self.full_mae_errors, nan_flag=nan_flag),
                     'mae': mae(self.full_mae_errors),
                     'rmse': rmse(self.squared_errors),
                     'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
                     'mage': mage,
-                    'mle': msle(full_errors, self.full_mae_errors, log_errors),
-                    'imle': msle(-full_errors, self.full_mae_errors, log_errors),
+                    'mle': msle(full_errors, self.full_mae_errors, log_errors, nan_flag=nan_flag),
+                    'imle': msle(-full_errors, self.full_mae_errors, log_errors, nan_flag=nan_flag),
                     'spl': spl(
                         self.upper_pl + self.lower_pl,
                         scaler=scaler,
                     ),
                     'containment': containment(lower_forecast, upper_forecast, A),
                     'contour': contour(lA, lF),
-                    # 'maxe': np.max(self.full_mae_errors, axis=0), # TAKE MAX for AGG
-                    # 'qae': np.quantile(self.full_mae_errors, 0.9, axis=0),
-                    # 'god': np.sum(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0) / F.shape[0],
+                    # 'maxe': np.nanmax(self.full_mae_errors, axis=0), # TAKE MAX for AGG
+                    # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
+                    # 'qae': qae(self.full_mae_errors, nan_flag=nan_flag),
+                    # 'god': np.nansum(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0) / F.shape[0],
                     # maxe 12 us, qae 200 us, god 35 us
-                    # 'medae': medae(self.full_mae_errors),  # median
+                    # 'medae': medae(self.full_mae_errors, nan_flag=nan_flag),  # median
                     # 'made_unscaled': mean_absolute_differential_error(lA, lF, 1),
                     # 'mad2e': mean_absolute_differential_error(lA, lF, 2),
                     # r2 can't handle NaN in history, also uncomment import above

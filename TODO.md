@@ -27,6 +27,9 @@
 * added current_model_file as an option for additional debugging information
 * updated PCA and FastICA to be more flexible on n_components
 * fixed a bug where unpack_ensemble_models with keep_ensemble=False was still keeping nested ensembles
+* impute speed optimizations for fill_mean, use of nan check so runs faster if no nan present
+* optimizations to metrics including faster if no NaN present
+* addition of new metrics: qae, mda, maxe
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

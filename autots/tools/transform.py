@@ -2335,8 +2335,15 @@ class GeneralTransformer(object):
         Returns:
             pandas.DataFrame
         """
-        df = FillNA(df, method=self.fillna, window=window)
-        return df
+        # so much faster not to try to fill NaN if there aren't any NaN
+        if isinstance(df, pd.DataFrame):
+            nan_flag = np.isnan(np.min(df.to_numpy()))
+        else:
+            nan_flag = np.isnan(np.min(np.array(df)))
+        if nan_flag:
+            return FillNA(df, method=self.fillna, window=window)
+        else:
+            return df
 
     @classmethod
     def retrieve_transformer(
