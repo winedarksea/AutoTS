@@ -29,6 +29,8 @@
 * fixed a bug where unpack_ensemble_models with keep_ensemble=False was still keeping nested ensembles
 * impute speed optimizations for fill_mean, use of nan check so runs faster if no nan present
 * optimizations to metrics including faster if no NaN present
+* added faster percentile function
+* made fake_date_fill nan method vectorized
 * addition of new metrics: qae, mda, maxe
 
 ### New Model Checklist:

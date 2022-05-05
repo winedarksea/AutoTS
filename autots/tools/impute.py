@@ -61,7 +61,7 @@ def biased_ffill(df, mean_weight: float = 1):
     return df
 
 
-def fake_date_fill(df, back_method: str = 'slice'):
+def fake_date_fill_old(df, back_method: str = 'slice'):
     """
     Return a dataframe where na values are removed and values shifted forward.
 
@@ -71,7 +71,8 @@ def fake_date_fill(df, back_method: str = 'slice'):
     Args:
         back_method (str): how to deal with tails left by shifting NaN
             - 'bfill' -back fill the last value
-            - 'slice' - drop any rows with any na
+            - 'slice' - drop any rows above threshold where half are nan, then bfill remainder
+            - 'slice_all' - drop any rows with any na
             - 'keepna' - keep the lagging na
     """
     df2 = df.sort_index(ascending=False).copy()
@@ -83,8 +84,7 @@ def fake_date_fill(df, back_method: str = 'slice'):
         df2 = df.fillna(0)
 
     if back_method == 'bfill':
-        df2 = fill_forward(df2)
-        return df
+        return fill_forward(df2)
     elif back_method == 'slice':
         # cut until half of columns are not NaN then backfill
         thresh = int(df.shape[1] * 0.5)
@@ -94,11 +94,61 @@ def fake_date_fill(df, back_method: str = 'slice'):
             return fill_forward(df2)
         else:
             return fill_forward(df3)
+    elif back_method == 'slice_all':
+        return df2.dropna(how="any", axis=0)
     elif back_method == 'keepna':
         return df2
     else:
         print('back_method not recognized in fake_date_fill')
         return df2
+
+
+
+def fake_date_fill(df, back_method: str = 'slice'):
+    """Numpy vectorized version.
+    Return a dataframe where na values are removed and values shifted forward.
+
+    Warnings:
+        Thus, values will have incorrect timestamps!
+
+    Args:
+        back_method (str): how to deal with tails left by shifting NaN
+            - 'bfill' -back fill the last value
+            - 'slice' - drop any rows above threshold where half are nan, then bfill remainder
+            - 'slice_all' - drop any rows with any na
+            - 'keepna' - keep the lagging na
+    """
+    arr = np.array(df)
+    indices = np.indices(arr.shape)
+    indices0 = indices[0]
+    # basically takes advantage of indices always positive to make then
+    # conditionally negative to float up in sort
+    to_sort = np.where(np.isnan(arr), -indices0, indices0)
+    df2 = pd.DataFrame(
+        arr[np.abs(np.sort(to_sort, axis=0)), indices[1]],
+        index=df.index,
+        columns=df.columns,
+    )
+    if df2.empty:
+        df2 = df.fillna(0)
+
+    if back_method == 'bfill':
+        return fill_forward(df2)
+    elif back_method == 'slice':
+        # cut until half of columns are not NaN then backfill
+        thresh = int(df.shape[1] * 0.5)
+        thresh = thresh if thresh > 1 else 1
+        df3 = df2.dropna(thresh=thresh, axis=0)
+        if df3.empty or df3.shape[0] < 8:
+            return fill_forward(df2)
+        else:
+            return fill_forward(df3)
+    elif back_method == 'slice_all':
+        return df2.dropna(how="any", axis=0)
+    elif back_method == 'keepna':
+        return df2
+    else:
+        raise ValueError('back_method not recognized in fake_date_fill')
 
 
 df_interpolate = {

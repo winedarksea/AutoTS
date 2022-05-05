@@ -179,9 +179,8 @@ class LastValueNaive(ModelObject):
         if just_point_forecast:
             return df
         else:
-            # upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df, prediction_interval = self.prediction_interval, method = 'historic_quantile')
-            upper_forecast = df.astype(float) + (self.upper * 0.8)
-            lower_forecast = df.astype(float) - (self.lower * 0.8)
+            upper_forecast = df.astype(float) + (self.upper * 0.85)
+            lower_forecast = df.astype(float) - (self.lower * 0.85)
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(
                 model_name=self.name,

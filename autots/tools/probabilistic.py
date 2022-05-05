@@ -15,7 +15,7 @@ def percentileofscore_appliable(x, a, kind='rank'):
     return percentileofscore(a, score=x, kind=kind)
 
 
-def historic_quantile(df_train, prediction_interval: float = 0.9):
+def historic_quantile(df_train, prediction_interval: float = 0.9, nan_flag=None):
     """
     Computes the difference between the median and the prediction interval range in historic data.
 
@@ -27,7 +27,16 @@ def historic_quantile(df_train, prediction_interval: float = 0.9):
         lower, upper (np.array): two 1D arrays
     """
     quantiles = [0, 1 - prediction_interval, 0.5, prediction_interval, 1]
-    bins = np.nanquantile(df_train.astype(float), quantiles, axis=0, keepdims=False)
+    # save compute time by using the non-nan verison if possible
+    if not isinstance(nan_flag, bool):
+        if isinstance(df_train, pd.DataFrame):
+            nan_flag = np.isnan(np.min(df_train.to_numpy()))
+        else:
+            nan_flag = np.isnan(np.min(np.array(df_train)))
+    if nan_flag:
+        bins = np.nanquantile(df_train.astype(float), quantiles, axis=0, keepdims=False)
+    else:
+        bins = np.quantile(df_train.astype(float), quantiles, axis=0, keepdims=False)
     upper = bins[3] - bins[2]
     if 0 in upper:
         np.where(upper != 0, upper, (bins[4] - bins[2]) / 4)
