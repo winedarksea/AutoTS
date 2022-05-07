@@ -20,12 +20,17 @@ def _zvalue_from_index(arr, ind):
     idx = nC*nR*ind + np.arange(nC*nR).reshape((nC,nR))
     return np.take(arr, idx)
 
-def nan_percentile(arr, q, method="linear", axis=0, errors="raise"):
+def nan_percentile(in_arr, q, method="linear", axis=0, errors="raise"):
     """Given a 3D array, return the given percentiles as input by q.
-    Args more limited. If errors="rollover" passes to np.nanpercentile where not supported.
+    Beware this is only tested for the limited case required here, and will not match np fully.
+    Args more limited. If errors="rollover" passes to np.nanpercentile where args are not supported.
     """
-    if arr.ndim == 2:
-        arr = np.expand_dims(arr, 1)
+    flag_2d = False
+    if in_arr.ndim == 2:
+        arr = np.expand_dims(in_arr, 1)
+        flag_2d = True
+    else:
+        arr = in_arr.copy()
     if axis != 0 or method not in ["linear", "nearest", "lowest", "highest"] or arr.ndim != 3:
         if errors == "rollover":
             return np.nanpercentile(arr, q=q, method=method, axis=axis)
@@ -81,9 +86,14 @@ def nan_percentile(arr, q, method="linear", axis=0, errors="raise"):
         else:
             raise ValueError("interpolation method not supported")
 
-        result.append(quant_arr)
-
-    return result
+        if flag_2d:
+            result.append(quant_arr[0])
+        else:
+            result.append(quant_arr)
+    if len(result) == 1:
+        return result[0]
+    else:
+        return np.asarray(result)
 
 
 def nan_quantile(arr, q, method="linear", axis=0, errors="raise"):

@@ -216,6 +216,9 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
     elif method == 'fake_date':
         return fake_date_fill(df, back_method='slice')
 
+    elif method == 'fake_date_slice':
+        return fake_date_fill(df, back_method='slice_all')
+
     elif method in df_interpolate_full:
         df = df.interpolate(method=method, order=5).fillna(method='bfill')
         if df.isnull().values.any():

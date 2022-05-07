@@ -27,4 +27,11 @@ class TestImpute(unittest.TestCase):
             'b': [5, 50, 15, np.nan, 10],
         })
         filled = FillNA(df_nan, method='fake_date')
+        self.assertTrue((filled.values.flatten() == np.array([ 5,  5, 5, 5, 10, 50, 15, 15, 10, 10])).all())
+
+        df_nan = pd.DataFrame({
+            'a': [5, 10, 15, np.nan, 10],
+            'b': [5, 50, 15, np.nan, 10],
+        })
+        filled = FillNA(df_nan, method='fake_date_slice')
         self.assertTrue((filled.values.flatten() == np.array([ 5,  5, 10, 50, 15, 15, 10, 10])).all())

@@ -115,23 +115,45 @@ def BestNEnsemble(
                 for x in upper_forecasts.values()
             ]
         )
+        # checks only upper and middle, assuming lower follows others in NaN
+        # because the nanmedian and nanquantile are much slower than non na version
+        nan_flag = np.isnan(np.min(forecast_array)) or np.isnan(np.min(u_forecast_array))
         if point_method == "midhinge":
-            ens_df = (
-                np.nanquantile(forecast_array, q=0.25, axis=0)
-                + np.quantile(forecast_array, q=0.75, axis=0)
-            ) / 2
-            ens_df_lower = (
-                np.nanquantile(l_forecast_array, q=0.25, axis=0)
-                + np.quantile(l_forecast_array, q=0.75, axis=0)
-            ) / 2
-            ens_df_upper = (
-                np.nanquantile(u_forecast_array, q=0.25, axis=0)
-                + np.quantile(u_forecast_array, q=0.75, axis=0)
-            ) / 2
+            if nan_flag:
+                ens_df = (
+                    np.nanquantile(forecast_array, q=0.25, axis=0)
+                    + np.nanquantile(forecast_array, q=0.75, axis=0)
+                ) / 2
+                ens_df_lower = (
+                    np.nanquantile(l_forecast_array, q=0.25, axis=0)
+                    + np.nanquantile(l_forecast_array, q=0.75, axis=0)
+                ) / 2
+                ens_df_upper = (
+                    np.nanquantile(u_forecast_array, q=0.25, axis=0)
+                    + np.nanquantile(u_forecast_array, q=0.75, axis=0)
+                ) / 2
+            else:
+                ens_df = (
+                    np.quantile(forecast_array, q=0.25, axis=0)
+                    + np.quantile(forecast_array, q=0.75, axis=0)
+                ) / 2
+                ens_df_lower = (
+                    np.quantile(l_forecast_array, q=0.25, axis=0)
+                    + np.quantile(l_forecast_array, q=0.75, axis=0)
+                ) / 2
+                ens_df_upper = (
+                    np.quantile(u_forecast_array, q=0.25, axis=0)
+                    + np.quantile(u_forecast_array, q=0.75, axis=0)
+                ) / 2
         else:
-            ens_df = np.nanmedian(forecast_array, axis=0)
-            ens_df_lower = np.nanmedian(l_forecast_array, axis=0)
-            ens_df_upper = np.nanmedian(u_forecast_array, axis=0)
+            if nan_flag:
+                ens_df = np.nanmedian(forecast_array, axis=0)
+                ens_df_lower = np.nanmedian(l_forecast_array, axis=0)
+                ens_df_upper = np.nanmedian(u_forecast_array, axis=0)
+            else:
+                ens_df = np.median(forecast_array, axis=0)
+                ens_df_lower = np.median(l_forecast_array, axis=0)
+                ens_df_upper = np.median(u_forecast_array, axis=0)
 
         ens_df = pd.DataFrame(ens_df, index=indices, columns=columnz)
         ens_df_lower = pd.DataFrame(ens_df_lower, index=indices, columns=columnz)

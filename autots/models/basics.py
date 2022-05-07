@@ -11,6 +11,7 @@ from autots.models.base import ModelObject, PredictionObject
 from autots.tools import seasonal_int
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 from autots.tools.window_functions import window_id_maker
+from autots.tools.percentile import nan_quantile
 
 class ConstantNaive(ModelObject):
     """Naive forecasting predicting a dataframe of zeroes (0's)
@@ -151,7 +152,7 @@ class LastValueNaive(ModelObject):
         self.last_values = df.tail(1).to_numpy()
         # self.df_train = df
         self.lower, self.upper = historic_quantile(
-            df, prediction_interval=self.prediction_interval
+            df.iloc[-100:], prediction_interval=self.prediction_interval
         )
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -179,8 +180,8 @@ class LastValueNaive(ModelObject):
         if just_point_forecast:
             return df
         else:
-            upper_forecast = df.astype(float) + (self.upper * 0.85)
-            lower_forecast = df.astype(float) - (self.lower * 0.85)
+            upper_forecast = df.astype(float) + (self.upper * 0.9)
+            lower_forecast = df.astype(float) - (self.lower * 0.9)
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(
                 model_name=self.name,
@@ -263,8 +264,8 @@ class AverageValueNaive(ModelObject):
             )
         elif method == "midhinge":
             results = df_used.to_numpy()
-            q1 = np.nanquantile(results, q=0.25, axis=0)
-            q2 = np.nanquantile(results, q=0.75, axis=0)
+            q1 = nan_quantile(results, q=0.25, axis=0)
+            q2 = nan_quantile(results, q=0.75, axis=0)
             self.average_values = (q1 + q2) / 2
         elif method in ["weighted_mean", "exp_weighted_mean"]:
             weights = pd.to_numeric(df_used.index)
@@ -885,7 +886,6 @@ class MotifSimulation(ModelObject):
         Profile speed and which code to improve first
             Remove for loops
             Quantile not be calculated until after pos_forecasts narrowed down to only forecast length
-            https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
         """
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -1104,13 +1104,13 @@ def looped_motif(
     elif point_method == "median":
         forecast = np.nanmedian(results, axis=0)
     elif point_method == "midhinge":
-        q1 = np.nanquantile(results, q=0.25, axis=0)
-        q2 = np.nanquantile(results, q=0.75, axis=0)
+        q1 = nan_quantile(results, q=0.25, axis=0)
+        q2 = nan_quantile(results, q=0.75, axis=0)
         forecast = (q1 + q2) / 2
 
     pred_int = (1 - prediction_interval) / 2
-    upper_forecast = np.nanquantile(results, q=(1 - pred_int), axis=0)
-    lower_forecast = np.nanquantile(results, q=pred_int, axis=0)
+    upper_forecast = nan_quantile(results, q=(1 - pred_int), axis=0)
+    lower_forecast = nan_quantile(results, q=pred_int, axis=0)
     forecast = pd.Series(forecast)
     forecast.name = name
     upper_forecast = pd.Series(upper_forecast)
@@ -1516,9 +1516,9 @@ def predict_reservoir(
                 )[0:d]
             else:
                 pred = np.quantile(pred_int, q=0.5, axis=0)[0:d]
-        pred_upper = np.nanquantile(interval_list, q=prediction_interval, axis=0)[0:d]
+        pred_upper = nan_quantile(interval_list, q=prediction_interval, axis=0)[0:d]
         pred_upper = np.where(pred_upper < pred, pred, pred_upper)
-        pred_lower = np.nanquantile(interval_list, q=(1 - prediction_interval), axis=0)[
+        pred_lower = nan_quantile(interval_list, q=(1 - prediction_interval), axis=0)[
             0:d
         ]
         pred_lower = np.where(pred_lower > pred, pred, pred_lower)
@@ -1907,13 +1907,13 @@ class SectionalMotif(ModelObject):
         elif point_method == "median":
             forecast = np.nanmedian(results, axis=0)
         elif point_method == "midhinge":
-            q1 = np.nanquantile(results, q=0.25, axis=0)
-            q2 = np.nanquantile(results, q=0.75, axis=0)
+            q1 = nan_quantile(results, q=0.25, axis=0)
+            q2 = nan_quantile(results, q=0.75, axis=0)
             forecast = (q1 + q2) / 2
 
         pred_int = round((1 - self.prediction_interval) / 2, 5)
-        upper_forecast = np.nanquantile(results, q=(1 - pred_int), axis=0)
-        lower_forecast = np.nanquantile(results, q=pred_int, axis=0)
+        upper_forecast = nan_quantile(results, q=(1 - pred_int), axis=0)
+        lower_forecast = nan_quantile(results, q=pred_int, axis=0)
 
         forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
         lower_forecast = pd.DataFrame(

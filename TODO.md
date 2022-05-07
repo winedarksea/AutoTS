@@ -29,8 +29,10 @@
 * fixed a bug where unpack_ensemble_models with keep_ensemble=False was still keeping nested ensembles
 * impute speed optimizations for fill_mean, use of nan check so runs faster if no nan present
 * optimizations to metrics including faster if no NaN present
-* added faster percentile function
+* added faster percentile function, used in transforms, basics
+* also added nan_checks to switch between numpy na and numpy non-na quantiles/medians
 * made fake_date_fill nan method vectorized
+* slightly adjusted the upper/lower forecast method for LastValueNaive
 * addition of new metrics: qae, mda, maxe
 
 ### New Model Checklist:

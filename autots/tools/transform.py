@@ -1595,12 +1595,14 @@ class Discretize(EmptyTransformer):
             'upper' - values are rounded up to upper edge of closest bin
             'sklearn-quantile', 'sklearn-uniform', 'sklearn-kmeans' - sklearn kbins discretizer
         n_bins (int): number of bins to group data into.
+        nan_flag (bool): set to True if this has to run on NaN values
     """
 
-    def __init__(self, discretization: str = "center", n_bins: int = 10, **kwargs):
+    def __init__(self, discretization: str = "center", n_bins: int = 10, nan_flag=False, **kwargs):
         super().__init__(name="Discretize")
         self.discretization = discretization
         self.n_bins = n_bins
+        self.nan_flag = nan_flag
 
     @staticmethod
     def get_new_params(method: str = 'random'):
@@ -1655,7 +1657,10 @@ class Discretize(EmptyTransformer):
             else:
                 steps = 1 / self.n_bins
                 quantiles = np.arange(0, 1 + steps, steps)
-                bins = np.nanquantile(df, quantiles, axis=0, keepdims=True)
+                if self.nan_flag:
+                    bins = np.nanquantile(df, quantiles, axis=0, keepdims=True)
+                else:
+                    bins = np.quantile(df, quantiles, axis=0, keepdims=True)
                 if self.discretization == 'center':
                     bins = np.cumsum(bins, dtype=float, axis=0)
                     bins[2:] = bins[2:] - bins[:-2]
@@ -2337,10 +2342,10 @@ class GeneralTransformer(object):
         """
         # so much faster not to try to fill NaN if there aren't any NaN
         if isinstance(df, pd.DataFrame):
-            nan_flag = np.isnan(np.min(df.to_numpy()))
+            self.nan_flag = np.isnan(np.min(df.to_numpy()))
         else:
-            nan_flag = np.isnan(np.min(np.array(df)))
-        if nan_flag:
+            self.nan_flag = np.isnan(np.min(np.array(df)))
+        if self.nan_flag:
             return FillNA(df, method=self.fillna, window=window)
         else:
             return df

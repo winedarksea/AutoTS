@@ -45,6 +45,7 @@ def rolling_x_regressor(
 
     Returns a dataframe of statistical features. Will need to be shifted by 1 or more to match Y for forecast.
     """
+    # making this all or partially Numpy (if possible) would probably be faster
     X = [df.copy()]
     if str(mean_rolling_periods).isdigit():
         temp = df.rolling(int(mean_rolling_periods), min_periods=1).median()
@@ -2373,7 +2374,7 @@ class MultivariateRegression(ModelObject):
         datepart_method: str = None,
         polynomial_degree: int = None,
         window: int = 5,
-        probabilistic: bool = True,
+        probabilistic: bool = False,
         quantile_params: dict = {
             'learning_rate': 0.1,
             'max_depth': 20,

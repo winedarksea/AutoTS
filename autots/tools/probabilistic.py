@@ -4,7 +4,7 @@ Point to Probabilistic
 import pandas as pd
 import numpy as np
 from autots.tools.impute import fake_date_fill
-
+from autots.tools.percentile import nan_quantile
 try:
     from scipy.stats import percentileofscore
 except Exception:
@@ -34,7 +34,7 @@ def historic_quantile(df_train, prediction_interval: float = 0.9, nan_flag=None)
         else:
             nan_flag = np.isnan(np.min(np.array(df_train)))
     if nan_flag:
-        bins = np.nanquantile(df_train.astype(float), quantiles, axis=0, keepdims=False)
+        bins = nan_quantile(df_train.astype(float), quantiles, axis=0)
     else:
         bins = np.quantile(df_train.astype(float), quantiles, axis=0, keepdims=False)
     upper = bins[3] - bins[2]
