@@ -2628,7 +2628,7 @@ transformer_dict = {
     'cffilter': 0.01,
     'bkfilter': 0.05,
     'convolution_filter': 0.001,
-    "HPFilter": 0.02,
+    "HPFilter": 0.01,
     'DatepartRegression': 0.01,
     "ClipOutliers": 0.05,
     "Discretize": 0.03,
@@ -2667,17 +2667,17 @@ superfast_transformer_dict = {
 
 # probability dictionary of FillNA methods
 na_probs = {
-    'ffill': 0.3,
+    'ffill': 0.4,
     'fake_date': 0.1,
-    'rolling_mean': 0.2,
+    'rolling_mean': 0.1,
     'rolling_mean_24': 0.1,
-    'IterativeImputer': 0.1,  # this parallelizes, uses much memory
-    'mean': 0.05,
+    'IterativeImputer': 0.05,  # this parallelizes, uses much memory
+    'mean': 0.06,
     'zero': 0.05,
     'ffill_mean_biased': 0.1,
-    'median': 0.05,
+    'median': 0.03,
     None: 0.001,
-    "interpolate": 0.5,
+    "interpolate": 0.4,
     "KNNImputer": 0.05,
     "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
 }

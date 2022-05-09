@@ -71,7 +71,7 @@ There are some basic things to beware of that can commonly lead to poor results:
 
 1. Bad data (sudden drops or missing values) in the *most recent* data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. 
 2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be chosen. Choose a good method and as many validations as possible. 
-3. Anomalies that won't be repeated. Manual anomaly removal can be more effective than any automatic methods. 
+3. Anomalies that won't be repeated. Manual anomaly removal can be more effective than any automatic methods. Along with this, beware of a changing pattern of NaN occurrences, as learned FillNA may not longer apply.
 4. Artifical historical events, a simple example being sales promotions. Use of regressors is the most common method for dealing with this and may be critical for modeling these types of events. 
 
 What you don't need to do before the automated forecasting is any typical preprocessing. It is best to leave it up to the model selection process to choose, as different models do better with different types of preprocessing. 
@@ -282,7 +282,8 @@ Some metrics are scaled and some are not. MAE, RMSE, MAGE, MLE, iMLE are unscale
 
 `MAGE` is *Mean Absolute aGgregate Error* which measures the error of a rollup of the forecasts. This is helpful in hiearchial/grouped forecasts for selecting series that have minimal overestimation or underestimation when summed.
 
-`Contour` is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. It is more human-readable than MADE for this information.
+`Contour` is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. It is more human-readable than MADE for this information. 
+This is similar to but faster than MDA (mean directional accuracy) as contour evaluates no change as a positive case.
 
 `MADE` is *(Scaled) Mean Absolute Differential Error*. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Equivalent to 'MAE' when forecast_length=1. It is better for optimization than contour.
 
@@ -418,25 +419,26 @@ python -m pip install autots --exists-action i
 ```shell
 mamba install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
 pip install mxnet --no-deps
-pip install intel-tensorflow scikit-learn-intelex yfinance pytrends fredapi gluonts
-pip install spyder
+pip install yfinance pytrends fredapi gluonts
+pip install intel-tensorflow scikit-learn-intelex
+mamba install spyder
 mamba install autots -c conda-forge
 ```
+`mamba` and `conda` commands are generally interchangeable.
 
 #### Intel conda channel installation (sometime faster, also, more prone to bugs)
 https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html
 ```shell
 # create the environment
-conda create -n intelpython -c intel python=3.7 intelpython3_full
-conda activate intelpython
+mamba create -n aikit37 python=3.7 intel-aikit-modin pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests tensorflow dpctl -c intel
+conda config --env --add channels conda-forge
+conda config --env --add channels intel
+conda config --env --get channels
 
 # install additional packages as desired
-python -m pip install yfinance pytrends fredapi bottleneck
 python -m pip install mxnet --no-deps
-python -m pip install gluonts
-conda install -c conda-forge prophet
-conda update -c intel intelpython3_full
-conda install -c intel numexpr statsmodels lightgbm tensorflow
+python -m pip install gluonts yfinance pytrends fredapi
+mamba update -c intel intel-aikit-modin
 
 python -m pip install autots
 

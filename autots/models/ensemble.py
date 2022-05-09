@@ -1403,6 +1403,7 @@ def MosaicEnsemble(
     fore, u_fore, l_fore = [], [], []
     row = (0, "Unknown", "Unknown", "Unknown")
     try:
+        # maybe this could be sped up by something like numpy take
         for row in melted.itertuples():
             fore.append(forecasts[row[3]][row[2]].iloc[row[1]])
             u_fore.append(upper_forecasts[row[3]][row[2]].iloc[row[1]])

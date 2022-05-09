@@ -1,6 +1,16 @@
 """Fill NA."""
 import numpy as np
 import pandas as pd
+try:
+    from sklearn.impute import KNNImputer
+    try:
+        from sklearn.experimental import enable_iterative_imputer  # noqa
+    except Exception:
+        pass
+    from sklearn.ensemble import ExtraTreesRegressor
+    from sklearn.impute import IterativeImputer
+except Exception:
+    pass
 
 
 def fill_zero(df):
@@ -228,11 +238,6 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
     elif method == 'IterativeImputer':
         cols = df.columns
         indx = df.index
-        try:
-            from sklearn.experimental import enable_iterative_imputer  # noqa
-        except Exception:
-            pass
-        from sklearn.impute import IterativeImputer
 
         df = IterativeImputer(random_state=0, max_iter=100).fit_transform(df)
         if not isinstance(df, pd.DataFrame):
@@ -244,12 +249,6 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
     elif method == 'IterativeImputerExtraTrees':
         cols = df.columns
         indx = df.index
-        try:
-            from sklearn.experimental import enable_iterative_imputer  # noqa
-        except Exception:
-            pass
-        from sklearn.ensemble import ExtraTreesRegressor
-        from sklearn.impute import IterativeImputer
 
         df = IterativeImputer(
             ExtraTreesRegressor(n_estimators=10, random_state=0),
@@ -265,7 +264,6 @@ def FillNA(df, method: str = 'ffill', window: int = 10):
     elif method == 'KNNImputer':
         cols = df.columns
         indx = df.index
-        from sklearn.impute import KNNImputer
 
         df = KNNImputer(n_neighbors=5).fit_transform(df)
         if not isinstance(df, pd.DataFrame):
