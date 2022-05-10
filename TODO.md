@@ -33,6 +33,8 @@
 * also added nan_checks to switch between numpy na and numpy non-na quantiles/medians
 * made fake_date_fill nan method vectorized
 * slightly adjusted the upper/lower forecast method for LastValueNaive
+* updated sliding_window_view to allow Motifs to run on Numpy < 1.20 and also for faster WindowRegression
+* updated regressor_used and used_regressor_check so they should be more reliably filled.
 * addition of new metrics: qae, mda, maxe
 
 ### New Model Checklist:

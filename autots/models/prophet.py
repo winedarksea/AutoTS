@@ -10,6 +10,12 @@ import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 import logging
+# optional packages at the high level
+try:
+    from joblib import Parallel, delayed
+    joblib_present = True
+except Exception:
+    joblib_present = False
 
 
 class FBProphet(ModelObject):
@@ -138,9 +144,9 @@ class FBProphet(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         try:  # no idea when they switched
-            from fbprophet import Prophet
-        except Exception:
             from prophet import Prophet
+        except Exception:
+            from fbprophet import Prophet
 
         # defining in function helps with Joblib it seems
         def seek_the_oracle(
@@ -225,9 +231,7 @@ class FBProphet(ModelObject):
         if self.n_jobs in [0, 1] or len(cols) < 4:
             parallel = False
         else:
-            try:
-                from joblib import Parallel, delayed
-            except Exception:
+            if not joblib_present:
                 parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
@@ -613,9 +617,7 @@ class NeuralProphet(ModelObject):
         if self.n_jobs in [0, 1] or len(cols) < 4:
             parallel = False
         else:
-            try:
-                from joblib import Parallel, delayed
-            except Exception:
+            if not joblib_present:
                 parallel = False
         # joblib multiprocessing to loop through series
         if parallel:

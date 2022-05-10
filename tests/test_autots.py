@@ -2,6 +2,7 @@
 """Overall testing."""
 import unittest
 import json
+import time
 import timeit
 import pandas as pd
 from autots.datasets import (
@@ -269,6 +270,8 @@ class AutoTSTest(unittest.TestCase):
         bench.run(times=1)
         self.assertGreater(bench.total_runtime, 0)
         print(f"Benchmark total_runtime: {bench.total_runtime}")
+        print(bench.results)
+        time.sleep(5)
 
         # test all same on univariate input, non-horizontal, with regressor, and different frequency, with forecast_length = 1 !
 

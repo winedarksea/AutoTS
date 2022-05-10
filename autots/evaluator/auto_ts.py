@@ -1393,18 +1393,8 @@ or otherwise increase models available."""
 
         # set flags to check if regressors or ensemble used in final model.
         param_dict = json.loads(self.best_model.iloc[0]['ModelParameters'])
-        if self.ensemble_check == 1:
-            self.used_regressor_check = self._regr_param_check(param_dict)
-        elif self.ensemble_check == 0:
-            self.used_regressor_check = False
-            try:
-                reg_param = param_dict['regression_type']
-                if reg_param == 'User':
-                    self.used_regressor_check = True
-            except KeyError:
-                pass
-        else:
-            print(f"Warning: ensemble_check not in [0,1]: {self.ensemble_check}")
+        self.used_regressor_check = self._regr_param_check(param_dict)
+        self.regressor_used = self.used_regressor_check
         # clean up any remaining print statements
         sys.stdout.flush()
         return self
@@ -1412,18 +1402,26 @@ or otherwise increase models available."""
     def _regr_param_check(self, param_dict):
         """Help to search for if a regressor was used in model."""
         out = False
-        for key in param_dict['models']:
-            cur_dict = json.loads(param_dict['models'][key]['ModelParameters'])
-            try:
-                reg_param = cur_dict['regression_type']
-                if reg_param == 'User':
+        # load string if not dictionary
+        if isinstance(param_dict, dict):
+            cur_dict = param_dict.copy()
+        else:
+            cur_dict = json.loads(param_dict)
+        current_keys = cur_dict.keys()
+        # always look in ModelParameters if present
+        if 'ModelParameters' in current_keys:
+            cur_dict = cur_dict["ModelParameters"]
+        # then dig in and see if regression type is a key
+        if "regression_type" in current_keys:
+            reg_param = cur_dict['regression_type']
+            if str(reg_param).lower() == 'user':
+                return True
+        # now check if it's an Ensemble
+        if "models" in current_keys:
+            for key in cur_dict['models'].keys():
+                # stop as soon as any finds a regressor
+                if self._regr_param_check(cur_dict['models'][key]):
                     return True
-            except KeyError:
-                pass
-            if param_dict['models'][key]['Model'] == 'Ensemble':
-                out = self._regr_param_check(cur_dict)
-                if out:
-                    return out
         return out
 
     def predict(

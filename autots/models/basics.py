@@ -10,8 +10,22 @@ import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools import seasonal_int
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
-from autots.tools.window_functions import window_id_maker
+from autots.tools.window_functions import window_id_maker, sliding_window_view
 from autots.tools.percentile import nan_quantile
+# these are all optional packages
+try:
+    from scipy.spatial.distance import cdist
+except Exception:
+    pass
+try:
+    from joblib import Parallel, delayed
+    joblib_present = True
+except Exception:
+    joblib_present = False
+try:
+    from sklearn.metrics.pairwise import nan_euclidean_distances, pairwise_distances
+except Exception:
+    pass
 
 class ConstantNaive(ModelObject):
     """Naive forecasting predicting a dataframe of zeroes (0's)
@@ -634,12 +648,9 @@ class MotifSimulation(ModelObject):
         if self.n_jobs in [0, 1] or df.shape[1] < 3:
             parallel = False
         else:
-            try:
-                from joblib import Parallel, delayed
-            except Exception:
+            if not joblib_present:
                 parallel = False
 
-        # import timeit
         # start_time_1st = timeit.default_timer()
         # transform the data into different views (contour = percent_change)
         original_df = None
@@ -691,8 +702,6 @@ class MotifSimulation(ModelObject):
         # elapsed_1st = timeit.default_timer() - start_time_1st
         # start_time_2nd = timeit.default_timer()
         # compare the motif vectors to the most recent vector of the series
-        from sklearn.metrics.pairwise import pairwise_distances
-
         args = {
             "cutoff_minimum": cutoff_minimum,
             "comparison": comparison,
@@ -1087,7 +1096,6 @@ def looped_motif(
     # model = NearestNeighbors(n_neighbors=10, algorithm='auto', metric='minkowski', n_jobs=1)
     # model.fit(Xa)
     # model.kneighbors(Xb)
-    from scipy.spatial.distance import cdist
 
     A = cdist(Xa, Xb, metric=distance_metric)
     # lowest values
@@ -1205,7 +1213,7 @@ class Motif(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         # keep this at top so it breaks quickly if missing version
-        x = np.lib.stride_tricks.sliding_window_view(
+        x = sliding_window_view(
             self.df.to_numpy(), self.window + forecast_length, axis=0
         )
         test_index = self.create_forecast_index(forecast_length=forecast_length)
@@ -1226,9 +1234,7 @@ class Motif(ModelObject):
         if self.n_jobs in [0, 1] or self.df.shape[1] < 5:
             self.parallel = False
         else:
-            try:
-                from joblib import Parallel, delayed
-            except Exception:
+            if not joblib_present:
                 self.parallel = False
 
         # joblib multiprocessing to loop through series
@@ -1806,10 +1812,6 @@ class SectionalMotif(ModelObject):
         point_method = self.point_method
         distance_metric = self.distance_metric
         regression_type = str(self.regression_type).lower()
-        try:
-            from scipy.spatial.distance import cdist
-        except Exception:
-            pass
 
         # the regressor can be tacked on to provide (minor) influence to the distance metric
         if regression_type == "user":
@@ -1832,8 +1834,6 @@ class SectionalMotif(ModelObject):
         )
         # calculate distance between all points and last window of history
         if distance_metric == "nan_euclidean":
-            from sklearn.metrics.pairwise import nan_euclidean_distances
-
             res = np.array(
                 [
                     nan_euclidean_distances(
