@@ -21,6 +21,9 @@ class TestImpute(unittest.TestCase):
 
         filled = FillNA(df_nan, method='mean')
         self.assertTrue((filled.values.flatten() == np.array([5, 5, 10, 50, 15, 15, 10, 20, 10, 10])).all())
+        
+        filled = FillNA(df_nan, method='median')
+        self.assertTrue((filled.values.flatten() == np.array([5, 5, 10, 50, 15, 15, 10, 12.5, 10, 10])).all())
 
         df_nan = pd.DataFrame({
             'a': [5, 10, 15, np.nan, 10],

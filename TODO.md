@@ -35,6 +35,7 @@
 * slightly adjusted the upper/lower forecast method for LastValueNaive
 * updated sliding_window_view to allow Motifs to run on Numpy < 1.20 and also for faster WindowRegression
 * updated regressor_used and used_regressor_check so they should be more reliably filled.
+* changed behavior where import_templates would fail if model_list not satisified. Still fails, but now only for the "only" import option
 * addition of new metrics: qae, mda, maxe
 
 ### New Model Checklist:

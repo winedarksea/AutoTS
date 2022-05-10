@@ -546,7 +546,13 @@ def ModelPrediction(
                     "model_transform_dict": transformation_dict,
                 }, f)
         except Exception as e:
-            print(f"failed to write {current_model_file} with error {repr(e)}")
+            error_msg = f"failed to write {current_model_file} with error {repr(e)}"
+            try:
+                with open(f'{current_model_file}_failure.json', 'w') as f:
+                    f.write(error_msg)
+            except Exception:
+                pass
+            print(error_msg)
 
     transformer_object = GeneralTransformer(**transformation_dict)
     df_train_transformed = transformer_object._fit(df_train)
@@ -1065,7 +1071,7 @@ def TemplateWizard(
     n_jobs: int = None,
     validation_round: int = 0,
     current_generation: int = 0,
-    max_generations: int = 0,
+    max_generations: str = "0",
     model_interrupt: bool = False,
     grouping_ids=None,
     template_cols: list = [
@@ -1101,7 +1107,7 @@ def TemplateWizard(
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
         validation_round (int): int passed to record current validation.
         current_generation (int): info to pass to print statements
-        max_generations (int): info to pass to print statements
+        max_generations (str): info to pass to print statements
         model_interrupt (bool): if True, keyboard interrupts are caught and only break current model eval.
         template_cols (list): column names of columns used as model template
         traceback (bool): include tracebook over just error representation

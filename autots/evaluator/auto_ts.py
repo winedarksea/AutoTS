@@ -846,6 +846,7 @@ class AutoTS(object):
                     grouping_ids=self.grouping_ids,
                     random_seed=random_seed,
                     current_generation=(current_generation + 1),
+                    max_generations="Ensembles",
                     verbose=verbose,
                     n_jobs=self.n_jobs,
                     traceback=self.traceback,
@@ -1298,6 +1299,7 @@ or otherwise increase models available."""
                     template_cols=template_cols,
                     model_interrupt=self.model_interrupt,
                     grouping_ids=self.grouping_ids,
+                    max_generations="Horizontal Ensembles",
                     random_seed=random_seed,
                     verbose=verbose,
                     n_jobs=self.n_jobs,
@@ -1392,8 +1394,7 @@ or otherwise increase models available."""
         self.ensemble_check = int(self.best_model_ensemble > 0)
 
         # set flags to check if regressors or ensemble used in final model.
-        param_dict = json.loads(self.best_model.iloc[0]['ModelParameters'])
-        self.used_regressor_check = self._regr_param_check(param_dict)
+        self.used_regressor_check = self._regr_param_check(self.best_model_params)
         self.regressor_used = self.used_regressor_check
         # clean up any remaining print statements
         sys.stdout.flush()
@@ -1410,7 +1411,7 @@ or otherwise increase models available."""
         current_keys = cur_dict.keys()
         # always look in ModelParameters if present
         if 'ModelParameters' in current_keys:
-            cur_dict = cur_dict["ModelParameters"]
+            return self._regr_param_check(cur_dict["ModelParameters"])
         # then dig in and see if regression type is a key
         if "regression_type" in current_keys:
             reg_param = cur_dict['regression_type']
@@ -1693,6 +1694,11 @@ or otherwise increase models available."""
             enforce_model_list (bool): if True, remove model types not in model_list
             include_ensemble (bool): if enforce_model_list is True, this specifies whether to allow ensembles anyway (otherwise they are unpacked and parts kept)
         """
+        if method.lower() in ['add on', 'addon', 'add_on']:
+            addon_flag = True
+        else:
+            addon_flag = False
+
         if isinstance(filename, pd.DataFrame):
             import_template = filename.copy()
         elif '.csv' in filename:
@@ -1726,11 +1732,14 @@ or otherwise increase models available."""
             if not include_ensemble and "Ensemble" in import_template.columns:
                 import_template = import_template[import_template["Ensemble"] == 0]
             if import_template.shape[0] == 0:
-                raise ValueError(
-                    "Len 0. Model_list does not match models in template! Try enforce_model_list=False."
-                )
+                error_msg = "Len 0. Model_list does not match models in imported template, template import failed."
+                if addon_flag:
+                    # if template is addon, then this is fine as just a warning
+                    print(error_msg)
+                else:
+                    raise ValueError(error_msg)
 
-        if method.lower() in ['add on', 'addon', 'add_on']:
+        if addon_flag:
             self.initial_template = self.initial_template.merge(
                 import_template,
                 how='outer',

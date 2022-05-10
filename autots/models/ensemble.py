@@ -322,16 +322,15 @@ def mosaic_classifier(df_train, known):
             index=None if len(p_full) > 1 else [0],
         )
         upload = pd.concat([upload, missing_rows])
-    X = fill_median(
-        (summarize_series(df_train).transpose()).merge(
+    X = summarize_series(df_train).transpose().merge(
             upload, left_index=True, right_on="series_id"
-        )
     )
     X.set_index("series_id", inplace=True)  # .drop(columns=['series_id'], inplace=True)
     to_predict = X[X['model_id'].isna()].drop(columns=['model_id'])
     X = X[~X['model_id'].isna()]
     Y = X['model_id']
     Xf = X.drop(columns=['model_id'])
+    Xf = fill_median(Xf)
     # from sklearn.linear_model import RidgeClassifier
     # from sklearn.naive_bayes import GaussianNB
     from sklearn.ensemble import RandomForestClassifier

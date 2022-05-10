@@ -52,8 +52,9 @@ def fill_median_old(df):
     return df
 
 def fill_median(df):
+    """Fill nan with median values. Does not work with non-numeric types."""
     arr = np.array(df)
-    arr = np.nan_to_num(arr) + np.isnan(arr) * np.nan_to_num(np.nanmedian(arr, axis=0))
+    arr = np.nan_to_num(arr) + pd.isna(arr) * np.nan_to_num(np.nanmedian(arr, axis=0))
     return pd.DataFrame(arr, index=df.index, columns=df.columns)
 
 
