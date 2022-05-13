@@ -626,7 +626,7 @@ def ModelPrediction(
             upper_constraint = float(constraint)
             constraint_regularization = 1
             bounds = False
-        if verbose > 2:
+        if verbose > 3:
             print(f"Using constraint with method: {constraint_method}, {constraint_regularization}, {lower_constraint}, {upper_constraint}, {bounds}")
 
         df_forecast = df_forecast.apply_constraints(
@@ -676,6 +676,9 @@ class TemplateEvalObject(object):
         per_series_spl=pd.DataFrame(),
         per_series_mle=pd.DataFrame(),
         per_series_imle=pd.DataFrame(),
+        per_series_maxe=pd.DataFrame(),
+        per_series_oda=pd.DataFrame(),
+        per_series_mqae=pd.DataFrame(),
         model_count: int = 0,
     ):
         self.model_results = model_results
@@ -688,6 +691,9 @@ class TemplateEvalObject(object):
         self.per_timestamp_smape = per_timestamp_smape
         self.per_series_mle = per_series_mle
         self.per_series_imle = per_series_imle
+        self.per_series_maxe = per_series_maxe
+        self.per_series_oda = per_series_oda
+        self.per_series_mqae = per_series_mqae
         self.full_mae_ids = []
         self.full_mae_errors = []
         self.full_pl_errors = []
@@ -732,6 +738,15 @@ class TemplateEvalObject(object):
         )
         self.per_series_imle = pd.concat(
             [self.per_series_imle, another_eval.per_series_imle], axis=0, sort=False
+        )
+        self.per_series_maxe = pd.concat(
+            [self.per_series_maxe, another_eval.per_series_maxe], axis=0, sort=False
+        )
+        self.per_series_oda = pd.concat(
+            [self.per_series_oda, another_eval.per_series_oda], axis=0, sort=False
+        )
+        self.per_series_mqae = pd.concat(
+            [self.per_series_mqae, another_eval.per_series_mqae], axis=0, sort=False
         )
         self.full_mae_errors.extend(another_eval.full_mae_errors)
         self.full_pl_errors.extend(another_eval.full_pl_errors)
@@ -1116,6 +1131,7 @@ def TemplateWizard(
     Returns:
         TemplateEvalObject
     """
+    best_smape = float("inf")
     template_result = TemplateEvalObject(
         per_series_mae=[],
         per_series_made=[],
@@ -1124,6 +1140,9 @@ def TemplateWizard(
         per_series_spl=[],
         per_series_mle=[],
         per_series_imle=[],
+        per_series_maxe=[],
+        per_series_oda=[],
+        per_series_mqae=[],
     )
     template_result.model_count = model_count
     if isinstance(template, pd.Series):
@@ -1222,12 +1241,20 @@ def TemplateWizard(
                 scaler=scaler,
             )
             if validation_round >= 1 and verbose > 0:
+                round_smape = model_error.avg_metrics['smape'].round(2)
                 validation_accuracy_print = "{} - {} with avg smape {}: ".format(
                     str(template_result.model_count),
                     model_str,
-                    model_error.avg_metrics['smape'].round(2),
+                    round_smape,
                 )
-                print(validation_accuracy_print)
+                if round_smape < best_smape:
+                    best_smape = round_smape
+                    try:
+                       print("\U0001F4C8 " + validation_accuracy_print)
+                    except Exception:
+                        print(validation_accuracy_print)
+                else:
+                    print(validation_accuracy_print)
             model_id = create_model_id(
                 df_forecast.model_name,
                 df_forecast.model_parameters,
@@ -1290,6 +1317,15 @@ def TemplateWizard(
             )
             template_result.per_series_imle.append(
                 _ps_metric(ps_metric, 'imle', model_id)
+            )
+            template_result.per_series_maxe.append(
+                _ps_metric(ps_metric, 'maxe', model_id)
+            )
+            template_result.per_series_oda.append(
+                _ps_metric(ps_metric, 'oda', model_id)
+            )
+            template_result.per_series_mqae.append(
+                _ps_metric(ps_metric, 'mqae', model_id)
             )
 
             if 'distance' in ensemble:
@@ -1406,6 +1442,15 @@ def TemplateWizard(
         template_result.per_series_imle = pd.concat(
             template_result.per_series_imle, axis=0
         )
+        template_result.per_series_maxe = pd.concat(
+            template_result.per_series_maxe, axis=0
+        )
+        template_result.per_series_oda = pd.concat(
+            template_result.per_series_oda, axis=0
+        )
+        template_result.per_series_mqae = pd.concat(
+            template_result.per_series_mqae, axis=0
+        )
     else:
         template_result.per_series_mae = pd.DataFrame()
         template_result.per_series_made = pd.DataFrame()
@@ -1414,6 +1459,9 @@ def TemplateWizard(
         template_result.per_series_spl = pd.DataFrame()
         template_result.per_series_mle = pd.DataFrame()
         template_result.per_series_imle = pd.DataFrame()
+        template_result.per_series_maxe = pd.DataFrame()
+        template_result.per_series_oda = pd.DataFrame()
+        template_result.per_series_mqae = pd.DataFrame()
         if verbose > 0 and not template.empty:
             print(f"Generation {current_generation} had all new models fail")
     return template_result
@@ -1753,6 +1801,9 @@ def validation_aggregation(validation_results):
         'spl': 'mean',
         'containment': 'mean',
         'contour': 'mean',
+        'maxe': 'max',
+        'oda': 'mean',
+        'mqae': 'mean',
         'smape_weighted': 'mean',
         'mae_weighted': 'mean',
         'rmse_weighted': 'mean',
@@ -1762,6 +1813,9 @@ def validation_aggregation(validation_results):
         'mle_weighted': 'mean',
         'imle_weighted': 'mean',
         'spl_weighted': 'mean',
+        'maxe_weighted': 'max',
+        'oda_weighted': 'mean',
+        'mqae_weighted': 'mean',
         'containment_weighted': 'mean',
         'contour_weighted': 'mean',
         'TotalRuntimeSeconds': 'mean',
@@ -1814,6 +1868,9 @@ def generate_score(
     mage_weighting = metric_weighting.get('mage_weighting', 0)
     mle_weighting = metric_weighting.get('mle_weighting', 0)
     imle_weighting = metric_weighting.get('imle_weighting', 0)
+    maxe_weighting = metric_weighting.get('maxe_weighting', 0)
+    oda_weighting = metric_weighting.get('oda_weighting', 0)
+    mqae_weighting = metric_weighting.get('mqae_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         if 'TotalRuntime' in model_results.columns:
@@ -1890,6 +1947,18 @@ def generate_score(
             ].min()
             imle_score = model_results['imle_weighted'] / imle_scaler
             overall_score = overall_score + (imle_score * imle_weighting)
+        if maxe_weighting > 0:
+            maxe_scaler = model_results['maxe_weighted'][
+                model_results['maxe_weighted'] != 0
+            ].min()
+            maxe_score = model_results['maxe_weighted'] / maxe_scaler
+            overall_score = overall_score + (maxe_score * maxe_weighting)
+        if mqae_weighting > 0:
+            mqae_scaler = model_results['mqae_weighted'][
+                model_results['mqae_weighted'] != 0
+            ].min()
+            mqae_score = model_results['mqae_weighted'] / mqae_scaler
+            overall_score = overall_score + (mqae_score * mqae_weighting)
         if spl_weighting > 0:
             spl_scaler = model_results['spl_weighted'][
                 model_results['spl_weighted'] != 0
@@ -1911,6 +1980,11 @@ def generate_score(
                 2 - model_results['contour_weighted']
             ) * smape_score.median()
             overall_score = overall_score + (contour_score * contour_weighting)
+        if oda_weighting > 0:
+            oda_score = (
+                2 - model_results['oda_weighted']
+            ) * smape_score.median()
+            overall_score = overall_score + (oda_score * oda_weighting)
         if containment_weighting > 0:
             containment_score = (
                 1 + abs(prediction_interval - model_results['containment_weighted'])
@@ -1937,6 +2011,9 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
     contour_weighting = metric_weighting.get('contour_weighting', 0)
     mle_weighting = metric_weighting.get('mle_weighting', 0)
     imle_weighting = metric_weighting.get('imle_weighting', 0)
+    maxe_weighting = metric_weighting.get('maxe_weighting', 0)
+    oda_weighting = metric_weighting.get('oda_weighting', 0)
+    mqae_weighting = metric_weighting.get('mqae_weighting', 0)
     if sum([mae_weighting, rmse_weighting, contour_weighting, spl_weighting]) == 0:
         mae_weighting = 1
 
@@ -1982,6 +2059,22 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
         )
         imle_score = results_object.per_series_imle / imle_scaler
         overall_score = overall_score + (imle_score * imle_weighting)
+    if maxe_weighting > 0:
+        maxe_scaler = (
+            results_object.per_series_maxe[results_object.per_series_maxe != 0]
+            .min()
+            .fillna(1)
+        )
+        maxe_score = results_object.per_series_maxe / maxe_scaler
+        overall_score = overall_score + (maxe_score * maxe_weighting)
+    if mqae_weighting > 0:
+        mqae_scaler = (
+            results_object.per_series_mqae[results_object.per_series_mqae != 0]
+            .min()
+            .fillna(1)
+        )
+        mqae_score = results_object.per_series_mqae / mqae_scaler
+        overall_score = overall_score + (mqae_score * mqae_weighting)
     if spl_weighting > 0:
         spl_scaler = (
             results_object.per_series_spl[results_object.per_series_spl != 0]
@@ -1999,6 +2092,15 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
                 overall_score = mae_score
         else:
             overall_score = overall_score + (contour_score * contour_weighting)
+    if oda_weighting > 0:
+        oda_score = (2 - results_object.per_series_oda) * mae_score.median()
+        # handle nan
+        if oda_score.isna().all().all():
+            print("NaN in Contour in generate_score_per_series")
+            if overall_score.sum().sum() == 0:
+                overall_score = mae_score
+        else:
+            overall_score = overall_score + (oda_score * oda_weighting)
     # remove basic duplicates
     local_results = results_object.model_results.copy()
     local_results = local_results[local_results['Exceptions'].isna()]

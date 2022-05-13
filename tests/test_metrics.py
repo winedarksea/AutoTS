@@ -40,16 +40,16 @@ class TestMetrics(unittest.TestCase):
         )
 
         known_avg_metrics = pd.Series(
-            [40., 2., 3.162, 0.533, 4.000, 1.240, 1.240, 0.572, 0.467, 0.467],
-            index=['smape', 'mae', 'rmse', 'made', 'mage', 'mle', 'imle', 'spl', 'containment', 'contour']
+            [40., 2., 3.162, 0.533, 4.000, 1.240, 1.240, 0.572, 0.467, 0.467, 5.000, 0.533, 1.250],
+            index=['smape', 'mae', 'rmse', 'made', 'mage', 'mle', 'imle', 'spl', 'containment', 'contour', 'maxe', 'oda', 'mqae']
         )
         known_avg_metrics_weighted = pd.Series(
-            [6.667, 0.333, 0.527, 0.089, 4.000, 0.207, 0.207, 0.623, 0.567, 0.717],
-            index=['smape', 'mae', 'rmse', 'made', 'mage', 'mle', 'imle', 'spl', 'containment', 'contour']
+            [6.667, 0.333, 0.527, 0.089, 4.000, 0.207, 0.207, 0.623, 0.567, 0.717, 0.833, 0.883, 0.208],
+            index=['smape', 'mae', 'rmse', 'made', 'mage', 'mle', 'imle', 'spl', 'containment', 'contour', 'maxe', 'oda', 'mqae']
         )
         b_avg_metrics = pd.Series(
-            [80., 4., 6.325, 1.067, 4.000, 2.480, 2.480, 0.44, 0.8, 0.6],
-            index=['smape', 'mae', 'rmse', 'made', 'mage', 'mle', 'imle', 'spl', 'containment', 'contour']
+            [80., 4., 6.325, 1.067, 4.000, 2.480, 2.480, 0.44, 0.8, 0.6, 10.0, 0.60, 2.50],
+            index=['smape', 'mae', 'rmse', 'made', 'mage', 'mle', 'imle', 'spl', 'containment', 'contour', 'maxe', 'oda', 'mqae']
         )
 
         self.assertTrue((output_res.avg_metrics.round(3) == known_avg_metrics).all())

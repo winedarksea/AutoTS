@@ -1,4 +1,10 @@
-"""Tools for calculating forecast errors."""
+"""Tools for calculating forecast errors.
+
+Some common args:
+    A or actual (np.array): actuals ndim 2 (timesteps, series)
+    F or forecast (np.array): forecast values ndim 2 (timesteps, series)
+    ae (np.array): precalculated np.abs(A - F)
+"""
 import warnings
 import numpy as np
 
@@ -188,6 +194,8 @@ def containment(lower_forecast, upper_forecast, actual):
 def contour(A, F):
     """A measure of how well the actual and forecast follow the same pattern of change.
     *Note:* If actual values are unchanging, will match positive changing forecasts.
+    This is faster, and because if actuals are a flat line, contour probably isn't a concern regardless.
+
     Expects two, 2-D numpy arrays of forecast_length * n series
     Returns a 1-D array of results in len n series
 
@@ -304,9 +312,45 @@ def msle(full_errors, ae, le, nan_flag=True):
         return np.mean(np.where(full_errors > 0, le, ae), axis=0)
 
 
+def oda(A, F, last_of_array):
+    """Origin Directional Accuracy, the accuracy of growth or decline relative to most recent data."""
+    return np.nansum(
+        np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0
+    ) / F.shape[0]
+
+
 def qae(ae, q=0.9, nan_flag=True):
-    """Return the q quantile of the errors per series."""
+    """Return the q quantile of the errors per series.
+    np.nans count as smallest values and will push more values into the exclusion group.
+    """
     if nan_flag:
         return np.quantile(np.nan_to_num(ae), q, axis=0)
     else:
         return np.quantile(ae, q, axis=0)
+
+
+def mqae(ae, q=0.85, nan_flag=True):
+    """Return the mean of errors less than q quantile of the errors per series.
+    np.nans count as largest values, and so are removed as part of the > q group.
+    """
+    qi = int(ae.shape[0] * q)
+    qi = qi if qi > 1 else 1
+    vals = np.partition(ae, qi, axis=0)[:qi]
+    if nan_flag:
+        return np.nanmean(vals, axis=0)
+    else:
+        return np.mean(vals, axis=0)
+
+
+def mlvb(A, F, last_of_array):
+    """Mean last value baseline, the % difference of forecast vs last value naive forecast.
+    Does poorly with near-zero values.
+    
+    Args:
+        A (np.array): actuals
+        F (np.array): forecast values
+        last_of_array (np.array): the last row of the historic training data, most recent values
+    """
+    a_diff = A - last_of_array
+    a_diff[a_diff == 0] = np.nan
+    return np.nanmean(np.abs((A - F) / a_diff), axis=0)

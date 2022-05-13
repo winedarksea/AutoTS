@@ -12,31 +12,32 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# Latest
+# Latest :fireworks: :fireworks:
 * Replaced ZeroesNaive model with ConstantNaive
 * updated the General starting template
 * added 'window' to AverageValueNaive
-* added load_artificial sample dataset
+* added :octocat: load_artificial sample dataset
 * fixed bug in plot_horizontal where not handling negative series
 * major update to Constraint functionality
 * GluonTS is no longer part of the default model list (faster tests this way) but is now part of 'best'
 * horizontal models_to_use for Mosaic ensembles
 * added some intel optimizations to sklearn code if scikit-learn-intelex installed
-* fixed a bug in rolling_x_regressor where datepart method wasn't actually getting appended
+* fixed a :bug: in rolling_x_regressor where datepart method wasn't actually getting appended
 * sped up rolling_x_regressor by reducing concats
 * added current_model_file as an option for additional debugging information
 * updated PCA and FastICA to be more flexible on n_components
 * fixed a bug where unpack_ensemble_models with keep_ensemble=False was still keeping nested ensembles
 * impute speed optimizations for fill_mean, use of nan check so runs faster if no nan present
 * optimizations to metrics including faster if no NaN present
-* added faster percentile function, used in transforms, basics
+* :heavy_plus_sign: faster percentile function, used in transforms, basics
 * also added nan_checks to switch between numpy na and numpy non-na quantiles/medians
 * made fake_date_fill nan method vectorized
-* slightly adjusted the upper/lower forecast method for LastValueNaive
+* slightly adjusted the upper/lower forecast method for LastValueNaive :crystal_ball:
 * updated sliding_window_view to allow Motifs to run on Numpy < 1.20 and also for faster WindowRegression
 * updated regressor_used and used_regressor_check so they should be more reliably filled.
 * changed behavior where import_templates would fail if model_list not satisified. Still fails, but now only for the "only" import option
-* addition of new metrics: qae, mda, maxe
+* added :chart_with_upwards_trend: when a model in validation is the best so far that round
+* addition of new metrics: mqae, oda, maxe
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

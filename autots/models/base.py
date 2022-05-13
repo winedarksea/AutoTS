@@ -9,7 +9,7 @@ import datetime
 import numpy as np
 import pandas as pd
 from autots.tools.shaping import infer_frequency, clean_weights
-from autots.evaluator.metrics import (
+from autots.evaluator.metrics import (  # noqa
     smape,
     mae,
     rmse,
@@ -20,6 +20,8 @@ from autots.evaluator.metrics import (
     mean_absolute_differential_error,
     msle,
     qae,
+    mqae,
+    mlvb,
 )
 
 # from sklearn.metrics import r2_score
@@ -510,12 +512,20 @@ class PredictionObject(object):
                     ),
                     'containment': containment(lower_forecast, upper_forecast, A),
                     'contour': contour(lA, lF),
-                    # 'maxe': np.nanmax(self.full_mae_errors, axis=0), # TAKE MAX for AGG
+                    # maximum error point
+                    'maxe': np.nanmax(self.full_mae_errors, axis=0), # TAKE MAX for AGG
+                    # origin directional accuracy
+                    'oda': np.nansum(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0) / F.shape[0],
+                    # mean of values less than 85th percentile of error
+                    'mqae': mqae(self.full_mae_errors, q=0.85, nan_flag=nan_flag),
+                    # 90th percentile of error
                     # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
-                    # 'qae': qae(self.full_mae_errors, nan_flag=nan_flag),
-                    # 'god': np.nansum(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0) / F.shape[0],
-                    # maxe 12 us, qae 200 us, god 35 us
+                    # 'qae': qae(self.full_mae_errors, q=0.9, nan_flag=nan_flag),
+                    # mean % last value naive baseline, smaller is better
+                    # 'mlvb': mlvb(A=A, F=F, last_of_array=last_of_array),
+                    # median absolute error
                     # 'medae': medae(self.full_mae_errors, nan_flag=nan_flag),  # median
+                    # variations on the mean absolute differential error
                     # 'made_unscaled': mean_absolute_differential_error(lA, lF, 1),
                     # 'mad2e': mean_absolute_differential_error(lA, lF, 2),
                     # r2 can't handle NaN in history, also uncomment import above

@@ -400,7 +400,12 @@ class AutoTS(object):
         }
 
         if verbose > 2:
-            print('"Hello. Would you like to destroy some evil today?" - Sanderson')
+            msg = '"Hello. Would you like to destroy some evil today?" - Sanderson'
+            # unicode may not be supported on all platforms
+            try:
+               print("\N{dagger} " + msg)
+            except Exception:
+                print(msg)
 
     def __repr__(self):
         """Print."""
@@ -1127,7 +1132,7 @@ or otherwise increase models available."""
                     time.sleep(5)
             try:
                 # eventually plan to allow window size to be controlled by params
-                if 'mosaic-window' in ensemble or 'mosaic' in ensemble:
+                if 'mosaic-window' in ensemble or 'mosaic' in ensemble or 'horizontal-max' in ensemble:
                     weight_per_value = (
                         self.initial_results.full_mae_errors
                         * metric_weighting.get('mae_weighting', 0)
@@ -1261,20 +1266,20 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
-                    if models_to_use is not None:
-                        ens_templates = generate_mosaic_template(
-                            initial_results=self.initial_results.model_results,
-                            full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=num_validations,
-                            col_names=df_subset.columns,
-                            full_mae_errors=weight_per_value,
-                            smoothing_window=None,
-                            models_to_use=models_to_use,
-                            metric_name="Horiz-Weighted",
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, ens_templates], axis=0
-                        )
+                if models_to_use is not None and ('mosaic' in ensemble or 'horizontal-max' in ensemble):
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=weight_per_value,
+                        smoothing_window=None,
+                        models_to_use=models_to_use,
+                        metric_name="Horiz-Weighted",
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
             except Exception as e:
                 if self.verbose >= 0:
                     print(f"Mosaic Ensemble Generation Error: {e}")
@@ -1608,7 +1613,7 @@ or otherwise increase models available."""
         self,
         filename=None,
         models: str = 'best',
-        n: int = 5,
+        n: int = 20,
         max_per_model_class: int = None,
         include_results: bool = False,
     ):
@@ -1633,8 +1638,10 @@ or otherwise increase models available."""
             else:
                 export_template = self.validation_results.model_results
                 export_template = export_template[
-                    export_template['Runs'] >= (self.num_validations + 1)
+                    (export_template['Runs'] >= (self.num_validations + 1)) |
+                    (export_template['Ensemble'] >= 2)
                 ]
+                """
                 if any(x in self.ensemble for x in self.h_ens_list):
                     temp = self.initial_results.model_results
                     temp = temp[temp['Ensemble'] >= 2]
@@ -1649,6 +1656,7 @@ or otherwise increase models available."""
                         metric_weighting=self.metric_weighting,
                         prediction_interval=self.prediction_interval,
                     )
+                """
                 if str(max_per_model_class).isdigit():
                     export_template = (
                         export_template.sort_values('Score', ascending=True)
