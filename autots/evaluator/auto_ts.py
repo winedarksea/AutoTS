@@ -86,6 +86,7 @@ class AutoTS(object):
             'default', 'deep' (searches more params, likely slower), and 'regressor' (forces 'User' regressor mode in regressor capable models)
         num_validations (int): number of cross validations to perform. 0 for just train/test on best split.
             Possible confusion: num_validations is the number of validations to perform *after* the first eval segment, so totally eval/validations will be this + 1.
+            Also "auto" and "max" aliases available. Max maxes out at 50.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
             0.99 is forced to 100% validation. 1 evaluates just 1 model.
             If horizontal or mosaic ensemble, then additional min per_series models above the number here are added to validation.
@@ -169,7 +170,7 @@ class AutoTS(object):
         transformer_list: dict = "fast",
         transformer_max_depth: int = 6,
         models_mode: str = "random",
-        num_validations: int = 2,
+        num_validations: int = "auto",
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
         validation_method: str = 'backwards',
@@ -201,7 +202,7 @@ class AutoTS(object):
         self.model_list = model_list
         self.transformer_list = transformer_list
         self.transformer_max_depth = transformer_max_depth
-        self.num_validations = abs(int(num_validations))
+        self.num_validations = num_validations
         self.models_to_validate = models_to_validate
         self.max_per_model_class = max_per_model_class
         self.validation_method = str(validation_method).lower()
@@ -230,10 +231,10 @@ class AutoTS(object):
         if isinstance(ensemble, str):
             ensemble = str(ensemble).lower()
         if ensemble == 'all':
-            ensemble = ['simple', "distance", "horizontal-max", "mosaic"]
+            ensemble = ['simple', "distance", "horizontal", "horizontal-max", "mosaic"]
         elif ensemble == 'auto':
             if model_list in ['superfast']:
-                ensemble = ['simple']
+                ensemble = ['horizontal']
             else:
                 ensemble = ['simple', "distance", "horizontal-max"]
         if isinstance(ensemble, str):
@@ -469,9 +470,13 @@ class AutoTS(object):
             assert (
                 validation_indexes is not None
             ), "validation_indexes needs to be filled with 'custom' validation"
-            assert len(validation_indexes) >= (
-                self.num_validations + 1
-            ), "validation_indexes needs to be >= num_validations + 1 with 'custom' validation"
+            # if auto num_validation, use as many as provided in custom
+            if self.num_validations in ["auto", 'max']:
+                self.num_validations == len(validation_indexes) - 1
+            else:
+                assert len(validation_indexes) >= (
+                    self.num_validations + 1
+                ), "validation_indexes needs to be >= num_validations + 1 with 'custom' validation"
         # flag if weights are given
         if bool(weights):
             weighted = True
@@ -594,6 +599,37 @@ class AutoTS(object):
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
+
+        # check how many validations are possible given the length of the data.
+        if 'seasonal' in self.validation_method:
+            temp = df_wide_numeric.shape[0] + self.forecast_length
+            max_possible = temp / self.seasonal_val_periods
+        else:
+            max_possible = (df_wide_numeric.shape[0]) / forecast_length
+        # now adjusted for minimum % amount of training data required
+        if (max_possible - np.floor(max_possible)) > self.min_allowed_train_percent:
+            max_possible = int(max_possible)
+        else:
+            max_possible = int(max_possible) - 1
+        # set auto and max validations
+        if num_validations == "auto":
+            num_validations = 3 if max_possible >= 4 else max_possible
+        elif num_validations == "max":
+            num_validations =  50 if max_possible > 51 else max_possible - 1
+        # this still has the initial test segment as a validation segment, so -1
+        elif max_possible < (num_validations + 1):
+            num_validations =  max_possible - 1
+            if verbose >= 0:
+                print(
+                    "Too many training validations for length of data provided, decreasing num_validations to {}".format(
+                        num_validations
+                    )
+                )
+        else:
+            num_validations = abs(int(num_validations))
+        if num_validations < 0:
+            num_validations = 0
+        self.num_validations = num_validations
 
         # generate similarity matching indices (so it can fail now, not after all the generations)
         if self.validation_method == "similarity":
@@ -877,7 +913,7 @@ class AutoTS(object):
             )
         )
 
-        # validations if float
+        # validation model count if float
         if (self.models_to_validate < 1) and (self.models_to_validate > 0):
             val_frac = self.models_to_validate
             val_frac = 1 if val_frac >= 0.99 else val_frac
@@ -888,27 +924,6 @@ class AutoTS(object):
             temp_len = len(self.model_list)
             self.max_per_model_class = (self.models_to_validate / temp_len) + 1
             self.max_per_model_class = int(np.ceil(self.max_per_model_class))
-
-        # check how many validations are possible given the length of the data.
-        if 'seasonal' in self.validation_method:
-            temp = df_wide_numeric.shape[0] + self.forecast_length
-            max_possible = temp / self.seasonal_val_periods
-        else:
-            max_possible = (df_wide_numeric.shape[0]) / forecast_length
-        if (max_possible - np.floor(max_possible)) > self.min_allowed_train_percent:
-            max_possible = int(max_possible)
-        else:
-            max_possible = int(max_possible) - 1
-        if max_possible < (num_validations + 1):
-            num_validations = max_possible - 1
-            if num_validations < 0:
-                num_validations = 0
-            print(
-                "Too many training validations for length of data provided, decreasing num_validations to {}".format(
-                    num_validations
-                )
-            )
-        self.num_validations = num_validations
 
         # construct validation template
         validation_template = self.initial_results.model_results[
@@ -1132,7 +1147,7 @@ or otherwise increase models available."""
                     time.sleep(5)
             try:
                 # eventually plan to allow window size to be controlled by params
-                if 'mosaic-window' in ensemble or 'mosaic' in ensemble or 'horizontal-max' in ensemble:
+                if 'mosaic-window' in ensemble or 'mosaic' in ensemble:
                     weight_per_value = (
                         self.initial_results.full_mae_errors
                         * metric_weighting.get('mae_weighting', 0)
@@ -1230,6 +1245,18 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=self.initial_results.squared_errors,
+                        smoothing_window=None,
+                        metric_name="SE",
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
                 if 'mosaic' in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
@@ -1247,18 +1274,6 @@ or otherwise increase models available."""
                         full_mae_ids=self.initial_results.full_mae_ids,
                         num_validations=num_validations,
                         col_names=df_subset.columns,
-                        full_mae_errors=self.initial_results.squared_errors,
-                        smoothing_window=None,
-                        metric_name="SE",
-                    )
-                    ensemble_templates = pd.concat(
-                        [ensemble_templates, ens_templates], axis=0
-                    )
-                    ens_templates = generate_mosaic_template(
-                        initial_results=self.initial_results.model_results,
-                        full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
-                        col_names=df_subset.columns,
                         full_mae_errors=weight_per_value,
                         smoothing_window=None,
                         metric_name="Weighted",
@@ -1266,20 +1281,20 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
-                if models_to_use is not None and ('mosaic' in ensemble or 'horizontal-max' in ensemble):
-                    ens_templates = generate_mosaic_template(
-                        initial_results=self.initial_results.model_results,
-                        full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
-                        col_names=df_subset.columns,
-                        full_mae_errors=weight_per_value,
-                        smoothing_window=None,
-                        models_to_use=models_to_use,
-                        metric_name="Horiz-Weighted",
-                    )
-                    ensemble_templates = pd.concat(
-                        [ensemble_templates, ens_templates], axis=0
-                    )
+                    if models_to_use is not None:
+                        ens_templates = generate_mosaic_template(
+                            initial_results=self.initial_results.model_results,
+                            full_mae_ids=self.initial_results.full_mae_ids,
+                            num_validations=num_validations,
+                            col_names=df_subset.columns,
+                            full_mae_errors=weight_per_value,
+                            smoothing_window=None,
+                            models_to_use=models_to_use,
+                            metric_name="Horiz-Weighted",
+                        )
+                        ensemble_templates = pd.concat(
+                            [ensemble_templates, ens_templates], axis=0
+                        )
             except Exception as e:
                 if self.verbose >= 0:
                     print(f"Mosaic Ensemble Generation Error: {e}")
@@ -1913,7 +1928,7 @@ or otherwise increase models available."""
     ):
         """Simple plot to visualize assigned series: models.
 
-        Note that for 'mosiac' ensembles, it only plots the type of the most common model_id for that series, or the first if all are mode.
+        Note that for 'mosaic' ensembles, it only plots the type of the most common model_id for that series, or the first if all are mode.
 
         Args:
             max_series (int): max number of points to plot

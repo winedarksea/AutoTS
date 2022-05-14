@@ -37,6 +37,7 @@
 * updated regressor_used and used_regressor_check so they should be more reliably filled.
 * changed behavior where import_templates would fail if model_list not satisified. Still fails, but now only for the "only" import option
 * added :chart_with_upwards_trend: when a model in validation is the best so far that round
+* addition of "auto" and "max" num_validations with auto set as default
 * addition of new metrics: mqae, oda, maxe
 
 ### New Model Checklist:

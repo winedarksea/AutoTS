@@ -1446,7 +1446,9 @@ class WindowRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        window_size_choice = random.choice([5, 10, 20, seasonal_int()])
+        wnd_sz_choice = random.choice([5, 10, 20, seasonal_int()])
+        if method != "deep":
+            wnd_sz_choice = wnd_sz_choice if wnd_sz_choice < 91 else 90
         model_choice = generate_regressor_params(
             model_dict=sklearn_model_dict, method=method
         )
@@ -1473,7 +1475,7 @@ class WindowRegression(ModelObject):
         normalize_window_choice = random.choices([True, False], [0.05, 0.95])[0]
         max_windows_choice = random.choices([5000, 1000, 50000], [0.85, 0.05, 0.1])[0]
         return {
-            'window_size': window_size_choice,
+            'window_size': wnd_sz_choice,
             'input_dim': input_dim_choice,
             'output_dim': output_dim_choice,
             'normalize_window': normalize_window_choice,
