@@ -333,9 +333,12 @@ def mqae(ae, q=0.85, nan_flag=True):
     """Return the mean of errors less than q quantile of the errors per series.
     np.nans count as largest values, and so are removed as part of the > q group.
     """
-    qi = int(ae.shape[0] * q)
-    qi = qi if qi > 1 else 1
-    vals = np.partition(ae, qi, axis=0)[:qi]
+    if ae.shape[0] <= 1:
+        vals = ae
+    else:
+        qi = int(ae.shape[0] * q)
+        qi = qi if qi > 1 else 1
+        vals = np.partition(ae, qi, axis=0)[:qi]
     if nan_flag:
         return np.nanmean(vals, axis=0)
     else:
