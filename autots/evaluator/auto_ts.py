@@ -54,7 +54,7 @@ class AutoTS(object):
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
         constraint (float): when not None, use this float value * data st dev above max or below min for constraining forecast values.
             now also instead accepts a dictionary containing the following key/values:
-                constraint_method (str): one of 
+                constraint_method (str): one of
                     stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
                     stdev - threshold is the mean of historic data +/- constraint * st dev of data
                     absolute - input is array of length series containing the threshold's final value for each
@@ -231,10 +231,17 @@ class AutoTS(object):
         if isinstance(ensemble, str):
             ensemble = str(ensemble).lower()
         if ensemble == 'all':
-            ensemble = ['simple', "distance", "horizontal", "horizontal-max", "mosaic"]
+            ensemble = [
+                'simple',
+                "distance",
+                "horizontal",
+                "horizontal-max",
+                "mosaic",
+                "subsample",
+            ]
         elif ensemble == 'auto':
             if model_list in ['superfast']:
-                ensemble = ['horizontal']
+                ensemble = ['horizontal-max']
             else:
                 ensemble = ['simple', "distance", "horizontal-max"]
         if isinstance(ensemble, str):
@@ -404,7 +411,7 @@ class AutoTS(object):
             msg = '"Hello. Would you like to destroy some evil today?" - Sanderson'
             # unicode may not be supported on all platforms
             try:
-               print("\N{dagger} " + msg)
+                print("\N{dagger} " + msg)
             except Exception:
                 print(msg)
 
@@ -615,10 +622,10 @@ class AutoTS(object):
         if num_validations == "auto":
             num_validations = 3 if max_possible >= 4 else max_possible
         elif num_validations == "max":
-            num_validations =  50 if max_possible > 51 else max_possible - 1
+            num_validations = 50 if max_possible > 51 else max_possible - 1
         # this still has the initial test segment as a validation segment, so -1
         elif max_possible < (num_validations + 1):
-            num_validations =  max_possible - 1
+            num_validations = max_possible - 1
             if verbose >= 0:
                 print(
                     "Too many training validations for length of data provided, decreasing num_validations to {}".format(
@@ -1653,8 +1660,8 @@ or otherwise increase models available."""
             else:
                 export_template = self.validation_results.model_results
                 export_template = export_template[
-                    (export_template['Runs'] >= (self.num_validations + 1)) |
-                    (export_template['Ensemble'] >= 2)
+                    (export_template['Runs'] >= (self.num_validations + 1))
+                    | (export_template['Ensemble'] >= 2)
                 ]
                 """
                 if any(x in self.ensemble for x in self.h_ens_list):
@@ -1939,9 +1946,9 @@ or otherwise increase models available."""
         max_series = series.shape[0] if series.shape[0] < max_series else max_series
         series = series.sample(max_series, replace=False)
         # sklearn.preprocessing.normalizer also might work
-        series[['log(Volatility)', 'log(Mean)']] = np.log1p(np.abs(
-            series[['Volatility', 'Mean']]
-        ))
+        series[['log(Volatility)', 'log(Mean)']] = np.log1p(
+            np.abs(series[['Volatility', 'Mean']])
+        )
         # plot
         series.set_index(['Model', 'log(Mean)']).unstack('Model')[
             'log(Volatility)'

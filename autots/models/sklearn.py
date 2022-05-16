@@ -7,8 +7,10 @@ import datetime
 import random
 import numpy as np
 import pandas as pd
+
 try:  # needs to go first
     from sklearnex import patch_sklearn
+
     patch_sklearn()
 except Exception:
     pass
@@ -100,7 +102,6 @@ def rolling_x_regressor(
 
         poly = PolynomialFeatures(polynomial_degree)
         X = pd.DataFrame(poly.fit_transform(X))
-    
 
     # X = X.replace([np.inf, -np.inf], np.nan)
     X.fillna(method='bfill', inplace=True)
@@ -2236,7 +2237,9 @@ class UnivariateRegression(ModelObject):
                 [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
                 [0.9, 0.03, 0.03, 0.04],
             )[0]
-            window_choice = random.choices([None, 3, 7, 10, 24], [0.7, 0.2, 0.05, 0.05, 0.05])[0]
+            window_choice = random.choices(
+                [None, 3, 7, 10, 24], [0.7, 0.2, 0.05, 0.05, 0.05]
+            )[0]
         else:
             x_transform_choice = random.choices(
                 [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],

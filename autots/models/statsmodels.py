@@ -13,6 +13,7 @@ from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.seasonal import date_part, seasonal_int
 from autots.tools.holiday import holiday_flag
+
 # these are optional packages
 try:
     from statsmodels.tsa.statespace.sarimax import SARIMAX
@@ -21,6 +22,7 @@ except Exception:
     pass
 try:
     from joblib import Parallel, delayed
+
     joblib_present = True
 except Exception:
     joblib_present = False
@@ -721,7 +723,6 @@ class ARIMA(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         alpha = 1 - self.prediction_interval
         if self.regression_type == 'Holiday':
-            
 
             future_regressor = holiday_flag(test_index, country=self.holiday_country)
         if self.regression_type is not None:

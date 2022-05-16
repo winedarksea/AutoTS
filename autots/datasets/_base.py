@@ -558,7 +558,7 @@ def load_sine(long=False, shape=None, start_date: str = "2021-01-01"):
 
 def load_artificial(long=False, date_start=None, date_end=None):
     """Load artifically generated series from random distributions.
-    
+
     Args:
         long (bool): if True long style data, if False, wide style data
         date_start: str or datetime.datetime of start date
@@ -566,8 +566,9 @@ def load_artificial(long=False, date_start=None, date_end=None):
     """
     import scipy.signal
     from scipy.ndimage import maximum_filter1d
+
     if date_end is None:
-        date_end  = datetime.datetime.now().date()
+        date_end = datetime.datetime.now().date()
     if isinstance(date_end, datetime.datetime):
         date_end = date_end.date()
     if date_start is None:
@@ -581,97 +582,130 @@ def load_artificial(long=False, date_start=None, date_end=None):
     size = dates.size
     rng = np.random.default_rng()
 
-    df_wide = pd.DataFrame({
-        'white_noise': rng.normal(0, 1, size),
-        "white_noise_trend": rng.normal(0, 1, size) + np.arange(size) * 0.01,
-        "random_walk": np.random.choice(a=[-0.8, 0, 0.8], size=size).cumsum() * 0.8,
-        "arima007_trend": np.convolve(
-            np.random.choice(a=[-0.4, 0, 0.4], size=size + 6),
-            np.ones(7, dtype=int),'valid'
-        ) + np.arange(size) * 0.01,
-        "arima017": np.convolve(
-            np.random.choice(a=[-0.4, 0, 0.4], size=size + 6),
-            np.ones(7, dtype=int),'valid'
-        ).cumsum() / 12,
-        "arima200_gamma": scipy.signal.lfilter(
-            [1], [1.0, -0.75,  0.25], 1 * rng.gamma(1, size=size), axis=0
-        ), # ma order is first, then ar order
-        "arima220_outliers": np.where(
-            rng.poisson(20, size) >= 30,
-            rng.gamma(5, size=size) + 10,
-            scipy.signal.lfilter(
-                [1.0, 0.65, 0.25], [1.0, -0.85, 0.25], 1 * rng.normal(2, size=size), axis=0
-        ) / 2),
-        "linear": np.arange(size) * 0.025,
-        "sine_wave": np.sin(np.arange(size)),
-        "sine_seasonality_monthweek": (
-             (np.sin((np.pi / 7) * np.arange(size)) * 0.25 + 0.25) + 
-             (np.sin((np.pi / 28) * np.arange(size)) * 1 + 1) +
-             rng.normal(0, 0.15, size)
-        ),
-        "wavelet_ricker": np.tile(
-            scipy.signal.ricker(33, 1), int(np.ceil(size/33))
-        )[:size],
-        "wavelet_morlet": np.real(np.tile(
-            scipy.signal.morlet2(100, 6.0, 6.0), int(np.ceil(size/100))
-        )[:size] * 10),
-        "lumpy": np.stack([
-            rng.gamma(1, size=size),
-            rng.gamma(1, size=size),
-            rng.gamma(1, size=size),
-            rng.gamma(4, size=size),
-            rng.gamma(6, size=size),
-            rng.gamma(7, size=size),
-            rng.gamma(5, size=size),
-        ],
-            axis=0
-        ).T.ravel()[:size] + (np.sin((np.pi / 182) * np.arange(size)) * 0.75 + 1),
-        "intermittent_random": rng.poisson(0.3, size=size),
-        "intermittent_weekly": np.stack([
-            np.random.choice(a=[0, 1], p=[0.98, 0.02], size=size),
-            np.random.choice(a=[0, 1], p=[0.96, 0.04], size=size),
-            np.random.choice(a=[0, 1], p=[0.94, 0.06], size=size),
-            np.random.choice(a=[0, 1], p=[0.94, 0.06], size=size),
-            np.random.choice(a=[0, 2, 1], p=[0.8, 0.1, 0.1], size=size),
-            np.random.choice(a=[0, 3, 2, 1], p=[0.5, 0.05, 0.1, 0.35], size=size),
-            np.random.choice(a=[0, 3, 2, 1], p=[0.25, 0.2, 0.3, 0.25], size=size)
-        ],
-            axis=0
-        ).T.ravel()[:size],
-        "out_of_stock": np.where(
-             -maximum_filter1d(-rng.negative_binomial(1, 0.04, size=size), 8) == 0,
-             0,
-             # moving average of a sine + gamma random
-             np.convolve(
-                 (
-                      (np.sin((np.pi / 182) * np.arange(size + 2)) * 2 + 2) + 
-                      rng.gamma(1, 0.5, size=size + 2)
-                 ),
-                 np.ones(3, dtype=int),'valid'
-             ) / 2
-        ),
-        "cubic_root": np.cbrt(np.arange(-int(size / 2), size - int(size / 2))),
-        "logistic_growth": np.log(np.arange(2, size + 2)),
-        "recent_spike": np.where(
-            np.arange(size) < (9 * size) / 10,
-            np.arange(size) * 0.01,
-            abs(np.arange(size) - (9 * size) / 10) ** 1.01 + (9 * size) / 10 * 0.01
-        ) + rng.normal(0, 0.05, size),
-        "recent_plateau": np.where(
-            np.arange(size) < (8.5 * size) / 10,
-            np.arange(size) * 0.01,
-            (8.5 * size * 0.01) / 10
-        ) + rng.normal(0, 0.05, size),
-        "old_to_new": np.where(
-            np.arange(size) < (4 * size) / 5,
-            np.real(np.tile(
-            scipy.signal.morlet2(50, 6.0, 6.0), int(np.ceil(size/50))
-        )[:size] * 10),
-            np.real(np.tile(
-            scipy.signal.morlet2(50, 6.0, 0.0), int(np.ceil(size/50))
-        )[:size] * 10)
-        ) + (np.sin((np.pi / 182) * np.arange(size)) * 1 + 1),
-    }, index=dates)
+    df_wide = pd.DataFrame(
+        {
+            'white_noise': rng.normal(0, 1, size),
+            "white_noise_trend": rng.normal(0, 1, size) + np.arange(size) * 0.01,
+            "random_walk": np.random.choice(a=[-0.8, 0, 0.8], size=size).cumsum() * 0.8,
+            "arima007_trend": np.convolve(
+                np.random.choice(a=[-0.4, 0, 0.4], size=size + 6),
+                np.ones(7, dtype=int),
+                'valid',
+            )
+            + np.arange(size) * 0.01,
+            "arima017": np.convolve(
+                np.random.choice(a=[-0.4, 0, 0.4], size=size + 6),
+                np.ones(7, dtype=int),
+                'valid',
+            ).cumsum()
+            / 12,
+            "arima200_gamma": scipy.signal.lfilter(
+                [1], [1.0, -0.75, 0.25], 1 * rng.gamma(1, size=size), axis=0
+            ),  # ma order is first, then ar order
+            "arima220_outliers": np.where(
+                rng.poisson(20, size) >= 30,
+                rng.gamma(5, size=size) + 10,
+                scipy.signal.lfilter(
+                    [1.0, 0.65, 0.25],
+                    [1.0, -0.85, 0.25],
+                    1 * rng.normal(2, size=size),
+                    axis=0,
+                )
+                / 2,
+            ),
+            "linear": np.arange(size) * 0.025,
+            "sine_wave": np.sin(np.arange(size)),
+            "sine_seasonality_monthweek": (
+                (np.sin((np.pi / 7) * np.arange(size)) * 0.25 + 0.25)
+                + (np.sin((np.pi / 28) * np.arange(size)) * 1 + 1)
+                + rng.normal(0, 0.15, size)
+            ),
+            "wavelet_ricker": np.tile(
+                scipy.signal.ricker(33, 1), int(np.ceil(size / 33))
+            )[:size],
+            "wavelet_morlet": np.real(
+                np.tile(scipy.signal.morlet2(100, 6.0, 6.0), int(np.ceil(size / 100)))[
+                    :size
+                ]
+                * 10
+            ),
+            "lumpy": np.stack(
+                [
+                    rng.gamma(1, size=size),
+                    rng.gamma(1, size=size),
+                    rng.gamma(1, size=size),
+                    rng.gamma(4, size=size),
+                    rng.gamma(6, size=size),
+                    rng.gamma(7, size=size),
+                    rng.gamma(5, size=size),
+                ],
+                axis=0,
+            ).T.ravel()[:size]
+            + (np.sin((np.pi / 182) * np.arange(size)) * 0.75 + 1),
+            "intermittent_random": rng.poisson(0.3, size=size),
+            "intermittent_weekly": np.stack(
+                [
+                    np.random.choice(a=[0, 1], p=[0.98, 0.02], size=size),
+                    np.random.choice(a=[0, 1], p=[0.96, 0.04], size=size),
+                    np.random.choice(a=[0, 1], p=[0.94, 0.06], size=size),
+                    np.random.choice(a=[0, 1], p=[0.94, 0.06], size=size),
+                    np.random.choice(a=[0, 2, 1], p=[0.8, 0.1, 0.1], size=size),
+                    np.random.choice(
+                        a=[0, 3, 2, 1], p=[0.5, 0.05, 0.1, 0.35], size=size
+                    ),
+                    np.random.choice(
+                        a=[0, 3, 2, 1], p=[0.25, 0.2, 0.3, 0.25], size=size
+                    ),
+                ],
+                axis=0,
+            ).T.ravel()[:size],
+            "out_of_stock": np.where(
+                -maximum_filter1d(-rng.negative_binomial(1, 0.04, size=size), 8) == 0,
+                0,
+                # moving average of a sine + gamma random
+                np.convolve(
+                    (
+                        (np.sin((np.pi / 182) * np.arange(size + 2)) * 2 + 2)
+                        + rng.gamma(1, 0.5, size=size + 2)
+                    ),
+                    np.ones(3, dtype=int),
+                    'valid',
+                )
+                / 2,
+            ),
+            "cubic_root": np.cbrt(np.arange(-int(size / 2), size - int(size / 2))),
+            "logistic_growth": np.log(np.arange(2, size + 2)),
+            "recent_spike": np.where(
+                np.arange(size) < (9 * size) / 10,
+                np.arange(size) * 0.01,
+                abs(np.arange(size) - (9 * size) / 10) ** 1.01 + (9 * size) / 10 * 0.01,
+            )
+            + rng.normal(0, 0.05, size),
+            "recent_plateau": np.where(
+                np.arange(size) < (8.5 * size) / 10,
+                np.arange(size) * 0.01,
+                (8.5 * size * 0.01) / 10,
+            )
+            + rng.normal(0, 0.05, size),
+            "old_to_new": np.where(
+                np.arange(size) < (4 * size) / 5,
+                np.real(
+                    np.tile(
+                        scipy.signal.morlet2(50, 6.0, 6.0), int(np.ceil(size / 50))
+                    )[:size]
+                    * 10
+                ),
+                np.real(
+                    np.tile(
+                        scipy.signal.morlet2(50, 6.0, 0.0), int(np.ceil(size / 50))
+                    )[:size]
+                    * 10
+                ),
+            )
+            + (np.sin((np.pi / 182) * np.arange(size)) * 1 + 1),
+        },
+        index=dates,
+    )
 
     if not long:
         return df_wide

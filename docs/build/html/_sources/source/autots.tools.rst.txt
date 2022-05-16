@@ -36,6 +36,14 @@ autots.tools.impute module
    :undoc-members:
    :show-inheritance:
 
+autots.tools.percentile module
+------------------------------
+
+.. automodule:: autots.tools.percentile
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.probabilistic module
 ---------------------------------
 
@@ -91,6 +99,7 @@ autots.tools.window\_functions module
    :members:
    :undoc-members:
    :show-inheritance:
+
 
 Module contents
 ---------------

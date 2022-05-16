@@ -168,7 +168,7 @@ class Detrend(EmptyTransformer):
                     "RANSAC",
                     "ARD",
                 ],
-                [0.24, 0.2, 0.1, 0.1, 0.1, 0.02, 0.02, 0.02],
+                [0.3, 0.2, 0.1, 0.1, 0.1, 0.0, 0.0, 0.0],
                 k=1,
             )[0]
             phi = random.choices([1, 0.999, 0.998, 0.99], [0.9, 0.1, 0.05, 0.05])[0]
@@ -529,7 +529,7 @@ class SinTrend(EmptyTransformer):
         guess_freq = abs(
             ff[np.argmax(Fyy[1:]) + 1]
         )  # excluding the zero frequency "peak", which is related to offset
-        guess_amp = np.std(yy) * 2.0 ** 0.5
+        guess_amp = np.std(yy) * 2.0**0.5
         guess_offset = np.mean(yy)
         guess = np.array([guess_amp, 2.0 * np.pi * guess_freq, 0.0, guess_offset])
 
@@ -691,7 +691,7 @@ class PositiveShift(EmptyTransformer):
         """
         df = df + self.shift_amount
         if self.squared:
-            df = df ** 2
+            df = df**2
         if self.log:
             df_log = pd.DataFrame(np.log(df))
             return df_log
@@ -707,7 +707,7 @@ class PositiveShift(EmptyTransformer):
         if self.log:
             df = pd.DataFrame(np.exp(df))
         if self.squared:
-            df = df ** 0.5
+            df = df**0.5
         df = df - self.shift_amount
         return df
 
@@ -1598,7 +1598,9 @@ class Discretize(EmptyTransformer):
         nan_flag (bool): set to True if this has to run on NaN values
     """
 
-    def __init__(self, discretization: str = "center", n_bins: int = 10, nan_flag=False, **kwargs):
+    def __init__(
+        self, discretization: str = "center", n_bins: int = 10, nan_flag=False, **kwargs
+    ):
         super().__init__(name="Discretize")
         self.discretization = discretization
         self.n_bins = n_bins
@@ -2087,7 +2089,6 @@ class FastICA(EmptyTransformer):
         }
 
 
-
 class PCA(EmptyTransformer):
     """sklearn PCA for signal decomposition. But need to store columns.
 
@@ -2153,7 +2154,6 @@ class PCA(EmptyTransformer):
         return {
             "whiten": random.choices([True, False], [0.2, 0.8])[0],
         }
-
 
 
 # lookup dict for all non-parameterized transformers
@@ -2597,7 +2597,11 @@ def get_transformer_params(transformer: str = "EmptyTransformer", method: str = 
             "output_distribution": random.choices(
                 ["uniform", "normal"], [0.8, 0.2], k=1
             )[0],
-            "n_quantiles": random.choices(["quarter", "fifth", "tenth", 1000, 100, 20], [0.05, 0.05, 0.05, 0.7, 0.1, 0.05], k=1)[0],
+            "n_quantiles": random.choices(
+                ["quarter", "fifth", "tenth", 1000, 100, 20],
+                [0.05, 0.05, 0.05, 0.7, 0.1, 0.05],
+                k=1,
+            )[0],
         }
     else:
         return {}

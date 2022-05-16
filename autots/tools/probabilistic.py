@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 from autots.tools.impute import fake_date_fill
 from autots.tools.percentile import nan_quantile
+
 try:
     from scipy.stats import percentileofscore
 except Exception:
@@ -63,8 +64,8 @@ def inferred_normal(train, forecast, n: int = 5, prediction_interval: float = 0.
         data_mu = row
         reshape_row = data_mu.reshape(1, -1)
         post_mu = (
-            (prior_mu / prior_sigma ** 2) + ((n * data_mu) / prior_sigma ** 2)
-        ) / ((1 / prior_sigma ** 2) + (n / prior_sigma ** 2))
+            (prior_mu / prior_sigma**2) + ((n * data_mu) / prior_sigma**2)
+        ) / ((1 / prior_sigma**2) + (n / prior_sigma**2))
         lower = pd.DataFrame(post_mu - adj * prior_sigma, index=columns).transpose()
         lower = lower.where(lower <= data_mu, reshape_row, axis=1)
         upper = pd.DataFrame(post_mu + adj * prior_sigma, index=columns).transpose()

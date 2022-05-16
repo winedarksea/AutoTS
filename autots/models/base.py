@@ -109,21 +109,26 @@ class ModelObject(object):
 
 
 def apply_constraints(
-        forecast, lower_forecast, upper_forecast,
-        constraint_method, constraint_regularization,
-        upper_constraint, lower_constraint,
-        bounds, df_train=None,
+    forecast,
+    lower_forecast,
+    upper_forecast,
+    constraint_method,
+    constraint_regularization,
+    upper_constraint,
+    lower_constraint,
+    bounds,
+    df_train=None,
 ):
     """Use constraint thresholds to adjust outputs by limit.
     Note that only one method of constraint can be used here, but if different methods are desired,
     this can be run twice, with None passed to the upper or lower constraint not being used.
-    
+
     Args:
         forecast (pd.DataFrame): forecast df, wide style
         lower_forecast (pd.DataFrame): lower bound forecast df
             if bounds is False, upper and lower forecast dataframes are unused and can be empty
         upper_forecast (pd.DataFrame): upper bound forecast df
-        constraint_method (str): one of 
+        constraint_method (str): one of
             stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
             stdev - threshold is the mean of historic data +/- constraint * st dev of data
             absolute - input is array of length series containing the threshold's final value for each
@@ -191,28 +196,31 @@ def apply_constraints(
             if lower_constraint is not None:
                 lower_forecast.where(
                     lower_forecast >= train_min,
-                    lower_forecast + (train_min - lower_forecast) * constraint_regularization,
+                    lower_forecast
+                    + (train_min - lower_forecast) * constraint_regularization,
                     inplace=True,
                 )
                 upper_forecast.where(
                     upper_forecast >= train_min,
-                    upper_forecast + (train_min - upper_forecast) * constraint_regularization,
+                    upper_forecast
+                    + (train_min - upper_forecast) * constraint_regularization,
                     inplace=True,
                 )
             if upper_constraint is not None:
                 lower_forecast.where(
                     lower_forecast <= train_max,
-                    lower_forecast + (train_max - lower_forecast) * constraint_regularization,
+                    lower_forecast
+                    + (train_max - lower_forecast) * constraint_regularization,
                     inplace=True,
                 )
 
                 upper_forecast.where(
                     upper_forecast <= train_max,
-                    upper_forecast + (train_max - upper_forecast) * constraint_regularization,
+                    upper_forecast
+                    + (train_max - upper_forecast) * constraint_regularization,
                     inplace=True,
                 )
     return forecast, lower_forecast, upper_forecast
-
 
 
 class PredictionObject(object):
@@ -452,7 +460,7 @@ class PredictionObject(object):
         # reuse this in several metrics so precalculate
         full_errors = F - A
         self.full_mae_errors = np.abs(full_errors)
-        self.squared_errors = full_errors ** 2
+        self.squared_errors = full_errors**2
         log_errors = np.log1p(self.full_mae_errors)
 
         # calculate scaler once
@@ -464,9 +472,7 @@ class PredictionObject(object):
             scaler[np.isnan(scaler)] = fill_val
 
         # concat most recent history to enable full-size diffs
-        last_of_array = np.nan_to_num(
-            df_train[-1:, :]
-        )
+        last_of_array = np.nan_to_num(df_train[-1:, :])
         lA = np.concatenate([last_of_array, A])
         lF = np.concatenate([last_of_array, F])
 
@@ -504,8 +510,15 @@ class PredictionObject(object):
                     'rmse': rmse(self.squared_errors),
                     'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
                     'mage': mage,
-                    'mle': msle(full_errors, self.full_mae_errors, log_errors, nan_flag=nan_flag),
-                    'imle': msle(-full_errors, self.full_mae_errors, log_errors, nan_flag=nan_flag),
+                    'mle': msle(
+                        full_errors, self.full_mae_errors, log_errors, nan_flag=nan_flag
+                    ),
+                    'imle': msle(
+                        -full_errors,
+                        self.full_mae_errors,
+                        log_errors,
+                        nan_flag=nan_flag,
+                    ),
                     'spl': spl(
                         self.upper_pl + self.lower_pl,
                         scaler=scaler,
@@ -513,9 +526,12 @@ class PredictionObject(object):
                     'containment': containment(lower_forecast, upper_forecast, A),
                     'contour': contour(lA, lF),
                     # maximum error point
-                    'maxe': np.nanmax(self.full_mae_errors, axis=0), # TAKE MAX for AGG
+                    'maxe': np.nanmax(self.full_mae_errors, axis=0),  # TAKE MAX for AGG
                     # origin directional accuracy
-                    'oda': np.nansum(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0) / F.shape[0],
+                    'oda': np.nansum(
+                        np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0
+                    )
+                    / F.shape[0],
                     # mean of values less than 85th percentile of error
                     'mqae': mqae(self.full_mae_errors, q=0.85, nan_flag=nan_flag),
                     # 90th percentile of error
@@ -553,17 +569,21 @@ class PredictionObject(object):
         self.avg_metrics = self.per_series_metrics.mean(axis=1, skipna=True)
         return self
 
-    def apply_constraints(self,
-        constraint_method="quantile", constraint_regularization=0.5,
-        upper_constraint=1.0, lower_constraint=0.0,
-        bounds=True, df_train=None,
+    def apply_constraints(
+        self,
+        constraint_method="quantile",
+        constraint_regularization=0.5,
+        upper_constraint=1.0,
+        lower_constraint=0.0,
+        bounds=True,
+        df_train=None,
     ):
         """Use constraint thresholds to adjust outputs by limit.
         Note that only one method of constraint can be used here, but if different methods are desired,
         this can be run twice, with None passed to the upper or lower constraint not being used.
-        
+
         Args:
-            constraint_method (str): one of 
+            constraint_method (str): one of
                 stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
                 stdev - threshold is the mean of historic data +/- constraint * st dev of data
                 absolute - input is array of length series containing the threshold's final value for each
@@ -579,9 +599,14 @@ class PredictionObject(object):
             self
         """
         self.forecast, self.lower_forecast, self.upper_forecast = apply_constraints(
-            self.forecast, self.lower_forecast, self.upper_forecast,
-            constraint_method, constraint_regularization,
-            upper_constraint, lower_constraint,
-            bounds, df_train
+            self.forecast,
+            self.lower_forecast,
+            self.upper_forecast,
+            constraint_method,
+            constraint_regularization,
+            upper_constraint,
+            lower_constraint,
+            bounds,
+            df_train,
         )
         return self

@@ -46,6 +46,7 @@ model_list = "default"
 transformer_list = "fast"  # 'superfast'
 transformer_max_depth = 5
 models_mode = "default"  # "deep", "regressor"
+initial_template='random'  # 'random' 'general+random'
 preclean = None
 {  # preclean this or None
     "fillna": 'ffill',  # "mean" or "median" are most consistent
@@ -168,7 +169,7 @@ model = AutoTS(
     transformer_max_depth=transformer_max_depth,
     max_generations=gens,
     metric_weighting=metric_weighting,
-    initial_template='random',
+    initial_template=initial_template,
     aggfunc="sum",
     models_to_validate=models_to_validate,
     model_interrupt=True,
@@ -219,7 +220,7 @@ validation_results = model.results("validation")
 # save a template of best models
 if initial_training or evolve:
     model.export_template(
-        template_filename, models="best", n=n_export, max_per_model_class=5
+        template_filename, models="best", n=n_export, max_per_model_class=6, include_results=True
     )
     if archive_templates:
         arc_file = f"{template_filename.split('.csv')[0]}_{start_time.strftime('%Y%m%d%H%M')}.csv"

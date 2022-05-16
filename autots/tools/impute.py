@@ -1,8 +1,10 @@
 """Fill NA."""
 import numpy as np
 import pandas as pd
+
 try:
     from sklearn.impute import KNNImputer
+
     try:
         from sklearn.experimental import enable_iterative_imputer  # noqa
     except Exception:
@@ -18,10 +20,12 @@ def fill_zero(df):
     df = df.fillna(0)
     return df
 
+
 def fillna_np(array, values):
     if np.isnan(array.sum()):
         array = np.nan_to_num(array) + np.isnan(array) * values
     return array
+
 
 def fill_forward_alt(df):
     """Fill NaN with previous values."""
@@ -31,25 +35,30 @@ def fill_forward_alt(df):
         df2[i] = df2[i].fillna(method='ffill').fillna(method='bfill').fillna(0)
     return df2
 
+
 def fill_forward(df):
     """Fill NaN with previous values."""
     df = df.fillna(method='ffill')
     return df.fillna(method='bfill').fillna(0)
+
 
 def fill_mean_old(df):
     """Fill NaN with mean."""
     df = df.fillna(df.mean().fillna(0).to_dict())
     return df
 
+
 def fill_mean(df):
     arr = np.array(df)
     arr = np.nan_to_num(arr) + np.isnan(arr) * np.nan_to_num(np.nanmean(arr, axis=0))
     return pd.DataFrame(arr, index=df.index, columns=df.columns)
 
+
 def fill_median_old(df):
     """Fill NaN with median."""
     df = df.fillna(df.median().fillna(0).to_dict())
     return df
+
 
 def fill_median(df):
     """Fill nan with median values. Does not work with non-numeric types."""
@@ -89,7 +98,7 @@ def fake_date_fill_old(df, back_method: str = 'slice'):
     df2 = df.sort_index(ascending=False).copy()
     df2 = df2.apply(lambda x: pd.Series(x.dropna().values))
     df2 = df2.sort_index(ascending=False)
-    df2.index = df.index[-df2.shape[0]:]
+    df2.index = df.index[-df2.shape[0] :]
     # df2 = df2.dropna(how='all', axis=0)
     if df2.empty:
         df2 = df.fillna(0)
@@ -112,7 +121,6 @@ def fake_date_fill_old(df, back_method: str = 'slice'):
     else:
         print('back_method not recognized in fake_date_fill')
         return df2
-
 
 
 def fake_date_fill(df, back_method: str = 'slice'):

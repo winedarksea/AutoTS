@@ -12,6 +12,7 @@ from autots.datasets import (
     load_weekdays,
     load_live_daily,
     load_linear,
+    load_artificial,
 )
 
 from autots.evaluator.auto_ts import AutoTS
@@ -21,7 +22,7 @@ from autots.tools.shaping import long_to_wide
 from autots.tools.regressor import create_lagged_regressor, create_regressor
 from autots.evaluator.auto_model import model_forecast
 
-__version__ = '0.4.0'
+__version__ = '0.4.1'
 
 TransformTS = GeneralTransformer
 
@@ -34,6 +35,7 @@ __all__ = [
     'load_weekdays',
     'load_live_daily',
     'load_linear',
+    'load_artificial',
     'AutoTS',
     'TransformTS',
     'GeneralTransformer',

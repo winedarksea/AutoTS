@@ -117,7 +117,9 @@ def BestNEnsemble(
         )
         # checks only upper and middle, assuming lower follows others in NaN
         # because the nanmedian and nanquantile are much slower than non na version
-        nan_flag = np.isnan(np.min(forecast_array)) or np.isnan(np.min(u_forecast_array))
+        nan_flag = np.isnan(np.min(forecast_array)) or np.isnan(
+            np.min(u_forecast_array)
+        )
         if point_method == "midhinge":
             if nan_flag:
                 ens_df = (
@@ -322,8 +324,10 @@ def mosaic_classifier(df_train, known):
             index=None if len(p_full) > 1 else [0],
         )
         upload = pd.concat([upload, missing_rows])
-    X = summarize_series(df_train).transpose().merge(
-            upload, left_index=True, right_on="series_id"
+    X = (
+        summarize_series(df_train)
+        .transpose()
+        .merge(upload, left_index=True, right_on="series_id")
     )
     X.set_index("series_id", inplace=True)  # .drop(columns=['series_id'], inplace=True)
     to_predict = X[X['model_id'].isna()].drop(columns=['model_id'])

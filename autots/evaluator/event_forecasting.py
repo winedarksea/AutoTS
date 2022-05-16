@@ -720,7 +720,12 @@ class EventRiskForecast(object):
         plot_df["upper & lower risk"] = up_risk + low_risk
         # #0095a4   #FA9632  # 3264C8   #6495ED
         plot_df["upper & lower risk"].plot(
-            kind="bar", xticks=[], title="Combined Risk Score", ax=ax2, color=bar_color, ylim=bar_ylim,
+            kind="bar",
+            xticks=[],
+            title="Combined Risk Score",
+            ax=ax2,
+            color=bar_color,
+            ylim=bar_ylim,
         )
 
     def plot_eval(
@@ -749,6 +754,7 @@ class EventRiskForecast(object):
             figsize (tuple): passed to figsize of output figure
         """
         import matplotlib.pyplot as plt
+
         lower_limit_2d = (
             self.lower_limit_2d if lower_limit_2d is None else lower_limit_2d
         )
@@ -793,5 +799,10 @@ class EventRiskForecast(object):
             low_risk = 0
         plot_df["upper & lower risk"] = up_risk + low_risk
         plot_df["upper & lower risk"].plot(
-            kind="bar", xticks=[], title="Risk Score", ax=ax2, color=bar_color, ylim=bar_ylim
+            kind="bar",
+            xticks=[],
+            title="Risk Score",
+            ax=ax2,
+            color=bar_color,
+            ylim=bar_ylim,
         )

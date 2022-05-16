@@ -3,9 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.datasets package &#8212; AutoTS 0.4.0 documentation</title>
+    <title>autots.datasets package &#8212; AutoTS 0.4.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -49,7 +49,7 @@ and pip install fredapi</p>
 <dd><p>Imports Data from Federal Reserve.
 For simplest results, make sure requested series are all of the same frequency.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>fredkey</strong> (<em>str</em>) – an API key from FRED</p></li>
 <li><p><strong>SeriesNameDict</strong> (<em>dict</em>) – pairs of FRED Series IDs and Series Names like: {‘SeriesID’: ‘SeriesName’} or a list of FRED IDs.
@@ -73,7 +73,7 @@ if None, several default series are returned</p></li>
 <dd><p>2020 Covid, Air Pollution, and Economic Data.</p>
 <p>Sources: Covid Tracking Project, EPA, and FRED</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>long</strong> (<em>bool</em>) – if True, return data in long format. Otherwise return wide</p>
 </dd>
 </dl>
@@ -108,7 +108,7 @@ if None, several default series are returned</p></li>
 <code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_weekdays</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False</em>, <em class="sig-param">categorical: bool = True</em>, <em class="sig-param">periods: int = 180</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_weekdays" title="Permalink to this definition">¶</a></dt>
 <dd><p>Test edge cases by creating a Series with values as day of week.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>long</strong> (<em>bool</em>) – if True, return a df with columns “value” and “datetime”
 if False, return a Series with dt index</p></li>
@@ -125,7 +125,7 @@ if False, return a Series with dt index</p></li>
 <dd><p>Generates a dataframe of data up to the present day. Requires active internet connection.
 Pass None instead of specification lists to exclude a data source.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>long</strong> (<em>bool</em>) – whether to return in long format or wide</p></li>
 <li><p><strong>fred_key</strong> (<em>str</em>) – <a class="reference external" href="https://fred.stlouisfed.org/docs/api/api_key.html">https://fred.stlouisfed.org/docs/api/api_key.html</a></p></li>
@@ -162,7 +162,7 @@ some examples: [‘usps.com’, ‘ncbi.nlm.nih.gov’, ‘cdc.gov’, ‘weathe
 <code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_linear</code><span class="sig-paren">(</span><em class="sig-param">long=False</em>, <em class="sig-param">shape=None</em>, <em class="sig-param">start_date: str = '2021-01-01'</em>, <em class="sig-param">introduce_nan: float = None</em>, <em class="sig-param">introduce_random: float = None</em>, <em class="sig-param">random_seed: int = 123</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_linear" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a dataset of just zeroes for testing edge case.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>long</strong> (<em>bool</em>) – whether to make long or wide</p></li>
 <li><p><strong>shape</strong> (<em>tuple</em>) – shape of output dataframe</p></li>
@@ -179,6 +179,21 @@ some examples: [‘usps.com’, ‘ncbi.nlm.nih.gov’, ‘cdc.gov’, ‘weathe
 <dt id="autots.datasets.load_sine">
 <code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_sine</code><span class="sig-paren">(</span><em class="sig-param">long=False</em>, <em class="sig-param">shape=None</em>, <em class="sig-param">start_date: str = '2021-01-01'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_sine" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a dataset of just zeroes for testing edge case.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.datasets.load_artificial">
+<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_artificial</code><span class="sig-paren">(</span><em class="sig-param">long=False</em>, <em class="sig-param">date_start=None</em>, <em class="sig-param">date_end=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_artificial" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load artifically generated series from random distributions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>long</strong> (<em>bool</em>) – if True long style data, if False, wide style data</p></li>
+<li><p><strong>date_start</strong> – str or datetime.datetime of start date</p></li>
+<li><p><strong>date_end</strong> – str or datetime.datetime of end date</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 </section>

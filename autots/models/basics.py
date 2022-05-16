@@ -12,6 +12,7 @@ from autots.tools import seasonal_int
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 from autots.tools.window_functions import window_id_maker, sliding_window_view
 from autots.tools.percentile import nan_quantile
+
 # these are all optional packages
 try:
     from scipy.spatial.distance import cdist
@@ -19,6 +20,7 @@ except Exception:
     pass
 try:
     from joblib import Parallel, delayed
+
     joblib_present = True
 except Exception:
     joblib_present = False
@@ -26,6 +28,7 @@ try:
     from sklearn.metrics.pairwise import nan_euclidean_distances, pairwise_distances
 except Exception:
     pass
+
 
 class ConstantNaive(ModelObject):
     """Naive forecasting predicting a dataframe of zeroes (0's)
@@ -85,7 +88,7 @@ class ConstantNaive(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         df = pd.DataFrame(
-            np.zeros((forecast_length, (self.train_shape[1])))  + self.constant,
+            np.zeros((forecast_length, (self.train_shape[1]))) + self.constant,
             columns=self.column_names,
             index=self.create_forecast_index(forecast_length=forecast_length),
         )
@@ -120,9 +123,7 @@ class ConstantNaive(ModelObject):
 
     def get_params(self):
         """Return dict of current parameters"""
-        return {
-            'constant': self.constant
-        }
+        return {'constant': self.constant}
 
 
 ZeroesNaive = ConstantNaive
@@ -264,7 +265,7 @@ class AverageValueNaive(ModelObject):
         df = self.basic_profile(df)
         method = str(self.method).lower()
         if self.window is not None:
-            df_used = df[-self.window:]
+            df_used = df[-self.window :]
         else:
             df_used = df
 
@@ -286,7 +287,9 @@ class AverageValueNaive(ModelObject):
             weights = weights - weights.min()
             if method == "exp_weighted_mean":
                 weights = (weights / weights[weights != 0].min()) ** 2
-            self.average_values = np.average(df_used.to_numpy(), axis=0, weights=weights)
+            self.average_values = np.average(
+                df_used.to_numpy(), axis=0, weights=weights
+            )
         self.fit_runtime = datetime.datetime.now() - self.startTime
         self.lower, self.upper = historic_quantile(
             df_used, prediction_interval=self.prediction_interval
@@ -347,13 +350,10 @@ class AverageValueNaive(ModelObject):
             ],
             [0.3, 0.3, 0.01, 0.1, 0.4, 0.1],
         )[0]
-        
+
         return {
             'method': method_choice,
-            'window': random.choices(
-                [None, seasonal_int()],
-                [0.8, 0.2]
-            )[0]
+            'window': random.choices([None, seasonal_int()], [0.8, 0.2])[0],
         }
 
     def get_params(self):
@@ -1686,7 +1686,7 @@ class NVAR(ModelObject):
             [0, -1, -2, -3, -4, -5, -6, -7, -8],
             [0.1, 0.1, 0.1, 0.5, 0.1, 0.1, 0.5, 0.1, 0.1],
         )[0]
-        ridge_choice = 2 * 10 ** ridge_choice
+        ridge_choice = 2 * 10**ridge_choice
         warmup_pts_choice = random.choices([1, 50, 250], [0.9, 0.1, 0.1])[0]
         seed_pts_choice = random.choices([1, 10, 100], [0.8, 0.2, 0.01])[0]
         if seed_pts_choice > 1:

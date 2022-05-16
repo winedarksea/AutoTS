@@ -14,11 +14,12 @@ def _zvalue_from_index(arr, ind):
     This is faster and more memory efficient than using the ogrid based solution with fancy indexing.
     """
     # get number of columns and rows
-    _,nC,nR = arr.shape
+    _, nC, nR = arr.shape
 
     # get linear indices and extract elements with np.take()
-    idx = nC*nR*ind + np.arange(nC*nR).reshape((nC,nR))
+    idx = nC * nR * ind + np.arange(nC * nR).reshape((nC, nR))
     return np.take(arr, idx)
+
 
 def nan_percentile(in_arr, q, method="linear", axis=0, errors="raise"):
     """Given a 3D array, return the given percentiles as input by q.
@@ -31,7 +32,11 @@ def nan_percentile(in_arr, q, method="linear", axis=0, errors="raise"):
         flag_2d = True
     else:
         arr = in_arr.copy()
-    if axis != 0 or method not in ["linear", "nearest", "lowest", "highest"] or arr.ndim != 3:
+    if (
+        axis != 0
+        or method not in ["linear", "nearest", "lowest", "highest"]
+        or arr.ndim != 3
+    ):
         if errors == "rollover":
             return np.nanpercentile(arr, q=q, method=method, axis=axis)
         else:
@@ -71,18 +76,22 @@ def nan_percentile(in_arr, q, method="linear", axis=0, errors="raise"):
             # linear interpolation (like numpy percentile) takes the fractional part of desired position
             floor_val = _zvalue_from_index(arr=arr, ind=f_arr) * (c_arr - k_arr)
             ceil_val = _zvalue_from_index(arr=arr, ind=c_arr) * (k_arr - f_arr)
-    
+
             quant_arr = floor_val + ceil_val
-            quant_arr[fc_equal_k_mask] = _zvalue_from_index(arr=arr, ind=k_arr.astype(np.int32))[fc_equal_k_mask]  # if floor == ceiling take floor value
-        elif method=='nearest':
+            quant_arr[fc_equal_k_mask] = _zvalue_from_index(
+                arr=arr, ind=k_arr.astype(np.int32)
+            )[
+                fc_equal_k_mask
+            ]  # if floor == ceiling take floor value
+        elif method == 'nearest':
             f_arr = np.around(k_arr).astype(np.int32)
-            quant_arr=_zvalue_from_index(arr=arr, ind=f_arr) 
-        elif method=='lowest':
+            quant_arr = _zvalue_from_index(arr=arr, ind=f_arr)
+        elif method == 'lowest':
             f_arr = np.floor(k_arr).astype(np.int32)
-            quant_arr=_zvalue_from_index(arr=arr, ind=f_arr) 
-        elif method=='highest':
+            quant_arr = _zvalue_from_index(arr=arr, ind=f_arr)
+        elif method == 'highest':
             f_arr = np.ceiling(k_arr).astype(np.int32)
-            quant_arr=_zvalue_from_index(arr=arr, ind=f_arr) 
+            quant_arr = _zvalue_from_index(arr=arr, ind=f_arr)
         else:
             raise ValueError("interpolation method not supported")
 

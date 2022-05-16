@@ -21,28 +21,31 @@ import matplotlib.pyplot as plt
 
 # raise ValueError("aaargh!")
 use_template = True
-save_template = True
-template_import_method = "addon"  # "only"
+save_template = False
 force_univariate = False  # long = False
 back_forecast = False
 graph = True
+template_import_method = "addon"  # "only" "addon"
+models_to_validate = 0.45  # 0.99 to validate every tried (use with template import)
 
 # this is the template file imported:
 template_filename = "template_" + str(platform.node()) + ".csv"
-template_filename = "template_categories.csv"
+template_filename = "template_categories_1.csv"
+name = template_filename.replace('.csv', '')
 random_seed = 2022
 forecast_length = 10
 long = False
-# df = load_linear(long=long, shape=(200, 500), introduce_nan=0.2, introduce_random=100)
-df = load_artificial(long=long)
+# df = load_linear(long=long, shape=(300, 5000), introduce_nan=None, introduce_random=100)
+df = load_artificial(long=long, date_start="2018-01-01")
+interest_series = ['arima220_outliers', 'lumpy', 'out-of-stock', "sine_seasonality_monthweek", "intermittent_weekly", "arima017", "old_to_new"]
 prediction_interval = 0.9
 n_jobs = "auto"
-verbose = 2
-validation_method = "similarity"
+verbose = 1
+validation_method = "backwards"  # "similarity"
 frequency = "infer"
 drop_most_recent = 0
-generations = 50
-num_validations = 2
+generations = 10
+num_validations = "max"
 initial_template = "General+Random"
 if use_template:
     initial_training = not os.path.exists(template_filename)
@@ -55,12 +58,12 @@ if force_univariate:
     df = df.iloc[:, 0]
 
 transformer_list = "fast"  # "fast", "all", "superfast"
-# transformer_list = ["Round", "Slice", "SinTrend", 'StandardScaler']
+# transformer_list = ["Round", "Slice", "EWMAFilter", 'FastICA']
 transformer_max_depth = 2
-models_mode = "default"  # "regressor"
-model_list = "default"
-# model_list = "regressor"  # fast_parallel, all
-# model_list = ["NVAR", "Theta"]
+models_mode = "default"  # "default", "regressor"
+model_list = "superfast"
+# model_list = "fast"  # fast_parallel, all
+# model_list = ["DatepartRegression", "GLM"]
 preclean = None
 {
     "fillna": None,  # mean or median one of few consistent things
@@ -69,7 +72,8 @@ preclean = None
         "0": {"span": 14},
     },
 }
-ensemble = ["simple", "horizontal-max", "mosaic", "mosaic-window"]  # "dist", "subsample", "mosaic-window", "horizontal-max"
+ensemble = ["simple", "horizontal-max", "mosaic", ]  # "dist", "subsample", "mosaic-window", "horizontal-max"
+# ensemble = None
 metric_weighting = {
     'smape_weighting': 5,
     'mae_weighting': 2,
@@ -83,13 +87,21 @@ metric_weighting = {
     'contour_weighting': 0,
     'runtime_weighting': 0.05,
 }
+constraint = {
+    "constraint_method": "quantile",
+    "constraint_regularization": 0.9,
+    "upper_constraint": 0.9,
+    "lower_constraint": 0.1,
+    "bounds": True,
+}
+constraint = None
 
 model = AutoTS(
     forecast_length=forecast_length,
     frequency=frequency,
     prediction_interval=prediction_interval,
     ensemble=ensemble,
-    constraint=None,
+    constraint=constraint,
     max_generations=generations,
     num_validations=num_validations,
     validation_method=validation_method,
@@ -98,18 +110,19 @@ model = AutoTS(
     transformer_max_depth=transformer_max_depth,
     initial_template=initial_template,
     metric_weighting=metric_weighting,
-    models_to_validate=0.35,
+    models_to_validate=models_to_validate,
     max_per_model_class=None,
-    model_interrupt="end_generation",
+    model_interrupt=True,
     n_jobs=n_jobs,
     drop_most_recent=drop_most_recent,
-    introduce_na=True,
+    introduce_na=None,
     preclean=preclean,
     # prefill_na=0,
     # subset=5,
     verbose=verbose,
     models_mode=models_mode,
     random_seed=random_seed,
+    current_model_file=f"current_model_{name}",
 )
 
 
@@ -175,13 +188,13 @@ print("Slowest models:")
 print(
     initial_results[initial_results["Ensemble"] < 1]
     .groupby("Model")
-    .agg({"TotalRuntime": ["mean", "max"]})
+    .agg({"TotalRuntimeSeconds": ["mean", "max"]})
     .idxmax()
 )
 
 if save_template:
     model.export_template(
-        template_filename, models="best", n=20, max_per_model_class=5
+        template_filename, models="best", n=20, max_per_model_class=5, include_results=True
     )
 
 if graph:
@@ -193,6 +206,7 @@ if graph:
     )
     plt.show()
     model.plot_generation_loss()
+    # plt.savefig("improvement_over_generations.png", dpi=300)
 
     model.plot_per_series_smape(kind="pie")
     plt.show()
@@ -204,7 +218,8 @@ if graph:
         model.plot_horizontal_transformers()
         plt.show()
         model.plot_horizontal()
-        plt.show()
+        plt.savefig(f"horizontal_{name}.png", dpi=300)
+        # plt.show()
         if "mosaic" in model.best_model["ModelParameters"].iloc[0].lower():
             mosaic_df = model.mosaic_to_df()
             print(mosaic_df[mosaic_df.columns[0:5]].head(5))
@@ -219,8 +234,9 @@ df = df_wide_numeric.tail(100).fillna(0).astype(float)
 
 print("test run complete")
 
+if interest_series not in model.df_wide_numeric.columns.tolist():
+    interest_series = model.df_wide_numeric.columns.tolist()[0:5]
 if model.best_model["Ensemble"].iloc[0] == 2:
-    interest_series = ['arima220_outliers', 'lumpy', 'out-of-stock', "sine_seasonality_monthweek", "intermittent_weekly", "arima017", "old_to_new"]
     interest_models = []
     for x, y in model.best_model_params['series'].items():
         if x in interest_series:
@@ -228,12 +244,13 @@ if model.best_model["Ensemble"].iloc[0] == 2:
                 interest_models.append(y)
             else:
                 interest_models.extend(list(y.values()))
-            prediction.plot(
-                model.df_wide_numeric,
-                series=x,
-                remove_zeroes=False,
-                start_date="2018-09-26",
-            )
+            if graph:
+                prediction.plot(
+                    model.df_wide_numeric,
+                    series=x,
+                    remove_zeroes=False,
+                    start_date="2018-09-26",
+                )
     interest_models = pd.Series(interest_models).value_counts().head(10)
     print(interest_models)
     print([y for x, y in model.best_model_params['models'].items() if x in interest_models.index.to_list()])
@@ -244,8 +261,8 @@ forecasts = model_forecast(
     model_param_dict={'window': 10, "pointed_method":"weighted_mean", "distance_metric": "cosine", "k": 10, "return_result_windows": True},
     model_transform_dict={
         'fillna': 'rolling_mean',
-        'transformations': {'0': 'MinMaxScaler', "1": "DifferencedTransformer"},
-        'transformation_params': {'0': {}, '1': {}}
+        'transformations': {'0': 'MinMaxScaler', "1": "PCA"},
+        'transformation_params': {'0': {}, '1': {"whiten": True}}
     },
     df_train=model.df_wide_numeric,
     forecast_length=forecast_length,
@@ -285,10 +302,13 @@ scp colin@192.168.1.122:/general_template_colin-1135.csv ./Documents/AutoTS
 PACKAGE RELEASE
 # update version in setup.py, /docs/conf.py, /autots/_init__.py
 
+cd to AutoTS
 set PYTHONPATH=%PYTHONPATH%;C:/Users/Colin/Documents/AutoTS
 python -m unittest discover ./tests
+python -m unittest tests.test_autots.ModelTest.test_models
+python -m unittest tests.test_impute.TestImpute.test_impute
 
-python ./autots/evaluator/benchmark.py
+python ./autots/evaluator/benchmark.py > benchmark.txt
 
 cd <project dir>
 black ./autots -l 88 -S
@@ -327,4 +347,8 @@ if (~initial_results['Exceptions'].isna()).sum() > 0:
     test_corr = error_correlations(
         initial_results[cols], result='corr'
     )  # result='poly corr'
+
+python -m cProfile -o testpy.pstats test.py
+gprof2dot -f pstats testpy.pstats | "C:/Program Files (x86)/Graphviz/bin/dot.exe" -Tpng -o test_pstat_output.png
+gprof2dot -f pstats testpy.pstats | dot -Tpng -o test_pstat_output.png
 """

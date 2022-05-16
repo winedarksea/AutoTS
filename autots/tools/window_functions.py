@@ -373,20 +373,21 @@ def sliding_window_view(array, window_shape=(0,), axis=None, writeable=False, **
             array, window_shape=window_shape, axis=axis, writeable=writeable, **kwargs
         )
 
+
 def rolling_window_view(array, window_shape=(0,), axis=None, writeable=False):
     """Create a view of `array` which for every point gives the n-dimensional
     neighbourhood of size window. New dimensions are added at the end of
     `array` or after the corresponding original dimension.
 
     Based on: https://gist.github.com/seberg/3866040 but designed to match the newer np.sliding_window_view
-    
+
     Args:
         array (np.array): Array to which the rolling window is applied.
         window_shape (int): Either a single integer to create a window of only the last axis or a
             tuple to create it for the last len(window) axis. 0 can be used as a to ignore a dimension in the window.
         axis (int): If given, must have the same size as window. In this case window is
             interpreted as the size in the dimension given by axis. IE. a window
-            of (2, 1) is equivalent to window=2 and axis=-2.       
+            of (2, 1) is equivalent to window=2 and axis=-2.
 
     Returns:
         A view on `array` which is smaller to fit the windows and has windows added
@@ -395,58 +396,59 @@ def rolling_window_view(array, window_shape=(0,), axis=None, writeable=False):
     """
     array = np.asarray(array)
     orig_shape = np.asarray(array.shape)
-    window = np.atleast_1d(window_shape).astype(int) # maybe crude to cast to int...
-    
+    window = np.atleast_1d(window_shape).astype(int)  # maybe crude to cast to int...
+
     if axis is not None:
         axis = np.atleast_1d(axis)
         w = np.zeros(array.ndim, dtype=int)
         for axis, size in zip(axis, window):
             w[axis] = size
         window = w
-    
+
     # Check if window is legal:
     if window.ndim > 1:
         raise ValueError("`window` must be one-dimensional.")
     if np.any(window < 0):
         raise ValueError("All elements of `window` must be larger then 1.")
     if len(array.shape) < len(window):
-        raise ValueError("`window` length must be less or equal `array` dimension.") 
+        raise ValueError("`window` length must be less or equal `array` dimension.")
 
     _asteps = np.ones_like(orig_shape)
     asteps = _asteps
-    
+
     _wsteps = np.ones_like(window)
     wsteps = _wsteps
 
     # Check that the window would not be larger then the original:
-    if np.any(orig_shape[-len(window):] < window * wsteps):
-        raise ValueError("`window` * `wsteps` larger then `array` in at least one dimension.")
+    if np.any(orig_shape[-len(window) :] < window * wsteps):
+        raise ValueError(
+            "`window` * `wsteps` larger then `array` in at least one dimension."
+        )
 
-    new_shape = orig_shape # just renaming...
-    
+    new_shape = orig_shape  # just renaming...
+
     # For calculating the new shape 0s must act like 1s:
     _window = window.copy()
-    _window[_window==0] = 1
-    
-    new_shape[-len(window):] += wsteps - _window * wsteps
+    _window[_window == 0] = 1
+
+    new_shape[-len(window) :] += wsteps - _window * wsteps
     new_shape = (new_shape + asteps - 1) // asteps
     # make sure the new_shape is at least 1 in any "old" dimension (ie. steps
     # is (too) large, but we do not care.
     new_shape[new_shape < 1] = 1
     shape = new_shape
-    
+
     strides = np.asarray(array.strides)
     strides *= asteps
-    new_strides = array.strides[-len(window):] * wsteps
-    
+    new_strides = array.strides[-len(window) :] * wsteps
+
     # The full new shape and strides:
     new_shape = np.concatenate((shape, window))
     new_strides = np.concatenate((strides, new_strides))
 
     new_strides = new_strides[new_shape != 0]
     new_shape = new_shape[new_shape != 0]
-    
+
     return np.lib.stride_tricks.as_strided(
         array, shape=new_shape, strides=new_strides, writeable=writeable
     )
-

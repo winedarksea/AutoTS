@@ -212,7 +212,9 @@ def contour(A, F):
         # On the assumption flat lines common in forecasts,
         # but exceedingly rare in real world
         contour_result = np.sum(
-            (np.nan_to_num(np.diff(A, axis=0)) >= 0) == (np.nan_to_num(np.diff(F, axis=0)) > 0), axis=0
+            (np.nan_to_num(np.diff(A, axis=0)) >= 0)
+            == (np.nan_to_num(np.diff(F, axis=0)) > 0),
+            axis=0,
         ) / (F.shape[0] - 1)
     except Exception:
         contour_result = np.nan
@@ -314,9 +316,10 @@ def msle(full_errors, ae, le, nan_flag=True):
 
 def oda(A, F, last_of_array):
     """Origin Directional Accuracy, the accuracy of growth or decline relative to most recent data."""
-    return np.nansum(
-        np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0
-    ) / F.shape[0]
+    return (
+        np.nansum(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0)
+        / F.shape[0]
+    )
 
 
 def qae(ae, q=0.9, nan_flag=True):
@@ -348,7 +351,7 @@ def mqae(ae, q=0.85, nan_flag=True):
 def mlvb(A, F, last_of_array):
     """Mean last value baseline, the % difference of forecast vs last value naive forecast.
     Does poorly with near-zero values.
-    
+
     Args:
         A (np.array): actuals
         F (np.array): forecast values

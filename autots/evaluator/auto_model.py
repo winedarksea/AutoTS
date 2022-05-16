@@ -93,7 +93,9 @@ def ModelMonster(
     model = str(model)
 
     if model in ['ZeroesNaive', 'ConstantNaive']:
-        return ConstantNaive(frequency=frequency, prediction_interval=prediction_interval, **parameters)
+        return ConstantNaive(
+            frequency=frequency, prediction_interval=prediction_interval, **parameters
+        )
 
     elif model == 'LastValueNaive':
         return LastValueNaive(
@@ -540,11 +542,14 @@ def ModelPrediction(
     if current_model_file is not None:
         try:
             with open(f'{current_model_file}.json', 'w') as f:
-                json.dump({
-                    "model_name": model_str,
-                    "model_param_dict": parameter_dict,
-                    "model_transform_dict": transformation_dict,
-                }, f)
+                json.dump(
+                    {
+                        "model_name": model_str,
+                        "model_param_dict": parameter_dict,
+                        "model_transform_dict": transformation_dict,
+                    },
+                    f,
+                )
         except Exception as e:
             error_msg = f"failed to write {current_model_file} with error {repr(e)}"
             try:
@@ -627,12 +632,17 @@ def ModelPrediction(
             constraint_regularization = 1
             bounds = False
         if verbose > 3:
-            print(f"Using constraint with method: {constraint_method}, {constraint_regularization}, {lower_constraint}, {upper_constraint}, {bounds}")
+            print(
+                f"Using constraint with method: {constraint_method}, {constraint_regularization}, {lower_constraint}, {upper_constraint}, {bounds}"
+            )
 
         df_forecast = df_forecast.apply_constraints(
-            constraint_method, constraint_regularization,
-            upper_constraint, lower_constraint,
-            bounds, df_train,
+            constraint_method,
+            constraint_regularization,
+            upper_constraint,
+            lower_constraint,
+            bounds,
+            df_train,
         )
 
     transformation_runtime = transformation_runtime + (
@@ -810,8 +820,10 @@ def unpack_ensemble_models(
             model_df = pd.concat(
                 [
                     unpack_ensemble_models(
-                        model_df, recursive=True,
-                        keep_ensemble=keep_ensemble, template_cols=template_cols
+                        model_df,
+                        recursive=True,
+                        keep_ensemble=keep_ensemble,
+                        template_cols=template_cols,
                     ),
                     model_df,
                 ],
@@ -1250,7 +1262,7 @@ def TemplateWizard(
                 if round_smape < best_smape:
                     best_smape = round_smape
                     try:
-                       print("\U0001F4C8 " + validation_accuracy_print)
+                        print("\U0001F4C8 " + validation_accuracy_print)
                     except Exception:
                         print(validation_accuracy_print)
                 else:
@@ -1981,9 +1993,7 @@ def generate_score(
             ) * smape_score.median()
             overall_score = overall_score + (contour_score * contour_weighting)
         if oda_weighting > 0:
-            oda_score = (
-                2 - model_results['oda_weighted']
-            ) * smape_score.median()
+            oda_score = (2 - model_results['oda_weighted']) * smape_score.median()
             overall_score = overall_score + (oda_score * oda_weighting)
         if containment_weighting > 0:
             containment_score = (
@@ -1994,6 +2004,7 @@ def generate_score(
     except Exception as e:
         raise KeyError(
             f"""Evaluation Metrics are missing and all models have failed, by an error in template or metrics.
+            There are many possible causes for this, bad parameters, environment, or an unreported bug.
             Usually this means you are missing required packages for the models like fbprophet or gluonts,
             or that the models in model_list are inappropriate for your data.
             A new starting template may also help. {repr(e)}"""

@@ -476,8 +476,14 @@ Since ensembles are based on the test dataset, it would also be wise to set `ens
 ### Adding regressors and other information
 `future_` regressor, to make it clear this is data that will be know with high certainy about the future. 
 Such data about the future is rare, one example might be number of stores that will be (planned to be) open each given day in the future when forecast sales. 
+Generally using regressors is very helpful for separating 'organic' and 'inorganic' patterns. 
+'Inorganic' patterns refers to human business decisions that effect the outcome and can be controlled. 
+A very common example of those is promotions and sales events. 
+The model can learn from the past promotion information to then anticpate the effects of the input planned promotion events. 
+Simulation forecasting, described below, is where multiple promotional plans can be tested side-by-side to evaluate effectiveness. 
+
 Only a handful of models support adding regressors, and not all handle multiple regressors. 
-The recommended way to provide regressors is as a pd.Series/pd.Dataframe with a DatetimeIndex. 
+The way to provide regressors is in the `wide` style as a pd.Series/pd.Dataframe with a DatetimeIndex. 
 
 Don't know the future? Don't worry, the models can handle quite a lot of parallel time series, which is another way to add information. 
 Additional regressors can be passed through as additional time series to forecast as part of df_long. 
