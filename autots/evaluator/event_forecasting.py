@@ -404,7 +404,7 @@ class EventRiskForecast(object):
             target_shape (tuple): of (forecast_length, num_series)
             df_train (pd.DataFrame): training data
             direction (str): whether it is the "upper" or "lower" limit
-            periods (str): "forecast" or "historic" only used for limits defined by forecast algorithm params
+            period (str): "forecast" or "historic" only used for limits defined by forecast algorithm params
             forecast_length (int): needed only for historic of forecast algorithm defined limit
             eval_periods (int): only for historic forecast limit, only runs on the tail n (this) of data
         """
@@ -651,6 +651,8 @@ class EventRiskForecast(object):
         ],
         up_low_color=["#ff4500", "#ff5349"],
         bar_color="#6495ED",
+        bar_ylim=[0.0, 0.5],
+        figsize=(14, 8),
         result_windows=None,
         lower_limit_2d=None,
         upper_limit_2d=None,
@@ -664,6 +666,8 @@ class EventRiskForecast(object):
             grays (list of str): list of hex codes for colors for the potential forecasts
             up_low_colors (list of str): two hex code colors for lower and upper
             bar_color (str): hex color for bar graph
+            bar_ylim (list): passed to ylim of plot, sets scale of axis of barplot
+            figsize (tuple): passed to figsize of output figure
         """
         import matplotlib.pyplot as plt
 
@@ -685,7 +689,7 @@ class EventRiskForecast(object):
 
         column = self.outcome_columns[column_idx]
         fig, (ax1, ax2) = plt.subplots(
-            nrows=2, ncols=1, gridspec_kw={'height_ratios': [2, 1]}, figsize=(14, 8)
+            nrows=2, ncols=1, gridspec_kw={'height_ratios': [2, 1]}, figsize=figsize
         )
         fig.suptitle(f'{column} Event Risk Forecasting')
         # index=pd.date_range("2022-01-01", periods=result_windows.shape[1], freq="D")
@@ -716,5 +720,89 @@ class EventRiskForecast(object):
         plot_df["upper & lower risk"] = up_risk + low_risk
         # #0095a4   #FA9632  # 3264C8   #6495ED
         plot_df["upper & lower risk"].plot(
-            kind="bar", xticks=[], title="Combined Risk Score", ax=ax2, color=bar_color
+            kind="bar",
+            xticks=[],
+            title="Combined Risk Score",
+            ax=ax2,
+            color=bar_color,
+            ylim=bar_ylim,
+        )
+
+    def plot_eval(
+        self,
+        df_test,
+        column_idx=0,
+        actuals_color=["#00BFFF"],
+        up_low_color=["#ff4500", "#ff5349"],
+        bar_color="#6495ED",
+        bar_ylim=[0.0, 0.5],
+        figsize=(14, 8),
+        lower_limit_2d=None,
+        upper_limit_2d=None,
+        upper_risk_array=None,
+        lower_risk_array=None,
+    ):
+        """Plot a sample of the risk forecast with known value vs risk score.
+
+        Args:
+            df_test (pd.DataFrame): dataframe of known values (dt index, series)
+            column_idx (int): positional index of series to sample for plot
+            actuals_color (list of str): list of one hex code for line of known actuals
+            up_low_colors (list of str): two hex code colors for lower and upper
+            bar_color (str): hex color for bar graph
+            bar_ylim (list): passed to ylim of plot, sets scale of axis of barplot
+            figsize (tuple): passed to figsize of output figure
+        """
+        import matplotlib.pyplot as plt
+
+        lower_limit_2d = (
+            self.lower_limit_2d if lower_limit_2d is None else lower_limit_2d
+        )
+        upper_limit_2d = (
+            self.upper_limit_2d if upper_limit_2d is None else upper_limit_2d
+        )
+        upper_risk_array = (
+            self.upper_risk_array if upper_risk_array is None else upper_risk_array
+        )
+        lower_risk_array = (
+            self.lower_risk_array if lower_risk_array is None else lower_risk_array
+        )
+        col = self.outcome_columns[column_idx]
+        plot_df = df_test[col].to_frame()
+        fig, (ax1, ax2) = plt.subplots(
+            nrows=2, ncols=1, gridspec_kw={'height_ratios': [2, 1]}, figsize=figsize
+        )
+        fig.suptitle(f'{col} Event Risk Forecasting Evaluation')
+        # index=pd.date_range("2022-01-01", periods=result_windows.shape[1], freq="D")
+        if lower_limit_2d is not None:
+            plot_df['lower_limit'] = lower_limit_2d[
+                :, column_idx
+            ]  # np.nanquantile(df, 0.6, axis=0)[column_idx]
+        else:
+            plot_df['lower_limit'] = np.nan
+        if upper_limit_2d is not None:
+            plot_df['upper_limt'] = upper_limit_2d[
+                :, column_idx
+            ]  # np.nanquantile(df, 0.85, axis=0)[column_idx]
+        else:
+            plot_df['upper_limt'] = np.nan
+        colors = actuals_color + up_low_color
+        plot_df.plot(color=colors, ax=ax1, legend=False)
+        # handle one being None
+        try:
+            up_risk = upper_risk_array[:, column_idx]
+        except Exception:
+            up_risk = 0
+        try:
+            low_risk = lower_risk_array[:, column_idx]
+        except Exception:
+            low_risk = 0
+        plot_df["upper & lower risk"] = up_risk + low_risk
+        plot_df["upper & lower risk"].plot(
+            kind="bar",
+            xticks=[],
+            title="Risk Score",
+            ax=ax2,
+            color=bar_color,
+            ylim=bar_ylim,
         )

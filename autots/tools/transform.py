@@ -168,7 +168,7 @@ class Detrend(EmptyTransformer):
                     "RANSAC",
                     "ARD",
                 ],
-                [0.24, 0.2, 0.1, 0.1, 0.1, 0.02, 0.02, 0.02],
+                [0.3, 0.2, 0.1, 0.1, 0.1, 0.0, 0.0, 0.0],
                 k=1,
             )[0]
             phi = random.choices([1, 0.999, 0.998, 0.99], [0.9, 0.1, 0.05, 0.05])[0]
@@ -529,7 +529,7 @@ class SinTrend(EmptyTransformer):
         guess_freq = abs(
             ff[np.argmax(Fyy[1:]) + 1]
         )  # excluding the zero frequency "peak", which is related to offset
-        guess_amp = np.std(yy) * 2.0 ** 0.5
+        guess_amp = np.std(yy) * 2.0**0.5
         guess_offset = np.mean(yy)
         guess = np.array([guess_amp, 2.0 * np.pi * guess_freq, 0.0, guess_offset])
 
@@ -691,7 +691,7 @@ class PositiveShift(EmptyTransformer):
         """
         df = df + self.shift_amount
         if self.squared:
-            df = df ** 2
+            df = df**2
         if self.log:
             df_log = pd.DataFrame(np.log(df))
             return df_log
@@ -707,7 +707,7 @@ class PositiveShift(EmptyTransformer):
         if self.log:
             df = pd.DataFrame(np.exp(df))
         if self.squared:
-            df = df ** 0.5
+            df = df**0.5
         df = df - self.shift_amount
         return df
 
@@ -1595,12 +1595,16 @@ class Discretize(EmptyTransformer):
             'upper' - values are rounded up to upper edge of closest bin
             'sklearn-quantile', 'sklearn-uniform', 'sklearn-kmeans' - sklearn kbins discretizer
         n_bins (int): number of bins to group data into.
+        nan_flag (bool): set to True if this has to run on NaN values
     """
 
-    def __init__(self, discretization: str = "center", n_bins: int = 10, **kwargs):
+    def __init__(
+        self, discretization: str = "center", n_bins: int = 10, nan_flag=False, **kwargs
+    ):
         super().__init__(name="Discretize")
         self.discretization = discretization
         self.n_bins = n_bins
+        self.nan_flag = nan_flag
 
     @staticmethod
     def get_new_params(method: str = 'random'):
@@ -1655,7 +1659,10 @@ class Discretize(EmptyTransformer):
             else:
                 steps = 1 / self.n_bins
                 quantiles = np.arange(0, 1 + steps, steps)
-                bins = np.nanquantile(df, quantiles, axis=0, keepdims=True)
+                if self.nan_flag:
+                    bins = np.nanquantile(df, quantiles, axis=0, keepdims=True)
+                else:
+                    bins = np.quantile(df, quantiles, axis=0, keepdims=True)
                 if self.discretization == 'center':
                     bins = np.cumsum(bins, dtype=float, axis=0)
                     bins[2:] = bins[2:] - bins[:-2]
@@ -1984,7 +1991,7 @@ class EWMAFilter(EmptyTransformer):
     """
 
     def __init__(self, span: int = 7, **kwargs):
-        super().__init__(name="HPFilter")
+        super().__init__(name="EWMAFilter")
         self.span = span
 
     def fit_transform(self, df):
@@ -2010,6 +2017,143 @@ class EWMAFilter(EmptyTransformer):
         else:
             choice = seasonal_int(include_one=False)
         return {"span": choice}
+
+
+class FastICA(EmptyTransformer):
+    """sklearn FastICA for signal decomposition. But need to store columns.
+
+    Args:
+        span (int): span of exponetial period to convert to alpha
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(name="FastICA")
+        self.kwargs = kwargs
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        from sklearn.decomposition import FastICA
+
+        self.columns = df.columns
+        self.index = df.index
+        self.transformer = FastICA(**self.kwargs)
+        return_df = self.transformer.fit_transform(df)
+        return pd.DataFrame(return_df, index=self.index)
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return_df = self.transformer.transform(df)
+        return pd.DataFrame(return_df, index=df.index)
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return_df = self.transformer.inverse_transform(df)
+        return pd.DataFrame(return_df, index=df.index, columns=self.columns)
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+    @staticmethod
+    def get_new_params(method: str = 'random'):
+        return {
+            "algorithm": random.choice(["parallel", "deflation"]),
+            "fun": random.choice(["logcosh", "exp", "cube"]),
+            "max_iter": random.choices([100, 250, 500], [0.2, 0.7, 0.1])[0],
+            "whiten": random.choices([True, False], [0.9, 0.1])[0],
+        }
+
+
+class PCA(EmptyTransformer):
+    """sklearn PCA for signal decomposition. But need to store columns.
+
+    Args:
+        span (int): span of exponetial period to convert to alpha
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(name="PCA")
+        self.kwargs = kwargs
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        from sklearn.decomposition import PCA
+
+        self.columns = df.columns
+        self.index = df.index
+        self.transformer = PCA(**self.kwargs)
+        return_df = self.transformer.fit_transform(df)
+        return pd.DataFrame(return_df, index=self.index)
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return_df = self.transformer.transform(df)
+        return pd.DataFrame(return_df, index=df.index)
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return_df = self.transformer.inverse_transform(df)
+        return pd.DataFrame(return_df, index=df.index, columns=self.columns)
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+    @staticmethod
+    def get_new_params(method: str = 'random'):
+        return {
+            "whiten": random.choices([True, False], [0.2, 0.8])[0],
+        }
 
 
 # lookup dict for all non-parameterized transformers
@@ -2061,6 +2205,8 @@ have_params = {
     'HPFilter': HPFilter,
     'STLFilter': STLFilter,
     "EWMAFilter": EWMAFilter,
+    "FastICA": FastICA,
+    "PCA": PCA,
 }
 # where will results will vary if not all series are included together
 shared_trans = ['PCA', 'FastICA', "DatepartRegression"]
@@ -2072,8 +2218,8 @@ external_transformers = [
     'MaxAbsScaler',
     'StandardScaler',
     'RobustScaler',
-    "PCA",
-    "FastICA",
+    # "PCA",
+    # "FastICA",
 ]
 
 
@@ -2194,8 +2340,15 @@ class GeneralTransformer(object):
         Returns:
             pandas.DataFrame
         """
-        df = FillNA(df, method=self.fillna, window=window)
-        return df
+        # so much faster not to try to fill NaN if there aren't any NaN
+        if isinstance(df, pd.DataFrame):
+            self.nan_flag = np.isnan(np.min(df.to_numpy()))
+        else:
+            self.nan_flag = np.isnan(np.min(np.array(df)))
+        if self.nan_flag:
+            return FillNA(df, method=self.fillna, window=window)
+        else:
+            return df
 
     @classmethod
     def retrieve_transformer(
@@ -2239,7 +2392,14 @@ class GeneralTransformer(object):
             from sklearn.preprocessing import QuantileTransformer
 
             quants = param["n_quantiles"]
-            quants = quants if df.shape[0] > quants else int(df.shape[0] / 3)
+            if quants == "quarter":
+                quants = int(df.shape[0] / 4)
+            elif quants == "fifth":
+                quants = int(df.shape[0] / 5)
+            elif quants == "tenth":
+                quants = int(df.shape[0] / 10)
+            else:
+                quants = quants if df.shape[0] > quants else int(df.shape[0] / 3)
             param["n_quantiles"] = quants
             return QuantileTransformer(copy=True, **param)
 
@@ -2276,7 +2436,6 @@ class GeneralTransformer(object):
                 raise ValueError("FastICA fails with > 500 series")
             transformer = FastICA(
                 n_components=df.shape[1],
-                whiten=True,
                 random_state=random_seed,
                 **param,
             )
@@ -2341,7 +2500,7 @@ class GeneralTransformer(object):
                 if not isinstance(df, pd.DataFrame):
                     df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
                 # update index reference if sliced
-                if transformation in ['Slice']:
+                if transformation in ['Slice', "FastICA", "PCA"]:
                     self.df_index = df.index
                     self.df_colnames = df.columns
                 # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
@@ -2386,7 +2545,7 @@ class GeneralTransformer(object):
             if not isinstance(df, pd.DataFrame):
                 df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
             # update index reference if sliced
-            if transformation in ['Slice']:
+            if transformation in ['Slice', "FastICA", "PCA"]:
                 self.df_index = df.index
                 self.df_colnames = df.columns
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
@@ -2415,6 +2574,8 @@ class GeneralTransformer(object):
                     df = self.transformers[i].inverse_transform(df)
                 if not isinstance(df, pd.DataFrame):
                     df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
+                elif self.transformations[i] in ["FastICA", "PCA"]:
+                    self.df_colnames = df.columns
                 # df = df.replace([np.inf, -np.inf], 0)
         except Exception as e:
             raise Exception(
@@ -2431,17 +2592,16 @@ def get_transformer_params(transformer: str = "EmptyTransformer", method: str = 
     """Retrieve new random params for new Transformers."""
     if transformer in list(have_params.keys()):
         return have_params[transformer].get_new_params(method=method)
-    elif transformer == "FastICA":
-        return {
-            "algorithm": random.choice(["parallel", "deflation"]),
-            "fun": random.choice(["logcosh", "exp", "cube"]),
-        }
     elif transformer == "QuantileTransformer":
         return {
             "output_distribution": random.choices(
                 ["uniform", "normal"], [0.8, 0.2], k=1
             )[0],
-            "n_quantiles": random.choices([1000, 100, 20], [0.7, 0.2, 0.1], k=1)[0],
+            "n_quantiles": random.choices(
+                ["quarter", "fifth", "tenth", 1000, 100, 20],
+                [0.05, 0.05, 0.05, 0.7, 0.1, 0.05],
+                k=1,
+            )[0],
         }
     else:
         return {}
@@ -2472,7 +2632,7 @@ transformer_dict = {
     'cffilter': 0.01,
     'bkfilter': 0.05,
     'convolution_filter': 0.001,
-    "HPFilter": 0.02,
+    "HPFilter": 0.01,
     'DatepartRegression': 0.01,
     "ClipOutliers": 0.05,
     "Discretize": 0.03,
@@ -2511,17 +2671,17 @@ superfast_transformer_dict = {
 
 # probability dictionary of FillNA methods
 na_probs = {
-    'ffill': 0.3,
+    'ffill': 0.4,
     'fake_date': 0.1,
-    'rolling_mean': 0.2,
+    'rolling_mean': 0.1,
     'rolling_mean_24': 0.1,
-    'IterativeImputer': 0.1,  # this parallelizes, uses much memory
-    'mean': 0.05,
+    'IterativeImputer': 0.05,  # this parallelizes, uses much memory
+    'mean': 0.06,
     'zero': 0.05,
     'ffill_mean_biased': 0.1,
-    'median': 0.05,
+    'median': 0.03,
     None: 0.001,
-    "interpolate": 0.5,
+    "interpolate": 0.4,
     "KNNImputer": 0.05,
     "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
 }
@@ -2531,7 +2691,7 @@ def transformer_list_to_dict(transformer_list):
     """Convert various possibilities to dict."""
     if not transformer_list or transformer_list == "all":
         transformer_list = transformer_dict
-    elif transformer_list == "fast":
+    elif transformer_list in ["fast", "default", "Fast"]:
         transformer_list = fast_transformer_dict
     elif transformer_list == "superfast":
         transformer_list = superfast_transformer_dict

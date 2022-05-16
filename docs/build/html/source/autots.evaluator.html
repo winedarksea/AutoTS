@@ -3,9 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.evaluator package &#8212; AutoTS 0.4.0 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 0.4.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -46,7 +46,7 @@
 <code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">ModelMonster</code><span class="sig-paren">(</span><em class="sig-param">model: str</em>, <em class="sig-param">parameters: dict = {}</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">startTimeStamps=None</em>, <em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.ModelMonster" title="Permalink to this definition">¶</a></dt>
 <dd><p>Directs strings and parameters to appropriate model objects.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>model</strong> (<em>str</em>) – Name of Model Function</p></li>
 <li><p><strong>parameters</strong> (<em>dict</em>) – Dictionary of parameters to pass through to model</p></li>
@@ -57,10 +57,10 @@
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.ModelPrediction">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">ModelPrediction</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">forecast_length: int</em>, <em class="sig-param">transformation_dict: dict</em>, <em class="sig-param">model_str: str</em>, <em class="sig-param">parameter_dict: dict</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">future_regressor_train=None</em>, <em class="sig-param">future_regressor_forecast=None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">startTimeStamps=None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">fail_on_forecast_nan: bool = True</em>, <em class="sig-param">return_model: bool = False</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.ModelPrediction" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">ModelPrediction</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">forecast_length: int</em>, <em class="sig-param">transformation_dict: dict</em>, <em class="sig-param">model_str: str</em>, <em class="sig-param">parameter_dict: dict</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">future_regressor_train=None</em>, <em class="sig-param">future_regressor_forecast=None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">startTimeStamps=None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">fail_on_forecast_nan: bool = True</em>, <em class="sig-param">return_model: bool = False</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">current_model_file: str = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.ModelPrediction" title="Permalink to this definition">¶</a></dt>
 <dd><p>Feed parameters into modeling pipeline</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df_train</strong> (<em>pandas.DataFrame</em>) – numeric training dataset of DatetimeIndex and series as cols</p></li>
 <li><p><strong>forecast_length</strong> (<em>int</em>) – number of periods to forecast</p></li>
@@ -77,12 +77,13 @@
 <li><p><strong>fail_on_forecast_nan</strong> (<em>bool</em>) – if False, return forecasts even if NaN present, if True, raises error if any nan in forecast</p></li>
 <li><p><strong>return_model</strong> (<em>bool</em>) – if True, forecast will have .model and .tranformer attributes set to model object.</p></li>
 <li><p><strong>n_jobs</strong> (<em>int</em>) – number of processes</p></li>
+<li><p><strong>current_model_file</strong> (<em>str</em>) – file path to write to disk of current model params (for debugging if computer crashes). .json is appended</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Prediction from AutoTS model object</p>
 </dd>
-<dt class="field-odd">Return type</dt>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference internal" href="autots.models.html#autots.models.base.PredictionObject" title="autots.models.base.PredictionObject">PredictionObject</a> (autots.PredictionObject)</p>
 </dd>
 </dl>
@@ -93,7 +94,7 @@
 <code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">NewGeneticTemplate</code><span class="sig-paren">(</span><em class="sig-param">model_results, submitted_parameters, sort_column: str = 'smape_weighted', sort_ascending: bool = True, max_results: int = 50, max_per_model_class: int = 5, top_n: int = 50, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], transformer_list: dict = {}, transformer_max_depth: int = 8, models_mode: str = 'default'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.NewGeneticTemplate" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return new template given old template with model accuracies.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>model_results</strong> (<em>pandas.DataFrame</em>) – models that have actually been run</p></li>
 <li><p><strong>submitted_paramters</strong> (<em>pandas.DataFrame</em>) – models tried (may have returned different parameters to results)</p></li>
@@ -107,7 +108,7 @@
 <code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">RandomTemplate</code><span class="sig-paren">(</span><em class="sig-param">n: int = 10, model_list: list = ['ZeroesNaive', 'LastValueNaive', 'AverageValueNaive', 'GLS', 'GLM', 'ETS'], transformer_list: dict = 'fast', transformer_max_depth: int = 8, models_mode: str = 'default'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.RandomTemplate" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns a template dataframe of randomly generated transformations, models, and hyperparameters.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>n</strong> (<em>int</em>) – number of random models to return</p>
 </dd>
 </dl>
@@ -115,7 +116,7 @@
 
 <dl class="class">
 <dt id="autots.evaluator.auto_model.TemplateEvalObject">
-<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateEvalObject</code><span class="sig-paren">(</span><em class="sig-param">model_results=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_timestamp_smape=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_mae=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_rmse=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_made=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_contour=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_spl=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_mle=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_imle=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">model_count: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateEvalObject" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateEvalObject</code><span class="sig-paren">(</span><em class="sig-param">model_results=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_timestamp_smape=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_mae=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_rmse=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_made=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_contour=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_spl=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_mle=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_imle=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_maxe=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_oda=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">per_series_mqae=Empty DataFrame Columns: [] Index: []</em>, <em class="sig-param">model_count: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateEvalObject" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Object to contain all the failures!.</p>
 <dl class="attribute">
@@ -123,7 +124,7 @@
 <code class="sig-name descname">full_mae_ids</code><a class="headerlink" href="#autots.evaluator.auto_model.TemplateEvalObject.full_mae_ids" title="Permalink to this definition">¶</a></dt>
 <dd><p>list of model_ids corresponding to full_mae_errors</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>list</p>
 </dd>
 </dl>
@@ -135,7 +136,7 @@
 <dd><p>list of numpy arrays of shape (rows, columns) appended in order of validation
 only provided for ‘mosaic’ ensembling</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>list</p>
 </dd>
 </dl>
@@ -157,11 +158,11 @@ only provided for ‘mosaic’ ensembling</p>
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.TemplateWizard">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateWizard</code><span class="sig-paren">(</span><em class="sig-param">template, df_train, df_test, weights, model_count: int = 0, ensemble: list = ['mosaic', 'distance'], forecast_length: int = 14, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=None, future_regressor_forecast=None, holiday_country: str = 'US', startTimeStamps=None, random_seed: int = 2020, verbose: int = 0, n_jobs: int = None, validation_round: int = 0, current_generation: int = 0, max_generations: int = 0, model_interrupt: bool = False, grouping_ids=None, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], traceback: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateWizard" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">TemplateWizard</code><span class="sig-paren">(</span><em class="sig-param">template, df_train, df_test, weights, model_count: int = 0, ensemble: list = ['mosaic', 'distance'], forecast_length: int = 14, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=None, future_regressor_forecast=None, holiday_country: str = 'US', startTimeStamps=None, random_seed: int = 2020, verbose: int = 0, n_jobs: int = None, validation_round: int = 0, current_generation: int = 0, max_generations: str = '0', model_interrupt: bool = False, grouping_ids=None, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], traceback: bool = False, current_model_file: str = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.TemplateWizard" title="Permalink to this definition">¶</a></dt>
 <dd><p>Take Template, returns Results.</p>
 <p>There are some who call me… Tim. - Python</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>template</strong> (<em>pandas.DataFrame</em>) – containing model str, and json of transformations and hyperparamters</p></li>
 <li><p><strong>df_train</strong> (<em>pandas.DataFrame</em>) – numeric training dataset of DatetimeIndex and series as cols</p></li>
@@ -181,13 +182,14 @@ only provided for ‘mosaic’ ensembling</p>
 <li><p><strong>startTimeStamps</strong> (<em>pd.Series</em>) – index (series_ids), columns (Datetime of First start of series)</p></li>
 <li><p><strong>validation_round</strong> (<em>int</em>) – int passed to record current validation.</p></li>
 <li><p><strong>current_generation</strong> (<em>int</em>) – info to pass to print statements</p></li>
-<li><p><strong>max_generations</strong> (<em>int</em>) – info to pass to print statements</p></li>
+<li><p><strong>max_generations</strong> (<em>str</em>) – info to pass to print statements</p></li>
 <li><p><strong>model_interrupt</strong> (<em>bool</em>) – if True, keyboard interrupts are caught and only break current model eval.</p></li>
 <li><p><strong>template_cols</strong> (<em>list</em>) – column names of columns used as model template</p></li>
 <li><p><strong>traceback</strong> (<em>bool</em>) – include tracebook over just error representation</p></li>
+<li><p><strong>current_model_file</strong> (<em>str</em>) – file path to write to disk of current model params (for debugging if computer crashes). .json is appended</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>TemplateEvalObject</p>
 </dd>
 </dl>
@@ -198,7 +200,7 @@ only provided for ‘mosaic’ ensembling</p>
 <code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">UniqueTemplates</code><span class="sig-paren">(</span><em class="sig-param">existing_templates, new_possibilities, selection_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble']</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.UniqueTemplates" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns unique dataframe rows from new_possiblities not in existing_templates.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>selection_cols</strong> (<em>list</em>) – list of column namess to use to judge uniqueness/match on</p>
 </dd>
 </dl>
@@ -206,7 +208,7 @@ only provided for ‘mosaic’ ensembling</p>
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.back_forecast">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">back_forecast</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">model_name</em>, <em class="sig-param">model_param_dict</em>, <em class="sig-param">model_transform_dict</em>, <em class="sig-param">future_regressor_train=None</em>, <em class="sig-param">n_splits: int = 'auto'</em>, <em class="sig-param">forecast_length=14</em>, <em class="sig-param">frequency='infer'</em>, <em class="sig-param">prediction_interval=0.9</em>, <em class="sig-param">no_negatives=False</em>, <em class="sig-param">constraint=None</em>, <em class="sig-param">holiday_country='US'</em>, <em class="sig-param">random_seed=123</em>, <em class="sig-param">n_jobs='auto'</em>, <em class="sig-param">verbose=0</em>, <em class="sig-param">eval_periods: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.back_forecast" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">back_forecast</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">model_name</em>, <em class="sig-param">model_param_dict</em>, <em class="sig-param">model_transform_dict</em>, <em class="sig-param">future_regressor_train=None</em>, <em class="sig-param">n_splits: int = 'auto'</em>, <em class="sig-param">forecast_length=14</em>, <em class="sig-param">frequency='infer'</em>, <em class="sig-param">prediction_interval=0.9</em>, <em class="sig-param">no_negatives=False</em>, <em class="sig-param">constraint=None</em>, <em class="sig-param">holiday_country='US'</em>, <em class="sig-param">random_seed=123</em>, <em class="sig-param">n_jobs='auto'</em>, <em class="sig-param">verbose=0</em>, <em class="sig-param">eval_periods: int = None</em>, <em class="sig-param">current_model_file: str = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.back_forecast" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create forecasts for the historical training data, ie. backcast or back forecast.</p>
 <p>This actually forecasts on historical data, these are not fit model values as are often returned by other packages.
 As such, this will be slower, but more representative of real world model performance.
@@ -215,7 +217,7 @@ There may be jumps in data between chunks.</p>
 n_splits(int): how many pieces to split data into. Pass 2 for fastest, or “auto” for best accuracy</p>
 <p>Returns a standard prediction object (access .forecast, .lower_forecast, .upper_forecast)</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>eval_period</strong> (<em>int</em>) – if passed, only returns results for this many time steps of recent history</p>
 </dd>
 </dl>
@@ -256,8 +258,14 @@ Runtime - smaller is better</p>
 </dd></dl>
 
 <dl class="function">
+<dt id="autots.evaluator.auto_model.horizontal_template_to_model_list">
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">horizontal_template_to_model_list</code><span class="sig-paren">(</span><em class="sig-param">template</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.horizontal_template_to_model_list" title="Permalink to this definition">¶</a></dt>
+<dd><p>helper function to take template dataframe of ensembles to a single list of models.</p>
+</dd></dl>
+
+<dl class="function">
 <dt id="autots.evaluator.auto_model.model_forecast">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">model_forecast</code><span class="sig-paren">(</span><em class="sig-param">model_name, model_param_dict, model_transform_dict, df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=None, future_regressor_forecast=None, holiday_country: str = 'US', startTimeStamps=None, grouping_ids=None, fail_on_forecast_nan: bool = True, random_seed: int = 2020, verbose: int = 0, n_jobs: int = 'auto', template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], horizontal_subset: list = None, return_model: bool = False, **kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.model_forecast" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">model_forecast</code><span class="sig-paren">(</span><em class="sig-param">model_name, model_param_dict, model_transform_dict, df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=None, future_regressor_forecast=None, holiday_country: str = 'US', startTimeStamps=None, grouping_ids=None, fail_on_forecast_nan: bool = True, random_seed: int = 2020, verbose: int = 0, n_jobs: int = 'auto', template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], horizontal_subset: list = None, return_model: bool = False, current_model_file: str = None, **kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.model_forecast" title="Permalink to this definition">¶</a></dt>
 <dd><p>Takes numeric data, returns numeric forecasts.</p>
 <p>Only one model (albeit potentially an ensemble)!
 Horizontal ensembles can not be nested, other ensemble types can be.</p>
@@ -265,7 +273,7 @@ Horizontal ensembles can not be nested, other ensemble types can be.</p>
 A newt?
 I got better. -Python</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>model_name</strong> (<em>str</em>) – a string to be direct to the appropriate model, used in ModelMonster</p></li>
 <li><p><strong>model_param_dict</strong> (<em>dict</em>) – dictionary of parameters to be passed into the model.</p></li>
@@ -285,12 +293,13 @@ pass an empty dictionary if no transformations are desired.</p></li>
 <li><p><strong>horizontal_subset</strong> (<em>list</em>) – columns of df_train to use for forecast, meant for internal use for horizontal ensembling</p></li>
 <li><p><strong>fail_on_forecast_nan</strong> (<em>bool</em>) – if False, return forecasts even if NaN present, if True, raises error if any nan in forecast. True is recommended.</p></li>
 <li><p><strong>return_model</strong> (<em>bool</em>) – if True, forecast will have .model and .tranformer attributes set to model object. Only works for non-ensembles.</p></li>
+<li><p><strong>current_model_file</strong> (<em>str</em>) – file path to write to disk of current model params (for debugging if computer crashes). .json is appended</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Prediction from AutoTS model object</p>
 </dd>
-<dt class="field-odd">Return type</dt>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference internal" href="autots.models.html#autots.models.base.PredictionObject" title="autots.models.base.PredictionObject">PredictionObject</a> (autots.PredictionObject)</p>
 </dd>
 </dl>
@@ -311,9 +320,10 @@ pass an empty dictionary if no transformations are desired.</p></li>
 <dl class="function">
 <dt id="autots.evaluator.auto_model.unpack_ensemble_models">
 <code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">unpack_ensemble_models</code><span class="sig-paren">(</span><em class="sig-param">template, template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], keep_ensemble: bool = True, recursive: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.unpack_ensemble_models" title="Permalink to this definition">¶</a></dt>
-<dd><p>Take ensemble models from template and add as new rows.</p>
+<dd><p>Take ensemble models from template and add as new rows.
+Some confusion may exist as Ensembles require both ‘Ensemble’ column &gt; 0 and model name ‘Ensemble’</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>template</strong> (<em>pd.DataFrame</em>) – AutoTS template containing template_cols</p></li>
 <li><p><strong>keep_ensemble</strong> (<em>bool</em>) – if False, drop row containing original ensemble</p></li>
@@ -335,11 +345,11 @@ pass an empty dictionary if no transformations are desired.</p></li>
 <p>Higher-level functions of automated time series modeling.</p>
 <dl class="class">
 <dt id="autots.evaluator.auto_ts.AutoTS">
-<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 10</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2022</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 1</em>, <em class="sig-param">'imle_weighting': 0</em>, <em class="sig-param">'made_weighting': 0.5</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'mage_weighting': 0</em>, <em class="sig-param">'mle_weighting': 0</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0.05</em>, <em class="sig-param">'smape_weighting': 5</em>, <em class="sig-param">'spl_weighting': 3}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'fast'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">models_mode: str = 'random'</em>, <em class="sig-param">num_validations: int = 2</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'backwards'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">prefill_na: str = None</em>, <em class="sig-param">introduce_na: bool = None</em>, <em class="sig-param">preclean: dict = None</em>, <em class="sig-param">model_interrupt: bool = True</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = -2</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 10</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2022</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 1</em>, <em class="sig-param">'imle_weighting': 0</em>, <em class="sig-param">'made_weighting': 0.5</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'mage_weighting': 0</em>, <em class="sig-param">'mle_weighting': 0</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0.05</em>, <em class="sig-param">'smape_weighting': 5</em>, <em class="sig-param">'spl_weighting': 3}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'fast'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">models_mode: str = 'random'</em>, <em class="sig-param">num_validations: int = 'auto'</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'backwards'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">prefill_na: str = None</em>, <em class="sig-param">introduce_na: bool = None</em>, <em class="sig-param">preclean: dict = None</em>, <em class="sig-param">model_interrupt: bool = True</em>, <em class="sig-param">current_model_file: str = None</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = -2</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Automate time series modeling using a genetic algorithm.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – number of periods over which to evaluate forecast. Can be overriden later in .predict().</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – ‘infer’ or a specific pandas datetime offset. Can be used to force rollup of data (ie daily input, but frequency ‘M’ will rollup to monthly).</p></li>
@@ -348,7 +358,23 @@ pass an empty dictionary if no transformations are desired.</p></li>
 More runs = longer runtime, generally better accuracy.
 It’s called <cite>max</cite> because someday there will be an auto early stopping option, but for now this is just the exact number of generations to run.</p></li>
 <li><p><strong>no_negatives</strong> (<em>bool</em>) – if True, all negative predictions are rounded up to 0.</p></li>
-<li><p><strong>constraint</strong> (<em>float</em>) – when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.</p></li>
+<li><p><strong>constraint</strong> (<em>float</em>) – <p>when not None, use this float value * data st dev above max or below min for constraining forecast values.
+now also instead accepts a dictionary containing the following key/values:</p>
+<blockquote>
+<div><dl class="simple">
+<dt>constraint_method (str): one of</dt><dd><p>stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
+stdev - threshold is the mean of historic data +/- constraint * st dev of data
+absolute - input is array of length series containing the threshold’s final value for each
+quantile - constraint is the quantile of historic data to use as threshold</p>
+</dd>
+<dt>constraint_regularization (float): 0 to 1</dt><dd><p>where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term</p>
+</dd>
+</dl>
+<p>upper_constraint (float): or array, depending on method, None if unused
+lower_constraint (float): or array, depending on method, None if unused
+bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast</p>
+</div></blockquote>
+</p></li>
 <li><p><strong>ensemble</strong> (<em>str</em>) – None or list or comma-separated string containing:
 ‘auto’, ‘simple’, ‘distance’, ‘horizontal’, ‘horizontal-min’, ‘horizontal-max’, “mosaic”, “subsample”</p></li>
 <li><p><strong>initial_template</strong> (<em>str</em>) – ‘Random’ - randomly generates starting template, ‘General’ uses template included in package, ‘General+Random’ - both of previous. Also can be overriden with self.import_template()</p></li>
@@ -370,7 +396,8 @@ can accept string aliases: “all”, “fast”, “superfast”</p></li>
 <li><p><strong>models_mode</strong> (<em>str</em>) – option to adjust parameter options for newly generated models. Currently includes:
 ‘default’, ‘deep’ (searches more params, likely slower), and ‘regressor’ (forces ‘User’ regressor mode in regressor capable models)</p></li>
 <li><p><strong>num_validations</strong> (<em>int</em>) – number of cross validations to perform. 0 for just train/test on best split.
-Possible confusion: num_validations is the number of validations to perform <em>after</em> the first eval segment, so totally eval/validations will be this + 1.</p></li>
+Possible confusion: num_validations is the number of validations to perform <em>after</em> the first eval segment, so totally eval/validations will be this + 1.
+Also “auto” and “max” aliases available. Max maxes out at 50.</p></li>
 <li><p><strong>models_to_validate</strong> (<em>int</em>) – top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
 0.99 is forced to 100% validation. 1 evaluates just 1 model.
 If horizontal or mosaic ensemble, then additional min per_series models above the number here are added to validation.</p></li>
@@ -397,6 +424,7 @@ This will change data used in model inputs for fit and predict, and for accuracy
 if True, KeyboardInterrupts attempt to only quit current model.
 if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite>result_file</cite> in the event of accidental complete termination.
 if “end_generation”, as True and also ends entire generation of run. Note skipped models will not be tried again.</p></li>
+<li><p><strong>current_model_file</strong> (<em>str</em>) – file path to write to disk of current model params (for debugging if computer crashes). .json is appended</p></li>
 <li><p><strong>verbose</strong> (<em>int</em>) – setting to 0 or lower should reduce most output. Higher numbers give more output.</p></li>
 <li><p><strong>n_jobs</strong> (<em>int</em>) – Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also ‘auto’.</p></li>
 </ul>
@@ -407,7 +435,7 @@ if “end_generation”, as True and also ends entire generation of run. Note sk
 <code class="sig-name descname">best_model</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.best_model" title="Permalink to this definition">¶</a></dt>
 <dd><p>DataFrame containing template for the best ranked model</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>pd.DataFrame</p>
 </dd>
 </dl>
@@ -418,7 +446,7 @@ if “end_generation”, as True and also ends entire generation of run. Note sk
 <code class="sig-name descname">best_model_name</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.best_model_name" title="Permalink to this definition">¶</a></dt>
 <dd><p>model name</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>str</p>
 </dd>
 </dl>
@@ -429,7 +457,7 @@ if “end_generation”, as True and also ends entire generation of run. Note sk
 <code class="sig-name descname">best_model_params</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.best_model_params" title="Permalink to this definition">¶</a></dt>
 <dd><p>model params</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>dict</p>
 </dd>
 </dl>
@@ -440,7 +468,7 @@ if “end_generation”, as True and also ends entire generation of run. Note sk
 <code class="sig-name descname">best_model_transformation_params</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.best_model_transformation_params" title="Permalink to this definition">¶</a></dt>
 <dd><p>transformation parameters</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>dict</p>
 </dd>
 </dl>
@@ -451,7 +479,7 @@ if “end_generation”, as True and also ends entire generation of run. Note sk
 <code class="sig-name descname">best_model_ensemble</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.best_model_ensemble" title="Permalink to this definition">¶</a></dt>
 <dd><p>Ensemble type int id</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>int</p>
 </dd>
 </dl>
@@ -462,7 +490,7 @@ if “end_generation”, as True and also ends entire generation of run. Note sk
 <code class="sig-name descname">regression_check</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.regression_check" title="Permalink to this definition">¶</a></dt>
 <dd><p>If True, the best_model uses an input ‘User’ future_regressor</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>bool</p>
 </dd>
 </dl>
@@ -473,7 +501,7 @@ if “end_generation”, as True and also ends entire generation of run. Note sk
 <code class="sig-name descname">df_wide_numeric</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.df_wide_numeric" title="Permalink to this definition">¶</a></dt>
 <dd><p>dataframe containing shaped final data</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>pd.DataFrame</p>
 </dd>
 </dl>
@@ -484,7 +512,7 @@ if “end_generation”, as True and also ends entire generation of run. Note sk
 <code class="sig-prename descclassname">initial_results.</code><code class="sig-name descname">model_results</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.initial_results.model_results" title="Permalink to this definition">¶</a></dt>
 <dd><p>contains a collection of result metrics</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>object</p>
 </dd>
 </dl>
@@ -495,7 +523,7 @@ if “end_generation”, as True and also ends entire generation of run. Note sk
 <code class="sig-name descname">score_per_series</code><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.score_per_series" title="Permalink to this definition">¶</a></dt>
 <dd><p>generated score of metrics given per input series, if horizontal ensembles</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type</dt>
+<dt class="field-odd">Type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>pd.DataFrame</p>
 </dd>
 </dl>
@@ -545,10 +573,10 @@ tail (int): df.tail() of the dataset, back_forecast is only run on n most recent
 
 <dl class="method">
 <dt id="autots.evaluator.auto_ts.AutoTS.export_template">
-<code class="sig-name descname">export_template</code><span class="sig-paren">(</span><em class="sig-param">filename=None</em>, <em class="sig-param">models: str = 'best'</em>, <em class="sig-param">n: int = 5</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">include_results: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.export_template" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">export_template</code><span class="sig-paren">(</span><em class="sig-param">filename=None</em>, <em class="sig-param">models: str = 'best'</em>, <em class="sig-param">n: int = 20</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">include_results: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.export_template" title="Permalink to this definition">¶</a></dt>
 <dd><p>Export top results as a reusable template.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>filename</strong> (<em>str</em>) – ‘csv’ or ‘json’ (in filename).
 <cite>None</cite> to return a dataframe and not write a file.</p></li>
@@ -567,10 +595,10 @@ the max number of each model class to include in template</p></li>
 <code class="sig-name descname">failure_rate</code><span class="sig-paren">(</span><em class="sig-param">result_set: str = 'initial'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.failure_rate" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return fraction of models passing with exceptions.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>result_set</strong> (<em>str</em><em>, </em><em>optional</em>) – ‘validation’ or ‘initial’. Defaults to ‘initial’.</p>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>float.</p>
 </dd>
 </dl>
@@ -581,7 +609,7 @@ the max number of each model class to include in template</p></li>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">date_col: str = None</em>, <em class="sig-param">value_col: str = None</em>, <em class="sig-param">id_col: str = None</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">weights: dict = {}</em>, <em class="sig-param">result_file: str = None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">validation_indexes: list = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed dataframe of series, or dataframe of three columns as below.</p></li>
 <li><p><strong>date_col</strong> (<em>str</em>) – name of datetime column</p></li>
@@ -621,7 +649,7 @@ or can be a DataFrame of model results or a full TemplateEvalObject</p>
 <dd><p>Import a previously exported template of model parameters.
 Must be done before the AutoTS object is .fit().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>filename</strong> (<em>str</em>) – file location (or a pd.DataFrame already loaded)</p></li>
 <li><p><strong>method</strong> (<em>str</em>) – ‘add_on’ or ‘only’ - “add_on” keeps <cite>initial_template</cite> generated in init. “only” uses only this template.</p></li>
@@ -650,7 +678,7 @@ If all had at least one success, then return an empty list.</p>
 <code class="sig-name descname">plot_backforecast</code><span class="sig-paren">(</span><em class="sig-param">series=None</em>, <em class="sig-param">n_splits: int = 3</em>, <em class="sig-param">start_date=None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.plot_backforecast" title="Permalink to this definition">¶</a></dt>
 <dd><p>Plot the historical data and fit forecast on historic.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>series</strong> (<em>str</em><em> or </em><em>list</em>) – column names of time series</p></li>
 <li><p><strong>n_splits</strong> (<em>int</em><em> or </em><em>str</em>) – “auto”, number &gt; 2, higher more accurate but slower</p></li>
@@ -667,7 +695,7 @@ If all had at least one success, then return an empty list.</p>
 Note: this is only “one size fits all” accuracy and
 doesn’t account for the benefits seen for ensembling.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>passed to pd.DataFrame.plot</strong><strong>(</strong><strong>)</strong> (<em>**kwargs</em>) – </p>
 </dd>
 </dl>
@@ -677,9 +705,9 @@ doesn’t account for the benefits seen for ensembling.</p>
 <dt id="autots.evaluator.auto_ts.AutoTS.plot_horizontal">
 <code class="sig-name descname">plot_horizontal</code><span class="sig-paren">(</span><em class="sig-param">max_series: int = 20</em>, <em class="sig-param">title='Model Types Chosen by Series'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.plot_horizontal" title="Permalink to this definition">¶</a></dt>
 <dd><p>Simple plot to visualize assigned series: models.</p>
-<p>Note that for ‘mosiac’ ensembles, it only plots the type of the most common model_id for that series, or the first if all are mode.</p>
+<p>Note that for ‘mosaic’ ensembles, it only plots the type of the most common model_id for that series, or the first if all are mode.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>max_series</strong> (<em>int</em>) – max number of points to plot</p></li>
 <li><p><strong>passed to pandas.plot</strong><strong>(</strong><strong>)</strong> (<em>**kwargs</em>) – </p></li>
@@ -694,7 +722,7 @@ doesn’t account for the benefits seen for ensembling.</p>
 <dd><p>Simple plot to visualize transformers used.
 Note this doesn’t capture transformers nested in simple ensembles.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>method</strong> (<em>str</em>) – ‘fillna’ or ‘transformers’ - which to plot</p></li>
 <li><p><strong>= list of colors to sample for bar colors. Can be names</strong><strong> or </strong><strong>hex.</strong> (<em>color_list</em>) – </p></li>
@@ -709,7 +737,7 @@ Note this doesn’t capture transformers nested in simple ensembles.</p>
 <code class="sig-name descname">plot_per_series_smape</code><span class="sig-paren">(</span><em class="sig-param">title: str = 'Top Series Contributing SMAPE Error'</em>, <em class="sig-param">max_series: int = 10</em>, <em class="sig-param">max_name_chars: int = 25</em>, <em class="sig-param">color: str = '#ff9912'</em>, <em class="sig-param">figsize=(12</em>, <em class="sig-param">4)</em>, <em class="sig-param">kind: str = 'bar'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.plot_per_series_smape" title="Permalink to this definition">¶</a></dt>
 <dd><p>Plot which series are contributing most to SMAPE of final model. Avg of validations for best_model</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>title</strong> (<em>str</em>) – plot title</p></li>
 <li><p><strong>max_series</strong> (<em>int</em>) – max number of series to show on plot (sorted)</p></li>
@@ -728,7 +756,7 @@ Note this doesn’t capture transformers nested in simple ensembles.</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 'self'</em>, <em class="sig-param">prediction_interval: float = 'self'</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">hierarchy=None</em>, <em class="sig-param">just_point_forecast: bool = False</em>, <em class="sig-param">fail_on_forecast_nan: bool = True</em>, <em class="sig-param">verbose: int = 'self'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>prediction_interval</strong> (<em>float</em>) – <p>interval of upper/lower forecasts.
@@ -744,7 +772,7 @@ if prediction_interval is a list, then returns a dict of forecast objects.</p>
 <li><p><strong>fail_on_forecast_nan</strong> (<em>bool</em>) – if False, return forecasts even if NaN present, if True, raises error if any nan in forecast</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -756,7 +784,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">results</code><span class="sig-paren">(</span><em class="sig-param">result_set: str = 'initial'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.results" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convenience function to return tested models table.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>result_set</strong> (<em>str</em>) – ‘validation’ or ‘initial’</p>
 </dd>
 </dl>
@@ -772,7 +800,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <p>Runs max_generations on first prediction interval, then validates on remainder.
 Most args are passed through to AutoTS().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>interval_models_to_validate</strong> (<em>int</em>) – number of models to validate on each prediction interval.</p></li>
 <li><p><strong>import_results</strong> (<em>str</em>) – results from run on same data to load, <cite>filename.pickle</cite>.
@@ -799,7 +827,7 @@ Currently result_file and import only save/load initial run, no validations.</p>
 <code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">error_correlations</code><span class="sig-paren">(</span><em class="sig-param">all_result</em>, <em class="sig-param">result: str = 'corr'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.error_correlations" title="Permalink to this definition">¶</a></dt>
 <dd><p>Onehot encode AutoTS result df and return df or correlation with errors.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>all_results</strong> (<em>pandas.DataFrame</em>) – AutoTS model_results df</p></li>
 <li><p><strong>result</strong> (<em>str</em>) – whether to return ‘df’, ‘corr’, ‘poly corr’ with errors</p></li>
@@ -828,7 +856,7 @@ Currently result_file and import only save/load initial run, no validations.</p>
 <code class="sig-name descname">run</code><span class="sig-paren">(</span><em class="sig-param">n_jobs: int = 'auto'</em>, <em class="sig-param">times: int = 3</em>, <em class="sig-param">random_seed: int = 123</em>, <em class="sig-param">base_models_only=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.benchmark.Benchmark.run" title="Permalink to this definition">¶</a></dt>
 <dd><p>Run benchmark.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>n_jobs</strong> (<em>int</em>) – passed to model_forecast for n cpus</p></li>
 <li><p><strong>times</strong> (<em>int</em>) – number of times to run benchmark models (returns avg of n times)</p></li>
@@ -872,9 +900,9 @@ The risk score is then the % of outcome forecasts which cross the limit.
 Methods are class_methods and can be used standalone. They default to __init__ inputs, but can be overriden.
 Results are usually a numpy array of shape (forecast_length, num_series)</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>df_train</strong> (<em>pd.DataFrame</em>) – <a href="#id1"><span class="problematic" id="id2">`</span></a>wide style data, pd.DatetimeIndex for index and one series per column</p></li>
+<li><p><strong>df_train</strong> (<em>pd.DataFrame</em>) – <a href="#system-message-1"><span class="problematic" id="problematic-1">`</span></a>wide style data, pd.DatetimeIndex for index and one series per column</p></li>
 <li><p><strong>forecast_length</strong> (<em>int</em>) – number of forecast steps to make</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – frequency of timesteps</p></li>
 <li><p><strong>prediction_interval</strong> (<em>float</em>) – float or list of floats for probabilistic forecasting
@@ -941,7 +969,7 @@ if a list, the first item in the list is the one used for .fit default</p></li>
 <dd><p>Shortcut for generating model params.</p>
 <p>args specified are those suggested for an otherwise normal AutoTS run</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df_train</strong> (<em>pd.DataFrame</em>) – wide style only</p></li>
 <li><p><strong>model_method</strong> (<em>str</em>) – event_risk here is used by motif models</p></li>
@@ -965,10 +993,10 @@ if None, defaults to class model_forecast_kwargs, for blank pass empty dict</p><
 <code class="sig-name descname">generate_result_windows</code><span class="sig-paren">(</span><em class="sig-param">df_train=None</em>, <em class="sig-param">forecast_length=None</em>, <em class="sig-param">frequency=None</em>, <em class="sig-param">prediction_interval=None</em>, <em class="sig-param">model_name=None</em>, <em class="sig-param">model_param_dict=None</em>, <em class="sig-param">model_transform_dict=None</em>, <em class="sig-param">model_forecast_kwargs=None</em>, <em class="sig-param">future_regressor_train=None</em>, <em class="sig-param">future_regressor_forecast=None</em><span class="sig-paren">)</span></dt>
 <dd><p>For event risk forecasting. Params default to class init but can be overridden here.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Returns</dt>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><p>(num_samples/k, forecast_length, num_series/columns)</p>
 </dd>
-<dt class="field-even">Return type</dt>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p>result_windows (numpy.array)</p>
 </dd>
 </dl>
@@ -982,15 +1010,36 @@ if None, defaults to class model_forecast_kwargs, for blank pass empty dict</p><
 
 <dl class="method">
 <dt>
-<code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">column_idx=0, grays=['#838996', '#c0c0c0', '#dcdcdc', '#a9a9a9', '#808080', '#989898', '#808080', '#757575', '#696969', '#c9c0bb', '#c8c8c8', '#323232', '#e5e4e2', '#778899', '#4f666a', '#848482', '#414a4c', '#8a7f80', '#c4c3d0', '#bebebe', '#dbd7d2'], up_low_color=['#ff4500', '#ff5349'], bar_color='#6495ED', result_windows=None, lower_limit_2d=None, upper_limit_2d=None, upper_risk_array=None, lower_risk_array=None</em><span class="sig-paren">)</span></dt>
+<code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">column_idx=0, grays=['#838996', '#c0c0c0', '#dcdcdc', '#a9a9a9', '#808080', '#989898', '#808080', '#757575', '#696969', '#c9c0bb', '#c8c8c8', '#323232', '#e5e4e2', '#778899', '#4f666a', '#848482', '#414a4c', '#8a7f80', '#c4c3d0', '#bebebe', '#dbd7d2'], up_low_color=['#ff4500', '#ff5349'], bar_color='#6495ED', bar_ylim=[0.0, 0.5], figsize=(14, 8), result_windows=None, lower_limit_2d=None, upper_limit_2d=None, upper_risk_array=None, lower_risk_array=None</em><span class="sig-paren">)</span></dt>
 <dd><p>Plot a sample of the risk forecast outcomes.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>column_idx</strong> (<em>int</em>) – positional index of series to sample for plot</p></li>
 <li><p><strong>grays</strong> (<em>list of str</em>) – list of hex codes for colors for the potential forecasts</p></li>
 <li><p><strong>up_low_colors</strong> (<em>list of str</em>) – two hex code colors for lower and upper</p></li>
 <li><p><strong>bar_color</strong> (<em>str</em>) – hex color for bar graph</p></li>
+<li><p><strong>bar_ylim</strong> (<em>list</em>) – passed to ylim of plot, sets scale of axis of barplot</p></li>
+<li><p><strong>figsize</strong> (<em>tuple</em>) – passed to figsize of output figure</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.evaluator.event_forecasting.EventRiskForecast.plot_eval">
+<code class="sig-name descname">plot_eval</code><span class="sig-paren">(</span><em class="sig-param">df_test, column_idx=0, actuals_color=['#00BFFF'], up_low_color=['#ff4500', '#ff5349'], bar_color='#6495ED', bar_ylim=[0.0, 0.5], figsize=(14, 8), lower_limit_2d=None, upper_limit_2d=None, upper_risk_array=None, lower_risk_array=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.event_forecasting.EventRiskForecast.plot_eval" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plot a sample of the risk forecast with known value vs risk score.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df_test</strong> (<em>pd.DataFrame</em>) – dataframe of known values (dt index, series)</p></li>
+<li><p><strong>column_idx</strong> (<em>int</em>) – positional index of series to sample for plot</p></li>
+<li><p><strong>actuals_color</strong> (<em>list of str</em>) – list of one hex code for line of known actuals</p></li>
+<li><p><strong>up_low_colors</strong> (<em>list of str</em>) – two hex code colors for lower and upper</p></li>
+<li><p><strong>bar_color</strong> (<em>str</em>) – hex color for bar graph</p></li>
+<li><p><strong>bar_ylim</strong> (<em>list</em>) – passed to ylim of plot, sets scale of axis of barplot</p></li>
+<li><p><strong>figsize</strong> (<em>tuple</em>) – passed to figsize of output figure</p></li>
 </ul>
 </dd>
 </dl>
@@ -1008,7 +1057,7 @@ if None, defaults to class model_forecast_kwargs, for blank pass empty dict</p><
 <dd><p>Returns upper, lower risk probability arrays for input limits for the historic data.
 If manual numpy array limits are used, the limits will need to be appropriate shape (for df_train and eval_periods if used)</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>upper_limit</strong> – if different than the version passed to init</p></li>
 <li><p><strong>lower_limit</strong> – if different than the version passed to init</p></li>
@@ -1023,13 +1072,13 @@ If manual numpy array limits are used, the limits will need to be appropriate sh
 <em class="property">static </em><code class="sig-name descname">set_limit</code><span class="sig-paren">(</span><em class="sig-param">limit</em>, <em class="sig-param">target_shape</em>, <em class="sig-param">df_train</em>, <em class="sig-param">direction='upper'</em>, <em class="sig-param">period='forecast'</em>, <em class="sig-param">forecast_length=None</em>, <em class="sig-param">eval_periods=None</em><span class="sig-paren">)</span></dt>
 <dd><p>Handles all limit input styles and returns numpy array.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>limit</strong> – see class overview for input options</p></li>
 <li><p><strong>target_shape</strong> (<em>tuple</em>) – of (forecast_length, num_series)</p></li>
 <li><p><strong>df_train</strong> (<em>pd.DataFrame</em>) – training data</p></li>
 <li><p><strong>direction</strong> (<em>str</em>) – whether it is the “upper” or “lower” limit</p></li>
-<li><p><strong>periods</strong> (<em>str</em>) – “forecast” or “historic” only used for limits defined by forecast algorithm params</p></li>
+<li><p><strong>period</strong> (<em>str</em>) – “forecast” or “historic” only used for limits defined by forecast algorithm params</p></li>
 <li><p><strong>forecast_length</strong> (<em>int</em>) – needed only for historic of forecast algorithm defined limit</p></li>
 <li><p><strong>eval_periods</strong> (<em>int</em>) – only for historic forecast limit, only runs on the tail n (this) of data</p></li>
 </ul>
@@ -1055,13 +1104,19 @@ If manual numpy array limits are used, the limits will need to be appropriate sh
 <section id="module-autots.evaluator.metrics">
 <span id="autots-evaluator-metrics-module"></span><h2>autots.evaluator.metrics module<a class="headerlink" href="#module-autots.evaluator.metrics" title="Permalink to this headline">¶</a></h2>
 <p>Tools for calculating forecast errors.</p>
+<dl class="simple">
+<dt>Some common args:</dt><dd><p>A or actual (np.array): actuals ndim 2 (timesteps, series)
+F or forecast (np.array): forecast values ndim 2 (timesteps, series)
+ae (np.array): precalculated np.abs(A - F)</p>
+</dd>
+</dl>
 <dl class="function">
 <dt id="autots.evaluator.metrics.containment">
 <code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">containment</code><span class="sig-paren">(</span><em class="sig-param">lower_forecast</em>, <em class="sig-param">upper_forecast</em>, <em class="sig-param">actual</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.containment" title="Permalink to this definition">¶</a></dt>
 <dd><p>Expects two, 2-D numpy arrays of forecast_length * n series.</p>
 <p>Returns a 1-D array of results in len n series</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>actual</strong> (<em>numpy.array</em>) – known true values</p></li>
 <li><p><strong>forecast</strong> (<em>numpy.array</em>) – predicted values</p></li>
@@ -1075,11 +1130,13 @@ If manual numpy array limits are used, the limits will need to be appropriate sh
 <code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">contour</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.contour" title="Permalink to this definition">¶</a></dt>
 <dd><p>A measure of how well the actual and forecast follow the same pattern of change.
 <em>Note:</em> If actual values are unchanging, will match positive changing forecasts.
-Expects two, 2-D numpy arrays of forecast_length * n series
+This is faster, and because if actuals are a flat line, contour probably isn’t a concern regardless.</p>
+<p>Expects two, 2-D numpy arrays of forecast_length * n series
 Returns a 1-D array of results in len n series</p>
+<p>NaNs diffs are filled with 0, essentially equiavelent to assuming a forward fill of NaN</p>
 <p>Concat the last row of history to head of both A and F (req for 1 step)</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>A</strong> (<em>numpy.array</em>) – known true values</p></li>
 <li><p><strong>F</strong> (<em>numpy.array</em>) – predicted values</p></li>
@@ -1095,12 +1152,30 @@ Returns a 1-D array of results in len n series</p>
 </dd></dl>
 
 <dl class="function">
+<dt id="autots.evaluator.metrics.mda">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">mda</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.mda" title="Permalink to this definition">¶</a></dt>
+<dd><p>A measure of how well the actual and forecast follow the same pattern of change.
+Expects two, 2-D numpy arrays of forecast_length * n series
+Returns a 1-D array of results in len n series</p>
+<p>NaNs diffs are filled with 0, essentially equiavelent to assuming a forward fill of NaN</p>
+<p>Concat the last row of history to head of both A and F (req for 1 step)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>A</strong> (<em>numpy.array</em>) – known true values</p></li>
+<li><p><strong>F</strong> (<em>numpy.array</em>) – predicted values</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
 <dt id="autots.evaluator.metrics.mean_absolute_differential_error">
 <code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">mean_absolute_differential_error</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em>, <em class="sig-param">order: int = 1</em>, <em class="sig-param">df_train=None</em>, <em class="sig-param">scaler=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.mean_absolute_differential_error" title="Permalink to this definition">¶</a></dt>
 <dd><p>Expects two, 2-D numpy arrays of forecast_length * n series.</p>
 <p>Returns a 1-D array of results in len n series</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>A</strong> (<em>numpy.array</em>) – known true values</p></li>
 <li><p><strong>F</strong> (<em>numpy.array</em>) – predicted values</p></li>
@@ -1123,7 +1198,7 @@ This will also allow this to work on forecast_length = 1 forecasts</p></li>
 <dd><p>Expects two, 2-D numpy arrays of forecast_length * n series.</p>
 <p>Returns a 1-D array of results in len n series</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>A</strong> (<em>numpy.array</em>) – known true values</p></li>
 <li><p><strong>F</strong> (<em>numpy.array</em>) – predicted values</p></li>
@@ -1134,7 +1209,7 @@ This will also allow this to work on forecast_length = 1 forecasts</p></li>
 
 <dl class="function">
 <dt id="autots.evaluator.metrics.medae">
-<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">medae</code><span class="sig-paren">(</span><em class="sig-param">ae</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.medae" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">medae</code><span class="sig-paren">(</span><em class="sig-param">ae</em>, <em class="sig-param">nan_flag=True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.medae" title="Permalink to this definition">¶</a></dt>
 <dd><p>Accepting abs error already calculated</p>
 </dd></dl>
 
@@ -1144,7 +1219,7 @@ This will also allow this to work on forecast_length = 1 forecasts</p></li>
 <dd><p>Expects two, 2-D numpy arrays of forecast_length * n series.</p>
 <p>Returns a 1-D array of results in len n series</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>A</strong> (<em>numpy.array</em>) – known true values</p></li>
 <li><p><strong>F</strong> (<em>numpy.array</em>) – predicted values</p></li>
@@ -1154,17 +1229,53 @@ This will also allow this to work on forecast_length = 1 forecasts</p></li>
 </dd></dl>
 
 <dl class="function">
+<dt id="autots.evaluator.metrics.mlvb">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">mlvb</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em>, <em class="sig-param">last_of_array</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.mlvb" title="Permalink to this definition">¶</a></dt>
+<dd><p>Mean last value baseline, the % difference of forecast vs last value naive forecast.
+Does poorly with near-zero values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>A</strong> (<em>np.array</em>) – actuals</p></li>
+<li><p><strong>F</strong> (<em>np.array</em>) – forecast values</p></li>
+<li><p><strong>last_of_array</strong> (<em>np.array</em>) – the last row of the historic training data, most recent values</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.evaluator.metrics.mqae">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">mqae</code><span class="sig-paren">(</span><em class="sig-param">ae</em>, <em class="sig-param">q=0.85</em>, <em class="sig-param">nan_flag=True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.mqae" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the mean of errors less than q quantile of the errors per series.
+np.nans count as largest values, and so are removed as part of the &gt; q group.</p>
+</dd></dl>
+
+<dl class="function">
 <dt id="autots.evaluator.metrics.msle">
-<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">msle</code><span class="sig-paren">(</span><em class="sig-param">full_errors</em>, <em class="sig-param">ae</em>, <em class="sig-param">le</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.msle" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">msle</code><span class="sig-paren">(</span><em class="sig-param">full_errors</em>, <em class="sig-param">ae</em>, <em class="sig-param">le</em>, <em class="sig-param">nan_flag=True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.msle" title="Permalink to this definition">¶</a></dt>
 <dd><p>input is array of y_pred - y_true to over-penalize underestimate.
 Use instead y_true - y_pred to over-penalize overestimate.
 AE used here for the log just to avoid divide by zero warnings (values aren’t used either way)</p>
 </dd></dl>
 
 <dl class="function">
+<dt id="autots.evaluator.metrics.oda">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">oda</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em>, <em class="sig-param">last_of_array</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.oda" title="Permalink to this definition">¶</a></dt>
+<dd><p>Origin Directional Accuracy, the accuracy of growth or decline relative to most recent data.</p>
+</dd></dl>
+
+<dl class="function">
 <dt id="autots.evaluator.metrics.pinball_loss">
 <code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">pinball_loss</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em>, <em class="sig-param">quantile</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.pinball_loss" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bigger is bad-er.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.evaluator.metrics.qae">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">qae</code><span class="sig-paren">(</span><em class="sig-param">ae</em>, <em class="sig-param">q=0.9</em>, <em class="sig-param">nan_flag=True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.qae" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the q quantile of the errors per series.
+np.nans count as smallest values and will push more values into the exclusion group.</p>
 </dd></dl>
 
 <dl class="function">
@@ -1179,7 +1290,7 @@ AE used here for the log just to avoid divide by zero warnings (values aren’t 
 <dd><p>Expects two, 2-D numpy arrays of forecast_length * n series.</p>
 <p>Returns a 1-D array of results in len n series</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>actual</strong> (<em>numpy.array</em>) – known true values</p></li>
 <li><p><strong>forecast</strong> (<em>numpy.array</em>) – predicted values</p></li>
@@ -1195,7 +1306,7 @@ AE used here for the log just to avoid divide by zero warnings (values aren’t 
 A lower value is a better score.
 From: Colin Catlin, <a class="reference external" href="https://syllepsis.live/2022/01/22/ranked-probability-score-in-python/">https://syllepsis.live/2022/01/22/ranked-probability-score-in-python/</a></p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>predictions</strong> (<em>pd.DataFrame</em>) – each column is an outcome category, with values as the 0 to 1 probability of that category</p></li>
 <li><p><strong>observed</strong> (<em>pd.DataFrame</em>) – each column is an outcome category, with values of 0 OR 1 with 1 being that category occurred</p></li>
@@ -1209,7 +1320,7 @@ From: Colin Catlin, <a class="reference external" href="https://syllepsis.live/2
 <code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">scaled_pinball_loss</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">F</em>, <em class="sig-param">df_train</em>, <em class="sig-param">quantile</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.scaled_pinball_loss" title="Permalink to this definition">¶</a></dt>
 <dd><p>Scaled pinball loss.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>A</strong> (<em>np.array</em>) – actual values</p></li>
 <li><p><strong>F</strong> (<em>np.array</em>) – forecast values</p></li>
@@ -1222,7 +1333,7 @@ From: Colin Catlin, <a class="reference external" href="https://syllepsis.live/2
 
 <dl class="function">
 <dt id="autots.evaluator.metrics.smape">
-<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">smape</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">forecast</em>, <em class="sig-param">ae</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.smape" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">smape</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">forecast</em>, <em class="sig-param">ae</em>, <em class="sig-param">nan_flag=True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.smape" title="Permalink to this definition">¶</a></dt>
 <dd><p>Accepting abs error already calculated</p>
 </dd></dl>
 
@@ -1240,7 +1351,7 @@ Allows NaN in actuals, and corresponding NaN in forecast, but not unmatched NaN 
 Also doesn’t like zeroes in either forecast or actual - results in poor error value even if forecast is accurate</p>
 <p>Returns a 1-D array of results in len n series</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>actual</strong> (<em>numpy.array</em>) – known true values</p></li>
 <li><p><strong>forecast</strong> (<em>numpy.array</em>) – predicted values</p></li>

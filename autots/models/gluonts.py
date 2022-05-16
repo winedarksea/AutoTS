@@ -505,60 +505,99 @@ class GluonTS(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
 
-        gluon_model_choice = random.choices(
-            [
-                'DeepAR',
-                'NPTS',
-                'DeepState',
-                'WaveNet',
-                'DeepFactor',
-                'Transformer',
-                'SFF',
-                'MQCNN',
-                'DeepVAR',
-                'GPVAR',
-                'NBEATS',
-                'Rotbaum',
-                'LSTNet',
-                'DeepRenewalProcess',
-                'SelfAttention',
-                'TemporalFusionTransformer',
-                'DeepTPP',
-            ],
-            [
-                0.1,
-                0.2,
-                0.05,
-                0.1,
-                0.1,
-                0.2,
-                0.1,
-                0.1,
-                0.1,
-                0.1,
-                0.05,
-                0.1,
-                0.1,
-                0.1,
-                0.1,
-                0.1,
-                0.1,
-            ],
-            k=1,
-        )[0]
+        if "deep" in method:
+            gluon_model_choice = random.choices(
+                [
+                    'DeepAR',
+                    'NPTS',
+                    'DeepState',
+                    'WaveNet',
+                    'DeepFactor',
+                    'Transformer',
+                    'SFF',
+                    'MQCNN',
+                    'DeepVAR',
+                    'GPVAR',
+                    'NBEATS',
+                    'Rotbaum',
+                    'LSTNet',
+                    'DeepRenewalProcess',
+                    'SelfAttention',
+                    'TemporalFusionTransformer',
+                    'DeepTPP',
+                ],
+                [
+                    0.1,
+                    0.2,
+                    0.05,
+                    0.1,
+                    0.1,
+                    0.2,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.05,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                ],
+                k=1,
+            )[0]
+            epochs_choice = random.choices(
+                [20, 40, 80, 150, 300, 500], [0.58, 0.35, 0.05, 0.05, 0.02]
+            )[0]
+        else:
+            gluon_model_choice = random.choices(
+                [
+                    'DeepAR',
+                    'NPTS',
+                    'DeepState',
+                    'WaveNet',
+                    'DeepFactor',
+                    'Transformer',
+                    'SFF',
+                    'MQCNN',
+                    'DeepVAR',
+                    'NBEATS',
+                    'Rotbaum',
+                    'LSTNet',
+                    'DeepRenewalProcess',
+                    'SelfAttention',
+                    'TemporalFusionTransformer',
+                    'DeepTPP',
+                ],
+                [
+                    0.1,
+                    0.2,
+                    0.05,
+                    0.1,
+                    0.1,
+                    0.2,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.05,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                ],
+                k=1,
+            )[0]
+            epochs_choice = random.choices([10, 20, 40, 80], [0.02, 0.58, 0.35, 0.05])[
+                0
+            ]
         # your base parameters
         context_length_choice = random.choices(
             [5, 10, 30, '1ForecastLength', '2ForecastLength'],
             [0.2, 0.3, 0.1, 0.1, 0.1],
         )[0]
-        if "deep" in method:
-            epochs_choice = random.choices(
-                [20, 40, 80, 150, 300, 500], [0.58, 0.35, 0.05, 0.05, 0.02]
-            )[0]
-        else:
-            epochs_choice = random.choices([10, 20, 40, 80], [0.02, 0.58, 0.35, 0.05])[
-                0
-            ]
         learning_rate_choice = random.choices([0.01, 0.001, 0.0001], [0.3, 0.6, 0.1])[0]
         # NPTS doesn't use these, so just fill a constant
         if gluon_model_choice in ['NPTS', 'Rotbaum']:

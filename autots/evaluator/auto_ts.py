@@ -29,6 +29,7 @@ from autots.evaluator.auto_model import (
     validation_aggregation,
     back_forecast,
     remove_leading_zeros,
+    horizontal_template_to_model_list,
 )
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
@@ -51,7 +52,18 @@ class AutoTS(object):
             More runs = longer runtime, generally better accuracy.
             It's called `max` because someday there will be an auto early stopping option, but for now this is just the exact number of generations to run.
         no_negatives (bool): if True, all negative predictions are rounded up to 0.
-        constraint (float): when not None, use this value * data st dev above max or below min for constraining forecast values. Applied to point forecast only, not upper/lower forecasts.
+        constraint (float): when not None, use this float value * data st dev above max or below min for constraining forecast values.
+            now also instead accepts a dictionary containing the following key/values:
+                constraint_method (str): one of
+                    stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
+                    stdev - threshold is the mean of historic data +/- constraint * st dev of data
+                    absolute - input is array of length series containing the threshold's final value for each
+                    quantile - constraint is the quantile of historic data to use as threshold
+                constraint_regularization (float): 0 to 1
+                    where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
+                upper_constraint (float): or array, depending on method, None if unused
+                lower_constraint (float): or array, depending on method, None if unused
+                bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
         ensemble (str): None or list or comma-separated string containing:
             'auto', 'simple', 'distance', 'horizontal', 'horizontal-min', 'horizontal-max', "mosaic", "subsample"
         initial_template (str): 'Random' - randomly generates starting template, 'General' uses template included in package, 'General+Random' - both of previous. Also can be overriden with self.import_template()
@@ -74,6 +86,7 @@ class AutoTS(object):
             'default', 'deep' (searches more params, likely slower), and 'regressor' (forces 'User' regressor mode in regressor capable models)
         num_validations (int): number of cross validations to perform. 0 for just train/test on best split.
             Possible confusion: num_validations is the number of validations to perform *after* the first eval segment, so totally eval/validations will be this + 1.
+            Also "auto" and "max" aliases available. Max maxes out at 50.
         models_to_validate (int): top n models to pass through to cross validation. Or float in 0 to 1 as % of tried.
             0.99 is forced to 100% validation. 1 evaluates just 1 model.
             If horizontal or mosaic ensemble, then additional min per_series models above the number here are added to validation.
@@ -100,6 +113,7 @@ class AutoTS(object):
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
             if "end_generation", as True and also ends entire generation of run. Note skipped models will not be tried again.
+        current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
         n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also 'auto'.
 
@@ -156,7 +170,7 @@ class AutoTS(object):
         transformer_list: dict = "fast",
         transformer_max_depth: int = 6,
         models_mode: str = "random",
-        num_validations: int = 2,
+        num_validations: int = "auto",
         models_to_validate: float = 0.15,
         max_per_model_class: int = None,
         validation_method: str = 'backwards',
@@ -166,6 +180,7 @@ class AutoTS(object):
         introduce_na: bool = None,
         preclean: dict = None,
         model_interrupt: bool = True,
+        current_model_file: str = None,
         verbose: int = 1,
         n_jobs: int = -2,
     ):
@@ -187,7 +202,7 @@ class AutoTS(object):
         self.model_list = model_list
         self.transformer_list = transformer_list
         self.transformer_max_depth = transformer_max_depth
-        self.num_validations = abs(int(num_validations))
+        self.num_validations = num_validations
         self.models_to_validate = models_to_validate
         self.max_per_model_class = max_per_model_class
         self.validation_method = str(validation_method).lower()
@@ -201,6 +216,7 @@ class AutoTS(object):
         self.verbose = int(verbose)
         self.n_jobs = n_jobs
         self.models_mode = models_mode
+        self.current_model_file = current_model_file
         random.seed(self.random_seed)
         # just a list of horizontal types in general
         self.h_ens_list = [
@@ -215,10 +231,17 @@ class AutoTS(object):
         if isinstance(ensemble, str):
             ensemble = str(ensemble).lower()
         if ensemble == 'all':
-            ensemble = ['simple', "distance", "horizontal-max", "mosaic"]
+            ensemble = [
+                'simple',
+                "distance",
+                "horizontal",
+                "horizontal-max",
+                "mosaic",
+                "subsample",
+            ]
         elif ensemble == 'auto':
             if model_list in ['superfast']:
-                ensemble = ['simple']
+                ensemble = ['horizontal-max']
             else:
                 ensemble = ['simple', "distance", "horizontal-max"]
         if isinstance(ensemble, str):
@@ -385,7 +408,12 @@ class AutoTS(object):
         }
 
         if verbose > 2:
-            print('"Hello. Would you like to destroy some evil today?" - Sanderson')
+            msg = '"Hello. Would you like to destroy some evil today?" - Sanderson'
+            # unicode may not be supported on all platforms
+            try:
+                print("\N{dagger} " + msg)
+            except Exception:
+                print(msg)
 
     def __repr__(self):
         """Print."""
@@ -449,9 +477,13 @@ class AutoTS(object):
             assert (
                 validation_indexes is not None
             ), "validation_indexes needs to be filled with 'custom' validation"
-            assert len(validation_indexes) >= (
-                self.num_validations + 1
-            ), "validation_indexes needs to be >= num_validations + 1 with 'custom' validation"
+            # if auto num_validation, use as many as provided in custom
+            if self.num_validations in ["auto", 'max']:
+                self.num_validations == len(validation_indexes) - 1
+            else:
+                assert len(validation_indexes) >= (
+                    self.num_validations + 1
+                ), "validation_indexes needs to be >= num_validations + 1 with 'custom' validation"
         # flag if weights are given
         if bool(weights):
             weighted = True
@@ -574,6 +606,37 @@ class AutoTS(object):
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
+
+        # check how many validations are possible given the length of the data.
+        if 'seasonal' in self.validation_method:
+            temp = df_wide_numeric.shape[0] + self.forecast_length
+            max_possible = temp / self.seasonal_val_periods
+        else:
+            max_possible = (df_wide_numeric.shape[0]) / forecast_length
+        # now adjusted for minimum % amount of training data required
+        if (max_possible - np.floor(max_possible)) > self.min_allowed_train_percent:
+            max_possible = int(max_possible)
+        else:
+            max_possible = int(max_possible) - 1
+        # set auto and max validations
+        if num_validations == "auto":
+            num_validations = 3 if max_possible >= 4 else max_possible
+        elif num_validations == "max":
+            num_validations = 50 if max_possible > 51 else max_possible - 1
+        # this still has the initial test segment as a validation segment, so -1
+        elif max_possible < (num_validations + 1):
+            num_validations = max_possible - 1
+            if verbose >= 0:
+                print(
+                    "Too many training validations for length of data provided, decreasing num_validations to {}".format(
+                        num_validations
+                    )
+                )
+        else:
+            num_validations = abs(int(num_validations))
+        if num_validations < 0:
+            num_validations = 0
+        self.num_validations = num_validations
 
         # generate similarity matching indices (so it can fail now, not after all the generations)
         if self.validation_method == "similarity":
@@ -713,6 +776,7 @@ class AutoTS(object):
             n_jobs=self.n_jobs,
             max_generations=self.max_generations,
             traceback=self.traceback,
+            current_model_file=self.current_model_file,
         )
         model_count = template_result.model_count
 
@@ -783,6 +847,7 @@ class AutoTS(object):
                 current_generation=current_generation,
                 max_generations=self.max_generations,
                 traceback=self.traceback,
+                current_model_file=self.current_model_file,
             )
             model_count = template_result.model_count
 
@@ -829,9 +894,11 @@ class AutoTS(object):
                     grouping_ids=self.grouping_ids,
                     random_seed=random_seed,
                     current_generation=(current_generation + 1),
+                    max_generations="Ensembles",
                     verbose=verbose,
                     n_jobs=self.n_jobs,
                     traceback=self.traceback,
+                    current_model_file=self.current_model_file,
                 )
                 model_count = template_result.model_count
                 # capture results from lower-level template run
@@ -853,7 +920,7 @@ class AutoTS(object):
             )
         )
 
-        # validations if float
+        # validation model count if float
         if (self.models_to_validate < 1) and (self.models_to_validate > 0):
             val_frac = self.models_to_validate
             val_frac = 1 if val_frac >= 0.99 else val_frac
@@ -864,27 +931,6 @@ class AutoTS(object):
             temp_len = len(self.model_list)
             self.max_per_model_class = (self.models_to_validate / temp_len) + 1
             self.max_per_model_class = int(np.ceil(self.max_per_model_class))
-
-        # check how many validations are possible given the length of the data.
-        if 'seasonal' in self.validation_method:
-            temp = df_wide_numeric.shape[0] + self.forecast_length
-            max_possible = temp / self.seasonal_val_periods
-        else:
-            max_possible = (df_wide_numeric.shape[0]) / forecast_length
-        if (max_possible - np.floor(max_possible)) > self.min_allowed_train_percent:
-            max_possible = int(max_possible)
-        else:
-            max_possible = int(max_possible) - 1
-        if max_possible < (num_validations + 1):
-            num_validations = max_possible - 1
-            if num_validations < 0:
-                num_validations = 0
-            print(
-                "Too many training validations for length of data provided, decreasing num_validations to {}".format(
-                    num_validations
-                )
-            )
-        self.num_validations = num_validations
 
         # construct validation template
         validation_template = self.initial_results.model_results[
@@ -1063,6 +1109,7 @@ class AutoTS(object):
                     n_jobs=self.n_jobs,
                     validation_round=(y + 1),
                     traceback=self.traceback,
+                    current_model_file=self.current_model_file,
                 )
                 model_count = template_result.model_count
                 # gather results of template run
@@ -1081,6 +1128,7 @@ Try increasing models_to_validate, max_per_model_class
 or otherwise increase models available."""
 
         # Construct horizontal style ensembles
+        models_to_use = None
         if any(x in ensemble for x in self.h_ens_list):
             ensemble_templates = pd.DataFrame()
             try:
@@ -1099,6 +1147,7 @@ or otherwise increase models available."""
                 ensemble_templates = pd.concat(
                     [ensemble_templates, ens_templates], axis=0
                 )
+                models_to_use = horizontal_template_to_model_list(ens_templates)
             except Exception as e:
                 if self.verbose >= 0:
                     print(f"Horizontal Ensemble Generation Error: {repr(e)}")
@@ -1122,6 +1171,7 @@ or otherwise increase models available."""
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
                         smoothing_window=14,
+                        metric_name="MAE",
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
@@ -1156,7 +1206,9 @@ or otherwise increase models available."""
                         num_validations=num_validations,
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
+                        models_to_use=models_to_use,
                         smoothing_window=7,
+                        metric_name="H-MAE",
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
@@ -1171,6 +1223,7 @@ or otherwise increase models available."""
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
                         smoothing_window=3,
+                        metric_name="MAE",
                     )
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
@@ -1199,6 +1252,18 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=self.initial_results.squared_errors,
+                        smoothing_window=None,
+                        metric_name="SE",
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
                 if 'mosaic' in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
@@ -1216,18 +1281,6 @@ or otherwise increase models available."""
                         full_mae_ids=self.initial_results.full_mae_ids,
                         num_validations=num_validations,
                         col_names=df_subset.columns,
-                        full_mae_errors=self.initial_results.squared_errors,
-                        smoothing_window=None,
-                        metric_name="SE",
-                    )
-                    ensemble_templates = pd.concat(
-                        [ensemble_templates, ens_templates], axis=0
-                    )
-                    ens_templates = generate_mosaic_template(
-                        initial_results=self.initial_results.model_results,
-                        full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
-                        col_names=df_subset.columns,
                         full_mae_errors=weight_per_value,
                         smoothing_window=None,
                         metric_name="Weighted",
@@ -1235,6 +1288,20 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
+                    if models_to_use is not None:
+                        ens_templates = generate_mosaic_template(
+                            initial_results=self.initial_results.model_results,
+                            full_mae_ids=self.initial_results.full_mae_ids,
+                            num_validations=num_validations,
+                            col_names=df_subset.columns,
+                            full_mae_errors=weight_per_value,
+                            smoothing_window=None,
+                            models_to_use=models_to_use,
+                            metric_name="Horiz-Weighted",
+                        )
+                        ensemble_templates = pd.concat(
+                            [ensemble_templates, ens_templates], axis=0
+                        )
             except Exception as e:
                 if self.verbose >= 0:
                     print(f"Mosaic Ensemble Generation Error: {e}")
@@ -1259,10 +1326,12 @@ or otherwise increase models available."""
                     template_cols=template_cols,
                     model_interrupt=self.model_interrupt,
                     grouping_ids=self.grouping_ids,
+                    max_generations="Horizontal Ensembles",
                     random_seed=random_seed,
                     verbose=verbose,
                     n_jobs=self.n_jobs,
                     traceback=self.traceback,
+                    current_model_file=self.current_model_file,
                 )
                 # capture results from lower-level template run
                 template_result.model_results['TotalRuntime'].fillna(
@@ -1352,19 +1421,8 @@ or otherwise increase models available."""
         self.ensemble_check = int(self.best_model_ensemble > 0)
 
         # set flags to check if regressors or ensemble used in final model.
-        param_dict = json.loads(self.best_model.iloc[0]['ModelParameters'])
-        if self.ensemble_check == 1:
-            self.used_regressor_check = self._regr_param_check(param_dict)
-        elif self.ensemble_check == 0:
-            self.used_regressor_check = False
-            try:
-                reg_param = param_dict['regression_type']
-                if reg_param == 'User':
-                    self.used_regressor_check = True
-            except KeyError:
-                pass
-        else:
-            print(f"Warning: ensemble_check not in [0,1]: {self.ensemble_check}")
+        self.used_regressor_check = self._regr_param_check(self.best_model_params)
+        self.regressor_used = self.used_regressor_check
         # clean up any remaining print statements
         sys.stdout.flush()
         return self
@@ -1372,18 +1430,26 @@ or otherwise increase models available."""
     def _regr_param_check(self, param_dict):
         """Help to search for if a regressor was used in model."""
         out = False
-        for key in param_dict['models']:
-            cur_dict = json.loads(param_dict['models'][key]['ModelParameters'])
-            try:
-                reg_param = cur_dict['regression_type']
-                if reg_param == 'User':
+        # load string if not dictionary
+        if isinstance(param_dict, dict):
+            cur_dict = param_dict.copy()
+        else:
+            cur_dict = json.loads(param_dict)
+        current_keys = cur_dict.keys()
+        # always look in ModelParameters if present
+        if 'ModelParameters' in current_keys:
+            return self._regr_param_check(cur_dict["ModelParameters"])
+        # then dig in and see if regression type is a key
+        if "regression_type" in current_keys:
+            reg_param = cur_dict['regression_type']
+            if str(reg_param).lower() == 'user':
+                return True
+        # now check if it's an Ensemble
+        if "models" in current_keys:
+            for key in cur_dict['models'].keys():
+                # stop as soon as any finds a regressor
+                if self._regr_param_check(cur_dict['models'][key]):
                     return True
-            except KeyError:
-                pass
-            if param_dict['models'][key]['Model'] == 'Ensemble':
-                out = self._regr_param_check(cur_dict)
-                if out:
-                    return out
         return out
 
     def predict(
@@ -1458,6 +1524,7 @@ or otherwise increase models available."""
                     verbose=verbose,
                     n_jobs=self.n_jobs,
                     template_cols=self.template_cols,
+                    current_model_file=self.current_model_file,
                 )
                 # convert categorical back to numeric
                 trans = self.categorical_transformer
@@ -1506,6 +1573,7 @@ or otherwise increase models available."""
                 verbose=verbose,
                 n_jobs=self.n_jobs,
                 template_cols=self.template_cols,
+                current_model_file=self.current_model_file,
             )
             # convert categorical back to numeric
             trans = self.categorical_transformer
@@ -1567,7 +1635,7 @@ or otherwise increase models available."""
         self,
         filename=None,
         models: str = 'best',
-        n: int = 5,
+        n: int = 20,
         max_per_model_class: int = None,
         include_results: bool = False,
     ):
@@ -1592,8 +1660,10 @@ or otherwise increase models available."""
             else:
                 export_template = self.validation_results.model_results
                 export_template = export_template[
-                    export_template['Runs'] >= (self.num_validations + 1)
+                    (export_template['Runs'] >= (self.num_validations + 1))
+                    | (export_template['Ensemble'] >= 2)
                 ]
+                """
                 if any(x in self.ensemble for x in self.h_ens_list):
                     temp = self.initial_results.model_results
                     temp = temp[temp['Ensemble'] >= 2]
@@ -1608,6 +1678,7 @@ or otherwise increase models available."""
                         metric_weighting=self.metric_weighting,
                         prediction_interval=self.prediction_interval,
                     )
+                """
                 if str(max_per_model_class).isdigit():
                     export_template = (
                         export_template.sort_values('Score', ascending=True)
@@ -1653,6 +1724,11 @@ or otherwise increase models available."""
             enforce_model_list (bool): if True, remove model types not in model_list
             include_ensemble (bool): if enforce_model_list is True, this specifies whether to allow ensembles anyway (otherwise they are unpacked and parts kept)
         """
+        if method.lower() in ['add on', 'addon', 'add_on']:
+            addon_flag = True
+        else:
+            addon_flag = False
+
         if isinstance(filename, pd.DataFrame):
             import_template = filename.copy()
         elif '.csv' in filename:
@@ -1682,12 +1758,18 @@ or otherwise increase models available."""
             else:
                 mod_list = self.model_list
             import_template = import_template[import_template['Model'].isin(mod_list)]
+            # double method of removing Ensemble
+            if not include_ensemble and "Ensemble" in import_template.columns:
+                import_template = import_template[import_template["Ensemble"] == 0]
             if import_template.shape[0] == 0:
-                raise ValueError(
-                    "Len 0. Model_list does not match models in template! Try enforce_model_list=False."
-                )
+                error_msg = "Len 0. Model_list does not match models in imported template, template import failed."
+                if addon_flag:
+                    # if template is addon, then this is fine as just a warning
+                    print(error_msg)
+                else:
+                    raise ValueError(error_msg)
 
-        if method.lower() in ['add on', 'addon', 'add_on']:
+        if addon_flag:
             self.initial_template = self.initial_template.merge(
                 import_template,
                 how='outer',
@@ -1701,7 +1783,7 @@ or otherwise increase models available."""
         elif method.lower() in ['only', 'user only', 'user_only', 'import_only']:
             self.initial_template = import_template
         else:
-            return ValueError("method must be 'add_on' or 'only'")
+            return ValueError("method must be 'addon' or 'only'")
 
         return self
 
@@ -1853,7 +1935,7 @@ or otherwise increase models available."""
     ):
         """Simple plot to visualize assigned series: models.
 
-        Note that for 'mosiac' ensembles, it only plots the type of the most common model_id for that series, or the first if all are mode.
+        Note that for 'mosaic' ensembles, it only plots the type of the most common model_id for that series, or the first if all are mode.
 
         Args:
             max_series (int): max number of points to plot
@@ -1864,8 +1946,8 @@ or otherwise increase models available."""
         max_series = series.shape[0] if series.shape[0] < max_series else max_series
         series = series.sample(max_series, replace=False)
         # sklearn.preprocessing.normalizer also might work
-        series[['log(Volatility)', 'log(Mean)']] = np.log(
-            series[['Volatility', 'Mean']]
+        series[['log(Volatility)', 'log(Mean)']] = np.log1p(
+            np.abs(series[['Volatility', 'Mean']])
         )
         # plot
         series.set_index(['Model', 'log(Mean)']).unstack('Model')[
@@ -2235,6 +2317,7 @@ class AutoTSIntervals(object):
                 random_seed=self.random_seed,
                 verbose=verbose,
                 template_cols=self.template_cols,
+                current_model_file=self.current_model_file,
             )
 
             trans = self.categorical_transformer

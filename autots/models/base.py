@@ -8,8 +8,8 @@ import warnings
 import datetime
 import numpy as np
 import pandas as pd
-from autots.tools.shaping import infer_frequency
-from autots.evaluator.metrics import (
+from autots.tools.shaping import infer_frequency, clean_weights
+from autots.evaluator.metrics import (  # noqa
     smape,
     mae,
     rmse,
@@ -19,6 +19,9 @@ from autots.evaluator.metrics import (
     medae,
     mean_absolute_differential_error,
     msle,
+    qae,
+    mqae,
+    mlvb,
 )
 
 # from sklearn.metrics import r2_score
@@ -68,6 +71,8 @@ class ModelObject(object):
 
     def basic_profile(self, df):
         """Capture basic training details."""
+        if 0 in df.shape:
+            raise ValueError(f"{self.name} training dataframe has no data: {df.shape}")
         self.startTime = datetime.datetime.now()
         self.train_shape = df.shape
         self.column_names = df.columns
@@ -103,6 +108,121 @@ class ModelObject(object):
         return {}
 
 
+def apply_constraints(
+    forecast,
+    lower_forecast,
+    upper_forecast,
+    constraint_method,
+    constraint_regularization,
+    upper_constraint,
+    lower_constraint,
+    bounds,
+    df_train=None,
+):
+    """Use constraint thresholds to adjust outputs by limit.
+    Note that only one method of constraint can be used here, but if different methods are desired,
+    this can be run twice, with None passed to the upper or lower constraint not being used.
+
+    Args:
+        forecast (pd.DataFrame): forecast df, wide style
+        lower_forecast (pd.DataFrame): lower bound forecast df
+            if bounds is False, upper and lower forecast dataframes are unused and can be empty
+        upper_forecast (pd.DataFrame): upper bound forecast df
+        constraint_method (str): one of
+            stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
+            stdev - threshold is the mean of historic data +/- constraint * st dev of data
+            absolute - input is array of length series containing the threshold's final value for each
+            quantile - constraint is the quantile of historic data to use as threshold
+        constraint_regularization (float): 0 to 1
+            where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
+        upper_constraint (float): or array, depending on method, None if unused
+        lower_constraint (float): or array, depending on method, None if unused
+        bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
+        df_train (pd.DataFrame): required for quantile/stdev methods to find threshold values
+
+    Returns:
+        forecast, lower, upper (pd.DataFrame)
+    """
+    if constraint_method == "stdev_min":
+        train_std = df_train.std(axis=0)
+        if lower_constraint is not None:
+            train_min = df_train.min(axis=0) - (lower_constraint * train_std)
+        if upper_constraint is not None:
+            train_max = df_train.max(axis=0) + (upper_constraint * train_std)
+    elif constraint_method == "stdev":
+        train_std = df_train.std(axis=0)
+        train_mean = df_train.mean(axis=0)
+        if lower_constraint is not None:
+            train_min = train_mean - (lower_constraint * train_std)
+        if upper_constraint is not None:
+            train_max = train_mean + (upper_constraint * train_std)
+    elif constraint_method == "absolute":
+        train_min = lower_constraint
+        train_max = upper_constraint
+    elif constraint_method == "quantile":
+        if lower_constraint is not None:
+            train_min = df_train.quantile(lower_constraint, axis=0)
+        if upper_constraint is not None:
+            train_max = df_train.quantile(upper_constraint, axis=0)
+    else:
+        raise ValueError("constraint_method not recognized, adjust constraint")
+
+    if constraint_regularization == 1:
+        if lower_constraint is not None:
+            forecast = forecast.clip(lower=train_min, axis=1)
+        if upper_constraint is not None:
+            forecast = forecast.clip(upper=train_max, axis=1)
+        if bounds:
+            if lower_constraint is not None:
+                lower_forecast = lower_forecast.clip(lower=train_min, axis=1)
+                upper_forecast = upper_forecast.clip(lower=train_min, axis=1)
+            if upper_constraint is not None:
+                lower_forecast = lower_forecast.clip(upper=train_max, axis=1)
+                upper_forecast = upper_forecast.clip(upper=train_max, axis=1)
+    else:
+        if lower_constraint is not None:
+            forecast.where(
+                forecast >= train_min,
+                forecast + (train_min - forecast) * constraint_regularization,
+                inplace=True,
+            )
+        if upper_constraint is not None:
+            forecast.where(
+                forecast <= train_max,
+                forecast + (train_max - forecast) * constraint_regularization,
+                inplace=True,
+            )
+        if bounds:
+            if lower_constraint is not None:
+                lower_forecast.where(
+                    lower_forecast >= train_min,
+                    lower_forecast
+                    + (train_min - lower_forecast) * constraint_regularization,
+                    inplace=True,
+                )
+                upper_forecast.where(
+                    upper_forecast >= train_min,
+                    upper_forecast
+                    + (train_min - upper_forecast) * constraint_regularization,
+                    inplace=True,
+                )
+            if upper_constraint is not None:
+                lower_forecast.where(
+                    lower_forecast <= train_max,
+                    lower_forecast
+                    + (train_max - lower_forecast) * constraint_regularization,
+                    inplace=True,
+                )
+
+                upper_forecast.where(
+                    upper_forecast <= train_max,
+                    upper_forecast
+                    + (train_max - upper_forecast) * constraint_regularization,
+                    inplace=True,
+                )
+    return forecast, lower_forecast, upper_forecast
+
+
 class PredictionObject(object):
     """Generic class for holding forecast information.
 
@@ -119,6 +239,7 @@ class PredictionObject(object):
         total_runtime: return runtime for all model components in seconds
         plot
         evaluate
+        apply_constraints
     """
 
     def __init__(
@@ -331,8 +452,6 @@ class PredictionObject(object):
 
         # check series_weights information
         if series_weights is None:
-            from autots.tools.shaping import clean_weights
-
             series_weights = clean_weights(weights=False, series=self.forecast.columns)
         # make sure the series_weights are passed correctly to metrics
         if len(series_weights) != F.shape[1]:
@@ -341,7 +460,7 @@ class PredictionObject(object):
         # reuse this in several metrics so precalculate
         full_errors = F - A
         self.full_mae_errors = np.abs(full_errors)
-        self.squared_errors = full_errors ** 2
+        self.squared_errors = full_errors**2
         log_errors = np.log1p(self.full_mae_errors)
 
         # calculate scaler once
@@ -353,48 +472,76 @@ class PredictionObject(object):
             scaler[np.isnan(scaler)] = fill_val
 
         # concat most recent history to enable full-size diffs
-        last_of_array = np.nan_to_num(
-            df_train[
-                df_train.shape[0] - 1 : df_train.shape[0],
-            ]
-        )
+        last_of_array = np.nan_to_num(df_train[-1:, :])
         lA = np.concatenate([last_of_array, A])
         lF = np.concatenate([last_of_array, F])
 
-        # mage = np.nansum(full_errors, axis=None) / A.shape[1]
-        mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
-
         # np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A))
+        inv_prediction_interval = 1 - self.prediction_interval
+        upper_diff = A - upper_forecast
         self.upper_pl = np.where(
             A >= upper_forecast,
-            self.prediction_interval * (A - upper_forecast),
-            (1 - self.prediction_interval) * (upper_forecast - A),
+            self.prediction_interval * upper_diff,
+            inv_prediction_interval * -1 * upper_diff,
         )
         # note that the quantile here is the lower quantile
+        low_diff = A - lower_forecast
         self.lower_pl = np.where(
             A >= lower_forecast,
-            (1 - self.prediction_interval) * (A - lower_forecast),
-            (1 - (1 - self.prediction_interval)) * (lower_forecast - A),
+            inv_prediction_interval * low_diff,
+            self.prediction_interval * -1 * low_diff,
         )
+
+        # test for NaN, this allows faster calculations if no nan
+        nan_flag = np.isnan(np.min(full_errors))
+
+        # mage = np.nansum(full_errors, axis=None) / A.shape[1]
+        if nan_flag:
+            mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
+        else:
+            mage = np.mean(np.abs(np.sum(full_errors, axis=1)))
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
             self.per_series_metrics = pd.DataFrame(
                 {
-                    'smape': smape(A, F, self.full_mae_errors),
+                    'smape': smape(A, F, self.full_mae_errors, nan_flag=nan_flag),
                     'mae': mae(self.full_mae_errors),
                     'rmse': rmse(self.squared_errors),
                     'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
                     'mage': mage,
-                    'mle': msle(full_errors, self.full_mae_errors, log_errors),
-                    'imle': msle(-full_errors, self.full_mae_errors, log_errors),
+                    'mle': msle(
+                        full_errors, self.full_mae_errors, log_errors, nan_flag=nan_flag
+                    ),
+                    'imle': msle(
+                        -full_errors,
+                        self.full_mae_errors,
+                        log_errors,
+                        nan_flag=nan_flag,
+                    ),
                     'spl': spl(
                         self.upper_pl + self.lower_pl,
                         scaler=scaler,
                     ),
                     'containment': containment(lower_forecast, upper_forecast, A),
                     'contour': contour(lA, lF),
-                    # 'medae': medae(self.full_mae_errors),  # median
+                    # maximum error point
+                    'maxe': np.nanmax(self.full_mae_errors, axis=0),  # TAKE MAX for AGG
+                    # origin directional accuracy
+                    'oda': np.nansum(
+                        np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0
+                    )
+                    / F.shape[0],
+                    # mean of values less than 85th percentile of error
+                    'mqae': mqae(self.full_mae_errors, q=0.85, nan_flag=nan_flag),
+                    # 90th percentile of error
+                    # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
+                    # 'qae': qae(self.full_mae_errors, q=0.9, nan_flag=nan_flag),
+                    # mean % last value naive baseline, smaller is better
+                    # 'mlvb': mlvb(A=A, F=F, last_of_array=last_of_array),
+                    # median absolute error
+                    # 'medae': medae(self.full_mae_errors, nan_flag=nan_flag),  # median
+                    # variations on the mean absolute differential error
                     # 'made_unscaled': mean_absolute_differential_error(lA, lF, 1),
                     # 'mad2e': mean_absolute_differential_error(lA, lF, 2),
                     # r2 can't handle NaN in history, also uncomment import above
@@ -420,4 +567,46 @@ class PredictionObject(object):
             axis=1, skipna=True
         ) / sum(series_weights.values())
         self.avg_metrics = self.per_series_metrics.mean(axis=1, skipna=True)
+        return self
+
+    def apply_constraints(
+        self,
+        constraint_method="quantile",
+        constraint_regularization=0.5,
+        upper_constraint=1.0,
+        lower_constraint=0.0,
+        bounds=True,
+        df_train=None,
+    ):
+        """Use constraint thresholds to adjust outputs by limit.
+        Note that only one method of constraint can be used here, but if different methods are desired,
+        this can be run twice, with None passed to the upper or lower constraint not being used.
+
+        Args:
+            constraint_method (str): one of
+                stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
+                stdev - threshold is the mean of historic data +/- constraint * st dev of data
+                absolute - input is array of length series containing the threshold's final value for each
+                quantile - constraint is the quantile of historic data to use as threshold
+            constraint_regularization (float): 0 to 1
+                where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term
+            upper_constraint (float): or array, depending on method, None if unused
+            lower_constraint (float): or array, depending on method, None if unused
+            bounds (bool): if True, apply to upper/lower forecast, otherwise False applies only to forecast
+            df_train (pd.DataFrame): required for quantile/stdev methods to find threshold values
+
+        Returns:
+            self
+        """
+        self.forecast, self.lower_forecast, self.upper_forecast = apply_constraints(
+            self.forecast,
+            self.lower_forecast,
+            self.upper_forecast,
+            constraint_method,
+            constraint_regularization,
+            upper_constraint,
+            lower_constraint,
+            bounds,
+            df_train,
+        )
         return self

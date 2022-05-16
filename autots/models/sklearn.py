@@ -7,6 +7,13 @@ import datetime
 import random
 import numpy as np
 import pandas as pd
+
+try:  # needs to go first
+    from sklearnex import patch_sklearn
+
+    patch_sklearn()
+except Exception:
+    pass
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.seasonal import date_part, seasonal_int
@@ -40,60 +47,48 @@ def rolling_x_regressor(
 
     Returns a dataframe of statistical features. Will need to be shifted by 1 or more to match Y for forecast.
     """
-    X = df.copy()
+    # making this all or partially Numpy (if possible) would probably be faster
+    X = [df.copy()]
     if str(mean_rolling_periods).isdigit():
         temp = df.rolling(int(mean_rolling_periods), min_periods=1).median()
-        X = pd.concat([X, temp], axis=1)
+        X.append(temp)
         if str(macd_periods).isdigit():
             temp = df.rolling(int(macd_periods), min_periods=1).median() - temp
-            X = pd.concat([X, temp], axis=1)
+            X.append(temp)
     if str(std_rolling_periods).isdigit():
-        X = pd.concat([X, df.rolling(std_rolling_periods, min_periods=1).std()], axis=1)
+        X.append(df.rolling(std_rolling_periods, min_periods=1).std())
     if str(max_rolling_periods).isdigit():
-        X = pd.concat([X, df.rolling(max_rolling_periods, min_periods=1).max()], axis=1)
+        X.append(df.rolling(max_rolling_periods, min_periods=1).max())
     if str(min_rolling_periods).isdigit():
-        X = pd.concat([X, df.rolling(min_rolling_periods, min_periods=1).min()], axis=1)
+        X.append(df.rolling(min_rolling_periods, min_periods=1).min())
     if str(quantile90_rolling_periods).isdigit():
-        X = pd.concat(
-            [X, df.rolling(quantile90_rolling_periods, min_periods=1).quantile(0.9)],
-            axis=1,
-        )
+        X.append(df.rolling(quantile90_rolling_periods, min_periods=1).quantile(0.9))
     if str(quantile10_rolling_periods).isdigit():
-        X = pd.concat(
-            [X, df.rolling(quantile10_rolling_periods, min_periods=1).quantile(0.1)],
-            axis=1,
-        )
-
+        X.append(df.rolling(quantile10_rolling_periods, min_periods=1).quantile(0.1))
     if str(ewm_alpha).replace('.', '').isdigit():
-        X = pd.concat(
-            [X, df.ewm(alpha=ewm_alpha, ignore_na=True, min_periods=1).mean()], axis=1
-        )
+        X.append(df.ewm(alpha=ewm_alpha, ignore_na=True, min_periods=1).mean())
     if str(ewm_var_alpha).replace('.', '').isdigit():
-        X = pd.concat(
-            [X, df.ewm(alpha=ewm_var_alpha, ignore_na=True, min_periods=1).var()],
-            axis=1,
-        )
+        X.append(df.ewm(alpha=ewm_var_alpha, ignore_na=True, min_periods=1).var())
     if str(additional_lag_periods).isdigit():
-        X = pd.concat([X, df.shift(additional_lag_periods)], axis=1).fillna(
-            method='bfill'
-        )
+        X.append(df.shift(additional_lag_periods))
     if abs_energy:
-        X = pd.concat([X, df.pow(other=([2] * len(df.columns))).cumsum()], axis=1)
+        X.append(df.pow(other=([2] * len(df.columns))).cumsum())
     if str(rolling_autocorr_periods).isdigit():
         temp = df.rolling(rolling_autocorr_periods).apply(
             lambda x: x.autocorr(), raw=False
         )
-        X = pd.concat([X, temp], axis=1).fillna(method='bfill')
-
+        X.append(temp)
     if add_date_part in ['simple', 'expanded', 'recurring', "simple_2"]:
         date_part_df = date_part(df.index, method=add_date_part)
         date_part_df.index = df.index
-        X = pd.concat(
-            [
-                X,
-            ],
-            axis=1,
-        )
+        X.append(date_part_df)
+    # unlike the others, this pulls the entire window, not just one lag
+    if str(window).isdigit():
+        # we already have lag 1 using this
+        for curr_shift in range(1, window):
+            X.append(df.shift(curr_shift))
+    X = pd.concat(X, axis=1)
+
     if holiday:
         from autots.tools.holiday import holiday_flag
 
@@ -107,14 +102,9 @@ def rolling_x_regressor(
 
         poly = PolynomialFeatures(polynomial_degree)
         X = pd.DataFrame(poly.fit_transform(X))
-    # unlike the others, this pulls the entire window, not just one lag
-    if str(window).isdigit():
-        # we already have lag 1 using this
-        for curr_shift in range(1, window):
-            X = pd.concat([X, df.shift(curr_shift)], axis=1).fillna(method='bfill')
 
-    X = X.replace([np.inf, -np.inf], np.nan)
-    X = X.fillna(method='ffill').fillna(method='bfill')
+    # X = X.replace([np.inf, -np.inf], np.nan)
+    X.fillna(method='bfill', inplace=True)
 
     X.columns = [str(x) for x in range(len(X.columns))]
 
@@ -1036,6 +1026,23 @@ class RollingRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
+        """
+        use_device = False
+        try:
+            device = dpctl.SyclDevice("gpu,cpu")
+            if self.verbose > 0:
+                print(f"{'GPU' if device.is_gpu else 'CPU'} targeted: ", device)
+            try:
+                x_device = from_numpy(X, usm_type='device', queue=dpctl.SyclQueue(device))
+                y_device = from_numpy(Y, usm_type='device', queue=dpctl.SyclQueue(device))
+            except Exception:
+                x_device = from_numpy(X, usm_type='device', device=device, sycl_queue=dpctl.SyclQueue(device))
+                y_device = from_numpy(Y, usm_type='device', device=device, sycl_queue=dpctl.SyclQueue(device))
+            use_device = True
+        except Exception:
+            x_device = X
+            y_device = Y
+        """
         self.regr = self.regr.fit(X, Y)
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -1165,7 +1172,7 @@ class RollingRegression(ModelObject):
         ewm_choice = random.choices(
             [None, 0.05, 0.1, 0.2, 0.5, 0.8], [0.4, 0.01, 0.05, 0.1, 0.1, 0.05]
         )[0]
-        abs_energy_choice = random.choices([True, False], [0.3, 0.7])[0]
+        abs_energy_choice = random.choices([True, False], [0.1, 0.9])[0]
         rolling_autocorr_periods_choice = random.choices(
             [None, 2, 7, 12, 30], [0.8, 0.05, 0.05, 0.05, 0.05]
         )[0]
@@ -1440,7 +1447,9 @@ class WindowRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        window_size_choice = random.choice([5, 10, 20, seasonal_int()])
+        wnd_sz_choice = random.choice([5, 10, 20, seasonal_int()])
+        if method != "deep":
+            wnd_sz_choice = wnd_sz_choice if wnd_sz_choice < 91 else 90
         model_choice = generate_regressor_params(
             model_dict=sklearn_model_dict, method=method
         )
@@ -1467,7 +1476,7 @@ class WindowRegression(ModelObject):
         normalize_window_choice = random.choices([True, False], [0.05, 0.95])[0]
         max_windows_choice = random.choices([5000, 1000, 50000], [0.85, 0.05, 0.1])[0]
         return {
-            'window_size': window_size_choice,
+            'window_size': wnd_sz_choice,
             'input_dim': input_dim_choice,
             'output_dim': output_dim_choice,
             'normalize_window': normalize_window_choice,
@@ -2223,7 +2232,23 @@ class UnivariateRegression(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        model_choice = generate_regressor_params(model_dict=univariate_model_dict)
+        if method == "deep":
+            x_transform_choice = random.choices(
+                [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
+                [0.9, 0.03, 0.03, 0.04],
+            )[0]
+            window_choice = random.choices(
+                [None, 3, 7, 10, 24], [0.7, 0.2, 0.05, 0.05, 0.05]
+            )[0]
+        else:
+            x_transform_choice = random.choices(
+                [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
+                [1.0, 0.0, 0.0, 0.0],
+            )[0]
+            window_choice = random.choices([None, 3, 7, 10], [0.7, 0.2, 0.05, 0.05])[0]
+        model_choice = generate_regressor_params(
+            model_dict=univariate_model_dict, method=method
+        )
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30], [0.6, 0.1, 0.1, 0.1, 0.1]
         )[0]
@@ -2250,7 +2275,7 @@ class UnivariateRegression(ModelObject):
         ewm_var_alpha = random.choices(
             [None, 0.05, 0.1, 0.2, 0.5, 0.8], [0.7, 0.01, 0.05, 0.1, 0.1, 0.05]
         )[0]
-        abs_energy_choice = random.choices([True, False], [0.1, 0.9])[0]
+        abs_energy_choice = random.choices([True, False], [0.05, 0.95])[0]
         rolling_autocorr_periods_choice = random.choices(
             [None, 2, 7, 12, 30], [0.86, 0.01, 0.01, 0.01, 0.01]
         )[0]
@@ -2260,15 +2285,12 @@ class UnivariateRegression(ModelObject):
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         polynomial_degree_choice = None
-        x_transform_choice = random.choices(
-            [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
-            [1.0, 0.0, 0.0, 0.0],
-        )[0]
+
         if "regressor" in method:
             regression_choice = "User"
         else:
             regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
-        window_choice = random.choices([None, 3, 7, 10], [0.7, 0.2, 0.05, 0.05])[0]
+
         parameter_dict = {
             'regression_model': model_choice,
             'holiday': holiday_choice,
@@ -2357,7 +2379,7 @@ class MultivariateRegression(ModelObject):
         datepart_method: str = None,
         polynomial_degree: int = None,
         window: int = 5,
-        probabilistic: bool = True,
+        probabilistic: bool = False,
         quantile_params: dict = {
             'learning_rate': 0.1,
             'max_depth': 20,
@@ -2479,7 +2501,7 @@ class MultivariateRegression(ModelObject):
                 )
                 for x_col in base.columns
             ]
-        )
+        ).to_numpy()
         del base
         if self.probabilistic:
             alpha_base = (1 - self.prediction_interval) / 2
@@ -2509,10 +2531,11 @@ class MultivariateRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
-        self.model.fit(X.to_numpy(), Y)
+        self.model.fit(X, Y)
+
         if self.probabilistic:
-            self.model_upper.fit(X.to_numpy(), Y)
-            self.model_lower.fit(X.to_numpy(), Y)
+            self.model_upper.fit(X, Y)
+            self.model_lower.fit(X, Y)
         # we only need the N most recent points for predict
         self.sktraindata = df.tail(self.min_threshold)
 
@@ -2581,18 +2604,18 @@ class MultivariateRegression(ModelObject):
                     ).tail(1)
                     for x_col in current_x.columns
                 ]
-            )
-            rfPred = self.model.predict(x_dat.to_numpy())
+            ).to_numpy()
+            rfPred = self.model.predict(x_dat)
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
             forecast = pd.concat([forecast, pred_clean])
             if self.probabilistic:
-                rfPred_upper = self.model_upper.predict(x_dat.to_numpy())
+                rfPred_upper = self.model_upper.predict(x_dat)
                 pred_upper = pd.DataFrame(
                     rfPred_upper, index=current_x.columns, columns=[index[fcst_step]]
                 ).transpose()
-                rfPred_lower = self.model_lower.predict(x_dat.to_numpy())
+                rfPred_lower = self.model_lower.predict(x_dat)
                 pred_lower = pd.DataFrame(
                     rfPred_lower, index=current_x.columns, columns=[index[fcst_step]]
                 ).transpose()

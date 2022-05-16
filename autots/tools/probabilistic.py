@@ -4,6 +4,7 @@ Point to Probabilistic
 import pandas as pd
 import numpy as np
 from autots.tools.impute import fake_date_fill
+from autots.tools.percentile import nan_quantile
 
 try:
     from scipy.stats import percentileofscore
@@ -15,7 +16,7 @@ def percentileofscore_appliable(x, a, kind='rank'):
     return percentileofscore(a, score=x, kind=kind)
 
 
-def historic_quantile(df_train, prediction_interval: float = 0.9):
+def historic_quantile(df_train, prediction_interval: float = 0.9, nan_flag=None):
     """
     Computes the difference between the median and the prediction interval range in historic data.
 
@@ -27,7 +28,16 @@ def historic_quantile(df_train, prediction_interval: float = 0.9):
         lower, upper (np.array): two 1D arrays
     """
     quantiles = [0, 1 - prediction_interval, 0.5, prediction_interval, 1]
-    bins = np.nanquantile(df_train.astype(float), quantiles, axis=0, keepdims=False)
+    # save compute time by using the non-nan verison if possible
+    if not isinstance(nan_flag, bool):
+        if isinstance(df_train, pd.DataFrame):
+            nan_flag = np.isnan(np.min(df_train.to_numpy()))
+        else:
+            nan_flag = np.isnan(np.min(np.array(df_train)))
+    if nan_flag:
+        bins = nan_quantile(df_train.astype(float), quantiles, axis=0)
+    else:
+        bins = np.quantile(df_train.astype(float), quantiles, axis=0, keepdims=False)
     upper = bins[3] - bins[2]
     if 0 in upper:
         np.where(upper != 0, upper, (bins[4] - bins[2]) / 4)
@@ -54,8 +64,8 @@ def inferred_normal(train, forecast, n: int = 5, prediction_interval: float = 0.
         data_mu = row
         reshape_row = data_mu.reshape(1, -1)
         post_mu = (
-            (prior_mu / prior_sigma ** 2) + ((n * data_mu) / prior_sigma ** 2)
-        ) / ((1 / prior_sigma ** 2) + (n / prior_sigma ** 2))
+            (prior_mu / prior_sigma**2) + ((n * data_mu) / prior_sigma**2)
+        ) / ((1 / prior_sigma**2) + (n / prior_sigma**2))
         lower = pd.DataFrame(post_mu - adj * prior_sigma, index=columns).transpose()
         lower = lower.where(lower <= data_mu, reshape_row, axis=1)
         upper = pd.DataFrame(post_mu + adj * prior_sigma, index=columns).transpose()

@@ -11,6 +11,11 @@ evolve = True allows the timeseries to automatically adapt to changes.
 There is a slight risk of it getting caught in suboptimal position however.
 It should probably be coupled with some basic data sanity checks.
 """
+try:  # needs to go first
+    from sklearnex import patch_sklearn
+    patch_sklearn()
+except Exception as e:
+    print(repr(e))
 import json
 import datetime
 import os
@@ -20,6 +25,7 @@ import matplotlib.pyplot as plt  # required only for graphs
 from autots import AutoTS, load_live_daily, create_regressor
 
 fred_key = None  # https://fred.stlouisfed.org/docs/api/api_key.html
+gsa_key = None
 forecast_name = "example"
 graph = True  # whether to plot graphs
 # https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects
@@ -40,6 +46,7 @@ model_list = "default"
 transformer_list = "fast"  # 'superfast'
 transformer_max_depth = 5
 models_mode = "default"  # "deep", "regressor"
+initial_template='random'  # 'random' 'general+random'
 preclean = None
 {  # preclean this or None
     "fillna": 'ffill',  # "mean" or "median" are most consistent
@@ -162,7 +169,7 @@ model = AutoTS(
     transformer_max_depth=transformer_max_depth,
     max_generations=gens,
     metric_weighting=metric_weighting,
-    initial_template='random',
+    initial_template=initial_template,
     aggfunc="sum",
     models_to_validate=models_to_validate,
     model_interrupt=True,
@@ -176,6 +183,7 @@ model = AutoTS(
     # subset=100,
     # prefill_na=0,
     # remove_leading_zeroes=True,
+    current_model_file=f"current_model_{forecast_name}",
     n_jobs=n_jobs,
     verbose=1,
 )
@@ -212,7 +220,7 @@ validation_results = model.results("validation")
 # save a template of best models
 if initial_training or evolve:
     model.export_template(
-        template_filename, models="best", n=n_export, max_per_model_class=5
+        template_filename, models="best", n=n_export, max_per_model_class=6, include_results=True
     )
     if archive_templates:
         arc_file = f"{template_filename.split('.csv')[0]}_{start_time.strftime('%Y%m%d%H%M')}.csv"
@@ -224,7 +232,7 @@ print("Slowest models:")
 print(
     model_results[model_results["Ensemble"] < 1]
     .groupby("Model")
-    .agg({"TotalRuntime": ["mean", "max"]})
+    .agg({"TotalRuntimeSeconds": ["mean", "max"]})
     .idxmax()
 )
 print(f"Completed at system time: {datetime.datetime.now()}")

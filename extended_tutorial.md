@@ -71,7 +71,7 @@ There are some basic things to beware of that can commonly lead to poor results:
 
 1. Bad data (sudden drops or missing values) in the *most recent* data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts. 
 2. Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don't accurately represent the series, a poor model may be chosen. Choose a good method and as many validations as possible. 
-3. Anomalies that won't be repeated. Manual anomaly removal can be more effective than any automatic methods. 
+3. Anomalies that won't be repeated. Manual anomaly removal can be more effective than any automatic methods. Along with this, beware of a changing pattern of NaN occurrences, as learned FillNA may not longer apply.
 4. Artifical historical events, a simple example being sales promotions. Use of regressors is the most common method for dealing with this and may be critical for modeling these types of events. 
 
 What you don't need to do before the automated forecasting is any typical preprocessing. It is best to leave it up to the model selection process to choose, as different models do better with different types of preprocessing. 
@@ -82,6 +82,7 @@ Cross validation can be tricky in time series data due to the necessity of preve
 
 Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future. 
 With very small datasets, there may be not be enough data for cross validation, in which case `num_validations` may be set to 0. This can also speed up quick tests. 
+Note that when `num_validations=0` *one evaluation* is still run. It's just not cross validation. `num_validations` is the number of **cross** validations to be done in addition. 
 In general, the safest approach is to have as many validations as possible, as long as there is sufficient data for it. 
 
 Here are the available methods:
@@ -271,9 +272,9 @@ Some metrics are scaled and some are not. MAE, RMSE, MAGE, MLE, iMLE are unscale
 
 `sMAPE` is *Symmetric Mean Absolute Percentage Loss* and is generally the most versatile metric across multiple series as it is scaled. It doesn't handle forecasts with lots of zeroes well. 
 
-`SPL` is *Scaled Pinball Loss* or *Quantile Loss* and is the optimal metric for assessing upper/lower quantile forecast accuracies.
+`SPL` is *Scaled Pinball Loss*, sometimes called *Quantile Loss*, and is the optimal metric for optimizing upper/lower quantile forecast accuracies.
 
-`Containment` measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called `coverage_fraction`.
+`Containment` measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called `coverage_fraction` in other places.
 
 `MLE` and `iMLE` are *Mean Logarithmic Error* inspired by the `mean squared log error`. They are used to target over or underestimation with MAE of the penalized direction and log(error) for the less-penalized (and less outlier sensitive) direction.
 `MLE` penalizes an under-predicted forecast greater than an over-predicted forecast. 
@@ -281,7 +282,8 @@ Some metrics are scaled and some are not. MAE, RMSE, MAGE, MLE, iMLE are unscale
 
 `MAGE` is *Mean Absolute aGgregate Error* which measures the error of a rollup of the forecasts. This is helpful in hiearchial/grouped forecasts for selecting series that have minimal overestimation or underestimation when summed.
 
-`Contour` is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. It is more human-readable than MADE for this information.
+`Contour` is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but *not* the magnitude of that difference. It is more human-readable than MADE for this information. 
+This is similar to but faster than MDA (mean directional accuracy) as contour evaluates no change as a positive case.
 
 `MADE` is *(Scaled) Mean Absolute Differential Error*. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Equivalent to 'MAE' when forecast_length=1. It is better for optimization than contour.
 
@@ -415,26 +417,28 @@ python -m pip install autots --exists-action i
 ```
 
 ```shell
-conda install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
+mamba install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
 pip install mxnet --no-deps
-pip install intel-tensorflow scikit-learn-intelex yfinance pytrends fredapi gluonts
-pip install spyder
+pip install yfinance pytrends fredapi gluonts
+pip install intel-tensorflow scikit-learn-intelex
+mamba install spyder
+mamba install autots -c conda-forge
 ```
+`mamba` and `conda` commands are generally interchangeable.
 
 #### Intel conda channel installation (sometime faster, also, more prone to bugs)
 https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html
 ```shell
 # create the environment
-conda create -n intelpython -c intel python=3.7 intelpython3_full
-conda activate intelpython
+mamba create -n aikit37 python=3.7 intel-aikit-modin pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests tensorflow dpctl -c intel
+conda config --env --add channels conda-forge
+conda config --env --add channels intel
+conda config --env --get channels
 
 # install additional packages as desired
-python -m pip install yfinance pytrends fredapi bottleneck
 python -m pip install mxnet --no-deps
-python -m pip install gluonts
-conda install -c conda-forge prophet
-conda update -c intel intelpython3_full
-conda install -c intel numexpr statsmodels lightgbm tensorflow
+python -m pip install gluonts yfinance pytrends fredapi
+mamba update -c intel intel-aikit-modin
 
 python -m pip install autots
 
@@ -472,8 +476,14 @@ Since ensembles are based on the test dataset, it would also be wise to set `ens
 ### Adding regressors and other information
 `future_` regressor, to make it clear this is data that will be know with high certainy about the future. 
 Such data about the future is rare, one example might be number of stores that will be (planned to be) open each given day in the future when forecast sales. 
+Generally using regressors is very helpful for separating 'organic' and 'inorganic' patterns. 
+'Inorganic' patterns refers to human business decisions that effect the outcome and can be controlled. 
+A very common example of those is promotions and sales events. 
+The model can learn from the past promotion information to then anticpate the effects of the input planned promotion events. 
+Simulation forecasting, described below, is where multiple promotional plans can be tested side-by-side to evaluate effectiveness. 
+
 Only a handful of models support adding regressors, and not all handle multiple regressors. 
-The recommended way to provide regressors is as a pd.Series/pd.Dataframe with a DatetimeIndex. 
+The way to provide regressors is in the `wide` style as a pd.Series/pd.Dataframe with a DatetimeIndex. 
 
 Don't know the future? Don't worry, the models can handle quite a lot of parallel time series, which is another way to add information. 
 Additional regressors can be passed through as additional time series to forecast as part of df_long. 
@@ -618,6 +628,7 @@ eval_lower = EventRiskForecast.generate_historic_risk_array(df_test, model.lower
 eval_upper = EventRiskForecast.generate_historic_risk_array(df_test, model.upper_limit_2d, direction="upper")
 pred_lower = np.where(model.lower_risk_array > threshold, 1, 0)
 pred_upper = np.where(model.upper_risk_array > threshold, 1, 0)
+model.plot_eval(df_test, 0)
 
 multilabel_confusion_matrix(eval_upper, pred_upper).sum(axis=0)
 print(classification_report(eval_upper, pred_upper, zero_division=1))  # target_names=df.columns
@@ -703,7 +714,7 @@ Currently `MultivariateRegression` has the option to utilize a stock GradientBoo
 
 | Model                   | Dependencies | Optional Dependencies   | Probabilistic | Multiprocessing | GPU   | Multivariate | Experimental | Use Regressor |
 | :-------------          | :----------: | :---------------------: | :-----------  | :-------------- | :---- | :----------: | :----------: | :-----------: |
-|  ZeroesNaive            |              |                         |               |                 |       |              |              |               |
+|  ConstantNaive          |              |                         |               |                 |       |              |              |               |
 |  LastValueNaive         |              |                         |               |                 |       |              |              |               |
 |  AverageValueNaive      |              |                         |    True       |                 |       |              |              |               |
 |  SeasonalNaive          |              |                         |               |                 |       |              |              |               |

@@ -12,16 +12,18 @@ import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.seasonal import date_part, seasonal_int
+from autots.tools.holiday import holiday_flag
 
+# these are optional packages
 try:
     from statsmodels.tsa.statespace.sarimax import SARIMAX
     from statsmodels.api import GLM as SM_GLM
 except Exception:
     pass
-
-joblib_present = True
 try:
     from joblib import Parallel, delayed
+
+    joblib_present = True
 except Exception:
     joblib_present = False
 
@@ -687,8 +689,6 @@ class ARIMA(ModelObject):
         self.regressor_train = None
         method_str = str(self.regression_type).lower()
         if method_str == 'holiday':
-            from autots.tools.holiday import holiday_flag
-
             self.regressor_train = holiday_flag(
                 df.index, country=self.holiday_country
             ).values
@@ -723,7 +723,6 @@ class ARIMA(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         alpha = 1 - self.prediction_interval
         if self.regression_type == 'Holiday':
-            from autots.tools.holiday import holiday_flag
 
             future_regressor = holiday_flag(test_index, country=self.holiday_country)
         if self.regression_type is not None:
@@ -910,8 +909,6 @@ class UnobservedComponents(ModelObject):
         self.df_train = df
 
         if self.regression_type == 'Holiday':
-            from autots.tools.holiday import holiday_flag
-
             self.regressor_train = holiday_flag(
                 df.index, country=self.holiday_country
             ).values
@@ -950,8 +947,6 @@ class UnobservedComponents(ModelObject):
 
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         if self.regression_type == 'Holiday':
-            from autots.tools.holiday import holiday_flag
-
             future_regressor = holiday_flag(
                 test_index, country=self.holiday_country
             ).values
@@ -1210,8 +1205,6 @@ class DynamicFactor(ModelObject):
         self.df_train = df
 
         if self.regression_type == 'Holiday':
-            from autots.tools.holiday import holiday_flag
-
             self.regressor_train = holiday_flag(
                 df.index, country=self.holiday_country
             ).values
@@ -1249,8 +1242,6 @@ class DynamicFactor(ModelObject):
 
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         if self.regression_type == 'Holiday':
-            from autots.tools.holiday import holiday_flag
-
             future_regressor = holiday_flag(
                 test_index, country=self.holiday_country
             ).values
@@ -1399,8 +1390,6 @@ class VECM(ModelObject):
 
         type_str = str(self.regression_type).lower()
         if type_str == 'holiday':
-            from autots.tools.holiday import holiday_flag
-
             self.regressor_train = holiday_flag(df.index, country=self.holiday_country)
         elif type_str == "user":
             if future_regressor is None:
@@ -1432,8 +1421,6 @@ class VECM(ModelObject):
 
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         if self.regression_type == 'Holiday':
-            from autots.tools.holiday import holiday_flag
-
             future_regressor = holiday_flag(test_index, country=self.holiday_country)
         elif self.regression_type is not None:
             assert (
@@ -1708,8 +1695,6 @@ class VAR(ModelObject):
         self.df_train = df
 
         if self.regression_type == 'Holiday':
-            from autots.tools.holiday import holiday_flag
-
             self.regressor_train = holiday_flag(
                 df.index, country=self.holiday_country
             ).values
@@ -1742,8 +1727,6 @@ class VAR(ModelObject):
 
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         if self.regression_type == 'Holiday':
-            from autots.tools.holiday import holiday_flag
-
             future_regressor = holiday_flag(
                 test_index, country=self.holiday_country
             ).values
@@ -2095,8 +2078,6 @@ class ARDL(ModelObject):
         df = self.basic_profile(df)
         self.regressor_train = None
         if self.regression_type == 'holiday':
-            from autots.tools.holiday import holiday_flag
-
             self.regressor_train = pd.DataFrame(
                 holiday_flag(df.index, country=self.holiday_country)
             )
@@ -2173,8 +2154,6 @@ class ARDL(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         alpha = 1 - self.prediction_interval
         if self.regression_type == 'holiday':
-            from autots.tools.holiday import holiday_flag
-
             future_regressor = pd.DataFrame(
                 holiday_flag(test_index, country=self.holiday_country)
             )

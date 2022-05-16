@@ -12,6 +12,15 @@ autots.templates.general module
    :undoc-members:
    :show-inheritance:
 
+autots.templates.general\_old module
+------------------------------------
+
+.. automodule:: autots.templates.general_old
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
 Module contents
 ---------------
 

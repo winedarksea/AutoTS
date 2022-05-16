@@ -2,11 +2,13 @@
 """Overall testing."""
 import unittest
 import json
+import time
+import timeit
 import pandas as pd
 from autots.datasets import (
-    load_daily
+    load_daily, load_monthly, load_artificial
 )
-from autots import AutoTS
+from autots import AutoTS, model_forecast
 from autots.evaluator.auto_ts import fake_regressor
 from autots.models.model_list import default as default_model_list
 from autots.evaluator.benchmark import Benchmark
@@ -26,7 +28,7 @@ class AutoTSTest(unittest.TestCase):
         models_to_validate = 0.35  # must be a decimal percent for this test
 
         model_list = [
-            'ZeroesNaive',
+            'ConstantNaive',
             'LastValueNaive',
             'AverageValueNaive',
             'SeasonalNaive',
@@ -263,11 +265,56 @@ class AutoTSTest(unittest.TestCase):
         self.assertTrue(initial_results['contour'].min() <= 1)
         self.assertTrue(initial_results['containment'].min() <= 1)
 
+    def test_univariate1step(self):
+        df = load_artificial(long=False)
+        df.iloc[:, :1]
+        forecast_length = 1
+        n_jobs = 1
+        verbose = 0
+        validation_method = "backwards"
+        generations = 1
+        model_list = [
+            'ConstantNaive',
+            'LastValueNaive',
+            'AverageValueNaive',
+            'SeasonalNaive',
+        ]
+
+        model = AutoTS(
+            forecast_length=forecast_length,
+            frequency='infer',
+            max_generations=generations,
+            validation_method=validation_method,
+            model_list=model_list,
+            n_jobs=n_jobs,
+            verbose=verbose,
+        )
+        model = model.fit(
+            df,
+        )
+        prediction = model.predict(verbose=0)
+        forecasts_df = prediction.forecast
+        initial_results = model.results()
+
+        expected_idx = pd.date_range(
+            start=df.index[-1], periods=forecast_length + 1, freq='D'
+        )[1:]
+        check_fails = initial_results.groupby("Model")["mae"].count() > 0
+        self.assertTrue(check_fails.all(), msg=f"These models failed: {check_fails[~check_fails].index.tolist()}. It is more likely a package install problem than a code problem")
+        # check the generated forecasts look right
+        self.assertEqual(forecasts_df.shape[0], forecast_length)
+        self.assertEqual(forecasts_df.shape[1], df.shape[1])
+        self.assertFalse(forecasts_df.isna().any().any())
+        self.assertEqual(forecast_length, len(forecasts_df.index))
+        self.assertTrue((expected_idx == pd.DatetimeIndex(forecasts_df.index)).all())
+
     def test_benchmark(self):
         bench = Benchmark()
         bench.run(times=1)
         self.assertGreater(bench.total_runtime, 0)
         print(f"Benchmark total_runtime: {bench.total_runtime}")
+        print(bench.results)
+        time.sleep(5)
 
         # test all same on univariate input, non-horizontal, with regressor, and different frequency, with forecast_length = 1 !
 
@@ -281,3 +328,226 @@ class AutoTSTest(unittest.TestCase):
         # test score generation + metric_weighting
         # test very short training data and/or lots of NaNs in data
         # test on all models that for each model, failure rate is < 100%
+
+
+class ModelTest(unittest.TestCase):
+
+    def test_models(self):
+        n_jobs = 1
+        random_seed = 300
+        df = load_monthly(long=False)[['CSUSHPISA', 'EMVOVERALLEMV', 'EXCAUS']]
+        models = [
+            'SectionalMotif', 'MultivariateMotif', 'AverageValueNaive',
+            'NVAR', "LastValueNaive",  'Theta', 'FBProphet', 'SeasonalNaive',
+            'GLM', 'ETS', "ConstantNaive", 'WindowRegression',
+            'DatepartRegression', 'MultivariateRegression'
+        ]
+
+        timings = {}
+        forecasts = {}
+        upper_forecasts = {}
+        lower_forecasts = {}
+        # load the comparison source
+        with open("./tests/model_forecasts.json", "r") as file:
+            loaded = json.load(file)
+            for x in models:
+                forecasts[x] = pd.DataFrame.from_dict(loaded['forecasts'][x], orient="columns")
+                forecasts[x]['index'] = pd.to_datetime(forecasts[x]['index'], infer_datetime_format=True)
+                forecasts[x] = forecasts[x].set_index("index")
+                upper_forecasts[x] = pd.DataFrame.from_dict(loaded['upper_forecasts'][x], orient="columns")
+                upper_forecasts[x]['index'] = pd.to_datetime(upper_forecasts[x]['index'], infer_datetime_format=True)
+                upper_forecasts[x] = upper_forecasts[x].set_index("index")
+                lower_forecasts[x] = pd.DataFrame.from_dict(loaded['lower_forecasts'][x], orient="columns")
+                lower_forecasts[x]['index'] = pd.to_datetime(lower_forecasts[x]['index'], infer_datetime_format=True)
+                lower_forecasts[x] = lower_forecasts[x].set_index("index")
+            timings = loaded['timing']
+
+        timings2 = {}
+        forecasts2 = {}
+        upper_forecasts2 = {}
+        lower_forecasts2 = {}
+        # following are not consistent with seed:
+        # "MotifSimulation"
+
+        for x in models: 
+            print(x)
+            start_time = timeit.default_timer()
+            df_forecast = model_forecast(
+                model_name=x,
+                model_param_dict={},  # 'return_result_windows': True
+                model_transform_dict={
+                    "fillna": "ffill",
+                    "transformations": {"0": "StandardScaler"},
+                    "transformation_params": {"0": {}},
+                },
+                df_train=df,
+                forecast_length=5,
+                frequency="M",
+                prediction_interval=0.9,
+                random_seed=random_seed,
+                verbose=0,
+                n_jobs=n_jobs,
+                return_model=True,
+            )
+            forecasts2[x] = df_forecast.forecast.round(2)
+            upper_forecasts2[x] = df_forecast.upper_forecast.round(2)
+            lower_forecasts2[x] = df_forecast.lower_forecast.round(2)
+            timings2[x] = (timeit.default_timer() - start_time)
+
+        print(sum(timings.values()))
+
+        pass_probabilistic = ['FBProphet']  # not reproducible in upper/lower with seed
+        for x in models:
+            res = (forecasts2[x].round(2) == forecasts[x].round(2)).all().all()
+            if x not in pass_probabilistic:
+                res_u = (upper_forecasts2[x].round(2) == upper_forecasts[x].round(2)).all().all()
+                res_l = (lower_forecasts2[x].round(2) == lower_forecasts[x].round(2)).all().all()
+            else:
+                res_u = True
+                res_l = True
+            self.assertTrue(
+                res,
+                f"Model '{x}' forecasts diverged from sample forecasts."
+            )
+            self.assertTrue(
+                res_u,
+                f"Model '{x}' upper forecasts diverged from sample forecasts."
+            )
+            self.assertTrue(
+                res_l,
+                f"Model '{x}' lower forecasts diverged from sample forecasts."
+            )
+            print(f"{res & res_u & res_l} model '{x}' ran successfully in {round(timings2[x], 4)} (bench: {round(timings[x], 4)})")
+
+        """
+        for x in models:
+            forecasts[x].index = forecasts[x].index.strftime("%Y-%m-%d")
+            forecasts[x] = forecasts[x].reset_index(drop=False).to_dict(orient="list")
+            upper_forecasts[x].index = upper_forecasts[x].index.strftime("%Y-%m-%d")
+            upper_forecasts[x] = upper_forecasts[x].reset_index(drop=False).to_dict(orient="list")
+            lower_forecasts[x].index = lower_forecasts[x].index.strftime("%Y-%m-%d")
+            lower_forecasts[x] = lower_forecasts[x].reset_index(drop=False).to_dict(orient="list")
+
+        with open("./tests/model_forecasts.json", "w") as file:
+            json.dump(
+                {
+                    'forecasts': forecasts,
+                    "upper_forecasts": upper_forecasts,
+                    "lower_forecasts": lower_forecasts,
+                    "timing": timings,
+                }, file
+            )
+        """
+
+    def test_transforms(self):
+        n_jobs = 1
+        random_seed = 300
+        df = load_monthly(long=False)[['CSUSHPISA', 'EMVOVERALLEMV', 'EXCAUS']]
+        transforms = [
+            'MinMaxScaler', 'PowerTransformer', 'QuantileTransformer',
+            'MaxAbsScaler', 'StandardScaler', 'RobustScaler',
+            'PCA', 'FastICA', "DatepartRegression",
+            "EWMAFilter", 'STLFilter', 'HPFilter', 'Detrend', 'Slice',
+            'ScipyFilter', 'Round', 'ClipOutliers', 'IntermittentOccurrence',
+            'CenterLastValue', 'Discretize', 'SeasonalDifference',
+            'RollingMeanTransformer', 'bkfilter', 'cffilter', 'Log',
+            'DifferencedTransformer', 'PctChangeTransformer', 'PositiveShift',
+            'SineTrend', 'convolution_filter', 'CumSumTransformer',
+        ]
+
+        timings = {}
+        forecasts = {}
+        upper_forecasts = {}
+        lower_forecasts = {}
+        # load the comparison source
+        with open("./tests/transform_forecasts.json", "r") as file:
+            loaded = json.load(file)
+            for x in transforms:
+                forecasts[x] = pd.DataFrame.from_dict(loaded['forecasts'][x], orient="columns")
+                forecasts[x]['index'] = pd.to_datetime(forecasts[x]['index'], infer_datetime_format=True)
+                forecasts[x] = forecasts[x].set_index("index")
+                upper_forecasts[x] = pd.DataFrame.from_dict(loaded['upper_forecasts'][x], orient="columns")
+                upper_forecasts[x]['index'] = pd.to_datetime(upper_forecasts[x]['index'], infer_datetime_format=True)
+                upper_forecasts[x] = upper_forecasts[x].set_index("index")
+                lower_forecasts[x] = pd.DataFrame.from_dict(loaded['lower_forecasts'][x], orient="columns")
+                lower_forecasts[x]['index'] = pd.to_datetime(lower_forecasts[x]['index'], infer_datetime_format=True)
+                lower_forecasts[x] = lower_forecasts[x].set_index("index")
+            timings = loaded['timing']
+
+        timings2 = {}
+        forecasts2 = {}
+        upper_forecasts2 = {}
+        lower_forecasts2 = {}
+        # following are not consistent with seed:
+        # "MotifSimulation"
+
+        for x in transforms: 
+            print(x)
+            param = {} if x not in ['QuantileTransformer'] else {"n_quantiles": 100}
+            start_time = timeit.default_timer()
+            df_forecast = model_forecast(
+                model_name="LastValueNaive",
+                model_param_dict={},  # 'return_result_windows': True
+                model_transform_dict={
+                    "fillna": "ffill",
+                    "transformations": {"0": x},
+                    "transformation_params": {"0": param},
+                },
+                df_train=df,
+                forecast_length=5,
+                frequency="M",
+                prediction_interval=0.9,
+                random_seed=random_seed,
+                verbose=0,
+                n_jobs=n_jobs,
+                return_model=True,
+            )
+            forecasts2[x] = df_forecast.forecast.round(2)
+            upper_forecasts2[x] = df_forecast.upper_forecast.round(2)
+            lower_forecasts2[x] = df_forecast.lower_forecast.round(2)
+            timings2[x] = (timeit.default_timer() - start_time)
+
+        print(sum(timings.values()))
+
+        pass_probabilistic = ['FastICA']  # not reproducible in upper/lower with seed
+        for x in transforms:
+            res = (forecasts2[x].round(2) == forecasts[x].round(2)).all().all()
+            if x not in pass_probabilistic:
+                res_u = (upper_forecasts2[x].round(2) == upper_forecasts[x].round(2)).all().all()
+                res_l = (lower_forecasts2[x].round(2) == lower_forecasts[x].round(2)).all().all()
+            else:
+                res_u = True
+                res_l = True
+            self.assertTrue(
+                res,
+                f"Model '{x}' forecasts diverged from sample forecasts."
+            )
+            self.assertTrue(
+                res_u,
+                f"Model '{x}' upper forecasts diverged from sample forecasts."
+            )
+            self.assertTrue(
+                res_l,
+                f"Model '{x}' lower forecasts diverged from sample forecasts."
+            )
+            print(f"{res & res_u & res_l} model '{x}' ran successfully in {round(timings2[x], 4)} (bench: {round(timings[x], 4)})")
+
+        """
+        for x in transforms:
+            forecasts[x].index = forecasts[x].index.strftime("%Y-%m-%d")
+            forecasts[x] = forecasts[x].reset_index(drop=False).to_dict(orient="list")
+            upper_forecasts[x].index = upper_forecasts[x].index.strftime("%Y-%m-%d")
+            upper_forecasts[x] = upper_forecasts[x].reset_index(drop=False).to_dict(orient="list")
+            lower_forecasts[x].index = lower_forecasts[x].index.strftime("%Y-%m-%d")
+            lower_forecasts[x] = lower_forecasts[x].reset_index(drop=False).to_dict(orient="list")
+
+        with open("./tests/transform_forecasts.json", "w") as file:
+            json.dump(
+                {
+                    'forecasts': forecasts,
+                    "upper_forecasts": upper_forecasts,
+                    "lower_forecasts": lower_forecasts,
+                    "timing": timings,
+                }, file
+            )
+        """

@@ -28,7 +28,7 @@ from autots.models.basics import (
     LastValueNaive,
     AverageValueNaive,
     SeasonalNaive,
-    ZeroesNaive,
+    ConstantNaive,
     Motif,
     SectionalMotif,
     NVAR,
@@ -61,6 +61,16 @@ def create_model_id(
     return hashed
 
 
+def horizontal_template_to_model_list(template):
+    """helper function to take template dataframe of ensembles to a single list of models."""
+    if "ModelParameters" not in template.columns:
+        raise ValueError("Template input does not match expected for models")
+    model_list = []
+    for idx, row in template.iterrows():
+        model_list.extend(list(json.loads(row["ModelParameters"])['models'].keys()))
+    return model_list
+
+
 def ModelMonster(
     model: str,
     parameters: dict = {},
@@ -82,8 +92,10 @@ def ModelMonster(
     """
     model = str(model)
 
-    if model == 'ZeroesNaive':
-        return ZeroesNaive(frequency=frequency, prediction_interval=prediction_interval)
+    if model in ['ZeroesNaive', 'ConstantNaive']:
+        return ConstantNaive(
+            frequency=frequency, prediction_interval=prediction_interval, **parameters
+        )
 
     elif model == 'LastValueNaive':
         return LastValueNaive(
@@ -501,6 +513,7 @@ def ModelPrediction(
     random_seed: int = 2020,
     verbose: int = 0,
     n_jobs: int = None,
+    current_model_file: str = None,
 ):
     """Feed parameters into modeling pipeline
 
@@ -520,11 +533,31 @@ def ModelPrediction(
         fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast
         return_model (bool): if True, forecast will have .model and .tranformer attributes set to model object.
         n_jobs (int): number of processes
+        current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
 
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
     """
     transformationStartTime = datetime.datetime.now()
+    if current_model_file is not None:
+        try:
+            with open(f'{current_model_file}.json', 'w') as f:
+                json.dump(
+                    {
+                        "model_name": model_str,
+                        "model_param_dict": parameter_dict,
+                        "model_transform_dict": transformation_dict,
+                    },
+                    f,
+                )
+        except Exception as e:
+            error_msg = f"failed to write {current_model_file} with error {repr(e)}"
+            try:
+                with open(f'{current_model_file}_failure.json', 'w') as f:
+                    f.write(error_msg)
+            except Exception:
+                pass
+            print(error_msg)
 
     transformer_object = GeneralTransformer(**transformation_dict)
     df_train_transformed = transformer_object._fit(df_train)
@@ -584,15 +617,34 @@ def ModelPrediction(
         df_forecast.lower_forecast = df_forecast.lower_forecast.clip(lower=0)
         df_forecast.forecast = df_forecast.forecast.clip(lower=0)
         df_forecast.upper_forecast = df_forecast.upper_forecast.clip(lower=0)
+
     if constraint is not None:
-        if verbose > 2:
-            print("Using constraint.")
-        constraint = float(constraint)
-        train_std = df_train.std(axis=0)
-        train_min = df_train.min(axis=0) - (constraint * train_std)
-        train_max = df_train.max(axis=0) + (constraint * train_std)
-        df_forecast.forecast = df_forecast.forecast.clip(lower=train_min, axis=1)
-        df_forecast.forecast = df_forecast.forecast.clip(upper=train_max, axis=1)
+        if isinstance(constraint, dict):
+            constraint_method = constraint.get("constraint_method", "quantile")
+            constraint_regularization = constraint.get("constraint_regularization", 1)
+            lower_constraint = constraint.get("lower_constraint", 0)
+            upper_constraint = constraint.get("upper_constraint", 1)
+            bounds = constraint.get("bounds", False)
+        else:
+            constraint_method = "stdev_min"
+            lower_constraint = float(constraint)
+            upper_constraint = float(constraint)
+            constraint_regularization = 1
+            bounds = False
+        if verbose > 3:
+            print(
+                f"Using constraint with method: {constraint_method}, {constraint_regularization}, {lower_constraint}, {upper_constraint}, {bounds}"
+            )
+
+        df_forecast = df_forecast.apply_constraints(
+            constraint_method,
+            constraint_regularization,
+            upper_constraint,
+            lower_constraint,
+            bounds,
+            df_train,
+        )
+
     transformation_runtime = transformation_runtime + (
         datetime.datetime.now() - transformationStartTime
     )
@@ -634,6 +686,9 @@ class TemplateEvalObject(object):
         per_series_spl=pd.DataFrame(),
         per_series_mle=pd.DataFrame(),
         per_series_imle=pd.DataFrame(),
+        per_series_maxe=pd.DataFrame(),
+        per_series_oda=pd.DataFrame(),
+        per_series_mqae=pd.DataFrame(),
         model_count: int = 0,
     ):
         self.model_results = model_results
@@ -646,6 +701,9 @@ class TemplateEvalObject(object):
         self.per_timestamp_smape = per_timestamp_smape
         self.per_series_mle = per_series_mle
         self.per_series_imle = per_series_imle
+        self.per_series_maxe = per_series_maxe
+        self.per_series_oda = per_series_oda
+        self.per_series_mqae = per_series_mqae
         self.full_mae_ids = []
         self.full_mae_errors = []
         self.full_pl_errors = []
@@ -691,6 +749,15 @@ class TemplateEvalObject(object):
         self.per_series_imle = pd.concat(
             [self.per_series_imle, another_eval.per_series_imle], axis=0, sort=False
         )
+        self.per_series_maxe = pd.concat(
+            [self.per_series_maxe, another_eval.per_series_maxe], axis=0, sort=False
+        )
+        self.per_series_oda = pd.concat(
+            [self.per_series_oda, another_eval.per_series_oda], axis=0, sort=False
+        )
+        self.per_series_mqae = pd.concat(
+            [self.per_series_mqae, another_eval.per_series_mqae], axis=0, sort=False
+        )
         self.full_mae_errors.extend(another_eval.full_mae_errors)
         self.full_pl_errors.extend(another_eval.full_pl_errors)
         self.squared_errors.extend(another_eval.squared_errors)
@@ -723,31 +790,40 @@ def unpack_ensemble_models(
     recursive: bool = False,
 ):
     """Take ensemble models from template and add as new rows.
+    Some confusion may exist as Ensembles require both 'Ensemble' column > 0 and model name 'Ensemble'
 
     Args:
         template (pd.DataFrame): AutoTS template containing template_cols
         keep_ensemble (bool): if False, drop row containing original ensemble
         recursive (bool): if True, unnest ensembles of ensembles...
     """
-    ensemble_template = pd.DataFrame()
+    if 'Ensemble' not in template.columns:
+        template['Ensemble'] = 0
+    # handle the fact that recursively, nested Ensembles ensemble flag is set to 0 below
     template['Ensemble'] = np.where(
         ((template['Model'] == 'Ensemble') & (template['Ensemble'] < 1)),
         1,
         template['Ensemble'],
     )
-    for index, value in template[template['Ensemble'] != 0][
-        'ModelParameters'
-    ].iteritems():
+    # alternatively the below could read from 'Model' == 'Ensemble'
+    models_to_iterate = template[template['Ensemble'] != 0]['ModelParameters'].copy()
+    for index, value in models_to_iterate.iteritems():
         model_dict = json.loads(value)['models']
         model_df = pd.DataFrame.from_dict(model_dict, orient='index')
+        # it might be wise to just drop the ID column, but keeping for now
         model_df = model_df.rename_axis('ID').reset_index(drop=False)
-        model_df['Ensemble'] = 0
+        # this next line is necessary, albeit confusing
+        if 'Ensemble' not in model_df.columns:
+            model_df['Ensemble'] = 0
         # unpack nested ensembles, if recursive specified
         if recursive and 'Ensemble' in model_df['Model'].tolist():
             model_df = pd.concat(
                 [
                     unpack_ensemble_models(
-                        model_df, recursive=True, template_cols=template_cols
+                        model_df,
+                        recursive=True,
+                        keep_ensemble=keep_ensemble,
+                        template_cols=template_cols,
                     ),
                     model_df,
                 ],
@@ -755,14 +831,11 @@ def unpack_ensemble_models(
                 ignore_index=True,
                 sort=False,
             ).reset_index(drop=True)
-        ensemble_template = pd.concat(
-            [ensemble_template, model_df], axis=0, ignore_index=True, sort=False
+        template = pd.concat(
+            [template, model_df], axis=0, ignore_index=True, sort=False
         ).reset_index(drop=True)
     if not keep_ensemble:
         template = template[template['Ensemble'] == 0]
-    template = pd.concat(
-        [template, ensemble_template], axis=0, ignore_index=True, sort=False
-    ).reset_index(drop=True)
     template = template.drop_duplicates(subset=template_cols)
     return template
 
@@ -794,6 +867,7 @@ def model_forecast(
     ],
     horizontal_subset: list = None,
     return_model: bool = False,
+    current_model_file: str = None,
     **kwargs,
 ):
     """Takes numeric data, returns numeric forecasts.
@@ -824,6 +898,7 @@ def model_forecast(
         horizontal_subset (list): columns of df_train to use for forecast, meant for internal use for horizontal ensembling
         fail_on_forecast_nan (bool): if False, return forecasts even if NaN present, if True, raises error if any nan in forecast. True is recommended.
         return_model (bool): if True, forecast will have .model and .tranformer attributes set to model object. Only works for non-ensembles.
+        current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
 
     Returns:
         PredictionObject (autots.PredictionObject): Prediction from AutoTS model object
@@ -903,6 +978,7 @@ def model_forecast(
                     n_jobs=n_jobs,
                     template_cols=template_cols,
                     horizontal_subset=horizontal_subset,
+                    current_model_file=current_model_file,
                 )
                 model_id = create_model_id(
                     df_forecast.model_name,
@@ -987,6 +1063,7 @@ def model_forecast(
             startTimeStamps=startTimeStamps,
             n_jobs=n_jobs,
             return_model=return_model,
+            current_model_file=current_model_file,
         )
 
         sys.stdout.flush()
@@ -1021,7 +1098,7 @@ def TemplateWizard(
     n_jobs: int = None,
     validation_round: int = 0,
     current_generation: int = 0,
-    max_generations: int = 0,
+    max_generations: str = "0",
     model_interrupt: bool = False,
     grouping_ids=None,
     template_cols: list = [
@@ -1031,6 +1108,7 @@ def TemplateWizard(
         'Ensemble',
     ],
     traceback: bool = False,
+    current_model_file: str = None,
 ):
     """
     Take Template, returns Results.
@@ -1056,14 +1134,16 @@ def TemplateWizard(
         startTimeStamps (pd.Series): index (series_ids), columns (Datetime of First start of series)
         validation_round (int): int passed to record current validation.
         current_generation (int): info to pass to print statements
-        max_generations (int): info to pass to print statements
+        max_generations (str): info to pass to print statements
         model_interrupt (bool): if True, keyboard interrupts are caught and only break current model eval.
         template_cols (list): column names of columns used as model template
         traceback (bool): include tracebook over just error representation
+        current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
 
     Returns:
         TemplateEvalObject
     """
+    best_smape = float("inf")
     template_result = TemplateEvalObject(
         per_series_mae=[],
         per_series_made=[],
@@ -1072,6 +1152,9 @@ def TemplateWizard(
         per_series_spl=[],
         per_series_mle=[],
         per_series_imle=[],
+        per_series_maxe=[],
+        per_series_oda=[],
+        per_series_mqae=[],
     )
     template_result.model_count = model_count
     if isinstance(template, pd.Series):
@@ -1152,6 +1235,7 @@ def TemplateWizard(
                 verbose=verbose,
                 n_jobs=n_jobs,
                 template_cols=template_cols,
+                current_model_file=current_model_file,
             )
             if verbose > 1:
                 post_memory_percent = virtual_memory().percent
@@ -1169,12 +1253,20 @@ def TemplateWizard(
                 scaler=scaler,
             )
             if validation_round >= 1 and verbose > 0:
+                round_smape = model_error.avg_metrics['smape'].round(2)
                 validation_accuracy_print = "{} - {} with avg smape {}: ".format(
                     str(template_result.model_count),
                     model_str,
-                    model_error.avg_metrics['smape'].round(2),
+                    round_smape,
                 )
-                print(validation_accuracy_print)
+                if round_smape < best_smape:
+                    best_smape = round_smape
+                    try:
+                        print("\U0001F4C8 " + validation_accuracy_print)
+                    except Exception:
+                        print(validation_accuracy_print)
+                else:
+                    print(validation_accuracy_print)
             model_id = create_model_id(
                 df_forecast.model_name,
                 df_forecast.model_parameters,
@@ -1237,6 +1329,15 @@ def TemplateWizard(
             )
             template_result.per_series_imle.append(
                 _ps_metric(ps_metric, 'imle', model_id)
+            )
+            template_result.per_series_maxe.append(
+                _ps_metric(ps_metric, 'maxe', model_id)
+            )
+            template_result.per_series_oda.append(
+                _ps_metric(ps_metric, 'oda', model_id)
+            )
+            template_result.per_series_mqae.append(
+                _ps_metric(ps_metric, 'mqae', model_id)
             )
 
             if 'distance' in ensemble:
@@ -1353,6 +1454,15 @@ def TemplateWizard(
         template_result.per_series_imle = pd.concat(
             template_result.per_series_imle, axis=0
         )
+        template_result.per_series_maxe = pd.concat(
+            template_result.per_series_maxe, axis=0
+        )
+        template_result.per_series_oda = pd.concat(
+            template_result.per_series_oda, axis=0
+        )
+        template_result.per_series_mqae = pd.concat(
+            template_result.per_series_mqae, axis=0
+        )
     else:
         template_result.per_series_mae = pd.DataFrame()
         template_result.per_series_made = pd.DataFrame()
@@ -1361,6 +1471,9 @@ def TemplateWizard(
         template_result.per_series_spl = pd.DataFrame()
         template_result.per_series_mle = pd.DataFrame()
         template_result.per_series_imle = pd.DataFrame()
+        template_result.per_series_maxe = pd.DataFrame()
+        template_result.per_series_oda = pd.DataFrame()
+        template_result.per_series_mqae = pd.DataFrame()
         if verbose > 0 and not template.empty:
             print(f"Generation {current_generation} had all new models fail")
     return template_result
@@ -1700,6 +1813,9 @@ def validation_aggregation(validation_results):
         'spl': 'mean',
         'containment': 'mean',
         'contour': 'mean',
+        'maxe': 'max',
+        'oda': 'mean',
+        'mqae': 'mean',
         'smape_weighted': 'mean',
         'mae_weighted': 'mean',
         'rmse_weighted': 'mean',
@@ -1709,6 +1825,9 @@ def validation_aggregation(validation_results):
         'mle_weighted': 'mean',
         'imle_weighted': 'mean',
         'spl_weighted': 'mean',
+        'maxe_weighted': 'max',
+        'oda_weighted': 'mean',
+        'mqae_weighted': 'mean',
         'containment_weighted': 'mean',
         'contour_weighted': 'mean',
         'TotalRuntimeSeconds': 'mean',
@@ -1761,6 +1880,9 @@ def generate_score(
     mage_weighting = metric_weighting.get('mage_weighting', 0)
     mle_weighting = metric_weighting.get('mle_weighting', 0)
     imle_weighting = metric_weighting.get('imle_weighting', 0)
+    maxe_weighting = metric_weighting.get('maxe_weighting', 0)
+    oda_weighting = metric_weighting.get('oda_weighting', 0)
+    mqae_weighting = metric_weighting.get('mqae_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         if 'TotalRuntime' in model_results.columns:
@@ -1837,6 +1959,18 @@ def generate_score(
             ].min()
             imle_score = model_results['imle_weighted'] / imle_scaler
             overall_score = overall_score + (imle_score * imle_weighting)
+        if maxe_weighting > 0:
+            maxe_scaler = model_results['maxe_weighted'][
+                model_results['maxe_weighted'] != 0
+            ].min()
+            maxe_score = model_results['maxe_weighted'] / maxe_scaler
+            overall_score = overall_score + (maxe_score * maxe_weighting)
+        if mqae_weighting > 0:
+            mqae_scaler = model_results['mqae_weighted'][
+                model_results['mqae_weighted'] != 0
+            ].min()
+            mqae_score = model_results['mqae_weighted'] / mqae_scaler
+            overall_score = overall_score + (mqae_score * mqae_weighting)
         if spl_weighting > 0:
             spl_scaler = model_results['spl_weighted'][
                 model_results['spl_weighted'] != 0
@@ -1858,6 +1992,9 @@ def generate_score(
                 2 - model_results['contour_weighted']
             ) * smape_score.median()
             overall_score = overall_score + (contour_score * contour_weighting)
+        if oda_weighting > 0:
+            oda_score = (2 - model_results['oda_weighted']) * smape_score.median()
+            overall_score = overall_score + (oda_score * oda_weighting)
         if containment_weighting > 0:
             containment_score = (
                 1 + abs(prediction_interval - model_results['containment_weighted'])
@@ -1867,6 +2004,7 @@ def generate_score(
     except Exception as e:
         raise KeyError(
             f"""Evaluation Metrics are missing and all models have failed, by an error in template or metrics.
+            There are many possible causes for this, bad parameters, environment, or an unreported bug.
             Usually this means you are missing required packages for the models like fbprophet or gluonts,
             or that the models in model_list are inappropriate for your data.
             A new starting template may also help. {repr(e)}"""
@@ -1884,6 +2022,9 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
     contour_weighting = metric_weighting.get('contour_weighting', 0)
     mle_weighting = metric_weighting.get('mle_weighting', 0)
     imle_weighting = metric_weighting.get('imle_weighting', 0)
+    maxe_weighting = metric_weighting.get('maxe_weighting', 0)
+    oda_weighting = metric_weighting.get('oda_weighting', 0)
+    mqae_weighting = metric_weighting.get('mqae_weighting', 0)
     if sum([mae_weighting, rmse_weighting, contour_weighting, spl_weighting]) == 0:
         mae_weighting = 1
 
@@ -1929,6 +2070,22 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
         )
         imle_score = results_object.per_series_imle / imle_scaler
         overall_score = overall_score + (imle_score * imle_weighting)
+    if maxe_weighting > 0:
+        maxe_scaler = (
+            results_object.per_series_maxe[results_object.per_series_maxe != 0]
+            .min()
+            .fillna(1)
+        )
+        maxe_score = results_object.per_series_maxe / maxe_scaler
+        overall_score = overall_score + (maxe_score * maxe_weighting)
+    if mqae_weighting > 0:
+        mqae_scaler = (
+            results_object.per_series_mqae[results_object.per_series_mqae != 0]
+            .min()
+            .fillna(1)
+        )
+        mqae_score = results_object.per_series_mqae / mqae_scaler
+        overall_score = overall_score + (mqae_score * mqae_weighting)
     if spl_weighting > 0:
         spl_scaler = (
             results_object.per_series_spl[results_object.per_series_spl != 0]
@@ -1946,6 +2103,15 @@ def generate_score_per_series(results_object, metric_weighting, total_validation
                 overall_score = mae_score
         else:
             overall_score = overall_score + (contour_score * contour_weighting)
+    if oda_weighting > 0:
+        oda_score = (2 - results_object.per_series_oda) * mae_score.median()
+        # handle nan
+        if oda_score.isna().all().all():
+            print("NaN in Contour in generate_score_per_series")
+            if overall_score.sum().sum() == 0:
+                overall_score = mae_score
+        else:
+            overall_score = overall_score + (oda_score * oda_weighting)
     # remove basic duplicates
     local_results = results_object.model_results.copy()
     local_results = local_results[local_results['Exceptions'].isna()]
@@ -1981,6 +2147,7 @@ def back_forecast(
     n_jobs="auto",
     verbose=0,
     eval_periods: int = None,
+    current_model_file: str = None,
     **kwargs,
 ):
     """Create forecasts for the historical training data, ie. backcast or back forecast.
@@ -2065,6 +2232,7 @@ def back_forecast(
                 random_seed=random_seed,
                 verbose=verbose,
                 n_jobs=n_jobs,
+                current_model_file=current_model_file,
             )
             b_forecast = pd.concat([b_forecast, df_forecast.forecast])
             b_forecast_up = pd.concat([b_forecast_up, df_forecast.upper_forecast])

@@ -3,9 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.models package &#8212; AutoTS 0.4.0 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.4.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -54,7 +54,7 @@
 </dd>
 </dl>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – Model Name</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -76,7 +76,7 @@
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
 <p>Requires ModelObject.basic_profile() being called as part of .fit()</p>
-</div>
+</aside>
 </dd></dl>
 
 <dl class="method">
@@ -151,12 +151,45 @@
 <dd></dd></dl>
 
 <dl class="method">
+<dt id="autots.models.base.PredictionObject.apply_constraints">
+<code class="sig-name descname">apply_constraints</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.PredictionObject.apply_constraints" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">apply_constraints</code><span class="sig-paren">(</span><em class="sig-param">constraint_method='quantile'</em>, <em class="sig-param">constraint_regularization=0.5</em>, <em class="sig-param">upper_constraint=1.0</em>, <em class="sig-param">lower_constraint=0.0</em>, <em class="sig-param">bounds=True</em>, <em class="sig-param">df_train=None</em><span class="sig-paren">)</span></dt>
+<dd><p>Use constraint thresholds to adjust outputs by limit.
+Note that only one method of constraint can be used here, but if different methods are desired,
+this can be run twice, with None passed to the upper or lower constraint not being used.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>constraint_method</strong> (<em>str</em>) – one of
+stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
+stdev - threshold is the mean of historic data +/- constraint * st dev of data
+absolute - input is array of length series containing the threshold’s final value for each
+quantile - constraint is the quantile of historic data to use as threshold</p></li>
+<li><p><strong>constraint_regularization</strong> (<em>float</em>) – 0 to 1
+where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term</p></li>
+<li><p><strong>upper_constraint</strong> (<em>float</em>) – or array, depending on method, None if unused</p></li>
+<li><p><strong>lower_constraint</strong> (<em>float</em>) – or array, depending on method, None if unused</p></li>
+<li><p><strong>bounds</strong> (<em>bool</em>) – if True, apply to upper/lower forecast, otherwise False applies only to forecast</p></li>
+<li><p><strong>df_train</strong> (<em>pd.DataFrame</em>) – required for quantile/stdev methods to find threshold values</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
 <dt>
 <code class="sig-name descname">evaluate</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">series_weights: dict = None</em>, <em class="sig-param">df_train=None</em>, <em class="sig-param">per_timestamp_errors: bool = False</em>, <em class="sig-param">full_mae_error: bool = True</em>, <em class="sig-param">scaler=None</em><span class="sig-paren">)</span></dt>
 <dd><p>Evalute prediction against test actual. Fills out attributes of base object.</p>
 <p>This fails with pd.NA values supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>actual</strong> (<em>pd.DataFrame</em>) – dataframe of actual values of (forecast length * n series)</p></li>
 <li><p><strong>series_weights</strong> (<em>dict</em>) – key = column/series_id, value = weight</p></li>
@@ -167,7 +200,7 @@ if None, actuals are used instead (suboptimal).</p></li>
 <li><p><strong>per_timestamp</strong> (<em>bool</em>) – whether to calculate and return per timestamp direction errors</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>contains a column for each series containing accuracy metrics
 per_timestamp (pandas.DataFrame): smape accuracy for each timestamp, avg of all series
 avg_metrics (pandas.Series): average values of accuracy across all input series
@@ -175,7 +208,7 @@ avg_metrics_weighted (pandas.Series): average values of accuracy across all inpu
 full_mae_errors (numpy.array): abs(actual - forecast)
 scaler (numpy.array): precomputed scaler for efficiency, avg value of series in order of columns</p>
 </dd>
-<dt class="field-odd">Return type</dt>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>per_series_metrics (pandas.DataFrame)</p>
 </dd>
 </dl>
@@ -186,7 +219,7 @@ scaler (numpy.array): precomputed scaler for efficiency, avg value of series in 
 <code class="sig-name descname">long_form_results</code><span class="sig-paren">(</span><em class="sig-param">id_name='SeriesID'</em>, <em class="sig-param">value_name='Value'</em>, <em class="sig-param">interval_name='PredictionInterval'</em>, <em class="sig-param">update_datetime_name=None</em><span class="sig-paren">)</span></dt>
 <dd><p>Export forecasts (including upper and lower) as single ‘long’ format output</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>id_name</strong> (<em>str</em>) – name of column containing ids</p></li>
 <li><p><strong>value_name</strong> (<em>str</em>) – name of column containing numeric values</p></li>
@@ -194,7 +227,7 @@ scaler (numpy.array): precomputed scaler for efficiency, avg value of series in 
 <li><p><strong>update_datetime_name</strong> (<em>str</em>) – if not None, adds column with current timestamp and this name</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>pd.DataFrame</p>
 </dd>
 </dl>
@@ -205,7 +238,7 @@ scaler (numpy.array): precomputed scaler for efficiency, avg value of series in 
 <code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">df_wide=None</em>, <em class="sig-param">series: str = None</em>, <em class="sig-param">ax=None</em>, <em class="sig-param">remove_zeroes: bool = False</em>, <em class="sig-param">start_date: str = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span></dt>
 <dd><p>Generate an example plot of one series. Does not handle non-numeric forecasts.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df_wide</strong> (<em>str</em>) – historic data for plotting actuals</p></li>
 <li><p><strong>series</strong> (<em>str</em>) – column name of series to plot. Random if None.</p></li>
@@ -226,17 +259,49 @@ scaler (numpy.array): precomputed scaler for efficiency, avg value of series in 
 
 </dd></dl>
 
+<dl class="function">
+<dt id="autots.models.base.apply_constraints">
+<code class="sig-prename descclassname">autots.models.base.</code><code class="sig-name descname">apply_constraints</code><span class="sig-paren">(</span><em class="sig-param">forecast</em>, <em class="sig-param">lower_forecast</em>, <em class="sig-param">upper_forecast</em>, <em class="sig-param">constraint_method</em>, <em class="sig-param">constraint_regularization</em>, <em class="sig-param">upper_constraint</em>, <em class="sig-param">lower_constraint</em>, <em class="sig-param">bounds</em>, <em class="sig-param">df_train=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.apply_constraints" title="Permalink to this definition">¶</a></dt>
+<dd><p>Use constraint thresholds to adjust outputs by limit.
+Note that only one method of constraint can be used here, but if different methods are desired,
+this can be run twice, with None passed to the upper or lower constraint not being used.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast</strong> (<em>pd.DataFrame</em>) – forecast df, wide style</p></li>
+<li><p><strong>lower_forecast</strong> (<em>pd.DataFrame</em>) – lower bound forecast df
+if bounds is False, upper and lower forecast dataframes are unused and can be empty</p></li>
+<li><p><strong>upper_forecast</strong> (<em>pd.DataFrame</em>) – upper bound forecast df</p></li>
+<li><p><strong>constraint_method</strong> (<em>str</em>) – one of
+stdev_min - threshold is min and max of historic data +/- constraint * st dev of data
+stdev - threshold is the mean of historic data +/- constraint * st dev of data
+absolute - input is array of length series containing the threshold’s final value for each
+quantile - constraint is the quantile of historic data to use as threshold</p></li>
+<li><p><strong>constraint_regularization</strong> (<em>float</em>) – 0 to 1
+where 0 means no constraint, 1 is hard threshold cutoff, and in between is penalty term</p></li>
+<li><p><strong>upper_constraint</strong> (<em>float</em>) – or array, depending on method, None if unused</p></li>
+<li><p><strong>lower_constraint</strong> (<em>float</em>) – or array, depending on method, None if unused</p></li>
+<li><p><strong>bounds</strong> (<em>bool</em>) – if True, apply to upper/lower forecast, otherwise False applies only to forecast</p></li>
+<li><p><strong>df_train</strong> (<em>pd.DataFrame</em>) – required for quantile/stdev methods to find threshold values</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>forecast, lower, upper (pd.DataFrame)</p>
+</dd>
+</dl>
+</dd></dl>
+
 </section>
 <section id="module-autots.models.basics">
 <span id="autots-models-basics-module"></span><h2>autots.models.basics module<a class="headerlink" href="#module-autots.models.basics" title="Permalink to this headline">¶</a></h2>
 <p>Naives and Others Requiring No Additional Packages Beyond Numpy and Pandas</p>
 <dl class="class">
 <dt id="autots.models.basics.AverageValueNaive">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">AverageValueNaive</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'AverageValueNaive'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">method: str = 'Median'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.AverageValueNaive" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">AverageValueNaive</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'AverageValueNaive'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">method: str = 'Median'</em>, <em class="sig-param">window: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.AverageValueNaive" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Naive forecasting predicting a dataframe of the series’ median values</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -249,7 +314,7 @@ scaler (numpy.array): precomputed scaler for efficiency, avg value of series in 
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.AverageValueNaive.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -272,14 +337,73 @@ scaler (numpy.array): precomputed scaler for efficiency, avg value of series in 
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.AverageValueNaive.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.models.basics.ConstantNaive">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">ConstantNaive</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'ConstantNaive'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">constant: float = 0</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ConstantNaive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>Naive forecasting predicting a dataframe of zeroes (0’s)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>constant</strong> (<em>float</em>) – value to fill with</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.basics.ConstantNaive.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ConstantNaive.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.ConstantNaive.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ConstantNaive.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns dict of new parameters for parameter tuning</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.ConstantNaive.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ConstantNaive.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.ConstantNaive.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ConstantNaive.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -294,7 +418,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Naive forecasting predicting a dataframe of the last series value</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -307,7 +431,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.LastValueNaive.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -330,14 +454,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.LastValueNaive.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -352,7 +476,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Forecasts using a nearest neighbors type model adapted for probabilistic time series.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -375,7 +499,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.Motif.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -398,14 +522,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.Motif.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -422,7 +546,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 Basically a highly-customized KNN</p>
 <p>Warning: if you are forecasting many steps (large forecast_length), and interested in probabilistic upper/lower forecasts, then set recency_weighting &lt;= 0, and have a larger cutoff_minimum</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -444,7 +568,7 @@ Basically a highly-customized KNN</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.MotifSimulation.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -467,14 +591,14 @@ Basically a highly-customized KNN</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.MotifSimulation.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -493,7 +617,7 @@ Gauthier, D.J., Bollt, E., Griffith, A. et al. Next generation reservoir computi
 <a class="reference external" href="https://doi.org/10.1038/s41467-021-25801-2">https://doi.org/10.1038/s41467-021-25801-2</a>
 with adjustments to make it probabilistic and to scale better</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -511,7 +635,7 @@ with adjustments to make it probabilistic and to scale better</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.NVAR.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -534,14 +658,14 @@ with adjustments to make it probabilistic and to scale better</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.NVAR.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -557,7 +681,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <p>Naive forecasting predicting a dataframe with seasonal (lag) forecasts.</p>
 <p>Concerto No. 2 in G minor, Op. 8, RV 315</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -573,7 +697,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SeasonalNaive.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -596,14 +720,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SeasonalNaive.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of .fit().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -619,7 +743,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <p>Forecasts using a nearest neighbors type model adapted for probabilistic time series.
 This version takes the distance metric average for all series at once.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -640,7 +764,7 @@ This version takes the distance metric average for all series at once.</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SectionalMotif.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
@@ -666,14 +790,14 @@ This version takes the distance metric average for all series at once.</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SectionalMotif.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -682,62 +806,10 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 </dd></dl>
 
-<dl class="class">
+<dl class="attribute">
 <dt id="autots.models.basics.ZeroesNaive">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">ZeroesNaive</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'ZeroesNaive'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ZeroesNaive" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
-<p>Naive forecasting predicting a dataframe of zeroes (0’s)</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
-<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
-<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
-</ul>
-</dd>
-</dl>
-<dl class="method">
-<dt id="autots.models.basics.ZeroesNaive.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ZeroesNaive.fit" title="Permalink to this definition">¶</a></dt>
-<dd><p>Train algorithm given data supplied</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="method">
-<dt id="autots.models.basics.ZeroesNaive.get_new_params">
-<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ZeroesNaive.get_new_params" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns dict of new parameters for parameter tuning</p>
-</dd></dl>
-
-<dl class="method">
-<dt id="autots.models.basics.ZeroesNaive.get_params">
-<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ZeroesNaive.get_params" title="Permalink to this definition">¶</a></dt>
-<dd><p>Return dict of current parameters</p>
-</dd></dl>
-
-<dl class="method">
-<dt id="autots.models.basics.ZeroesNaive.predict">
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.ZeroesNaive.predict" title="Permalink to this definition">¶</a></dt>
-<dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
-<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
-<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
-if just_point_forecast == True, a dataframe of point forecasts</p>
-</dd>
-</dl>
-</dd></dl>
-
+<code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">ZeroesNaive</code><a class="headerlink" href="#autots.models.basics.ZeroesNaive" title="Permalink to this definition">¶</a></dt>
+<dd><p>alias of <a class="reference internal" href="#autots.models.basics.ConstantNaive" title="autots.models.basics.ConstantNaive"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.basics.ConstantNaive</span></code></a></p>
 </dd></dl>
 
 <dl class="function">
@@ -759,7 +831,7 @@ Already effectively parallelized by linpack it seems.
 It’s very sensitive to error in most recent data point!
 The seed_pts and seed_weighted can help address that.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -785,7 +857,7 @@ if &gt; 10, also increases search space of probabilistic forecast</p></li>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Wrapper for Tensorflow Keras based RNN.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>rnn_type</strong> (<em>str</em>) – Keras cell type ‘GRU’ or default ‘LSTM’</p></li>
 <li><p><strong>kernel_initializer</strong> (<em>str</em>) – passed to first keras LSTM or GRU layer</p></li>
@@ -820,7 +892,7 @@ if &gt; 10, also increases search space of probabilistic forecast</p></li>
 <p>Wrapper for Tensorflow Keras based Transformer.</p>
 <p>based on: <a class="reference external" href="https://keras.io/examples/timeseries/timeseries_transformer_classification/">https://keras.io/examples/timeseries/timeseries_transformer_classification/</a></p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>optimizer</strong> (<em>str</em>) – Passed to keras model.compile</p></li>
 <li><p><strong>loss</strong> (<em>str</em>) – Passed to keras model.compile</p></li>
@@ -865,7 +937,7 @@ if &gt; 10, also increases search space of probabilistic forecast</p></li>
 <dd><p>Generate mean forecast for ensemble of models.</p>
 <p>model_weights and point_methods other than ‘mean’ are incompatible</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>ensemble_params</strong> (<em>dict</em>) – BestN ensemble param dict
 should have “model_weights”: {model_id: weight} where 1 is default weight per model</p></li>
@@ -919,7 +991,7 @@ same for lower_forecasts, upper_forecasts</p></li>
 <code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">MosaicEnsemble</code><span class="sig-paren">(</span><em class="sig-param">ensemble_params</em>, <em class="sig-param">forecasts_list</em>, <em class="sig-param">forecasts</em>, <em class="sig-param">lower_forecasts</em>, <em class="sig-param">upper_forecasts</em>, <em class="sig-param">forecasts_runtime</em>, <em class="sig-param">prediction_interval</em>, <em class="sig-param">df_train=None</em>, <em class="sig-param">prematched_series: dict = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.MosaicEnsemble" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast for mosaic ensembling.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>prematched_series</strong> (<em>dict</em>) – from outer horizontal generalization, possibly different than params</p>
 </dd>
 </dl>
@@ -930,7 +1002,7 @@ same for lower_forecasts, upper_forecasts</p></li>
 <code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">generalize_horizontal</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">known_matches: dict</em>, <em class="sig-param">available_models: list</em>, <em class="sig-param">full_models: list = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.generalize_horizontal" title="Permalink to this definition">¶</a></dt>
 <dd><p>generalize a horizontal model trained on a subset of all series</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df_train</strong> (<em>pd.DataFrame</em>) – time series data</p></li>
 <li><p><strong>known_matches</strong> (<em>dict</em>) – series:model dictionary for some to all series</p></li>
@@ -943,7 +1015,7 @@ same for lower_forecasts, upper_forecasts</p></li>
 
 <dl class="function">
 <dt id="autots.models.ensemble.generate_mosaic_template">
-<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">generate_mosaic_template</code><span class="sig-paren">(</span><em class="sig-param">initial_results</em>, <em class="sig-param">full_mae_ids</em>, <em class="sig-param">num_validations</em>, <em class="sig-param">col_names</em>, <em class="sig-param">full_mae_errors</em>, <em class="sig-param">smoothing_window=None</em>, <em class="sig-param">metric_name='MAE'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.generate_mosaic_template" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">generate_mosaic_template</code><span class="sig-paren">(</span><em class="sig-param">initial_results</em>, <em class="sig-param">full_mae_ids</em>, <em class="sig-param">num_validations</em>, <em class="sig-param">col_names</em>, <em class="sig-param">full_mae_errors</em>, <em class="sig-param">smoothing_window=None</em>, <em class="sig-param">metric_name='MAE'</em>, <em class="sig-param">models_to_use=None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.generate_mosaic_template" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate an ensemble template from results.</p>
 </dd></dl>
 
@@ -952,13 +1024,13 @@ same for lower_forecasts, upper_forecasts</p></li>
 <code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">horizontal_classifier</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">known: dict</em>, <em class="sig-param">method: str = 'whatever'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.horizontal_classifier" title="Permalink to this definition">¶</a></dt>
 <dd><p>CLassify unknown series with the appropriate model for horizontal ensembling.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df_train</strong> (<em>pandas.DataFrame</em>) – historical data about the series. Columns = series_ids.</p></li>
 <li><p><strong>known</strong> (<em>dict</em>) – dict of series_id: classifier outcome including some but not all series in df_train.</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>dict.</p>
 </dd>
 </dl>
@@ -975,7 +1047,7 @@ same for lower_forecasts, upper_forecasts</p></li>
 <code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">mosaic_or_horizontal</code><span class="sig-paren">(</span><em class="sig-param">all_series: dict</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.mosaic_or_horizontal" title="Permalink to this definition">¶</a></dt>
 <dd><p>Take a mosaic or horizontal model and return series or models.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>all_series</strong> (<em>dict</em>) – dict of series: model (or list of models)</p>
 </dd>
 </dl>
@@ -986,7 +1058,7 @@ same for lower_forecasts, upper_forecasts</p></li>
 <code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">mosaic_to_horizontal</code><span class="sig-paren">(</span><em class="sig-param">ModelParameters</em>, <em class="sig-param">forecast_period: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.mosaic_to_horizontal" title="Permalink to this definition">¶</a></dt>
 <dd><p>Take a mosaic template and pull a single forecast step as a horizontal model.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>ModelParameters</strong> (<em>dict</em>) – the json.loads() of the ModelParameters of a mosaic ensemble template</p></li>
 <li><p><strong>forecast_period</strong> (<em>int</em>) – when to choose the model, starting with 0
@@ -1006,14 +1078,14 @@ must be less than forecast_length that the model was trained on.</p></li>
 <code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">parse_horizontal</code><span class="sig-paren">(</span><em class="sig-param">all_series: dict</em>, <em class="sig-param">model_id: str = None</em>, <em class="sig-param">series_id: str = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.parse_horizontal" title="Permalink to this definition">¶</a></dt>
 <dd><p>Take a mosaic or horizontal model and return series or models.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>all_series</strong> (<em>dict</em>) – dict of series: model (or list of models)</p></li>
 <li><p><strong>model_id</strong> (<em>str</em>) – name of model to find series for</p></li>
 <li><p><strong>series_id</strong> (<em>str</em>) – name of series to find models for</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>list</p>
 </dd>
 </dl>
@@ -1037,7 +1109,7 @@ Except it is really the only thing I use that runs mxnet, and it takes a while t
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>GluonTS based on mxnet.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1056,7 +1128,7 @@ Except it is really the only thing I use that runs mxnet, and it takes a while t
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.gluonts.GluonTS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -1079,14 +1151,14 @@ Except it is really the only thing I use that runs mxnet, and it takes a while t
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.gluonts.GluonTS.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1104,7 +1176,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <em class="property">class </em><code class="sig-prename descclassname">autots.models.greykite.</code><code class="sig-name descname">Greykite</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'Greykite'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">growth: str = None</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.greykite.Greykite" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1119,7 +1191,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.greykite.Greykite.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -1142,14 +1214,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.greykite.Greykite.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1187,7 +1259,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 shall be 3. 4 thou shall not count, neither count thou 2, excepting that thou then preceed to 3.’ -Python</p>
 <p>For params see: <a class="reference external" href="https://facebook.github.io/prophet/docs/diagnostics.html">https://facebook.github.io/prophet/docs/diagnostics.html</a></p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1202,7 +1274,7 @@ shall be 3. 4 thou shall not count, neither count thou 2, excepting that thou th
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.FBProphet.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -1225,14 +1297,14 @@ shall be 3. 4 thou shall not count, neither count thou 2, excepting that thou th
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.FBProphet.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1248,7 +1320,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <p>Facebook’s Prophet got caught in a net.</p>
 <p>n_jobs is implemented here but it should be set to 1. PyTorch already maxes out cores in all observed cases.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1263,7 +1335,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.NeuralProphet.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -1286,14 +1358,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.prophet.NeuralProphet.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1313,7 +1385,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Forecasting on principle components.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1330,7 +1402,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.ComponentAnalysis.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -1353,14 +1425,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.ComponentAnalysis.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of .fit().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1375,7 +1447,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Regression not on series but datetime</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1388,7 +1460,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.DatepartRegression.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -1411,14 +1483,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.DatepartRegression.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>future_regressor</strong> (<em>pandas.DataFrame</em><em> or </em><em>Series</em>) – Datetime Indexed</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1429,12 +1501,12 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="class">
 <dt id="autots.models.sklearn.MultivariateRegression">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">MultivariateRegression</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'MultivariateRegression'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">forecast_length: int = 7</em>, <em class="sig-param">regression_model: dict = {'model': 'RandomForest'</em>, <em class="sig-param">'model_params': {}}</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = 7</em>, <em class="sig-param">min_rolling_periods: int = 7</em>, <em class="sig-param">ewm_var_alpha: float = None</em>, <em class="sig-param">quantile90_rolling_periods: int = None</em>, <em class="sig-param">quantile10_rolling_periods: int = None</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">additional_lag_periods: int = None</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">datepart_method: str = None</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">window: int = 5</em>, <em class="sig-param">probabilistic: bool = True</em>, <em class="sig-param">quantile_params: dict = {'learning_rate': 0.1</em>, <em class="sig-param">'max_depth': 20</em>, <em class="sig-param">'min_samples_leaf': 4</em>, <em class="sig-param">'min_samples_split': 5</em>, <em class="sig-param">'n_estimators': 250}</em>, <em class="sig-param">n_jobs: int = -1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.MultivariateRegression" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">MultivariateRegression</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'MultivariateRegression'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">forecast_length: int = 7</em>, <em class="sig-param">regression_model: dict = {'model': 'RandomForest'</em>, <em class="sig-param">'model_params': {}}</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = 7</em>, <em class="sig-param">min_rolling_periods: int = 7</em>, <em class="sig-param">ewm_var_alpha: float = None</em>, <em class="sig-param">quantile90_rolling_periods: int = None</em>, <em class="sig-param">quantile10_rolling_periods: int = None</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">additional_lag_periods: int = None</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">datepart_method: str = None</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">window: int = 5</em>, <em class="sig-param">probabilistic: bool = False</em>, <em class="sig-param">quantile_params: dict = {'learning_rate': 0.1</em>, <em class="sig-param">'max_depth': 20</em>, <em class="sig-param">'min_samples_leaf': 4</em>, <em class="sig-param">'min_samples_split': 5</em>, <em class="sig-param">'n_estimators': 250}</em>, <em class="sig-param">n_jobs: int = -1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.MultivariateRegression" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Regression-framed approach to forecasting using sklearn.
 A multiariate version of rolling regression: ie each series is lagged independently but modeled together</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1449,7 +1521,7 @@ A multiariate version of rolling regression: ie each series is lagged independen
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.MultivariateRegression.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
 <li><p><strong>future_regressor</strong> (<em>pandas.DataFrame</em><em> or </em><em>Series</em>) – Datetime Indexed</p></li>
@@ -1475,7 +1547,7 @@ A multiariate version of rolling regression: ie each series is lagged independen
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = None</em>, <em class="sig-param">just_point_forecast: bool = False</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.MultivariateRegression.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead
 ignored here for this model, must be set in __init__ before .fit()</p></li>
@@ -1483,7 +1555,7 @@ ignored here for this model, must be set in __init__ before .fit()</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1500,7 +1572,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <p>Who are you who are so wise in the ways of science?
 I am Arthur, King of the Britons. -Python</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1515,7 +1587,7 @@ I am Arthur, King of the Britons. -Python</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.RollingRegression.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
 <li><p><strong>future_regressor</strong> (<em>pandas.DataFrame</em><em> or </em><em>Series</em>) – Datetime Indexed</p></li>
@@ -1541,14 +1613,14 @@ I am Arthur, King of the Britons. -Python</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.RollingRegression.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1564,7 +1636,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <p>Regression-framed approach to forecasting using sklearn.
 A univariate version of rolling regression: ie each series is modeled independently</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1579,7 +1651,7 @@ A univariate version of rolling regression: ie each series is modeled independen
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.UnivariateRegression.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
 <li><p><strong>future_regressor</strong> (<em>pandas.DataFrame</em><em> or </em><em>Series</em>) – Datetime Indexed</p></li>
@@ -1605,7 +1677,7 @@ A univariate version of rolling regression: ie each series is modeled independen
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = None</em>, <em class="sig-param">just_point_forecast: bool = False</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.UnivariateRegression.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead
 ignored here for this model, must be set in __init__ before .fit()</p></li>
@@ -1613,7 +1685,7 @@ ignored here for this model, must be set in __init__ before .fit()</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1628,7 +1700,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Regression use the last n values as the basis of training data.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1642,7 +1714,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.WindowRegression.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -1665,14 +1737,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.WindowRegression.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of .fit().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1719,7 +1791,7 @@ For example: exog, exog_oos, and exog_fc all sometimes mean the same thing</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>ARDL from Statsmodels.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1737,7 +1809,7 @@ For example: exog, exog_oos, and exog_fc all sometimes mean the same thing</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ARDL.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied .</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -1760,14 +1832,14 @@ For example: exog, exog_oos, and exog_fc all sometimes mean the same thing</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ARDL.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1782,7 +1854,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>ARIMA from Statsmodels.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1800,7 +1872,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ARIMA.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied .</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -1824,14 +1896,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ARIMA.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1846,7 +1918,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>DynamicFactor from Statsmodels</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1860,7 +1932,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.DynamicFactor.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -1883,14 +1955,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.DynamicFactor.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><dl class="simple">
 <dt>Either a PredictionObject of forecasts and metadata, or</dt><dd><p>if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1910,7 +1982,7 @@ maPred = maModel.predict()</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>DynamicFactorMQ from Statsmodels</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1923,7 +1995,7 @@ maPred = maModel.predict()</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.DynamicFactorMQ.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -1946,14 +2018,14 @@ maPred = maModel.predict()</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.DynamicFactorMQ.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -1968,7 +2040,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Exponential Smoothing from Statsmodels</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -1985,7 +2057,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ETS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -2008,14 +2080,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.ETS.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -2030,7 +2102,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Simple linear regression from statsmodels</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -2044,7 +2116,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.GLM.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -2067,14 +2139,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.GLM.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -2089,7 +2161,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Simple linear regression from statsmodels</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -2102,7 +2174,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.GLS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -2125,14 +2197,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.GLS.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -2147,7 +2219,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Theta Model from Statsmodels</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -2161,7 +2233,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.Theta.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -2184,14 +2256,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.Theta.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -2206,7 +2278,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>UnobservedComponents from Statsmodels.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -2221,7 +2293,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.UnobservedComponents.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -2244,14 +2316,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.UnobservedComponents.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -2266,7 +2338,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>VAR from Statsmodels.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -2280,7 +2352,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VAR.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -2303,14 +2375,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VAR.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -2325,7 +2397,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>VARMAX from Statsmodels</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -2339,7 +2411,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VARMAX.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -2362,14 +2434,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VARMAX.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -2384,7 +2456,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>VECM from Statsmodels</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -2398,7 +2470,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VECM.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -2421,14 +2493,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.statsmodels.VECM.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -2457,7 +2529,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Tensorflow Probability regression.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -2471,7 +2543,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tfp.TFPRegression.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -2494,14 +2566,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tfp.TFPRegression.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>
@@ -2516,7 +2588,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Wrapper for Tensorflow Keras based RNN.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>rnn_type</strong> (<em>str</em>) – Keras cell type ‘GRU’ or default ‘LSTM’</p></li>
 <li><p><strong>kernel_initializer</strong> (<em>str</em>) – passed to first keras LSTM or GRU layer</p></li>
@@ -2550,7 +2622,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>STS from TensorflowProbability.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
@@ -2564,7 +2636,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=[]</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tfp.TensorflowSTS.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Train algorithm given data supplied.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
 </dd>
 </dl>
@@ -2587,14 +2659,14 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=[]</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.tfp.TensorflowSTS.predict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
 if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd>

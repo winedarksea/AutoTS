@@ -3,9 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Tutorial &#8212; AutoTS 0.4.0 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.4.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -56,8 +56,8 @@
 </section>
 <section id="extended-tutorial">
 <h2>Extended Tutorial<a class="headerlink" href="#extended-tutorial" title="Permalink to this headline">¶</a></h2>
-<section id="id1">
-<h3>A simple example<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h3>
+<section id="a-simple-example-1">
+<h3>A simple example<a class="headerlink" href="#a-simple-example-1" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># also: _hourly, _daily, _weekly, or _yearly</span>
 <span class="kn">from</span> <span class="nn">autots.datasets</span> <span class="kn">import</span> <span class="n">load_monthly</span>
 
@@ -108,17 +108,18 @@ Dropping series which are mostly missing, or using <code class="docutils literal
 <ol class="arabic simple">
 <li><p>Bad data (sudden drops or missing values) in the <em>most recent</em> data is the single most common cause of bad forecasts here. As many models use the most recent data as a jumping off point, error in the most recent data points can have an oversized effect on forecasts.</p></li>
 <li><p>Misrepresentative cross-validation samples. Models are chosen on performance in cross validation. If the validations don’t accurately represent the series, a poor model may be chosen. Choose a good method and as many validations as possible.</p></li>
-<li><p>Anomalies that won’t be repeated. Manual anomaly removal can be more effective than any automatic methods.</p></li>
+<li><p>Anomalies that won’t be repeated. Manual anomaly removal can be more effective than any automatic methods. Along with this, beware of a changing pattern of NaN occurrences, as learned FillNA may not longer apply.</p></li>
 <li><p>Artifical historical events, a simple example being sales promotions. Use of regressors is the most common method for dealing with this and may be critical for modeling these types of events.</p></li>
 </ol>
 <p>What you don’t need to do before the automated forecasting is any typical preprocessing. It is best to leave it up to the model selection process to choose, as different models do better with different types of preprocessing.</p>
 </section>
-<section id="id2">
-<h3>Validation and Cross Validation<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h3>
+<section id="validation-and-cross-validation-1">
+<h3>Validation and Cross Validation<a class="headerlink" href="#validation-and-cross-validation-1" title="Permalink to this headline">¶</a></h3>
 <p>Cross validation helps assure that the optimal model is stable over the dynamics of a time series.
 Cross validation can be tricky in time series data due to the necessity of preventing data leakage from future data points.</p>
 <p>Firstly, all models are initially validated on the most recent piece of data. This is done because the most recent data will generally most closely resemble the forecast future.
 With very small datasets, there may be not be enough data for cross validation, in which case <code class="docutils literal notranslate"><span class="pre">num_validations</span></code> may be set to 0. This can also speed up quick tests.
+Note that when <code class="docutils literal notranslate"><span class="pre">num_validations=0</span></code> <em>one evaluation</em> is still run. It’s just not cross validation. <code class="docutils literal notranslate"><span class="pre">num_validations</span></code> is the number of <strong>cross</strong> validations to be done in addition.
 In general, the safest approach is to have as many validations as possible, as long as there is sufficient data for it.</p>
 <p>Here are the available methods:</p>
 <p><strong>Backwards</strong> cross validation is the safest method and works backwards from the most recent data. First the most recent forecast_length samples are taken, then the next most recent forecast_length samples, and so on. This makes it more ideal for smaller or fast-changing datasets.</p>
@@ -137,8 +138,8 @@ However, increasing this value above, say, <code class="docutils literal notrans
 Most commonly, this may occur where some series have a very long history, while others in the same dataset only have very recent data.
 In these cases, avoid the <code class="docutils literal notranslate"><span class="pre">even</span></code> cross validation and use one of the other validation methods.</p>
 </section>
-<section id="id3">
-<h3>Another Example:<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h3>
+<section id="another-example-1">
+<h3>Another Example:<a class="headerlink" href="#another-example-1" title="Permalink to this headline">¶</a></h3>
 <p>Here, we are forecasting the traffice along Interstate 94 between Minneapolis and St Paul in Minnesota. This is a great dataset to demonstrate a recommended way of including external variables - by including them as time series with a lower weighting.
 Here weather data is included - winter and road construction being the major influencers for traffic and will be forecast alongside the traffic volume. These additional series carry information to models such as <code class="docutils literal notranslate"><span class="pre">RollingRegression</span></code>, <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code>, and <code class="docutils literal notranslate"><span class="pre">VECM</span></code>.</p>
 <p>Also seen in use here is the <code class="docutils literal notranslate"><span class="pre">model_list</span></code>.</p>
@@ -191,8 +192,8 @@ Here weather data is included - winter and road construction being the major inf
 </pre></div>
 </div>
 </section>
-<section id="id4">
-<h3>Model Lists<a class="headerlink" href="#id4" title="Permalink to this headline">¶</a></h3>
+<section id="model-lists-1">
+<h3>Model Lists<a class="headerlink" href="#model-lists-1" title="Permalink to this headline">¶</a></h3>
 <p>By default, most available models are tried. For a more limited subset of models, a custom list can be passed in, or more simply, a string, one of <code class="docutils literal notranslate"><span class="pre">'probabilistic',</span> <span class="pre">'multivariate',</span> <span class="pre">'fast',</span> <span class="pre">'superfast',</span> <span class="pre">or</span> <span class="pre">'all'</span></code>.</p>
 <p>A table of all available models is below.</p>
 <p>On large multivariate series, <code class="docutils literal notranslate"><span class="pre">DynamicFactor</span></code> and <code class="docutils literal notranslate"><span class="pre">VARMAX</span></code> can be impractically slow.</p>
@@ -218,8 +219,8 @@ One thing to note is that, as AutoTS is still under development, template format
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Overwrite template is: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">initial_template</span><span class="p">)))</span>
 </pre></div>
 </div>
-<section id="id5">
-<h3>Running Just One Model<a class="headerlink" href="#id5" title="Permalink to this headline">¶</a></h3>
+<section id="running-just-one-model-1">
+<h3>Running Just One Model<a class="headerlink" href="#running-just-one-model-1" title="Permalink to this headline">¶</a></h3>
 <p>While the above version of deployment, with  evolving templates and cross_validation on every run, is the recommended deployment, it is also possible to run a single fixed model.</p>
 <p>Coming from the deeper internals of AutoTS, this function can only take the <code class="docutils literal notranslate"><span class="pre">wide</span></code> style data (there is a long_to_wide function available).
 Data must already be fairly clean - all numerics (or np.nan).
@@ -258,8 +259,8 @@ model.best_model_transformation_params
 </div>
 <p>If you overwrite these, it will accordingly change the forecast output.</p>
 </section>
-<section id="id6">
-<h3>Metrics<a class="headerlink" href="#id6" title="Permalink to this headline">¶</a></h3>
+<section id="metrics-1">
+<h3>Metrics<a class="headerlink" href="#metrics-1" title="Permalink to this headline">¶</a></h3>
 <p>There are a number of available metrics, all combined together into a ‘Score’ which evaluates the best model. The ‘Score’ that compares models can easily be adjusted by passing through custom metric weights dictionary.
 Higher weighting increases the importance of that metric, while 0 removes that metric from consideration. Weights must be numbers greater than or equal to 0.
 This weighting is not to be confused with series weighting, which effects how equally any one metric is applied to all the series.</p>
@@ -290,13 +291,14 @@ quality of point forecast, quality of probabilistic forecast, overestimation or 
 <p>Some metrics are scaled and some are not. MAE, RMSE, MAGE, MLE, iMLE are unscaled and accordingly in multivariate forecasting will favor model performance on the largest scale input series.</p>
 <p><em>Horizontal</em> style ensembles use <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code> for series selection, but only the values passed for <code class="docutils literal notranslate"><span class="pre">mae,</span> <span class="pre">rmse,</span> <span class="pre">made,</span> <span class="pre">mle,</span> <span class="pre">imle,</span> <span class="pre">contour,</span> <span class="pre">spl</span></code>. If all of these are 0, mae is used for selection.</p>
 <p><code class="docutils literal notranslate"><span class="pre">sMAPE</span></code> is <em>Symmetric Mean Absolute Percentage Loss</em> and is generally the most versatile metric across multiple series as it is scaled. It doesn’t handle forecasts with lots of zeroes well.</p>
-<p><code class="docutils literal notranslate"><span class="pre">SPL</span></code> is <em>Scaled Pinball Loss</em> or <em>Quantile Loss</em> and is the optimal metric for assessing upper/lower quantile forecast accuracies.</p>
-<p><code class="docutils literal notranslate"><span class="pre">Containment</span></code> measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called <code class="docutils literal notranslate"><span class="pre">coverage_fraction</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">SPL</span></code> is <em>Scaled Pinball Loss</em>, sometimes called <em>Quantile Loss</em>, and is the optimal metric for optimizing upper/lower quantile forecast accuracies.</p>
+<p><code class="docutils literal notranslate"><span class="pre">Containment</span></code> measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called <code class="docutils literal notranslate"><span class="pre">coverage_fraction</span></code> in other places.</p>
 <p><code class="docutils literal notranslate"><span class="pre">MLE</span></code> and <code class="docutils literal notranslate"><span class="pre">iMLE</span></code> are <em>Mean Logarithmic Error</em> inspired by the <code class="docutils literal notranslate"><span class="pre">mean</span> <span class="pre">squared</span> <span class="pre">log</span> <span class="pre">error</span></code>. They are used to target over or underestimation with MAE of the penalized direction and log(error) for the less-penalized (and less outlier sensitive) direction.
 <code class="docutils literal notranslate"><span class="pre">MLE</span></code> penalizes an under-predicted forecast greater than an over-predicted forecast.
 <code class="docutils literal notranslate"><span class="pre">iMLE</span></code> is the inverse, and penalizes an over-prediction more.</p>
 <p><code class="docutils literal notranslate"><span class="pre">MAGE</span></code> is <em>Mean Absolute aGgregate Error</em> which measures the error of a rollup of the forecasts. This is helpful in hiearchial/grouped forecasts for selecting series that have minimal overestimation or underestimation when summed.</p>
-<p><code class="docutils literal notranslate"><span class="pre">Contour</span></code> is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but <em>not</em> the magnitude of that difference. It is more human-readable than MADE for this information.</p>
+<p><code class="docutils literal notranslate"><span class="pre">Contour</span></code> is designed to help choose models which when plotted visually appear similar to the actual. As such, it measures the % of points where the forecast and actual both went in the same direction, either both up or both down, but <em>not</em> the magnitude of that difference. It is more human-readable than MADE for this information.
+This is similar to but faster than MDA (mean directional accuracy) as contour evaluates no change as a positive case.</p>
 <p><code class="docutils literal notranslate"><span class="pre">MADE</span></code> is <em>(Scaled) Mean Absolute Differential Error</em>. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Equivalent to ‘MAE’ when forecast_length=1. It is better for optimization than contour.</p>
 <p>The contour and MADE metrics are useful as they encourages ‘wavy’ forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they “don’t look like they are trying hard enough” to some managers, and using them favors non-flat forecasts that (to many) look like a more serious model.</p>
 </section>
@@ -314,8 +316,8 @@ This assesses how well the forecasts aggregate, and when used as part of metric_
 <code class="docutils literal notranslate"><span class="pre">MAGE</span></code> assesses all series present, so if very distinct sub-groups are present, it may be sometimes necessary to model those groups in separate runs.
 Additionally, <code class="docutils literal notranslate"><span class="pre">MLE</span></code> or <code class="docutils literal notranslate"><span class="pre">iMLE</span></code> can be used if either underestimation or overestimation respectively has been identified as a problem.</p>
 </section>
-<section id="id7">
-<h3>Ensembles<a class="headerlink" href="#id7" title="Permalink to this headline">¶</a></h3>
+<section id="ensembles-1">
+<h3>Ensembles<a class="headerlink" href="#ensembles-1" title="Permalink to this headline">¶</a></h3>
 <p>Ensemble methods are specified by the <code class="docutils literal notranslate"><span class="pre">ensemble=</span></code> parameter. It can be either a list or a comma-separated string.</p>
 <p><code class="docutils literal notranslate"><span class="pre">simple</span></code> style ensembles (labeled ‘BestN’ in templates) are the most recognizable form of ensemble and are the simple average of the specified models, here usally 3 or 5 models.
 <code class="docutils literal notranslate"><span class="pre">distance</span></code> style ensembles are two models spliced together. The first model forecasts the first fraction of forecast period, the second model the latter half. There is no overlap of the models.
@@ -425,27 +427,29 @@ python -m pip install --upgrade numpy pandas --exists-action i  <span class="c1"
 python -m pip install autots --exists-action i
 </pre></div>
 </div>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>conda install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>mamba install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
 pip install mxnet --no-deps
-pip install intel-tensorflow scikit-learn-intelex yfinance pytrends fredapi gluonts
-pip install spyder
+pip install yfinance pytrends fredapi gluonts
+pip install intel-tensorflow scikit-learn-intelex
+mamba install spyder
+mamba install autots -c conda-forge
 </pre></div>
 </div>
+<p><code class="docutils literal notranslate"><span class="pre">mamba</span></code> and <code class="docutils literal notranslate"><span class="pre">conda</span></code> commands are generally interchangeable.</p>
 </section>
 <section id="intel-conda-channel-installation-sometime-faster-also-more-prone-to-bugs">
 <h4>Intel conda channel installation (sometime faster, also, more prone to bugs)<a class="headerlink" href="#intel-conda-channel-installation-sometime-faster-also-more-prone-to-bugs" title="Permalink to this headline">¶</a></h4>
 <p><a class="reference external" href="https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html">https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html</a></p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># create the environment</span>
-conda create -n intelpython -c intel <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.7 intelpython3_full
-conda activate intelpython
+mamba create -n aikit37 <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.7 intel-aikit-modin pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests tensorflow dpctl -c intel
+conda config --env --add channels conda-forge
+conda config --env --add channels intel
+conda config --env --get channels
 
 <span class="c1"># install additional packages as desired</span>
-python -m pip install yfinance pytrends fredapi bottleneck
 python -m pip install mxnet --no-deps
-python -m pip install gluonts
-conda install -c conda-forge prophet
-conda update -c intel intelpython3_full
-conda install -c intel numexpr statsmodels lightgbm tensorflow
+python -m pip install gluonts yfinance pytrends fredapi
+mamba update -c intel intel-aikit-modin
 
 python -m pip install autots
 
@@ -489,8 +493,13 @@ Since ensembles are based on the test dataset, it would also be wise to set <cod
 <h3>Adding regressors and other information<a class="headerlink" href="#adding-regressors-and-other-information" title="Permalink to this headline">¶</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">future_</span></code> regressor, to make it clear this is data that will be know with high certainy about the future.
 Such data about the future is rare, one example might be number of stores that will be (planned to be) open each given day in the future when forecast sales.
-Only a handful of models support adding regressors, and not all handle multiple regressors.
-The recommended way to provide regressors is as a pd.Series/pd.Dataframe with a DatetimeIndex.</p>
+Generally using regressors is very helpful for separating ‘organic’ and ‘inorganic’ patterns.
+‘Inorganic’ patterns refers to human business decisions that effect the outcome and can be controlled.
+A very common example of those is promotions and sales events.
+The model can learn from the past promotion information to then anticpate the effects of the input planned promotion events.
+Simulation forecasting, described below, is where multiple promotional plans can be tested side-by-side to evaluate effectiveness.</p>
+<p>Only a handful of models support adding regressors, and not all handle multiple regressors.
+The way to provide regressors is in the <code class="docutils literal notranslate"><span class="pre">wide</span></code> style as a pd.Series/pd.Dataframe with a DatetimeIndex.</p>
 <p>Don’t know the future? Don’t worry, the models can handle quite a lot of parallel time series, which is another way to add information.
 Additional regressors can be passed through as additional time series to forecast as part of df_long.
 Some models here can utilize the additional information they provide to help improve forecast quality.
@@ -538,8 +547,8 @@ To prevent forecast accuracy for considering these additional series too heavily
 <p>For models here in the lower level api, confusingly, regression_type=”User” must be specified as well as passing future_regressor. Why? This allows the model search to easily try both with and without the regressor, because sometimes the regressor may do more harm than good.</p>
 </section>
 </section>
-<section id="id8">
-<h2>Simulation Forecasting<a class="headerlink" href="#id8" title="Permalink to this headline">¶</a></h2>
+<section id="simulation-forecasting-1">
+<h2>Simulation Forecasting<a class="headerlink" href="#simulation-forecasting-1" title="Permalink to this headline">¶</a></h2>
 <p>Simulation forecasting allows for experimenting with different potential future scenarios to examine the potential effects on the forecast.
 This is done here by passing known values of a <code class="docutils literal notranslate"><span class="pre">future_regressor</span></code> to model <code class="docutils literal notranslate"><span class="pre">.fit</span></code> and then running <code class="docutils literal notranslate"><span class="pre">.predict</span></code> with multiple variations on the <code class="docutils literal notranslate"><span class="pre">future_regressor</span></code> future values.
 By default in AutoTS, when a <code class="docutils literal notranslate"><span class="pre">future_regressor</span></code> is supplied, models that can utilize it are tried both with and without the regressor.
@@ -588,8 +597,8 @@ To enforce the use of future_regressor for simulation forecasting, a few paramet
 It may be necessary to rerun multiple times until a model with satisfactory variable response is found,
 or to try with a subset of the regressor model list like <code class="docutils literal notranslate"><span class="pre">['FBProphet',</span> <span class="pre">'GLM',</span> <span class="pre">'ARDL',</span> <span class="pre">'DatepartRegression']</span></code>.</p>
 </section>
-<section id="id9">
-<h2>Event Risk Forecasting<a class="headerlink" href="#id9" title="Permalink to this headline">¶</a></h2>
+<section id="event-risk-forecasting-1">
+<h2>Event Risk Forecasting<a class="headerlink" href="#event-risk-forecasting-1" title="Permalink to this headline">¶</a></h2>
 <p>Generate a risk score (0 to 1, but usually close to 0) for a future event exceeding user specified upper or lower bounds.</p>
 <p>Upper and lower limits can be one of four types, and may each be different.</p>
 <ol class="arabic simple">
@@ -636,6 +645,7 @@ or to try with a subset of the regressor model list like <code class="docutils l
 <span class="n">eval_upper</span> <span class="o">=</span> <span class="n">EventRiskForecast</span><span class="o">.</span><span class="n">generate_historic_risk_array</span><span class="p">(</span><span class="n">df_test</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">upper_limit_2d</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="s2">&quot;upper&quot;</span><span class="p">)</span>
 <span class="n">pred_lower</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">lower_risk_array</span> <span class="o">&gt;</span> <span class="n">threshold</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
 <span class="n">pred_upper</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">upper_risk_array</span> <span class="o">&gt;</span> <span class="n">threshold</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">plot_eval</span><span class="p">(</span><span class="n">df_test</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
 
 <span class="n">multilabel_confusion_matrix</span><span class="p">(</span><span class="n">eval_upper</span><span class="p">,</span> <span class="n">pred_upper</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">classification_report</span><span class="p">(</span><span class="n">eval_upper</span><span class="p">,</span> <span class="n">pred_upper</span><span class="p">,</span> <span class="n">zero_division</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>  <span class="c1"># target_names=df.columns</span>
@@ -720,20 +730,9 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <p>Currently <code class="docutils literal notranslate"><span class="pre">MultivariateRegression</span></code> has the option to utilize a stock GradientBoostingRegressor with quantile loss for probabilistic estimates, while others utilize point to probabilistic estimates.</p>
 </section>
 </section>
-<section id="id10">
-<h2>Models<a class="headerlink" href="#id10" title="Permalink to this headline">¶</a></h2>
+<section id="models-1">
+<h2>Models<a class="headerlink" href="#models-1" title="Permalink to this headline">¶</a></h2>
 <table class="docutils align-default">
-<colgroup>
-<col style="width: 11%" />
-<col style="width: 11%" />
-<col style="width: 11%" />
-<col style="width: 11%" />
-<col style="width: 11%" />
-<col style="width: 11%" />
-<col style="width: 11%" />
-<col style="width: 11%" />
-<col style="width: 11%" />
-</colgroup>
 <thead>
 <tr class="row-odd"><th class="head"><p>Model</p></th>
 <th class="head"><p>Dependencies</p></th>
@@ -747,7 +746,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>ZeroesNaive</p></td>
+<tr class="row-even"><td><p>ConstantNaive</p></td>
 <td></td>
 <td></td>
 <td></td>
@@ -1118,10 +1117,10 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <li class="toctree-l2"><a class="reference internal" href="#deployment-and-template-import-export">Deployment and Template Import/Export</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#installation-and-dependency-versioning">Installation and Dependency Versioning</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#caveats-and-advice">Caveats and Advice</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#id8">Simulation Forecasting</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#id9">Event Risk Forecasting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#simulation-forecasting-1">Simulation Forecasting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#event-risk-forecasting-1">Event Risk Forecasting</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#using-the-transformers-independently">Using the Transformers independently</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#id10">Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#models-1">Models</a></li>
 </ul>
 </li>
 </ul>

@@ -10,33 +10,45 @@ import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools import seasonal_int
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
-from autots.tools.window_functions import window_id_maker
+from autots.tools.window_functions import window_id_maker, sliding_window_view
+from autots.tools.percentile import nan_quantile
 
-# optional requirement
+# these are all optional packages
 try:
     from scipy.spatial.distance import cdist
 except Exception:
     pass
+try:
+    from joblib import Parallel, delayed
+
+    joblib_present = True
+except Exception:
+    joblib_present = False
+try:
+    from sklearn.metrics.pairwise import nan_euclidean_distances, pairwise_distances
+except Exception:
+    pass
 
 
-class ZeroesNaive(ModelObject):
+class ConstantNaive(ModelObject):
     """Naive forecasting predicting a dataframe of zeroes (0's)
 
     Args:
         name (str): String to identify class
         frequency (str): String alias of datetime index frequency or else 'infer'
         prediction_interval (float): Confidence interval for probabilistic forecast
-
+        constant (float): value to fill with
     """
 
     def __init__(
         self,
-        name: str = "ZeroesNaive",
+        name: str = "ConstantNaive",
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
+        constant: float = 0,
         **kwargs
     ):
         ModelObject.__init__(
@@ -48,6 +60,7 @@ class ZeroesNaive(ModelObject):
             random_seed=random_seed,
             verbose=verbose,
         )
+        self.constant = constant
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied
@@ -75,7 +88,7 @@ class ZeroesNaive(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         df = pd.DataFrame(
-            np.zeros((forecast_length, (self.train_shape[1]))),
+            np.zeros((forecast_length, (self.train_shape[1]))) + self.constant,
             columns=self.column_names,
             index=self.create_forecast_index(forecast_length=forecast_length),
         )
@@ -101,11 +114,19 @@ class ZeroesNaive(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
-        return {}
+        return {
+            'constant': random.choices(
+                [0, 1, -1, 0.1],
+                [0.6, 0.25, 0.1, 0.05],
+            )[0]
+        }
 
     def get_params(self):
         """Return dict of current parameters"""
-        return {}
+        return {'constant': self.constant}
+
+
+ZeroesNaive = ConstantNaive
 
 
 class LastValueNaive(ModelObject):
@@ -146,7 +167,7 @@ class LastValueNaive(ModelObject):
         self.last_values = df.tail(1).to_numpy()
         # self.df_train = df
         self.lower, self.upper = historic_quantile(
-            df, prediction_interval=self.prediction_interval
+            df.iloc[-100:], prediction_interval=self.prediction_interval
         )
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -174,9 +195,8 @@ class LastValueNaive(ModelObject):
         if just_point_forecast:
             return df
         else:
-            # upper_forecast, lower_forecast = Point_to_Probability(self.df_train, df, prediction_interval = self.prediction_interval, method = 'historic_quantile')
-            upper_forecast = df.astype(float) + (self.upper * 0.8)
-            lower_forecast = df.astype(float) - (self.lower * 0.8)
+            upper_forecast = df.astype(float) + (self.upper * 0.9)
+            lower_forecast = df.astype(float) - (self.lower * 0.9)
             predict_runtime = datetime.datetime.now() - predictStartTime
             prediction = PredictionObject(
                 model_name=self.name,
@@ -221,6 +241,7 @@ class AverageValueNaive(ModelObject):
         random_seed: int = 2020,
         verbose: int = 0,
         method: str = 'Median',
+        window: int = None,
         **kwargs
     ):
         ModelObject.__init__(
@@ -233,6 +254,7 @@ class AverageValueNaive(ModelObject):
             verbose=verbose,
         )
         self.method = method
+        self.window = window
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -242,28 +264,35 @@ class AverageValueNaive(ModelObject):
         """
         df = self.basic_profile(df)
         method = str(self.method).lower()
+        if self.window is not None:
+            df_used = df[-self.window :]
+        else:
+            df_used = df
+
         if method == 'median':
-            self.average_values = df.median(axis=0).to_numpy()
+            self.average_values = df_used.median(axis=0).to_numpy()
         elif method == 'mean':
-            self.average_values = df.mean(axis=0).to_numpy()
+            self.average_values = df_used.mean(axis=0).to_numpy()
         elif method == 'mode':
             self.average_values = (
-                df.mode(axis=0).iloc[0].fillna(df.median(axis=0)).to_numpy()
+                df_used.mode(axis=0).iloc[0].fillna(df_used.median(axis=0)).to_numpy()
             )
         elif method == "midhinge":
-            results = df.to_numpy()
-            q1 = np.nanquantile(results, q=0.25, axis=0)
-            q2 = np.nanquantile(results, q=0.75, axis=0)
+            results = df_used.to_numpy()
+            q1 = nan_quantile(results, q=0.25, axis=0)
+            q2 = nan_quantile(results, q=0.75, axis=0)
             self.average_values = (q1 + q2) / 2
         elif method in ["weighted_mean", "exp_weighted_mean"]:
-            weights = pd.to_numeric(df.index)
+            weights = pd.to_numeric(df_used.index)
             weights = weights - weights.min()
             if method == "exp_weighted_mean":
                 weights = (weights / weights[weights != 0].min()) ** 2
-            self.average_values = np.average(df.to_numpy(), axis=0, weights=weights)
+            self.average_values = np.average(
+                df_used.to_numpy(), axis=0, weights=weights
+            )
         self.fit_runtime = datetime.datetime.now() - self.startTime
         self.lower, self.upper = historic_quantile(
-            df, prediction_interval=self.prediction_interval
+            df_used, prediction_interval=self.prediction_interval
         )
         return self
 
@@ -321,11 +350,18 @@ class AverageValueNaive(ModelObject):
             ],
             [0.3, 0.3, 0.01, 0.1, 0.4, 0.1],
         )[0]
-        return {'method': method_choice}
+
+        return {
+            'method': method_choice,
+            'window': random.choices([None, seasonal_int()], [0.8, 0.2])[0],
+        }
 
     def get_params(self):
         """Return dict of current parameters."""
-        return {'method': self.method}
+        return {
+            'method': self.method,
+            'window': self.window,
+        }
 
 
 class SeasonalNaive(ModelObject):
@@ -612,12 +648,9 @@ class MotifSimulation(ModelObject):
         if self.n_jobs in [0, 1] or df.shape[1] < 3:
             parallel = False
         else:
-            try:
-                from joblib import Parallel, delayed
-            except Exception:
+            if not joblib_present:
                 parallel = False
 
-        # import timeit
         # start_time_1st = timeit.default_timer()
         # transform the data into different views (contour = percent_change)
         original_df = None
@@ -669,8 +702,6 @@ class MotifSimulation(ModelObject):
         # elapsed_1st = timeit.default_timer() - start_time_1st
         # start_time_2nd = timeit.default_timer()
         # compare the motif vectors to the most recent vector of the series
-        from sklearn.metrics.pairwise import pairwise_distances
-
         args = {
             "cutoff_minimum": cutoff_minimum,
             "comparison": comparison,
@@ -864,7 +895,6 @@ class MotifSimulation(ModelObject):
         Profile speed and which code to improve first
             Remove for loops
             Quantile not be calculated until after pos_forecasts narrowed down to only forecast length
-            https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
         """
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -1082,13 +1112,13 @@ def looped_motif(
     elif point_method == "median":
         forecast = np.nanmedian(results, axis=0)
     elif point_method == "midhinge":
-        q1 = np.nanquantile(results, q=0.25, axis=0)
-        q2 = np.nanquantile(results, q=0.75, axis=0)
+        q1 = nan_quantile(results, q=0.25, axis=0)
+        q2 = nan_quantile(results, q=0.75, axis=0)
         forecast = (q1 + q2) / 2
 
     pred_int = (1 - prediction_interval) / 2
-    upper_forecast = np.nanquantile(results, q=(1 - pred_int), axis=0)
-    lower_forecast = np.nanquantile(results, q=pred_int, axis=0)
+    upper_forecast = nan_quantile(results, q=(1 - pred_int), axis=0)
+    lower_forecast = nan_quantile(results, q=pred_int, axis=0)
     forecast = pd.Series(forecast)
     forecast.name = name
     upper_forecast = pd.Series(upper_forecast)
@@ -1183,7 +1213,7 @@ class Motif(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         # keep this at top so it breaks quickly if missing version
-        x = np.lib.stride_tricks.sliding_window_view(
+        x = sliding_window_view(
             self.df.to_numpy(), self.window + forecast_length, axis=0
         )
         test_index = self.create_forecast_index(forecast_length=forecast_length)
@@ -1204,9 +1234,7 @@ class Motif(ModelObject):
         if self.n_jobs in [0, 1] or self.df.shape[1] < 5:
             self.parallel = False
         else:
-            try:
-                from joblib import Parallel, delayed
-            except Exception:
+            if not joblib_present:
                 self.parallel = False
 
         # joblib multiprocessing to loop through series
@@ -1494,9 +1522,9 @@ def predict_reservoir(
                 )[0:d]
             else:
                 pred = np.quantile(pred_int, q=0.5, axis=0)[0:d]
-        pred_upper = np.nanquantile(interval_list, q=prediction_interval, axis=0)[0:d]
+        pred_upper = nan_quantile(interval_list, q=prediction_interval, axis=0)[0:d]
         pred_upper = np.where(pred_upper < pred, pred, pred_upper)
-        pred_lower = np.nanquantile(interval_list, q=(1 - prediction_interval), axis=0)[
+        pred_lower = nan_quantile(interval_list, q=(1 - prediction_interval), axis=0)[
             0:d
         ]
         pred_lower = np.where(pred_lower > pred, pred, pred_lower)
@@ -1658,7 +1686,7 @@ class NVAR(ModelObject):
             [0, -1, -2, -3, -4, -5, -6, -7, -8],
             [0.1, 0.1, 0.1, 0.5, 0.1, 0.1, 0.5, 0.1, 0.1],
         )[0]
-        ridge_choice = 2 * 10 ** ridge_choice
+        ridge_choice = 2 * 10**ridge_choice
         warmup_pts_choice = random.choices([1, 50, 250], [0.9, 0.1, 0.1])[0]
         seed_pts_choice = random.choices([1, 10, 100], [0.8, 0.2, 0.01])[0]
         if seed_pts_choice > 1:
@@ -1806,8 +1834,6 @@ class SectionalMotif(ModelObject):
         )
         # calculate distance between all points and last window of history
         if distance_metric == "nan_euclidean":
-            from sklearn.metrics.pairwise import nan_euclidean_distances
-
             res = np.array(
                 [
                     nan_euclidean_distances(
@@ -1881,13 +1907,13 @@ class SectionalMotif(ModelObject):
         elif point_method == "median":
             forecast = np.nanmedian(results, axis=0)
         elif point_method == "midhinge":
-            q1 = np.nanquantile(results, q=0.25, axis=0)
-            q2 = np.nanquantile(results, q=0.75, axis=0)
+            q1 = nan_quantile(results, q=0.25, axis=0)
+            q2 = nan_quantile(results, q=0.75, axis=0)
             forecast = (q1 + q2) / 2
 
         pred_int = round((1 - self.prediction_interval) / 2, 5)
-        upper_forecast = np.nanquantile(results, q=(1 - pred_int), axis=0)
-        lower_forecast = np.nanquantile(results, q=pred_int, axis=0)
+        upper_forecast = nan_quantile(results, q=(1 - pred_int), axis=0)
+        lower_forecast = nan_quantile(results, q=pred_int, axis=0)
 
         forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
         lower_forecast = pd.DataFrame(

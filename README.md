@@ -115,6 +115,7 @@ Also take a look at the [production_example.py](https://github.com/winedarksea/A
 * Reducing `num_validations` and `models_to_validate` will decrease runtime but may lead to poorer model selections.
 * For datasets with many records, upsampling (for example, from daily to monthly frequency forecasts) can reduce training time if appropriate.
 	* this can be done by adjusting `frequency` and `aggfunc` but is probably best done before passing data into AutoTS.
+* It will be faster if NaN's are already filled. If a search for optimal NaN fill method is not required, then fill any NaN with a satisfactory method before passing to class.
 
 ## How to Contribute:
 * Give feedback on where you find the documentation confusing

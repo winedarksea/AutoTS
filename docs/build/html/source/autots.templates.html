@@ -3,9 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.templates package &#8212; AutoTS 0.4.0 documentation</title>
+    <title>autots.templates package &#8212; AutoTS 0.4.1 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -43,7 +43,53 @@
 <p>Starting templates for models.</p>
 <dl class="data">
 <dt id="autots.templates.general.general_template">
-<code class="sig-prename descclassname">autots.templates.general.</code><code class="sig-name descname">general_template</code><em class="property"> = Model  ... Ensemble 0                  ARIMA  ...        0 1                  ARIMA  ...        0 2                  ARIMA  ...        0 3                  ARIMA  ...        0 4                  ARIMA  ...        0 5      AverageValueNaive  ...        0 6      AverageValueNaive  ...        0 7      AverageValueNaive  ...        0 8     DatepartRegression  ...        0 9     DatepartRegression  ...        0 10    DatepartRegression  ...        0 11    DatepartRegression  ...        0 12                   ETS  ...        0 13                   ETS  ...        0 14                   GLM  ...        0 15                   GLM  ...        0 16                   GLS  ...        0 17                   GLS  ...        0 18               GluonTS  ...        0 19               GluonTS  ...        0 20               GluonTS  ...        0 21               GluonTS  ...        0 22               GluonTS  ...        0 23               GluonTS  ...        0 24        LastValueNaive  ...        0 25        LastValueNaive  ...        0 26        LastValueNaive  ...        0 27        LastValueNaive  ...        0 28         SeasonalNaive  ...        0 29         SeasonalNaive  ...        0 30         SeasonalNaive  ...        0 31         SeasonalNaive  ...        0 32  UnobservedComponents  ...        0 33  UnobservedComponents  ...        0 34  UnobservedComponents  ...        0 35                   VAR  ...        0 36                   VAR  ...        0 37                   VAR  ...        0 38                  VECM  ...        0 39                  VECM  ...        0 40                  VECM  ...        0 41                  VECM  ...        0 42      WindowRegression  ...        0 43           ZeroesNaive  ...        0  [44 rows x 4 columns]</em><a class="headerlink" href="#autots.templates.general.general_template" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.templates.general.</code><code class="sig-name descname">general_template</code><em class="property"> = Model  ... Ensemble 0                  ARIMA  ...        0 1                  ARIMA  ...        0 2                  ARIMA  ...        0 3      AverageValueNaive  ...        0 4      AverageValueNaive  ...        0 ..                   ...  ...      ... 62  UnivariateRegression  ...        0 63       MotifSimulation  ...        0 64         DynamicFactor  ...        0 65     RollingRegression  ...        0 66  UnivariateRegression  ...        0  [67 rows x 4 columns]</em><a class="headerlink" href="#autots.templates.general.general_template" title="Permalink to this definition">¶</a></dt>
+<dd><p># Basic Template Construction Code
+# transformer_max_depth = 6 and transformer_list = “fast”
+from autots.evaluator.auto_model import unpack_ensemble_models
+max_per_model_class = 1
+export_template = model.validation_results.model_results
+export_template = export_template[</p>
+<blockquote>
+<div><p>export_template[‘Runs’] &gt;= (model.num_validations + 1)</p>
+</div></blockquote>
+<p>]
+export_template = (</p>
+<blockquote>
+<div><p>export_template.sort_values(‘Score’, ascending=True)
+.groupby(‘Model’)
+.head(max_per_model_class)
+.reset_index()</p>
+</div></blockquote>
+<p>)
+import json
+export2 = unpack_ensemble_models(model.best_model, keep_ensemble=False, recursive=True)
+export_final = pd.concat([export_template, export2])
+export_final = export_final[export_final[‘Ensemble’] &lt; 1]
+export_final[[“Model”, “ModelParameters”, “TransformationParameters”, “Ensemble”]].reset_index(drop=True).to_json(orient=’index’)</p>
+<p>import pprint
+import json</p>
+<p>imported = pd.read_csv(“autots_forecast_template_gen.csv”)
+export = unpack_ensemble_models(imported, keep_ensemble=False, recursive=True)
+export[export[‘Ensemble’] &lt; 1].to_json(“template.json”, orient=”records”)
+with open(“template.json”, “r”) as jsn:</p>
+<blockquote>
+<div><p>json_temp = json.loads(jsn.read())</p>
+</div></blockquote>
+<p>print(json_temp)
+with open(“template.txt”, “w”) as txt:</p>
+<blockquote>
+<div><p>txt.write(json.dumps(json_temp, indent=4, sort_keys=False))</p>
+</div></blockquote>
+</dd></dl>
+
+</section>
+<section id="module-autots.templates.general_old">
+<span id="autots-templates-general-old-module"></span><h2>autots.templates.general_old module<a class="headerlink" href="#module-autots.templates.general_old" title="Permalink to this headline">¶</a></h2>
+<p>Starting templates for models.</p>
+<dl class="data">
+<dt id="autots.templates.general_old.general_template">
+<code class="sig-prename descclassname">autots.templates.general_old.</code><code class="sig-name descname">general_template</code><em class="property"> = Model  ... Ensemble 0                  ARIMA  ...        0 1                  ARIMA  ...        0 2                  ARIMA  ...        0 3                  ARIMA  ...        0 4                  ARIMA  ...        0 5      AverageValueNaive  ...        0 6      AverageValueNaive  ...        0 7      AverageValueNaive  ...        0 8     DatepartRegression  ...        0 9     DatepartRegression  ...        0 10    DatepartRegression  ...        0 11    DatepartRegression  ...        0 12                   ETS  ...        0 13                   ETS  ...        0 14                   GLM  ...        0 15                   GLM  ...        0 16                   GLS  ...        0 17                   GLS  ...        0 18               GluonTS  ...        0 19               GluonTS  ...        0 20               GluonTS  ...        0 21               GluonTS  ...        0 22               GluonTS  ...        0 23               GluonTS  ...        0 24        LastValueNaive  ...        0 25        LastValueNaive  ...        0 26        LastValueNaive  ...        0 27        LastValueNaive  ...        0 28         SeasonalNaive  ...        0 29         SeasonalNaive  ...        0 30         SeasonalNaive  ...        0 31         SeasonalNaive  ...        0 32  UnobservedComponents  ...        0 33  UnobservedComponents  ...        0 34  UnobservedComponents  ...        0 35                   VAR  ...        0 36                   VAR  ...        0 37                   VAR  ...        0 38                  VECM  ...        0 39                  VECM  ...        0 40                  VECM  ...        0 41                  VECM  ...        0 42      WindowRegression  ...        0 43           ZeroesNaive  ...        0  [44 rows x 4 columns]</em><a class="headerlink" href="#autots.templates.general_old.general_template" title="Permalink to this definition">¶</a></dt>
 <dd><p># Basic Template Construction Code
 # transformer_max_depth = 6 and transformer_list = “fast”
 from autots.evaluator.auto_model import unpack_ensemble_models

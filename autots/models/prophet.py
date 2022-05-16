@@ -11,6 +11,14 @@ from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 import logging
 
+# optional packages at the high level
+try:
+    from joblib import Parallel, delayed
+
+    joblib_present = True
+except Exception:
+    joblib_present = False
+
 
 class FBProphet(ModelObject):
     """Facebook's Prophet
@@ -138,9 +146,9 @@ class FBProphet(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         try:  # no idea when they switched
-            from fbprophet import Prophet
-        except Exception:
             from prophet import Prophet
+        except Exception:
+            from fbprophet import Prophet
 
         # defining in function helps with Joblib it seems
         def seek_the_oracle(
@@ -225,9 +233,7 @@ class FBProphet(ModelObject):
         if self.n_jobs in [0, 1] or len(cols) < 4:
             parallel = False
         else:
-            try:
-                from joblib import Parallel, delayed
-            except Exception:
+            if not joblib_present:
                 parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
@@ -316,7 +322,7 @@ class FBProphet(ModelObject):
             'changepoint_range': random.choices(
                 [0.8, 0.85, 0.9, 0.98], [0.9, 0.1, 0.1, 0.1]
             )[0],
-            'growth': "linear",
+            'growth': random.choices(["linear", "flat"], [0.9, 0.1])[0],
             'n_changepoints': random.choices(
                 [5, 10, 20, 25, 30, 40, 50], [0.05, 0.1, 0.1, 0.9, 0.1, 0.05, 0.05]
             )[0],
@@ -613,9 +619,7 @@ class NeuralProphet(ModelObject):
         if self.n_jobs in [0, 1] or len(cols) < 4:
             parallel = False
         else:
-            try:
-                from joblib import Parallel, delayed
-            except Exception:
+            if not joblib_present:
                 parallel = False
         # joblib multiprocessing to loop through series
         if parallel:
