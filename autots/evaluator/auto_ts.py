@@ -79,6 +79,7 @@ class AutoTS(object):
             occurs after any aggregration is applied, so will be whatever is specified by frequency, will drop n frequencies
         drop_data_older_than_periods (int): take only the n most recent timestamps
         model_list (list): str alias or list of names of model objects to use
+            now can be a dictionary of {"model": prob} but only affects starting random templates. Genetic algorithim takes from there.
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
             can accept string aliases: "all", "fast", "superfast"
         transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
@@ -792,6 +793,8 @@ class AutoTS(object):
 
         # now run new generations, trying more models based on past successes.
         current_generation = 0
+        num_mod_types = len(self.model_list)
+        max_per_model_class_g = 5
         while current_generation < self.max_generations:
             current_generation += 1
             if verbose > 0:
@@ -800,15 +803,24 @@ class AutoTS(object):
                         current_generation, self.max_generations
                     )
                 )
-            cutoff_multiple = 5 if current_generation < 10 else 3
-            top_n = len(self.model_list) * cutoff_multiple
+            # affirmative action to have more models represented, then less
+            if current_generation < 5:
+                cutoff_multiple = max_per_model_class_g
+            elif current_generation < 10:
+                cutoff_multiple = max_per_model_class_g - 1
+            elif current_generation < 20:
+                cutoff_multiple = max_per_model_class_g - 2
+            else:
+                cutoff_multiple = max_per_model_class_g - 3
+            cutoff_multiple = 1 if cutoff_multiple < 1 else cutoff_multiple
+            top_n = num_mod_types * cutoff_multiple if num_mod_types > 2 else num_mod_types * max_per_model_class_g
             new_template = NewGeneticTemplate(
                 self.initial_results.model_results,
                 submitted_parameters=submitted_parameters,
                 sort_column="Score",
                 sort_ascending=True,
                 max_results=top_n,
-                max_per_model_class=5,
+                max_per_model_class=max_per_model_class_g,
                 top_n=top_n,
                 template_cols=template_cols,
                 transformer_list=self.transformer_list,
@@ -1828,6 +1840,73 @@ or otherwise increase models available."""
                 raise ValueError("import type not recognized.")
             self.initial_results = self.initial_results.concat(new_obj)
         return self
+    
+    def horizontal_per_generation(self):
+        df_train = self.df_wide_numeric.reindex(self.validation_train_indexes[0])
+        df_test = self.df_wide_numeric.reindex(self.validation_test_indexes[0])
+        if not self.weighted:
+            current_weights = {x: 1 for x in df_train.columns}
+        else:
+            current_weights = {x: self.weights[x] for x in df_train.columns}
+        # ensemble_templates = pd.DataFrame()
+        result = TemplateEvalObject()
+        for gen in range(self.max_generations):
+            mods = self.initial_results.model_results[
+                (self.initial_results.model_results['Generation'] <= gen) &
+                (self.initial_results.model_results['ValidationRound'] == 0) &
+                (self.initial_results.model_results['Ensemble'] == 0)
+            ]['ID'].unique().tolist()
+            score_per_series = generate_score_per_series(
+                self.initial_results,
+                metric_weighting=self.metric_weighting,
+                total_validations=(self.num_validations + 1),
+                models_to_use=mods,
+            )
+            ens_templates = HorizontalTemplateGenerator(
+                score_per_series,
+                model_results=self.initial_results.model_results,
+                forecast_length=self.forecast_length,
+                ensemble=self.ensemble,
+                subset_flag=self.subset_flag,
+                only_specified=True,
+            )
+            result.concat(TemplateWizard(
+                ens_templates,
+                df_train,
+                df_test,
+                weights=current_weights,
+                model_count=0,
+                current_generation=gen,
+                forecast_length=self.forecast_length,
+                frequency=self.frequency,
+                prediction_interval=self.prediction_interval,
+                ensemble=self.ensemble,
+                no_negatives=self.no_negatives,
+                constraint=self.constraint,
+                future_regressor_train=self.future_regressor_train.reindex(index=df_train.index),
+                future_regressor_forecast=self.future_regressor_train.reindex(index=df_test.index),
+                holiday_country=self.holiday_country,
+                startTimeStamps=self.startTimeStamps,
+                template_cols=self.template_cols,
+                model_interrupt=self.model_interrupt,
+                grouping_ids=self.grouping_ids,
+                max_generations="Horizontal Ensembles",
+                random_seed=self.random_seed,
+                verbose=self.verbose,
+                n_jobs=self.n_jobs,
+                traceback=self.traceback,
+                current_model_file=self.current_model_file,
+            ))
+        result.model_results['Score'] = generate_score(
+            result.model_results,
+            metric_weighting=self.metric_weighting,
+            prediction_interval=self.prediction_interval,
+        )
+        return result
+
+    def plot_horizontal_per_generation(self):
+        """Plot how well the horizontal ensembles would do after each new generation. Slow."""
+        self.horizontal_per_generation().model_results['Score'].plot(label="Score")
 
     def back_forecast(
         self, column=None, n_splits: int = 3, tail: int = None, verbose: int = 0

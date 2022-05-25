@@ -33,32 +33,33 @@ all_models = [
     'NeuralProphet',
     'DynamicFactorMQ',
 ]
-default = [
-    'ConstantNaive',
-    'LastValueNaive',
-    'AverageValueNaive',
-    'GLS',
-    'SeasonalNaive',
-    'GLM',
-    'ETS',
-    'FBProphet',
-    # 'RollingRegression',  # maybe not?
-    # 'GluonTS',  # downweight if that becomes an option
-    'UnobservedComponents',
-    'VAR',
-    'VECM',
-    'WindowRegression',
-    'DatepartRegression',
-    # 'UnivariateRegression',  # this has been crashing on 1135
-    'MultivariateRegression',  # downweight if that becomes an option
-    'UnivariateMotif',
-    'MultivariateMotif',
-    'SectionalMotif',
-    'NVAR',
-    'Theta',
-    'ARDL',
-    # 'DynamicFactorMQ',
-]
+# downweight slower models
+default = {
+    'ConstantNaive': 1,
+    'LastValueNaive': 1,
+    'AverageValueNaive': 1,
+    'GLS': 1,
+    'SeasonalNaive': 1,
+    'GLM': 1,
+    'ETS': 1,
+    'FBProphet': 0.3,
+    # 'RollingRegression': 1,  # maybe not?
+    'GluonTS': 0.1,  # downweight if that becomes an option
+    'UnobservedComponents': 1,
+    'VAR': 1,
+    'VECM': 1,
+    'WindowRegression': 0.5,
+    'DatepartRegression': 1,
+    # 'UnivariateRegression': 0.1,  # this has been crashing on 1135
+    'MultivariateRegression': 0.2,
+    'UnivariateMotif': 1,
+    'MultivariateMotif': 1,
+    'SectionalMotif': 1,
+    'NVAR': 1,
+    'Theta': 1,
+    'ARDL': 1,
+    # 'DynamicFactorMQ': 1,
+}
 best = [
     'LastValueNaive',
     'AverageValueNaive',
@@ -95,39 +96,39 @@ superfast = [
     'SeasonalNaive',
 ]
 # relatively fast
-fast = [
-    'ConstantNaive',
-    'LastValueNaive',
-    'AverageValueNaive',
-    'GLS',
-    'SeasonalNaive',
-    'GLM',
-    'ETS',
-    # 'UnobservedComponents',  # it's fast enough but I'll leave for parallel
-    'VAR',
-    'VECM',
-    'WindowRegression',  # well, this gets slow with Transformer, KerasRNN
-    'DatepartRegression',
-    'UnivariateMotif',
-    'MultivariateMotif',
-    'SectionalMotif',
-    'NVAR',
-]
+fast = {
+    'ConstantNaive': 1,
+    'LastValueNaive': 1.5,
+    'AverageValueNaive': 1,
+    'GLS': 1,
+    'SeasonalNaive': 1,
+    'GLM': 1,
+    'ETS': 1,
+    # 'UnobservedComponents': 1,  # it's fast enough but I'll leave for parallel
+    'VAR': 0.8,
+    'VECM': 1,
+    'WindowRegression': 0.5,  # this gets slow with Transformer, KerasRNN
+    'DatepartRegression': 0.8,
+    'UnivariateMotif': 1,
+    'MultivariateMotif': 0.8,
+    'SectionalMotif': 1,
+    'NVAR': 1,
+}
 # models that can scale well if many CPU cores are available
-parallel = [
-    'ETS',
-    'FBProphet',
-    'ARIMA',
-    'GLM',
-    'UnobservedComponents',
-    "Greykite",
-    'UnivariateMotif',
-    'MultivariateMotif',
-    'Theta',
-    'ARDL',
-]
+parallel = {
+    'ETS': 1,
+    'FBProphet': 0.8,
+    'ARIMA': 1,
+    'GLM': 1,
+    'UnobservedComponents': 1,
+    "Greykite": 0.3,
+    'UnivariateMotif': 1,
+    'MultivariateMotif': 1,
+    'Theta': 1,
+    'ARDL': 1,
+}
 # models that should be fast given many CPU cores
-fast_parallel = list(set(parallel + fast))
+fast_parallel = {**parallel, **fast}
 # models that are explicitly not production ready
 experimental = [
     'MotifSimulation',
@@ -136,7 +137,7 @@ experimental = [
     'TFPRegression',
 ]
 # models that perform slowly at scale
-slow = list((set(all_models) - set(fast)) - set(experimental))
+slow = list((set(all_models) - set(fast.keys())) - set(experimental))
 # use GPU
 gpu = ['GluonTS', 'WindowRegression']
 # models with model-based upper/lower forecasts
