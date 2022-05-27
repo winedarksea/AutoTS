@@ -32,6 +32,7 @@ all_models = [
     'ARDL',
     'NeuralProphet',
     'DynamicFactorMQ',
+    'PytorchForecasting',
 ]
 # downweight slower models
 default = {
@@ -139,7 +140,7 @@ experimental = [
 # models that perform slowly at scale
 slow = list((set(all_models) - set(fast.keys())) - set(experimental))
 # use GPU
-gpu = ['GluonTS', 'WindowRegression']
+gpu = ['GluonTS', 'WindowRegression', 'PytorchForecasting']
 # models with model-based upper/lower forecasts
 probabilistic = [
     'ARIMA',
@@ -157,6 +158,7 @@ probabilistic = [
     'ARDL',
     'UnobservedComponents',
     'DynamicFactorMQ',
+    'PytorchForecasting',
     # 'MultivariateRegression',
 ]
 # models that use the shared information of multiple series to improve accuracy
@@ -173,6 +175,7 @@ multivariate = [
     'MultivariateRegression',
     'SectionalMotif',
     'DynamicFactorMQ',
+    'PytorchForecasting',
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -205,6 +208,7 @@ recombination_approved = [
     'ARDL',
     'NeuralProphet',
     'DynamicFactorMQ',
+    'PytorchForecasting',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [

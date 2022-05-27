@@ -34,7 +34,7 @@ model = AutoTS(
 )
 model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id')
 
-# Print the name of the best model
+# Print the description of the best model
 print(model)
 ```
 
@@ -269,6 +269,7 @@ quality of point forecast, quality of probabilistic forecast, overestimation or 
 Some metrics are scaled and some are not. MAE, RMSE, MAGE, MLE, iMLE are unscaled and accordingly in multivariate forecasting will favor model performance on the largest scale input series. 
 
 *Horizontal* style ensembles use `metric_weighting` for series selection, but only the values passed for `mae, rmse, made, mle, imle, contour, spl`. If all of these are 0, mae is used for selection. 
+Accordingly it may be better to reduce the use of`smape`, `containment`, and `mage` weighting when using these ensembles. With univariate models, runtime for overall won't translate to runtime inside a horizontal ensemble. 
 
 `sMAPE` is *Symmetric Mean Absolute Percentage Loss* and is generally the most versatile metric across multiple series as it is scaled. It doesn't handle forecasts with lots of zeroes well. 
 
@@ -410,7 +411,6 @@ python -m pip install mxnet --no-deps     # check the mxnet documentation for mo
 python -m pip install gluonts
 python -m pip install holidays-ext pmdarima dill greykite --exists-action i --no-deps
 # install pytorch
-python -m pip install neuralprophet
 python -m pip install --upgrade numpy pandas --exists-action i  # mxnet likes to (pointlessly seeming) install old versions of numpy
 
 python -m pip install autots --exists-action i
@@ -423,6 +423,11 @@ pip install yfinance pytrends fredapi gluonts
 pip install intel-tensorflow scikit-learn-intelex
 mamba install spyder
 mamba install autots -c conda-forge
+```
+
+```shell
+conda install pytorch torchvision torchaudio cpuonly -c pytorch
+pip install neuralprophet pytorch-forecasting
 ```
 `mamba` and `conda` commands are generally interchangeable.
 
@@ -740,9 +745,11 @@ Currently `MultivariateRegression` has the option to utilize a stock GradientBoo
 | Univariate/MultivariateMotif | scipy.distance.cdist |            |    True       |     joblib      |       | *            |              |               |
 |  SectionalMotif         | scipy.distance.cdist |  sklearn        |    True       |                 |       | True         |              | True          |
 |  NVAR                   |              |                         |    True       |   blas/lapack   |       | True         |              |               |
-|  NeuralProphet          | neuralprophet |                        |    tbd        |     pytorch     | yes   |              |              | True          |
-|  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |   *           |
+|  NeuralProphet          | neuralprophet |                        |    nyi        |     pytorch     | yes   |              |              | True          |
+|  PytorchForecasting     | pytorch-forecasting |                  |    True       |     pytorch     | yes   | True         |              |               |
+|  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         | nyi           |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
 |  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |
 |  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |               |
+*nyi = not yet implemented*

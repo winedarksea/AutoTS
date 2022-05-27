@@ -16,6 +16,8 @@
 * plot_horizontal_per_generation and horizontal_per_generation added
 * model_list now accepts a dictionary of probabilities, however this only affects new Random Templates
 * :seedling: improved the genetic algorithm for new model generation
+* minor improvement to generate_score_per_series for handling very small ~e-20 errors
+* added PytorchForecasting to available models
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

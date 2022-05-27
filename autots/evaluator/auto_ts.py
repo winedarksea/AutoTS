@@ -398,6 +398,7 @@ class AutoTS(object):
         self.validation_train_indexes = []
         self.validation_test_indexes = []
         self.preclean_transformer = None
+        self.score_per_series = None
         # this is temporary until proper validation param passing is sorted out
         stride_size = round(self.forecast_length / 2)
         stride_size = stride_size if stride_size > 0 else 1
@@ -814,6 +815,10 @@ class AutoTS(object):
                 cutoff_multiple = max_per_model_class_g - 3
             cutoff_multiple = 1 if cutoff_multiple < 1 else cutoff_multiple
             top_n = num_mod_types * cutoff_multiple if num_mod_types > 2 else num_mod_types * max_per_model_class_g
+            if df_train.shape[1] > 1:
+                self.score_per_series = generate_score_per_series(
+                    self.initial_results, self.metric_weighting, 1
+                )
             new_template = NewGeneticTemplate(
                 self.initial_results.model_results,
                 submitted_parameters=submitted_parameters,
@@ -826,6 +831,7 @@ class AutoTS(object):
                 transformer_list=self.transformer_list,
                 transformer_max_depth=self.transformer_max_depth,
                 models_mode=self.models_mode,
+                score_per_series=self.score_per_series,
             )
             submitted_parameters = pd.concat(
                 [submitted_parameters, new_template],
@@ -970,22 +976,17 @@ class AutoTS(object):
         # add on best per_series models (which may not be in the top scoring)
         if any(x in ensemble for x in self.h_ens_list):
             model_results = self.initial_results.model_results
-            """
-            mods = generate_score_per_series(
-                self.initial_results, self.metric_weighting, 1
-            ).idxmin()
-            """
             if self.models_to_validate < 50:
                 n_per_series = 1
             elif self.models_to_validate > 500:
                 n_per_series = 5
             else:
                 n_per_series = 3
-            score_per_series = generate_score_per_series(
+            self.score_per_series = generate_score_per_series(
                 self.initial_results, self.metric_weighting, 1
             )
-            mods = score_per_series.index[
-                np.argsort(-score_per_series.values, axis=0)[
+            mods = self.score_per_series.index[
+                np.argsort(-self.score_per_series.values, axis=0)[
                     -1 : -1 - n_per_series : -1
                 ].flatten()
             ]
@@ -1904,9 +1905,11 @@ or otherwise increase models available."""
         )
         return result
 
-    def plot_horizontal_per_generation(self):
+    def plot_horizontal_per_generation(self, title="Horizontal Ensemble Model Accuracy Gain Over Generations", **kwargs):
         """Plot how well the horizontal ensembles would do after each new generation. Slow."""
-        self.horizontal_per_generation().model_results['Score'].plot(label="Score")
+        self.horizontal_per_generation().model_results['Score'].plot(
+            ylabel="Lowest Score", title=title, **kwargs
+        )
 
     def back_forecast(
         self, column=None, n_splits: int = 3, tail: int = None, verbose: int = 0

@@ -488,6 +488,18 @@ def ModelMonster(
             verbose=verbose,
             **parameters,
         )
+    elif model == 'PytorchForecasting':
+        from autots.models.pytorch import PytorchForecasting
+
+        return PytorchForecasting(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            **parameters,
+        )
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)
@@ -1675,7 +1687,7 @@ def NewGeneticTemplate(
     transformer_list: dict = {},
     transformer_max_depth: int = 8,
     models_mode: str = "default",
-    max_results_per_model_class: int = 10
+    score_per_series=None,
 ):
     """
     Return new template given old template with model accuracies.
@@ -1690,8 +1702,9 @@ def NewGeneticTemplate(
     new_template_list = []
 
     # filter existing templates
-    sorted_results = model_results[model_results['Ensemble'] == 0].copy()
-    sorted_results = sorted_results[sorted_results['Exceptions'].isna()]
+    sorted_results = model_results[
+        (model_results['Ensemble'] == 0) & (model_results['Exceptions'].isna())
+    ].copy()
     # remove duplicates by exact same performance
     sorted_results = sorted_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
     sorted_results.drop_duplicates(
@@ -1702,6 +1715,14 @@ def NewGeneticTemplate(
     sorted_results = sorted_results.sort_values(
         by=sort_column, ascending=sort_ascending, na_position='last'
     )
+    # find some of the best per series models to mix in
+    if score_per_series is not None:
+        per_s = score_per_series / (score_per_series.min(axis=0) + 1)
+        ad_mods = per_s.quantile(0.3, axis=1).nsmallest(3).index.tolist()
+        ad_mods1 = sorted_results[sorted_results["ID"].isin(ad_mods)]
+        ad_mods = per_s.quantile(0.1, axis=1).nsmallest(3).index.tolist()
+        ad_mods2 = sorted_results[sorted_results["ID"].isin(ad_mods)]
+    # take only max of n models per model type to reduce duplication of similar
     if str(max_per_model_class).isdigit():
         sorted_results = (
             sorted_results.sort_values(sort_column, ascending=sort_ascending)
@@ -1715,7 +1736,13 @@ def NewGeneticTemplate(
             .sample(max_per_model_class, weights=((1 + (1 / sorted_results['Score'])) ** 10) - 1)
         )
         """
+    # take only n results to proceed
     sorted_results = sorted_results.head(top_n)
+    # tack on the per_series best afterwards
+    if score_per_series is not None:
+        sorted_results = pd.concat(
+            [sorted_results, ad_mods1, ad_mods2], axis=0
+        ).drop_duplicates(subset=template_cols, keep='first')
 
     best = json.loads(sorted_results.iloc[0, :]['TransformationParameters'])
 
@@ -1729,7 +1756,10 @@ def NewGeneticTemplate(
         counter += 1
         model_type = row[sidx["Model"]]
         model_params = row[sidx["ModelParameters"]]
-        trans_params = row[sidx["TransformationParameters"]]
+        try:
+            trans_params = json.loads(row[sidx["TransformationParameters"]])
+        except Exception as e:
+            raise ValueError(f"JSON didn't like {row}") from e
         current_ops = sorted_results[sorted_results['Model'] == model_type]
         # only transformers for some models
         if model_type in no_params:
@@ -1739,7 +1769,7 @@ def NewGeneticTemplate(
                 n=n,
                 transformer_list=transformer_list,
                 transformer_max_depth=transformer_max_depth,
-                first_transformer=json.loads(trans_params),
+                first_transformer=trans_params,
             )
             new_template_list.append(pd.DataFrame(
                 {
@@ -1758,7 +1788,7 @@ def NewGeneticTemplate(
                 n=n,
                 transformer_list=transformer_list,
                 transformer_max_depth=transformer_max_depth,
-                first_transformer=json.loads(trans_params),
+                first_transformer=trans_params,
             )
             # select the best model of this type
             # fir = json.loads(current_ops.iloc[0, :]['ModelParameters'])
@@ -1808,7 +1838,7 @@ def NewGeneticTemplate(
                 n=n,
                 transformer_list=transformer_list,
                 transformer_max_depth=transformer_max_depth,
-                first_transformer=json.loads(trans_params),
+                first_transformer=trans_params,
             )
             model_dicts = list()
             c0 = json.loads(model_params)
@@ -1846,16 +1876,19 @@ def NewGeneticTemplate(
         sorted_results, new_template, selection_cols=template_cols
     )
     # enjoy the privilege
-    if max_results < 1:
-        return new_template.sample(
-            frac=max_results,
-            weights=np.log(np.arange(new_template.shape[0]) + 2)[:: -1] + 1
-        )
+    if new_template.shape[0] < max_results:
+        return new_template
     else:
-        return new_template.sample(
-            max_results,
-            weights=np.log(np.arange(new_template.shape[0]) + 2)[:: -1] + 1
-        )
+        if max_results < 1:
+            return new_template.sample(
+                frac=max_results,
+                weights=np.log(np.arange(new_template.shape[0]) + 2)[:: -1] + 1
+            )
+        else:
+            return new_template.sample(
+                max_results,
+                weights=np.log(np.arange(new_template.shape[0]) + 2)[:: -1] + 1
+            )
 
 
 def validation_aggregation(validation_results):
@@ -2081,7 +2114,7 @@ def generate_score(
 
 
 def generate_score_per_series(
-        results_object, metric_weighting, total_validations,
+        results_object, metric_weighting, total_validations=1,
         models_to_use=None,
 ):
     """Score generation on per_series_metrics for ensembles."""
@@ -2098,19 +2131,14 @@ def generate_score_per_series(
     if sum([mae_weighting, rmse_weighting, contour_weighting, spl_weighting]) == 0:
         mae_weighting = 1
 
-    mae_scaler = (
-        results_object.per_series_mae[results_object.per_series_mae != 0]
-        .min()
-        .fillna(1)
-    )
+    # there are problems when very small ~e-20 type number are in play
+    mae_scaler = results_object.per_series_mae[results_object.per_series_mae != 0].round(20)
+    mae_scaler = mae_scaler[mae_scaler != 0].min().fillna(1)
     mae_score = results_object.per_series_mae / mae_scaler
     overall_score = mae_score * mae_weighting
     if rmse_weighting > 0:
-        rmse_scaler = (
-            results_object.per_series_rmse[results_object.per_series_rmse != 0]
-            .min()
-            .fillna(1)
-        )
+        rmse_scaler = results_object.per_series_rmse[results_object.per_series_rmse.round(20) != 0].round(20)
+        rmse_scaler = rmse_scaler.min().fillna(1)
         rmse_score = results_object.per_series_rmse / rmse_scaler
         overall_score = overall_score + (rmse_score * rmse_weighting)
     if made_weighting > 0:

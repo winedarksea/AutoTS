@@ -533,6 +533,14 @@ def generate_regressor_params(
 ):
     if model_dict is None:
         model_dict = sklearn_model_dict
+    # force neural networks for testing purposes (not recommended)
+    if method == "neuralnets":
+        model_dict = {
+            'KerasRNN': 0.05,
+            'Transformer': 0.05,
+            'MLP': 0.05,
+        }
+        method = "deep"
     """Generate new parameters for input to regressor."""
     model = random.choices(list(model_dict.keys()), list(model_dict.values()), k=1)[0]
     if model in [
