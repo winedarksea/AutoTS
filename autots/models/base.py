@@ -530,8 +530,7 @@ class PredictionObject(object):
                     # origin directional accuracy
                     'oda': np.nansum(
                         np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0
-                    )
-                    / F.shape[0],
+                    ) / F.shape[0],
                     # mean of values less than 85th percentile of error
                     'mqae': mqae(self.full_mae_errors, q=0.85, nan_flag=nan_flag),
                     # 90th percentile of error

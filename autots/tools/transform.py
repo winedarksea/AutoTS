@@ -2650,6 +2650,7 @@ del fast_transformer_dict['FastICA']
 del fast_transformer_dict['ScipyFilter']
 
 # and even more, not just removing slow but also less commonly useful ones
+# also there should be no 'shared' transformers in this list to make h-ensembles faster
 superfast_transformer_dict = {
     None: 0.0,
     'MinMaxScaler': 0.05,

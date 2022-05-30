@@ -249,6 +249,12 @@ regressor = [
     'ARDL',
     'NeuralProphet',
 ]
+motifs = [
+    'UnivariateMotif',
+    "MultivariateMotif",
+    'SectionalMotif',
+    'MotifSimulation',
+]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {
     "all": all_models,
@@ -269,6 +275,7 @@ model_lists = {
     "gpu": gpu,
     "regressor": regressor,
     "best": best,
+    "motifs": motifs,
 }
 
 
