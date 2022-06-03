@@ -2254,6 +2254,9 @@ class UnivariateRegression(ModelObject):
                 [1.0, 0.0, 0.0, 0.0],
             )[0]
             window_choice = random.choices([None, 3, 7, 10], [0.7, 0.2, 0.05, 0.05])[0]
+        if method == 'neuralnets':
+            print('`neuralnets` model_mode does not apply to UnivariateRegression')
+            method = 'deep'
         model_choice = generate_regressor_params(
             model_dict=univariate_model_dict, method=method
         )

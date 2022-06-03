@@ -175,7 +175,7 @@ class PytorchForecasting(ModelObject):
             add_target_scales=self.add_target_scales,
             # min_encoder_length=3,
             lags=self.lags,
-            add_relative_time_idx=False if self.model in ["NHiTS", "DecoderMLP"] else True
+            add_relative_time_idx=False if self.model in ["NHiTS", "DecoderMLP", "NBeats"] else True
         )
 
         # create validation and training dataset
@@ -384,11 +384,16 @@ class PytorchForecasting(ModelObject):
             ),
             "max_encoder_length": random.choice([7, 12, 24, 28, 60, 96]),
             "datepart_method": random.choices(
-                ["recurring", "simple", "expanded", "simple_2"], [0.4, 0.3, 0.3, 0.3]
+                [None, "recurring", "simple", "expanded", "simple_2"], [0.8, 0.4, 0.3, 0.3, 0.3]
             )[0],
             "add_target_scales": random.choice([True, False]),
             "lags": random.choices(
-                [{}, {"value": [seasonal_int(very_small=True)]}, {"value": [1, seasonal_int(very_small=True)]}, {"value": [1]}], [0.8, 0.1, 0.1, 0.1]
+                [
+                    {},
+                    {"value": [seasonal_int(very_small=True)]},
+                    {"value": [1, seasonal_int(very_small=True)]},
+                    {"value": [1]}
+                ], [0.9, 0.1, 0.1, 0.1]
             )[0],  # {"value": [1, 7]}
             "target_normalizer": random.choices(
                 ["EncoderNormalizer", "TorchNormalizer", "GroupNormalizer"], [0.5, 0.25, 0.25]
