@@ -18,6 +18,9 @@
 * :seedling: improved the genetic algorithm for new model generation
 * minor improvement to generate_score_per_series for handling very small ~e-20 errors
 * added PytorchForecasting to available models
+* Johansen Cointegration transformer
+* BTCD transformer
+* Johansen and BTCD as Regression features
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
@@ -30,7 +33,7 @@
 	* depth of recombination is?
 	* add to "all" transformer_dict
 	* add to no_params or external if so
-	* add to no_shared if so, in auto_model.py (shared_trans)
+	* add to shared_trans if so
 	* oddities_list for those with forecast/original transform difference
 
 ## New Metric Checklist:

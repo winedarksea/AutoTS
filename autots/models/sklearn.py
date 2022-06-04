@@ -18,6 +18,7 @@ from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.seasonal import date_part, seasonal_int
 from autots.tools.window_functions import window_maker, last_window
+from autots.tools.cointegration import coint_johansen, btcd_decompose
 
 
 def rolling_x_regressor(
@@ -39,6 +40,8 @@ def rolling_x_regressor(
     holiday_country: str = 'US',
     polynomial_degree: int = None,
     window: int = None,
+    cointegration: str = None,
+    cointegration_lag: int = 1,
 ):
     """
     Generate more features from initial time series.
@@ -71,6 +74,28 @@ def rolling_x_regressor(
         X.append(df.ewm(alpha=ewm_var_alpha, ignore_na=True, min_periods=1).var())
     if str(additional_lag_periods).isdigit():
         X.append(df.shift(additional_lag_periods))
+    if cointegration is not None:
+        if cointegration == "btcd":
+            X.append(pd.DataFrame(np.matmul(btcd_decompose(
+                df.values,
+                retrieve_regressor(
+                    regression_model={
+                        "model": 'LinearRegression',
+                        "model_params": {},
+                    },
+                    verbose=0,
+                    verbose_bool=False,
+                    random_seed=2020,
+                    multioutput=False,
+                ),
+                max_lag=cointegration_lag,
+            ), (df.values).T).T, index=df.index))
+        else:
+            X.append(pd.DataFrame(
+                np.matmul(
+                    coint_johansen(df.values, k_ar_diff=cointegration_lag), (df.values).T).T,
+                index=df.index,
+            ))
     if abs_energy:
         X.append(df.pow(other=([2] * len(df.columns))).cumsum())
     if str(rolling_autocorr_periods).isdigit():
@@ -131,6 +156,8 @@ def rolling_x_regressor_regressor(
     polynomial_degree: int = None,
     window: int = None,
     future_regressor=None,
+    cointegration: str = None,
+    cointegration_lag: int = 1,
 ):
     """Adds in the future_regressor."""
     X = rolling_x_regressor(
@@ -152,6 +179,8 @@ def rolling_x_regressor_regressor(
         holiday_country=holiday_country,
         polynomial_degree=polynomial_degree,
         window=window,
+        cointegration=cointegration,
+        cointegration_lag=cointegration_lag,
     )
     if future_regressor is not None:
         X = pd.concat([X, future_regressor], axis=1)
@@ -388,6 +417,9 @@ def retrieve_regressor(
         from sklearn.linear_model import RANSACRegressor
 
         return RANSACRegressor(random_state=random_seed, **model_param_dict)
+    elif model_class == "LinearRegression":
+        from sklearn.linear_model import LinearRegression
+        return LinearRegression(**model_param_dict)
     elif model_class == "GaussianProcessRegressor":
         from sklearn.gaussian_process import GaussianProcessRegressor
 
@@ -2398,6 +2430,8 @@ class MultivariateRegression(ModelObject):
             'min_samples_split': 5,
             'n_estimators': 250,
         },
+        cointegration: str = None,
+        cointegration_lag: int = 1,
         n_jobs: int = -1,
         **kwargs,
     ):
@@ -2436,6 +2470,8 @@ class MultivariateRegression(ModelObject):
         self.quantile_params = quantile_params
         self.regressor_train = None
         self.probabilistic = probabilistic
+        self.cointegration = cointegration
+        self.cointegration_lag = cointegration_lag
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
@@ -2509,6 +2545,8 @@ class MultivariateRegression(ModelObject):
                     polynomial_degree=self.polynomial_degree,
                     window=self.window,
                     future_regressor=cut_regr,
+                    cointegration=self.cointegration,
+                    cointegration_lag=self.cointegration_lag,
                 )
                 for x_col in base.columns
             ]
@@ -2612,6 +2650,8 @@ class MultivariateRegression(ModelObject):
                         polynomial_degree=self.polynomial_degree,
                         window=self.window,
                         future_regressor=cur_regr,
+                        cointegration=self.cointegration,
+                        cointegration_lag=self.cointegration_lag,
                     ).tail(1)
                     for x_col in current_x.columns
                 ]
@@ -2728,6 +2768,10 @@ class MultivariateRegression(ModelObject):
             regression_choice = "User"
         else:
             regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
+        coint_choice = random.choices([None, "BTCD", "Johansen"], [0.8, 0.1, 0.1])[0]
+        coint_lag = 1
+        if coint_choice is not None:
+            coint_lag = random.choice([1, 2, 7])
         parameter_dict = {
             'regression_model': model_choice,
             'mean_rolling_periods': mean_rolling_periods_choice,
@@ -2748,6 +2792,8 @@ class MultivariateRegression(ModelObject):
             'window': window_choice,
             'holiday': holiday_choice,
             "probabilistic": probabilistic,
+            "cointegration": coint_choice,
+            "cointegration_lag": coint_lag,
         }
         return parameter_dict
 
@@ -2773,5 +2819,7 @@ class MultivariateRegression(ModelObject):
             'window': self.window,
             'holiday': self.holiday,
             'probabilistic': self.probabilistic,
+            "cointegration": self.cointegration,
+            "cointegration_lag": self.cointegration_lag,
         }
         return parameter_dict
