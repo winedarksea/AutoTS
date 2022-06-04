@@ -164,6 +164,7 @@ class AutoTS(object):
             'containment_weighting': 0,
             'contour_weighting': 1,
             'runtime_weighting': 0.05,
+            'oda_weighting': 0.001,
         },
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
@@ -1851,7 +1852,8 @@ or otherwise increase models available."""
             current_weights = {x: self.weights[x] for x in df_train.columns}
         # ensemble_templates = pd.DataFrame()
         result = TemplateEvalObject()
-        for gen in range(self.max_generations):
+        max_gens = self.initial_results.model_results['Generation'].max()
+        for gen in range(max_gens + 1):
             mods = self.initial_results.model_results[
                 (self.initial_results.model_results['Generation'] <= gen) &
                 (self.initial_results.model_results['ValidationRound'] == 0) &
@@ -1871,6 +1873,8 @@ or otherwise increase models available."""
                 subset_flag=self.subset_flag,
                 only_specified=True,
             )
+            reg_tr = self.future_regressor_train.reindex(index=df_train.index) if self.future_regressor_train is not None else None
+            reg_fc = self.future_regressor_train.reindex(index=df_test.index) if self.future_regressor_train is not None else None
             result.concat(TemplateWizard(
                 ens_templates,
                 df_train,
@@ -1884,8 +1888,8 @@ or otherwise increase models available."""
                 ensemble=self.ensemble,
                 no_negatives=self.no_negatives,
                 constraint=self.constraint,
-                future_regressor_train=self.future_regressor_train.reindex(index=df_train.index),
-                future_regressor_forecast=self.future_regressor_train.reindex(index=df_test.index),
+                future_regressor_train=reg_tr,
+                future_regressor_forecast=reg_fc,
                 holiday_country=self.holiday_country,
                 startTimeStamps=self.startTimeStamps,
                 template_cols=self.template_cols,
@@ -2003,7 +2007,7 @@ or otherwise increase models available."""
         """Helper function to create a readable df of models in mosaic."""
         if self.best_model.empty:
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
-        if self.best_model['Ensemble'].iloc[0] != 2:
+        if self.best_model_ensemble != 2:
             raise ValueError("Only works on horizontal ensemble type models.")
         ModelParameters = self.best_model_params
         if str(ModelParameters['model_name']).lower() != 'mosaic':
@@ -2023,7 +2027,7 @@ or otherwise increase models available."""
             max_series (int): max number of points to plot
             **kwargs passed to pandas.plot()
         """
-        series = self.horizontal_to_df()
+        series = self.horizontal_to_df().copy()
         # remove some data to prevent overcrowding the graph, if necessary
         max_series = series.shape[0] if series.shape[0] < max_series else max_series
         series = series.sample(max_series, replace=False)
@@ -2165,7 +2169,7 @@ or otherwise increase models available."""
         )
         temp = temp.reset_index()
         temp.columns = ["Series", "SMAPE"]
-        if self.best_model["Ensemble"].iloc[0] == 2:
+        if self.best_model_ensemble == 2:
             series = self.horizontal_to_df()
             temp = temp.merge(series, on='Series')
             temp['Series'] = (
@@ -2180,6 +2184,61 @@ or otherwise increase models available."""
             temp.plot(
                 x="Series",
                 y="SMAPE",
+                kind=kind,
+                title=title,
+                color=color,
+                figsize=figsize,
+                **kwargs,
+            )
+
+    def plot_per_series_error(
+        self,
+        title: str = "Top Series Contributing Score Error",
+        max_series: int = 10,
+        max_name_chars: int = 25,
+        color: str = "#ff9912",
+        figsize=(12, 4),
+        kind: str = "bar",
+        **kwargs,
+    ):
+        """Plot which series are contributing most to error (Score) of final model. Avg of validations for best_model
+
+        Args:
+            title (str): plot title
+            max_series (int): max number of series to show on plot (sorted)
+            max_name_chars (str): if horizontal ensemble, will chop series names to this
+            color (str): hex or name of color of plot
+            figsize (tuple): passed through to plot axis
+            kind (str): bar or pie
+            **kwargs passed to pandas.plot()
+        """
+        if self.best_model.empty:
+            raise ValueError("No best_model. AutoTS .fit() needs to be run.")
+        best_model_per = self.initial_results.per_series_mae[
+            self.initial_results.per_series_mae.index == self.best_model_id
+        ]
+        best_model_per = generate_score_per_series(
+            self.initial_results, metric_weighting=self.metric_weighting,
+            total_validations=(self.num_validations + 1),
+            models_to_use=[self.best_model_id],
+        ).mean(axis=0).sort_values(ascending=False).head(max_series).round(2)
+        temp = best_model_per.reset_index()
+        temp.columns = ["Series", "Error"]
+        if self.best_model["Ensemble"].iloc[0] == 2:
+            series = self.horizontal_to_df()
+            temp = temp.merge(series, on='Series')
+            temp['Series'] = (
+                temp['Series'].str.slice(0, max_name_chars) + " (" + temp["Model"] + ")"
+            )
+
+        if kind == "pie":
+            temp.set_index("Series").plot(
+                y="Error", kind="pie", title=title, figsize=figsize, **kwargs
+            )
+        else:
+            temp.plot(
+                x="Series",
+                y="Error",
                 kind=kind,
                 title=title,
                 color=color,
