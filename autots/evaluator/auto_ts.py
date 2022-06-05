@@ -2036,7 +2036,7 @@ or otherwise increase models available."""
             np.abs(series[['Volatility', 'Mean']])
         )
         # plot
-        series.set_index(['Model', 'log(Mean)']).unstack('Model')[
+        series.set_index(['Model', 'log(Mean)'], append=True).unstack('Model')[
             'log(Volatility)'
         ].plot(style='o', title=title, **kwargs)
 
