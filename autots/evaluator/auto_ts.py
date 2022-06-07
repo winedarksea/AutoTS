@@ -169,7 +169,7 @@ class AutoTS(object):
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
         model_list: str = 'default',
-        transformer_list: dict = "fast",
+        transformer_list: dict = "auto",
         transformer_max_depth: int = 6,
         models_mode: str = "random",
         num_validations: int = "auto",
@@ -559,6 +559,9 @@ class AutoTS(object):
                 "Warning: column/series names are not unique. Unique column names are required for some features!"
             )
             time.sleep(3)  # give the message a chance to be seen
+
+        if self.transformer_list == "auto":
+            self.transformer_list = "all" if df_wide_numeric.shape[1] <= 10 else "fast"
 
         # remove other ensembling types if univariate
         if df_wide_numeric.shape[1] == 1:

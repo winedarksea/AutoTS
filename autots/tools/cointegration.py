@@ -136,6 +136,7 @@ def coint_johansen(endog, det_order=-1, k_ar_diff=1, return_eigenvalues=False):
     else:
         return dt
 
+
 def btcd_decompose(
     p_mat: np.ndarray, regression_model, max_lag: int = 1,
     return_eigenvalues=False,

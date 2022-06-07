@@ -2110,7 +2110,7 @@ def generate_score(
             A new starting template may also help. {repr(e)}"""
         )
 
-    return overall_score
+    return overall_score.astype(float)  # need to handle complex values (!)
 
 
 def generate_score_per_series(
@@ -2226,7 +2226,7 @@ def generate_score_per_series(
     overall_score = overall_score[overall_score.index.isin(models_to_use)]
     # take the average score across validations
     overall_score = overall_score.groupby(level=0).mean()
-    return overall_score
+    return overall_score.astype(float)  # need to handle complex values (!)
 
 
 def back_forecast(

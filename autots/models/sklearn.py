@@ -7,11 +7,10 @@ import datetime
 import random
 import numpy as np
 import pandas as pd
-
-try:  # needs to go first
-    from sklearnex import patch_sklearn
-
-    patch_sklearn()
+# because this attempts to make sklearn optional for overall usage
+try:
+    from sklearn import config_context
+    from sklearn.multioutput import MultiOutputRegressor, RegressorChain
 except Exception:
     pass
 from autots.models.base import ModelObject, PredictionObject
@@ -19,6 +18,7 @@ from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.seasonal import date_part, seasonal_int
 from autots.tools.window_functions import window_maker, last_window
 from autots.tools.cointegration import coint_johansen, btcd_decompose
+from autots.tools.holiday import holiday_flag
 
 
 def rolling_x_regressor(
@@ -115,8 +115,6 @@ def rolling_x_regressor(
     X = pd.concat(X, axis=1)
 
     if holiday:
-        from autots.tools.holiday import holiday_flag
-
         X['holiday_flag_'] = holiday_flag(X.index, country=holiday_country)
         X['holiday_flag_future_'] = holiday_flag(
             X.index.shift(1, freq=pd.infer_freq(X.index)), country=holiday_country
@@ -244,7 +242,7 @@ def retrieve_regressor(
         from sklearn.neighbors import KNeighborsRegressor
 
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
+            
 
             regr = MultiOutputRegressor(
                 KNeighborsRegressor(**model_param_dict, n_jobs=1),
@@ -261,8 +259,6 @@ def retrieve_regressor(
         from sklearn.ensemble import HistGradientBoostingRegressor
 
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
-
             regr = MultiOutputRegressor(
                 HistGradientBoostingRegressor(
                     verbose=int(verbose_bool),
@@ -281,8 +277,6 @@ def retrieve_regressor(
         from lightgbm import LGBMRegressor
 
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
-
             return MultiOutputRegressor(
                 LGBMRegressor(
                     verbose=int(verbose_bool),
@@ -309,8 +303,6 @@ def retrieve_regressor(
             **model_param_dict,
         )
         if multioutput:
-            from sklearn.multioutput import RegressorChain
-
             return RegressorChain(regr)
         else:
             return regr
@@ -342,8 +334,6 @@ def retrieve_regressor(
         else:
             regr = AdaBoostRegressor(random_state=random_seed, **model_param_dict)
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
-
             return MultiOutputRegressor(regr, n_jobs=n_jobs)
         else:
             return regr
@@ -351,8 +341,6 @@ def retrieve_regressor(
         import xgboost as xgb
 
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
-
             regr = MultiOutputRegressor(
                 xgb.XGBRegressor(verbosity=verbose, **model_param_dict, n_jobs=1),
                 n_jobs=n_jobs,
@@ -366,8 +354,6 @@ def retrieve_regressor(
         from sklearn.svm import LinearSVR
 
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
-
             regr = MultiOutputRegressor(
                 LinearSVR(verbose=verbose_bool, **model_param_dict),
                 n_jobs=n_jobs,
@@ -379,13 +365,15 @@ def retrieve_regressor(
         from sklearn.linear_model import Ridge
 
         return Ridge(random_state=random_seed, **model_param_dict)
+    elif model_class == "FastRidge":
+        from sklearn.linear_model import Ridge
+
+        return Ridge(alpha=1e-9, solver="cholesky", fit_intercept=False, copy_X=False)
     elif model_class == 'BayesianRidge':
         from sklearn.linear_model import BayesianRidge
 
         regr = BayesianRidge(**model_param_dict)
         if multioutput:
-            from sklearn.multioutput import RegressorChain
-
             return RegressorChain(regr)
         else:
             return regr
@@ -404,8 +392,6 @@ def retrieve_regressor(
         from sklearn.linear_model import PoissonRegressor
 
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
-
             regr = MultiOutputRegressor(
                 PoissonRegressor(fit_intercept=True, max_iter=200, **model_param_dict),
                 n_jobs=n_jobs,
@@ -2498,98 +2484,101 @@ class MultivariateRegression(ModelObject):
             future_regressor (pandas.DataFrame or Series): Datetime Indexed
         """
         df = self.basic_profile(df)
-        from sklearn.ensemble import GradientBoostingRegressor
-
-        # if external regressor, do some check up
-        if self.regression_type is not None:
-            if future_regressor is None:
-                raise ValueError(
-                    "regression_type='User' but not future_regressor supplied."
-                )
-            elif future_regressor.shape[0] != df.shape[0]:
-                raise ValueError(
-                    "future_regressor shape does not match training data shape."
-                )
+        # assume memory and CPU count are correlated
+        with config_context(
+                assume_finite=True, working_memory=int(self.n_jobs * 512)
+        ):
+            # if external regressor, do some check up
+            if self.regression_type is not None:
+                if future_regressor is None:
+                    raise ValueError(
+                        "regression_type='User' but not future_regressor supplied."
+                    )
+                elif future_regressor.shape[0] != df.shape[0]:
+                    raise ValueError(
+                        "future_regressor shape does not match training data shape."
+                    )
+                else:
+                    self.regressor_train = future_regressor
+            # define X and Y
+            Y = df[1:].to_numpy().ravel(order="F")
+            # drop look ahead data
+            base = df[:-1]
+            if self.regression_type is not None:
+                cut_regr = self.regressor_train[1:]
+                cut_regr.index = base.index
             else:
-                self.regressor_train = future_regressor
+                cut_regr = None
+            # open to suggestions on making this faster
+            X = pd.concat(
+                [
+                    rolling_x_regressor_regressor(
+                        base[x_col].to_frame(),
+                        mean_rolling_periods=self.mean_rolling_periods,
+                        macd_periods=self.macd_periods,
+                        std_rolling_periods=self.std_rolling_periods,
+                        max_rolling_periods=self.max_rolling_periods,
+                        min_rolling_periods=self.min_rolling_periods,
+                        ewm_var_alpha=self.ewm_var_alpha,
+                        quantile90_rolling_periods=self.quantile90_rolling_periods,
+                        quantile10_rolling_periods=self.quantile10_rolling_periods,
+                        additional_lag_periods=self.additional_lag_periods,
+                        ewm_alpha=self.ewm_alpha,
+                        abs_energy=self.abs_energy,
+                        rolling_autocorr_periods=self.rolling_autocorr_periods,
+                        add_date_part=self.datepart_method,
+                        holiday=self.holiday,
+                        holiday_country=self.holiday_country,
+                        polynomial_degree=self.polynomial_degree,
+                        window=self.window,
+                        future_regressor=cut_regr,
+                        cointegration=self.cointegration,
+                        cointegration_lag=self.cointegration_lag,
+                    )
+                    for x_col in base.columns
+                ]
+            ).to_numpy()
+            del base
+            if self.probabilistic:
+                from sklearn.ensemble import GradientBoostingRegressor
 
-        # define X and Y
-        Y = df[1:].to_numpy().ravel(order="F")
-        # drop look ahead data
-        base = df[:-1]
-        if self.regression_type is not None:
-            cut_regr = self.regressor_train[1:]
-            cut_regr.index = base.index
-        else:
-            cut_regr = None
-        # open to suggestions on making this faster
-        X = pd.concat(
-            [
-                rolling_x_regressor_regressor(
-                    base[x_col].to_frame(),
-                    mean_rolling_periods=self.mean_rolling_periods,
-                    macd_periods=self.macd_periods,
-                    std_rolling_periods=self.std_rolling_periods,
-                    max_rolling_periods=self.max_rolling_periods,
-                    min_rolling_periods=self.min_rolling_periods,
-                    ewm_var_alpha=self.ewm_var_alpha,
-                    quantile90_rolling_periods=self.quantile90_rolling_periods,
-                    quantile10_rolling_periods=self.quantile10_rolling_periods,
-                    additional_lag_periods=self.additional_lag_periods,
-                    ewm_alpha=self.ewm_alpha,
-                    abs_energy=self.abs_energy,
-                    rolling_autocorr_periods=self.rolling_autocorr_periods,
-                    add_date_part=self.datepart_method,
-                    holiday=self.holiday,
-                    holiday_country=self.holiday_country,
-                    polynomial_degree=self.polynomial_degree,
-                    window=self.window,
-                    future_regressor=cut_regr,
-                    cointegration=self.cointegration,
-                    cointegration_lag=self.cointegration_lag,
+                alpha_base = (1 - self.prediction_interval) / 2
+                self.model_upper = GradientBoostingRegressor(
+                    loss='quantile',
+                    alpha=(1 - alpha_base),
+                    random_state=self.random_seed,
+                    **self.quantile_params,
                 )
-                for x_col in base.columns
-            ]
-        ).to_numpy()
-        del base
-        if self.probabilistic:
-            alpha_base = (1 - self.prediction_interval) / 2
-            self.model_upper = GradientBoostingRegressor(
-                loss='quantile',
-                alpha=(1 - alpha_base),
-                random_state=self.random_seed,
-                **self.quantile_params,
+                self.model_lower = GradientBoostingRegressor(
+                    loss='quantile',
+                    alpha=alpha_base,
+                    random_state=self.random_seed,
+                    **self.quantile_params,
+                )
+
+            multioutput = True
+            if Y.ndim < 2:
+                multioutput = False
+            elif Y.shape[1] < 2:
+                multioutput = False
+            self.model = retrieve_regressor(
+                regression_model=self.regression_model,
+                verbose=self.verbose,
+                verbose_bool=self.verbose_bool,
+                random_seed=self.random_seed,
+                n_jobs=self.n_jobs,
+                multioutput=multioutput,
             )
-            self.model_lower = GradientBoostingRegressor(
-                loss='quantile',
-                alpha=alpha_base,
-                random_state=self.random_seed,
-                **self.quantile_params,
-            )
+            self.model.fit(X, Y)
 
-        multioutput = True
-        if Y.ndim < 2:
-            multioutput = False
-        elif Y.shape[1] < 2:
-            multioutput = False
-        self.model = retrieve_regressor(
-            regression_model=self.regression_model,
-            verbose=self.verbose,
-            verbose_bool=self.verbose_bool,
-            random_seed=self.random_seed,
-            n_jobs=self.n_jobs,
-            multioutput=multioutput,
-        )
-        self.model.fit(X, Y)
+            if self.probabilistic:
+                self.model_upper.fit(X, Y)
+                self.model_lower.fit(X, Y)
+            # we only need the N most recent points for predict
+            self.sktraindata = df.tail(self.min_threshold)
 
-        if self.probabilistic:
-            self.model_upper.fit(X, Y)
-            self.model_lower.fit(X, Y)
-        # we only need the N most recent points for predict
-        self.sktraindata = df.tail(self.min_threshold)
-
-        self.fit_runtime = datetime.datetime.now() - self.startTime
-        return self
+            self.fit_runtime = datetime.datetime.now() - self.startTime
+            return self
 
     def predict(
         self,

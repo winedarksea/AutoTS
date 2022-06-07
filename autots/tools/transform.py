@@ -2235,6 +2235,9 @@ class Cointegration(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        if df.shape[1] < 2:
+            raise ValueError("Coint only works on multivarate series")
+        # might be helpful to add a fast test for correlation?
         self.components_ = coint_johansen(
             df.values, self.det_order, self.k_ar_diff
         )
@@ -2260,11 +2263,11 @@ class Cointegration(EmptyTransformer):
         """
         return pd.DataFrame(
             # np.dot(np.linalg.inv(df), self.components_),
-            # np.linalg.lstsq(self.components_, df.T, rcond=1)[0].T,
-            np.linalg.solve(self.components_, df.T).T,
+            np.linalg.lstsq(self.components_, df.T, rcond=1)[0].T,
+            # np.linalg.solve(self.components_, df.T).T,
             index=df.index,
             columns=df.columns
-        )
+        ).astype(float)
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -2279,7 +2282,7 @@ class Cointegration(EmptyTransformer):
         """Generate new random parameters"""
         return {
             'det_order': random.choice([-1, 0, 1]),
-            'k_ar_diff': random.choice([0, 1, 2, 7])  # 7 may be too slow
+            'k_ar_diff': random.choice([0, 1, 2])
         }
 
 
@@ -2290,7 +2293,7 @@ class BTCD(EmptyTransformer):
         self, regression_model: dict = {
             "model": 'LinearRegression',
             "model_params": {},
-        }, 
+        },
         max_lags: int = 1,
         name: str = 'BTCD', **kwargs
     ):
@@ -2304,6 +2307,9 @@ class BTCD(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        if df.shape[1] < 2:
+            raise ValueError("BTCD only works on multivarate series")
+
         self.components_ = btcd_decompose(
             df.values,
             retrieve_regressor(
@@ -2327,7 +2333,7 @@ class BTCD(EmptyTransformer):
             np.matmul(self.components_, (df.values).T).T,
             index=df.index,
             columns=df.columns
-        )
+        ).astype(float)
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original space.
@@ -2340,7 +2346,7 @@ class BTCD(EmptyTransformer):
             np.linalg.solve(self.components_, df.T).T,
             index=df.index,
             columns=df.columns
-        )
+        ).astype(float)
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -2353,33 +2359,19 @@ class BTCD(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = 'random'):
         """Generate new random parameters"""
-        if method == "all":
-            choice = generate_regressor_params()
-        elif method == "fast":
+        if method == "deep":
             choice = generate_regressor_params(
                 model_dict={
-                    'ElasticNet': 0.1,
-                    'DecisionTree': 0.1,
+                    'ElasticNet': 0.05,
+                    'DecisionTree': 0.05,
                     "LinearRegression": 0.9,
                 }
             )
         else:
-            choice = generate_regressor_params(
-                model_dict={
-                    "LinearRegression": 0.8,
-                    'ElasticNet': 0.25,
-                    'DecisionTree': 0.25,
-                    'KNN': 0.1,
-                    'MLP': 0.05,
-                    'RandomForest': 0.2,
-                    'ExtraTrees': 0.25,
-                    "SVM": 0.1,
-                    "RadiusRegressor": 0.1,
-                }
-            )
+            choice = random.choice(["LinearRegression", "FastRidge"])
         return {
             'regression_model': choice,
-            'max_lags': random.choice([0, 1, 2, 7])  # 7 may be too slow
+            'max_lags': random.choice([0, 1, 2])
         }
 
 
@@ -2885,6 +2877,8 @@ fast_transformer_dict = transformer_dict.copy()
 del fast_transformer_dict['SinTrend']
 del fast_transformer_dict['FastICA']
 del fast_transformer_dict['ScipyFilter']
+del fast_transformer_dict['Cointegration']
+del fast_transformer_dict['BTCD']
 
 # and even more, not just removing slow but also less commonly useful ones
 # also there should be no 'shared' transformers in this list to make h-ensembles faster
