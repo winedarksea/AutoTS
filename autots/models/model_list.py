@@ -33,6 +33,7 @@ all_models = [
     'NeuralProphet',
     'DynamicFactorMQ',
     'PytorchForecasting',
+    'ARCH',
 ]
 # downweight slower models
 default = {
@@ -127,6 +128,7 @@ parallel = {
     'MultivariateMotif': 1,
     'Theta': 1,
     'ARDL': 1,
+    'ARCH': 1,
 }
 # models that should be fast given many CPU cores
 fast_parallel = {**parallel, **fast}
@@ -160,6 +162,7 @@ probabilistic = [
     'DynamicFactorMQ',
     'PytorchForecasting',
     # 'MultivariateRegression',
+    'ARCH',
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -209,6 +212,7 @@ recombination_approved = [
     'NeuralProphet',
     'DynamicFactorMQ',
     'PytorchForecasting',
+    'ARCH',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -229,6 +233,7 @@ no_shared = [
     'Theta',
     'ARDL',
     'NeuralProphet',
+    'ARCH',
 ]
 # allow the use of a regressor, need to accept "User" (fail if not given), have 'regressor' param method
 regressor = [
@@ -248,6 +253,7 @@ regressor = [
     'SectionalMotif',  # kinda
     'ARDL',
     'NeuralProphet',
+    'ARCH',
 ]
 motifs = [
     'UnivariateMotif',

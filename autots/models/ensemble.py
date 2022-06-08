@@ -940,7 +940,7 @@ def EnsembleTemplateGenerator(
             except Exception as e:
                 print(f"cluster-based simple ensemble failed with {repr(e)}")
 
-        mods = pd.Series()
+        mods = pd.Series(dtype='object')
         per_series_des = per_series.copy()
         n_models = 3
         # choose best per series, remove those series, then choose next best

@@ -335,18 +335,18 @@ class PytorchForecasting(ModelObject):
 
         if just_point_forecast:
             return predictions_df
-        result = self.tft.predict(new_prediction_data, mode="quantiles")
-        if result.shape[2] > 1:
+        self.result_windows = self.tft.predict(new_prediction_data, mode="quantiles")
+        if self.result_windows.shape[2] > 1:
             c_int = (1.0 - self.prediction_interval) / 2
             # predictions_df = result.quantile(0.5, axis=2).numpy().T
             # taking a quantile of the quantiles given!
             lower_df = pd.DataFrame(
-                result.quantile(c_int, axis=2).numpy().T,
+                self.result_windows.quantile(c_int, axis=2).numpy().T,
                 index=test_index,
                 columns=self.column_names,
             )
             upper_df = pd.DataFrame(
-                result.quantile(1.0 - c_int, axis=2).numpy().T,
+                self.result_windows.quantile(1.0 - c_int, axis=2).numpy().T,
                 index=test_index,
                 columns=self.column_names,
             )

@@ -48,6 +48,7 @@ from autots.models.statsmodels import (
     ARDL,
     DynamicFactorMQ,
 )
+from autots.models.arch import ARCH
 
 
 def create_model_id(
@@ -498,6 +499,17 @@ def ModelMonster(
             random_seed=random_seed,
             verbose=verbose,
             forecast_length=forecast_length,
+            **parameters,
+        )
+    elif model == 'ARCH':
+        return ARCH(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
             **parameters,
         )
     else:

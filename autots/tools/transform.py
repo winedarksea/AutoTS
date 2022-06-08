@@ -2368,10 +2368,14 @@ class BTCD(EmptyTransformer):
                 }
             )
         else:
-            choice = random.choice(["LinearRegression", "FastRidge"])
+            choice1 = random.choice(["LinearRegression", "FastRidge"])
+            choice = {
+                "model": choice1,
+                "model_params": {},
+            }
         return {
             'regression_model': choice,
-            'max_lags': random.choice([0, 1, 2])
+            'max_lags': random.choice([1, 2])
         }
 
 

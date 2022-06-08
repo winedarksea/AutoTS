@@ -22,6 +22,7 @@
 * BTCD transformer
 * Johansen and BTCD as Regression features
 * fixed bug in plot_horizontal()
+* added ARCH to available models
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
