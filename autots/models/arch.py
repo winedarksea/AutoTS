@@ -132,7 +132,7 @@ class ARCH(ModelObject):
         self.regressor_train = None
         self.verbose_bool = False
         if self.verbose > 2:
-            print("ARCHers, draw")
+            print("\U0001F3F9 ARCHers, draw")
             self.verbose_bool = True
         elif self.verbose > 1:
             self.verbose_bool = True
@@ -170,9 +170,9 @@ class ARCH(ModelObject):
 
         # defining this internally seems to make multiprocessing run better
         def arch_per_column(current_series, args):
-            # with warnings.catch_warnings():
-            if args['verbose'] < 2:
-                warnings.simplefilter("ignore")
+            with warnings.catch_warnings():
+                if args['verbose'] < 2:
+                    warnings.simplefilter("ignore")
                 if args['regression_type'] in ["User", "user", "holiday"]:
                     am = arch_model(
                         current_series, self.regressor_train,
@@ -263,7 +263,7 @@ class ARCH(ModelObject):
             parallel = False
         # joblib multiprocessing to loop through series
         if self.verbose > 2:
-            print("ARCHers, loose!")
+            print("\U0001F3F9 ARCHers, loose!")
         if parallel:
             verbs = 0 if self.verbose < 1 else self.verbose - 1
             df_list = Parallel(n_jobs=self.n_jobs, verbose=(verbs))(

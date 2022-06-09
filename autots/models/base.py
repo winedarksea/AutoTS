@@ -364,6 +364,7 @@ class PredictionObject(object):
         series: str = None,
         ax=None,
         remove_zeroes: bool = False,
+        interpolate: str = None,
         start_date: str = None,
         title=None,
         **kwargs,
@@ -375,6 +376,7 @@ class PredictionObject(object):
             series (str): column name of series to plot. Random if None.
             ax: matplotlib axes to pass through to pd.plot()
             remove_zeroes (bool): if True, don't plot any zeroes
+            interpolate (str): if not None, a method to pass to pandas interpolate
             start_date (str): Y-m-d string or Timestamp to remove all data before
             **kwargs passed to pd.DataFrame.plot()
         """
@@ -409,6 +411,9 @@ class PredictionObject(object):
             )
         if remove_zeroes:
             plot_df[plot_df == 0] = np.nan
+        if interpolate is not None:
+            plot_df["actuals"] = plot_df["actuals"].interpolate(method=interpolate, limit_direction="backward")
+            plot_df["forecast"] = plot_df["forecast"].interpolate(method=interpolate, limit_direction="backward", limit=5)
 
         if start_date is not None:
             start_date = pd.to_datetime(start_date, infer_datetime_format=True)

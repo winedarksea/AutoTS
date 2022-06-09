@@ -207,6 +207,7 @@ class PytorchForecasting(ModelObject):
             # gradient_clip_val=0.1,
             # limit_train_batches=30,
             callbacks=self.callbacks,  # lr_logger,
+            logger=False, checkpoint_callback=False,
             **self.trainer_kwargs
         )
 
