@@ -2266,18 +2266,28 @@ class UnivariateRegression(ModelObject):
             window_choice = random.choices(
                 [None, 3, 7, 10, 24], [0.7, 0.2, 0.05, 0.05, 0.05]
             )[0]
+            model_choice = generate_regressor_params(
+                model_dict=univariate_model_dict, method=method
+            )
         else:
             x_transform_choice = random.choices(
                 [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
                 [1.0, 0.0, 0.0, 0.0],
             )[0]
             window_choice = random.choices([None, 3, 7, 10], [0.7, 0.2, 0.05, 0.05])[0]
+            model_choice = generate_regressor_params(
+                model_dict={
+                    'ElasticNet': 0.2,
+                    'DecisionTree': 0.4,
+                    'FastRidge': 0.2,
+                    'LinearRegression': 0.2,
+                    # 'ExtraTrees': 0.1,
+                }, method=method
+            )
         if method == 'neuralnets':
             print('`neuralnets` model_mode does not apply to UnivariateRegression')
             method = 'deep'
-        model_choice = generate_regressor_params(
-            model_dict=univariate_model_dict, method=method
-        )
+
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30], [0.6, 0.1, 0.1, 0.1, 0.1]
         )[0]

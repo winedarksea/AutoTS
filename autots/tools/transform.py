@@ -2927,7 +2927,7 @@ def transformer_list_to_dict(transformer_list):
     """Convert various possibilities to dict."""
     if not transformer_list or transformer_list == "all":
         transformer_list = transformer_dict
-    elif transformer_list in ["fast", "default", "Fast"]:
+    elif transformer_list in ["fast", "default", "Fast", "auto"]:
         transformer_list = fast_transformer_dict
     elif transformer_list == "superfast":
         transformer_list = superfast_transformer_dict

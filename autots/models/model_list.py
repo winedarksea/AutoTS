@@ -44,15 +44,15 @@ default = {
     'SeasonalNaive': 1,
     'GLM': 1,
     'ETS': 1,
-    'FBProphet': 0.3,
+    'FBProphet': 0.5,
     # 'RollingRegression': 1,  # maybe not?
-    'GluonTS': 0.1,  # downweight if that becomes an option
+    'GluonTS': 0.5,  # downweight if that becomes an option
     'UnobservedComponents': 1,
     'VAR': 1,
     'VECM': 1,
     'WindowRegression': 0.5,
     'DatepartRegression': 1,
-    # 'UnivariateRegression': 0.1,  # this has been crashing on 1135
+    'UnivariateRegression': 0.2,
     'MultivariateRegression': 0.2,
     'UnivariateMotif': 1,
     'MultivariateMotif': 1,
@@ -68,7 +68,6 @@ best = [
     'GLS',
     'GLM',
     'ETS',
-    # 'ARIMA',
     'FBProphet',
     # 'RollingRegression',
     'GluonTS',

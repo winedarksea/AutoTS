@@ -10,8 +10,8 @@ general_template_dict = {
     },
     "1": {
         "Model": "ARIMA",
-        "ModelParameters": "{\"p\": 4, \"d\": 1, \"q\": 7, \"regression_type\": null}",
-        "TransformationParameters": "{\"fillna\": \"fake_date\", \"transformations\": {\"0\": \"ClipOutliers\", \"1\": \"QuantileTransformer\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}}}",
+        "ModelParameters": '{"p": 7, "d": 0, "q": 1, "regression_type": null}',
+        "TransformationParameters": '{"fillna": "ffill_mean_biased", "transformations": {"0": "bkfilter"}, "transformation_params": {"0": {}}}',
         "Ensemble": 0,
     },
     "2": {
@@ -224,7 +224,7 @@ general_template_dict = {
         "TransformationParameters": "{\"fillna\": \"ffill\", \"transformations\": {\"0\": \"PowerTransformer\", \"1\": \"QuantileTransformer\", \"2\": \"SeasonalDifference\"}, \"transformation_params\": {\"0\": {}, \"1\": {\"output_distribution\": \"uniform\", \"n_quantiles\": 1000}, \"2\": {\"lag_1\": 7, \"method\": \"LastValue\"}}}",
         "Ensemble": 0,
     },
-    ### Gen 2
+    # Gen 2
     "37": {
         "Model": "FBProphet",
         "ModelParameters": "{\"holiday\": true, \"regression_type\": null, \"growth\": \"linear\", \"n_changepoints\": 30, \"changepoint_prior_scale\": 0.05, \"seasonality_mode\": \"additive\", \"changepoint_range\": 0.98, \"seasonality_prior_scale\": 10.0, \"holidays_prior_scale\": 10.0}",
@@ -400,12 +400,22 @@ general_template_dict = {
         'Ensemble': 0,
     },
     "66": {
+        'Model': 'ARCH',
+        'ModelParameters': '{"mean": "Zero", "lags": 1, "vol": "GARCH", "p": 4, "o": 1, "q": 2, "power": 1.5, "dist": "studentst", "rescale": true, "simulations": 1000, "maxiter": 200, "regression_type": null}',
+        'TransformationParameters': '{"fillna": "ffill", "transformations": {"0": "SeasonalDifference"}, "transformation_params": {"0": {"lag_1": 7, "method": "LastValue"}}}',
+        'Ensemble': 0,
+    },
+}
+"""
+
+    "66": {
         'Model': 'UnivariateRegression',
         'ModelParameters': '{"regression_model": {"model": "KNN", "model_params": {"n_neighbors": 3, "weights": "uniform"}}, "holiday": false, "mean_rolling_periods": 5, "macd_periods": 28, "std_rolling_periods": null, "max_rolling_periods": 24, "min_rolling_periods": null, "ewm_var_alpha": null, "ewm_alpha": 0.5, "additional_lag_periods": 11, "abs_energy": false, "rolling_autocorr_periods": null, "add_date_part": null, "polynomial_degree": null, "x_transform": null, "regression_type": null, "window": null}',
         'TransformationParameters': '{"fillna": "rolling_mean", "transformations": {"0": "QuantileTransformer", "1": "QuantileTransformer"}, "transformation_params": {"0": {"output_distribution": "normal", "n_quantiles": 1000}, "1": {"output_distribution": "uniform", "n_quantiles": 20}}}',
         'Ensemble': 0,
     },
-}
+"""
+
 general_template = pd.DataFrame.from_dict(general_template_dict, orient='index')
 
 

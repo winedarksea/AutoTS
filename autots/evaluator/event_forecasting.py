@@ -209,7 +209,6 @@ class EventRiskForecast(object):
         prediction_interval=None,
         models_mode="event_risk",
         model_list=["UnivariateMotif", "MultivariateMotif", "SectionalMotif", "ARCH"],
-        # transformer_list=[],
         ensemble=None,
         autots_kwargs=None,
         future_regressor_train=None,
