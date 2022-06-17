@@ -19,6 +19,7 @@ try:
     from pytorch_forecasting import TimeSeriesDataSet, TemporalFusionTransformer, DeepAR, NHiTS, NBeats, DecoderMLP
     from pytorch_forecasting.metrics import QuantileLoss
     from pytorch_forecasting.data import EncoderNormalizer, GroupNormalizer, TorchNormalizer
+    from torch.cuda import is_available
     pytorch_present = True
 except Exception:
     pytorch_present = False
@@ -204,15 +205,27 @@ class PytorchForecasting(ModelObject):
                 mode="min"
             )]
         # lr_logger = LearningRateMonitor()
-        self.trainer = pl.Trainer(
-            max_epochs=self.max_epochs,
-            num_processes=self.n_jobs,  # don't think this will usually be used
-            # gradient_clip_val=0.1,
-            # limit_train_batches=30,
-            callbacks=self.callbacks,  # lr_logger,
-            logger=False, checkpoint_callback=False,
-            **self.trainer_kwargs
-        )
+        if is_available() and "accelerator" not in self.trainer_kwargs.keys():
+            self.trainer = pl.Trainer(
+                max_epochs=self.max_epochs,
+                num_processes=self.n_jobs,  # don't think this will usually be used
+                # gradient_clip_val=0.1,
+                # limit_train_batches=30,
+                callbacks=self.callbacks,  # lr_logger,
+                logger=False, checkpoint_callback=False,
+                accelerator='gpu', devices=1,
+                **self.trainer_kwargs
+            )
+        else:
+            self.trainer = pl.Trainer(
+                max_epochs=self.max_epochs,
+                num_processes=self.n_jobs,  # don't think this will usually be used
+                # gradient_clip_val=0.1,
+                # limit_train_batches=30,
+                callbacks=self.callbacks,  # lr_logger,
+                logger=False, checkpoint_callback=False,
+                **self.trainer_kwargs
+            )
 
         # create the model
         if self.model == "TemporalFusionTransformer":
