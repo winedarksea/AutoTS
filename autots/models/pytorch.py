@@ -36,6 +36,7 @@ class PytorchForecasting(ModelObject):
         model_kwargs (dict): passed to pytorch-forecasting model on creation (for those not already defined above)
         trainer_kwargs (dict): passed to pt lightning Trainer
         callbacks (list): pt lightning callbacks
+        quantiles (list): [0.1, 0.5, 0.9] or similar for quantileloss models
 
     """
 
@@ -62,6 +63,7 @@ class PytorchForecasting(ModelObject):
         lags: dict = {},
         target_normalizer: str = "EncoderNormalizer",
         model: str = "TemporalFusionTransformer",
+        quantiles: list = [0.01, 0.1, 0.22, 0.36, 0.5, 0.64, 0.78, 0.9, 0.99],
 
         model_kwargs: dict = {},
         trainer_kwargs: dict = {},
@@ -92,6 +94,7 @@ class PytorchForecasting(ModelObject):
         self.lags = lags
         self.target_normalizer = target_normalizer
         self.model = model
+        self.quantiles = quantiles
 
         self.model_kwargs = model_kwargs
         self.trainer_kwargs = trainer_kwargs
@@ -221,8 +224,8 @@ class PytorchForecasting(ModelObject):
                 lstm_layers=self.n_layers,
                 # attention_head_size=1,
                 # hidden_continuous_size=16,
-                output_size=7,  # must be 1 for non-quantile losses
-                loss=QuantileLoss(),
+                output_size=len(self.quantiles),  # must be 1 for non-quantile losses
+                loss=QuantileLoss(quantiles=self.quantiles),
                 # reduce_on_plateau_patience=4,
                 **self.model_kwargs,
             )
@@ -247,6 +250,8 @@ class PytorchForecasting(ModelObject):
                 # weight_decay=1e-2,
                 # loss=MQF2DistributionLoss(prediction_length=max_prediction_length),
                 # backcast_loss_ratio=0.0,
+                output_size=len(self.quantiles),  # must be 1 for non-quantile losses
+                loss=QuantileLoss(quantiles=self.quantiles),
                 context_length=self.forecast_length * 2,
                 **self.model_kwargs,
             )
@@ -259,6 +264,8 @@ class PytorchForecasting(ModelObject):
                 # weight_decay=1e-2,
                 # loss=MQF2DistributionLoss(prediction_length=max_prediction_length),
                 n_hidden_layers=self.n_layers,  # said to be important
+                output_size=len(self.quantiles),  # must be 1 for non-quantile losses
+                loss=QuantileLoss(quantiles=self.quantiles),
                 **self.model_kwargs,
             )
         else:
@@ -269,8 +276,8 @@ class PytorchForecasting(ModelObject):
                 dropout=self.dropout,
                 # weight_decay=1e-2,
                 # loss=MQF2DistributionLoss(prediction_length=max_prediction_length),
-                # backcast_loss_ratio=0.0,
-                context_length=self.forecast_length * 2,
+                # backcast_loss_ratio=0.0,s
+                context_length=self.max_encoder_length,
                 **self.model_kwargs,
             )
 
@@ -336,18 +343,18 @@ class PytorchForecasting(ModelObject):
 
         if just_point_forecast:
             return predictions_df
-        self.result_windows = self.tft.predict(new_prediction_data, mode="quantiles")
+        self.result_windows = self.tft.predict(new_prediction_data, mode="quantiles").transpose(0, 2)
         if self.result_windows.shape[2] > 1:
             c_int = (1.0 - self.prediction_interval) / 2
             # predictions_df = result.quantile(0.5, axis=2).numpy().T
             # taking a quantile of the quantiles given!
             lower_df = pd.DataFrame(
-                self.result_windows.quantile(c_int, axis=2).numpy().T,
+                self.result_windows.quantile(c_int, axis=0).numpy(),
                 index=test_index,
                 columns=self.column_names,
             )
             upper_df = pd.DataFrame(
-                self.result_windows.quantile(1.0 - c_int, axis=2).numpy().T,
+                self.result_windows.quantile(1.0 - c_int, axis=0).numpy(),
                 index=test_index,
                 columns=self.column_names,
             )
@@ -359,6 +366,7 @@ class PytorchForecasting(ModelObject):
                 method='inferred_normal',
                 prediction_interval=self.prediction_interval,
             )
+        self.result_windows = self.result_windows.numpy()
 
         predict_runtime = datetime.datetime.now() - predictStartTime
         prediction = PredictionObject(

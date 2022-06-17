@@ -318,7 +318,9 @@ class EventRiskForecast(object):
             "SectionalMotif",
             "Motif",
             "ARCH",  # simulations not motifs but similar
+            "PytorchForecasting",
         ]
+        # these are those that require a parameter, and return a dict
         diff_window_motif_list = ["UnivariateMotif", "MultivariateMotif", "Motif", "ARCH"]
         if model_name in all_motif_list:
             if isinstance(prediction_interval, list):
@@ -346,6 +348,8 @@ class EventRiskForecast(object):
                 result_windows = np.moveaxis(
                     np.array(list(result_windows.values())), 0, -1
                 )
+            if result_windows.ndim == 4:
+                result_windows = result_windows[0]
             transformed_array = []
             # bring these back to the original feature space, as they aren't already
             for samp in result_windows:
