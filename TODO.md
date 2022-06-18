@@ -23,6 +23,8 @@
 * Johansen and BTCD as Regression features
 * fixed bug in plot_horizontal()
 * added ARCH to available models
+* changed the sklearn models used by UnivariateRegression by default and returned to default model_list
+* fixed a bug in KerasRNN
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

@@ -242,8 +242,6 @@ def retrieve_regressor(
         from sklearn.neighbors import KNeighborsRegressor
 
         if multioutput:
-            
-
             regr = MultiOutputRegressor(
                 KNeighborsRegressor(**model_param_dict, n_jobs=1),
                 n_jobs=n_jobs,
@@ -1850,7 +1848,7 @@ class DatepartRegression(ModelObject):
             multioutput=multioutput,
         )
         self.df_train = df
-        self.model = self.model.fit(X, y)
+        self.model = self.model.fit(X.astype(float), y.astype(float))
         self.shape = df.shape
         return self
 
@@ -1883,7 +1881,7 @@ class DatepartRegression(ModelObject):
         X.columns = [str(xc) for xc in X.columns]
 
         forecast = pd.DataFrame(
-            self.model.predict(X), index=index, columns=self.column_names
+            self.model.predict(X.astype(float)), index=index, columns=self.column_names
         )
 
         if just_point_forecast:
