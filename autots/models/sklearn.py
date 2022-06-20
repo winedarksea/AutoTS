@@ -8,16 +8,18 @@ import random
 import numpy as np
 import pandas as pd
 
-try:  # needs to go first
-    from sklearnex import patch_sklearn
-
-    patch_sklearn()
+# because this attempts to make sklearn optional for overall usage
+try:
+    from sklearn import config_context
+    from sklearn.multioutput import MultiOutputRegressor, RegressorChain
 except Exception:
     pass
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
 from autots.tools.seasonal import date_part, seasonal_int
 from autots.tools.window_functions import window_maker, last_window
+from autots.tools.cointegration import coint_johansen, btcd_decompose
+from autots.tools.holiday import holiday_flag
 
 
 def rolling_x_regressor(
@@ -39,6 +41,8 @@ def rolling_x_regressor(
     holiday_country: str = 'US',
     polynomial_degree: int = None,
     window: int = None,
+    cointegration: str = None,
+    cointegration_lag: int = 1,
 ):
     """
     Generate more features from initial time series.
@@ -71,6 +75,40 @@ def rolling_x_regressor(
         X.append(df.ewm(alpha=ewm_var_alpha, ignore_na=True, min_periods=1).var())
     if str(additional_lag_periods).isdigit():
         X.append(df.shift(additional_lag_periods))
+    if cointegration is not None:
+        if cointegration == "btcd":
+            X.append(
+                pd.DataFrame(
+                    np.matmul(
+                        btcd_decompose(
+                            df.values,
+                            retrieve_regressor(
+                                regression_model={
+                                    "model": 'LinearRegression',
+                                    "model_params": {},
+                                },
+                                verbose=0,
+                                verbose_bool=False,
+                                random_seed=2020,
+                                multioutput=False,
+                            ),
+                            max_lag=cointegration_lag,
+                        ),
+                        (df.values).T,
+                    ).T,
+                    index=df.index,
+                )
+            )
+        else:
+            X.append(
+                pd.DataFrame(
+                    np.matmul(
+                        coint_johansen(df.values, k_ar_diff=cointegration_lag),
+                        (df.values).T,
+                    ).T,
+                    index=df.index,
+                )
+            )
     if abs_energy:
         X.append(df.pow(other=([2] * len(df.columns))).cumsum())
     if str(rolling_autocorr_periods).isdigit():
@@ -90,8 +128,6 @@ def rolling_x_regressor(
     X = pd.concat(X, axis=1)
 
     if holiday:
-        from autots.tools.holiday import holiday_flag
-
         X['holiday_flag_'] = holiday_flag(X.index, country=holiday_country)
         X['holiday_flag_future_'] = holiday_flag(
             X.index.shift(1, freq=pd.infer_freq(X.index)), country=holiday_country
@@ -131,6 +167,8 @@ def rolling_x_regressor_regressor(
     polynomial_degree: int = None,
     window: int = None,
     future_regressor=None,
+    cointegration: str = None,
+    cointegration_lag: int = 1,
 ):
     """Adds in the future_regressor."""
     X = rolling_x_regressor(
@@ -152,6 +190,8 @@ def rolling_x_regressor_regressor(
         holiday_country=holiday_country,
         polynomial_degree=polynomial_degree,
         window=window,
+        cointegration=cointegration,
+        cointegration_lag=cointegration_lag,
     )
     if future_regressor is not None:
         X = pd.concat([X, future_regressor], axis=1)
@@ -215,8 +255,6 @@ def retrieve_regressor(
         from sklearn.neighbors import KNeighborsRegressor
 
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
-
             regr = MultiOutputRegressor(
                 KNeighborsRegressor(**model_param_dict, n_jobs=1),
                 n_jobs=n_jobs,
@@ -232,8 +270,6 @@ def retrieve_regressor(
         from sklearn.ensemble import HistGradientBoostingRegressor
 
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
-
             regr = MultiOutputRegressor(
                 HistGradientBoostingRegressor(
                     verbose=int(verbose_bool),
@@ -252,8 +288,6 @@ def retrieve_regressor(
         from lightgbm import LGBMRegressor
 
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
-
             return MultiOutputRegressor(
                 LGBMRegressor(
                     verbose=int(verbose_bool),
@@ -280,8 +314,6 @@ def retrieve_regressor(
             **model_param_dict,
         )
         if multioutput:
-            from sklearn.multioutput import RegressorChain
-
             return RegressorChain(regr)
         else:
             return regr
@@ -313,8 +345,6 @@ def retrieve_regressor(
         else:
             regr = AdaBoostRegressor(random_state=random_seed, **model_param_dict)
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
-
             return MultiOutputRegressor(regr, n_jobs=n_jobs)
         else:
             return regr
@@ -322,8 +352,6 @@ def retrieve_regressor(
         import xgboost as xgb
 
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
-
             regr = MultiOutputRegressor(
                 xgb.XGBRegressor(verbosity=verbose, **model_param_dict, n_jobs=1),
                 n_jobs=n_jobs,
@@ -337,8 +365,6 @@ def retrieve_regressor(
         from sklearn.svm import LinearSVR
 
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
-
             regr = MultiOutputRegressor(
                 LinearSVR(verbose=verbose_bool, **model_param_dict),
                 n_jobs=n_jobs,
@@ -350,13 +376,15 @@ def retrieve_regressor(
         from sklearn.linear_model import Ridge
 
         return Ridge(random_state=random_seed, **model_param_dict)
+    elif model_class == "FastRidge":
+        from sklearn.linear_model import Ridge
+
+        return Ridge(alpha=1e-9, solver="cholesky", fit_intercept=False, copy_X=False)
     elif model_class == 'BayesianRidge':
         from sklearn.linear_model import BayesianRidge
 
         regr = BayesianRidge(**model_param_dict)
         if multioutput:
-            from sklearn.multioutput import RegressorChain
-
             return RegressorChain(regr)
         else:
             return regr
@@ -375,8 +403,6 @@ def retrieve_regressor(
         from sklearn.linear_model import PoissonRegressor
 
         if multioutput:
-            from sklearn.multioutput import MultiOutputRegressor
-
             regr = MultiOutputRegressor(
                 PoissonRegressor(fit_intercept=True, max_iter=200, **model_param_dict),
                 n_jobs=n_jobs,
@@ -388,6 +414,10 @@ def retrieve_regressor(
         from sklearn.linear_model import RANSACRegressor
 
         return RANSACRegressor(random_state=random_seed, **model_param_dict)
+    elif model_class == "LinearRegression":
+        from sklearn.linear_model import LinearRegression
+
+        return LinearRegression(**model_param_dict)
     elif model_class == "GaussianProcessRegressor":
         from sklearn.gaussian_process import GaussianProcessRegressor
 
@@ -533,6 +563,14 @@ def generate_regressor_params(
 ):
     if model_dict is None:
         model_dict = sklearn_model_dict
+    # force neural networks for testing purposes (not recommended)
+    if method == "neuralnets":
+        model_dict = {
+            'KerasRNN': 0.05,
+            'Transformer': 0.05,
+            'MLP': 0.05,
+        }
+        method = "deep"
     """Generate new parameters for input to regressor."""
     model = random.choices(list(model_dict.keys()), list(model_dict.values()), k=1)[0]
     if model in [
@@ -1824,7 +1862,7 @@ class DatepartRegression(ModelObject):
             multioutput=multioutput,
         )
         self.df_train = df
-        self.model = self.model.fit(X, y)
+        self.model = self.model.fit(X.astype(float), y.astype(float))
         self.shape = df.shape
         return self
 
@@ -1857,7 +1895,7 @@ class DatepartRegression(ModelObject):
         X.columns = [str(xc) for xc in X.columns]
 
         forecast = pd.DataFrame(
-            self.model.predict(X), index=index, columns=self.column_names
+            self.model.predict(X.astype(float)), index=index, columns=self.column_names
         )
 
         if just_point_forecast:
@@ -2240,15 +2278,29 @@ class UnivariateRegression(ModelObject):
             window_choice = random.choices(
                 [None, 3, 7, 10, 24], [0.7, 0.2, 0.05, 0.05, 0.05]
             )[0]
+            model_choice = generate_regressor_params(
+                model_dict=univariate_model_dict, method=method
+            )
         else:
             x_transform_choice = random.choices(
                 [None, 'FastICA', 'Nystroem', 'RmZeroVariance'],
                 [1.0, 0.0, 0.0, 0.0],
             )[0]
             window_choice = random.choices([None, 3, 7, 10], [0.7, 0.2, 0.05, 0.05])[0]
-        model_choice = generate_regressor_params(
-            model_dict=univariate_model_dict, method=method
-        )
+            model_choice = generate_regressor_params(
+                model_dict={
+                    'ElasticNet': 0.2,
+                    'DecisionTree': 0.4,
+                    'FastRidge': 0.2,
+                    'LinearRegression': 0.2,
+                    # 'ExtraTrees': 0.1,
+                },
+                method=method,
+            )
+        if method == 'neuralnets':
+            print('`neuralnets` model_mode does not apply to UnivariateRegression')
+            method = 'deep'
+
         mean_rolling_periods_choice = random.choices(
             [None, 5, 7, 12, 30], [0.6, 0.1, 0.1, 0.1, 0.1]
         )[0]
@@ -2387,6 +2439,8 @@ class MultivariateRegression(ModelObject):
             'min_samples_split': 5,
             'n_estimators': 250,
         },
+        cointegration: str = None,
+        cointegration_lag: int = 1,
         n_jobs: int = -1,
         **kwargs,
     ):
@@ -2425,6 +2479,8 @@ class MultivariateRegression(ModelObject):
         self.quantile_params = quantile_params
         self.regressor_train = None
         self.probabilistic = probabilistic
+        self.cointegration = cointegration
+        self.cointegration_lag = cointegration_lag
 
         # detect just the max needed for cutoff (makes faster)
         starting_min = 90  # based on what effects ewm alphas, too
@@ -2451,96 +2507,99 @@ class MultivariateRegression(ModelObject):
             future_regressor (pandas.DataFrame or Series): Datetime Indexed
         """
         df = self.basic_profile(df)
-        from sklearn.ensemble import GradientBoostingRegressor
-
-        # if external regressor, do some check up
-        if self.regression_type is not None:
-            if future_regressor is None:
-                raise ValueError(
-                    "regression_type='User' but not future_regressor supplied."
-                )
-            elif future_regressor.shape[0] != df.shape[0]:
-                raise ValueError(
-                    "future_regressor shape does not match training data shape."
-                )
+        # assume memory and CPU count are correlated
+        with config_context(assume_finite=True, working_memory=int(self.n_jobs * 512)):
+            # if external regressor, do some check up
+            if self.regression_type is not None:
+                if future_regressor is None:
+                    raise ValueError(
+                        "regression_type='User' but not future_regressor supplied."
+                    )
+                elif future_regressor.shape[0] != df.shape[0]:
+                    raise ValueError(
+                        "future_regressor shape does not match training data shape."
+                    )
+                else:
+                    self.regressor_train = future_regressor
+            # define X and Y
+            Y = df[1:].to_numpy().ravel(order="F")
+            # drop look ahead data
+            base = df[:-1]
+            if self.regression_type is not None:
+                cut_regr = self.regressor_train[1:]
+                cut_regr.index = base.index
             else:
-                self.regressor_train = future_regressor
+                cut_regr = None
+            # open to suggestions on making this faster
+            X = pd.concat(
+                [
+                    rolling_x_regressor_regressor(
+                        base[x_col].to_frame(),
+                        mean_rolling_periods=self.mean_rolling_periods,
+                        macd_periods=self.macd_periods,
+                        std_rolling_periods=self.std_rolling_periods,
+                        max_rolling_periods=self.max_rolling_periods,
+                        min_rolling_periods=self.min_rolling_periods,
+                        ewm_var_alpha=self.ewm_var_alpha,
+                        quantile90_rolling_periods=self.quantile90_rolling_periods,
+                        quantile10_rolling_periods=self.quantile10_rolling_periods,
+                        additional_lag_periods=self.additional_lag_periods,
+                        ewm_alpha=self.ewm_alpha,
+                        abs_energy=self.abs_energy,
+                        rolling_autocorr_periods=self.rolling_autocorr_periods,
+                        add_date_part=self.datepart_method,
+                        holiday=self.holiday,
+                        holiday_country=self.holiday_country,
+                        polynomial_degree=self.polynomial_degree,
+                        window=self.window,
+                        future_regressor=cut_regr,
+                        cointegration=self.cointegration,
+                        cointegration_lag=self.cointegration_lag,
+                    )
+                    for x_col in base.columns
+                ]
+            ).to_numpy()
+            del base
+            if self.probabilistic:
+                from sklearn.ensemble import GradientBoostingRegressor
 
-        # define X and Y
-        Y = df[1:].to_numpy().ravel(order="F")
-        # drop look ahead data
-        base = df[:-1]
-        if self.regression_type is not None:
-            cut_regr = self.regressor_train[1:]
-            cut_regr.index = base.index
-        else:
-            cut_regr = None
-        # open to suggestions on making this faster
-        X = pd.concat(
-            [
-                rolling_x_regressor_regressor(
-                    base[x_col].to_frame(),
-                    mean_rolling_periods=self.mean_rolling_periods,
-                    macd_periods=self.macd_periods,
-                    std_rolling_periods=self.std_rolling_periods,
-                    max_rolling_periods=self.max_rolling_periods,
-                    min_rolling_periods=self.min_rolling_periods,
-                    ewm_var_alpha=self.ewm_var_alpha,
-                    quantile90_rolling_periods=self.quantile90_rolling_periods,
-                    quantile10_rolling_periods=self.quantile10_rolling_periods,
-                    additional_lag_periods=self.additional_lag_periods,
-                    ewm_alpha=self.ewm_alpha,
-                    abs_energy=self.abs_energy,
-                    rolling_autocorr_periods=self.rolling_autocorr_periods,
-                    add_date_part=self.datepart_method,
-                    holiday=self.holiday,
-                    holiday_country=self.holiday_country,
-                    polynomial_degree=self.polynomial_degree,
-                    window=self.window,
-                    future_regressor=cut_regr,
+                alpha_base = (1 - self.prediction_interval) / 2
+                self.model_upper = GradientBoostingRegressor(
+                    loss='quantile',
+                    alpha=(1 - alpha_base),
+                    random_state=self.random_seed,
+                    **self.quantile_params,
                 )
-                for x_col in base.columns
-            ]
-        ).to_numpy()
-        del base
-        if self.probabilistic:
-            alpha_base = (1 - self.prediction_interval) / 2
-            self.model_upper = GradientBoostingRegressor(
-                loss='quantile',
-                alpha=(1 - alpha_base),
-                random_state=self.random_seed,
-                **self.quantile_params,
+                self.model_lower = GradientBoostingRegressor(
+                    loss='quantile',
+                    alpha=alpha_base,
+                    random_state=self.random_seed,
+                    **self.quantile_params,
+                )
+
+            multioutput = True
+            if Y.ndim < 2:
+                multioutput = False
+            elif Y.shape[1] < 2:
+                multioutput = False
+            self.model = retrieve_regressor(
+                regression_model=self.regression_model,
+                verbose=self.verbose,
+                verbose_bool=self.verbose_bool,
+                random_seed=self.random_seed,
+                n_jobs=self.n_jobs,
+                multioutput=multioutput,
             )
-            self.model_lower = GradientBoostingRegressor(
-                loss='quantile',
-                alpha=alpha_base,
-                random_state=self.random_seed,
-                **self.quantile_params,
-            )
+            self.model.fit(X, Y)
 
-        multioutput = True
-        if Y.ndim < 2:
-            multioutput = False
-        elif Y.shape[1] < 2:
-            multioutput = False
-        self.model = retrieve_regressor(
-            regression_model=self.regression_model,
-            verbose=self.verbose,
-            verbose_bool=self.verbose_bool,
-            random_seed=self.random_seed,
-            n_jobs=self.n_jobs,
-            multioutput=multioutput,
-        )
-        self.model.fit(X, Y)
+            if self.probabilistic:
+                self.model_upper.fit(X, Y)
+                self.model_lower.fit(X, Y)
+            # we only need the N most recent points for predict
+            self.sktraindata = df.tail(self.min_threshold)
 
-        if self.probabilistic:
-            self.model_upper.fit(X, Y)
-            self.model_lower.fit(X, Y)
-        # we only need the N most recent points for predict
-        self.sktraindata = df.tail(self.min_threshold)
-
-        self.fit_runtime = datetime.datetime.now() - self.startTime
-        return self
+            self.fit_runtime = datetime.datetime.now() - self.startTime
+            return self
 
     def predict(
         self,
@@ -2601,6 +2660,8 @@ class MultivariateRegression(ModelObject):
                         polynomial_degree=self.polynomial_degree,
                         window=self.window,
                         future_regressor=cur_regr,
+                        cointegration=self.cointegration,
+                        cointegration_lag=self.cointegration_lag,
                     ).tail(1)
                     for x_col in current_x.columns
                 ]
@@ -2717,6 +2778,10 @@ class MultivariateRegression(ModelObject):
             regression_choice = "User"
         else:
             regression_choice = random.choices([None, 'User'], [0.7, 0.3])[0]
+        coint_choice = random.choices([None, "BTCD", "Johansen"], [0.8, 0.1, 0.1])[0]
+        coint_lag = 1
+        if coint_choice is not None:
+            coint_lag = random.choice([1, 2, 7])
         parameter_dict = {
             'regression_model': model_choice,
             'mean_rolling_periods': mean_rolling_periods_choice,
@@ -2737,6 +2802,8 @@ class MultivariateRegression(ModelObject):
             'window': window_choice,
             'holiday': holiday_choice,
             "probabilistic": probabilistic,
+            "cointegration": coint_choice,
+            "cointegration_lag": coint_lag,
         }
         return parameter_dict
 
@@ -2762,5 +2829,7 @@ class MultivariateRegression(ModelObject):
             'window': self.window,
             'holiday': self.holiday,
             'probabilistic': self.probabilistic,
+            "cointegration": self.cointegration,
+            "cointegration_lag": self.cointegration_lag,
         }
         return parameter_dict

@@ -364,7 +364,9 @@ class PredictionObject(object):
         series: str = None,
         ax=None,
         remove_zeroes: bool = False,
+        interpolate: str = None,
         start_date: str = None,
+        title=None,
         **kwargs,
     ):
         """Generate an example plot of one series. Does not handle non-numeric forecasts.
@@ -374,6 +376,7 @@ class PredictionObject(object):
             series (str): column name of series to plot. Random if None.
             ax: matplotlib axes to pass through to pd.plot()
             remove_zeroes (bool): if True, don't plot any zeroes
+            interpolate (str): if not None, a method to pass to pandas interpolate
             start_date (str): Y-m-d string or Timestamp to remove all data before
             **kwargs passed to pd.DataFrame.plot()
         """
@@ -382,10 +385,17 @@ class PredictionObject(object):
 
             series = random.choice(self.forecast.columns)
 
+        model_name = self.model_name
+        if model_name == "Ensemble":
+            if 'series' in self.model_parameters.keys():
+                h_params = self.model_parameters['series'][series]
+                if isinstance(h_params, str):
+                    model_name = self.model_parameters['models'][h_params]['Model']
+
         if df_wide is not None:
             plot_df = pd.DataFrame(
                 {
-                    series: df_wide[series],
+                    'actuals': df_wide[series],
                     'up_forecast': self.upper_forecast[series],
                     'low_forecast': self.lower_forecast[series],
                     'forecast': self.forecast[series],
@@ -401,6 +411,13 @@ class PredictionObject(object):
             )
         if remove_zeroes:
             plot_df[plot_df == 0] = np.nan
+        if interpolate is not None:
+            plot_df["actuals"] = plot_df["actuals"].interpolate(
+                method=interpolate, limit_direction="backward"
+            )
+            plot_df["forecast"] = plot_df["forecast"].interpolate(
+                method=interpolate, limit_direction="backward", limit=5
+            )
 
         if start_date is not None:
             start_date = pd.to_datetime(start_date, infer_datetime_format=True)
@@ -408,9 +425,10 @@ class PredictionObject(object):
                 start_date, infer_datetime_format=True
             ):
                 raise ValueError("start_date is more recent than all data provided")
-            plot_df[plot_df.index >= start_date].plot(**kwargs)
-        else:
-            plot_df.plot(**kwargs)
+            plot_df = plot_df[plot_df.index >= start_date]
+        if title is None:
+            title = f"{series} with model {str(model_name)[0:80]}"
+        plot_df.plot(title=title, **kwargs)
 
     def evaluate(
         self,

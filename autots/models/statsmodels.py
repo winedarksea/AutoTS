@@ -2112,10 +2112,9 @@ class ARDL(ModelObject):
 
         def ardl_per_column(current_series, args):
             with warnings.catch_warnings():
-                # warnings.simplefilter("ignore", category='ConvergenceWarning')
-                # warnings.simplefilter("ignore", category='ValueWarning')
                 if args['verbose'] < 2:
                     warnings.simplefilter("ignore", category=UserWarning)
+                    # warnings.simplefilter("ignore", category='ConvergenceWarning')
                 if args['regression_type'] in ["User", "user", "holiday"]:
                     maModel = ARDL(
                         current_series,

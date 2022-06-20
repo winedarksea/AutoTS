@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.models package &#8212; AutoTS 0.4.1 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.4.2 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -37,6 +37,71 @@
 <h1>autots.models package<a class="headerlink" href="#autots-models-package" title="Permalink to this headline">¶</a></h1>
 <section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-autots.models.arch">
+<span id="autots-models-arch-module"></span><h2>autots.models.arch module<a class="headerlink" href="#module-autots.models.arch" title="Permalink to this headline">¶</a></h2>
+<p>Arch Models from arch package.</p>
+<dl class="class">
+<dt id="autots.models.arch.ARCH">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.arch.</code><code class="sig-name descname">ARCH</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'ARCH'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">mean: str = 'Constant'</em>, <em class="sig-param">lags: int = 2</em>, <em class="sig-param">vol: str = 'GARCH'</em>, <em class="sig-param">p: int = 1</em>, <em class="sig-param">o: int = 0</em>, <em class="sig-param">q: int = 1</em>, <em class="sig-param">power: float = 2.0</em>, <em class="sig-param">dist: str = 'normal'</em>, <em class="sig-param">rescale: bool = False</em>, <em class="sig-param">maxiter: int = 200</em>, <em class="sig-param">simulations: int = 1000</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">return_result_windows: bool = False</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2022</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.arch.ARCH" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>ARCH model family from arch package. See arch package for arg details.
+Not to be confused with a linux distro.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>regression_type</strong> (<em>str</em>) – type of regression (None, ‘User’, or ‘Holiday’)</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em>) – passed to joblib for multiprocessing. Set to none for context manager.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.arch.ARCH.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.arch.ARCH.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied .</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.arch.ARCH.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.arch.ARCH.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.arch.ARCH.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.arch.ARCH.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.arch.ARCH.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.arch.ARCH.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 </section>
 <section id="module-autots.models.base">
 <span id="autots-models-base-module"></span><h2>autots.models.base module<a class="headerlink" href="#module-autots.models.base" title="Permalink to this headline">¶</a></h2>
@@ -235,7 +300,7 @@ scaler (numpy.array): precomputed scaler for efficiency, avg value of series in 
 
 <dl class="method">
 <dt>
-<code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">df_wide=None</em>, <em class="sig-param">series: str = None</em>, <em class="sig-param">ax=None</em>, <em class="sig-param">remove_zeroes: bool = False</em>, <em class="sig-param">start_date: str = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span></dt>
+<code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">df_wide=None</em>, <em class="sig-param">series: str = None</em>, <em class="sig-param">ax=None</em>, <em class="sig-param">remove_zeroes: bool = False</em>, <em class="sig-param">interpolate: str = None</em>, <em class="sig-param">start_date: str = None</em>, <em class="sig-param">title=None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span></dt>
 <dd><p>Generate an example plot of one series. Does not handle non-numeric forecasts.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -244,6 +309,7 @@ scaler (numpy.array): precomputed scaler for efficiency, avg value of series in 
 <li><p><strong>series</strong> (<em>str</em>) – column name of series to plot. Random if None.</p></li>
 <li><p><strong>ax</strong> – matplotlib axes to pass through to pd.plot()</p></li>
 <li><p><strong>remove_zeroes</strong> (<em>bool</em>) – if True, don’t plot any zeroes</p></li>
+<li><p><strong>interpolate</strong> (<em>str</em>) – if not None, a method to pass to pandas interpolate</p></li>
 <li><p><strong>start_date</strong> (<em>str</em>) – Y-m-d string or Timestamp to remove all data before</p></li>
 <li><p><strong>passed to pd.DataFrame.plot</strong><strong>(</strong><strong>)</strong> (<em>**kwargs</em>) – </p></li>
 </ul>
@@ -982,7 +1048,7 @@ same for lower_forecasts, upper_forecasts</p></li>
 
 <dl class="function">
 <dt id="autots.models.ensemble.HorizontalTemplateGenerator">
-<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">HorizontalTemplateGenerator</code><span class="sig-paren">(</span><em class="sig-param">per_series</em>, <em class="sig-param">model_results</em>, <em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">ensemble: str = 'horizontal'</em>, <em class="sig-param">subset_flag: bool = True</em>, <em class="sig-param">per_series2=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.HorizontalTemplateGenerator" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.ensemble.</code><code class="sig-name descname">HorizontalTemplateGenerator</code><span class="sig-paren">(</span><em class="sig-param">per_series</em>, <em class="sig-param">model_results</em>, <em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">ensemble: str = 'horizontal'</em>, <em class="sig-param">subset_flag: bool = True</em>, <em class="sig-param">per_series2=None</em>, <em class="sig-param">only_specified: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.ensemble.HorizontalTemplateGenerator" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate horizontal ensemble templates given a table of results.</p>
 </dd></dl>
 
@@ -1375,6 +1441,75 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd></dl>
 
 </section>
+<section id="module-autots.models.pytorch">
+<span id="autots-models-pytorch-module"></span><h2>autots.models.pytorch module<a class="headerlink" href="#module-autots.models.pytorch" title="Permalink to this headline">¶</a></h2>
+<p>Created on Tue May 24 13:32:12 2022</p>
+<p>&#64;author: Colin</p>
+<dl class="class">
+<dt id="autots.models.pytorch.PytorchForecasting">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.pytorch.</code><code class="sig-name descname">PytorchForecasting</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'PytorchForecasting', frequency: str = 'infer', prediction_interval: float = 0.9, regression_type: str = None, holiday_country: str = 'US', random_seed: int = 2022, verbose: int = 0, n_jobs: int = 1, forecast_length: int = 90, max_epochs: int = 100, batch_size: int = 128, max_encoder_length: int = 12, learning_rate: float = 0.03, hidden_size: int = 32, n_layers: int = 2, dropout: float = 0.1, datepart_method: str = 'simple', add_target_scales: bool = False, lags: dict = {}, target_normalizer: str = 'EncoderNormalizer', model: str = 'TemporalFusionTransformer', quantiles: list = [0.01, 0.1, 0.22, 0.36, 0.5, 0.64, 0.78, 0.9, 0.99], model_kwargs: dict = {}, trainer_kwargs: dict = {}, callbacks: list = None, **kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.pytorch.PytorchForecasting" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>pytorch-forecasting for the world’s over-obsession of neural nets.</p>
+<p>This is generally going to require more data than most other models.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>model_kwargs</strong> (<em>dict</em>) – passed to pytorch-forecasting model on creation (for those not already defined above)</p></li>
+<li><p><strong>trainer_kwargs</strong> (<em>dict</em>) – passed to pt lightning Trainer</p></li>
+<li><p><strong>callbacks</strong> (<em>list</em>) – pt lightning callbacks</p></li>
+<li><p><strong>quantiles</strong> (<em>list</em>) – [0.1, 0.5, 0.9] or similar for quantileloss models</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.pytorch.PytorchForecasting.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.pytorch.PytorchForecasting.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed, wide style data</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.pytorch.PytorchForecasting.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.pytorch.PytorchForecasting.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.pytorch.PytorchForecasting.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.pytorch.PytorchForecasting.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.pytorch.PytorchForecasting.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = None</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.pytorch.PytorchForecasting.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead
+must be equal or lesser to that specified in init</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
 <section id="module-autots.models.sklearn">
 <span id="autots-models-sklearn-module"></span><h2>autots.models.sklearn module<a class="headerlink" href="#module-autots.models.sklearn" title="Permalink to this headline">¶</a></h2>
 <p>Sklearn dependent models</p>
@@ -1501,7 +1636,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="class">
 <dt id="autots.models.sklearn.MultivariateRegression">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">MultivariateRegression</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'MultivariateRegression'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">forecast_length: int = 7</em>, <em class="sig-param">regression_model: dict = {'model': 'RandomForest'</em>, <em class="sig-param">'model_params': {}}</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = 7</em>, <em class="sig-param">min_rolling_periods: int = 7</em>, <em class="sig-param">ewm_var_alpha: float = None</em>, <em class="sig-param">quantile90_rolling_periods: int = None</em>, <em class="sig-param">quantile10_rolling_periods: int = None</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">additional_lag_periods: int = None</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">datepart_method: str = None</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">window: int = 5</em>, <em class="sig-param">probabilistic: bool = False</em>, <em class="sig-param">quantile_params: dict = {'learning_rate': 0.1</em>, <em class="sig-param">'max_depth': 20</em>, <em class="sig-param">'min_samples_leaf': 4</em>, <em class="sig-param">'min_samples_split': 5</em>, <em class="sig-param">'n_estimators': 250}</em>, <em class="sig-param">n_jobs: int = -1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.MultivariateRegression" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">MultivariateRegression</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'MultivariateRegression'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">forecast_length: int = 7</em>, <em class="sig-param">regression_model: dict = {'model': 'RandomForest'</em>, <em class="sig-param">'model_params': {}}</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = 7</em>, <em class="sig-param">min_rolling_periods: int = 7</em>, <em class="sig-param">ewm_var_alpha: float = None</em>, <em class="sig-param">quantile90_rolling_periods: int = None</em>, <em class="sig-param">quantile10_rolling_periods: int = None</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">additional_lag_periods: int = None</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">datepart_method: str = None</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">window: int = 5</em>, <em class="sig-param">probabilistic: bool = False</em>, <em class="sig-param">quantile_params: dict = {'learning_rate': 0.1</em>, <em class="sig-param">'max_depth': 20</em>, <em class="sig-param">'min_samples_leaf': 4</em>, <em class="sig-param">'min_samples_split': 5</em>, <em class="sig-param">'n_estimators': 250}</em>, <em class="sig-param">cointegration: str = None</em>, <em class="sig-param">cointegration_lag: int = 1</em>, <em class="sig-param">n_jobs: int = -1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.MultivariateRegression" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Regression-framed approach to forecasting using sklearn.
 A multiariate version of rolling regression: ie each series is lagged independently but modeled together</p>
@@ -1766,7 +1901,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="function">
 <dt id="autots.models.sklearn.rolling_x_regressor">
-<code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">rolling_x_regressor</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = None</em>, <em class="sig-param">min_rolling_periods: int = None</em>, <em class="sig-param">quantile90_rolling_periods: int = None</em>, <em class="sig-param">quantile10_rolling_periods: int = None</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">ewm_var_alpha: float = None</em>, <em class="sig-param">additional_lag_periods: int = 7</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">add_date_part: str = None</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">window: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.rolling_x_regressor" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">rolling_x_regressor</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = None</em>, <em class="sig-param">min_rolling_periods: int = None</em>, <em class="sig-param">quantile90_rolling_periods: int = None</em>, <em class="sig-param">quantile10_rolling_periods: int = None</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">ewm_var_alpha: float = None</em>, <em class="sig-param">additional_lag_periods: int = 7</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">add_date_part: str = None</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">window: int = None</em>, <em class="sig-param">cointegration: str = None</em>, <em class="sig-param">cointegration_lag: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.rolling_x_regressor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate more features from initial time series.</p>
 <p>macd_periods ignored if mean_rolling is None.</p>
 <p>Returns a dataframe of statistical features. Will need to be shifted by 1 or more to match Y for forecast.</p>
@@ -1774,7 +1909,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="function">
 <dt id="autots.models.sklearn.rolling_x_regressor_regressor">
-<code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">rolling_x_regressor_regressor</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = None</em>, <em class="sig-param">min_rolling_periods: int = None</em>, <em class="sig-param">quantile90_rolling_periods: int = None</em>, <em class="sig-param">quantile10_rolling_periods: int = None</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">ewm_var_alpha: float = None</em>, <em class="sig-param">additional_lag_periods: int = 7</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">add_date_part: str = None</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">window: int = None</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.rolling_x_regressor_regressor" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.sklearn.</code><code class="sig-name descname">rolling_x_regressor_regressor</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">mean_rolling_periods: int = 30</em>, <em class="sig-param">macd_periods: int = None</em>, <em class="sig-param">std_rolling_periods: int = 7</em>, <em class="sig-param">max_rolling_periods: int = None</em>, <em class="sig-param">min_rolling_periods: int = None</em>, <em class="sig-param">quantile90_rolling_periods: int = None</em>, <em class="sig-param">quantile10_rolling_periods: int = None</em>, <em class="sig-param">ewm_alpha: float = 0.5</em>, <em class="sig-param">ewm_var_alpha: float = None</em>, <em class="sig-param">additional_lag_periods: int = 7</em>, <em class="sig-param">abs_energy: bool = False</em>, <em class="sig-param">rolling_autocorr_periods: int = None</em>, <em class="sig-param">add_date_part: str = None</em>, <em class="sig-param">holiday: bool = False</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">window: int = None</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">cointegration: str = None</em>, <em class="sig-param">cointegration_lag: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.rolling_x_regressor_regressor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Adds in the future_regressor.</p>
 </dd></dl>
 

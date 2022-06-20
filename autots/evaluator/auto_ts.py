@@ -79,6 +79,7 @@ class AutoTS(object):
             occurs after any aggregration is applied, so will be whatever is specified by frequency, will drop n frequencies
         drop_data_older_than_periods (int): take only the n most recent timestamps
         model_list (list): str alias or list of names of model objects to use
+            now can be a dictionary of {"model": prob} but only affects starting random templates. Genetic algorithim takes from there.
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
             can accept string aliases: "all", "fast", "superfast"
         transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
@@ -163,11 +164,12 @@ class AutoTS(object):
             'containment_weighting': 0,
             'contour_weighting': 1,
             'runtime_weighting': 0.05,
+            'oda_weighting': 0.001,
         },
         drop_most_recent: int = 0,
         drop_data_older_than_periods: int = 100000,
         model_list: str = 'default',
-        transformer_list: dict = "fast",
+        transformer_list: dict = "auto",
         transformer_max_depth: int = 6,
         models_mode: str = "random",
         num_validations: int = "auto",
@@ -397,6 +399,7 @@ class AutoTS(object):
         self.validation_train_indexes = []
         self.validation_test_indexes = []
         self.preclean_transformer = None
+        self.score_per_series = None
         # this is temporary until proper validation param passing is sorted out
         stride_size = round(self.forecast_length / 2)
         stride_size = stride_size if stride_size > 0 else 1
@@ -556,6 +559,9 @@ class AutoTS(object):
                 "Warning: column/series names are not unique. Unique column names are required for some features!"
             )
             time.sleep(3)  # give the message a chance to be seen
+
+        if self.transformer_list == "auto":
+            self.transformer_list = "all" if df_wide_numeric.shape[1] <= 10 else "fast"
 
         # remove other ensembling types if univariate
         if df_wide_numeric.shape[1] == 1:
@@ -792,6 +798,8 @@ class AutoTS(object):
 
         # now run new generations, trying more models based on past successes.
         current_generation = 0
+        num_mod_types = len(self.model_list)
+        max_per_model_class_g = 5
         while current_generation < self.max_generations:
             current_generation += 1
             if verbose > 0:
@@ -800,20 +808,38 @@ class AutoTS(object):
                         current_generation, self.max_generations
                     )
                 )
-            cutoff_multiple = 5 if current_generation < 10 else 3
-            top_n = len(self.model_list) * cutoff_multiple
+            # affirmative action to have more models represented, then less
+            if current_generation < 5:
+                cutoff_multiple = max_per_model_class_g
+            elif current_generation < 10:
+                cutoff_multiple = max_per_model_class_g - 1
+            elif current_generation < 20:
+                cutoff_multiple = max_per_model_class_g - 2
+            else:
+                cutoff_multiple = max_per_model_class_g - 3
+            cutoff_multiple = 1 if cutoff_multiple < 1 else cutoff_multiple
+            top_n = (
+                num_mod_types * cutoff_multiple
+                if num_mod_types > 2
+                else num_mod_types * max_per_model_class_g
+            )
+            if df_train.shape[1] > 1:
+                self.score_per_series = generate_score_per_series(
+                    self.initial_results, self.metric_weighting, 1
+                )
             new_template = NewGeneticTemplate(
                 self.initial_results.model_results,
                 submitted_parameters=submitted_parameters,
                 sort_column="Score",
                 sort_ascending=True,
                 max_results=top_n,
-                max_per_model_class=5,
+                max_per_model_class=max_per_model_class_g,
                 top_n=top_n,
                 template_cols=template_cols,
                 transformer_list=self.transformer_list,
                 transformer_max_depth=self.transformer_max_depth,
                 models_mode=self.models_mode,
+                score_per_series=self.score_per_series,
             )
             submitted_parameters = pd.concat(
                 [submitted_parameters, new_template],
@@ -958,22 +984,17 @@ class AutoTS(object):
         # add on best per_series models (which may not be in the top scoring)
         if any(x in ensemble for x in self.h_ens_list):
             model_results = self.initial_results.model_results
-            """
-            mods = generate_score_per_series(
-                self.initial_results, self.metric_weighting, 1
-            ).idxmin()
-            """
             if self.models_to_validate < 50:
                 n_per_series = 1
             elif self.models_to_validate > 500:
                 n_per_series = 5
             else:
                 n_per_series = 3
-            score_per_series = generate_score_per_series(
+            self.score_per_series = generate_score_per_series(
                 self.initial_results, self.metric_weighting, 1
             )
-            mods = score_per_series.index[
-                np.argsort(-score_per_series.values, axis=0)[
+            mods = self.score_per_series.index[
+                np.argsort(-self.score_per_series.values, axis=0)[
                     -1 : -1 - n_per_series : -1
                 ].flatten()
             ]
@@ -1829,6 +1850,94 @@ or otherwise increase models available."""
             self.initial_results = self.initial_results.concat(new_obj)
         return self
 
+    def horizontal_per_generation(self):
+        df_train = self.df_wide_numeric.reindex(self.validation_train_indexes[0])
+        df_test = self.df_wide_numeric.reindex(self.validation_test_indexes[0])
+        if not self.weighted:
+            current_weights = {x: 1 for x in df_train.columns}
+        else:
+            current_weights = {x: self.weights[x] for x in df_train.columns}
+        # ensemble_templates = pd.DataFrame()
+        result = TemplateEvalObject()
+        max_gens = self.initial_results.model_results['Generation'].max()
+        for gen in range(max_gens + 1):
+            mods = (
+                self.initial_results.model_results[
+                    (self.initial_results.model_results['Generation'] <= gen)
+                    & (self.initial_results.model_results['ValidationRound'] == 0)
+                    & (self.initial_results.model_results['Ensemble'] == 0)
+                ]['ID']
+                .unique()
+                .tolist()
+            )
+            score_per_series = generate_score_per_series(
+                self.initial_results,
+                metric_weighting=self.metric_weighting,
+                total_validations=(self.num_validations + 1),
+                models_to_use=mods,
+            )
+            ens_templates = HorizontalTemplateGenerator(
+                score_per_series,
+                model_results=self.initial_results.model_results,
+                forecast_length=self.forecast_length,
+                ensemble=self.ensemble,
+                subset_flag=self.subset_flag,
+                only_specified=True,
+            )
+            reg_tr = (
+                self.future_regressor_train.reindex(index=df_train.index)
+                if self.future_regressor_train is not None
+                else None
+            )
+            reg_fc = (
+                self.future_regressor_train.reindex(index=df_test.index)
+                if self.future_regressor_train is not None
+                else None
+            )
+            result.concat(
+                TemplateWizard(
+                    ens_templates,
+                    df_train,
+                    df_test,
+                    weights=current_weights,
+                    model_count=0,
+                    current_generation=gen,
+                    forecast_length=self.forecast_length,
+                    frequency=self.frequency,
+                    prediction_interval=self.prediction_interval,
+                    ensemble=self.ensemble,
+                    no_negatives=self.no_negatives,
+                    constraint=self.constraint,
+                    future_regressor_train=reg_tr,
+                    future_regressor_forecast=reg_fc,
+                    holiday_country=self.holiday_country,
+                    startTimeStamps=self.startTimeStamps,
+                    template_cols=self.template_cols,
+                    model_interrupt=self.model_interrupt,
+                    grouping_ids=self.grouping_ids,
+                    max_generations="Horizontal Ensembles",
+                    random_seed=self.random_seed,
+                    verbose=self.verbose,
+                    n_jobs=self.n_jobs,
+                    traceback=self.traceback,
+                    current_model_file=self.current_model_file,
+                )
+            )
+        result.model_results['Score'] = generate_score(
+            result.model_results,
+            metric_weighting=self.metric_weighting,
+            prediction_interval=self.prediction_interval,
+        )
+        return result
+
+    def plot_horizontal_per_generation(
+        self, title="Horizontal Ensemble Model Accuracy Gain Over Generations", **kwargs
+    ):
+        """Plot how well the horizontal ensembles would do after each new generation. Slow."""
+        self.horizontal_per_generation().model_results['Score'].plot(
+            ylabel="Lowest Score", title=title, **kwargs
+        )
+
     def back_forecast(
         self, column=None, n_splits: int = 3, tail: int = None, verbose: int = 0
     ):
@@ -1921,7 +2030,7 @@ or otherwise increase models available."""
         """Helper function to create a readable df of models in mosaic."""
         if self.best_model.empty:
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
-        if self.best_model['Ensemble'].iloc[0] != 2:
+        if self.best_model_ensemble != 2:
             raise ValueError("Only works on horizontal ensemble type models.")
         ModelParameters = self.best_model_params
         if str(ModelParameters['model_name']).lower() != 'mosaic':
@@ -1941,7 +2050,7 @@ or otherwise increase models available."""
             max_series (int): max number of points to plot
             **kwargs passed to pandas.plot()
         """
-        series = self.horizontal_to_df()
+        series = self.horizontal_to_df().copy()
         # remove some data to prevent overcrowding the graph, if necessary
         max_series = series.shape[0] if series.shape[0] < max_series else max_series
         series = series.sample(max_series, replace=False)
@@ -1950,7 +2059,7 @@ or otherwise increase models available."""
             np.abs(series[['Volatility', 'Mean']])
         )
         # plot
-        series.set_index(['Model', 'log(Mean)']).unstack('Model')[
+        series.set_index(['Model', 'log(Mean)'], append=True).unstack('Model')[
             'log(Volatility)'
         ].plot(style='o', title=title, **kwargs)
 
@@ -2083,7 +2192,7 @@ or otherwise increase models available."""
         )
         temp = temp.reset_index()
         temp.columns = ["Series", "SMAPE"]
-        if self.best_model["Ensemble"].iloc[0] == 2:
+        if self.best_model_ensemble == 2:
             series = self.horizontal_to_df()
             temp = temp.merge(series, on='Series')
             temp['Series'] = (
@@ -2098,6 +2207,68 @@ or otherwise increase models available."""
             temp.plot(
                 x="Series",
                 y="SMAPE",
+                kind=kind,
+                title=title,
+                color=color,
+                figsize=figsize,
+                **kwargs,
+            )
+
+    def plot_per_series_error(
+        self,
+        title: str = "Top Series Contributing Score Error",
+        max_series: int = 10,
+        max_name_chars: int = 25,
+        color: str = "#ff9912",
+        figsize=(12, 4),
+        kind: str = "bar",
+        **kwargs,
+    ):
+        """Plot which series are contributing most to error (Score) of final model. Avg of validations for best_model
+
+        Args:
+            title (str): plot title
+            max_series (int): max number of series to show on plot (sorted)
+            max_name_chars (str): if horizontal ensemble, will chop series names to this
+            color (str): hex or name of color of plot
+            figsize (tuple): passed through to plot axis
+            kind (str): bar or pie
+            **kwargs passed to pandas.plot()
+        """
+        if self.best_model.empty:
+            raise ValueError("No best_model. AutoTS .fit() needs to be run.")
+        best_model_per = self.initial_results.per_series_mae[
+            self.initial_results.per_series_mae.index == self.best_model_id
+        ]
+        best_model_per = (
+            generate_score_per_series(
+                self.initial_results,
+                metric_weighting=self.metric_weighting,
+                total_validations=(self.num_validations + 1),
+                models_to_use=[self.best_model_id],
+            )
+            .mean(axis=0)
+            .sort_values(ascending=False)
+            .head(max_series)
+            .round(2)
+        )
+        temp = best_model_per.reset_index()
+        temp.columns = ["Series", "Error"]
+        if self.best_model["Ensemble"].iloc[0] == 2:
+            series = self.horizontal_to_df()
+            temp = temp.merge(series, on='Series')
+            temp['Series'] = (
+                temp['Series'].str.slice(0, max_name_chars) + " (" + temp["Model"] + ")"
+            )
+
+        if kind == "pie":
+            temp.set_index("Series").plot(
+                y="Error", kind="pie", title=title, figsize=figsize, **kwargs
+            )
+        else:
+            temp.plot(
+                x="Series",
+                y="Error",
                 kind=kind,
                 title=title,
                 color=color,

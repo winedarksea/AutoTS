@@ -940,7 +940,7 @@ def EnsembleTemplateGenerator(
             except Exception as e:
                 print(f"cluster-based simple ensemble failed with {repr(e)}")
 
-        mods = pd.Series()
+        mods = pd.Series(dtype='object')
         per_series_des = per_series.copy()
         n_models = 3
         # choose best per series, remove those series, then choose next best
@@ -1052,6 +1052,7 @@ def HorizontalTemplateGenerator(
     ensemble: str = "horizontal",
     subset_flag: bool = True,
     per_series2=None,
+    only_specified: bool = False,
 ):
     """Generate horizontal ensemble templates given a table of results."""
     ensemble_templates = pd.DataFrame()
@@ -1116,7 +1117,9 @@ def HorizontalTemplateGenerator(
         ensemble_templates = pd.concat(
             [ensemble_templates, best5_params], axis=0, ignore_index=True
         )
-    if 'horizontal' in ensemble or 'horizontal-max' in ensemble:
+    if 'horizontal' in ensemble or (
+        'horizontal-max' in ensemble and not only_specified
+    ):
         # first generate lists of models by ID that are in shared and no_shared
         no_shared_select = model_results['Model'].isin(no_shared)
         shared_mod_lst = model_results[~no_shared_select]['ID'].tolist()

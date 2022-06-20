@@ -396,28 +396,29 @@ class ModelTest(unittest.TestCase):
 
         print(sum(timings.values()))
 
-        pass_probabilistic = ['FBProphet']  # not reproducible in upper/lower with seed
+        pass_probabilistic = ['FBProphet']  # not yet reproducible in upper/lower with seed
         for x in models:
-            res = (forecasts2[x].round(2) == forecasts[x].round(2)).all().all()
-            if x not in pass_probabilistic:
-                res_u = (upper_forecasts2[x].round(2) == upper_forecasts[x].round(2)).all().all()
-                res_l = (lower_forecasts2[x].round(2) == lower_forecasts[x].round(2)).all().all()
-            else:
-                res_u = True
-                res_l = True
-            self.assertTrue(
-                res,
-                f"Model '{x}' forecasts diverged from sample forecasts."
-            )
-            self.assertTrue(
-                res_u,
-                f"Model '{x}' upper forecasts diverged from sample forecasts."
-            )
-            self.assertTrue(
-                res_l,
-                f"Model '{x}' lower forecasts diverged from sample forecasts."
-            )
-            print(f"{res & res_u & res_l} model '{x}' ran successfully in {round(timings2[x], 4)} (bench: {round(timings[x], 4)})")
+            with self.subTest(i=x):
+                res = (forecasts2[x].round(2) == forecasts[x].round(2)).all().all()
+                if x not in pass_probabilistic:
+                    res_u = (upper_forecasts2[x].round(2) == upper_forecasts[x].round(2)).all().all()
+                    res_l = (lower_forecasts2[x].round(2) == lower_forecasts[x].round(2)).all().all()
+                else:
+                    res_u = True
+                    res_l = True
+                self.assertTrue(
+                    res,
+                    f"Model '{x}' forecasts diverged from sample forecasts."
+                )
+                self.assertTrue(
+                    res_u,
+                    f"Model '{x}' upper forecasts diverged from sample forecasts."
+                )
+                self.assertTrue(
+                    res_l,
+                    f"Model '{x}' lower forecasts diverged from sample forecasts."
+                )
+                print(f"{res & res_u & res_l} model '{x}' ran successfully in {round(timings2[x], 4)} (bench: {round(timings[x], 4)})")
 
         """
         for x in models:
@@ -481,7 +482,7 @@ class ModelTest(unittest.TestCase):
         # following are not consistent with seed:
         # "MotifSimulation"
 
-        for x in transforms: 
+        for x in transforms:
             print(x)
             param = {} if x not in ['QuantileTransformer'] else {"n_quantiles": 100}
             start_time = timeit.default_timer()
@@ -511,26 +512,27 @@ class ModelTest(unittest.TestCase):
 
         pass_probabilistic = ['FastICA']  # not reproducible in upper/lower with seed
         for x in transforms:
-            res = (forecasts2[x].round(2) == forecasts[x].round(2)).all().all()
-            if x not in pass_probabilistic:
-                res_u = (upper_forecasts2[x].round(2) == upper_forecasts[x].round(2)).all().all()
-                res_l = (lower_forecasts2[x].round(2) == lower_forecasts[x].round(2)).all().all()
-            else:
-                res_u = True
-                res_l = True
-            self.assertTrue(
-                res,
-                f"Model '{x}' forecasts diverged from sample forecasts."
-            )
-            self.assertTrue(
-                res_u,
-                f"Model '{x}' upper forecasts diverged from sample forecasts."
-            )
-            self.assertTrue(
-                res_l,
-                f"Model '{x}' lower forecasts diverged from sample forecasts."
-            )
-            print(f"{res & res_u & res_l} model '{x}' ran successfully in {round(timings2[x], 4)} (bench: {round(timings[x], 4)})")
+            with self.subTest(i=x):
+                res = (forecasts2[x].round(2) == forecasts[x].round(2)).all().all()
+                if x not in pass_probabilistic:
+                    res_u = (upper_forecasts2[x].round(2) == upper_forecasts[x].round(2)).all().all()
+                    res_l = (lower_forecasts2[x].round(2) == lower_forecasts[x].round(2)).all().all()
+                else:
+                    res_u = True
+                    res_l = True
+                self.assertTrue(
+                    res,
+                    f"Model '{x}' forecasts diverged from sample forecasts."
+                )
+                self.assertTrue(
+                    res_u,
+                    f"Model '{x}' upper forecasts diverged from sample forecasts."
+                )
+                self.assertTrue(
+                    res_l,
+                    f"Model '{x}' lower forecasts diverged from sample forecasts."
+                )
+                print(f"{res & res_u & res_l} model '{x}' ran successfully in {round(timings2[x], 4)} (bench: {round(timings[x], 4)})")
 
         """
         for x in transforms:

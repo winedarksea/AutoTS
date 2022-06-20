@@ -122,11 +122,11 @@ class KerasRNN(object):
                 tf.keras.layers.Dense(OUTPUT_SHAPE)
             )(decoder_l2)
             #
-            simple_lstm_model = tf.keras.models.Model(encoder_inputs, decoder_outputs2)
+            self.model = tf.keras.models.Model(encoder_inputs, decoder_outputs2)
         if self.rnn_type == "CNN":
             if len(self.hidden_layer_sizes) == 1:
                 kernel_size = 10 if INPUT_SHAPE[0] > 10 else INPUT_SHAPE[0]
-                simple_lstm_model = tf.keras.Sequential(
+                self.model = tf.keras.Sequential(
                     [
                         tf.keras.layers.Conv1D(
                             filters=self.hidden_layer_sizes[0],
@@ -173,12 +173,12 @@ class KerasRNN(object):
 
                 gap = tf.keras.layers.GlobalAveragePooling1D()(conv3)
                 output_layer = tf.keras.layers.Dense(OUTPUT_SHAPE)(gap)
-                simple_lstm_model = tf.keras.models.Model(
+                self.model = tf.keras.models.Model(
                     inputs=input_layer, outputs=output_layer
                 )
         elif len(self.hidden_layer_sizes) == 3:
             if self.rnn_type == 'GRU':
-                simple_lstm_model = tf.keras.models.Sequential(
+                self.model = tf.keras.models.Sequential(
                     [
                         tf.keras.layers.GRU(
                             self.hidden_layer_sizes[0],
@@ -195,7 +195,7 @@ class KerasRNN(object):
                     ]
                 )
             else:
-                simple_lstm_model = tf.keras.models.Sequential(
+                self.model = tf.keras.models.Sequential(
                     [
                         tf.keras.layers.LSTM(
                             self.hidden_layer_sizes[0],
@@ -214,7 +214,7 @@ class KerasRNN(object):
                 )
         if len(self.hidden_layer_sizes) == 1:
             if self.rnn_type == 'GRU':
-                simple_lstm_model = ResidualWrapper(
+                self.model = ResidualWrapper(
                     tf.keras.models.Sequential(
                         [
                             tf.keras.layers.GRU(
@@ -228,7 +228,7 @@ class KerasRNN(object):
                     )
                 )
             else:
-                simple_lstm_model = tf.keras.models.Sequential(
+                self.model = tf.keras.models.Sequential(
                     [
                         tf.keras.layers.Bidirectional(
                             tf.keras.layers.LSTM(
@@ -243,20 +243,19 @@ class KerasRNN(object):
                     ]
                 )
 
-        if self.loss == 'Huber':
+        if str(self.loss).lower() == 'huber':
             loss = tf.keras.losses.Huber()
         else:
             loss = self.loss
-        simple_lstm_model.compile(optimizer=self.optimizer, loss=loss)
+        self.model.compile(optimizer=self.optimizer, loss=loss)
 
-        simple_lstm_model.fit(
+        self.model.fit(
             x=train_X,
             y=Y,
             epochs=self.epochs,
             batch_size=self.batch_size,
             verbose=self.verbose,
         )
-        self.model = simple_lstm_model
         return self
 
     def predict(self, X):
@@ -265,7 +264,7 @@ class KerasRNN(object):
             test = pd.DataFrame(X).to_numpy().reshape((X.shape[0], 1, X.shape[1]))
         else:
             test = pd.DataFrame(X).to_numpy().reshape((X.shape[0], X.shape[1], 1))
-        return pd.DataFrame(self.model.predict(test))
+        return self.model.predict(test)
 
 
 def transformer_encoder(inputs, head_size, num_heads, ff_dim, dropout=0):

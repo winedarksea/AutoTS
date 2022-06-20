@@ -4,6 +4,14 @@ autots.models package
 Submodules
 ----------
 
+autots.models.arch module
+-------------------------
+
+.. automodule:: autots.models.arch
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.models.base module
 -------------------------
 
@@ -64,6 +72,14 @@ autots.models.prophet module
 ----------------------------
 
 .. automodule:: autots.models.prophet
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+autots.models.pytorch module
+----------------------------
+
+.. automodule:: autots.models.pytorch
    :members:
    :undoc-members:
    :show-inheritance:

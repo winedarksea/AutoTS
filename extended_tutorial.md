@@ -34,7 +34,7 @@ model = AutoTS(
 )
 model = model.fit(df_long, date_col='datetime', value_col='value', id_col='series_id')
 
-# Print the name of the best model
+# Print the description of the best model
 print(model)
 ```
 
@@ -155,9 +155,6 @@ model = model.fit(
 prediction = model.predict()
 forecasts_df = prediction.forecast
 # prediction.long_form_results()
-
-if model.best_model_ensemble == 2:
-    model.plot_horizontal()
 ```
 
 Probabilistic forecasts are *available* for all models, but in many cases are just data-based estimates in lieu of model estimates. 
@@ -269,6 +266,7 @@ quality of point forecast, quality of probabilistic forecast, overestimation or 
 Some metrics are scaled and some are not. MAE, RMSE, MAGE, MLE, iMLE are unscaled and accordingly in multivariate forecasting will favor model performance on the largest scale input series. 
 
 *Horizontal* style ensembles use `metric_weighting` for series selection, but only the values passed for `mae, rmse, made, mle, imle, contour, spl`. If all of these are 0, mae is used for selection. 
+Accordingly it may be better to reduce the use of`smape`, `containment`, and `mage` weighting when using these ensembles. With univariate models, runtime for overall won't translate to runtime inside a horizontal ensemble. 
 
 `sMAPE` is *Symmetric Mean Absolute Percentage Loss* and is generally the most versatile metric across multiple series as it is scaled. It doesn't handle forecasts with lots of zeroes well. 
 
@@ -288,6 +286,47 @@ This is similar to but faster than MDA (mean directional accuracy) as contour ev
 `MADE` is *(Scaled) Mean Absolute Differential Error*. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Equivalent to 'MAE' when forecast_length=1. It is better for optimization than contour.
 
 The contour and MADE metrics are useful as they encourages 'wavy' forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they "don't look like they are trying hard enough" to some managers, and using them favors non-flat forecasts that (to many) look like a more serious model.
+
+##### Plots
+```python
+import matplotlib.pyplot as plt
+
+model = AutoTS().fit(df)
+prediction = model.predict()
+
+prediction.plot(
+	model.df_wide_numeric,
+	series=model.df_wide_numeric.columns[2],
+	remove_zeroes=False,
+	start_date="2018-09-26",
+)
+plt.show()
+
+model.plot_per_series_smape(kind="pie")
+plt.show()
+
+model.plot_per_series_error()
+plt.show()
+
+model.plot_generation_loss()
+plt.show()
+
+if model.best_model_ensemble == 2:
+	model.plot_horizontal_per_generation()
+	plt.show()
+	model.plot_horizontal_transformers(method="fillna")
+	plt.show()
+	model.plot_horizontal_transformers()
+	plt.show()
+	model.plot_horizontal()
+	plt.show()
+	if "mosaic" in model.best_model["ModelParameters"].iloc[0].lower():
+		mosaic_df = model.mosaic_to_df()
+		print(mosaic_df[mosaic_df.columns[0:5]].head(5))
+
+if False:  # slow
+	model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
+```
 
 ### Hierarchial and Grouped Forecasts
 Hiearchial and grouping refer to multivariate forecast situations where the individual series are aggregated. 
@@ -407,10 +446,9 @@ python -m pip install numpy scipy scikit-learn statsmodels lightgbm xgboost nume
 python -m pip install pystan prophet --exists-action i  # conda-forge option below works more easily, --no-deps to pip install prophet if this fails
 python -m pip install tensorflow
 python -m pip install mxnet --no-deps     # check the mxnet documentation for more install options, also try pip install mxnet --no-deps
-python -m pip install gluonts
+python -m pip install gluonts arch
 python -m pip install holidays-ext pmdarima dill greykite --exists-action i --no-deps
 # install pytorch
-python -m pip install neuralprophet
 python -m pip install --upgrade numpy pandas --exists-action i  # mxnet likes to (pointlessly seeming) install old versions of numpy
 
 python -m pip install autots --exists-action i
@@ -419,12 +457,31 @@ python -m pip install autots --exists-action i
 ```shell
 mamba install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
 pip install mxnet --no-deps
-pip install yfinance pytrends fredapi gluonts
+pip install yfinance pytrends fredapi gluonts arch
 pip install intel-tensorflow scikit-learn-intelex
 mamba install spyder
 mamba install autots -c conda-forge
 ```
-`mamba` and `conda` commands are generally interchangeable.
+
+```shell
+conda install pytorch torchvision torchaudio cpuonly -c pytorch
+conda install pytorch-forecasting -c conda-forge
+pip install neuralprophet
+```
+GPU support, Linux only. CUDA versions will need to match package requirements. Mixed CUDA versions may cause crashes if run in same session.
+```shell
+nvidia-smi
+mamba activate base
+mamba install -c conda-forge cudatoolkit=11.2 cudnn=8.1.0 nccl  # install in conda base
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/  # NOT PERMANENT unless add to ./bashrc make sure is for base env, mine /home/colin/mambaforge/lib
+mamba create -n gpu python=3.8 scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
+mamba activate gpu
+pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
+pip install mxnet-cu112 --no-deps
+pip install gluonts tensorflow neuralprophet pytorch-lightning pytorch-forecasting
+mamba install spyder
+```
+`mamba` and `conda` commands are generally interchangeable. `conda env remove -n env_name`
 
 #### Intel conda channel installation (sometime faster, also, more prone to bugs)
 https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html
@@ -720,7 +777,7 @@ Currently `MultivariateRegression` has the option to utilize a stock GradientBoo
 |  SeasonalNaive          |              |                         |               |                 |       |              |              |               |
 |  GLS                    | statsmodels  |                         |               |                 |       | True         |              |               |
 |  GLM                    | statsmodels  |                         |               |     joblib      |       |              |              | True          |
-| ETS - Exponential Smoothing | statsmodels  |                     |               |     joblib      |       |              |              |               |
+| ETS - Exponential Smoothing | statsmodels |                      |               |     joblib      |       |              |              |               |
 |  UnobservedComponents   | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  ARIMA                  | statsmodels  |                         |    True       |     joblib      |       |              |              | True          |
 |  VARMAX                 | statsmodels  |                         |    True       |                 |       | True         |              |               |
@@ -740,9 +797,13 @@ Currently `MultivariateRegression` has the option to utilize a stock GradientBoo
 | Univariate/MultivariateMotif | scipy.distance.cdist |            |    True       |     joblib      |       | *            |              |               |
 |  SectionalMotif         | scipy.distance.cdist |  sklearn        |    True       |                 |       | True         |              | True          |
 |  NVAR                   |              |                         |    True       |   blas/lapack   |       | True         |              |               |
-|  NeuralProphet          | neuralprophet |                        |    tbd        |     pytorch     | yes   |              |              | True          |
-|  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         |   *           |
+|  NeuralProphet          | neuralprophet |                        |    nyi        |     pytorch     | yes   |              |              | True          |
+|  PytorchForecasting     | pytorch-forecasting |                  |    True       |     pytorch     | yes   | True         |              |               |
+|  ARCH                   | arch         |                         |    True       |     joblib      |       |              |              | True          |
+|  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         | nyi           |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
-|  TensorflowSTS          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         |               |
-|  TFPRegression          | tensorflow_probability   |             |    True       |                 | yes   | True         | True         | True          |
-|  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         |               |
+|  TensorflowSTS          | tensorflow_probability |               |    True       |                 | yes   | True         | True         |               |
+|  TFPRegression          | tensorflow_probability |               |    True       |                 | yes   | True         | True         | True          |
+|  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         | _             |
+
+*nyi = not yet implemented*

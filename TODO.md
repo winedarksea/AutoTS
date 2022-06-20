@@ -12,33 +12,19 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# Latest :fireworks: :fireworks:
-* Replaced ZeroesNaive model with ConstantNaive
-* updated the General starting template
-* added 'window' to AverageValueNaive
-* added :octocat: load_artificial sample dataset
-* fixed bug in plot_horizontal where not handling negative series
-* major update to Constraint functionality
-* GluonTS is no longer part of the default model list (faster tests this way) but is now part of 'best'
-* horizontal models_to_use for Mosaic ensembles
-* added some intel optimizations to sklearn code if scikit-learn-intelex installed
-* fixed a :bug: in rolling_x_regressor where datepart method wasn't actually getting appended
-* sped up rolling_x_regressor by reducing concats
-* added current_model_file as an option for additional debugging information
-* updated PCA and FastICA to be more flexible on n_components
-* fixed a bug where unpack_ensemble_models with keep_ensemble=False was still keeping nested ensembles
-* impute speed optimizations for fill_mean, use of nan check so runs faster if no nan present
-* optimizations to metrics including faster if no NaN present
-* :heavy_plus_sign: faster percentile function, used in transforms, basics
-* also added nan_checks to switch between numpy na and numpy non-na quantiles/medians
-* made fake_date_fill nan method vectorized
-* slightly adjusted the upper/lower forecast method for LastValueNaive :crystal_ball:
-* updated sliding_window_view to allow Motifs to run on Numpy < 1.20 and also for faster WindowRegression
-* updated regressor_used and used_regressor_check so they should be more reliably filled.
-* changed behavior where import_templates would fail if model_list not satisified. Still fails, but now only for the "only" import option
-* added :chart_with_upwards_trend: when a model in validation is the best so far that round
-* addition of "auto" and "max" num_validations with auto set as default
-* addition of new metrics: mqae, oda, maxe
+# Latest :space_invader: :space_invader: :space_invader:
+* plot_horizontal_per_generation and horizontal_per_generation added
+* model_list now accepts a dictionary of probabilities, however this only affects new Random Templates
+* :seedling: improved the genetic algorithm for new model generation
+* minor improvement to generate_score_per_series for handling very small ~e-20 errors
+* added PytorchForecasting to available models
+* Johansen Cointegration transformer
+* BTCD transformer
+* Johansen and BTCD as Regression features
+* fixed bug in plot_horizontal()
+* added ARCH to available models
+* changed the sklearn models used by UnivariateRegression by default and returned to default model_list
+* fixed a bug in KerasRNN
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
@@ -51,7 +37,7 @@
 	* depth of recombination is?
 	* add to "all" transformer_dict
 	* add to no_params or external if so
-	* add to no_shared if so, in auto_model.py (shared_trans)
+	* add to shared_trans if so
 	* oddities_list for those with forecast/original transform difference
 
 ## New Metric Checklist:

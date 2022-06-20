@@ -1119,12 +1119,9 @@ def looped_motif(
     pred_int = (1 - prediction_interval) / 2
     upper_forecast = nan_quantile(results, q=(1 - pred_int), axis=0)
     lower_forecast = nan_quantile(results, q=pred_int, axis=0)
-    forecast = pd.Series(forecast)
-    forecast.name = name
-    upper_forecast = pd.Series(upper_forecast)
-    upper_forecast.name = name
-    lower_forecast = pd.Series(lower_forecast)
-    lower_forecast.name = name
+    forecast = pd.Series(forecast, name=name)
+    upper_forecast = pd.Series(upper_forecast, name=name)
+    lower_forecast = pd.Series(lower_forecast, name=name)
     if return_result_windows:
         return (forecast, upper_forecast, lower_forecast, results)
     else:
@@ -1333,11 +1330,12 @@ class Motif(ModelObject):
             )[0]
         else:
             k_choice = random.choices(
-                [3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+                [1, 3, 5, 10, 15, 20, 100], [0.02, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
             )[0]
         return {
             "window": random.choices(
-                [3, 5, 7, 10, 14, 28, 60], [0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01]
+                [2, 3, 5, 7, 10, 14, 28, 60],
+                [0.01, 0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01],
             )[0],
             "point_method": random.choices(
                 ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]

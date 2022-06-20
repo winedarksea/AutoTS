@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 from autots.tools.impute import FillNA, df_interpolate
 from autots.tools.seasonal import date_part, seasonal_int
+from autots.tools.cointegration import coint_johansen, btcd_decompose
+from autots.models.sklearn import generate_regressor_params, retrieve_regressor
 
 
 class EmptyTransformer(object):
@@ -1028,7 +1030,6 @@ class DatepartRegressionTransformer(EmptyTransformer):
             polynomial_choice = random.choices([None, 2], [0.5, 0.2])[0]
         else:
             polynomial_choice = None
-        from autots.models.sklearn import generate_regressor_params
 
         if method == "all":
             choice = generate_regressor_params()
@@ -1079,8 +1080,6 @@ class DatepartRegressionTransformer(EmptyTransformer):
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
         )
-        from autots.models.sklearn import retrieve_regressor
-
         multioutput = True
         if y.ndim < 2:
             multioutput = False
@@ -2156,6 +2155,234 @@ class PCA(EmptyTransformer):
         }
 
 
+class MeanDifference(EmptyTransformer):
+    """Difference from lag n value, but differenced by mean of all series.
+    inverse_transform can only be applied to the original series, or an immediately following forecast
+
+    Args:
+        lag (int): number of periods to shift (not implemented, default = 1)
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(name="MeanDifference")
+        self.lag = 1
+        self.beta = 1
+
+    def fit(self, df):
+        """Fit.
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.means = df.mean(axis=1)
+
+        self.last_values = self.means.iloc[-self.lag]
+        self.first_values = self.means.iloc[self.lag - 1]
+        return self
+
+    def transform(self, df):
+        """Return differenced data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return (df - df.mean(axis=1).shift(self.lag).values[..., None]).fillna(
+            method='bfill'
+        )
+
+    def fit_transform(self, df):
+        """Fits and Returns Magical DataFrame
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return (df - self.means.shift(self.lag).values[..., None]).fillna(
+            method='bfill'
+        )
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Returns data to original *or* forecast form
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+            trans_method (str): whether to inverse on original data, or on a following sequence
+                - 'original' return original data to original numbers
+                - 'forecast' inverse the transform on a dataset immediately following the original
+        """
+        lag = self.lag
+        # add last values, group by lag, cumsum
+        if trans_method == 'original':
+            return df + self.means.shift(lag).values[..., None]
+        else:
+            last_vals = self.last_values
+            for indx in range(df.shape[0]):
+                df.iloc[indx] = df.iloc[indx] + last_vals
+                last_vals = df.iloc[indx].mean()
+            if df.isnull().values.any():
+                raise ValueError("NaN in MeanDifference.inverse_transform")
+            return df
+
+
+class Cointegration(EmptyTransformer):
+    """Johansen Cointegration Decomposition."""
+
+    def __init__(
+        self,
+        det_order: int = -1,
+        k_ar_diff: int = 1,
+        name: str = 'Cointegration',
+        **kwargs,
+    ):
+        self.name = name
+        self.det_order = det_order
+        self.k_ar_diff = k_ar_diff
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if df.shape[1] < 2:
+            raise ValueError("Coint only works on multivarate series")
+        # might be helpful to add a fast test for correlation?
+        self.components_ = coint_johansen(df.values, self.det_order, self.k_ar_diff)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return pd.DataFrame(
+            np.matmul(self.components_, (df.values).T).T,
+            index=df.index,
+            columns=df.columns,
+        )
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original space.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return pd.DataFrame(
+            # np.dot(np.linalg.inv(df), self.components_),
+            np.linalg.lstsq(self.components_, df.T, rcond=1)[0].T,
+            # np.linalg.solve(self.components_, df.T).T,
+            index=df.index,
+            columns=df.columns,
+        ).astype(float)
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self.fit(df).transform(df)
+
+    @staticmethod
+    def get_new_params(method: str = 'random'):
+        """Generate new random parameters"""
+        return {
+            'det_order': random.choice([-1, 0, 1]),
+            'k_ar_diff': random.choice([0, 1, 2]),
+        }
+
+
+class BTCD(EmptyTransformer):
+    """Box and Tiao Canonical Decomposition."""
+
+    def __init__(
+        self,
+        regression_model: dict = {
+            "model": 'LinearRegression',
+            "model_params": {},
+        },
+        max_lags: int = 1,
+        name: str = 'BTCD',
+        **kwargs,
+    ):
+        self.name = name
+        self.regression_model = regression_model
+        self.max_lags = max_lags
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if df.shape[1] < 2:
+            raise ValueError("BTCD only works on multivarate series")
+
+        self.components_ = btcd_decompose(
+            df.values,
+            retrieve_regressor(
+                regression_model=self.regression_model,
+                verbose=0,
+                verbose_bool=False,
+                random_seed=2020,
+                multioutput=False,
+            ),
+            self.max_lags,
+        )
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return pd.DataFrame(
+            np.matmul(self.components_, (df.values).T).T,
+            index=df.index,
+            columns=df.columns,
+        ).astype(float)
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original space.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return pd.DataFrame(
+            # np.linalg.lstsq(self.components_, df.T)[0].T,
+            np.linalg.solve(self.components_, df.T).T,
+            index=df.index,
+            columns=df.columns,
+        ).astype(float)
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self.fit(df).transform(df)
+
+    @staticmethod
+    def get_new_params(method: str = 'random'):
+        """Generate new random parameters"""
+        if method == "deep":
+            choice = generate_regressor_params(
+                model_dict={
+                    'ElasticNet': 0.05,
+                    'DecisionTree': 0.05,
+                    "LinearRegression": 0.9,
+                }
+            )
+        else:
+            choice1 = random.choice(["LinearRegression", "FastRidge"])
+            choice = {
+                "model": choice1,
+                "model_params": {},
+            }
+        return {'regression_model': choice, 'max_lags': random.choice([1, 2])}
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     'None': EmptyTransformer(),
@@ -2188,6 +2415,7 @@ trans_dict = {
     'DatepartRegressionRandForest': DatepartRegressionTransformer(
         regression_model={"model": 'RandomForest', "model_params": {}}
     ),
+    'MeanDifference': MeanDifference(),
 }
 # transformers with parameter pass through (internal only)
 have_params = {
@@ -2207,9 +2435,18 @@ have_params = {
     "EWMAFilter": EWMAFilter,
     "FastICA": FastICA,
     "PCA": PCA,
+    "BTCD": BTCD,
+    "Cointegration": Cointegration,
 }
 # where will results will vary if not all series are included together
-shared_trans = ['PCA', 'FastICA', "DatepartRegression"]
+shared_trans = [
+    'PCA',
+    'FastICA',
+    "DatepartRegression",
+    "MeanDifference",
+    "BTCD",
+    "Cointegration",
+]
 # transformers not defined in AutoTS
 external_transformers = [
     'MinMaxScaler',
@@ -2283,6 +2520,9 @@ class GeneralTransformer(object):
             "HPFilter" - statsmodels hp_filter
             "STLFilter" - seasonal decompose and keep just one part of decomposition
             "EWMAFilter" - use an exponential weighted moving average to smooth data
+            "MeanDifference" - joint version of differencing
+            "Cointegration" - VECM but just the vectors
+            "BTCD" - Box Tiao decomposition
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -2329,6 +2569,7 @@ class GeneralTransformer(object):
             'SeasonalDifference7',
             'SeasonalDifference12',
             'SeasonalDifference28',
+            'MeanDifference',
         ]
 
     def fill_na(self, df, window: int = 10):
@@ -2642,14 +2883,20 @@ transformer_dict = {
     "ScipyFilter": 0.02,
     "STLFilter": 0.01,
     "EWMAFilter": 0.02,
+    "MeanDifference": 0.002,
+    "BTCD": 0.01,
+    "Cointegration": 0.01,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
 del fast_transformer_dict['SinTrend']
 del fast_transformer_dict['FastICA']
 del fast_transformer_dict['ScipyFilter']
+del fast_transformer_dict['Cointegration']
+del fast_transformer_dict['BTCD']
 
 # and even more, not just removing slow but also less commonly useful ones
+# also there should be no 'shared' transformers in this list to make h-ensembles faster
 superfast_transformer_dict = {
     None: 0.0,
     'MinMaxScaler': 0.05,
@@ -2691,7 +2938,7 @@ def transformer_list_to_dict(transformer_list):
     """Convert various possibilities to dict."""
     if not transformer_list or transformer_list == "all":
         transformer_list = transformer_dict
-    elif transformer_list in ["fast", "default", "Fast"]:
+    elif transformer_list in ["fast", "default", "Fast", "auto"]:
         transformer_list = fast_transformer_dict
     elif transformer_list == "superfast":
         transformer_list = superfast_transformer_dict

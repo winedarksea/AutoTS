@@ -208,7 +208,7 @@ class EventRiskForecast(object):
         forecast_length=None,
         prediction_interval=None,
         models_mode="event_risk",
-        model_list=["UnivariateMotif", "MultivariateMotif", "SectionalMotif"],
+        model_list=["UnivariateMotif", "MultivariateMotif", "SectionalMotif", "ARCH"],
         ensemble=None,
         autots_kwargs=None,
         future_regressor_train=None,
@@ -311,13 +311,22 @@ class EventRiskForecast(object):
             else future_regressor_forecast
         )
 
+        # this should be implementable with some models in gluonts and pytorch-forecasting
         all_motif_list = [
             "UnivariateMotif",
             "MultivariateMotif",
             "SectionalMotif",
             "Motif",
+            "ARCH",  # simulations not motifs but similar
+            "PytorchForecasting",
         ]
-        diff_window_motif_list = ["UnivariateMotif", "MultivariateMotif", "Motif"]
+        # these are those that require a parameter, and return a dict
+        diff_window_motif_list = [
+            "UnivariateMotif",
+            "MultivariateMotif",
+            "Motif",
+            "ARCH",
+        ]
         if model_name in all_motif_list:
             if isinstance(prediction_interval, list):
                 prediction_interval = prediction_interval[0]
@@ -344,7 +353,10 @@ class EventRiskForecast(object):
                 result_windows = np.moveaxis(
                     np.array(list(result_windows.values())), 0, -1
                 )
+            if result_windows.ndim == 4:
+                result_windows = result_windows[0]
             transformed_array = []
+            # bring these back to the original feature space, as they aren't already
             for samp in result_windows:
                 transformed_array.append(
                     forecasts.transformer.inverse_transform(

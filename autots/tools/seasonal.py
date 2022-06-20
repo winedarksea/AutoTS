@@ -8,22 +8,28 @@ import random
 import pandas as pd
 
 
-def seasonal_int(include_one: bool = False, small=False):
-    """Generate a random integer of typical seasonalities."""
+def seasonal_int(include_one: bool = False, small=False, very_small=False):
+    """Generate a random integer of typical seasonalities.
+
+    Args:
+        include_one (bool): whether to include 1 in output options
+        small (bool): if True, keep below 364
+        very_small (bool): if True keep below 30
+    """
     prob_dict = {
-        'random_int': 0.1,
-        1: 0.05,
-        2: 0.05,
-        4: 0.05,
-        7: 0.15,
+        -1: 0.1,  # random int
+        1: 0.05,  # previous day
+        2: 0.1,
+        4: 0.05,  # quarters
+        7: 0.15,  # week
         10: 0.01,
-        12: 0.1,
-        24: 0.1,
-        28: 0.1,
-        60: 0.1,
-        96: 0.04,
+        12: 0.1,  # months
+        24: 0.1,  # months or hours
+        28: 0.1,  # days in month to weekday
+        60: 0.05,
+        96: 0.04,  # quarter in days
         168: 0.01,
-        364: 0.1,
+        364: 0.1,  # year to weekday
         1440: 0.01,
         420: 0.01,
         52: 0.01,
@@ -34,12 +40,15 @@ def seasonal_int(include_one: bool = False, small=False):
         list(prob_dict.values()),
         k=1,
     )[0]
-    if not include_one and str(lag) == '1':
-        lag = 'random_int'
-    if lag == 'random_int':
+    if lag == -1:
         lag = random.randint(2, 100)
+    if not include_one and lag == 1:
+        lag = seasonal_int(include_one=include_one, small=small, very_small=very_small)
     if small:
         lag = lag if lag < 364 else 364
+    if very_small:
+        while lag > 30:
+            lag = seasonal_int(include_one=include_one, very_small=very_small)
     return int(lag)
 
 

@@ -4,6 +4,14 @@ autots.tools package
 Submodules
 ----------
 
+autots.tools.cointegration module
+---------------------------------
+
+.. automodule:: autots.tools.cointegration
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.cpu\_count module
 ------------------------------
 

@@ -179,7 +179,9 @@ class FBProphet(ModelObject):
                 for nme in args['regressor_name']:
                     m.add_regressor(nme)
             m = m.fit(current_series)
-            future = m.make_future_dataframe(periods=forecast_length)
+            future = m.make_future_dataframe(
+                periods=forecast_length, include_history=False
+            )
             if args['regression_type'] == 'User':
                 if future_regressor.ndim > 1:
                     # a = args['dimensionality_reducer'].transform(future_regressor)
@@ -500,7 +502,7 @@ class NeuralProphet(ModelObject):
                     changepoints_range=self.changepoints_range,
                     trend_reg=self.trend_reg,
                     trend_reg_threshold=self.trend_reg_threshold,
-                    ar_sparsity=self.ar_sparsity,
+                    # ar_sparsity=self.ar_sparsity,
                     yearly_seasonality=self.yearly_seasonality,
                     weekly_seasonality=self.weekly_seasonality,
                     daily_seasonality=self.daily_seasonality,
@@ -512,7 +514,7 @@ class NeuralProphet(ModelObject):
                     d_hidden=self.d_hidden,
                     learning_rate=self.learning_rate,
                     loss_func=self.loss_func,
-                    train_speed=self.train_speed,
+                    # train_speed=self.train_speed,
                     normalize=self.normalize,
                     collect_metrics=False,
                 )
@@ -523,7 +525,7 @@ class NeuralProphet(ModelObject):
                     changepoints_range=self.changepoints_range,
                     trend_reg=self.trend_reg,
                     trend_reg_threshold=self.trend_reg_threshold,
-                    ar_sparsity=self.ar_sparsity,
+                    # ar_sparsity=self.ar_sparsity,
                     yearly_seasonality=self.yearly_seasonality,
                     weekly_seasonality=self.weekly_seasonality,
                     daily_seasonality=self.daily_seasonality,
@@ -535,7 +537,7 @@ class NeuralProphet(ModelObject):
                     d_hidden=self.d_hidden,
                     learning_rate=self.learning_rate,
                     loss_func=self.loss_func,
-                    train_speed=self.train_speed,
+                    # train_speed=self.train_speed,
                     normalize=self.normalize,
                     collect_metrics=False,
                 )
@@ -547,7 +549,7 @@ class NeuralProphet(ModelObject):
                 )
                 for nme in args['regressor_name']:
                     m.add_future_regressor(nme)
-            m.fit(current_series, freq=args['freq'], progress_print=False, minimal=True)
+            m.fit(current_series, freq=args['freq'], minimal=True)
             if args['regression_type'] == 'User':
                 if future_regressor.ndim > 1:
                     if future_regressor.shape[1] > 1:
@@ -718,9 +720,9 @@ class NeuralProphet(ModelObject):
             "changepoints_range": random.choice([0.8, 0.9, 0.95]),
             "trend_reg": trend_reg,
             'trend_reg_threshold': trend_reg_threshold,
-            "ar_sparsity": random.choices(
-                [None, 0.01, 0.03, 0.1], [0.9, 0.1, 0.1, 0.1]
-            )[0],
+            # "ar_sparsity": random.choices(
+            #    [None, 0.01, 0.03, 0.1], [0.9, 0.1, 0.1, 0.1]
+            # )[0],
             "yearly_seasonality": random.choices(["auto", False], [0.1, 0.5])[0],
             "weekly_seasonality": random.choices(["auto", False], [0.1, 0.5])[0],
             "daily_seasonality": random.choices(["auto", False], [0.1, 0.5])[0],
@@ -733,9 +735,9 @@ class NeuralProphet(ModelObject):
                 [None, 1.0, 0.1, 0.01, 0.001], [0.7, 0.2, 0.1, 0.1, 0.1]
             )[0],
             "loss_func": random.choice(['Huber', "MAE", "MSE"]),
-            "train_speed": random.choices(
-                [None, -1, -2, -3, 1, 2, 3], [0.9, 0.01, 0.01, 0.01, 0.05, 0.05, 0.05]
-            )[0],
+            # "train_speed": random.choices(
+            #     [None, -1, -2, -3, 1, 2, 3], [0.9, 0.01, 0.01, 0.01, 0.05, 0.05, 0.05]
+            # )[0],
             "normalize": random.choices(['off', 'auto', 'soft1'], [0.4, 0.3, 0.3])[0],
         }
         return parameter_dict
@@ -750,7 +752,7 @@ class NeuralProphet(ModelObject):
             "changepoints_range": self.changepoints_range,
             "trend_reg": self.trend_reg,
             'trend_reg_threshold': self.trend_reg_threshold,
-            "ar_sparsity": self.ar_sparsity,
+            # "ar_sparsity": self.ar_sparsity,
             "yearly_seasonality": self.yearly_seasonality,
             "weekly_seasonality": self.weekly_seasonality,
             "daily_seasonality": self.daily_seasonality,
@@ -761,7 +763,7 @@ class NeuralProphet(ModelObject):
             'd_hidden': self.d_hidden,
             "learning_rate": self.learning_rate,
             "loss_func": self.loss_func,
-            "train_speed": self.train_speed,
+            # "train_speed": self.train_speed,
             "normalize": self.normalize,
         }
         return parameter_dict

@@ -4,6 +4,7 @@ from autots.tools.impute import FillNA
 from autots.tools.shaping import infer_frequency
 from autots.tools.seasonal import date_part
 from autots.tools.holiday import holiday_flag
+from autots.tools.cointegration import coint_johansen
 
 
 def create_regressor(
@@ -173,59 +174,74 @@ def create_lagged_regressor(
         df = df.to_frame()
     dates = df.index
     df_cols = df.columns
+    df_inner = df.copy()
 
     if scale:
         from sklearn.preprocessing import StandardScaler
 
         scaler = StandardScaler()
-        df = pd.DataFrame(scaler.fit_transform(df), index=dates, columns=df_cols)
+        df_inner = pd.DataFrame(
+            scaler.fit_transform(df_inner), index=dates, columns=df_cols
+        )
 
     ag_flag = False
     # these shouldn't care about NaN
     if summarize is None:
         pass
     if summarize == "auto":
-        ag_flag = True if df.shape[1] > 10 else False
+        ag_flag = True if df_inner.shape[1] > 10 else False
     elif summarize == 'mean':
-        df = df.mean(axis=1).to_frame()
+        df_inner = df_inner.mean(axis=1).to_frame()
     elif summarize == 'median':
-        df = df.median(axis=1).to_frame()
+        df_inner = df_inner.median(axis=1).to_frame()
     elif summarize == 'mean+std':
-        df = pd.concat([df.mean(axis=1).to_frame(), df.std(axis=1).to_frame()], axis=1)
-        df.columns = [0, 1]
+        df_inner = pd.concat(
+            [df_inner.mean(axis=1).to_frame(), df_inner.std(axis=1).to_frame()], axis=1
+        )
+        df_inner.columns = [0, 1]
 
-    df = FillNA(df, method=fill_na)
+    df_inner = FillNA(df_inner, method=fill_na)
     # some debate over whether PCA or RandomProjection will result in minor data leakage, if used
     if summarize == 'pca':
         from sklearn.decomposition import PCA
 
-        n_components = "mle" if df.shape[0] > df.shape[1] else None
-        df = FillNA(df, method=fill_na)
-        df = pd.DataFrame(PCA(n_components=n_components).fit_transform(df), index=dates)
-        ag_flag = True if df.shape[1] > 10 else False
+        n_components = "mle" if df_inner.shape[0] > df_inner.shape[1] else None
+        df_inner = FillNA(df_inner, method=fill_na)
+        df_inner = pd.DataFrame(
+            PCA(n_components=n_components).fit_transform(df_inner), index=dates
+        )
+        ag_flag = True if df_inner.shape[1] > 10 else False
+    elif summarize == 'cointegration':
+        ev, components_ = coint_johansen(df_inner.values, 0, 1, return_eigenvalues=True)
+        df_inner = pd.DataFrame(
+            np.matmul(components_, (df_inner.values).T).T,
+            index=df_inner.index,
+        ).iloc[:, np.flipud(np.argsort(ev))[0:10]]
     elif summarize == "feature_agglomeration" or ag_flag:
         from sklearn.cluster import FeatureAgglomeration
 
         n_clusters = 10 if ag_flag else 25
-        if df.shape[1] > 25:
-            df = pd.DataFrame(
-                FeatureAgglomeration(n_clusters=n_clusters).fit_transform(df),
+        if df_inner.shape[1] > 25:
+            df_inner = pd.DataFrame(
+                FeatureAgglomeration(n_clusters=n_clusters).fit_transform(df_inner),
                 index=dates,
             )
     elif summarize == "gaussian_random_projection":
         from sklearn.random_projection import GaussianRandomProjection
 
-        df = pd.DataFrame(
-            GaussianRandomProjection(n_components='auto', eps=0.2).fit_transform(df),
+        df_inner = pd.DataFrame(
+            GaussianRandomProjection(n_components='auto', eps=0.2).fit_transform(
+                df_inner
+            ),
             index=dates,
         )
 
-    regressor_forecast = df.tail(forecast_length)
+    regressor_forecast = df_inner.tail(forecast_length)
     # also dates.shift(forecast_length)[-forecast_length:]
     regressor_forecast.index = pd.date_range(
         dates[-1], periods=(forecast_length + 1), freq=frequency
     )[1:]
-    regressor_train = df.shift(forecast_length)
+    regressor_train = df_inner.shift(forecast_length)
     if backfill == "ets":
         model_flag = True
         model_name = "ETS"
@@ -240,7 +256,7 @@ def create_lagged_regressor(
     if model_flag:
         from autots import model_forecast
 
-        df_train = df.iloc[::-1]
+        df_train = df_inner.iloc[::-1]
         df_train.index = dates
         df_forecast = model_forecast(
             model_name=model_name,
@@ -260,6 +276,6 @@ def create_lagged_regressor(
         add_on = df_forecast.forecast.iloc[::-1]
         add_on.index = regressor_train.head(forecast_length).index
         regressor_train = pd.concat(
-            [add_on, regressor_train.tail(df.shape[0] - forecast_length)]
+            [add_on, regressor_train.tail(df_inner.shape[0] - forecast_length)]
         )
     return regressor_train, regressor_forecast

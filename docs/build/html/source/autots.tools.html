@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.tools package &#8212; AutoTS 0.4.1 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.4.2 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -36,6 +36,54 @@
 <h1>autots.tools package<a class="headerlink" href="#autots-tools-package" title="Permalink to this headline">¶</a></h1>
 <section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-autots.tools.cointegration">
+<span id="autots-tools-cointegration-module"></span><h2>autots.tools.cointegration module<a class="headerlink" href="#module-autots.tools.cointegration" title="Permalink to this headline">¶</a></h2>
+<p>Cointegration</p>
+<p>Johansen heavily based on Statsmodels source code</p>
+<p>BTCD heavily based on D. Barba
+<a class="reference external" href="https://towardsdatascience.com/canonical-decomposition-a-forgotten-method-for-time-series-cointegration-and-beyond-4d1213396da1">https://towardsdatascience.com/canonical-decomposition-a-forgotten-method-for-time-series-cointegration-and-beyond-4d1213396da1</a></p>
+<dl class="function">
+<dt id="autots.tools.cointegration.btcd_decompose">
+<code class="sig-prename descclassname">autots.tools.cointegration.</code><code class="sig-name descname">btcd_decompose</code><span class="sig-paren">(</span><em class="sig-param">p_mat: numpy.ndarray</em>, <em class="sig-param">regression_model</em>, <em class="sig-param">max_lag: int = 1</em>, <em class="sig-param">return_eigenvalues=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.cointegration.btcd_decompose" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate decomposition.
+p_mat is of shape(t,n), wide style data.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.cointegration.coint_johansen">
+<code class="sig-prename descclassname">autots.tools.cointegration.</code><code class="sig-name descname">coint_johansen</code><span class="sig-paren">(</span><em class="sig-param">endog</em>, <em class="sig-param">det_order=-1</em>, <em class="sig-param">k_ar_diff=1</em>, <em class="sig-param">return_eigenvalues=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.cointegration.coint_johansen" title="Permalink to this definition">¶</a></dt>
+<dd><p>Johansen cointegration test of the cointegration rank of a VECM, abbreviated from Statsmodels</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.cointegration.fourier_series">
+<code class="sig-prename descclassname">autots.tools.cointegration.</code><code class="sig-name descname">fourier_series</code><span class="sig-paren">(</span><em class="sig-param">dates</em>, <em class="sig-param">period</em>, <em class="sig-param">series_order</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.cointegration.fourier_series" title="Permalink to this definition">¶</a></dt>
+<dd><p>Provides Fourier series components with the specified frequency
+and order.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dates</strong> (<em>pd.Series containing timestamps.</em>) – </p></li>
+<li><p><strong>period</strong> (<em>Number of days of the period.</em>) – </p></li>
+<li><p><strong>series_order</strong> (<em>Number of components.</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p></p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Matrix with seasonality features.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.cointegration.lagmat">
+<code class="sig-prename descclassname">autots.tools.cointegration.</code><code class="sig-name descname">lagmat</code><span class="sig-paren">(</span><em class="sig-param">x</em>, <em class="sig-param">maxlag: int</em>, <em class="sig-param">trim='forward'</em>, <em class="sig-param">original='ex'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.cointegration.lagmat" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create 2d array of lags. Modified from Statsmodels.</p>
+</dd></dl>
+
 </section>
 <section id="module-autots.tools.cpu_count">
 <span id="autots-tools-cpu-count-module"></span><h2>autots.tools.cpu_count module<a class="headerlink" href="#module-autots.tools.cpu_count" title="Permalink to this headline">¶</a></h2>
@@ -474,8 +522,17 @@ recurring - all features that should commonly repeat without aging</p></li>
 
 <dl class="function">
 <dt id="autots.tools.seasonal.seasonal_int">
-<code class="sig-prename descclassname">autots.tools.seasonal.</code><code class="sig-name descname">seasonal_int</code><span class="sig-paren">(</span><em class="sig-param">include_one: bool = False</em>, <em class="sig-param">small=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.seasonal.seasonal_int" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.seasonal.</code><code class="sig-name descname">seasonal_int</code><span class="sig-paren">(</span><em class="sig-param">include_one: bool = False</em>, <em class="sig-param">small=False</em>, <em class="sig-param">very_small=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.seasonal.seasonal_int" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate a random integer of typical seasonalities.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>include_one</strong> (<em>bool</em>) – whether to include 1 in output options</p></li>
+<li><p><strong>small</strong> (<em>bool</em>) – if True, keep below 364</p></li>
+<li><p><strong>very_small</strong> (<em>bool</em>) – if True keep below 30</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 </section>
@@ -665,6 +722,63 @@ note this includes NaNs in current configuration</p>
 <span id="autots-tools-transform-module"></span><h2>autots.tools.transform module<a class="headerlink" href="#module-autots.tools.transform" title="Permalink to this headline">¶</a></h2>
 <p>Preprocessing data methods.</p>
 <dl class="class">
+<dt id="autots.tools.transform.BTCD">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">BTCD</code><span class="sig-paren">(</span><em class="sig-param">regression_model: dict = {'model': 'LinearRegression'</em>, <em class="sig-param">'model_params': {}}</em>, <em class="sig-param">max_lags: int = 1</em>, <em class="sig-param">name: str = 'BTCD'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.BTCD" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
+<p>Box and Tiao Canonical Decomposition.</p>
+<dl class="method">
+<dt id="autots.tools.transform.BTCD.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.BTCD.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Learn behavior of data to change.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.BTCD.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.BTCD.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns <em>Magical</em> DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.BTCD.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.BTCD.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate new random parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.BTCD.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.BTCD.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data to original space.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.BTCD.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.BTCD.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return changed data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
 <dt id="autots.tools.transform.CenterLastValue">
 <em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">CenterLastValue</code><span class="sig-paren">(</span><em class="sig-param">rows: int = 1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.CenterLastValue" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
@@ -782,6 +896,63 @@ note this includes NaNs in current configuration</p>
 <dl class="method">
 <dt id="autots.tools.transform.ClipOutliers.transform">
 <code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.ClipOutliers.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return changed data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.Cointegration">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">Cointegration</code><span class="sig-paren">(</span><em class="sig-param">det_order: int = -1</em>, <em class="sig-param">k_ar_diff: int = 1</em>, <em class="sig-param">name: str = 'Cointegration'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Cointegration" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
+<p>Johansen Cointegration Decomposition.</p>
+<dl class="method">
+<dt id="autots.tools.transform.Cointegration.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Cointegration.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Learn behavior of data to change.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.Cointegration.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Cointegration.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns <em>Magical</em> DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.Cointegration.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Cointegration.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate new random parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.Cointegration.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Cointegration.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data to original space.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.Cointegration.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Cointegration.transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return changed data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1333,7 +1504,10 @@ most of the interpolate methods from pandas.interpolate</p>
 “ScipyFilter” - filter data (lose information but smoother!) from scipy
 “HPFilter” - statsmodels hp_filter
 “STLFilter” - seasonal decompose and keep just one part of decomposition
-“EWMAFilter” - use an exponential weighted moving average to smooth data</p>
+“EWMAFilter” - use an exponential weighted moving average to smooth data
+“MeanDifference” - joint version of differencing
+“Cointegration” - VECM but just the vectors
+“BTCD” - Box Tiao decomposition</p>
 </p></li>
 <li><p><strong>transformation_params</strong> (<em>dict</em>) – params of transformers {0: {}, 1: {‘model’: ‘Poisson’}, …}
 pass through dictionary of empty dictionaries to utilize defaults</p></li>
@@ -1509,6 +1683,62 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 <dt id="autots.tools.transform.IntermittentOccurrence.transform">
 <code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.IntermittentOccurrence.transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>0 if Median. 1 if &gt; Median, -1 if less.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.MeanDifference">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">MeanDifference</code><span class="sig-paren">(</span><em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.MeanDifference" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
+<p>Difference from lag n value, but differenced by mean of all series.
+inverse_transform can only be applied to the original series, or an immediately following forecast</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>lag</strong> (<em>int</em>) – number of periods to shift (not implemented, default = 1)</p>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.tools.transform.MeanDifference.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.MeanDifference.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit.
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.MeanDifference.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.MeanDifference.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns Magical DataFrame
+:param df: input dataframe
+:type df: pandas.DataFrame</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.MeanDifference.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.MeanDifference.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns data to original <em>or</em> forecast form</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p></li>
+<li><p><strong>trans_method</strong> (<em>str</em>) – whether to inverse on original data, or on a following sequence
+- ‘original’ return original data to original numbers
+- ‘forecast’ inverse the transform on a dataset immediately following the original</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.MeanDifference.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.MeanDifference.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return differenced data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
@@ -1698,7 +1928,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="function">
 <dt id="autots.tools.transform.RandomTransform">
-<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.07</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.01</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.03</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01</em>, <em class="sig-param">'EWMAFilter': 0.02}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.4</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.1</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.05</em>, <em class="sig-param">'mean': 0.06</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.03</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.4</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">superfast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.07</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.01</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.03</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01</em>, <em class="sig-param">'EWMAFilter': 0.02</em>, <em class="sig-param">'MeanDifference': 0.002</em>, <em class="sig-param">'BTCD': 0.01</em>, <em class="sig-param">'Cointegration': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.4</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.1</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.05</em>, <em class="sig-param">'mean': 0.06</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.03</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.4</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">superfast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a dict of randomly choosen transformation selections.</p>
 <p>SinTrend is used as a signal that slow parameters are allowed.</p>
 </dd></dl>

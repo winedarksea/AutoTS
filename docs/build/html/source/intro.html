@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Intro &#8212; AutoTS 0.4.1 documentation</title>
+    <title>Intro &#8212; AutoTS 0.4.2 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -74,12 +74,12 @@ Many models also support passing in user-defined exogenous regressors.</p>
 <li><p>The <em>wide</em> format is a <code class="docutils literal notranslate"><span class="pre">pandas.DataFrame</span></code> with a <code class="docutils literal notranslate"><span class="pre">pandas.DatetimeIndex</span></code> and each column a distinct series.</p></li>
 <li><p>The <em>long</em> format has three columns:</p>
 <ul>
-<li><p>Date (ideally already in pd.DateTime format)</p></li>
+<li><p>Date (ideally already in pandas-recognized <code class="docutils literal notranslate"><span class="pre">datetime</span></code> format)</p></li>
 <li><p>Series ID. For a single time series, series_id can be <code class="docutils literal notranslate"><span class="pre">=</span> <span class="pre">None</span></code>.</p></li>
 <li><p>Value</p></li>
 </ul>
 </li>
-<li><p>For <em>long</em> data, the column name for each of these is passed to .fit() as <code class="docutils literal notranslate"><span class="pre">date_col</span></code>, <code class="docutils literal notranslate"><span class="pre">id_col</span></code>, and <code class="docutils literal notranslate"><span class="pre">value_col</span></code>. No parameters are needed for <em>wide</em> data.</p></li>
+<li><p>For <em>long</em> data, the column name for each of these is passed to <code class="docutils literal notranslate"><span class="pre">.fit()</span></code> as <code class="docutils literal notranslate"><span class="pre">date_col</span></code>, <code class="docutils literal notranslate"><span class="pre">id_col</span></code>, and <code class="docutils literal notranslate"><span class="pre">value_col</span></code>. No parameters are needed for <em>wide</em> data.</p></li>
 </ul>
 <p>Lower-level functions are only designed for <code class="docutils literal notranslate"><span class="pre">wide</span></code> style data.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># also load: _hourly, _monthly, _weekly, _yearly, or _live_daily</span>
@@ -167,6 +167,7 @@ Many models also support passing in user-defined exogenous regressors.</p>
 </ul>
 </li>
 <li><p>It will be faster if NaN’s are already filled. If a search for optimal NaN fill method is not required, then fill any NaN with a satisfactory method before passing to class.</p></li>
+<li><p>Set <code class="docutils literal notranslate"><span class="pre">runtime_weighting</span></code> in <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code> to a higher value. This will guide the search towards faster models, although it may come at the expense of accuracy.</p></li>
 </ul>
 </section>
 <section id="how-to-contribute">

@@ -530,7 +530,13 @@ def load_linear(
         return df_long
 
 
-def load_sine(long=False, shape=None, start_date: str = "2021-01-01"):
+def load_sine(
+    long=False,
+    shape=None,
+    start_date: str = "2021-01-01",
+    introduce_random: float = None,
+    random_seed: int = 123,
+):
     """Create a dataset of just zeroes for testing edge case."""
     if shape is None:
         shape = (500, 5)
@@ -542,10 +548,15 @@ def load_sine(long=False, shape=None, start_date: str = "2021-01-01"):
     X = pd.to_numeric(df_wide.index, errors='coerce', downcast='integer').values
 
     def sin_func(a, X):
-        return a * np.sin(1 * X) + a
+        return a * np.sin(a * X) + a
 
     for column in df_wide.columns:
         df_wide[column] = sin_func(column, X)
+    if introduce_random is not None:
+        df_wide = (
+            df_wide
+            + np.random.default_rng(random_seed).gamma(introduce_random, size=shape)
+        ).clip(lower=0.1)
     if not long:
         return df_wide
     else:
