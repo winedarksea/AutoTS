@@ -20,33 +20,45 @@ from autots import AutoTS, create_regressor, model_forecast  # noqa
 import matplotlib.pyplot as plt
 
 # raise ValueError("aaargh!")
-use_template = True
+use_template = False
 save_template = False
 force_univariate = False  # long = False
 back_forecast = False
 graph = True
 template_import_method = "addon"  # "only" "addon"
-models_to_validate = 0.45  # 0.99 to validate every tried (use with template import)
+models_to_validate = 0.35  # 0.99 to validate every tried (use with template import)
 
 # this is the template file imported:
 template_filename = "template_" + str(platform.node()) + ".csv"
 template_filename = "template_categories_1.csv"
 name = template_filename.replace('.csv', '')
 random_seed = 2022
-forecast_length = 10
+forecast_length = 28
 long = False
-# df = load_linear(long=long, shape=(300, 5000), introduce_nan=None, introduce_random=100)
-df = load_artificial(long=long, date_start="2018-01-01")
-interest_series = ['arima220_outliers', 'lumpy', 'out-of-stock', "sine_seasonality_monthweek", "intermittent_weekly", "arima017", "old_to_new"]
+# df = load_linear(long=long, shape=(400, 1000), introduce_nan=None)
+df = load_sine(
+    long=long, shape=(400, 1000), start_date="2021-01-01", introduce_random=100
+).iloc[:, 2:]
+# df = load_artificial(long=long, date_start="2018-01-01")
+# df = load_weekly(long=long)
+interest_series = [
+    'arima220_outliers',
+    'lumpy',
+    'out-of-stock',
+    "sine_seasonality_monthweek",
+    "intermittent_weekly",
+    "arima017",
+    "old_to_new",
+]
 prediction_interval = 0.9
 n_jobs = "auto"
-verbose = 1
+verbose = 2
 validation_method = "backwards"  # "similarity"
 frequency = "infer"
 drop_most_recent = 0
-generations = 10
-num_validations = "max"
-initial_template = "General+Random"
+generations = 1
+num_validations = 0  # "auto"
+initial_template = "Random"  # "General+Random"
 if use_template:
     initial_training = not os.path.exists(template_filename)
     if initial_training:
@@ -58,12 +70,12 @@ if force_univariate:
     df = df.iloc[:, 0]
 
 transformer_list = "fast"  # "fast", "all", "superfast"
-# transformer_list = ["Round", "Slice", "EWMAFilter", 'FastICA']
-transformer_max_depth = 2
-models_mode = "default"  # "default", "regressor"
+# transformer_list = ["Round", "Slice", "EWMAFilter", 'Cointegration', "MeanDifference", "BTCD"]
+transformer_max_depth = 1
+models_mode = "default"  # "default", "regressor", "neuralnets"
 model_list = "superfast"
 # model_list = "fast"  # fast_parallel, all
-# model_list = ["DatepartRegression", "GLM"]
+model_list = ["UnivariateRegression", "LastValueNaive"]
 preclean = None
 {
     "fillna": None,  # mean or median one of few consistent things
@@ -72,7 +84,10 @@ preclean = None
         "0": {"span": 14},
     },
 }
-ensemble = ["simple", "horizontal-max", "mosaic", ]  # "dist", "subsample", "mosaic-window", "horizontal-max"
+ensemble = [
+    "simple",
+    'horizontal',
+]  # "dist", "subsample", "mosaic-window", "horizontal-max"
 # ensemble = None
 metric_weighting = {
     'smape_weighting': 5,
@@ -86,6 +101,9 @@ metric_weighting = {
     'containment_weighting': 0,
     'contour_weighting': 0,
     'runtime_weighting': 0.05,
+    'maxe_weighting': 0,
+    'oda_weighting': 0,
+    'mqae_weighting': 0,
 }
 constraint = {
     "constraint_method": "quantile",
@@ -164,7 +182,9 @@ model = model.fit(
 
 elapsed_for = timeit.default_timer() - start_time_for
 
-prediction = model.predict(future_regressor=regr_fcst, verbose=1, fail_on_forecast_nan=True)
+prediction = model.predict(
+    future_regressor=regr_fcst, verbose=1, fail_on_forecast_nan=True
+)
 # point forecasts dataframe
 forecasts_df = prediction.forecast
 # accuracy of all tried model results (not including cross validation)
@@ -194,7 +214,11 @@ print(
 
 if save_template:
     model.export_template(
-        template_filename, models="best", n=20, max_per_model_class=5, include_results=True
+        template_filename,
+        models="best",
+        n=20,
+        max_per_model_class=5,
+        include_results=True,
     )
 
 if graph:
@@ -206,12 +230,19 @@ if graph:
     )
     plt.show()
     model.plot_generation_loss()
+    plt.show()
     # plt.savefig("improvement_over_generations.png", dpi=300)
 
     model.plot_per_series_smape(kind="pie")
     plt.show()
 
-    if model.best_model["Ensemble"].iloc[0] == 2:
+    model.plot_per_series_error()
+    plt.show()
+
+    if model.best_model_ensemble == 2:
+        model.plot_horizontal_per_generation()
+        plt.show()
+
         plt.show()
         model.plot_horizontal_transformers(method="fillna")
         plt.show()
@@ -253,7 +284,22 @@ if model.best_model["Ensemble"].iloc[0] == 2:
                 )
     interest_models = pd.Series(interest_models).value_counts().head(10)
     print(interest_models)
-    print([y for x, y in model.best_model_params['models'].items() if x in interest_models.index.to_list()])
+    print(
+        [
+            y
+            for x, y in model.best_model_params['models'].items()
+            if x in interest_models.index.to_list()
+        ]
+    )
+else:
+    for x in interest_series:
+        if graph:
+            prediction.plot(
+                model.df_wide_numeric,
+                series=x,
+                remove_zeroes=False,
+                start_date="2018-09-26",
+            )
 
 """
 forecasts = model_forecast(
@@ -313,6 +359,7 @@ python ./autots/evaluator/benchmark.py > benchmark.txt
 cd <project dir>
 black ./autots -l 88 -S
 
+mistune==0.8.4 markupsafe==2.0.1 jinja2==2.11.3
 https://github.com/sphinx-doc/sphinx/issues/3382
 # pip install sphinx==2.4.4
 # m2r does not yet work on sphinx 3.0
@@ -332,6 +379,10 @@ python -m pip install --user --upgrade setuptools wheel
 cd /to project directory
 python setup.py sdist bdist_wheel
 twine upload dist/*
+To use this API token:
+    Set your username to __token__
+    Set your password to the token value, including the pypi- prefix
+
 
 Merge dev to master on GitHub and create release (include .tar.gz)
 Update conda-forge

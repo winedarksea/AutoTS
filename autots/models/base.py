@@ -412,8 +412,12 @@ class PredictionObject(object):
         if remove_zeroes:
             plot_df[plot_df == 0] = np.nan
         if interpolate is not None:
-            plot_df["actuals"] = plot_df["actuals"].interpolate(method=interpolate, limit_direction="backward")
-            plot_df["forecast"] = plot_df["forecast"].interpolate(method=interpolate, limit_direction="backward", limit=5)
+            plot_df["actuals"] = plot_df["actuals"].interpolate(
+                method=interpolate, limit_direction="backward"
+            )
+            plot_df["forecast"] = plot_df["forecast"].interpolate(
+                method=interpolate, limit_direction="backward", limit=5
+            )
 
         if start_date is not None:
             start_date = pd.to_datetime(start_date, infer_datetime_format=True)
@@ -544,7 +548,8 @@ class PredictionObject(object):
                     # origin directional accuracy
                     'oda': np.nansum(
                         np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0
-                    ) / F.shape[0],
+                    )
+                    / F.shape[0],
                     # mean of values less than 85th percentile of error
                     'mqae': mqae(self.full_mae_errors, q=0.85, nan_flag=nan_flag),
                     # 90th percentile of error

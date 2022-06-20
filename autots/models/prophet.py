@@ -179,7 +179,9 @@ class FBProphet(ModelObject):
                 for nme in args['regressor_name']:
                     m.add_regressor(nme)
             m = m.fit(current_series)
-            future = m.make_future_dataframe(periods=forecast_length, include_history=False)
+            future = m.make_future_dataframe(
+                periods=forecast_length, include_history=False
+            )
             if args['regression_type'] == 'User':
                 if future_regressor.ndim > 1:
                     # a = args['dimensionality_reducer'].transform(future_regressor)

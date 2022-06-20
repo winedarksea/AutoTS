@@ -2185,7 +2185,9 @@ class MeanDifference(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        return (df - df.mean(axis=1).shift(self.lag).values[..., None]).fillna(method='bfill')
+        return (df - df.mean(axis=1).shift(self.lag).values[..., None]).fillna(
+            method='bfill'
+        )
 
     def fit_transform(self, df):
         """Fits and Returns Magical DataFrame
@@ -2193,7 +2195,9 @@ class MeanDifference(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         self.fit(df)
-        return (df - self.means.shift(self.lag).values[..., None]).fillna(method='bfill')
+        return (df - self.means.shift(self.lag).values[..., None]).fillna(
+            method='bfill'
+        )
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Returns data to original *or* forecast form
@@ -2222,8 +2226,11 @@ class Cointegration(EmptyTransformer):
     """Johansen Cointegration Decomposition."""
 
     def __init__(
-        self, det_order: int = -1, k_ar_diff: int = 1,
-        name: str = 'Cointegration', **kwargs
+        self,
+        det_order: int = -1,
+        k_ar_diff: int = 1,
+        name: str = 'Cointegration',
+        **kwargs,
     ):
         self.name = name
         self.det_order = det_order
@@ -2238,9 +2245,7 @@ class Cointegration(EmptyTransformer):
         if df.shape[1] < 2:
             raise ValueError("Coint only works on multivarate series")
         # might be helpful to add a fast test for correlation?
-        self.components_ = coint_johansen(
-            df.values, self.det_order, self.k_ar_diff
-        )
+        self.components_ = coint_johansen(df.values, self.det_order, self.k_ar_diff)
         return self
 
     def transform(self, df):
@@ -2252,7 +2257,7 @@ class Cointegration(EmptyTransformer):
         return pd.DataFrame(
             np.matmul(self.components_, (df.values).T).T,
             index=df.index,
-            columns=df.columns
+            columns=df.columns,
         )
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
@@ -2266,7 +2271,7 @@ class Cointegration(EmptyTransformer):
             np.linalg.lstsq(self.components_, df.T, rcond=1)[0].T,
             # np.linalg.solve(self.components_, df.T).T,
             index=df.index,
-            columns=df.columns
+            columns=df.columns,
         ).astype(float)
 
     def fit_transform(self, df):
@@ -2282,7 +2287,7 @@ class Cointegration(EmptyTransformer):
         """Generate new random parameters"""
         return {
             'det_order': random.choice([-1, 0, 1]),
-            'k_ar_diff': random.choice([0, 1, 2])
+            'k_ar_diff': random.choice([0, 1, 2]),
         }
 
 
@@ -2290,12 +2295,14 @@ class BTCD(EmptyTransformer):
     """Box and Tiao Canonical Decomposition."""
 
     def __init__(
-        self, regression_model: dict = {
+        self,
+        regression_model: dict = {
             "model": 'LinearRegression',
             "model_params": {},
         },
         max_lags: int = 1,
-        name: str = 'BTCD', **kwargs
+        name: str = 'BTCD',
+        **kwargs,
     ):
         self.name = name
         self.regression_model = regression_model
@@ -2319,7 +2326,7 @@ class BTCD(EmptyTransformer):
                 random_seed=2020,
                 multioutput=False,
             ),
-            self.max_lags
+            self.max_lags,
         )
         return self
 
@@ -2332,7 +2339,7 @@ class BTCD(EmptyTransformer):
         return pd.DataFrame(
             np.matmul(self.components_, (df.values).T).T,
             index=df.index,
-            columns=df.columns
+            columns=df.columns,
         ).astype(float)
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
@@ -2345,7 +2352,7 @@ class BTCD(EmptyTransformer):
             # np.linalg.lstsq(self.components_, df.T)[0].T,
             np.linalg.solve(self.components_, df.T).T,
             index=df.index,
-            columns=df.columns
+            columns=df.columns,
         ).astype(float)
 
     def fit_transform(self, df):
@@ -2373,10 +2380,7 @@ class BTCD(EmptyTransformer):
                 "model": choice1,
                 "model_params": {},
             }
-        return {
-            'regression_model': choice,
-            'max_lags': random.choice([1, 2])
-        }
+        return {'regression_model': choice, 'max_lags': random.choice([1, 2])}
 
 
 # lookup dict for all non-parameterized transformers
@@ -2435,7 +2439,14 @@ have_params = {
     "Cointegration": Cointegration,
 }
 # where will results will vary if not all series are included together
-shared_trans = ['PCA', 'FastICA', "DatepartRegression", "MeanDifference", "BTCD", "Cointegration"]
+shared_trans = [
+    'PCA',
+    'FastICA',
+    "DatepartRegression",
+    "MeanDifference",
+    "BTCD",
+    "Cointegration",
+]
 # transformers not defined in AutoTS
 external_transformers = [
     'MinMaxScaler',

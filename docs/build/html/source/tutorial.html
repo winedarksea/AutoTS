@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Tutorial &#8212; AutoTS 0.4.1 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.4.2 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -74,7 +74,7 @@
 <span class="p">)</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df_long</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s1">&#39;datetime&#39;</span><span class="p">,</span> <span class="n">value_col</span><span class="o">=</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">id_col</span><span class="o">=</span><span class="s1">&#39;series_id&#39;</span><span class="p">)</span>
 
-<span class="c1"># Print the name of the best model</span>
+<span class="c1"># Print the description of the best model</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -181,9 +181,6 @@ Here weather data is included - winter and road construction being the major inf
 <span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">()</span>
 <span class="n">forecasts_df</span> <span class="o">=</span> <span class="n">prediction</span><span class="o">.</span><span class="n">forecast</span>
 <span class="c1"># prediction.long_form_results()</span>
-
-<span class="k">if</span> <span class="n">model</span><span class="o">.</span><span class="n">best_model_ensemble</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
-    <span class="n">model</span><span class="o">.</span><span class="n">plot_horizontal</span><span class="p">()</span>
 </pre></div>
 </div>
 <p>Probabilistic forecasts are <em>available</em> for all models, but in many cases are just data-based estimates in lieu of model estimates.</p>
@@ -289,7 +286,8 @@ This weighting is not to be confused with series weighting, which effects how eq
 Secondly, forecasts often have to meet multiple expectations. Using a composite score allows balancing the
 quality of point forecast, quality of probabilistic forecast, overestimation or underestimation, visual fit, and speed of runtime.</p>
 <p>Some metrics are scaled and some are not. MAE, RMSE, MAGE, MLE, iMLE are unscaled and accordingly in multivariate forecasting will favor model performance on the largest scale input series.</p>
-<p><em>Horizontal</em> style ensembles use <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code> for series selection, but only the values passed for <code class="docutils literal notranslate"><span class="pre">mae,</span> <span class="pre">rmse,</span> <span class="pre">made,</span> <span class="pre">mle,</span> <span class="pre">imle,</span> <span class="pre">contour,</span> <span class="pre">spl</span></code>. If all of these are 0, mae is used for selection.</p>
+<p><em>Horizontal</em> style ensembles use <code class="docutils literal notranslate"><span class="pre">metric_weighting</span></code> for series selection, but only the values passed for <code class="docutils literal notranslate"><span class="pre">mae,</span> <span class="pre">rmse,</span> <span class="pre">made,</span> <span class="pre">mle,</span> <span class="pre">imle,</span> <span class="pre">contour,</span> <span class="pre">spl</span></code>. If all of these are 0, mae is used for selection.
+Accordingly it may be better to reduce the use of<code class="docutils literal notranslate"><span class="pre">smape</span></code>, <code class="docutils literal notranslate"><span class="pre">containment</span></code>, and <code class="docutils literal notranslate"><span class="pre">mage</span></code> weighting when using these ensembles. With univariate models, runtime for overall won’t translate to runtime inside a horizontal ensemble.</p>
 <p><code class="docutils literal notranslate"><span class="pre">sMAPE</span></code> is <em>Symmetric Mean Absolute Percentage Loss</em> and is generally the most versatile metric across multiple series as it is scaled. It doesn’t handle forecasts with lots of zeroes well.</p>
 <p><code class="docutils literal notranslate"><span class="pre">SPL</span></code> is <em>Scaled Pinball Loss</em>, sometimes called <em>Quantile Loss</em>, and is the optimal metric for optimizing upper/lower quantile forecast accuracies.</p>
 <p><code class="docutils literal notranslate"><span class="pre">Containment</span></code> measures the percent of test data that falls between the upper and lower forecasts, and is more human readable than SPL. Also called <code class="docutils literal notranslate"><span class="pre">coverage_fraction</span></code> in other places.</p>
@@ -301,6 +299,45 @@ quality of point forecast, quality of probabilistic forecast, overestimation or 
 This is similar to but faster than MDA (mean directional accuracy) as contour evaluates no change as a positive case.</p>
 <p><code class="docutils literal notranslate"><span class="pre">MADE</span></code> is <em>(Scaled) Mean Absolute Differential Error</em>. Similar to contour, it measures how well similar a forecast changes are to the timestep changes in the actual. Contour measures direction while MADE measures magnitude. Equivalent to ‘MAE’ when forecast_length=1. It is better for optimization than contour.</p>
 <p>The contour and MADE metrics are useful as they encourages ‘wavy’ forecasts, ie, not flat line forecasts. Although flat line naive or linear forecasts can sometimes be very good models, they “don’t look like they are trying hard enough” to some managers, and using them favors non-flat forecasts that (to many) look like a more serious model.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoTS</span><span class="p">()</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+<span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">()</span>
+
+<span class="n">prediction</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">df_wide_numeric</span><span class="p">,</span>
+    <span class="n">series</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">df_wide_numeric</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+    <span class="n">remove_zeroes</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;2018-09-26&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+<span class="n">model</span><span class="o">.</span><span class="n">plot_per_series_smape</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">&quot;pie&quot;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+<span class="n">model</span><span class="o">.</span><span class="n">plot_per_series_error</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+<span class="n">model</span><span class="o">.</span><span class="n">plot_generation_loss</span><span class="p">()</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="n">model</span><span class="o">.</span><span class="n">best_model_ensemble</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">plot_horizontal_per_generation</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">plot_horizontal_transformers</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;fillna&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">plot_horizontal_transformers</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">plot_horizontal</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="k">if</span> <span class="s2">&quot;mosaic&quot;</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">best_model</span><span class="p">[</span><span class="s2">&quot;ModelParameters&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+        <span class="n">mosaic_df</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">mosaic_to_df</span><span class="p">()</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">mosaic_df</span><span class="p">[</span><span class="n">mosaic_df</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">5</span><span class="p">]]</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">5</span><span class="p">))</span>
+
+<span class="k">if</span> <span class="kc">False</span><span class="p">:</span>  <span class="c1"># slow</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">plot_backforecast</span><span class="p">(</span><span class="n">n_splits</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;2019-01-01&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
 </section>
 <section id="hierarchial-and-grouped-forecasts">
 <h3>Hierarchial and Grouped Forecasts<a class="headerlink" href="#hierarchial-and-grouped-forecasts" title="Permalink to this headline">¶</a></h3>
@@ -418,10 +455,9 @@ python -m pip install numpy scipy scikit-learn statsmodels lightgbm xgboost nume
 python -m pip install pystan prophet --exists-action i  <span class="c1"># conda-forge option below works more easily, --no-deps to pip install prophet if this fails</span>
 python -m pip install tensorflow
 python -m pip install mxnet --no-deps     <span class="c1"># check the mxnet documentation for more install options, also try pip install mxnet --no-deps</span>
-python -m pip install gluonts
+python -m pip install gluonts arch
 python -m pip install holidays-ext pmdarima dill greykite --exists-action i --no-deps
 <span class="c1"># install pytorch</span>
-python -m pip install neuralprophet
 python -m pip install --upgrade numpy pandas --exists-action i  <span class="c1"># mxnet likes to (pointlessly seeming) install old versions of numpy</span>
 
 python -m pip install autots --exists-action i
@@ -429,13 +465,31 @@ python -m pip install autots --exists-action i
 </div>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>mamba install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
 pip install mxnet --no-deps
-pip install yfinance pytrends fredapi gluonts
+pip install yfinance pytrends fredapi gluonts arch
 pip install intel-tensorflow scikit-learn-intelex
 mamba install spyder
 mamba install autots -c conda-forge
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">mamba</span></code> and <code class="docutils literal notranslate"><span class="pre">conda</span></code> commands are generally interchangeable.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>conda install pytorch torchvision torchaudio cpuonly -c pytorch
+conda install pytorch-forecasting -c conda-forge
+pip install neuralprophet
+</pre></div>
+</div>
+<p>GPU support, Linux only. CUDA versions will need to match package requirements. Mixed CUDA versions may cause crashes if run in same session.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>nvidia-smi
+mamba activate base
+mamba install -c conda-forge <span class="nv">cudatoolkit</span><span class="o">=</span><span class="m">11</span>.2 <span class="nv">cudnn</span><span class="o">=</span><span class="m">8</span>.1.0 nccl  <span class="c1"># install in conda base</span>
+<span class="nb">export</span> <span class="nv">LD_LIBRARY_PATH</span><span class="o">=</span><span class="nv">$LD_LIBRARY_PATH</span>:<span class="nv">$CONDA_PREFIX</span>/lib/  <span class="c1"># NOT PERMANENT unless add to ./bashrc make sure is for base env, mine /home/colin/mambaforge/lib</span>
+mamba create -n gpu <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.8 scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
+mamba activate gpu
+pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
+pip install mxnet-cu112 --no-deps
+pip install gluonts tensorflow neuralprophet pytorch-lightning pytorch-forecasting
+mamba install spyder
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">mamba</span></code> and <code class="docutils literal notranslate"><span class="pre">conda</span></code> commands are generally interchangeable. <code class="docutils literal notranslate"><span class="pre">conda</span> <span class="pre">env</span> <span class="pre">remove</span> <span class="pre">-n</span> <span class="pre">env_name</span></code></p>
 </section>
 <section id="intel-conda-channel-installation-sometime-faster-also-more-prone-to-bugs">
 <h4>Intel conda channel installation (sometime faster, also, more prone to bugs)<a class="headerlink" href="#intel-conda-channel-installation-sometime-faster-also-more-prone-to-bugs" title="Permalink to this headline">¶</a></h4>
@@ -1012,9 +1066,29 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <tr class="row-even"><td><p>NeuralProphet</p></td>
 <td><p>neuralprophet</p></td>
 <td></td>
-<td><p>tbd</p></td>
+<td><p>nyi</p></td>
 <td><p>pytorch</p></td>
 <td><p>yes</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+</tr>
+<tr class="row-odd"><td><p>PytorchForecasting</p></td>
+<td><p>pytorch-forecasting</p></td>
+<td></td>
+<td><p>True</p></td>
+<td><p>pytorch</p></td>
+<td><p>yes</p></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>ARCH</p></td>
+<td><p>arch</p></td>
+<td></td>
+<td><p>True</p></td>
+<td><p>joblib</p></td>
+<td></td>
 <td></td>
 <td></td>
 <td><p>True</p></td>
@@ -1027,10 +1101,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 <td><p>True</p></td>
-<td><ul class="simple">
-<li></li>
-</ul>
-</td>
+<td><p>nyi</p></td>
 </tr>
 <tr class="row-even"><td><p>MotifSimulation</p></td>
 <td><p>sklearn.metrics.pairwise</p></td>
@@ -1070,10 +1141,11 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td><p>True</p></td>
 <td><p>True</p></td>
-<td></td>
+<td><p>_</p></td>
 </tr>
 </tbody>
 </table>
+<p><em>nyi = not yet implemented</em></p>
 </section>
 </section>
 

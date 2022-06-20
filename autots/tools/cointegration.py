@@ -16,10 +16,11 @@ from scipy.linalg import fractional_matrix_power
 # np.allclose((np.matmul(transformed, trans.components_) + trans.mean_), trans.inverse_transform(transformed))
 
 
-def lagmat(x,
-           maxlag: int,
-           trim='forward',
-           original="ex",
+def lagmat(
+    x,
+    maxlag: int,
+    trim='forward',
+    original="ex",
 ):
     """
     Create 2d array of lags. Modified from Statsmodels.
@@ -85,11 +86,7 @@ def coint_johansen(endog, det_order=-1, k_ar_diff=1, return_eigenvalues=False):
             return y
         else:
             from statsmodels.regression.linear_model import OLS
-        return (
-            OLS(y, np.vander(np.linspace(-1, 1, len(y)), order + 1))
-            .fit()
-            .resid
-        )
+        return OLS(y, np.vander(np.linspace(-1, 1, len(y)), order + 1)).fit().resid
 
     def resid(y, x):
         if x.size == 0:
@@ -138,7 +135,9 @@ def coint_johansen(endog, det_order=-1, k_ar_diff=1, return_eigenvalues=False):
 
 
 def btcd_decompose(
-    p_mat: np.ndarray, regression_model, max_lag: int = 1,
+    p_mat: np.ndarray,
+    regression_model,
+    max_lag: int = 1,
     return_eigenvalues=False,
 ):
     """Calculate decomposition.
@@ -175,7 +174,7 @@ def _get_y(p_mat: np.ndarray, p_mat_col_idx: int, max_lag: int):
     return p_mat[max_lag:, p_mat_col_idx]
 
 
-def _get_q_t( regression_model, X: np.ndarray, y: np.ndarray):
+def _get_q_t(regression_model, X: np.ndarray, y: np.ndarray):
     """
     Expected value for p_t (q model) using RegressionModel.
     - X is a numpy 2D array of shape (T-max_lag, n_features)
@@ -200,7 +199,6 @@ def _get_A(p_mat: np.ndarray, regression_model, max_lag: int = 1):
     return _get_expected_dyadic_prod(q_mat)
 
 
-
 def fourier_series(dates, period, series_order):
     """Provides Fourier series components with the specified frequency
     and order.
@@ -222,15 +220,12 @@ def fourier_series(dates, period, series_order):
     # convert to days since epoch
     dates = pd.date_range("2020-01-01", "2022-01-01", freq="D")
     t = np.array(
-        (dates - datetime.datetime(1970, 1, 1))
-            .total_seconds()
-            .astype(float)
-    ) / (3600 * 24.)
-    result = np.column_stack([
-        fun((2.0 * (i + 1) * np.pi * t / period))
-        for i in range(series_order)
-        for fun in (np.sin, np.cos)
-    ])
-
-
-
+        (dates - datetime.datetime(1970, 1, 1)).total_seconds().astype(float)
+    ) / (3600 * 24.0)
+    result = np.column_stack(
+        [
+            fun((2.0 * (i + 1) * np.pi * t / period))
+            for i in range(series_order)
+            for fun in (np.sin, np.cos)
+        ]
+    )

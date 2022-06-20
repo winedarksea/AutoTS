@@ -321,7 +321,12 @@ class EventRiskForecast(object):
             "PytorchForecasting",
         ]
         # these are those that require a parameter, and return a dict
-        diff_window_motif_list = ["UnivariateMotif", "MultivariateMotif", "Motif", "ARCH"]
+        diff_window_motif_list = [
+            "UnivariateMotif",
+            "MultivariateMotif",
+            "Motif",
+            "ARCH",
+        ]
         if model_name in all_motif_list:
             if isinstance(prediction_interval, list):
                 prediction_interval = prediction_interval[0]

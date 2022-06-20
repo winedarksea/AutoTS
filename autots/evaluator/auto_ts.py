@@ -818,7 +818,11 @@ class AutoTS(object):
             else:
                 cutoff_multiple = max_per_model_class_g - 3
             cutoff_multiple = 1 if cutoff_multiple < 1 else cutoff_multiple
-            top_n = num_mod_types * cutoff_multiple if num_mod_types > 2 else num_mod_types * max_per_model_class_g
+            top_n = (
+                num_mod_types * cutoff_multiple
+                if num_mod_types > 2
+                else num_mod_types * max_per_model_class_g
+            )
             if df_train.shape[1] > 1:
                 self.score_per_series = generate_score_per_series(
                     self.initial_results, self.metric_weighting, 1
@@ -1845,7 +1849,7 @@ or otherwise increase models available."""
                 raise ValueError("import type not recognized.")
             self.initial_results = self.initial_results.concat(new_obj)
         return self
-    
+
     def horizontal_per_generation(self):
         df_train = self.df_wide_numeric.reindex(self.validation_train_indexes[0])
         df_test = self.df_wide_numeric.reindex(self.validation_test_indexes[0])
@@ -1857,11 +1861,15 @@ or otherwise increase models available."""
         result = TemplateEvalObject()
         max_gens = self.initial_results.model_results['Generation'].max()
         for gen in range(max_gens + 1):
-            mods = self.initial_results.model_results[
-                (self.initial_results.model_results['Generation'] <= gen) &
-                (self.initial_results.model_results['ValidationRound'] == 0) &
-                (self.initial_results.model_results['Ensemble'] == 0)
-            ]['ID'].unique().tolist()
+            mods = (
+                self.initial_results.model_results[
+                    (self.initial_results.model_results['Generation'] <= gen)
+                    & (self.initial_results.model_results['ValidationRound'] == 0)
+                    & (self.initial_results.model_results['Ensemble'] == 0)
+                ]['ID']
+                .unique()
+                .tolist()
+            )
             score_per_series = generate_score_per_series(
                 self.initial_results,
                 metric_weighting=self.metric_weighting,
@@ -1876,35 +1884,45 @@ or otherwise increase models available."""
                 subset_flag=self.subset_flag,
                 only_specified=True,
             )
-            reg_tr = self.future_regressor_train.reindex(index=df_train.index) if self.future_regressor_train is not None else None
-            reg_fc = self.future_regressor_train.reindex(index=df_test.index) if self.future_regressor_train is not None else None
-            result.concat(TemplateWizard(
-                ens_templates,
-                df_train,
-                df_test,
-                weights=current_weights,
-                model_count=0,
-                current_generation=gen,
-                forecast_length=self.forecast_length,
-                frequency=self.frequency,
-                prediction_interval=self.prediction_interval,
-                ensemble=self.ensemble,
-                no_negatives=self.no_negatives,
-                constraint=self.constraint,
-                future_regressor_train=reg_tr,
-                future_regressor_forecast=reg_fc,
-                holiday_country=self.holiday_country,
-                startTimeStamps=self.startTimeStamps,
-                template_cols=self.template_cols,
-                model_interrupt=self.model_interrupt,
-                grouping_ids=self.grouping_ids,
-                max_generations="Horizontal Ensembles",
-                random_seed=self.random_seed,
-                verbose=self.verbose,
-                n_jobs=self.n_jobs,
-                traceback=self.traceback,
-                current_model_file=self.current_model_file,
-            ))
+            reg_tr = (
+                self.future_regressor_train.reindex(index=df_train.index)
+                if self.future_regressor_train is not None
+                else None
+            )
+            reg_fc = (
+                self.future_regressor_train.reindex(index=df_test.index)
+                if self.future_regressor_train is not None
+                else None
+            )
+            result.concat(
+                TemplateWizard(
+                    ens_templates,
+                    df_train,
+                    df_test,
+                    weights=current_weights,
+                    model_count=0,
+                    current_generation=gen,
+                    forecast_length=self.forecast_length,
+                    frequency=self.frequency,
+                    prediction_interval=self.prediction_interval,
+                    ensemble=self.ensemble,
+                    no_negatives=self.no_negatives,
+                    constraint=self.constraint,
+                    future_regressor_train=reg_tr,
+                    future_regressor_forecast=reg_fc,
+                    holiday_country=self.holiday_country,
+                    startTimeStamps=self.startTimeStamps,
+                    template_cols=self.template_cols,
+                    model_interrupt=self.model_interrupt,
+                    grouping_ids=self.grouping_ids,
+                    max_generations="Horizontal Ensembles",
+                    random_seed=self.random_seed,
+                    verbose=self.verbose,
+                    n_jobs=self.n_jobs,
+                    traceback=self.traceback,
+                    current_model_file=self.current_model_file,
+                )
+            )
         result.model_results['Score'] = generate_score(
             result.model_results,
             metric_weighting=self.metric_weighting,
@@ -1912,7 +1930,9 @@ or otherwise increase models available."""
         )
         return result
 
-    def plot_horizontal_per_generation(self, title="Horizontal Ensemble Model Accuracy Gain Over Generations", **kwargs):
+    def plot_horizontal_per_generation(
+        self, title="Horizontal Ensemble Model Accuracy Gain Over Generations", **kwargs
+    ):
         """Plot how well the horizontal ensembles would do after each new generation. Slow."""
         self.horizontal_per_generation().model_results['Score'].plot(
             ylabel="Lowest Score", title=title, **kwargs
@@ -2220,11 +2240,18 @@ or otherwise increase models available."""
         best_model_per = self.initial_results.per_series_mae[
             self.initial_results.per_series_mae.index == self.best_model_id
         ]
-        best_model_per = generate_score_per_series(
-            self.initial_results, metric_weighting=self.metric_weighting,
-            total_validations=(self.num_validations + 1),
-            models_to_use=[self.best_model_id],
-        ).mean(axis=0).sort_values(ascending=False).head(max_series).round(2)
+        best_model_per = (
+            generate_score_per_series(
+                self.initial_results,
+                metric_weighting=self.metric_weighting,
+                total_validations=(self.num_validations + 1),
+                models_to_use=[self.best_model_id],
+            )
+            .mean(axis=0)
+            .sort_values(ascending=False)
+            .head(max_series)
+            .round(2)
+        )
         temp = best_model_per.reset_index()
         temp.columns = ["Series", "Error"]
         if self.best_model["Ensemble"].iloc[0] == 2:

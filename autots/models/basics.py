@@ -1334,7 +1334,8 @@ class Motif(ModelObject):
             )[0]
         return {
             "window": random.choices(
-                [2, 3, 5, 7, 10, 14, 28, 60], [0.01, 0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01]
+                [2, 3, 5, 7, 10, 14, 28, 60],
+                [0.01, 0.01, 0.01, 0.1, 0.5, 0.1, 0.1, 0.01],
             )[0],
             "point_method": random.choices(
                 ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]

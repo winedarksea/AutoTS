@@ -13,6 +13,7 @@ It should probably be coupled with some basic data sanity checks.
 """
 try:  # needs to go first
     from sklearnex import patch_sklearn
+
     patch_sklearn()
 except Exception as e:
     print(repr(e))
@@ -26,16 +27,23 @@ from autots import AutoTS, load_live_daily, create_regressor
 
 fred_key = None  # https://fred.stlouisfed.org/docs/api/api_key.html
 gsa_key = None
+
 forecast_name = "example"
 graph = True  # whether to plot graphs
 # https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects
-frequency = "D"  # "infer" for automatic alignment, but specific offsets are most reliable
+frequency = (
+    "D"  # "infer" for automatic alignment, but specific offsets are most reliable
+)
 forecast_length = 28  # number of periods to forecast ahead
 drop_most_recent = 1  # whether to discard the n most recent records (as incomplete)
-num_validations = 4  # number of cross validation runs. More is better but slower, usually
+num_validations = (
+    4  # number of cross validation runs. More is better but slower, usually
+)
 validation_method = "similarity"  # "similarity", "backwards", "seasonal 364"
 n_jobs = "auto"  # or set to number of CPU cores
-prediction_interval = 0.9  # sets the upper and lower forecast range by probability range. Bigger = wider
+prediction_interval = (
+    0.9  # sets the upper and lower forecast range by probability range. Bigger = wider
+)
 initial_training = "auto"  # set this to True on first run, or on reset, 'auto' looks for existing template, if found, sets to False.
 evolve = True  # allow time series to progressively evolve on each run, if False, uses fixed template
 archive_templates = True  # save a copy of the model template used with a timestamp
@@ -46,7 +54,7 @@ model_list = "default"
 transformer_list = "fast"  # 'superfast'
 transformer_max_depth = 5
 models_mode = "default"  # "deep", "regressor"
-initial_template='random'  # 'random' 'general+random'
+initial_template = 'random'  # 'random' 'general+random'
 preclean = None
 {  # preclean this or None
     "fillna": 'ffill',  # "mean" or "median" are most consistent
@@ -71,7 +79,7 @@ if initial_training == "auto":
 # set max generations based on settings, increase for slower but greater chance of highest accuracy
 # if include_ensemble is specified in import_templates, ensembles can progressively nest over generations
 if initial_training:
-    gens = 30
+    gens = 50
     models_to_validate = 0.35
     ensemble = ["horizontal-max", "dist", "simple", "mosaic", "mosaic-window"]
 elif evolve:
@@ -96,7 +104,15 @@ Begin dataset retrieval
 df = load_live_daily(
     long=False,
     fred_key=fred_key,
-    fred_series=["DGS10", "T5YIE", "SP500", "DCOILWTICO", "DEXUSEU", "WPU0911", "DEXUSUK"],
+    fred_series=[
+        "DGS10",
+        "T5YIE",
+        "SP500",
+        "DCOILWTICO",
+        "DEXUSEU",
+        "WPU0911",
+        "DEXUSUK",
+    ],
     tickers=["MSFT", "PG"],
     trends_list=["forecasting", "msft", "p&g"],
     earthquake_min_magnitude=5,
@@ -119,7 +135,9 @@ min_cutoff_date = start_time - datetime.timedelta(days=180)
 most_recent_date = df.notna()[::-1].idxmax()
 drop_cols = most_recent_date[most_recent_date < min_cutoff_date].index.tolist()
 df = df.drop(columns=drop_cols)
-print(f"Series with most NaN: {df.head(365).isnull().sum().sort_values(ascending=False).head(5)}")
+print(
+    f"Series with most NaN: {df.head(365).isnull().sum().sort_values(ascending=False).head(5)}"
+)
 
 # example regressor with some things we can glean from data and datetime index
 # note this only accepts `wide` style input dataframes
@@ -194,9 +212,14 @@ if not initial_training:
     else:
         model.import_template(template_filename, method="only")
 
-model = model.fit(df, future_regressor=regr_train,)
+model = model.fit(
+    df,
+    future_regressor=regr_train,
+)
 
-prediction = model.predict(future_regressor=regr_fcst, verbose=2, fail_on_forecast_nan=True)
+prediction = model.predict(
+    future_regressor=regr_fcst, verbose=2, fail_on_forecast_nan=True
+)
 
 # Print the details of the best model
 print(model)
@@ -220,7 +243,11 @@ validation_results = model.results("validation")
 # save a template of best models
 if initial_training or evolve:
     model.export_template(
-        template_filename, models="best", n=n_export, max_per_model_class=6, include_results=True
+        template_filename,
+        models="best",
+        n=n_export,
+        max_per_model_class=6,
+        include_results=True,
     )
     if archive_templates:
         arc_file = f"{template_filename.split('.csv')[0]}_{start_time.strftime('%Y%m%d%H%M')}.csv"
@@ -235,65 +262,38 @@ print(
     .agg({"TotalRuntimeSeconds": ["mean", "max"]})
     .idxmax()
 )
-print(f"Completed at system time: {datetime.datetime.now()}")
 
 model_parameters = json.loads(model.best_model["ModelParameters"].iloc[0])
 
 if graph:
     column_indices = [0, 1]  # change columns here
+    column_indices = list(range(model.df_wide_numeric.shape[1]))
     for plt_col in column_indices:
-        col = model.df_wide_numeric.columns[plt_col]
-        plot_df = pd.DataFrame(
-            {
-                col: model.df_wide_numeric[col],
-                "up_forecast": forecasts_upper_df[col],
-                "low_forecast": forecasts_lower_df[col],
-                "forecast": forecasts_df[col],
-            }
+        prediction.plot(
+            model.df_wide_numeric.clip(lower=0),
+            series=model.df_wide_numeric.columns[plt_col],
+            remove_zeroes=True,
+            interpolate="linear",
+            start_date="2021-01-01",
         )
-        plot_df[plot_df == 0] = np.nan
-        plot_df[plot_df < 0] = np.nan
-        plot_df[plot_df > 100000] = np.nan
-        plot_df[col] = plot_df[col].interpolate(method="linear", limit_direction="backward")
-        fig, ax = plt.subplots(dpi=300, figsize=(8, 6))
-        plot_df[plot_df.index.year >= 2021].plot(ax=ax, kind="line")
         # plt.savefig("model.png", dpi=300)
         plt.show()
 
     model.plot_per_series_smape()
     plt.show()
 
-    if model.best_model["Ensemble"].iloc[0] == 2:
+    if model.best_model_ensemble == 2:
         plt.subplots_adjust(bottom=0.5)
         model.plot_horizontal_transformers()
         # plt.savefig("transformers.png", dpi=300)
         plt.show()
 
-        series = model.horizontal_to_df()
-        if series.shape[0] > 25:
-            series = series.sample(25, replace=False)
-        series[["log(Volatility)", "log(Mean)"]] = np.log(
-            series[["Volatility", "Mean"]]
-        )
-
-        fig, ax = plt.subplots(figsize=(6, 4.5))
-        cmap = plt.get_cmap("tab10")  # 'Pastel1, 'cividis', 'coolwarm', 'spectral'
-        names = series["Model"].unique()
-        colors = dict(zip(names, cmap(np.linspace(0, 1, len(names)))))
-        grouped = series.groupby("Model")
-        for key, group in grouped:
-            group.plot(
-                ax=ax,
-                kind="scatter",
-                x="log(Mean)",
-                y="log(Volatility)",
-                label=key,
-                color=colors[key].reshape(1, -1),
-            )
-        plt.title("Horizontal Ensemble: models choosen by series")
+        model.plot_horizontal()
         plt.show()
         # plt.savefig("horizontal.png", dpi=300)
 
         if str(model_parameters["model_name"]).lower() in ["mosaic", "mosaic-window"]:
             mosaic_df = model.mosaic_to_df()
             print(mosaic_df[mosaic_df.columns[0:5]].head(5))
+
+print(f"Completed at system time: {datetime.datetime.now()}")

@@ -180,7 +180,9 @@ def create_lagged_regressor(
         from sklearn.preprocessing import StandardScaler
 
         scaler = StandardScaler()
-        df_inner = pd.DataFrame(scaler.fit_transform(df_inner), index=dates, columns=df_cols)
+        df_inner = pd.DataFrame(
+            scaler.fit_transform(df_inner), index=dates, columns=df_cols
+        )
 
     ag_flag = False
     # these shouldn't care about NaN
@@ -193,7 +195,9 @@ def create_lagged_regressor(
     elif summarize == 'median':
         df_inner = df_inner.median(axis=1).to_frame()
     elif summarize == 'mean+std':
-        df_inner = pd.concat([df_inner.mean(axis=1).to_frame(), df_inner.std(axis=1).to_frame()], axis=1)
+        df_inner = pd.concat(
+            [df_inner.mean(axis=1).to_frame(), df_inner.std(axis=1).to_frame()], axis=1
+        )
         df_inner.columns = [0, 1]
 
     df_inner = FillNA(df_inner, method=fill_na)
@@ -203,7 +207,9 @@ def create_lagged_regressor(
 
         n_components = "mle" if df_inner.shape[0] > df_inner.shape[1] else None
         df_inner = FillNA(df_inner, method=fill_na)
-        df_inner = pd.DataFrame(PCA(n_components=n_components).fit_transform(df_inner), index=dates)
+        df_inner = pd.DataFrame(
+            PCA(n_components=n_components).fit_transform(df_inner), index=dates
+        )
         ag_flag = True if df_inner.shape[1] > 10 else False
     elif summarize == 'cointegration':
         ev, components_ = coint_johansen(df_inner.values, 0, 1, return_eigenvalues=True)
@@ -224,7 +230,9 @@ def create_lagged_regressor(
         from sklearn.random_projection import GaussianRandomProjection
 
         df_inner = pd.DataFrame(
-            GaussianRandomProjection(n_components='auto', eps=0.2).fit_transform(df_inner),
+            GaussianRandomProjection(n_components='auto', eps=0.2).fit_transform(
+                df_inner
+            ),
             index=dates,
         )
 

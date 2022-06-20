@@ -38,10 +38,10 @@ Input data for AutoTS is expected to come in either a *long* or a *wide* format:
 
 - The *wide* format is a `pandas.DataFrame` with a `pandas.DatetimeIndex` and each column a distinct series. 
 - The *long* format has three columns: 
-  - Date (ideally already in pd.DateTime format)
+  - Date (ideally already in pandas-recognized `datetime` format)
   - Series ID. For a single time series, series_id can be `= None`.
   - Value
-- For *long* data, the column name for each of these is passed to .fit() as `date_col`, `id_col`, and `value_col`. No parameters are needed for *wide* data.
+- For *long* data, the column name for each of these is passed to `.fit()` as `date_col`, `id_col`, and `value_col`. No parameters are needed for *wide* data.
 
 Lower-level functions are only designed for `wide` style data.
 
@@ -116,6 +116,7 @@ Also take a look at the [production_example.py](https://github.com/winedarksea/A
 * For datasets with many records, upsampling (for example, from daily to monthly frequency forecasts) can reduce training time if appropriate.
 	* this can be done by adjusting `frequency` and `aggfunc` but is probably best done before passing data into AutoTS.
 * It will be faster if NaN's are already filled. If a search for optimal NaN fill method is not required, then fill any NaN with a satisfactory method before passing to class.
+* Set `runtime_weighting` in `metric_weighting` to a higher value. This will guide the search towards faster models, although it may come at the expense of accuracy. 
 
 ## How to Contribute:
 * Give feedback on where you find the documentation confusing

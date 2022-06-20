@@ -16,10 +16,22 @@ try:
     # bewarned, pytorch-forecasting has useless error messages
     import pytorch_lightning as pl
     from pytorch_lightning.callbacks import EarlyStopping  # , LearningRateMonitor
-    from pytorch_forecasting import TimeSeriesDataSet, TemporalFusionTransformer, DeepAR, NHiTS, NBeats, DecoderMLP
+    from pytorch_forecasting import (
+        TimeSeriesDataSet,
+        TemporalFusionTransformer,
+        DeepAR,
+        NHiTS,
+        NBeats,
+        DecoderMLP,
+    )
     from pytorch_forecasting.metrics import QuantileLoss
-    from pytorch_forecasting.data import EncoderNormalizer, GroupNormalizer, TorchNormalizer
+    from pytorch_forecasting.data import (
+        EncoderNormalizer,
+        GroupNormalizer,
+        TorchNormalizer,
+    )
     from torch.cuda import is_available
+
     pytorch_present = True
 except Exception:
     pytorch_present = False
@@ -65,7 +77,6 @@ class PytorchForecasting(ModelObject):
         target_normalizer: str = "EncoderNormalizer",
         model: str = "TemporalFusionTransformer",
         quantiles: list = [0.01, 0.1, 0.22, 0.36, 0.5, 0.64, 0.78, 0.9, 0.99],
-
         model_kwargs: dict = {},
         trainer_kwargs: dict = {},
         callbacks: list = None,
@@ -110,7 +121,9 @@ class PytorchForecasting(ModelObject):
             df (pandas.DataFrame): Datetime Indexed, wide style data
         """
         if not pytorch_present:
-            raise ImportError("pytorch, pytorch lighting, or pytorch-forecasting not present")
+            raise ImportError(
+                "pytorch, pytorch lighting, or pytorch-forecasting not present"
+            )
 
         df = self.basic_profile(df)
         pl.seed_everything(self.random_seed)
@@ -120,16 +133,16 @@ class PytorchForecasting(ModelObject):
             self.range_idx_name = "range_datetime"
         else:
             while self.range_idx_name is None:
-                temp_name = ''.join(random.choice('0123456789ABCDEF') for i in range(14))
+                temp_name = ''.join(
+                    random.choice('0123456789ABCDEF') for i in range(14)
+                )
                 if temp_name not in df.columns:
                     self.range_idx_name = temp_name
 
         # convert wide data back to long for this
         df[self.range_idx_name] = pd.RangeIndex(start=0, stop=df.shape[0], step=1)
         self._id_vars = [self.range_idx_name]
-        data = df.melt(
-            id_vars=self._id_vars, var_name='series_id', value_name='value'
-        )
+        data = df.melt(id_vars=self._id_vars, var_name='series_id', value_name='value')
         if self.datepart_method is not None:
             dt_merge = df[self.range_idx_name].drop_duplicates()
             date_parts = date_part(
@@ -137,12 +150,11 @@ class PytorchForecasting(ModelObject):
                 method=self.datepart_method,
                 polynomial_degree=None,
             )
-            dt_merge = dt_merge.to_frame().merge(date_parts, left_index=True, right_index=True)
-            self.date_part_cols = date_parts.columns.tolist()
-            data = data.merge(
-                dt_merge.reset_index(drop=False),
-                on=self.range_idx_name
+            dt_merge = dt_merge.to_frame().merge(
+                date_parts, left_index=True, right_index=True
             )
+            self.date_part_cols = date_parts.columns.tolist()
+            data = data.merge(dt_merge.reset_index(drop=False), on=self.range_idx_name)
 
         # define dataset
         val_cutoff = data[self.range_idx_name].max() - self.forecast_length
@@ -179,14 +191,18 @@ class PytorchForecasting(ModelObject):
             add_target_scales=self.add_target_scales,
             # min_encoder_length=3,
             lags=self.lags,
-            add_relative_time_idx=False if self.model in ["NHiTS", "DecoderMLP", "NBeats"] else True
+            add_relative_time_idx=False
+            if self.model in ["NHiTS", "DecoderMLP", "NBeats"]
+            else True,
         )
 
         # create validation and training dataset
         validation = TimeSeriesDataSet.from_dataset(
-            training, data, min_prediction_idx=val_cutoff + 1,
+            training,
+            data,
+            min_prediction_idx=val_cutoff + 1,
             predict=True,
-            stop_randomization=True
+            stop_randomization=True,
         )
         val_dataloader = validation.to_dataloader(
             train=False, batch_size=self.batch_size  # , num_workers=self.n_jobs
@@ -200,10 +216,15 @@ class PytorchForecasting(ModelObject):
 
         # define trainer with early stopping
         if self.callbacks is None:
-            self.callbacks = [EarlyStopping(
-                monitor="val_loss", min_delta=1e-4, patience=1, verbose=False,
-                mode="min"
-            )]
+            self.callbacks = [
+                EarlyStopping(
+                    monitor="val_loss",
+                    min_delta=1e-4,
+                    patience=1,
+                    verbose=False,
+                    mode="min",
+                )
+            ]
         # lr_logger = LearningRateMonitor()
         if is_available() and "accelerator" not in self.trainer_kwargs.keys():
             self.trainer = pl.Trainer(
@@ -212,9 +233,11 @@ class PytorchForecasting(ModelObject):
                 # gradient_clip_val=0.1,
                 # limit_train_batches=30,
                 callbacks=self.callbacks,  # lr_logger,
-                logger=False, checkpoint_callback=False,
-                accelerator='gpu', devices=1,
-                **self.trainer_kwargs
+                logger=False,
+                checkpoint_callback=False,
+                accelerator='gpu',
+                devices=1,
+                **self.trainer_kwargs,
             )
         else:
             self.trainer = pl.Trainer(
@@ -223,8 +246,9 @@ class PytorchForecasting(ModelObject):
                 # gradient_clip_val=0.1,
                 # limit_train_batches=30,
                 callbacks=self.callbacks,  # lr_logger,
-                logger=False, checkpoint_callback=False,
-                **self.trainer_kwargs
+                logger=False,
+                checkpoint_callback=False,
+                **self.trainer_kwargs,
             )
 
         # create the model
@@ -295,7 +319,9 @@ class PytorchForecasting(ModelObject):
             )
 
         if self.verbose > 1:
-            print(f"Number of parameters in pytorch network: {self.tft.size()/1e3:.1f}k")
+            print(
+                f"Number of parameters in pytorch network: {self.tft.size()/1e3:.1f}k"
+            )
 
         # fit the model
         self.trainer.fit(
@@ -307,7 +333,10 @@ class PytorchForecasting(ModelObject):
         return self
 
     def predict(
-        self, forecast_length: int = None, future_regressor=None, just_point_forecast=False
+        self,
+        forecast_length: int = None,
+        future_regressor=None,
+        just_point_forecast=False,
     ):
         """Generates forecast data immediately following dates of index supplied to .fit()
 
@@ -328,12 +357,23 @@ class PytorchForecasting(ModelObject):
 
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
-        encoder_data = self.encoder_tail.merge(pd.DataFrame({
-            self.range_idx_name: pd.RangeIndex(
-                self.actual_cutoff + 1, self.actual_cutoff + forecast_length + 1, step=1
-            )
-        }, index=test_index), on=self.range_idx_name, how='outer').fillna(method='ffill')
-        encoder_data.index = pd.DatetimeIndex(np.concatenate([self.encoder_tail.index, test_index], axis=None))
+        encoder_data = self.encoder_tail.merge(
+            pd.DataFrame(
+                {
+                    self.range_idx_name: pd.RangeIndex(
+                        self.actual_cutoff + 1,
+                        self.actual_cutoff + forecast_length + 1,
+                        step=1,
+                    )
+                },
+                index=test_index,
+            ),
+            on=self.range_idx_name,
+            how='outer',
+        ).fillna(method='ffill')
+        encoder_data.index = pd.DatetimeIndex(
+            np.concatenate([self.encoder_tail.index, test_index], axis=None)
+        )
         # combine encoder and decoder data
         new_prediction_data = encoder_data.melt(
             id_vars=self._id_vars, var_name='series_id', value_name='value'
@@ -345,18 +385,25 @@ class PytorchForecasting(ModelObject):
                 method=self.datepart_method,
                 polynomial_degree=None,
             )
-            dt_merge = dt_merge.to_frame().merge(date_parts, left_index=True, right_index=True)
+            dt_merge = dt_merge.to_frame().merge(
+                date_parts, left_index=True, right_index=True
+            )
             new_prediction_data = new_prediction_data.merge(
-                dt_merge.reset_index(drop=False),
-                on=self.range_idx_name
+                dt_merge.reset_index(drop=False), on=self.range_idx_name
             )
 
-        predictions, pred_idx = self.tft.predict(new_prediction_data, mode='prediction', return_index=True)
-        predictions_df = pd.DataFrame(predictions.numpy().T, columns=pred_idx['series_id'], index=test_index)
+        predictions, pred_idx = self.tft.predict(
+            new_prediction_data, mode='prediction', return_index=True
+        )
+        predictions_df = pd.DataFrame(
+            predictions.numpy().T, columns=pred_idx['series_id'], index=test_index
+        )
 
         if just_point_forecast:
             return predictions_df
-        self.result_windows = self.tft.predict(new_prediction_data, mode="quantiles").transpose(0, 2)
+        self.result_windows = self.tft.predict(
+            new_prediction_data, mode="quantiles"
+        ).transpose(0, 2)
         if self.result_windows.shape[2] > 1:
             c_int = (1.0 - self.prediction_interval) / 2
             # predictions_df = result.quantile(0.5, axis=2).numpy().T
@@ -406,7 +453,8 @@ class PytorchForecasting(ModelObject):
             ),
             "max_encoder_length": random.choice([7, 12, 24, 28, 60, 96]),
             "datepart_method": random.choices(
-                [None, "recurring", "simple", "expanded", "simple_2"], [0.8, 0.4, 0.3, 0.3, 0.3]
+                [None, "recurring", "simple", "expanded", "simple_2"],
+                [0.8, 0.4, 0.3, 0.3, 0.3],
             )[0],
             "add_target_scales": random.choice([True, False]),
             "lags": random.choices(
@@ -414,11 +462,15 @@ class PytorchForecasting(ModelObject):
                     {},
                     {"value": [seasonal_int(very_small=True)]},
                     {"value": [1, seasonal_int(very_small=True)]},
-                    {"value": [1]}
-                ], [0.9, 0.1, 0.1, 0.1]
-            )[0],  # {"value": [1, 7]}
+                    {"value": [1]},
+                ],
+                [0.9, 0.1, 0.1, 0.1],
+            )[
+                0
+            ],  # {"value": [1, 7]}
             "target_normalizer": random.choices(
-                ["EncoderNormalizer", "TorchNormalizer", "GroupNormalizer"], [0.5, 0.25, 0.25]
+                ["EncoderNormalizer", "TorchNormalizer", "GroupNormalizer"],
+                [0.5, 0.25, 0.25],
             )[0],
             "batch_size": random.choice([32, 64, 128]),
             "max_epochs": random.choice([30, 50, 100]),
@@ -426,9 +478,7 @@ class PytorchForecasting(ModelObject):
             "hidden_size": random.choices(
                 [8, 16, 32, 30, 64, 128, 256], [0.1, 0.1, 0.25, 0.2, 0.2, 0.1, 0.05]
             )[0],
-            "n_layers": random.choices(
-                [1, 2, 3, 4], [0.14, 0.4, 0.3, 0.16]
-            )[0],
+            "n_layers": random.choices([1, 2, 3, 4], [0.14, 0.4, 0.3, 0.16])[0],
             "dropout": random.choice([0.0, 0.1, 0.2, 0.05]),
             "model_kwargs": {},
             "trainer_kwargs": {},

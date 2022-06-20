@@ -1564,15 +1564,17 @@ def RandomTemplate(
                 transformer_list=transformer_list,
                 transformer_max_depth=transformer_max_depth,
             )
-        template_list.append(pd.DataFrame(
-            {
-                'Model': model_str,
-                'ModelParameters': json.dumps(param_dict),
-                'TransformationParameters': json.dumps(trans_dict),
-                'Ensemble': 0,
-            },
-            index=[0],
-        ))
+        template_list.append(
+            pd.DataFrame(
+                {
+                    'Model': model_str,
+                    'ModelParameters': json.dumps(param_dict),
+                    'TransformationParameters': json.dumps(trans_dict),
+                    'Ensemble': 0,
+                },
+                index=[0],
+            )
+        )
         counter += 1
         if counter > (n * 3):
             break
@@ -1651,7 +1653,9 @@ def _trans_dicts(
     first_transformer: dict = None,
 ):
     if first_transformer is None:
-        first_transformer = json.loads(current_ops.iloc[0, :]['TransformationParameters'])
+        first_transformer = json.loads(
+            current_ops.iloc[0, :]['TransformationParameters']
+        )
     cur_len = current_ops.shape[0]
     if cur_len > 1:
         # select randomly from best of data
@@ -1718,7 +1722,9 @@ def NewGeneticTemplate(
         (model_results['Ensemble'] == 0) & (model_results['Exceptions'].isna())
     ].copy()
     # remove duplicates by exact same performance
-    sorted_results = sorted_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
+    sorted_results = sorted_results.sort_values(
+        by="TotalRuntimeSeconds", ascending=True
+    )
     sorted_results.drop_duplicates(
         subset=['ValidationRound', 'smape', 'mae', 'spl'], keep="first", inplace=True
     )
@@ -1783,15 +1789,17 @@ def NewGeneticTemplate(
                 transformer_max_depth=transformer_max_depth,
                 first_transformer=trans_params,
             )
-            new_template_list.append(pd.DataFrame(
-                {
-                    'Model': model_type,
-                    'ModelParameters': model_params,
-                    'TransformationParameters': trans_dicts,
-                    'Ensemble': 0,
-                },
-                index=list(range(n)),
-            ))
+            new_template_list.append(
+                pd.DataFrame(
+                    {
+                        'Model': model_type,
+                        'ModelParameters': model_params,
+                        'TransformationParameters': trans_dicts,
+                        'Ensemble': 0,
+                    },
+                    index=list(range(n)),
+                )
+            )
         # recombination for models where mixing params is allowable
         elif model_type in recombination_approved:
             trans_dicts = _trans_dicts(
@@ -1816,9 +1824,9 @@ def NewGeneticTemplate(
             # select weighted from all
             if cur_len > 4:
                 r = json.loads(
-                    current_ops['ModelParameters'].sample(
-                        1, weights=np.log(np.arange(cur_len) + 1)[:: -1]
-                    ).iloc[0]
+                    current_ops['ModelParameters']
+                    .sample(1, weights=np.log(np.arange(cur_len) + 1)[::-1])
+                    .iloc[0]
                 )
             else:
                 r = ModelMonster(model_type).get_new_params(method=models_mode)
@@ -1833,15 +1841,17 @@ def NewGeneticTemplate(
                 b = r_sel[1]
                 c = dict_recombination(a, b)
                 model_dicts.append(json.dumps(c))
-            new_template_list.append(pd.DataFrame(
-                {
-                    'Model': model_type,
-                    'ModelParameters': model_dicts,
-                    'TransformationParameters': trans_dicts,
-                    'Ensemble': 0,
-                },
-                index=list(range(n)),
-            ))
+            new_template_list.append(
+                pd.DataFrame(
+                    {
+                        'Model': model_type,
+                        'ModelParameters': model_dicts,
+                        'TransformationParameters': trans_dicts,
+                        'Ensemble': 0,
+                    },
+                    index=list(range(n)),
+                )
+            )
         # models with params that cannot be mixed, just random mutations
         else:
             trans_dicts = _trans_dicts(
@@ -1855,23 +1865,22 @@ def NewGeneticTemplate(
             model_dicts = list()
             c0 = json.loads(model_params)
             for _ in range(n):
-                c = random.choice([
-                    c0,
-                    ModelMonster(model_type).get_new_params(method=models_mode)
-                ])
+                c = random.choice(
+                    [c0, ModelMonster(model_type).get_new_params(method=models_mode)]
+                )
                 model_dicts.append(json.dumps(c))
-            new_template_list.append(pd.DataFrame(
-                {
-                    'Model': model_type,
-                    'ModelParameters': model_dicts,
-                    'TransformationParameters': trans_dicts,
-                    'Ensemble': 0,
-                },
-                index=list(range(n)),
-            ))
-    new_template = pd.concat(
-        new_template_list, axis=0, ignore_index=True, sort=False
-    )
+            new_template_list.append(
+                pd.DataFrame(
+                    {
+                        'Model': model_type,
+                        'ModelParameters': model_dicts,
+                        'TransformationParameters': trans_dicts,
+                        'Ensemble': 0,
+                    },
+                    index=list(range(n)),
+                )
+            )
+    new_template = pd.concat(new_template_list, axis=0, ignore_index=True, sort=False)
     """
     # recombination of transforms across models by shifting transforms
     recombination = sorted_results.tail(len(sorted_results.index) - 1).copy()
@@ -1894,12 +1903,12 @@ def NewGeneticTemplate(
         if max_results < 1:
             return new_template.sample(
                 frac=max_results,
-                weights=np.log(np.arange(new_template.shape[0]) + 2)[:: -1] + 1
+                weights=np.log(np.arange(new_template.shape[0]) + 2)[::-1] + 1,
             )
         else:
             return new_template.sample(
                 max_results,
-                weights=np.log(np.arange(new_template.shape[0]) + 2)[:: -1] + 1
+                weights=np.log(np.arange(new_template.shape[0]) + 2)[::-1] + 1,
             )
 
 
@@ -2126,8 +2135,10 @@ def generate_score(
 
 
 def generate_score_per_series(
-        results_object, metric_weighting, total_validations=1,
-        models_to_use=None,
+    results_object,
+    metric_weighting,
+    total_validations=1,
+    models_to_use=None,
 ):
     """Score generation on per_series_metrics for ensembles."""
     mae_weighting = metric_weighting.get('mae_weighting', 0)
@@ -2144,12 +2155,16 @@ def generate_score_per_series(
         mae_weighting = 1
 
     # there are problems when very small ~e-20 type number are in play
-    mae_scaler = results_object.per_series_mae[results_object.per_series_mae != 0].round(20)
+    mae_scaler = results_object.per_series_mae[
+        results_object.per_series_mae != 0
+    ].round(20)
     mae_scaler = mae_scaler[mae_scaler != 0].min().fillna(1)
     mae_score = results_object.per_series_mae / mae_scaler
     overall_score = mae_score * mae_weighting
     if rmse_weighting > 0:
-        rmse_scaler = results_object.per_series_rmse[results_object.per_series_rmse.round(20) != 0].round(20)
+        rmse_scaler = results_object.per_series_rmse[
+            results_object.per_series_rmse.round(20) != 0
+        ].round(20)
         rmse_scaler = rmse_scaler.min().fillna(1)
         rmse_score = results_object.per_series_rmse / rmse_scaler
         overall_score = overall_score + (rmse_score * rmse_weighting)
@@ -2234,7 +2249,9 @@ def generate_score_per_series(
     # models_to_use = run_count[run_count >= total_validations].index.tolist()
     if models_to_use is None:
         run_count = local_results[['Model', 'ID']].groupby("ID").count()
-        models_to_use = run_count[run_count['Model'] >= total_validations].index.tolist()
+        models_to_use = run_count[
+            run_count['Model'] >= total_validations
+        ].index.tolist()
     overall_score = overall_score[overall_score.index.isin(models_to_use)]
     # take the average score across validations
     overall_score = overall_score.groupby(level=0).mean()

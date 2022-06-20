@@ -7,8 +7,10 @@ import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.seasonal import seasonal_int
 from autots.tools.holiday import holiday_flag
+
 try:
     from arch import arch_model
+
     arch_present = True
 except Exception:
     arch_present = False
@@ -175,14 +177,21 @@ class ARCH(ModelObject):
                     warnings.simplefilter("ignore")
                 if args['regression_type'] in ["User", "user", "holiday"]:
                     am = arch_model(
-                        current_series, self.regressor_train,
-                        mean=self.mean, lags=self.lags, vol=self.vol,
-                        p=self.p, o=self.o, q=self.q, dist=self.dist,
+                        current_series,
+                        self.regressor_train,
+                        mean=self.mean,
+                        lags=self.lags,
+                        vol=self.vol,
+                        p=self.p,
+                        o=self.o,
+                        q=self.q,
+                        dist=self.dist,
                         power=self.power,
                         rescale=self.rescale,
                     )
                     res = am.fit(
-                        update_freq=0, disp="off",
+                        update_freq=0,
+                        disp="off",
                         show_warning=self.verbose_bool,
                         options={'maxiter': self.maxiter},
                     )
@@ -197,13 +206,19 @@ class ARCH(ModelObject):
                 else:
                     am = arch_model(
                         current_series,
-                        mean=self.mean, lags=self.lags, vol=self.vol,
-                        p=self.p, o=self.o, q=self.q, dist=self.dist,
+                        mean=self.mean,
+                        lags=self.lags,
+                        vol=self.vol,
+                        p=self.p,
+                        o=self.o,
+                        q=self.q,
+                        dist=self.dist,
                         power=self.power,
                         rescale=self.rescale,
                     )
                     res = am.fit(
-                        update_freq=0, disp="off",
+                        update_freq=0,
+                        disp="off",
                         show_warning=self.verbose_bool,
                         options={'maxiter': self.maxiter},
                     )
@@ -225,14 +240,21 @@ class ARCH(ModelObject):
                 index=args['test_index'],
             )
             cupper_forecast = pd.Series(
-                np.quantile(forecasts.simulations.values, 1 - pred_range, axis=1).flatten(),
+                np.quantile(
+                    forecasts.simulations.values, 1 - pred_range, axis=1
+                ).flatten(),
                 name=current_series.name,
                 index=args['test_index'],
             )
             cforecast.name = current_series.name
             cforecast.index = args['test_index']
             if self.return_result_windows:
-                return (cforecast, clower_forecast, cupper_forecast, forecasts.simulations.values)
+                return (
+                    cforecast,
+                    clower_forecast,
+                    cupper_forecast,
+                    forecasts.simulations.values,
+                )
             else:
                 return (cforecast, clower_forecast, cupper_forecast)
 
@@ -325,7 +347,9 @@ class ARCH(ModelObject):
                 0
             ]
         if regression_choice is None:
-            mean_choice = random.choice(['Constant', 'Zero', 'LS', 'AR', 'ARX', 'HAR', 'HARX'])
+            mean_choice = random.choice(
+                ['Constant', 'Zero', 'LS', 'AR', 'ARX', 'HAR', 'HARX']
+            )
         else:
             mean_choice = random.choice(['ARX', 'HARX'])
 

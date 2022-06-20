@@ -7,6 +7,7 @@ import datetime
 import random
 import numpy as np
 import pandas as pd
+
 # because this attempts to make sklearn optional for overall usage
 try:
     from sklearn import config_context
@@ -76,26 +77,38 @@ def rolling_x_regressor(
         X.append(df.shift(additional_lag_periods))
     if cointegration is not None:
         if cointegration == "btcd":
-            X.append(pd.DataFrame(np.matmul(btcd_decompose(
-                df.values,
-                retrieve_regressor(
-                    regression_model={
-                        "model": 'LinearRegression',
-                        "model_params": {},
-                    },
-                    verbose=0,
-                    verbose_bool=False,
-                    random_seed=2020,
-                    multioutput=False,
-                ),
-                max_lag=cointegration_lag,
-            ), (df.values).T).T, index=df.index))
+            X.append(
+                pd.DataFrame(
+                    np.matmul(
+                        btcd_decompose(
+                            df.values,
+                            retrieve_regressor(
+                                regression_model={
+                                    "model": 'LinearRegression',
+                                    "model_params": {},
+                                },
+                                verbose=0,
+                                verbose_bool=False,
+                                random_seed=2020,
+                                multioutput=False,
+                            ),
+                            max_lag=cointegration_lag,
+                        ),
+                        (df.values).T,
+                    ).T,
+                    index=df.index,
+                )
+            )
         else:
-            X.append(pd.DataFrame(
-                np.matmul(
-                    coint_johansen(df.values, k_ar_diff=cointegration_lag), (df.values).T).T,
-                index=df.index,
-            ))
+            X.append(
+                pd.DataFrame(
+                    np.matmul(
+                        coint_johansen(df.values, k_ar_diff=cointegration_lag),
+                        (df.values).T,
+                    ).T,
+                    index=df.index,
+                )
+            )
     if abs_energy:
         X.append(df.pow(other=([2] * len(df.columns))).cumsum())
     if str(rolling_autocorr_periods).isdigit():
@@ -403,6 +416,7 @@ def retrieve_regressor(
         return RANSACRegressor(random_state=random_seed, **model_param_dict)
     elif model_class == "LinearRegression":
         from sklearn.linear_model import LinearRegression
+
         return LinearRegression(**model_param_dict)
     elif model_class == "GaussianProcessRegressor":
         from sklearn.gaussian_process import GaussianProcessRegressor
@@ -2280,7 +2294,8 @@ class UnivariateRegression(ModelObject):
                     'FastRidge': 0.2,
                     'LinearRegression': 0.2,
                     # 'ExtraTrees': 0.1,
-                }, method=method
+                },
+                method=method,
             )
         if method == 'neuralnets':
             print('`neuralnets` model_mode does not apply to UnivariateRegression')
@@ -2493,9 +2508,7 @@ class MultivariateRegression(ModelObject):
         """
         df = self.basic_profile(df)
         # assume memory and CPU count are correlated
-        with config_context(
-                assume_finite=True, working_memory=int(self.n_jobs * 512)
-        ):
+        with config_context(assume_finite=True, working_memory=int(self.n_jobs * 512)):
             # if external regressor, do some check up
             if self.regression_type is not None:
                 if future_regressor is None:
