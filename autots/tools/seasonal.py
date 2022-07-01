@@ -66,6 +66,10 @@ def date_part(
             simple - just day, year, month, weekday
             expanded - all available futures
             recurring - all features that should commonly repeat without aging
+            simple_2
+            simple_3
+            simple_binarized
+            expanded_binarized
         set_index (bool): if True, return DTindex as index of df
         polynomial_degree (int): add this degree of sklearn polynomial features if not None
 
@@ -103,6 +107,47 @@ def date_part(
                 ).values,
             }
         )
+    elif method in "simple_3":
+        # trying to *prevent* it from learning holidays for this one
+        date_part_df = pd.DataFrame(
+            {
+                'month': DTindex.month,
+                'weekday': DTindex.weekday,
+                'weekend': (DTindex.weekday > 4).astype(int),
+                'quarter': DTindex.quarter,
+                'epoch': pd.to_numeric(
+                    DTindex, errors='coerce', downcast='integer'
+                ).values,
+            }
+        )
+        date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday'])
+    elif "simple_binarized" in method:
+        date_part_df = pd.DataFrame(
+            {
+                'month': DTindex.month,
+                'weekday': DTindex.weekday,
+                'day': DTindex.day,
+                'weekend': (DTindex.weekday > 4).astype(int),
+                'epoch': pd.to_numeric(
+                    DTindex, errors='coerce', downcast='integer'
+                ).values,
+            }
+        )
+        date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday'])
+    elif method in "expanded_binarized":
+        date_part_df = pd.DataFrame(
+            {
+                'month': DTindex.month,
+                'weekday': DTindex.weekday,
+                'day': DTindex.day,
+                'weekend': (DTindex.weekday > 4).astype(int),
+                'quarter': DTindex.quarter,
+                'epoch': pd.to_numeric(
+                    DTindex, errors='coerce', downcast='integer'
+                ).values,
+            }
+        )
+        date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday', 'day'])
     else:
         # method == "simple"
         date_part_df = pd.DataFrame(

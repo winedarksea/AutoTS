@@ -13,18 +13,8 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # Latest :space_invader: :space_invader: :space_invader:
-* plot_horizontal_per_generation and horizontal_per_generation added
-* model_list now accepts a dictionary of probabilities, however this only affects new Random Templates
-* :seedling: improved the genetic algorithm for new model generation
-* minor improvement to generate_score_per_series for handling very small ~e-20 errors
-* added PytorchForecasting to available models
-* Johansen Cointegration transformer
-* BTCD transformer
-* Johansen and BTCD as Regression features
-* fixed bug in plot_horizontal()
-* added ARCH to available models
-* changed the sklearn models used by UnivariateRegression by default and returned to default model_list
-* fixed a bug in KerasRNN
+* added observation_end and Wikipedia data to load_live_daily
+* added binarized versions of datepart method (should have done ages ago!)
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

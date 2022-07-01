@@ -1025,7 +1025,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
 
     @staticmethod
     def get_new_params(method: str = 'random'):
-        datepart_choice = random.choice(["simple", "expanded", "recurring", "simple_2"])
+        datepart_choice = random.choice(["simple", "expanded", "recurring", "simple_2", "simple_binarized"])
         if datepart_choice in ["simple", "simple_2", "recurring"]:
             polynomial_choice = random.choices([None, 2], [0.5, 0.2])[0]
         else:
