@@ -3,6 +3,10 @@
 
 Heavily borrowing on the work of Xinyu Chen
 See https://github.com/xinychen/transdim and corresponding Medium articles
+
+Thrown around a lot of np.nan_to_num before pinv to prevent the following crash:
+On entry to DLASCL parameter number  4 had an illegal value
+
 """
 import datetime
 import random
@@ -22,8 +26,8 @@ def rrvar(data, R, pred_step, maxiter=100):
     X2 = data[:, 1:]
     V = np.random.randn(R, N)
     for it in range(maxiter):
-        W = X2 @ np.linalg.pinv(V @ X1)
-        V = np.linalg.pinv(W) @ X2 @ np.linalg.pinv(X1)
+        W = X2 @ np.linalg.pinv((V @ X1))
+        V = np.linalg.pinv(W) @ X2 @ np.linalg.pinv((X1))
     mat = np.append(data, np.zeros((N, pred_step)), axis=1)
     for s in range(pred_step):
         mat[:, T + s] = W @ V @ mat[:, T + s - 1]
@@ -38,7 +42,7 @@ def var(X, pred_step):
     for t in range(1, T):
         temp1 += np.outer(X[:, t], X[:, t - 1])
         temp2 += np.outer(X[:, t - 1], X[:, t - 1])
-    A = temp1 @ np.linalg.pinv(temp2)
+    A = temp1 @ np.linalg.pinv((temp2))
     mat = np.append(X, np.zeros((N, pred_step)), axis=1)
     for s in range(pred_step):
         mat[:, T + s] = A @ mat[:, T + s - 1]
@@ -59,7 +63,7 @@ def dmd(data, r):
     Phi, Q = np.linalg.eig(A_tilde)
     # Compute the coefficient matrix
     Psi = X2 @ v[:r, :].conj().T @ np.diag(np.reciprocal(s[:r])) @ Q
-    A = Psi @ np.diag(Phi) @ np.linalg.pinv(Psi)
+    A = Psi @ np.diag(Phi) @ np.linalg.pinv(np.nan_to_num(Psi))
 
     return A_tilde, Phi, A
 
@@ -73,9 +77,17 @@ def dmd4cast(data, r, pred_step):
     return mat[:, -pred_step:]
 
 
-def mar(X, pred_step, maxiter=100):
+def mar(X, pred_step, family="Gaussian", maxiter=100):
     m, n, T = X.shape
-    B = np.random.randn(n, n)
+    if family == "Poisson":
+        B = np.random.poisson(size=(n, n))
+    elif family == "Gamma":
+        B = np.random.standard_gamma(2, size=(n, n))
+    elif family == "NegativeBinomial":
+        B = np.random.negative_binomial(1, 0.5, size=(n, n))
+    else:  # 'Gaussian'
+        B = np.random.randn(n, n)
+
     for it in range(maxiter):
         temp0 = B.T @ B
         temp1 = np.zeros((m, m))
@@ -83,14 +95,14 @@ def mar(X, pred_step, maxiter=100):
         for t in range(1, T):
             temp1 += X[:, :, t] @ B @ X[:, :, t - 1].T
             temp2 += X[:, :, t - 1] @ temp0 @ X[:, :, t - 1].T
-        A = temp1 @ np.linalg.pinv(temp2)
+        A = temp1 @ np.linalg.pinv(np.nan_to_num(temp2))
         temp0 = A.T @ A
         temp1 = np.zeros((n, n))
         temp2 = np.zeros((n, n))
         for t in range(1, T):
             temp1 += X[:, :, t].T @ A @ X[:, :, t - 1]
             temp2 += X[:, :, t - 1].T @ temp0 @ X[:, :, t - 1]
-        B = temp1 @ np.linalg.pinv(temp2)
+        B = temp1 @ np.linalg.pinv(np.nan_to_num(temp2))
     tensor = np.append(X, np.zeros((m, n, pred_step)), axis=2)
     for s in range(pred_step):
         tensor[:, :, T + s] = A @ tensor[:, :, T + s - 1] @ B.T
@@ -178,13 +190,16 @@ class RRVAR(ModelObject):
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
+        data = self.df_train.to_numpy().T
         if self.rank == 0:
-            forecast = var(self.df_train.to_numpy().T, forecast_length).T
+            forecast = var(data, forecast_length).T
         elif self.method == "als":
-            forecast = rrvar(self.df_train.to_numpy().T, self.rank, forecast_length).T
+            forecast = rrvar(data, self.rank, forecast_length).T
         elif self.method == "dmd":
+            if np.isnan(np.sum(data)):
+                raise ValueError("DMD method does not allow NaN")
             forecast = dmd4cast(
-                self.df_train.to_numpy().T, self.rank, forecast_length
+                data, self.rank, forecast_length
             ).T
 
         forecast = pd.DataFrame(
@@ -253,6 +268,7 @@ class MAR(ModelObject):
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
         seasonality: float = 7,
+        family: str = "Gaussian",
         maxiter: int = 200,
         holiday_country: str = 'US',
         random_seed: int = 2022,
@@ -271,6 +287,7 @@ class MAR(ModelObject):
             n_jobs=n_jobs,
         )
         self.seasonality = seasonality
+        self.family = family
         self.maxiter = maxiter
 
     def fit(self, df, future_regressor=None):
@@ -307,7 +324,9 @@ class MAR(ModelObject):
 
         shifted = wide_to_3d(self.df_train.to_numpy())
         pred_steps = int(np.ceil(forecast_length / self.seasonality))
-        forecast = np.hstack(mar(shifted, pred_steps, self.maxiter).T).T[:forecast_length]
+        forecast = np.hstack(
+            mar(shifted, pred_steps, family=self.family, maxiter=self.maxiter).T
+        ).T[:forecast_length]
 
         forecast = pd.DataFrame(
             forecast,
@@ -344,6 +363,15 @@ class MAR(ModelObject):
         """Return dict of new parameters for parameter tuning."""
         return {
             'seasonality': seasonal_int(include_one=False, very_small=True),
+            'family': random.choices(
+                [
+                    'Gaussian',
+                    'Poisson',
+                    'NegativeBinomial',
+                    'Gamma',
+                ],
+                [0.7, 0.1, 0.1, 0.1],
+            )[0],
             'maxiter': 200,
         }
 
@@ -351,6 +379,7 @@ class MAR(ModelObject):
         """Return dict of current parameters."""
         return {
             'seasonality': self.seasonality,
+            'family': self.family,
             'maxiter': self.maxiter,
         }
 
@@ -437,7 +466,7 @@ def tmf(sparse_mat, rank, d, lambda0, rho, maxiter=50, inner_maxiter=10):
         X = conj_grad_x(sparse_mat, ind, W, X, A, Psi, d, lambda0, rho, inner_maxiter)
         for k in range(1, d + 1):
             temp[(k - 1) * rank: k * rank, :] = X @ Psi[k].T
-        A = X @ Psi[0].T @ np.linalg.pinv(temp)
+        A = X @ Psi[0].T @ np.linalg.pinv((temp))
         mat_hat = W.T @ X
     return mat_hat, W, X, A
 
@@ -639,7 +668,9 @@ def latc_imputer(
     epsilon,
     maxiter,
 ):
-    """Low-Rank Autoregressive Tensor Completion, LATC-imputer."""
+    """Low-Rank Autoregressive Tensor Completion, LATC-imputer.
+    Recognizes 0 as NaN.
+    """
     dim = np.array(sparse_tensor.shape)
     dim_time = int(np.prod(dim) / dim[0])
     d = len(time_lags)
@@ -736,8 +767,11 @@ def latc_predictor(
         cuts = int(temp2.shape[1] / (time_intervals))
         start_2 = temp2.shape[1] % time_intervals
         dim = np.array([num_series, time_intervals, cuts])
+        temp2 = mat2ten(temp2[:, start_2:], dim, 0)
+        if (temp2 == 0)[:, 1:].all():
+            raise ValueError("LATC cannot accept any arrays that are all 0")
         tensor = latc_imputer(
-            mat2ten(temp2[:, start_2:], dim, 0),
+            temp2,
             time_lags,
             alpha,
             rho,
@@ -844,8 +878,9 @@ class LATC(ModelObject):
 
         if self.time_horizon < 1 and self.time_horizon > 0:
             self.time_horizon = int(np.ceil(self.time_horizon * forecast_length))
+        data = self.df_train.fillna(0).to_numpy().T
         mat_hat = latc_predictor(
-            sparse_mat=self.df_train.values.T,
+            sparse_mat=data,
             pred_time_steps=forecast_length,  # forecast_length
             time_horizon=self.time_horizon,  # must be % of pred_time_steps
             time_intervals=self.seasonality,  # seasonality

@@ -584,6 +584,7 @@ def ModelPrediction(
     verbose: int = 0,
     n_jobs: int = None,
     current_model_file: str = None,
+    model_count: int = 0,
 ):
     """Feed parameters into modeling pipeline
 
@@ -614,6 +615,7 @@ def ModelPrediction(
             with open(f'{current_model_file}.json', 'w') as f:
                 json.dump(
                     {
+                        "model_number": model_count,
                         "model_name": model_str,
                         "model_param_dict": parameter_dict,
                         "model_transform_dict": transformation_dict,
@@ -938,6 +940,7 @@ def model_forecast(
     horizontal_subset: list = None,
     return_model: bool = False,
     current_model_file: str = None,
+    model_count: int = 0,
     **kwargs,
 ):
     """Takes numeric data, returns numeric forecasts.
@@ -1049,6 +1052,7 @@ def model_forecast(
                     template_cols=template_cols,
                     horizontal_subset=horizontal_subset,
                     current_model_file=current_model_file,
+                    model_count=model_count,
                 )
                 model_id = create_model_id(
                     df_forecast.model_name,
@@ -1134,6 +1138,7 @@ def model_forecast(
             n_jobs=n_jobs,
             return_model=return_model,
             current_model_file=current_model_file,
+            model_count=model_count,
         )
 
         sys.stdout.flush()
@@ -1306,6 +1311,7 @@ def TemplateWizard(
                 n_jobs=n_jobs,
                 template_cols=template_cols,
                 current_model_file=current_model_file,
+                model_count=template_result.model_count,
             )
             if verbose > 1:
                 post_memory_percent = virtual_memory().percent
