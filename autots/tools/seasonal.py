@@ -111,8 +111,8 @@ def date_part(
         # trying to *prevent* it from learning holidays for this one
         date_part_df = pd.DataFrame(
             {
-                'month': DTindex.month,
-                'weekday': DTindex.weekday,
+                'month': pd.Categorical(DTindex.month, categories=list(range(12)), ordered=True),
+                'weekday': pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True),
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'quarter': DTindex.quarter,
                 'epoch': pd.to_numeric(
@@ -120,12 +120,15 @@ def date_part(
                 ).values,
             }
         )
+        date_part_df['weekday'] = date_part_df['month'].astype(
+            pd.CategoricalDtype(categories=list(range(6)))
+        )
         date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday'])
     elif "simple_binarized" in method:
         date_part_df = pd.DataFrame(
             {
-                'month': DTindex.month,
-                'weekday': DTindex.weekday,
+                'month': pd.Categorical(DTindex.month, categories=list(range(12)), ordered=True),
+                'weekday': pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True),
                 'day': DTindex.day,
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'epoch': pd.to_numeric(
@@ -137,9 +140,9 @@ def date_part(
     elif method in "expanded_binarized":
         date_part_df = pd.DataFrame(
             {
-                'month': DTindex.month,
-                'weekday': DTindex.weekday,
-                'day': DTindex.day,
+                'month': pd.Categorical(DTindex.month, categories=list(range(12)), ordered=True),
+                'weekday': pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True),
+                'day': pd.Categorical(DTindex.day, categories=list(range(31)), ordered=True),
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'quarter': DTindex.quarter,
                 'epoch': pd.to_numeric(
