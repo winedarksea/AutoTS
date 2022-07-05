@@ -317,7 +317,7 @@ class AutoTS(object):
             )
             self.initial_template = pd.concat(
                 [general_template, random_template], axis=0
-            ).drop_duplicates()
+            ).drop_duplicates().reset_index(drop=True)
         elif isinstance(initial_template, pd.DataFrame):
             self.initial_template = initial_template
         else:

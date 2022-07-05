@@ -1,5 +1,6 @@
 """Neural Nets."""
 import pandas as pd
+from autots.tools.shaping import wide_to_3d
 
 try:
     import tensorflow as tf
@@ -84,6 +85,9 @@ class KerasRNN(object):
         train_X = pd.DataFrame(X).to_numpy()
         if self.shape == 1:
             train_X = train_X.reshape((train_X.shape[0], 1, train_X.shape[1]))
+        elif self.shape > 2:
+            # needs matching Y shape and predict input
+            train_X = wide_to_3d(train_X, self.shape)
         else:
             train_X = train_X.reshape((train_X.shape[0], train_X.shape[1], 1))
         INPUT_SHAPE = (train_X.shape[1], train_X.shape[2])

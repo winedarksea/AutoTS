@@ -228,7 +228,7 @@ def load_live_daily(
     gsa_key: str = None,  # https://open.gsa.gov/api/dap/
     gov_domain_list=['nasa.gov'],
     gov_domain_limit: int = 600,
-    wikipedia_pages: list = ['Microsoft', "Middle-earth"],
+    wikipedia_pages: list = ['Microsoft_Office', "List_of_highest-grossing_films"],
     wiki_language: str = "en",
     weather_event_types=["%28Z%29+Winter+Weather", "%28Z%29+Winter+Storm"],
     timeout: float = 300.05,

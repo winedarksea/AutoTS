@@ -122,11 +122,11 @@ def coint_johansen(endog, det_order=-1, k_ar_diff=1, return_eigenvalues=False):
     # Covariacne between filtered and unfiltered
     sk0 = np.dot(rkt.T, r0t) / rkt.shape[0]
     s00 = np.dot(r0t.T, r0t) / r0t.shape[0]
-    sig = np.dot(sk0, np.dot(np.linalg.inv(s00), sk0.T))
-    tmp = np.linalg.inv(skk)
+    sig = np.dot(sk0, np.dot(np.linalg.pinv(s00), sk0.T))
+    tmp = np.linalg.pinv(skk)
     au, du = np.linalg.eig(np.dot(tmp, sig))  # au is eval, du is evec
 
-    temp = np.linalg.inv(np.linalg.cholesky(np.dot(du.T, np.dot(skk, du))))
+    temp = np.linalg.pinv(np.linalg.cholesky(np.dot(du.T, np.dot(skk, du))))
     dt = np.dot(du, temp)
     if return_eigenvalues:
         return au, dt
@@ -162,7 +162,7 @@ def _get_b_sqrt_inv(p_mat):
     """Rows of p_mat represent t index, columns represent each path."""
     B = _get_expected_dyadic_prod(p_mat)
     B_sqrt = fractional_matrix_power(B, 0.5)
-    return np.linalg.inv(B_sqrt)
+    return np.linalg.pinv(B_sqrt)
 
 
 def _get_y(p_mat: np.ndarray, p_mat_col_idx: int, max_lag: int):

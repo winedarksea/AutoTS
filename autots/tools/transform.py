@@ -2267,7 +2267,7 @@ class Cointegration(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         return pd.DataFrame(
-            # np.dot(np.linalg.inv(df), self.components_),
+            # np.dot(np.linalg.pinv(df), self.components_),
             np.linalg.lstsq(self.components_, df.T, rcond=1)[0].T,
             # np.linalg.solve(self.components_, df.T).T,
             index=df.index,
@@ -2571,6 +2571,10 @@ class GeneralTransformer(object):
             'SeasonalDifference28',
             'MeanDifference',
         ]
+
+    @staticmethod
+    def get_new_params(method='random'):
+        return RandomTransform()
 
     def fill_na(self, df, window: int = 10):
         """

@@ -308,6 +308,36 @@ class AutoTSTest(unittest.TestCase):
         self.assertEqual(forecast_length, len(forecasts_df.index))
         self.assertTrue((expected_idx == pd.DatetimeIndex(forecasts_df.index)).all())
 
+    def test_all_models_load(self):
+        # make sure it can at least load a template of all models
+        forecast_length = 8
+        n_jobs = 'auto'
+        verbose = 4
+        generations = 0
+
+        model_list = "all"
+        transformer_list = "all"  # ["SinTrend", "MinMaxScaler"]
+        transformer_max_depth = 10
+
+        model = AutoTS(
+            forecast_length=forecast_length,
+            frequency='infer',
+            prediction_interval=0.9,
+            ensemble=["horizontal-max"],
+            constraint=None,
+            max_generations=generations,
+            model_list=model_list,
+            transformer_list=transformer_list,
+            transformer_max_depth=transformer_max_depth,
+            initial_template='Random',
+            max_per_model_class=None,
+            n_jobs=n_jobs,
+            model_interrupt=True,
+            drop_most_recent=1,
+            verbose=verbose,
+        )
+        self.assertFalse(model.initial_template.empty)
+
     def test_benchmark(self):
         bench = Benchmark()
         bench.run(times=1)

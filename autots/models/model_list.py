@@ -34,6 +34,10 @@ all_models = [
     'DynamicFactorMQ',
     'PytorchForecasting',
     'ARCH',
+    'RRVAR',
+    'MAR',
+    'TMF',
+    'LATC',
 ]
 # downweight slower models
 default = {
@@ -178,6 +182,10 @@ multivariate = [
     'SectionalMotif',
     'DynamicFactorMQ',
     'PytorchForecasting',
+    'RRVAR',
+    'MAR',
+    'TMF',
+    'LATC',
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -212,6 +220,10 @@ recombination_approved = [
     'DynamicFactorMQ',
     'PytorchForecasting',
     'ARCH',
+    'RRVAR',
+    'MAR',
+    'TMF',
+    'LATC',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [

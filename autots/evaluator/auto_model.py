@@ -49,6 +49,7 @@ from autots.models.statsmodels import (
     DynamicFactorMQ,
 )
 from autots.models.arch import ARCH
+from autots.models.matrix_var import RRVAR, MAR, TMF, LATC
 
 
 def create_model_id(
@@ -503,6 +504,50 @@ def ModelMonster(
         )
     elif model == 'ARCH':
         return ARCH(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'RRVAR':
+        return RRVAR(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'MAR':
+        return MAR(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'TMF':
+        return TMF(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'LATC':
+        return LATC(
             frequency=frequency,
             prediction_interval=prediction_interval,
             holiday_country=holiday_country,

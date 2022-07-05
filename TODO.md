@@ -15,6 +15,10 @@
 # Latest :space_invader: :space_invader: :space_invader:
 * added observation_end and Wikipedia data to load_live_daily
 * added binarized versions of datepart method (should have done ages ago!)
+* addded RRVAR, MAR, TMF, LATC models
+
+* test cointegration with pinv!
+* test new models with high dimensionality!
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
