@@ -455,6 +455,9 @@ def generate_Psi(T, d):
 
 def tmf(sparse_mat, rank, d, lambda0, rho, maxiter=50, inner_maxiter=10):
     dim1, dim2 = sparse_mat.shape
+    # prevent failure of constant matrix
+    if np.all(sparse_mat == sparse_mat[0, 0]):
+        raise ValueError("TMF fails on constant arrays")
     ind = sparse_mat != 0
     W = 0.01 * np.random.randn(rank, dim1)
     X = 0.01 * np.random.randn(rank, dim2)
@@ -770,6 +773,7 @@ def latc_predictor(
         temp2 = mat2ten(temp2[:, start_2:], dim, 0)
         if (temp2 == 0)[:, 1:].all():
             raise ValueError("LATC cannot accept any arrays that are all 0")
+        # if np.all(temp2 == temp2[0, 0, 0])
         tensor = latc_imputer(
             temp2,
             time_lags,

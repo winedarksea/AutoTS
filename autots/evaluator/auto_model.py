@@ -2316,7 +2316,7 @@ def back_forecast(
     model_transform_dict,
     future_regressor_train=None,
     n_splits: int = "auto",
-    forecast_length=14,
+    forecast_length=7,
     frequency="infer",
     prediction_interval=0.9,
     no_negatives=False,
