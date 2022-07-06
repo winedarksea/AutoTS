@@ -484,6 +484,7 @@ class ModelTest(unittest.TestCase):
             'RollingMeanTransformer', 'bkfilter', 'cffilter', 'Log',
             'DifferencedTransformer', 'PctChangeTransformer', 'PositiveShift',
             'SineTrend', 'convolution_filter', 'CumSumTransformer',
+            'AlignLastValue',  # new 0.4.3
         ]
 
         timings = {}

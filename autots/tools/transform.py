@@ -2383,6 +2383,98 @@ class BTCD(EmptyTransformer):
         return {'regression_model': choice, 'max_lags': random.choice([1, 2])}
 
 
+class AlignLastValue(EmptyTransformer):
+    """Shift all data relative to the last value(s) of the series.
+
+    Args:
+        rows (int): number of rows to average as last record
+        lag (int): use last value as this lag back, 1 is no shift, 2 is lag one from end, ie second to last
+        method (str): 'additive', 'multiplicative'
+        strength (float): softening parameter [0, 1], 1.0 for full difference
+    """
+
+    def __init__(
+            self, rows: int = 1, lag: int = 1,
+            method: str = "additive", strength: float = 1.0,
+            **kwargs
+    ):
+        super().__init__(name="AlignLastValue")
+        self.rows = rows
+        self.lag = lag
+        self.method = method
+        self.strength = strength
+
+    @staticmethod
+    def get_new_params(method: str = 'random'):
+        return {
+            "rows": random.choices([1, 2, 4, 7], [0.83, 0.02, 0.05, 0.1])[0],
+            'lag': random.choices([1, 2, 7, 28], [0.8, 0.05, 0.1, 0.05])[0],
+            'method': random.choices(['additive', 'multiplicative'], [0.9, 0.1])[0],
+            'strength': random.choices([1.0, 0.9, 0.5], [0.90, 0.05, 0.05])[0],
+        }
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        # fill NaN if present (up to a limit for slight speedup)
+        if np.isnan(np.sum(np.array(df)[-50:])):
+            self.center = self.find_centerpoint(
+                df.ffill(axis=0), self.rows, self.lag
+            )
+        else:
+            self.center = self.find_centerpoint(df, self.rows, self.lag)
+
+        return self
+
+    @staticmethod
+    def find_centerpoint(df, rows, lag):
+        if rows <= 1:
+            if lag > 1:
+                center = df.iloc[-lag, :]
+            else:
+                center = df.iloc[-1, :]
+        else:
+            if lag > 1:
+                center = df.iloc[-(lag + rows - 1):-(lag - 1), :].mean()
+            else:
+                center = df.tail(rows).mean()
+        return center
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if trans_method == "original":
+            return df
+        else:
+            if self.method == "multiplicative":
+                return df * (1 + ((self.center / df.iloc[0]) - 1) * self.strength)
+            else:
+                return df + self.strength * (self.center - df.iloc[0])
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     'None': EmptyTransformer(),
@@ -2437,6 +2529,7 @@ have_params = {
     "PCA": PCA,
     "BTCD": BTCD,
     "Cointegration": Cointegration,
+    "AlignLastValue": AlignLastValue,
 }
 # where will results will vary if not all series are included together
 shared_trans = [
@@ -2522,7 +2615,8 @@ class GeneralTransformer(object):
             "EWMAFilter" - use an exponential weighted moving average to smooth data
             "MeanDifference" - joint version of differencing
             "Cointegration" - VECM but just the vectors
-            "BTCD" - Box Tiao decomposition
+            "BTCD" - Box Tiao decomposition,
+            'AlignLastValue': align forecast start to end of training data
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -2570,6 +2664,7 @@ class GeneralTransformer(object):
             'SeasonalDifference12',
             'SeasonalDifference28',
             'MeanDifference',
+            'AlignLastValue',
         ]
 
     @staticmethod
@@ -2890,6 +2985,7 @@ transformer_dict = {
     "MeanDifference": 0.002,
     "BTCD": 0.01,
     "Cointegration": 0.01,
+    "AlignLastValue": 0.04,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
@@ -2918,6 +3014,7 @@ superfast_transformer_dict = {
     "Discretize": 0.03,
     "Slice": 0.02,
     "EWMAFilter": 0.01,
+    'AlignLastValue': 0.01,
 }
 
 # probability dictionary of FillNA methods
@@ -3030,7 +3127,8 @@ def RandomTransform(
         randos = random.choices(transformer_list, transformer_prob, k=5)
         clip = "ClipOutliers" if "ClipOutliers" in transformer_list else randos[0]
         detrend = "Detrend" if "Detrend" in transformer_list else randos[1]
-        discretize = "Discretize" if "Discretize" in transformer_list else randos[2]
+        # formerly Discretize
+        discretize = "AlignLastValue" if "AlignLastValue" in transformer_list else randos[2]
         # create new dictionary in fixed order
         trans = [clip, randos[3], detrend, randos[4], discretize]
         trans = trans[0:num_trans]
