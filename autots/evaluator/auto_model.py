@@ -2008,7 +2008,7 @@ def validation_aggregation(validation_results):
     col_names = validation_results.model_results.columns
     col_aggs = {x: y for x, y in col_aggs.items() if x in col_names}
     validation_results.model_results['TotalRuntimeSeconds'] = (
-        validation_results.model_results['TotalRuntime'].dt.seconds + 1
+        validation_results.model_results['TotalRuntime'].dt.total_seconds().round(4)
     )
     validation_results.model_results = validation_results.model_results[
         pd.isnull(validation_results.model_results['Exceptions'])
@@ -2057,24 +2057,13 @@ def generate_score(
     mqae_weighting = metric_weighting.get('mqae_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
-        if 'TotalRuntime' in model_results.columns:
-            try:
-                outz = model_results['TotalRuntime'].dt.seconds
-            except Exception:
-                outz = model_results['TotalRuntime'].astype(float)
-            model_results['TotalRuntimeSeconds'] = np.where(
-                model_results['TotalRuntimeSeconds'].isna(),
-                outz,
-                model_results['TotalRuntimeSeconds'],
-            )
-        else:
-            model_results['TotalRuntimeSeconds'] = np.where(
-                model_results['TotalRuntimeSeconds'].isna(),
-                model_results['TotalRuntimeSeconds'].max(),
-                model_results['TotalRuntimeSeconds'],
-            )
+        model_results['TotalRuntimeSeconds'] = np.where(
+            model_results['TotalRuntimeSeconds'].isna(),
+            model_results['TotalRuntimeSeconds'].max(),
+            model_results['TotalRuntimeSeconds'],
+        )
     else:
-        model_results['TotalRuntimeSeconds'] = model_results['TotalRuntime'].dt.seconds
+        model_results['TotalRuntimeSeconds'] = model_results['TotalRuntime'].dt.total_seconds().round(4)
     # generate minimizing scores, where smaller = better accuracy
     try:
         model_results = model_results.replace([np.inf, -np.inf], np.nan)
@@ -2149,28 +2138,29 @@ def generate_score(
             ].min()
             spl_score = model_results['spl_weighted'] / spl_scaler
             overall_score = overall_score + (spl_score * spl_weighting)
+        smape_median = smape_score.median()
         if runtime_weighting > 0:
-            runtime = model_results['TotalRuntimeSeconds'] + 120
-            runtime_scaler = runtime[runtime != 0].min()
+            runtime = model_results['TotalRuntimeSeconds'] + 100
+            runtime_scaler = runtime.min()  # [runtime != 0]
             runtime_score = runtime / runtime_scaler
             # this scales it into a similar range as SMAPE
             runtime_score = runtime_score * (
-                smape_score.median() / runtime_score.median()
+                smape_median / runtime_score.median()
             )
             overall_score = overall_score + (runtime_score * runtime_weighting)
         # these have values in the range 0 to 1
         if contour_weighting > 0:
             contour_score = (
                 2 - model_results['contour_weighted']
-            ) * smape_score.median()
+            ) * smape_median
             overall_score = overall_score + (contour_score * contour_weighting)
         if oda_weighting > 0:
-            oda_score = (2 - model_results['oda_weighted']) * smape_score.median()
+            oda_score = (2 - model_results['oda_weighted']) * smape_median
             overall_score = overall_score + (oda_score * oda_weighting)
         if containment_weighting > 0:
             containment_score = (
                 1 + abs(prediction_interval - model_results['containment_weighted'])
-            ) * smape_score.median()
+            ) * smape_median
             overall_score = overall_score + (containment_score * containment_weighting)
 
     except Exception as e:

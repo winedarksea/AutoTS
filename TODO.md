@@ -18,6 +18,7 @@
 * addded RRVAR, MAR, TMF, LATC models
 * added AlignLastValue transformer
 * added plot_horizontal_model_count and fixed an error in horizontal generation plot
+* adjusted TotalRuntime to higher precision, and no longer + 1
 
 * test cointegration with pinv!
 * test new models with high dimensionality!

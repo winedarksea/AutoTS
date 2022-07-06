@@ -2409,8 +2409,12 @@ class AlignLastValue(EmptyTransformer):
         return {
             "rows": random.choices([1, 2, 4, 7], [0.83, 0.02, 0.05, 0.1])[0],
             'lag': random.choices([1, 2, 7, 28], [0.8, 0.05, 0.1, 0.05])[0],
-            'method': random.choices(['additive', 'multiplicative'], [0.9, 0.1])[0],
-            'strength': random.choices([1.0, 0.9, 0.5], [0.90, 0.05, 0.05])[0],
+            'method': random.choices(
+                ['additive', 'multiplicative'], [0.9, 0.1]
+            )[0],
+            'strength': random.choices(
+                [1.0, 0.9, 0.7, 0.5, 0.2], [0.8, 0.05, 0.05, 0.05, 0.05]
+            )[0],
         }
 
     def fit(self, df):
@@ -2985,7 +2989,7 @@ transformer_dict = {
     "MeanDifference": 0.002,
     "BTCD": 0.01,
     "Cointegration": 0.01,
-    "AlignLastValue": 0.04,
+    "AlignLastValue": 0.1,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
@@ -3014,7 +3018,7 @@ superfast_transformer_dict = {
     "Discretize": 0.03,
     "Slice": 0.02,
     "EWMAFilter": 0.01,
-    'AlignLastValue': 0.01,
+    'AlignLastValue': 0.05,
 }
 
 # probability dictionary of FillNA methods
@@ -3124,13 +3128,13 @@ def RandomTransform(
             }
     if traditional_order:
         # handle these not being in TransformerList
-        randos = random.choices(transformer_list, transformer_prob, k=5)
+        randos = random.choices(transformer_list, transformer_prob, k=4)
         clip = "ClipOutliers" if "ClipOutliers" in transformer_list else randos[0]
         detrend = "Detrend" if "Detrend" in transformer_list else randos[1]
         # formerly Discretize
         discretize = "AlignLastValue" if "AlignLastValue" in transformer_list else randos[2]
         # create new dictionary in fixed order
-        trans = [clip, randos[3], detrend, randos[4], discretize]
+        trans = [clip, detrend, randos[3], discretize]
         trans = trans[0:num_trans]
         num_trans = len(trans)
     else:
