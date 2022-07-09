@@ -220,6 +220,10 @@ class AutoTS(object):
         self.models_mode = models_mode
         self.current_model_file = current_model_file
         random.seed(self.random_seed)
+        if holiday_country == "RU":
+            self.holiday_country = "UA"
+        elif holiday_country == 'CN':
+            self.holiday_country = 'TW'
         # just a list of horizontal types in general
         self.h_ens_list = [
             'horizontal',

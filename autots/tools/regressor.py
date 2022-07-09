@@ -98,6 +98,10 @@ def create_regressor(
             holiday_countries = holiday_countries.split(",")
 
         for holiday_country in holiday_countries:
+            if holiday_country == "RU":
+                holiday_country = "UA"
+            elif holiday_country == 'CN':
+                holiday_country = 'TW'
             # create holiday flag for historic regressor
             regr_train[f"holiday_flag_{holiday_country}"] = holiday_flag(
                 regr_train.index, country=holiday_country

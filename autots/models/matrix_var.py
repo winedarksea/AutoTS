@@ -77,14 +77,19 @@ def dmd4cast(data, r, pred_step):
     return mat[:, -pred_step:]
 
 
-def mar(X, pred_step, family="Gaussian", maxiter=100):
+def mar(X, pred_step, family="gaussian", maxiter=100):
     m, n, T = X.shape
-    if family == "Poisson":
+    family = str(family).lower()
+    if family == "poisson":
         B = np.random.poisson(size=(n, n))
-    elif family == "Gamma":
+    elif family == "gamma":
         B = np.random.standard_gamma(2, size=(n, n))
-    elif family == "NegativeBinomial":
+    elif family == "negativebinomial":
         B = np.random.negative_binomial(1, 0.5, size=(n, n))
+    elif family == "chi2":
+        B = np.random.chisquare(1, size=(n, n))
+    elif family == "uniform":
+        B = np.random.uniform(size=(n, n))
     else:  # 'Gaussian'
         B = np.random.randn(n, n)
 
@@ -268,7 +273,7 @@ class MAR(ModelObject):
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
         seasonality: float = 7,
-        family: str = "Gaussian",
+        family: str = "gaussian",
         maxiter: int = 200,
         holiday_country: str = 'US',
         random_seed: int = 2022,
@@ -365,12 +370,14 @@ class MAR(ModelObject):
             'seasonality': seasonal_int(include_one=False, very_small=True),
             'family': random.choices(
                 [
-                    'Gaussian',
-                    'Poisson',
-                    'NegativeBinomial',
-                    'Gamma',
+                    'gaussian',
+                    'poisson',
+                    'negativebinomial',
+                    'gamma',
+                    'chi2',
+                    'uniform'
                 ],
-                [0.7, 0.1, 0.1, 0.1],
+                [0.6, 0.05, 0.05, 0.2, 0.05, 0.05],
             )[0],
             'maxiter': 200,
         }
