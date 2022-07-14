@@ -6,6 +6,7 @@ seasonal
 """
 import random
 import pandas as pd
+from autots.tools.lunar import moon_phase
 
 
 def seasonal_int(include_one: bool = False, small=False, very_small=False):
@@ -107,7 +108,7 @@ def date_part(
                 ).values,
             }
         )
-    elif method in ["simple_3"]:
+    elif method in ["simple_3", "lunar_phase"]:
         # trying to *prevent* it from learning holidays for this one
         date_part_df = pd.DataFrame(
             {
@@ -124,6 +125,8 @@ def date_part(
             pd.CategoricalDtype(categories=list(range(6)))
         )
         date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday'])
+        if method == "lunar_phase":
+            date_part_df['phase'] = moon_phase(DTindex)
     elif "simple_binarized" in method:
         date_part_df = pd.DataFrame(
             {
@@ -131,9 +134,7 @@ def date_part(
                 'weekday': pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True),
                 'day': DTindex.day,
                 'weekend': (DTindex.weekday > 4).astype(int),
-                'epoch': pd.to_numeric(
-                    DTindex, errors='coerce', downcast='integer'
-                ).values,
+                'epoch': DTindex.to_julian_date(),
             }
         )
         date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday'])
