@@ -107,7 +107,7 @@ def date_part(
                 ).values,
             }
         )
-    elif method in "simple_3":
+    elif method in ["simple_3"]:
         # trying to *prevent* it from learning holidays for this one
         date_part_df = pd.DataFrame(
             {

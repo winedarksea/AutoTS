@@ -2423,9 +2423,10 @@ def back_forecast(
             b_forecast_up = pd.concat([b_forecast_up, b_df])
             b_forecast_low = pd.concat([b_forecast_low, b_df])
 
-    df_forecast.forecast = b_forecast
-    df_forecast.upper_forecast = b_forecast_up
-    df_forecast.lower_forecast = b_forecast_low
+    # interpolation may hide errors in backcast
+    df_forecast.forecast = b_forecast.interpolate('linear')
+    df_forecast.upper_forecast = b_forecast_up.interpolate('linear')
+    df_forecast.lower_forecast = b_forecast_low.interpolate('linear')
     return df_forecast
 
 
