@@ -20,9 +20,10 @@
 * added AlignLastValue transformer
 * added plot_horizontal_model_count and fixed an error in horizontal generation plot
 * adjusted TotalRuntime to higher precision, and no longer + 1
+* new AnomalyRemoval transformer
 
 * test cointegration with pinv!
-* test new models with high dimensionality!
+* test new models and transformers with high dimensionality!
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

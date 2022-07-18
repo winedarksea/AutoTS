@@ -9,7 +9,6 @@ import pandas as pd
 from autots.tools.lunar import moon_phase_df
 
 
-# 13 hours ahead
 def lunar_from_lunar(new_moon):
     """Assumes continuous daily data and pre-needed start."""
     new_moon_dates = new_moon[new_moon == 1]
@@ -27,9 +26,15 @@ def lunar_from_lunar(new_moon):
 
 
 def gregorian_to_chinese(datetime_index):
-    """Convert a pandas DatetimeIndex to Chinese Lunar calendar."""
+    """Convert a pandas DatetimeIndex to Chinese Lunar calendar. Potentially has errors."""
+    if isinstance(datetime_index, (str, list)):
+        datetime_input = pd.to_datetime(
+            datetime_index, infer_datetime_format=True
+        ).sort_values()
+    else:
+        datetime_input = datetime_index.sort_values()
     expanded_dates = pd.date_range(
-        datetime_index[0] - pd.Timedelta(days=365), datetime_index[-1], freq='D'
+        datetime_input[0] - pd.Timedelta(days=365), datetime_input[-1], freq='D'
     )
     min_year = np.min(expanded_dates.year)
     moon_df = moon_phase_df(expanded_dates, epoch=2444238.5)
@@ -39,7 +44,7 @@ def gregorian_to_chinese(datetime_index):
     expanded_dates['lunar_month'] = expanded_dates['lunar_month'].ffill()
     expanded_dates['lunar_day'] = expanded_dates.groupby(['syear', 'lunar_month']).cumcount() + 1
     expanded_dates['lunar_year'] = expanded_dates['syear'] + min_year
-    return expanded_dates[expanded_dates.index.isin(datetime_index)][['lunar_year', 'lunar_month', 'lunar_day']].astype(int)
+    return expanded_dates.loc[datetime_index, ['lunar_year', 'lunar_month', 'lunar_day']].astype(int)
 
 
 def to_jd(year, month, day):
@@ -51,10 +56,12 @@ def to_jd(year, month, day):
 
 
 def gregorian_to_islamic(date):
-    """Calculate Islamic date from Julian day. Approximately. From convertdate by fitnr."""
+    """Calculate Islamic dates for pandas DatetimeIndex. Approximately. From convertdate by fitnr."""
+    if isinstance(date, (str, list)):
+        date = pd.to_datetime(date, infer_datetime_format=True)
     jd = date.to_julian_date()
-    jd = np.floor(jd) + 0.5
+    jd = np.floor(jd) + 1.5
     year = np.floor(((30 * (jd - 1948439.5)) + 10646) / 10631)
     month = np.minimum(12, np.ceil((jd - (29 + to_jd(year, 1, 1))) / 29.5) + 1)
     day = (jd - to_jd(year, month, 1)).astype(int) + 1
-    return pd.DataFrame({'Gregorian': date, 'year': year, 'month': month, 'day': day})
+    return pd.DataFrame({'year': year, 'month': month, 'day': day}, index=date).astype(int)

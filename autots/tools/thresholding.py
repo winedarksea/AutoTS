@@ -536,7 +536,7 @@ class ErrorWindow:
 
 class NonparametricThreshold:
     def __init__(
-            self, data, warmup_pts: int = 10, p=0.1,
+            self, data, warmup_pts: int = 1, p=0.1,
             error_buffer=1, z_init=2.5, z_limit=12.0,
             z_step=0.5,
             max_contamination=0.25,
@@ -882,8 +882,9 @@ def nonparametric(series, method_params):
         index=series.index,
         columns=['anomaly_score'],
     )
+    # print(i_anom)
     res = pd.DataFrame(
-        np.where(series.index.isin(series.index[i_anom]), -1, 1),
+        np.where(series.index.isin(series.index[i_anom.astype(int)]), -1, 1),
         index=series.index,
         columns=["anomaly"],
     )

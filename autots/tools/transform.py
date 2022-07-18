@@ -7,6 +7,7 @@ from autots.tools.impute import FillNA, df_interpolate
 from autots.tools.seasonal import date_part, seasonal_int
 from autots.tools.cointegration import coint_johansen, btcd_decompose
 from autots.models.sklearn import generate_regressor_params, retrieve_regressor
+from autots.tools.anomaly_utils import anomaly_new_params, detect_anomalies, limits_to_anomalies
 
 
 class EmptyTransformer(object):
@@ -1027,7 +1028,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
     def get_new_params(method: str = 'random'):
         datepart_choice = random.choices(
             ["simple", "expanded", "recurring", "simple_2", "simple_binarized", "lunar_phase"],
-            [0.1, 0.2, 0.2, 0.1, 0.3, 0.1]
+            [0.1, 0.25, 0.2, 0.1, 0.3, 0.05]
         )[0]
         if datepart_choice in ["simple", "simple_2", "recurring"]:
             polynomial_choice = random.choices([None, 2], [0.5, 0.2])[0]
@@ -2482,6 +2483,99 @@ class AlignLastValue(EmptyTransformer):
         return self.transform(df)
 
 
+class AnomalyRemoval(EmptyTransformer):
+    def __init__(
+        self,
+        output="multivariate",
+        method="zscore",
+        transform_dict={  # also  suggest DifferencedTransformer
+            "transformations": {0: "DatepartRegression"},
+            "transformation_params": {
+                0: {
+                    "datepart_method": "simple_3",
+                    "regression_model": {
+                        "model": "ElasticNet",
+                        "model_params": {},
+                    },
+                }
+            },
+        },
+        method_params={},
+        fillna=None,
+        n_jobs=1,
+    ):
+        """Detect anomalies on a historic dataset. No inverse_transform available.
+
+        Args:
+            output (str): 'multivariate' (each series unique outliers), or 'univariate' (all series together for one outlier flag per timestamp)
+            method (str): method choosen, from sklearn, AutoTS, and basic stats. Use `.get_new_params()` to see potential models
+            transform_dict (dict): option but helpful, often datepart, differencing, or other standard AutoTS transformer params
+            method_params (dict): parameters specific to the method, use `.get_new_params()` to see potential models
+            fillna (str): how to fill anomaly values removed
+            n_jobs (int): multiprocessing jobs, used by some methods
+
+        Methods:
+            detect()
+        """
+        self.output = output
+        self.method = method
+        self.transform_dict = transform_dict
+        self.method_params = method_params
+        self.n_jobs = n_jobs
+        self.fillna = fillna
+
+    def fit(self, df):
+        """All will return -1 for anomalies.
+
+        Args:
+            df (pd.DataFrame): pandas wide-style data
+        Returns:
+            pd.DataFrame (classifications, -1 = outlier, 1 = not outlier), pd.DataFrame s(scores)
+        """
+        self.df_anomaly = df.copy()
+        if self.transform_dict is not None:
+            model = GeneralTransformer(
+                **self.transform_dict
+            )
+            self.df_anomaly = model.fit_transform(self.df_anomaly)
+
+        self.anomalies, self.scores = detect_anomalies(
+            self.df_anomaly,
+            output=self.output,
+            method=self.method,
+            transform_dict=self.transform_dict,
+            method_params=self.method_params,
+            n_jobs=self.n_jobs,
+        )
+        return self
+
+    def transform(self, df):
+        df2 = df[self.anomalies != -1]
+        if self.fillna is not None:
+            df2 = FillNA(df2, method=self.fillna, window=10)
+        return df2
+
+    def fit_transform(self, df):
+        self.fit(df)
+        return self.transform(df)
+
+    @staticmethod
+    def get_new_params(method="fast"):
+        method_choice, method_params, transform_dict = anomaly_new_params(method=method)
+        if transform_dict == "random":
+            transform_dict = RandomTransform(transformer_list='fast', transformer_max_depth=2)
+
+        return {
+            "method": method_choice,
+            "transform_dict": transform_dict,
+            "method_params": method_params,
+            "fillna": random.choices(
+                [None, "ffill", "mean", "rolling_mean_24", 'linear', 'fake_date'],
+                [0.01, 0.39, 0.1, 0.3, 0.15, 0.05]
+            )[0],
+        }
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     'None': EmptyTransformer(),
@@ -2537,6 +2631,7 @@ have_params = {
     "BTCD": BTCD,
     "Cointegration": Cointegration,
     "AlignLastValue": AlignLastValue,
+    "AnomalyRemoval": AnomalyRemoval,  # not shared as long as output is 'multivariate'
 }
 # where will results will vary if not all series are included together
 shared_trans = [
@@ -2622,8 +2717,9 @@ class GeneralTransformer(object):
             "EWMAFilter" - use an exponential weighted moving average to smooth data
             "MeanDifference" - joint version of differencing
             "Cointegration" - VECM but just the vectors
-            "BTCD" - Box Tiao decomposition,
+            "BTCD" - Box Tiao decomposition
             'AlignLastValue': align forecast start to end of training data
+            'AnomalyRemoval': more tailored anomaly removal options
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -2993,6 +3089,7 @@ transformer_dict = {
     "BTCD": 0.01,
     "Cointegration": 0.01,
     "AlignLastValue": 0.1,
+    'AnomalyRemoval': 0.03,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()

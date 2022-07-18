@@ -14,10 +14,9 @@ regard to local values - https://arxiv.org/pdf/1802.04431.pdf
 import random
 import numpy as np
 import pandas as pd
-from autots.tools.transform import GeneralTransformer
-from autots.evaluator.auto_model import back_forecast
 from autots.tools.percentile import nan_quantile
 from autots.tools.thresholding import NonparametricThreshold, nonparametric
+
 
 try:
     from joblib import Parallel, delayed
@@ -58,24 +57,24 @@ except Exception:
 # runtime, number of holidays, prediction forecast gain
 
 
-def sk_outliers(df, method, contamination="auto", method_params={}):
+def sk_outliers(df, method, method_params={}):
     """scikit-learn outlier methods wrapper."""
     if method == "IsolationForest":
         model = IsolationForest(
-            contamination=contamination, n_jobs=1, **method_params
+            n_jobs=1, **method_params
         )  # n_estimators=200
         res = model.fit_predict(df)
         scores = model.decision_function(df)
     elif method == "LOF":
         model = LocalOutlierFactor(
-            contamination=contamination, n_jobs=1, **method_params
+            n_jobs=1, **method_params
         )  # n_neighbors=5
         res = model.fit_predict(df)
         scores = model.negative_outlier_factor_ + 1.45
     elif method == "EE":
-        if contamination == "auto":
-            contamination = 0.1
-        model = EllipticEnvelope(contamination=contamination, **method_params)
+        if method_params['contamination'] == "auto":
+            method_params['contamination'] = 0.1
+        model = EllipticEnvelope(**method_params)
         res = model.fit_predict(df)
         scores = model.decision_function(df)
     return pd.DataFrame({"anomaly": res}, index=df.index), pd.DataFrame(
@@ -83,7 +82,7 @@ def sk_outliers(df, method, contamination="auto", method_params={}):
     )
 
 
-def loop_sk_outliers(df, method, contamination="auto", method_params={}, n_jobs=1):
+def loop_sk_outliers(df, method, method_params={}, n_jobs=1):
     """Multiprocessing on each series for multivariate outliers with sklearn."""
     parallel = True
     if n_jobs in [0, 1] or df.shape[1] < 5:
@@ -98,7 +97,6 @@ def loop_sk_outliers(df, method, contamination="auto", method_params={}, n_jobs=
             delayed(sk_outliers)(
                 df=df.iloc[:, i : i + 1],
                 method=method,
-                contamination=contamination,
                 method_params=method_params,
             )
             for i in range(df.shape[1])
@@ -110,7 +108,6 @@ def loop_sk_outliers(df, method, contamination="auto", method_params={}, n_jobs=
                 sk_outliers(
                     df=df.iloc[:, i : i + 1],
                     method=method,
-                    contamination=contamination,
                     method_params=method_params,
                 )
             )
@@ -187,16 +184,27 @@ def zscore_survival_function(
 
 
 def limits_to_anomalies(
-    df, output, threshold_method, method_params, upper_limit, lower_limit
+    df, output, upper_limit, lower_limit, method_params=None,
 ):
-    res = np.where((df >= upper_limit) | (df <= lower_limit), -1, 1)
     scores = zscore_survival_function(
         np.minimum(abs(df - upper_limit), abs(df - lower_limit)),
         output=output,
-        method="zscore",
-        distribution="gamma",
-        center=False,
+        method=method_params.get("threshold_method", "zscore"),
+        distribution=method_params.get("distribution", "gamma"),
+        center=method_params.get('center', False),
     )
+    if output == "univariate":
+        alpha = method_params.get("alpha", 0.05)
+        res = pd.DataFrame(
+            np.where(scores < alpha, -1, 1),
+            index=df.index,
+            columns=["p_values"],
+        )
+    else:
+        res = pd.DataFrame(
+            np.where((df >= upper_limit) | (df <= lower_limit), -1, 1),
+            index=df.index, columns=df.columns
+        )
     return res, scores
 
 
@@ -343,13 +351,11 @@ def detect_anomalies(
     output,
     method,
     transform_dict=None,
-    forecast_params=None,
     method_params={},
     eval_period=None,
     n_jobs=1,
 ):
-    """Returns just one set of results, regardless if univariate or multivariate.
-    All will return -1 for anomalies.
+    """All will return -1 for anomalies.
 
     Args:
         output (str): 'multivariate' (each series unique outliers), or 'univariate' (all series together for one outlier flag per timestamp)
@@ -361,48 +367,24 @@ def detect_anomalies(
     Returns:
         pd.DataFrame (classifications, -1 = outlier, 1 = not outlier), pd.DataFrame s(scores)
     """
-    df_anomaly = df.copy()
+    df_anomaly = df  # .copy()
+    """
     if transform_dict is not None:
         model = GeneralTransformer(
             **transform_dict
         )  # DATEPART, LOG, SMOOTHING, DIFF, CLIP OUTLIERS with high z score
         df_anomaly = model.fit_transform(df_anomaly)
-
-    if forecast_params is not None:
-        backcast = back_forecast(
-            df_anomaly,
-            n_splits="auto",
-            forecast_length=method_params.get("forecast_length", 3),
-            frequency="infer",
-            eval_period=eval_period,
-            **forecast_params,
-        )
-        # don't difference for prediction_interval
-        if method not in ["prediction_interval"]:
-            if eval_period is not None:
-                df_anomaly = df_anomaly.tail(eval_period) - backcast.forecast
-            else:
-                df_anomaly = df_anomaly - backcast.forecast
+    """
 
     if method in ["IsolationForest", "LOF", "EE"]:
-        contamination = method_params.get("contamination", "auto")
         if output == "univariate":
-            res, scores = sk_outliers(df_anomaly, method, contamination, method_params)
+            res, scores = sk_outliers(df_anomaly, method, method_params)
         else:
             res, scores = loop_sk_outliers(
-                df_anomaly, method, contamination, method_params, n_jobs
+                df_anomaly, method, method_params, n_jobs
             )
     elif method in ["zscore", "rolling_zscore", "mad", "minmax"]:
         res, scores = values_to_anomalies(df_anomaly, output, method, method_params)
-    elif method in ["prediction_interval"]:
-        res, scores = limits_to_anomalies(
-            df_anomaly,
-            output,
-            method,
-            method_params,
-            upper_limit=backcast.upper_forecast,
-            lower_limit=backcast.lower_forecast,
-        )
     elif method in ["IQR"]:
         iqr_thresh = method_params.get("iqr_threshold", 2.0)
         iqr_quantiles = method_params.get("iqr_quantiles", [0.25, 0.75])
@@ -411,9 +393,8 @@ def detect_anomalies(
         limits = resid_q + (iqr_thresh * iqr)
         res, scores = limits_to_anomalies(
             df_anomaly,
-            output,
-            method,
-            method_params,
+            output=output,
+            method_params=method_params,
             upper_limit=limits[1],
             lower_limit=limits[0],
         )
@@ -425,93 +406,113 @@ def detect_anomalies(
             method_params=method_params,
             n_jobs=n_jobs,
         )
+    elif method in ["prediction_interval"]:
+        raise ValueError("prediction_interval method only handled by AnomalyDetector class.")
     else:
         raise ValueError(f"{method} outlier method not recognized")
 
     return res, scores
 
 
-class AnomalyDetector(object):
-    def __init__(
-        self,
-        output="multivariate",
-        method="zscore",
-        transform_dict={  # also  suggest DifferencedTransformer
-            "transformations": {0: "DatepartRegression"},
-            "transformation_params": {
-                0: {
-                    "datepart_method": "simple_3",
-                    "regression_model": {
-                        "model": "ElasticNet",
-                        "model_params": {},
-                    },
-                }
-            },
-        },
-        forecast_params=None,
-        method_params={},
-        eval_period=None,
-        n_jobs=1,
-    ):
-        """Detect anomalies."""
-        self.output = output
-        self.method = method
-        self.transform_dict = transform_dict
-        self.forecast_params = forecast_params
-        self.method_params = method_params
-        self.eval_period = eval_period
-        self.n_jobs = n_jobs
+available_methods = [
+    "IsolationForest",
+    "LOF",
+    "EE",
+    "zscore",
+    "rolling_zscore",
+    "mad",
+    "minmax",
+    "prediction_interval",
+    "IQR",
+    "nonparametric",
+]
 
-    def detect(self, df):
-        self.df = df
-        self.anomalies, self.scores = detect_anomalies(
-            df,
-            output=self.output,
-            method=self.method,
-            transform_dict=self.transform_dict,
-            forecast_params=self.forecast_params,
-            method_params=self.method_params,
-            eval_period=self.eval_period,
-            n_jobs=self.n_jobs,
-        )
-        return self.anomalies, self.scores
 
-    def plot(self, series_name=None, plot_kwargs={}):
-        import matplotlib.pyplot as plt
-
-        fig, ax = plt.subplots()
-        if series_name is None:
-            series_name = random.choice(self.df.columns)
-        self.df[series_name].plot(ax=ax, title=series_name, **plot_kwargs)
-        if self.output == "univariate":
-            i_anom = self.anomalies.index[self.anomalies.iloc[:, 0] == -1]
-        else:
-            series_anom = self.anomalies[series_name]
-            i_anom = series_anom[series_anom == -1].index
-        if len(i_anom) > 1:
-            ax.scatter(i_anom, self.df.loc[i_anom, :][series_name], c="red")
-
-    def get_new_params(self, method="random"):
-        if method == "fast":
-            pass
+def anomaly_new_params(method='random'):
+    if method == "fast":
         method_choice = random.choices(
             [
-                "IsolationForest",
-                "LOF",
-                "EE",
-                "zscore",
-                "rolling_zscore",
-                "mad",
-                "minmax",
-                "prediction_interval",
-                "IQR",
-                "nonparametric",
+                "LOF", "EE", "zscore", "rolling_zscore", "mad",
+                "minmax", "IQR", "nonparametric",
             ],
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+            [0.1, 0.1, 0.25, 0.25, 0.1, 0.1, 0.2, 0.1]
         )[0]
-        return {
-            "method": method_choice,
-            "transform_dict": {
+    else:
+        method_choice = random.choices(
+            available_methods,
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1, 0.15],
+        )[0]
+    if method_choice == "IsolationForest":
+        method_params = {
+            'contamination': random.choices(['auto', 0.1, 0.05], [0.8, 0.1, 0.1])[0],
+            'n_estimators': random.choices([50, 100, 200], [0.3, 0.4, 0.3])[0],
+            'max_features': random.choices([1.0, 0.5], [0.9, 0.1])[0],
+            'bootstrap': random.choices([False, True], [0.9, 0.1])[0],
+        }
+    elif method_choice == "LOF":
+        method_params = {
+            'contamination': random.choices(['auto', 0.1, 0.05], [0.8, 0.1, 0.1])[0],
+            'n_neighbors': random.choices([3, 5, 10, 20], [0.3, 0.4, 0.3, 0.1])[0],
+            'metric': random.choices(['minkowski', 'canberra'], [0.9, 0.1])[0],
+        }
+    elif method_choice == "EE":
+        method_params = {
+            'contamination': random.choices([0.02, 0.1, 0.05, 0.15], [0.1, 0.8, 0.05, 0.05])[0],
+            'assume_centered': random.choices([False, True], [0.9, 0.1])[0],
+            'support_fraction': random.choices([None, 0.2, 0.8], [0.9, 0.1, 0.1])[0]
+        }
+    elif method_choice == "zscore":
+        method_params = {
+            'distribution': random.choices(
+                ['norm', 'gamma', 'chi2', 'uniform'], [0.4, 0.2, 0.2, 0.2]
+            )[0],
+            'alpha': random.choices([0.03, 0.05, 0.1], [0.1, 0.8, 0.1])[0],
+        }
+    elif method_choice == "rolling_zscore":
+        method_params = {
+            'distribution': random.choices(
+                ['norm', 'gamma', 'chi2', 'uniform'], [0.4, 0.2, 0.2, 0.2]
+            )[0],
+            'alpha': random.choices([0.03, 0.05, 0.1], [0.1, 0.8, 0.1])[0],
+            'rolling_periods': random.choice([28, 90, 200, 300]),
+            'center': random.choice([True, False])
+        }
+    elif method_choice == "mad":
+        method_params = {
+            'distribution': random.choices(
+                ['norm', 'gamma', 'chi2', 'uniform'], [0.4, 0.2, 0.2, 0.2]
+            )[0],
+            'alpha': random.choices([0.03, 0.05, 0.1], [0.1, 0.8, 0.1])[0],
+        }
+    elif method_choice == "minmax":
+        method_params = {
+            'alpha': random.choices([0.03, 0.05, 0.1], [0.3, 0.6, 0.1])[0],
+        }
+    elif method_choice == "prediction_interval":
+        method_params = {"prediction_interval": random.choice([0.9, 0.99])}
+    elif method_choice == "IQR":
+        method_params = {
+            'iqr_threshold': random.choices(
+                [1.5, 2.0, 2.5, 3.0], [0.1, 0.4, 0.2, 0.1]
+            )[0],
+            'iqr_quantiles': random.choices([[0.25, 0.75], [0.4, 0.6]], [0.8, 0.2])[0],
+        }
+    elif method_choice == "nonparametric":
+        method_params = {
+            'p': random.choices([None, 0.1, 0.05, 0.02, 0.25], [0.8, 0.1, 0.1, 0.01, 0.1])[0],
+            'z_init': random.choices([1.5, 2.0, 2.5], [0.3, 0.4, 0.3])[0],
+            'z_limit': random.choices([10, 12], [0.5, 0.5])[0],
+            'z_step': random.choice([0.5, 0.25]),
+            'inverse': random.choices([False, True], [0.9, 0.1])[0],
+            'max_contamination': random.choices([0.25, 0.1, 0.05], [0.9, 0.05, 0.05])[0],
+            'mean_weight': random.choices([1, 25, 100, 200], [0.1, 0.7, 0.1, 0.1])[0],
+            'sd_weight': random.choices([1, 25, 100, 200], [0.1, 0.7, 0.1, 0.1])[0],
+            'anomaly_count_weight': random.choices([0.5, 1.0, 2.0], [0.05, 0.9, 0.05])[0],
+        }
+    transform_dict = random.choices(
+        [
+            None, 'random',
+            {
                 "transformations": {0: "DatepartRegression"},
                 "transformation_params": {
                     0: {
@@ -523,9 +524,39 @@ class AnomalyDetector(object):
                     }
                 },
             },
-            "forecast_params": None,
-            "method_params": {},
-        }
+            {
+                "transformations": {0: "DatepartRegression"},
+                "transformation_params": {
+                    0: {
+                        "datepart_method": "simple_3",
+                        "regression_model": {
+                            "model": "DecisionTree",
+                            "model_params": {"max_depth": None, "min_samples_split": 0.05},
+                        },
+                    }
+                },
+            },
+            {
+                "transformations": {0: "DifferencedTransformer"},
+                "transformation_params": {0: {}},
+            },
+            {
+                "fillna": None,
+                "transformations": {"0": "EWMAFilter"},
+                "transformation_params": {
+                    "0": {"span": 7},
+                },
+            },
+            {
+                "fillna": None,
+                "transformations": {"0": "ClipOutliers"},
+                "transformation_params": {
+                    "0": {"method": "clip", "std_threshold": 6},
+                },
+            },
+        ], [0.5, 0.2, 0.3, 0.1, 0.1, 0.1, 0.1],
+    )[0]
+    return method_choice, method_params, transform_dict
 
 
 def anomaly_list_to_holidays(dates):
@@ -553,9 +584,3 @@ def anomaly_list_to_holidays(dates):
         ]
     )
     return day_holidays, wkdom_holidays
-
-
-mod = AnomalyDetector(method="zscore", output="univariate")
-# mod.detect(df.iloc[:, 0:3])
-detected = mod.anomalies
-mod.plot()

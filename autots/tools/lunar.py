@@ -101,7 +101,7 @@ def moon_phase(
 def moon_phase_df(datetime_index, epoch=2444237.905):
     """Convert pandas DatetimeIndex to moon phases. Note timezone and hour can matter slightly.
     Epoch can be adjust slightly (0.5 = half day) to adjust for time zones.
-    2444237.905 is for US. epoch=2444238.5 for Asia generally.
+    2444237.905 is for US Central. epoch=2444238.5 for Asia generally.
     """
     moon = pd.Series(moon_phase(datetime_index, epoch=epoch), index=datetime_index)
     full_moon = ((moon > moon.shift(1)) & (moon > moon.shift(-1))).astype(int)
@@ -570,17 +570,3 @@ def truephase(k, tphase):
 
     # return datetime.DateTimeFromJDN(pt)
     return pd.to_datetime(pt, unit='D', origin='julian')
-
-
-if __name__ == "__main__":
-    m = MoonPhase()
-    s = """The moon is %s, %.1f%% illuminated, %.1f days old.""" % (
-        m.phase_text,
-        m.illuminated * 100,
-        m.age,
-    )
-    print(s)
-
-
-# print(MoonPhase(date="2020-01-10").illuminated)
-# print(MoonPhase(date="2040-12-10").illuminated)

@@ -1571,6 +1571,47 @@ def model_list_to_dict(model_list):
     return model_list, model_prob
 
 
+def random_model(
+    model_list,
+    model_prob,
+    transformer_list='fast',
+    transformer_max_depth=2,
+    models_mode='random',
+    counter=15, n_models=5,
+    keyword_format=False,
+):
+    """Generate a random model from a given list of models and probabilities."""
+    if counter < n_models:
+        model_str = model_list[counter]
+    else:
+        model_str = random.choices(model_list, model_prob, k=1)[0]
+    param_dict = ModelMonster(model_str).get_new_params(method=models_mode)
+    if counter % 4 == 0:
+        trans_dict = RandomTransform(
+            transformer_list=transformer_list,
+            transformer_max_depth=transformer_max_depth,
+            traditional_order=True,
+        )
+    else:
+        trans_dict = RandomTransform(
+            transformer_list=transformer_list,
+            transformer_max_depth=transformer_max_depth,
+        )
+    if keyword_format:
+        return {
+            'model_name': model_str,
+            'model_param_dict': param_dict,
+            'model_transform_dict': trans_dict,
+        }
+    else:
+        return {
+            'Model': model_str,
+            'ModelParameters': json.dumps(param_dict),
+            'TransformationParameters': json.dumps(trans_dict),
+            'Ensemble': 0,
+        }
+
+
 def RandomTemplate(
     n: int = 10,
     model_list: list = [
@@ -1599,30 +1640,19 @@ def RandomTemplate(
     template_list = []
     while len(template_list) < n:
         # this assures all models get choosen at least once
-        if counter < n_models:
-            model_str = model_list[counter]
-        else:
-            model_str = random.choices(model_list, model_prob, k=1)[0]
-        param_dict = ModelMonster(model_str).get_new_params(method=models_mode)
-        if counter % 4 == 0:
-            trans_dict = RandomTransform(
-                transformer_list=transformer_list,
-                transformer_max_depth=transformer_max_depth,
-                traditional_order=True,
-            )
-        else:
-            trans_dict = RandomTransform(
-                transformer_list=transformer_list,
-                transformer_max_depth=transformer_max_depth,
-            )
+        random_mod = random_model(
+            model_list=model_list,
+            model_prob=model_prob,
+            transformer_list=transformer_list,
+            transformer_max_depth=transformer_max_depth,
+            models_mode=models_mode,
+            counter=counter,
+            n_models=n_models,
+        )
+
         template_list.append(
             pd.DataFrame(
-                {
-                    'Model': model_str,
-                    'ModelParameters': json.dumps(param_dict),
-                    'TransformationParameters': json.dumps(trans_dict),
-                    'Ensemble': 0,
-                },
+                random_mod,
                 index=[0],
             )
         )
