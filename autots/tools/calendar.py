@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """Calendar conversion functions.
-Created on Thu Jul 14 16:41:16 2022
 
-@author: Colin
+Includes Lunar, Chinese lunar, and Arabic lunar
 """
 import numpy as np
 import pandas as pd
@@ -55,13 +54,134 @@ def to_jd(year, month, day):
     ) - 1
 
 
-def gregorian_to_islamic(date):
-    """Calculate Islamic dates for pandas DatetimeIndex. Approximately. From convertdate by fitnr."""
+def gregorian_to_islamic(date, epoch_adjustment=1.5):
+    """Calculate Islamic dates for pandas DatetimeIndex. Approximately. From convertdate by fitnr.
+    
+    Args:
+        epoch_adjustment (float): 1.0 and that needs to be adjusted by about +/- 0.5 to account for timezone
+    """
     if isinstance(date, (str, list)):
         date = pd.to_datetime(date, infer_datetime_format=True)
     jd = date.to_julian_date()
-    jd = np.floor(jd) + 1.5
+    jd = np.floor(jd) + epoch_adjustment
     year = np.floor(((30 * (jd - 1948439.5)) + 10646) / 10631)
     month = np.minimum(12, np.ceil((jd - (29 + to_jd(year, 1, 1))) / 29.5) + 1)
     day = (jd - to_jd(year, month, 1)).astype(int) + 1
     return pd.DataFrame({'year': year, 'month': month, 'day': day}, index=date).astype(int)
+
+
+def heb_is_leap(year):
+    if (((7 * year) + 1) % 19) < 7:
+        return True
+    return False
+
+
+def _elapsed_months(year):
+    return (235 * year - 234) // 19
+
+
+def _elapsed_days(year):
+    months_elapsed = _elapsed_months(year)
+    parts_elapsed = 204 + 793 * (months_elapsed % 1080)
+    hours_elapsed = (
+        5 + 12 * months_elapsed + 793 * (months_elapsed // 1080) + parts_elapsed // 1080
+    )
+    conjunction_day = 1 + 29 * months_elapsed + hours_elapsed // 24
+    conjunction_parts = 1080 * (hours_elapsed % 24) + parts_elapsed % 1080
+
+    if (
+        (conjunction_parts >= 19440)
+        or (
+            (conjunction_day % 7 == 2)
+            and (conjunction_parts >= 9924)
+            and not heb_is_leap(year)
+        )
+        or (
+            (conjunction_day % 7 == 1)
+            and conjunction_parts >= 16789
+            and heb_is_leap(year - 1)
+        )
+    ):
+        alt_day = conjunction_day + 1
+    else:
+        alt_day = conjunction_day
+    if alt_day % 7 in [0, 3, 5]:
+        alt_day += 1
+
+    return alt_day
+
+
+def _days_in_year(year):
+    return _elapsed_days(year + 1) - _elapsed_days(year)
+
+
+def _long_cheshvan(year):
+    """Returns True if Cheshvan has 30 days"""
+    return _days_in_year(year) % 10 == 5
+
+
+def _short_kislev(year):
+    """Returns True if Kislev has 29 days"""
+    return _days_in_year(year) % 10 == 3
+
+
+def _month_length(year, month):
+    """Months start with Nissan (Nissan is 1 and Tishrei is 7)"""
+    if month in [1, 3, 5, 7, 11]:
+        return 30
+    if month in [2, 4, 6, 10, 13]:
+        return 29
+    if month == 12:
+        if heb_is_leap(year):
+            return 30
+        return 29
+    if month == 8:  # if long Cheshvan return 30, else return 29
+        if _long_cheshvan(year):
+            return 30
+        return 29
+    if month == 9:  # if short Kislev return 29, else return 30
+        if _short_kislev(year):
+            return 29
+        return 30
+    raise ValueError("Invalid month")
+
+
+def gregorian_to_hebrew(dates):
+    """Convert pd.Datetimes to a Hebrew date. From pyluach by simlist.
+
+    This is the slowest of the lot and needs to be improved.
+    """
+    if isinstance(dates, (str, list)):
+        day = pd.to_datetime(dates, infer_datetime_format=True).to_julian_date()
+    else:
+        day = dates.to_julian_date()
+    if (day <= 347997).any():
+        raise ValueError("According to this calendar, this time doesn't exist")
+
+    jd = (day + 0.5).astype(int)  # Try to account for half day
+    jd -= 347997
+    years = (jd // 365).astype(int) + 2  # try that to debug early years
+    date_list = []
+    for idx in range(len(jd)):
+        c_jd = jd[idx]
+        year = years[idx]
+        first_day = _elapsed_days(year)
+
+        while first_day > c_jd:
+            year -= 1
+            first_day = _elapsed_days(year)
+
+        months = [7, 8, 9, 10, 11, 12, 13, 1, 2, 3, 4, 5, 6]
+        if not heb_is_leap(year):
+            months.remove(13)
+
+        days_remaining = c_jd - first_day
+        for month in months:
+            if days_remaining >= _month_length(year, month):
+                days_remaining -= _month_length(year, month)
+            else:
+                date_list.append(pd.DataFrame({
+                    "year": year, "month": month, 'day': days_remaining + 1
+                }, index=[dates[idx]]))
+                break
+    return pd.concat(date_list, axis=0)

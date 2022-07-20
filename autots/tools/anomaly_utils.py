@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 from autots.tools.percentile import nan_quantile
 from autots.tools.thresholding import NonparametricThreshold, nonparametric
+from autots.tools.calendar import gregorian_to_chinese, gregorian_to_islamic, gregorian_to_hebrew
 
 
 try:
@@ -217,15 +218,27 @@ def values_to_anomalies(df, output, threshold_method, method_params, n_jobs=1):
     elif threshold_method in ["minmax"]:
         alpha = method_params.get("alpha", 0.05)
         df_abs = df.abs()
-        scores = 1 - (
-            (df_abs - df_abs.min(axis=0))
-            / (df.abs().max(axis=0) - df_abs.min(axis=0)).replace(0, 1)
-        )
-        res = pd.DataFrame(
-            np.where(scores < alpha, -1, 1),
-            index=df.index,
-            columns=cols,
-        )
+        if output == "univariate":
+            df_abs = df_abs.sum(axis=1).to_frame()
+            scores = 1 - (
+                (df_abs - df_abs.min(axis=0))
+                / (df_abs.max(axis=0) - df_abs.min(axis=0)).replace(0, 1)
+            )
+            res = pd.DataFrame(
+                np.where(scores < alpha, -1, 1),
+                index=df.index,
+                columns=cols,
+            )
+        elif output == "multivariate":
+            scores = 1 - (
+                (df_abs - df_abs.min(axis=0))
+                / (df_abs.max(axis=0) - df_abs.min(axis=0)).replace(0, 1)
+            )
+            res = pd.DataFrame(
+                np.where(scores < alpha, -1, 1),
+                index=df.index,
+                columns=cols,
+            )
         return res, scores
     elif threshold_method in ["zscore", "rolling_zscore", "mad"]:
         alpha = method_params.get("alpha", 0.05)
@@ -559,28 +572,73 @@ def anomaly_new_params(method='random'):
     return method_choice, method_params, transform_dict
 
 
-def anomaly_list_to_holidays(dates):
-    # RETURN INSTEAD full table, filter threshold later
-    # filter by % of available seasons (ie keep 1 if only 1 full season)
+def anomaly_list_to_holidays(
+        dates, threshold=0, lunar_holidays=True, islamic_holidays=True, hebrew_holidays=True
+):
     dates_df = pd.DataFrame(
         {"month": dates.month, "day": dates.day, "dayofweek": dates.dayofweek},
         index=dates,
     )
-    dates_df["weekofmonth"] = (dates_df["day"] - 1) // 7 + 1
-    threshold = (dates.year.max() - dates.year.min() + 1) * 0.75
+    dates_df['occurrence_rate'] = 1
+    dates_df['count'] = 1
+
+    threshold = (dates.year.max() - dates.year.min() + 1) * threshold
     threshold = threshold if threshold > 2 else 2
+
     day_holidays = (
         dates_df.groupby(["month", "day"])
-        .count()
+        .agg({"count": 'count', "occurrence_rate": 'mean'})
         .loc[
-            lambda df: df["dayofweek"] > threshold,
+            lambda df: df["count"] > threshold,
         ]
     )
+    dates_df["weekofmonth"] = (dates_df["day"] - 1) // 7 + 1
     wkdom_holidays = (
         dates_df.groupby(["month", "weekofmonth", "dayofweek"])
-        .count()
+        .agg({"count": 'count', "occurrence_rate": 'mean'})
         .loc[
-            lambda df: df["day"] > threshold,
+            lambda df: df["count"] > threshold,
         ]
     )
-    return day_holidays, wkdom_holidays
+    dates_df['weekfromend'] = (dates_df['day'] - dates.daysinmonth) // -7
+    wkdeom_holidays = (
+        dates_df.groupby(["month", "weekfromend", "dayofweek"])
+        .agg({"count": 'count', "occurrence_rate": 'mean'})
+        .loc[
+            lambda df: df["count"] > threshold,
+        ]
+    )
+    if lunar_holidays:
+        lunar_df = gregorian_to_chinese(dates)
+        lunar_df['count'] = 1
+        lunar_df['occurrence_rate'] = 1
+        lunar_holidays_df = (
+            lunar_df.groupby(["lunar_month", "lunar_day"])
+            .agg({"count": 'count', "occurrence_rate": 'mean'})
+            .loc[
+                lambda df: df["count"] > threshold,
+            ]
+        )
+    if islamic_holidays:
+        islamic_df = gregorian_to_islamic(dates)
+        islamic_df['count'] = 1
+        islamic_df['occurrence_rate'] = 1
+        islamic_holidays_df = (
+            islamic_df.groupby(["month", "day"])
+            .agg({"count": 'count', "occurrence_rate": 'mean'})
+            .loc[
+                lambda df: df["count"] > threshold,
+            ]
+        )
+    if hebrew_holidays:
+        hebrew_df = gregorian_to_hebrew(dates)
+        hebrew_df['count'] = 1
+        hebrew_df['occurrence_rate'] = 1
+        hebrew_holidays_df = (
+            hebrew_df.groupby(["month", "day"])
+            .agg({"count": 'count', "occurrence_rate": 'mean'})
+            .loc[
+                lambda df: df["count"] > threshold,
+            ]
+        )
+    return day_holidays, wkdom_holidays, wkdeom_holidays, lunar_holidays_df, islamic_holidays_df, hebrew_holidays_df

@@ -20,6 +20,7 @@
 * added AlignLastValue transformer
 * added plot_horizontal_model_count and fixed an error in horizontal generation plot
 * adjusted TotalRuntime to higher precision, and no longer + 1
+* added subsidiary transformer for cleaning in Detrend and Datepart detrend Transformers
 * new AnomalyRemoval transformer
 
 * test cointegration with pinv!

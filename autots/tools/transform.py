@@ -7,13 +7,17 @@ from autots.tools.impute import FillNA, df_interpolate
 from autots.tools.seasonal import date_part, seasonal_int
 from autots.tools.cointegration import coint_johansen, btcd_decompose
 from autots.models.sklearn import generate_regressor_params, retrieve_regressor
-from autots.tools.anomaly_utils import anomaly_new_params, detect_anomalies, limits_to_anomalies
+from autots.tools.anomaly_utils import (
+    anomaly_new_params,
+    detect_anomalies,
+    limits_to_anomalies,
+)
 
 
 class EmptyTransformer(object):
     """Base transformer returning raw data."""
 
-    def __init__(self, name: str = 'EmptyTransformer', **kwargs):
+    def __init__(self, name: str = "EmptyTransformer", **kwargs):
         self.name = name
 
     def _fit(self, df):
@@ -59,13 +63,13 @@ class EmptyTransformer(object):
 
     def __repr__(self):
         """Print."""
-        return 'Transformer ' + str(self.name) + ', uses standard .fit/.transform'
+        return "Transformer " + str(self.name) + ", uses standard .fit/.transform"
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         """Generate new random parameters"""
-        if method == 'test':
-            return {'test': random.choice([1, 2])}
+        if method == "test":
+            return {"test": random.choice([1, 2])}
         else:
             return {}
 
@@ -101,7 +105,7 @@ def clip_outliers(df, std_threshold: float = 3):
     return df2
 
 
-def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
+def simple_context_slicer(df, method: str = "None", forecast_length: int = 30):
     """Condensed version of context_slicer with more limited options.
 
     Args:
@@ -121,10 +125,10 @@ def simple_context_slicer(df, method: str = 'None', forecast_length: int = 30):
 
     df = df.sort_index(ascending=True)
 
-    if 'forecastlength' in str(method).lower():
+    if "forecastlength" in str(method).lower():
         len_int = int([x for x in str(method) if x.isdigit()][0])
         return df.tail(len_int * forecast_length)
-    elif method == 'HalfMax':
+    elif method == "HalfMax":
         return df.tail(int(len(df.index) / 2))
     elif str(method).replace("-", "").replace(".", "").isdigit():
         method = float(method)
@@ -143,16 +147,22 @@ class Detrend(EmptyTransformer):
     """Remove a linear trend from the data."""
 
     def __init__(
-        self, model: str = 'GLS', phi: float = 1.0, window: int = None, **kwargs
+        self,
+        model: str = "GLS",
+        phi: float = 1.0,
+        window: int = None,
+        transform_dict=None,
+        **kwargs,
     ):
-        super().__init__(name='Detrend')
+        super().__init__(name="Detrend")
         self.model = model
-        self.need_positive = ['Poisson', 'Gamma', 'Tweedie']
+        self.need_positive = ["Poisson", "Gamma", "Tweedie"]
         self.phi = phi
         self.window = window
+        self.transform_dict = transform_dict
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         window = random.choices(
             [None, 365, 900, 30, 90, 10], [2.0, 0.1, 0.1, 0.1, 0.1, 0.1]
         )[0]
@@ -179,10 +189,11 @@ class Detrend(EmptyTransformer):
             "model": choice,
             "phi": phi,
             "window": window,
+            "transform_dict": random_cleaners(),
         }
 
     def _retrieve_detrend(self, detrend: str = "Linear"):
-        if detrend == 'Linear':
+        if detrend == "Linear":
             from sklearn.linear_model import LinearRegression
 
             return LinearRegression(fit_intercept=True)
@@ -193,28 +204,28 @@ class Detrend(EmptyTransformer):
             return MultiOutputRegressor(
                 PoissonRegressor(fit_intercept=True, max_iter=200)
             )
-        elif detrend == 'Tweedie':
+        elif detrend == "Tweedie":
             from sklearn.linear_model import TweedieRegressor
             from sklearn.multioutput import MultiOutputRegressor
 
             return MultiOutputRegressor(TweedieRegressor(power=1.5, max_iter=200))
-        elif detrend == 'Gamma':
+        elif detrend == "Gamma":
             from sklearn.linear_model import GammaRegressor
             from sklearn.multioutput import MultiOutputRegressor
 
             return MultiOutputRegressor(
                 GammaRegressor(fit_intercept=True, max_iter=200)
             )
-        elif detrend == 'TheilSen':
+        elif detrend == "TheilSen":
             from sklearn.linear_model import TheilSenRegressor
             from sklearn.multioutput import MultiOutputRegressor
 
             return MultiOutputRegressor(TheilSenRegressor())
-        elif detrend == 'RANSAC':
+        elif detrend == "RANSAC":
             from sklearn.linear_model import RANSACRegressor
 
             return RANSACRegressor()
-        elif detrend == 'ARD':
+        elif detrend == "ARD":
             from sklearn.linear_model import ARDRegression
             from sklearn.multioutput import MultiOutputRegressor
 
@@ -235,15 +246,20 @@ class Detrend(EmptyTransformer):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
-        Y = df.to_numpy()
-        X = pd.to_numeric(df.index, errors='coerce', downcast='integer').to_numpy()
+        # this is meant mostly for filling in some smoothing we don't want kept on original
+        if self.transform_dict is not None:
+            model = GeneralTransformer(**self.transform_dict)
+            Y = model.fit_transform(df)
+        else:
+            Y = df.to_numpy()
+        X = pd.to_numeric(df.index, errors="coerce", downcast="integer").to_numpy()
         if self.window is not None:
             Y = Y[-self.window :]
             X = X[-self.window :]
-        if self.model == 'GLS':
+        if self.model == "GLS":
             from statsmodels.regression.linear_model import GLS
 
-            self.trained_model = GLS(Y, X, missing='drop').fit()
+            self.trained_model = GLS(Y, X, missing="drop").fit()
         else:
             self.trained_model = self._retrieve_detrend(detrend=self.model)
             if self.model in self.need_positive:
@@ -275,7 +291,7 @@ class Detrend(EmptyTransformer):
             df = df.astype(float)
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
-        X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
+        X = pd.to_numeric(df.index, errors="coerce", downcast="integer").values
         if self.model != "GLS":
             X = X.reshape((-1, 1))
         # df = df.astype(float) - self.model.predict(X)
@@ -309,7 +325,7 @@ class Detrend(EmptyTransformer):
         x_in = df.index
         if not isinstance(x_in, pd.DatetimeIndex):
             x_in = pd.DatetimeIndex(x_in)
-        X = pd.to_numeric(x_in, errors='coerce', downcast='integer').values
+        X = pd.to_numeric(x_in, errors="coerce", downcast="integer").values
         if self.model != "GLS":
             X = X.reshape((-1, 1))
         if self.model in self.need_positive:
@@ -348,7 +364,7 @@ class StatsmodelsFilter(EmptyTransformer):
         method (str): bkfilter or cffilter or convolution_filter
     """
 
-    def __init__(self, method: str = 'bkfilter', **kwargs):
+    def __init__(self, method: str = "bkfilter", **kwargs):
         super().__init__(name="StatsmodelsFilter")
         self.method = method
 
@@ -366,13 +382,13 @@ class StatsmodelsFilter(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        if self.method == 'bkfilter':
+        if self.method == "bkfilter":
             from statsmodels.tsa.filters import bk_filter
 
             cycles = bk_filter.bkfilter(df, K=1)
             cycles.columns = df.columns
-            df = (df - cycles).fillna(method='ffill').fillna(method='bfill')
-        elif self.method == 'cffilter':
+            df = (df - cycles).fillna(method="ffill").fillna(method="bfill")
+        elif self.method == "cffilter":
             from statsmodels.tsa.filters import cf_filter
 
             cycle, trend = cf_filter.cffilter(df)
@@ -382,7 +398,7 @@ class StatsmodelsFilter(EmptyTransformer):
             from statsmodels.tsa.filters.filtertools import convolution_filter
 
             df = convolution_filter(df, [[0.75] * df.shape[1], [0.25] * df.shape[1]])
-            df = df.fillna(method='ffill').fillna(method='bfill')
+            df = df.fillna(method="ffill").fillna(method="bfill")
         return df
 
 
@@ -393,7 +409,7 @@ class HPFilter(EmptyTransformer):
         lamb (int): lambda for hpfilter
     """
 
-    def __init__(self, part: str = 'trend', lamb: float = 1600, **kwargs):
+    def __init__(self, part: str = "trend", lamb: float = 1600, **kwargs):
         super().__init__(name="HPFilter")
         self.part = part
         self.lamb = lamb
@@ -428,8 +444,8 @@ class HPFilter(EmptyTransformer):
         return df
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
-        part = random.choices(['trend', 'cycle'], weights=[0.98, 0.02])[0]
+    def get_new_params(method: str = "random"):
+        part = random.choices(["trend", "cycle"], weights=[0.98, 0.02])[0]
         lamb = random.choices(
             [1600, 6.25, 129600, 104976000000], weights=[0.5, 0.2, 0.2, 0.1]
         )[0]
@@ -446,7 +462,7 @@ class STLFilter(EmptyTransformer):
     """
 
     def __init__(
-        self, decomp_type="STL", part: str = 'trend', seasonal: int = 7, **kwargs
+        self, decomp_type="STL", part: str = "trend", seasonal: int = 7, **kwargs
     ):
         super().__init__(name="STLFilter")
         self.part = part
@@ -471,7 +487,7 @@ class STLFilter(EmptyTransformer):
 
         def _stl_one_return(series, decomp_type="STL", seasonal=7, part="trend"):
             """Convert filter to apply on pd DataFrame."""
-            if str(decomp_type).lower() == 'stl':
+            if str(decomp_type).lower() == "stl":
                 result = STL(series, seasonal=seasonal).fit()
             else:
                 result = seasonal_decompose(series)
@@ -491,15 +507,15 @@ class STLFilter(EmptyTransformer):
             seasonal=self.seasonal,
             part=self.part,
         )
-        return df.fillna(method='ffill').fillna(method='bfill')
+        return df.fillna(method="ffill").fillna(method="bfill")
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
-        decomp_type = random.choices(['STL', 'seasonal_decompose'], weights=[0.5, 0.5])[
+    def get_new_params(method: str = "random"):
+        decomp_type = random.choices(["STL", "seasonal_decompose"], weights=[0.5, 0.5])[
             0
         ]
         part = random.choices(
-            ['trend', 'seasonal', "resid"], weights=[0.98, 0.02, 0.001]
+            ["trend", "seasonal", "resid"], weights=[0.98, 0.02, 0.001]
         )[0]
         if decomp_type == "STL":
             seasonal = seasonal_int()
@@ -564,7 +580,7 @@ class SinTrend(EmptyTransformer):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
-        X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
+        X = pd.to_numeric(df.index, errors="coerce", downcast="integer").values
         self.sin_params = pd.DataFrame()
         # make this faster (250 columns in 2.5 seconds isn't bad, though)
         fail_count = 0
@@ -603,15 +619,15 @@ class SinTrend(EmptyTransformer):
             df = df.astype(float)
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
-        X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
+        X = pd.to_numeric(df.index, errors="coerce", downcast="integer").values
 
         sin_df = []
         # make this faster
         for index, row in self.sin_params.iterrows():
             sin_df.append(
                 pd.DataFrame(
-                    row['amp'] * np.sin(row['omega'] * X + row['phase'])
-                    + row['offset'],
+                    row["amp"] * np.sin(row["omega"] * X + row["phase"])
+                    + row["offset"],
                     columns=[index],
                 )
             )
@@ -630,13 +646,13 @@ class SinTrend(EmptyTransformer):
             df = df.astype(float)
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
-        X = pd.to_numeric(df.index, errors='coerce', downcast='integer').values
+        X = pd.to_numeric(df.index, errors="coerce", downcast="integer").values
 
         sin_df = pd.DataFrame()
         # make this faster
         for index, row in self.sin_params.iterrows():
             yy = pd.DataFrame(
-                row['amp'] * np.sin(row['omega'] * X + row['phase']) + row['offset'],
+                row["amp"] * np.sin(row["omega"] * X + row["phase"]) + row["offset"],
                 columns=[index],
             )
             sin_df = pd.concat([sin_df, yy], axis=1)
@@ -729,7 +745,7 @@ class IntermittentOccurrence(EmptyTransformer):
         self.center = center
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         if method == "fast":
             choice = "mean"
         else:
@@ -816,7 +832,7 @@ class RollingMeanTransformer(EmptyTransformer):
         self.fixed = fixed
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         bool_c = bool(random.getrandbits(1))
         if method == "fast":
             choice = random.choice([3, 7, 10, 12])
@@ -832,10 +848,10 @@ class RollingMeanTransformer(EmptyTransformer):
         """
         self.shape = df.shape
         self.last_values = (
-            df.tail(self.window).fillna(method='ffill').fillna(method='bfill')
+            df.tail(self.window).fillna(method="ffill").fillna(method="bfill")
         )
         self.first_values = (
-            df.head(self.window).fillna(method='ffill').fillna(method='bfill')
+            df.head(self.window).fillna(method="ffill").fillna(method="bfill")
         )
 
         df = df.tail(self.window + 1).rolling(window=self.window, min_periods=1).mean()
@@ -872,7 +888,7 @@ class RollingMeanTransformer(EmptyTransformer):
             return df
         else:
             window = self.window
-            if trans_method == 'original':
+            if trans_method == "original":
                 staged = self.first_values
                 diffed = ((df.astype(float) - df.shift(1).astype(float)) * window).tail(
                     len(df.index) - window
@@ -891,7 +907,7 @@ class RollingMeanTransformer(EmptyTransformer):
                 return staged
 
             # current_inversed = current * window - cumsum(window-1 to previous)
-            if trans_method == 'forecast':
+            if trans_method == "forecast":
                 staged = self.last_values
                 df = pd.concat([self.last_rolling, df], axis=0)
                 diffed = ((df.astype(float) - df.shift(1).astype(float)) * window).tail(
@@ -921,14 +937,14 @@ class SeasonalDifference(EmptyTransformer):
         method (str): 'LastValue', 'Mean', 'Median' to construct seasonality
     """
 
-    def __init__(self, lag_1: int = 7, method: str = 'LastValue', **kwargs):
+    def __init__(self, lag_1: int = 7, method: str = "LastValue", **kwargs):
         super().__init__(name="SeasonalDifference")
         self.lag_1 = int(abs(lag_1))
         self.method = method
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
-        method_c = random.choice(['LastValue', 'Mean', "Median"])
+    def get_new_params(method: str = "random"):
+        method_c = random.choice(["LastValue", "Mean", "Median"])
         if method == "fast":
             choice = random.choice([7, 12])
         else:
@@ -943,7 +959,7 @@ class SeasonalDifference(EmptyTransformer):
         """
         df_length = df.shape[0]
 
-        if self.method in ['Mean', 'Median']:
+        if self.method in ["Mean", "Median"]:
             df2 = df.copy()
             tile_index = np.tile(
                 np.arange(self.lag_1), int(np.ceil(df_length / self.lag_1))
@@ -955,7 +971,7 @@ class SeasonalDifference(EmptyTransformer):
             else:
                 self.tile_values_lag_1 = df2.groupby(level=0, axis=0).mean()
         else:
-            self.method == 'LastValue'
+            self.method == "LastValue"
             self.tile_values_lag_1 = df.tail(self.lag_1)
         return self
 
@@ -997,7 +1013,7 @@ class SeasonalDifference(EmptyTransformer):
         sdf = pd.DataFrame(
             np.tile(self.tile_values_lag_1, (int(np.ceil(df_len / tile_len)), 1))
         )
-        if trans_method == 'original':
+        if trans_method == "original":
             sdf = sdf.tail(df_len)
         else:
             sdf = sdf.head(df_len)
@@ -1012,23 +1028,32 @@ class DatepartRegressionTransformer(EmptyTransformer):
     def __init__(
         self,
         regression_model: dict = {
-            "model": 'DecisionTree',
+            "model": "DecisionTree",
             "model_params": {"max_depth": 5, "min_samples_split": 2},
         },
-        datepart_method: str = 'expanded',
+        datepart_method: str = "expanded",
         polynomial_degree: int = None,
+        transform_dict=None,
         **kwargs,
     ):
         super().__init__(name="DatepartRegressionTransformer")
         self.regression_model = regression_model
         self.datepart_method = datepart_method
         self.polynomial_degree = polynomial_degree
+        self.transform_dict = transform_dict
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         datepart_choice = random.choices(
-            ["simple", "expanded", "recurring", "simple_2", "simple_binarized", "lunar_phase"],
-            [0.1, 0.25, 0.2, 0.1, 0.3, 0.05]
+            [
+                "simple",
+                "expanded",
+                "recurring",
+                "simple_2",
+                "simple_binarized",
+                "lunar_phase",
+            ],
+            [0.1, 0.25, 0.2, 0.1, 0.3, 0.05],
         )[0]
         if datepart_choice in ["simple", "simple_2", "recurring"]:
             polynomial_choice = random.choices([None, 2], [0.5, 0.2])[0]
@@ -1040,20 +1065,20 @@ class DatepartRegressionTransformer(EmptyTransformer):
         elif method == "fast":
             choice = generate_regressor_params(
                 model_dict={
-                    'ElasticNet': 0.5,
-                    'DecisionTree': 0.5,
+                    "ElasticNet": 0.5,
+                    "DecisionTree": 0.5,
                     # 'ExtraTrees': 0.25,
                 }
             )
         else:
             choice = generate_regressor_params(
                 model_dict={
-                    'ElasticNet': 0.25,
-                    'DecisionTree': 0.25,
-                    'KNN': 0.1,
-                    'MLP': 0.2,
-                    'RandomForest': 0.2,
-                    'ExtraTrees': 0.25,
+                    "ElasticNet": 0.25,
+                    "DecisionTree": 0.25,
+                    "KNN": 0.1,
+                    "MLP": 0.2,
+                    "RandomForest": 0.2,
+                    "ExtraTrees": 0.25,
                     "SVM": 0.1,
                     "RadiusRegressor": 0.1,
                 }
@@ -1063,6 +1088,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             "regression_model": choice,
             "datepart_method": datepart_choice,
             "polynomial_degree": polynomial_choice,
+            "transform_dict": random_cleaners(),
         }
 
     def fit(self, df):
@@ -1076,7 +1102,11 @@ class DatepartRegressionTransformer(EmptyTransformer):
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
-        y = df.values
+        if self.transform_dict is not None:
+            model = GeneralTransformer(**self.transform_dict)
+            y = model.fit_transform(df)
+        else:
+            y = df.to_numpy()
         if y.shape[1] == 1:
             y = y.ravel()
         X = date_part(
@@ -1182,7 +1212,7 @@ class DifferencedTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        df = (df - df.shift(self.lag)).fillna(method='bfill')
+        df = (df - df.shift(self.lag)).fillna(method="bfill")
         return df
 
     def fit_transform(self, df):
@@ -1204,7 +1234,7 @@ class DifferencedTransformer(EmptyTransformer):
         """
         lag = self.lag
         # add last values, group by lag, cumsum
-        if trans_method == 'original':
+        if trans_method == "original":
             df = pd.concat([self.first_values, df.tail(df.shape[0] - lag)])
             return df.cumsum()
         else:
@@ -1247,7 +1277,7 @@ class PctChangeTransformer(EmptyTransformer):
         """
         df = df.replace([0], np.nan)
         df = df.fillna((df[df != 0]).abs().min(axis=0)).fillna(0.1)
-        df = df.pct_change(periods=1, fill_method='ffill').fillna(0)
+        df = df.pct_change(periods=1, fill_method="ffill").fillna(0)
         df = df.replace([np.inf, -np.inf], 0)
         return df
 
@@ -1272,7 +1302,7 @@ class PctChangeTransformer(EmptyTransformer):
         df = df.fillna((df[df != 0]).abs().min()).fillna(0.1)
 
         # add last values, group by lag, cumprod
-        if trans_method == 'original':
+        if trans_method == "original":
             df = pd.concat([self.first_values, df.tail(df.shape[0] - 1)], axis=0)
             return df.cumprod()
         else:
@@ -1328,7 +1358,7 @@ class CumSumTransformer(EmptyTransformer):
                 - 'forecast' inverse the transform on a dataset immediately following the original
         """
 
-        if trans_method == 'original':
+        if trans_method == "original":
             df = pd.concat(
                 [self.first_values, (df - df.shift(1)).tail(df.shape[0] - 1)], axis=0
             )
@@ -1362,7 +1392,7 @@ class ClipOutliers(EmptyTransformer):
         self.fillna = fillna
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         fillna_c = None
         if method == "fast":
             method_c = "clip"
@@ -1462,7 +1492,7 @@ class Round(EmptyTransformer):
         self.force_int = force_int
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         on_inverse_c = bool(random.getrandbits(1))
         on_transform_c = bool(random.getrandbits(1))
         if not on_inverse_c and not on_transform_c:
@@ -1537,7 +1567,7 @@ class Slice(EmptyTransformer):
         self.forecast_length = forecast_length
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         if method == "fast":
             choice = random.choices([100, 0.5, 0.2], [0.3, 0.5, 0.2], k=1)[0]
         else:
@@ -1610,7 +1640,7 @@ class Discretize(EmptyTransformer):
         self.nan_flag = nan_flag
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         if method == "fast":
             choice = random.choice(["center", "upper", "lower"])
             n_bin_c = random.choice([5, 10, 20])
@@ -1620,9 +1650,9 @@ class Discretize(EmptyTransformer):
                     "center",
                     "upper",
                     "lower",
-                    'sklearn-quantile',
-                    'sklearn-uniform',
-                    'sklearn-kmeans',
+                    "sklearn-quantile",
+                    "sklearn-uniform",
+                    "sklearn-kmeans",
                 ],
                 [0.3, 0.2, 0.2, 0.1, 0.1, 0.1],
                 k=1,
@@ -1639,20 +1669,20 @@ class Discretize(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        if self.discretization not in [None, 'None']:
+        if self.discretization not in [None, "None"]:
             self.df_index = df.index
             self.df_colnames = df.columns
             if self.discretization in [
-                'sklearn-quantile',
-                'sklearn-uniform',
-                'sklearn-kmeans',
+                "sklearn-quantile",
+                "sklearn-uniform",
+                "sklearn-kmeans",
             ]:
                 from sklearn.preprocessing import KBinsDiscretizer
 
                 self.kbins_discretizer = KBinsDiscretizer(
                     n_bins=self.n_bins,
-                    encode='ordinal',
-                    strategy=self.discretization.split('-')[1],
+                    encode="ordinal",
+                    strategy=self.discretization.split("-")[1],
                 )
                 df = pd.DataFrame(self.kbins_discretizer.fit_transform(df))
                 df.index = self.df_index
@@ -1666,13 +1696,13 @@ class Discretize(EmptyTransformer):
                     bins = np.nanquantile(df, quantiles, axis=0, keepdims=True)
                 else:
                     bins = np.quantile(df, quantiles, axis=0, keepdims=True)
-                if self.discretization == 'center':
+                if self.discretization == "center":
                     bins = np.cumsum(bins, dtype=float, axis=0)
                     bins[2:] = bins[2:] - bins[:-2]
                     bins = bins[2 - 1 :] / 2
-                elif self.discretization == 'lower':
+                elif self.discretization == "lower":
                     bins = np.delete(bins, (-1), axis=0)
-                elif self.discretization == 'upper':
+                elif self.discretization == "upper":
                     bins = np.delete(bins, (0), axis=0)
                 self.bins = bins
                 binned = (np.abs(df.values - self.bins)).argmin(axis=0)
@@ -1700,11 +1730,11 @@ class Discretize(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        if self.discretization not in [None, 'None']:
+        if self.discretization not in [None, "None"]:
             if self.discretization in [
-                'sklearn-quantile',
-                'sklearn-uniform',
-                'sklearn-kmeans',
+                "sklearn-quantile",
+                "sklearn-uniform",
+                "sklearn-kmeans",
             ]:
                 df = pd.DataFrame(self.kbins_discretizer.transform(df))
                 df.index = self.df_index
@@ -1728,12 +1758,12 @@ class Discretize(EmptyTransformer):
         """
 
         if self.discretization in [
-            'sklearn-quantile',
-            'sklearn-uniform',
-            'sklearn-kmeans',
+            "sklearn-quantile",
+            "sklearn-uniform",
+            "sklearn-kmeans",
         ]:
             df_index = df.index
-            df_colnames = df.columns9
+            df_colnames = df.columns
             df = df.clip(upper=self.bin_max, lower=self.bin_min, axis=1)
             df = df.astype(int).clip(lower=0, upper=(self.n_bins - 1))
             df = pd.DataFrame(self.kbins_discretizer.inverse_transform(df))
@@ -1762,7 +1792,7 @@ class CenterLastValue(EmptyTransformer):
         self.rows = rows
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         choice = random.randint(1, 6)
         return {
             "rows": choice,
@@ -1817,7 +1847,7 @@ class ScipyFilter(EmptyTransformer):
         method_args (list): passed to filter as appropriate
     """
 
-    def __init__(self, method: str = 'hilbert', method_args: list = None, **kwargs):
+    def __init__(self, method: str = "hilbert", method_args: list = None, **kwargs):
         super().__init__(name="ScipyFilter")
         self.method = method
         self.method_args = method_args
@@ -1840,7 +1870,7 @@ class ScipyFilter(EmptyTransformer):
         return self.transform(df)
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         method = random.choices(
             [
                 "hilbert",
@@ -1859,7 +1889,7 @@ class ScipyFilter(EmptyTransformer):
         analog_choice = False
         xn = random.randint(1, 99)
         btype = random.choice(["lowpass", "highpass"])  # "bandpass", "bandstop"
-        if method in ['wiener', 'hilbert']:
+        if method in ["wiener", "hilbert"]:
             method_args = None
         elif method == "savgol_filter":
             method_args = [random.randrange(5, 11, 2), random.randint(1, 3)]
@@ -1911,30 +1941,30 @@ class ScipyFilter(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
 
-        if self.method == 'hilbert':
+        if self.method == "hilbert":
             from scipy.signal import hilbert
 
             test = pd.DataFrame(hilbert(df.values), columns=df.columns, index=df.index)
             return np.abs(test)
-        elif self.method == 'wiener':
+        elif self.method == "wiener":
             from scipy.signal import wiener
 
             return pd.DataFrame(wiener(df.values), columns=df.columns, index=df.index)
-        elif self.method == 'savgol_filter':
+        elif self.method == "savgol_filter":
             from scipy.signal import savgol_filter
 
             # args = [5, 2]
             return pd.DataFrame(
-                savgol_filter(df.values, *self.method_args, axis=0, mode='nearest'),
+                savgol_filter(df.values, *self.method_args, axis=0, mode="nearest"),
                 columns=df.columns,
                 index=df.index,
             )
-        elif self.method == 'butter':
+        elif self.method == "butter":
             from scipy.signal import butter, sosfiltfilt
 
             # args = [4, 0.125]
             # [4, 100, 'lowpass'], [1, 0.125, "highpass"]
-            sos = butter(*self.method_args, output='sos')
+            sos = butter(*self.method_args, output="sos")
             return pd.DataFrame(
                 sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
             )
@@ -1943,7 +1973,7 @@ class ScipyFilter(EmptyTransformer):
 
             # args = [4, 5, 100, 'lowpass', True]
             # args = [10, 1, 15, 'highpass']
-            sos = cheby1(*self.method_args, output='sos')
+            sos = cheby1(*self.method_args, output="sos")
             return pd.DataFrame(
                 sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
             )
@@ -1952,7 +1982,7 @@ class ScipyFilter(EmptyTransformer):
 
             # args = [4, 40, 100, 'lowpass', True]
             # args = [12, 20, 17, 'highpass']
-            sos = cheby2(*self.method_args, output='sos')
+            sos = cheby2(*self.method_args, output="sos")
             return pd.DataFrame(
                 sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
             )
@@ -1961,7 +1991,7 @@ class ScipyFilter(EmptyTransformer):
 
             # args = [4, 5, 40, 100, 'lowpass', True]
             # args = [8, 1, 100, 17, 'highpass']
-            sos = ellip(*self.method_args, output='sos')
+            sos = ellip(*self.method_args, output="sos")
             return pd.DataFrame(
                 sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
             )
@@ -1970,7 +2000,7 @@ class ScipyFilter(EmptyTransformer):
 
             # args = [4, 100, 'lowpass', True]
             # args = [3, 10, 'highpass']
-            sos = bessel(*self.method_args, output='sos')
+            sos = bessel(*self.method_args, output="sos")
             return pd.DataFrame(
                 sosfiltfilt(sos, df.values, axis=0), columns=df.columns, index=df.index
             )
@@ -2014,7 +2044,7 @@ class EWMAFilter(EmptyTransformer):
         return df.ewm(span=self.span).mean()
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         if method == "fast":
             choice = random.choice([3, 7, 10, 12])
         else:
@@ -2083,7 +2113,7 @@ class FastICA(EmptyTransformer):
         return self._fit(df)
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         return {
             "algorithm": random.choice(["parallel", "deflation"]),
             "fun": random.choice(["logcosh", "exp", "cube"]),
@@ -2153,7 +2183,7 @@ class PCA(EmptyTransformer):
         return self._fit(df)
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         return {
             "whiten": random.choices([True, False], [0.2, 0.8])[0],
         }
@@ -2190,7 +2220,7 @@ class MeanDifference(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         return (df - df.mean(axis=1).shift(self.lag).values[..., None]).fillna(
-            method='bfill'
+            method="bfill"
         )
 
     def fit_transform(self, df):
@@ -2200,7 +2230,7 @@ class MeanDifference(EmptyTransformer):
         """
         self.fit(df)
         return (df - self.means.shift(self.lag).values[..., None]).fillna(
-            method='bfill'
+            method="bfill"
         )
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
@@ -2214,7 +2244,7 @@ class MeanDifference(EmptyTransformer):
         """
         lag = self.lag
         # add last values, group by lag, cumsum
-        if trans_method == 'original':
+        if trans_method == "original":
             return df + self.means.shift(lag).values[..., None]
         else:
             last_vals = self.last_values
@@ -2233,7 +2263,7 @@ class Cointegration(EmptyTransformer):
         self,
         det_order: int = -1,
         k_ar_diff: int = 1,
-        name: str = 'Cointegration',
+        name: str = "Cointegration",
         **kwargs,
     ):
         self.name = name
@@ -2287,11 +2317,11 @@ class Cointegration(EmptyTransformer):
         return self.fit(df).transform(df)
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         """Generate new random parameters"""
         return {
-            'det_order': random.choice([-1, 0, 1]),
-            'k_ar_diff': random.choice([0, 1, 2]),
+            "det_order": random.choice([-1, 0, 1]),
+            "k_ar_diff": random.choice([0, 1, 2]),
         }
 
 
@@ -2301,11 +2331,11 @@ class BTCD(EmptyTransformer):
     def __init__(
         self,
         regression_model: dict = {
-            "model": 'LinearRegression',
+            "model": "LinearRegression",
             "model_params": {},
         },
         max_lags: int = 1,
-        name: str = 'BTCD',
+        name: str = "BTCD",
         **kwargs,
     ):
         self.name = name
@@ -2368,13 +2398,13 @@ class BTCD(EmptyTransformer):
         return self.fit(df).transform(df)
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         """Generate new random parameters"""
         if method == "deep":
             choice = generate_regressor_params(
                 model_dict={
-                    'ElasticNet': 0.05,
-                    'DecisionTree': 0.05,
+                    "ElasticNet": 0.05,
+                    "DecisionTree": 0.05,
                     "LinearRegression": 0.9,
                 }
             )
@@ -2384,7 +2414,7 @@ class BTCD(EmptyTransformer):
                 "model": choice1,
                 "model_params": {},
             }
-        return {'regression_model': choice, 'max_lags': random.choice([1, 2])}
+        return {"regression_model": choice, "max_lags": random.choice([1, 2])}
 
 
 class AlignLastValue(EmptyTransformer):
@@ -2398,9 +2428,12 @@ class AlignLastValue(EmptyTransformer):
     """
 
     def __init__(
-            self, rows: int = 1, lag: int = 1,
-            method: str = "additive", strength: float = 1.0,
-            **kwargs
+        self,
+        rows: int = 1,
+        lag: int = 1,
+        method: str = "additive",
+        strength: float = 1.0,
+        **kwargs,
     ):
         super().__init__(name="AlignLastValue")
         self.rows = rows
@@ -2409,14 +2442,12 @@ class AlignLastValue(EmptyTransformer):
         self.strength = strength
 
     @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(method: str = "random"):
         return {
             "rows": random.choices([1, 2, 4, 7], [0.83, 0.02, 0.05, 0.1])[0],
-            'lag': random.choices([1, 2, 7, 28], [0.8, 0.05, 0.1, 0.05])[0],
-            'method': random.choices(
-                ['additive', 'multiplicative'], [0.9, 0.1]
-            )[0],
-            'strength': random.choices(
+            "lag": random.choices([1, 2, 7, 28], [0.8, 0.05, 0.1, 0.05])[0],
+            "method": random.choices(["additive", "multiplicative"], [0.9, 0.1])[0],
+            "strength": random.choices(
                 [1.0, 0.9, 0.7, 0.5, 0.2], [0.8, 0.05, 0.05, 0.05, 0.05]
             )[0],
         }
@@ -2429,9 +2460,7 @@ class AlignLastValue(EmptyTransformer):
         """
         # fill NaN if present (up to a limit for slight speedup)
         if np.isnan(np.sum(np.array(df)[-50:])):
-            self.center = self.find_centerpoint(
-                df.ffill(axis=0), self.rows, self.lag
-            )
+            self.center = self.find_centerpoint(df.ffill(axis=0), self.rows, self.lag)
         else:
             self.center = self.find_centerpoint(df, self.rows, self.lag)
 
@@ -2446,7 +2475,7 @@ class AlignLastValue(EmptyTransformer):
                 center = df.iloc[-1, :]
         else:
             if lag > 1:
-                center = df.iloc[-(lag + rows - 1):-(lag - 1), :].mean()
+                center = df.iloc[-(lag + rows - 1) : -(lag - 1), :].mean()
             else:
                 center = df.tail(rows).mean()
         return center
@@ -2534,9 +2563,7 @@ class AnomalyRemoval(EmptyTransformer):
         """
         self.df_anomaly = df.copy()
         if self.transform_dict is not None:
-            model = GeneralTransformer(
-                **self.transform_dict
-            )
+            model = GeneralTransformer(**self.transform_dict)
             self.df_anomaly = model.fit_transform(self.df_anomaly)
 
         self.anomalies, self.scores = detect_anomalies(
@@ -2563,68 +2590,70 @@ class AnomalyRemoval(EmptyTransformer):
     def get_new_params(method="fast"):
         method_choice, method_params, transform_dict = anomaly_new_params(method=method)
         if transform_dict == "random":
-            transform_dict = RandomTransform(transformer_list='fast', transformer_max_depth=2)
+            transform_dict = RandomTransform(
+                transformer_list="fast", transformer_max_depth=2
+            )
 
         return {
             "method": method_choice,
             "transform_dict": transform_dict,
             "method_params": method_params,
             "fillna": random.choices(
-                [None, "ffill", "mean", "rolling_mean_24", 'linear', 'fake_date'],
-                [0.01, 0.39, 0.1, 0.3, 0.15, 0.05]
+                [None, "ffill", "mean", "rolling_mean_24", "linear", "fake_date"],
+                [0.01, 0.39, 0.1, 0.3, 0.15, 0.05],
             )[0],
         }
 
 
 # lookup dict for all non-parameterized transformers
 trans_dict = {
-    'None': EmptyTransformer(),
+    "None": EmptyTransformer(),
     None: EmptyTransformer(),
-    'RollingMean10': RollingMeanTransformer(window=10),
-    'DifferencedTransformer': DifferencedTransformer(),
-    'PctChangeTransformer': PctChangeTransformer(),
-    'SinTrend': SinTrend(),
-    'SineTrend': SinTrend(),
-    'PositiveShift': PositiveShift(squared=False),
-    'Log': PositiveShift(log=True),
-    'CumSumTransformer': CumSumTransformer(),
-    'SeasonalDifference7': SeasonalDifference(lag_1=7, method='LastValue'),
-    'SeasonalDifference12': SeasonalDifference(lag_1=12, method='Mean'),
-    'SeasonalDifference28': SeasonalDifference(lag_1=28, method='Mean'),
-    'bkfilter': StatsmodelsFilter(method='bkfilter'),
-    'cffilter': StatsmodelsFilter(method='cffilter'),
-    'convolution_filter': StatsmodelsFilter(method='convolution_filter'),
+    "RollingMean10": RollingMeanTransformer(window=10),
+    "DifferencedTransformer": DifferencedTransformer(),
+    "PctChangeTransformer": PctChangeTransformer(),
+    "SinTrend": SinTrend(),
+    "SineTrend": SinTrend(),
+    "PositiveShift": PositiveShift(squared=False),
+    "Log": PositiveShift(log=True),
+    "CumSumTransformer": CumSumTransformer(),
+    "SeasonalDifference7": SeasonalDifference(lag_1=7, method="LastValue"),
+    "SeasonalDifference12": SeasonalDifference(lag_1=12, method="Mean"),
+    "SeasonalDifference28": SeasonalDifference(lag_1=28, method="Mean"),
+    "bkfilter": StatsmodelsFilter(method="bkfilter"),
+    "cffilter": StatsmodelsFilter(method="cffilter"),
+    "convolution_filter": StatsmodelsFilter(method="convolution_filter"),
     "Discretize": Discretize(discretization="center", n_bins=10),
-    'DatepartRegressionLtd': DatepartRegressionTransformer(
+    "DatepartRegressionLtd": DatepartRegressionTransformer(
         regression_model={
-            "model": 'DecisionTree',
+            "model": "DecisionTree",
             "model_params": {"max_depth": 4, "min_samples_split": 2},
         },
-        datepart_method='recurring',
+        datepart_method="recurring",
     ),
-    'DatepartRegressionElasticNet': DatepartRegressionTransformer(
-        regression_model={"model": 'ElasticNet', "model_params": {}}
+    "DatepartRegressionElasticNet": DatepartRegressionTransformer(
+        regression_model={"model": "ElasticNet", "model_params": {}}
     ),
-    'DatepartRegressionRandForest': DatepartRegressionTransformer(
-        regression_model={"model": 'RandomForest', "model_params": {}}
+    "DatepartRegressionRandForest": DatepartRegressionTransformer(
+        regression_model={"model": "RandomForest", "model_params": {}}
     ),
-    'MeanDifference': MeanDifference(),
+    "MeanDifference": MeanDifference(),
 }
 # transformers with parameter pass through (internal only)
 have_params = {
-    'RollingMeanTransformer': RollingMeanTransformer,
-    'SeasonalDifference': SeasonalDifference,
-    'Discretize': Discretize,
-    'CenterLastValue': CenterLastValue,
-    'IntermittentOccurrence': IntermittentOccurrence,
-    'ClipOutliers': ClipOutliers,
-    'DatepartRegression': DatepartRegression,
-    'Round': Round,
-    'Slice': Slice,
-    'Detrend': Detrend,
-    'ScipyFilter': ScipyFilter,
-    'HPFilter': HPFilter,
-    'STLFilter': STLFilter,
+    "RollingMeanTransformer": RollingMeanTransformer,
+    "SeasonalDifference": SeasonalDifference,
+    "Discretize": Discretize,
+    "CenterLastValue": CenterLastValue,
+    "IntermittentOccurrence": IntermittentOccurrence,
+    "ClipOutliers": ClipOutliers,
+    "DatepartRegression": DatepartRegression,
+    "Round": Round,
+    "Slice": Slice,
+    "Detrend": Detrend,
+    "ScipyFilter": ScipyFilter,
+    "HPFilter": HPFilter,
+    "STLFilter": STLFilter,
     "EWMAFilter": EWMAFilter,
     "FastICA": FastICA,
     "PCA": PCA,
@@ -2635,8 +2664,8 @@ have_params = {
 }
 # where will results will vary if not all series are included together
 shared_trans = [
-    'PCA',
-    'FastICA',
+    "PCA",
+    "FastICA",
     "DatepartRegression",
     "MeanDifference",
     "BTCD",
@@ -2644,12 +2673,12 @@ shared_trans = [
 ]
 # transformers not defined in AutoTS
 external_transformers = [
-    'MinMaxScaler',
-    'PowerTransformer',
-    'QuantileTransformer',
-    'MaxAbsScaler',
-    'StandardScaler',
-    'RobustScaler',
+    "MinMaxScaler",
+    "PowerTransformer",
+    "QuantileTransformer",
+    "MaxAbsScaler",
+    "StandardScaler",
+    "RobustScaler",
     # "PCA",
     # "FastICA",
 ]
@@ -2753,25 +2782,25 @@ class GeneralTransformer(object):
         self.random_seed = random_seed
         self.transformers = {}
         self.oddities_list = [
-            'DifferencedTransformer',
-            'RollingMean100thN',
-            'RollingMean10thN',
-            'RollingMean10',
-            'RollingMean',
-            'RollingMeanTransformer',
-            'PctChangeTransformer',
-            'CumSumTransformer',
-            'SeasonalDifference',
-            'SeasonalDifferenceMean',
-            'SeasonalDifference7',
-            'SeasonalDifference12',
-            'SeasonalDifference28',
-            'MeanDifference',
-            'AlignLastValue',
+            "DifferencedTransformer",
+            "RollingMean100thN",
+            "RollingMean10thN",
+            "RollingMean10",
+            "RollingMean",
+            "RollingMeanTransformer",
+            "PctChangeTransformer",
+            "CumSumTransformer",
+            "SeasonalDifference",
+            "SeasonalDifferenceMean",
+            "SeasonalDifference7",
+            "SeasonalDifference12",
+            "SeasonalDifference28",
+            "MeanDifference",
+            "AlignLastValue",
         ]
 
     @staticmethod
-    def get_new_params(method='random'):
+    def get_new_params(method="random"):
         return RandomTransform()
 
     def fill_na(self, df, window: int = 10):
@@ -2818,20 +2847,20 @@ class GeneralTransformer(object):
         elif transformation in list(have_params.keys()):
             return have_params[transformation](**param)
 
-        elif transformation == 'MinMaxScaler':
+        elif transformation == "MinMaxScaler":
             from sklearn.preprocessing import MinMaxScaler
 
             return MinMaxScaler()
 
-        elif transformation == 'PowerTransformer':
+        elif transformation == "PowerTransformer":
             from sklearn.preprocessing import PowerTransformer
 
             transformer = PowerTransformer(
-                method='yeo-johnson', standardize=True, copy=True
+                method="yeo-johnson", standardize=True, copy=True
             )
             return transformer
 
-        elif transformation == 'QuantileTransformer':
+        elif transformation == "QuantileTransformer":
             from sklearn.preprocessing import QuantileTransformer
 
             quants = param["n_quantiles"]
@@ -2846,22 +2875,22 @@ class GeneralTransformer(object):
             param["n_quantiles"] = quants
             return QuantileTransformer(copy=True, **param)
 
-        elif transformation == 'StandardScaler':
+        elif transformation == "StandardScaler":
             from sklearn.preprocessing import StandardScaler
 
             return StandardScaler(copy=True)
 
-        elif transformation == 'MaxAbsScaler':
+        elif transformation == "MaxAbsScaler":
             from sklearn.preprocessing import MaxAbsScaler
 
             return MaxAbsScaler(copy=True)
 
-        elif transformation == 'RobustScaler':
+        elif transformation == "RobustScaler":
             from sklearn.preprocessing import RobustScaler
 
             return RobustScaler(copy=True)
 
-        elif transformation == 'PCA':
+        elif transformation == "PCA":
             from sklearn.decomposition import PCA
 
             # could probably may it work, but this is simpler
@@ -2872,7 +2901,7 @@ class GeneralTransformer(object):
             )
             return transformer
 
-        elif transformation == 'FastICA':
+        elif transformation == "FastICA":
             from sklearn.decomposition import FastICA
 
             if df.shape[1] > 500:
@@ -2884,34 +2913,34 @@ class GeneralTransformer(object):
             )
             return transformer
 
-        elif transformation in ['RollingMean', 'FixedRollingMean']:
+        elif transformation in ["RollingMean", "FixedRollingMean"]:
             param = 10 if param is None else param
             if not str(param).isdigit():
-                window = int(''.join([s for s in str(param) if s.isdigit()]))
+                window = int("".join([s for s in str(param) if s.isdigit()]))
                 window = int(df.shape[0] / window)
             else:
                 window = int(param)
             window = 2 if window < 2 else window
             self.window = window
-            if transformation == 'FixedRollingMean':
+            if transformation == "FixedRollingMean":
                 transformer = RollingMeanTransformer(window=self.window, fixed=True)
             else:
                 transformer = RollingMeanTransformer(window=self.window, fixed=False)
             return transformer
 
-        elif transformation in ['SeasonalDifference', 'SeasonalDifferenceMean']:
-            if transformation == 'SeasonalDifference':
-                return SeasonalDifference(lag_1=param, method='LastValue')
+        elif transformation in ["SeasonalDifference", "SeasonalDifferenceMean"]:
+            if transformation == "SeasonalDifference":
+                return SeasonalDifference(lag_1=param, method="LastValue")
             else:
-                return SeasonalDifference(lag_1=param, method='Mean')
+                return SeasonalDifference(lag_1=param, method="Mean")
 
-        elif transformation == 'RollingMean100thN':
+        elif transformation == "RollingMean100thN":
             window = int(df.shape[0] / 100)
             window = 2 if window < 2 else window
             self.window = window
             return RollingMeanTransformer(window=self.window)
 
-        elif transformation == 'RollingMean10thN':
+        elif transformation == "RollingMean10thN":
             window = int(df.shape[0] / 10)
             window = 2 if window < 2 else window
             self.window = window
@@ -2943,7 +2972,7 @@ class GeneralTransformer(object):
                 if not isinstance(df, pd.DataFrame):
                     df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
                 # update index reference if sliced
-                if transformation in ['Slice', "FastICA", "PCA"]:
+                if transformation in ["Slice", "FastICA", "PCA"]:
                     self.df_index = df.index
                     self.df_colnames = df.columns
                 # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
@@ -2988,7 +3017,7 @@ class GeneralTransformer(object):
             if not isinstance(df, pd.DataFrame):
                 df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
             # update index reference if sliced
-            if transformation in ['Slice', "FastICA", "PCA"]:
+            if transformation in ["Slice", "FastICA", "PCA"]:
                 self.df_index = df.index
                 self.df_colnames = df.columns
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
@@ -3053,30 +3082,30 @@ def get_transformer_params(transformer: str = "EmptyTransformer", method: str = 
 # dictionary of probabilities for randomly choosen transformers
 transformer_dict = {
     None: 0.0,
-    'MinMaxScaler': 0.05,
-    'PowerTransformer': 0.02,  # is noticeably slower at scale, if not tons
-    'QuantileTransformer': 0.05,
-    'MaxAbsScaler': 0.05,
-    'StandardScaler': 0.04,
-    'RobustScaler': 0.05,
-    'PCA': 0.01,
-    'FastICA': 0.01,
-    'Detrend': 0.1,  # slow with some params, but that's handled in get_params
-    'RollingMeanTransformer': 0.02,
-    'RollingMean100thN': 0.01,  # old
-    'DifferencedTransformer': 0.07,
-    'SinTrend': 0.01,
-    'PctChangeTransformer': 0.01,
-    'CumSumTransformer': 0.02,
-    'PositiveShift': 0.02,
-    'Log': 0.01,
-    'IntermittentOccurrence': 0.01,
-    'SeasonalDifference': 0.1,
-    'cffilter': 0.01,
-    'bkfilter': 0.05,
-    'convolution_filter': 0.001,
+    "MinMaxScaler": 0.05,
+    "PowerTransformer": 0.02,  # is noticeably slower at scale, if not tons
+    "QuantileTransformer": 0.05,
+    "MaxAbsScaler": 0.05,
+    "StandardScaler": 0.04,
+    "RobustScaler": 0.05,
+    "PCA": 0.01,
+    "FastICA": 0.01,
+    "Detrend": 0.1,  # slow with some params, but that's handled in get_params
+    "RollingMeanTransformer": 0.02,
+    "RollingMean100thN": 0.01,  # old
+    "DifferencedTransformer": 0.07,
+    "SinTrend": 0.01,
+    "PctChangeTransformer": 0.01,
+    "CumSumTransformer": 0.02,
+    "PositiveShift": 0.02,
+    "Log": 0.01,
+    "IntermittentOccurrence": 0.01,
+    "SeasonalDifference": 0.1,
+    "cffilter": 0.01,
+    "bkfilter": 0.05,
+    "convolution_filter": 0.001,
     "HPFilter": 0.01,
-    'DatepartRegression': 0.01,
+    "DatepartRegression": 0.01,
     "ClipOutliers": 0.05,
     "Discretize": 0.03,
     "CenterLastValue": 0.01,
@@ -3089,49 +3118,49 @@ transformer_dict = {
     "BTCD": 0.01,
     "Cointegration": 0.01,
     "AlignLastValue": 0.1,
-    'AnomalyRemoval': 0.03,
+    "AnomalyRemoval": 0.03,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
-del fast_transformer_dict['SinTrend']
-del fast_transformer_dict['FastICA']
-del fast_transformer_dict['ScipyFilter']
-del fast_transformer_dict['Cointegration']
-del fast_transformer_dict['BTCD']
+del fast_transformer_dict["SinTrend"]
+del fast_transformer_dict["FastICA"]
+del fast_transformer_dict["ScipyFilter"]
+del fast_transformer_dict["Cointegration"]
+del fast_transformer_dict["BTCD"]
 
 # and even more, not just removing slow but also less commonly useful ones
 # also there should be no 'shared' transformers in this list to make h-ensembles faster
 superfast_transformer_dict = {
     None: 0.0,
-    'MinMaxScaler': 0.05,
-    'MaxAbsScaler': 0.05,
-    'StandardScaler': 0.04,
-    'RobustScaler': 0.05,
-    'Detrend': 0.1,
-    'RollingMeanTransformer': 0.02,
-    'DifferencedTransformer': 0.1,
-    'PositiveShift': 0.02,
-    'Log': 0.01,
-    'SeasonalDifference': 0.1,
-    'bkfilter': 0.05,
+    "MinMaxScaler": 0.05,
+    "MaxAbsScaler": 0.05,
+    "StandardScaler": 0.04,
+    "RobustScaler": 0.05,
+    "Detrend": 0.1,
+    "RollingMeanTransformer": 0.02,
+    "DifferencedTransformer": 0.1,
+    "PositiveShift": 0.02,
+    "Log": 0.01,
+    "SeasonalDifference": 0.1,
+    "bkfilter": 0.05,
     "ClipOutliers": 0.05,
     "Discretize": 0.03,
     "Slice": 0.02,
     "EWMAFilter": 0.01,
-    'AlignLastValue': 0.05,
+    "AlignLastValue": 0.05,
 }
 
 # probability dictionary of FillNA methods
 na_probs = {
-    'ffill': 0.4,
-    'fake_date': 0.1,
-    'rolling_mean': 0.1,
-    'rolling_mean_24': 0.1,
-    'IterativeImputer': 0.05,  # this parallelizes, uses much memory
-    'mean': 0.06,
-    'zero': 0.05,
-    'ffill_mean_biased': 0.1,
-    'median': 0.03,
+    "ffill": 0.4,
+    "fake_date": 0.1,
+    "rolling_mean": 0.1,
+    "rolling_mean_24": 0.1,
+    "IterativeImputer": 0.05,  # this parallelizes, uses much memory
+    "mean": 0.06,
+    "zero": 0.05,
+    "ffill_mean_biased": 0.1,
+    "median": 0.03,
     None: 0.001,
     "interpolate": 0.4,
     "KNNImputer": 0.05,
@@ -3194,12 +3223,12 @@ def RandomTransform(
     params_method = None
     if fast_params:
         params_method = "fast"
-        throw_away = na_prob_dict.pop('IterativeImputer', None)
-        throw_away = df_interpolate.pop('spline', None)  # noqa
-        throw_away = na_prob_dict.pop('IterativeImputerExtraTrees', None)  # noqa
+        throw_away = na_prob_dict.pop("IterativeImputer", None)
+        throw_away = df_interpolate.pop("spline", None)  # noqa
+        throw_away = na_prob_dict.pop("IterativeImputerExtraTrees", None)  # noqa
     if superfast_params:
         params_method = "fast"
-        throw_away = na_prob_dict.pop('KNNImputer', None)  # noqa
+        throw_away = na_prob_dict.pop("KNNImputer", None)  # noqa
 
     # clean na_probs dict
     na_probabilities = list(na_prob_dict.values())
@@ -3232,7 +3261,9 @@ def RandomTransform(
         clip = "ClipOutliers" if "ClipOutliers" in transformer_list else randos[0]
         detrend = "Detrend" if "Detrend" in transformer_list else randos[1]
         # formerly Discretize
-        discretize = "AlignLastValue" if "AlignLastValue" in transformer_list else randos[2]
+        discretize = (
+            "AlignLastValue" if "AlignLastValue" in transformer_list else randos[2]
+        )
         # create new dictionary in fixed order
         trans = [clip, detrend, randos[3], discretize]
         trans = trans[0:num_trans]
@@ -3247,3 +3278,77 @@ def RandomTransform(
         "transformations": dict(zip(keys, trans)),
         "transformation_params": dict(zip(keys, params)),
     }
+
+
+def random_cleaners():
+    """Returns transformation params that clean data without shifting."""
+    transform_dict = random.choices(
+        [
+            None,
+            "random",
+            {
+                "fillna": None,
+                "transformations": {"0": "EWMAFilter"},
+                "transformation_params": {
+                    "0": {"span": 7},
+                },
+            },
+            {
+                "fillna": None,
+                "transformations": {"0": "EWMAFilter"},
+                "transformation_params": {
+                    "0": {"span": 2},
+                },
+            },
+            {
+                "fillna": None,
+                "transformations": {"0": "ClipOutliers"},
+                "transformation_params": {
+                    "0": {"method": "clip", "std_threshold": 3},
+                },
+            },
+            {
+                "fillna": None,
+                "transformations": {"0": "bkfilter"},
+                "transformation_params": {"0": {}},
+            },
+            {
+                "fillna": None,
+                "transformations": {"0": "Discretize"},
+                "transformation_params": {
+                    "0": {"discretization": "center", "n_bins": 20},
+                },
+            },
+            {
+                "fillna": None,
+                "transformations": {"0": "AnomalyRemoval"},
+                "transformation_params": {
+                    "0": {
+                        "method": "zscore",
+                        "transform_dict": {
+                            "transformations": {0: "DatepartRegression"},
+                            "transformation_params": {
+                                0: {
+                                    "datepart_method": "simple_3",
+                                    "regression_model": {
+                                        "model": "ElasticNet",
+                                        "model_params": {},
+                                    },
+                                }
+                            },
+                        },
+                        "method_params": {
+                            "distribution": "uniform",
+                            "alpha": 0.05,
+                        },
+                    },
+                },
+            },
+        ],
+        [0.8, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.1],
+    )[0]
+    if transform_dict == "random":
+        transform_dict = RandomTransform(
+            transformer_list="fast", transformer_max_depth=2
+        )
+    return transform_dict
