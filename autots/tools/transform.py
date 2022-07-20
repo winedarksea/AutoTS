@@ -10,8 +10,11 @@ from autots.models.sklearn import generate_regressor_params, retrieve_regressor
 from autots.tools.anomaly_utils import (
     anomaly_new_params,
     detect_anomalies,
-    limits_to_anomalies,
 )
+try:
+    from joblib import Parallel, delayed
+except Exception:
+    pass
 
 
 class EmptyTransformer(object):
@@ -531,15 +534,24 @@ class STLFilter(EmptyTransformer):
 class SinTrend(EmptyTransformer):
     """Modelling sin."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, n_jobs=1, method='lm', **kwargs):
         super().__init__(name="SinTrend")
+        self.n_jobs = n_jobs
+        self.method = method
 
-    def fit_sin(self, tt, yy):
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        return {
+            'method': random.choice(['lm', 'trf', 'dogbox'])
+        }
+
+    @staticmethod
+    def fit_sin(tt, yy, method="lm"):
         """Fit sin to the input time sequence, and return fitting parameters "amp", "omega", "phase", "offset", "freq", "period" and "fitfunc"
 
         from user unsym @ https://stackoverflow.com/questions/16716302/how-do-i-fit-a-sine-curve-to-my-data-with-pylab-and-numpy
         """
-        import scipy.optimize
+        from scipy.optimize import curve_fit
 
         tt = np.array(tt)
         yy = np.array(yy)
@@ -555,11 +567,9 @@ class SinTrend(EmptyTransformer):
         def sinfunc(t, A, w, p, c):
             return A * np.sin(w * t + p) + c
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            popt, pcov = scipy.optimize.curve_fit(
-                sinfunc, tt, yy, p0=guess, maxfev=10000
-            )
+        popt, pcov = curve_fit(
+            sinfunc, tt, yy, p0=guess, maxfev=10000, method=method
+        )
         A, w, p, c = popt
         # f = w/(2.*np.pi)
         # fitfunc = lambda t: A * np.sin(w*t + p) + c
@@ -581,24 +591,24 @@ class SinTrend(EmptyTransformer):
             raise ValueError("Data Cannot Be Converted to Numeric Float")
 
         X = pd.to_numeric(df.index, errors="coerce", downcast="integer").values
-        self.sin_params = pd.DataFrame()
         # make this faster (250 columns in 2.5 seconds isn't bad, though)
-        fail_count = 0
-        for column in df.columns:
-            vals = 0
-            try:
-                y = df[column].values
-                vals = self.fit_sin(X, y)
-                current_param = pd.DataFrame(vals, index=[column])
-            except Exception as e:
-                print(f"SinTrend failed with {repr(e)} for {column} with {vals}")
-                current_param = pd.DataFrame(
-                    {"amp": 0, "omega": 1, "phase": 1, "offset": 1}, index=[column]
+        cols = df.columns.tolist()
+        if self.n_jobs in [0, 1] or len(cols) < 100:
+            parallel = False
+        # joblib multiprocessing to loop through series
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            if parallel:
+                df_list = Parallel(n_jobs=self.n_jobs)(
+                    delayed(self.fit_sin)(X, df[col].to_numpy(), method=self.method)
+                    for col in cols
                 )
-                fail_count += 1
-            if fail_count >= df.shape[1]:
-                raise ValueError("SinTrend Transformer failed on all series.")
-            self.sin_params = pd.concat([self.sin_params, current_param], axis=0)
+            else:
+                df_list = []
+                for col in cols:
+                    df_list.append(self.fit_sin(X, df[col].to_numpy(), method=self.method))
+        self.sin_params = pd.DataFrame(df_list)
+
         self.shape = df.shape
         return self
 
@@ -619,10 +629,10 @@ class SinTrend(EmptyTransformer):
             df = df.astype(float)
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
-        X = pd.to_numeric(df.index, errors="coerce", downcast="integer").values
+        X = pd.to_numeric(df.index, errors="coerce", downcast="integer").to_numpy()
 
+        """
         sin_df = []
-        # make this faster
         for index, row in self.sin_params.iterrows():
             sin_df.append(
                 pd.DataFrame(
@@ -632,6 +642,12 @@ class SinTrend(EmptyTransformer):
                 )
             )
         sin_df = pd.concat(sin_df, axis=1)
+        """
+        X = np.repeat(X[..., np.newaxis], df.shape[1], axis=1)
+        sin_df = pd.DataFrame(
+            self.sin_params['amp'].to_frame().to_numpy().T * np.sin(self.sin_params['omega'].to_frame().to_numpy().T * X + self.sin_params['phase'].to_frame().to_numpy().T),
+            columns=df.columns
+        )
         df_index = df.index
         df = df.astype(float).reset_index(drop=True) - sin_df.reset_index(drop=True)
         df.index = df_index
@@ -646,16 +662,13 @@ class SinTrend(EmptyTransformer):
             df = df.astype(float)
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
-        X = pd.to_numeric(df.index, errors="coerce", downcast="integer").values
+        X = pd.to_numeric(df.index, errors="coerce", downcast="integer").to_numpy()
+        X = np.repeat(X[..., np.newaxis], df.shape[1], axis=1)
+        sin_df = pd.DataFrame(
+            self.sin_params['amp'].to_frame().to_numpy().T * np.sin(self.sin_params['omega'].to_frame().to_numpy().T * X + self.sin_params['phase'].to_frame().to_numpy().T),
+            columns=df.columns
+        )
 
-        sin_df = pd.DataFrame()
-        # make this faster
-        for index, row in self.sin_params.iterrows():
-            yy = pd.DataFrame(
-                row["amp"] * np.sin(row["omega"] * X + row["phase"]) + row["offset"],
-                columns=[index],
-            )
-            sin_df = pd.concat([sin_df, yy], axis=1)
         df_index = df.index
         df = df.astype(float).reset_index(drop=True) + sin_df.reset_index(drop=True)
         df.index = df_index
@@ -2639,6 +2652,13 @@ trans_dict = {
     ),
     "MeanDifference": MeanDifference(),
 }
+# have n_jobs
+n_jobs_trans = {
+    # datepart not included for fears it will slow it down sometimes
+    "SinTrend": SinTrend(),
+    "SineTrend": SinTrend(),
+    "AnomalyRemoval": AnomalyRemoval,
+}
 # transformers with parameter pass through (internal only)
 have_params = {
     "RollingMeanTransformer": RollingMeanTransformer,
@@ -2765,6 +2785,7 @@ class GeneralTransformer(object):
         reconciliation: str = None,
         grouping_ids=None,
         random_seed: int = 2020,
+        n_jobs: int = 1,
     ):
 
         self.fillna = fillna
@@ -2780,6 +2801,7 @@ class GeneralTransformer(object):
         self.grouping_ids = grouping_ids
 
         self.random_seed = random_seed
+        self.n_jobs = n_jobs
         self.transformers = {}
         self.oddities_list = [
             "DifferencedTransformer",
@@ -2829,6 +2851,7 @@ class GeneralTransformer(object):
         param: dict = {},
         df=None,
         random_seed: int = 2020,
+        n_jobs: int = 1,
     ):
         """Retrieves a specific transformer object from a string.
 
@@ -2843,6 +2866,9 @@ class GeneralTransformer(object):
 
         if transformation in (trans_dict.keys()):
             return trans_dict[transformation]
+
+        elif transformation in n_jobs_trans.keys():
+            return n_jobs_trans[transformation](n_jobs=n_jobs, **param)
 
         elif transformation in list(have_params.keys()):
             return have_params[transformation](**param)
@@ -2966,6 +2992,7 @@ class GeneralTransformer(object):
                     df=df,
                     param=self.transformation_params[i],
                     random_seed=self.random_seed,
+                    n_jobs=self.n_jobs,
                 )
                 df = self.transformers[i].fit_transform(df)
                 # convert to DataFrame only if it isn't already

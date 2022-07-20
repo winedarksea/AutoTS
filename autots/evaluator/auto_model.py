@@ -631,7 +631,7 @@ def ModelPrediction(
                 pass
             print(error_msg)
 
-    transformer_object = GeneralTransformer(**transformation_dict)
+    transformer_object = GeneralTransformer(**transformation_dict, n_jobs=n_jobs)
     df_train_transformed = transformer_object._fit(df_train)
 
     # make sure regressor has same length. This could be a problem if wrong size regressor is passed.

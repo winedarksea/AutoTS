@@ -21,10 +21,11 @@
 * added plot_horizontal_model_count and fixed an error in horizontal generation plot
 * adjusted TotalRuntime to higher precision, and no longer + 1
 * added subsidiary transformer for cleaning in Detrend and Datepart detrend Transformers
+* sped up SinTrend transformer
 * new AnomalyRemoval transformer
 
 * test cointegration with pinv!
-* test new models and transformers with high dimensionality!
+* test new models and transformers (Align, Anomaly, Sine) with high dimensionality!
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
