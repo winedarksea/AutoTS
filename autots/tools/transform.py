@@ -542,7 +542,7 @@ class SinTrend(EmptyTransformer):
     @staticmethod
     def get_new_params(method: str = "random"):
         return {
-            'method': random.choice(['lm', 'trf', 'dogbox'])
+            'method': random.choices(['lm', 'trf', 'dogbox'], [0.95, 0.025, 0.025])[0]
         }
 
     @staticmethod

@@ -572,73 +572,189 @@ def anomaly_new_params(method='random'):
     return method_choice, method_params, transform_dict
 
 
-def anomaly_list_to_holidays(
-        dates, threshold=0, lunar_holidays=True, islamic_holidays=True, hebrew_holidays=True
-):
+class HolidayDetector(object):
+    pass
+
+
+def create_dates_df(dates):
+    """Take a pd.DatetimeIndex and create simple date parts."""
     dates_df = pd.DataFrame(
         {"month": dates.month, "day": dates.day, "dayofweek": dates.dayofweek},
         index=dates,
-    )
-    dates_df['occurrence_rate'] = 1
-    dates_df['count'] = 1
-
-    threshold = (dates.year.max() - dates.year.min() + 1) * threshold
-    threshold = threshold if threshold > 2 else 2
-
-    day_holidays = (
-        dates_df.groupby(["month", "day"])
-        .agg({"count": 'count', "occurrence_rate": 'mean'})
-        .loc[
-            lambda df: df["count"] > threshold,
-        ]
-    )
+    ).rename_axis(index="date")
     dates_df["weekofmonth"] = (dates_df["day"] - 1) // 7 + 1
-    wkdom_holidays = (
-        dates_df.groupby(["month", "weekofmonth", "dayofweek"])
-        .agg({"count": 'count', "occurrence_rate": 'mean'})
-        .loc[
-            lambda df: df["count"] > threshold,
-        ]
-    )
     dates_df['weekfromend'] = (dates_df['day'] - dates.daysinmonth) // -7
-    wkdeom_holidays = (
-        dates_df.groupby(["month", "weekfromend", "dayofweek"])
-        .agg({"count": 'count', "occurrence_rate": 'mean'})
-        .loc[
-            lambda df: df["count"] > threshold,
-        ]
-    )
-    if lunar_holidays:
+    return dates_df
+
+
+def anomaly_df_to_holidays(
+        anomaly_df, actuals=None, anomaly_scores=None,
+        threshold=0.8, min_occurrences=2, splash_threshold=0.65,
+        use_wkdom_holidays=True, use_wkdeom_holidays=True,
+        use_lunar_holidays=True, use_lunar_weekday=False,
+        use_islamic_holidays=True, use_hebrew_holidays=True,
+):
+    if isinstance(anomaly_df, pd.Series):
+        stacked = anomaly_df.copy()  # [anomaly_df == -1]
+        stacked.index.name = 'date'
+        stacked = pd.concat([stacked], keys=["all"], names=["series"])
+        # anomalies = anomaly_df.index[(anomaly_df == -1).iloc[:, 0]]
+    else:
+        anomaly_df.columns.name = "series"
+        stacked = anomaly_df.stack()
+        # stacked = stacked[stacked == -1]
+        # stacked = stacked.reset_index()
+        # anomalies = stacked.index[(stacked == -1)].get_level_values('date').unique()
+    stacked.name = "count"
+    # all anomaly values MUST be == -1
+    stacked = stacked.where(stacked == -1, 0).abs()
+    agg_dict = {"count": 'sum', "occurrence_rate": 'mean'}
+    if actuals is not None:
+        stacked = stacked.to_frame().merge(actuals.stack().rename("avg_value").rename_axis(index=['date', 'series']), left_index=True, right_index=True)
+        agg_dict['avg_value'] = 'mean'
+    if anomaly_scores is not None:
+        stacked = pd.DataFrame(stacked).merge(anomaly_scores.stack().rename("avg_anomaly_score").rename_axis(index=['date', 'series']), left_index=True, right_index=True)
+        agg_dict['avg_anomaly_score'] = 'mean'
+
+    dates = stacked.index.get_level_values('date').unique()
+    year_range = dates.year.max() - dates.year.min() + 1
+    if year_range <= 1:
+        raise ValueError("more than 1 year of data is required for holiday detection.")
+
+    dates_df = create_dates_df(dates)
+    # dates_df['count'] = 1
+    dates_df = dates_df.merge(stacked, left_index=True, right_index=True, how="outer")
+    dates_df['occurrence_rate'] = dates_df['count']
+
+    day_holidays = dates_df.groupby(["series", "month", "day"]).agg(agg_dict)
+    if splash_threshold is not None:
+        day_holidays = day_holidays.loc[
+            lambda df: ((df["occurrence_rate"] >= threshold) | (df['occurrence_rate'].rolling(3, min_periods=1, center=True).mean() > splash_threshold)) & (df["count"] >= min_occurrences),
+        ].reset_index(drop=False)
+    else:
+        day_holidays = day_holidays.loc[
+            lambda df: (df["occurrence_rate"] >= threshold) & (df["count"] >= min_occurrences),
+        ].reset_index(drop=False)
+    day_holidays['holiday_name'] = 'dom_' + day_holidays['month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + day_holidays['day'].astype(str).str.pad(2, side='left', fillchar="0")
+    # replace a few major names
+    day_holidays['holiday_name'] = day_holidays['holiday_name'].replace({
+        'dom_12_25': "Christmas",
+        'dom_12_26': "BoxingDay",
+        'dom_12_24': "ChristmasEve",
+        'dom_07_04': "July4th",
+        'dom_01_01': "NewYearsDay",
+        'dom_12_31': "NewYearsEve",
+        'dom_02_14': 'ValentinesDay',
+        'dom_10-31': 'Halloween',
+        'dom_11-11': 'ArmisticeDay',
+    })
+    if use_wkdom_holidays:
+        wkdom_holidays = dates_df.groupby(["series", "month", "weekofmonth", "dayofweek"]).agg(agg_dict)
+        if splash_threshold is not None:
+            wkdom_holidays = wkdom_holidays.loc[
+                lambda df: ((df["occurrence_rate"] >= threshold) | (df['occurrence_rate'].rolling(3, min_periods=1, center=True).mean() > splash_threshold)) & (df["count"] >= min_occurrences),
+            ].reset_index(drop=False)
+        else:
+            wkdom_holidays = wkdom_holidays.loc[
+                lambda df: (df["occurrence_rate"] >= threshold) & (df["count"] >= min_occurrences),
+            ].reset_index(drop=False)
+        wkdom_holidays['holiday_name'] = 'wkdom_' + wkdom_holidays['month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + wkdom_holidays['weekofmonth'].astype(str) + "_" + wkdom_holidays['dayofweek'].astype(str)
+        wkdom_holidays['holiday_name'] = wkdom_holidays['holiday_name'].replace({
+            'wkdom_11_4_4': "BlackFriday",
+            'wkdom_11_4_3': "Thanksgiving",
+            'wkdom_05_2_6': "MothersDay",
+            'wkdom_06_3_6': "FathersDay",
+            'wkdom_09_1_0': "LaborDay",
+        })
+    else:
+        wkdom_holidays = None
+    if use_wkdeom_holidays:
+        wkdeom_holidays = (
+            dates_df.groupby(["series", "month", "weekfromend", "dayofweek"])
+            .agg(agg_dict)
+            .loc[
+                lambda df: (df["occurrence_rate"] >= threshold) & (df["count"] >= min_occurrences),
+            ]
+        ).reset_index(drop=False)
+        wkdeom_holidays['holiday_name'] = 'wkdeom_' + wkdeom_holidays['month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + wkdeom_holidays['weekfromend'].astype(str) + "_" + wkdeom_holidays['dayofweek'].astype(str)
+        wkdeom_holidays['holiday_name'] = wkdeom_holidays['holiday_name'].replace({
+            'wkdeom_05_0_0': "MemorialDay",
+        })
+    else:
+        wkdeom_holidays = None
+    if use_lunar_holidays:
         lunar_df = gregorian_to_chinese(dates)
-        lunar_df['count'] = 1
-        lunar_df['occurrence_rate'] = 1
-        lunar_holidays_df = (
-            lunar_df.groupby(["lunar_month", "lunar_day"])
-            .agg({"count": 'count', "occurrence_rate": 'mean'})
+        lunar_df["weekofmonth"] = (lunar_df["lunar_day"] - 1) // 7 + 1
+        lunar_df['dayofweek'] = lunar_df.index.dayofweek
+        # lunar_df['count'] = 1
+        lunar_df = lunar_df.merge(stacked, left_index=True, right_index=True, how="outer")
+        lunar_df['occurrence_rate'] = lunar_df['count']
+        lunar_holidays = (
+            lunar_df.groupby(["series", "lunar_month", "lunar_day"])
+            .agg(agg_dict)
             .loc[
-                lambda df: df["count"] > threshold,
+                lambda df: (df["occurrence_rate"] >= threshold) & (df["count"] >= min_occurrences),
             ]
-        )
-    if islamic_holidays:
+        ).reset_index(drop=False)
+        lunar_holidays['holiday_name'] = 'lunar_' + lunar_holidays['lunar_month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + lunar_holidays['lunar_day'].astype(str).str.pad(2, side='left', fillchar="0")
+        lunar_holidays['holiday_name'] = lunar_holidays['holiday_name'].replace({
+            'lunar_01_01': "LunarNewYear",
+        })
+        if use_lunar_weekday:
+            lunar_weekday = (
+                lunar_df.groupby(["series", "lunar_month", "weekofmonth", 'dayofweek'])
+                .agg(agg_dict)
+                .loc[
+                    lambda df: (df["occurrence_rate"] >= threshold) & (df["count"] >= min_occurrences),
+                ]
+            ).reset_index(drop=False)
+            lunar_weekday['holiday_name'] = 'lunarwkd_' + lunar_weekday['lunar_month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + lunar_weekday['weekofmonth'].astype(str) + "_" + lunar_weekday['dayofweek'].astype(str)
+        else:
+            lunar_weekday = None
+    else:
+        lunar_holidays = None
+    if use_islamic_holidays:
         islamic_df = gregorian_to_islamic(dates)
-        islamic_df['count'] = 1
-        islamic_df['occurrence_rate'] = 1
-        islamic_holidays_df = (
-            islamic_df.groupby(["month", "day"])
-            .agg({"count": 'count', "occurrence_rate": 'mean'})
+        # islamic_df['count'] = 1
+        islamic_df = islamic_df.merge(stacked, left_index=True, right_index=True, how="outer")
+        islamic_df['occurrence_rate'] = islamic_df['count']
+        islamic_holidays = (
+            islamic_df.groupby(["series", "month", "day"])
+            .agg(agg_dict)
             .loc[
-                lambda df: df["count"] > threshold,
+                lambda df: (df["occurrence_rate"] >= threshold) & (df["count"] >= min_occurrences),
             ]
-        )
-    if hebrew_holidays:
+        ).reset_index(drop=False)
+        islamic_holidays['holiday_name'] = 'dom_' + islamic_holidays['month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + islamic_holidays['day'].astype(str).str.pad(2, side='left', fillchar="0")
+    else:
+        islamic_holidays = None
+    if use_hebrew_holidays:
         hebrew_df = gregorian_to_hebrew(dates)
-        hebrew_df['count'] = 1
-        hebrew_df['occurrence_rate'] = 1
-        hebrew_holidays_df = (
-            hebrew_df.groupby(["month", "day"])
-            .agg({"count": 'count', "occurrence_rate": 'mean'})
+        hebrew_df.index.name = "date"
+        # hebrew_df['count'] = 1
+        hebrew_df = hebrew_df.merge(stacked, left_index=True, right_index=True, how="outer")
+        hebrew_df['occurrence_rate'] = hebrew_df['count']
+        hebrew_holidays = (
+            hebrew_df.groupby(["series", "month", "day"])
+            .agg(agg_dict)
             .loc[
-                lambda df: df["count"] > threshold,
+                lambda df: (df["occurrence_rate"] >= threshold) & (df["count"] >= min_occurrences),
             ]
-        )
-    return day_holidays, wkdom_holidays, wkdeom_holidays, lunar_holidays_df, islamic_holidays_df, hebrew_holidays_df
+        ).reset_index(drop=False)
+        hebrew_holidays['holiday_name'] = 'dom_' + hebrew_holidays['month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + hebrew_holidays['day'].astype(str).str.pad(2, side='left', fillchar="0")
+    else:
+        hebrew_holidays = None
+    return day_holidays, wkdom_holidays, wkdeom_holidays, lunar_holidays, lunar_weekday, islamic_holidays, hebrew_holidays
+
+
+def dates_to_holidays(dates, day_holidays, wkdom_holidays, wkdeom_holidays, lunar_holidays_df, lunar_wkd_holidays_df, islamic_holidays_df, hebrew_holidays_df):
+    # need index in column for merge
+    dates_df = create_dates_df(dates).reset_index(drop=False)
+    if day_holidays is not None:
+        populated_day_holidays = dates_df.merge(day_holidays, on=['month', 'day'], how="left")
+        # result = populated_day_holidays.pivot(index='date', columns='series', values='holiday_name').reindex(columns=df.columns)
+        # result = result.where(result.isnull(), 1).fillna(0)
+    prophet = pd.DataFrame(
+        {'ds': populated_day_holidays['date'], 'holiday': populated_day_holidays['holiday_name'], 'lower_window': 0, 'upper_window': 0, 'series': populated_day_holidays['series']}
+    )  # needs to cover future, and at the time of object creation
+    return populated_day_holidays

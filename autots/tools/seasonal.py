@@ -187,6 +187,7 @@ def date_part(
                     'epoch': pd.to_numeric(
                         DTindex, errors='coerce', downcast='integer'
                     ).values,
+                    'us_election_year': (DTindex.year % 4 == 0).astype(int),
                 }
             )
             date_part_df = pd.concat([date_part_df, date_part_df2], axis=1)
