@@ -2555,9 +2555,6 @@ class AnomalyRemoval(EmptyTransformer):
             method_params (dict): parameters specific to the method, use `.get_new_params()` to see potential models
             fillna (str): how to fill anomaly values removed
             n_jobs (int): multiprocessing jobs, used by some methods
-
-        Methods:
-            detect()
         """
         self.output = output
         self.method = method

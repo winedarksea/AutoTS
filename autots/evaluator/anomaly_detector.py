@@ -5,7 +5,7 @@ Created on Mon Jul 18 14:19:55 2022
 @author: Colin
 """
 import random
-from autots.tools.anomaly_utils import anomaly_new_params, detect_anomalies, limits_to_anomalies
+from autots.tools.anomaly_utils import anomaly_new_params, detect_anomalies, limits_to_anomalies, anomaly_df_to_holidays, holiday_new_params
 from autots.tools.transform import RandomTransform, GeneralTransformer
 from autots.evaluator.auto_model import random_model
 from autots.evaluator.auto_model import back_forecast
@@ -146,3 +146,59 @@ class AnomalyDetector(object):
             "forecast_params": forecast_params,
             "method_params": method_params,
         }
+
+
+class HolidayDetector(object):
+    def __init__(
+        self,
+        anomaly_detector_params={},
+        threshold=0.8, min_occurrences=2, splash_threshold=0.65,
+        use_wkdom_holidays=True, use_wkdeom_holidays=True,
+        use_lunar_holidays=True, use_lunar_weekday=False,
+        use_islamic_holidays=True, use_hebrew_holidays=True,
+    ):
+        """Detect anomalies, then mark as holidays (events, festivals, etc) any that reoccur to a calendar.
+
+        Args:
+            anomaly_detector_params (dict): anomaly detection params passed to detector class
+            threshold (float): percent of date occurrences that must be anomalous (0 - 1)
+            splash_threshold (float): None, or % required, avg of nearest 2 neighbors to point
+            use* (bool): whether to use these calendars for holiday detection
+        """
+        self.anomaly_detector_params = anomaly_detector_params
+        self.threshold = threshold
+        self.min_occurrences = min_occurrences
+        self.splash_threshold = splash_threshold
+        self.use_wkdom_holidays = use_wkdom_holidays
+        self.use_wkdeom_holidays = use_wkdeom_holidays
+        self.use_lunar_holidays = use_lunar_holidays
+        self.use_lunar_weekday = use_lunar_weekday
+        self.use_islamic_holidays = use_islamic_holidays
+        self.use_hebrew_holidays = use_hebrew_holidays
+        self.anomaly_model = AnomalyDetector(output='multivariate', **self.anomaly_detector_params)
+
+    def detect(self, df):
+        self.anomaly_model.detect(df)
+        self.day_holidays, self.wkdom_holidays, self.wkdeom_holidays, self.lunar_holidays_df, self.lunar_wkd_holidays_df, self.islamic_holidays_df, self.hebrew_holidays_df = anomaly_df_to_holidays(
+            self.anomaly_model.anomalies, splash_threshold=self.splash_threshold,
+            threshold=self.threshold,
+            actuals=df, anomaly_scores=self.anomaly_model.scores,
+            use_wkdom_holidays=self.use_wkdom_holidays,
+            use_wkdeom_holidays=self.use_wkdeom_holidays,
+            use_lunar_holidays=self.use_lunar_holidays,
+            use_lunar_weekday=self.use_lunar_weekday,
+            use_islamic_holidays=self.use_islamic_holidays,
+            use_hebrew_holidays=self.use_hebrew_holidays,
+        )
+
+    def plot_anomaly(self, kwargs={}):
+        self.anomaly_model.plot(**kwargs)
+
+    def generate_holiday_flags(dates, style="multivariate_flag"):
+        pass
+
+    @staticmethod
+    def get_new_params(method="random"):
+        holiday_params = holiday_new_params()
+        holiday_params['anomaly_detector_params'] = AnomalyDetector.get_new_params()
+        return holiday_params

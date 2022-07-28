@@ -572,10 +572,6 @@ def anomaly_new_params(method='random'):
     return method_choice, method_params, transform_dict
 
 
-class HolidayDetector(object):
-    pass
-
-
 def create_dates_df(dates):
     """Take a pd.DatetimeIndex and create simple date parts."""
     dates_df = pd.DataFrame(
@@ -747,14 +743,69 @@ def anomaly_df_to_holidays(
     return day_holidays, wkdom_holidays, wkdeom_holidays, lunar_holidays, lunar_weekday, islamic_holidays, hebrew_holidays
 
 
-def dates_to_holidays(dates, day_holidays, wkdom_holidays, wkdeom_holidays, lunar_holidays_df, lunar_wkd_holidays_df, islamic_holidays_df, hebrew_holidays_df):
+def dates_to_holidays(
+        dates, day_holidays, df_cols,
+        style="long", holiday_impacts=False,
+        wkdom_holidays=None,
+        wkdeom_holidays=None, lunar_holidays_df=None,
+        lunar_wkd_holidays_df=None, islamic_holidays_df=None,
+        hebrew_holidays_df=None,
+):
+    """Populate date information for a given pd.DatetimeIndex.
+
+    Args:
+        dates (pd.DatetimeIndex): list of dates
+        day_holidays (pd.DataFrame): list of month/day holidays. Pass None if not available
+        style (str): option for how to return information
+            "long" - return date, name, series for all holidays in a long style dataframe
+            "impact" - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
+            'flag' - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day). Clip to 1 if desired.
+            'prophet' - return format required for prophet. Will need to be filtered on `series` for multivariate case
+        holiday_impacts (dict): a dict passed to .replace contaning values for holiday_names
+    """
     # need index in column for merge
     dates_df = create_dates_df(dates).reset_index(drop=False)
+    if style in ['long', 'flag', 'prophet']:
+        result = []
+    elif style == "impact":
+        result = pd.DataFrame()
+    else:
+        raise ValueError("`style` arg not recognized in dates_to_holidays")
     if day_holidays is not None:
-        populated_day_holidays = dates_df.merge(day_holidays, on=['month', 'day'], how="left")
-        # result = populated_day_holidays.pivot(index='date', columns='series', values='holiday_name').reindex(columns=df.columns)
-        # result = result.where(result.isnull(), 1).fillna(0)
-    prophet = pd.DataFrame(
-        {'ds': populated_day_holidays['date'], 'holiday': populated_day_holidays['holiday_name'], 'lower_window': 0, 'upper_window': 0, 'series': populated_day_holidays['series']}
-    )  # needs to cover future, and at the time of object creation
-    return populated_day_holidays
+        populated_holidays = dates_df.merge(day_holidays, on=['month', 'day'], how="left")
+        if style == "flag":
+            result_per_holiday = pd.get_dummies(populated_holidays['holiday_name'])
+            result_per_holiday.index = populated_holidays['date']
+            result.append(result_per_holiday.groupby(level=0).sum())
+        elif style == "impact":
+            temp = populated_holidays.pivot(index='date', columns='series', values='holiday_name').reindex(columns=df_cols)
+            if holiday_impacts:
+                result = result + temp.replace(holiday_impacts)
+            else:
+                result = result + (temp.astype(str) + f",").replace("nan,", "")
+        else:
+            result.append(populated_holidays)
+        # result_flag = result.where(result.isnull(), 1).fillna(0)
+    if style in ['long','prophet']:
+        result = pd.concat(result, axis=0)
+    elif style == "flag":
+        result = pd.concat(result, axis=1)
+    if style == "prophet":
+        return pd.DataFrame(
+            {'ds': result['date'], 'holiday': result['holiday_name'],
+             'lower_window': 0, 'upper_window': 0, 'series': result['series']}
+        )  # needs to cover future, and at the time of object creation
+    return populated_holidays
+
+
+def holiday_new_params(method='random'):
+    return {
+        'threshold': random.choices([1.0, 0.9, 0.8, 0.7], [0.1, 0.4, 0.4, 0.1])[0],
+        'splash_threshold': random.choices([None, 0.85, 0.65, 0.4], [0.95, 0.05, 0.05, 0.05])[0],
+        'use_wkdom_holidays': random.choices([True, False], [0.9, 0.1])[0],
+        'use_wkdeom_holidays': random.choices([True, False], [0.05, 0.95])[0],
+        'use_lunar_holidays': random.choices([True, False], [0.1, 0.9])[0],
+        'use_lunar_weekday': random.choices([True, False], [0.05, 0.95])[0],
+        'use_islamic_holidays': random.choices([True, False], [0.1, 0.9])[0],
+        'use_hebrew_holidays': random.choices([True, False], [0.1, 0.9])[0],
+    }
