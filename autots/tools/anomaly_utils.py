@@ -678,6 +678,7 @@ def anomaly_df_to_holidays(
         })
     else:
         wkdeom_holidays = None
+    lunar_weekday = None
     if use_lunar_holidays:
         lunar_df = gregorian_to_chinese(dates)
         lunar_df["weekofmonth"] = (lunar_df["lunar_day"] - 1) // 7 + 1
@@ -705,8 +706,6 @@ def anomaly_df_to_holidays(
                 ]
             ).reset_index(drop=False)
             lunar_weekday['holiday_name'] = 'lunarwkd_' + lunar_weekday['lunar_month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + lunar_weekday['weekofmonth'].astype(str) + "_" + lunar_weekday['dayofweek'].astype(str)
-        else:
-            lunar_weekday = None
     else:
         lunar_holidays = None
     if use_islamic_holidays:
@@ -747,9 +746,9 @@ def dates_to_holidays(
         dates, day_holidays, df_cols,
         style="long", holiday_impacts=False,
         wkdom_holidays=None,
-        wkdeom_holidays=None, lunar_holidays_df=None,
-        lunar_wkd_holidays_df=None, islamic_holidays_df=None,
-        hebrew_holidays_df=None,
+        wkdeom_holidays=None, lunar_holidays=None,
+        lunar_weekday=None, islamic_holidays=None,
+        hebrew_holidays=None,
 ):
     """Populate date information for a given pd.DatetimeIndex.
 
@@ -759,43 +758,50 @@ def dates_to_holidays(
         style (str): option for how to return information
             "long" - return date, name, series for all holidays in a long style dataframe
             "impact" - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
-            'flag' - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day). Clip to 1 if desired.
+            'flag' - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
             'prophet' - return format required for prophet. Will need to be filtered on `series` for multivariate case
+            'series_flag' - dates, series 0/1 for if holiday occurred in any calendar
         holiday_impacts (dict): a dict passed to .replace contaning values for holiday_names
     """
     # need index in column for merge
     dates_df = create_dates_df(dates).reset_index(drop=False)
     if style in ['long', 'flag', 'prophet']:
         result = []
-    elif style == "impact":
-        result = pd.DataFrame()
+    elif style in ["impact", 'series_flag']:
+        result = pd.DataFrame(0, columns=df_cols, index=dates)
     else:
         raise ValueError("`style` arg not recognized in dates_to_holidays")
-    if day_holidays is not None:
-        populated_holidays = dates_df.merge(day_holidays, on=['month', 'day'], how="left")
-        if style == "flag":
-            result_per_holiday = pd.get_dummies(populated_holidays['holiday_name'])
-            result_per_holiday.index = populated_holidays['date']
-            result.append(result_per_holiday.groupby(level=0).sum())
-        elif style == "impact":
-            temp = populated_holidays.pivot(index='date', columns='series', values='holiday_name').reindex(columns=df_cols)
-            if holiday_impacts:
-                result = result + temp.replace(holiday_impacts)
+    for holiday_df in [day_holidays, wkdom_holidays, wkdeom_holidays, lunar_holidays, lunar_weekday, islamic_holidays, hebrew_holidays]:
+        if holiday_df is not None:
+            populated_holidays = dates_df.merge(day_holidays, on=['month', 'day'], how="left")
+            if style == "flag":
+                result_per_holiday = pd.get_dummies(populated_holidays['holiday_name'])
+                result_per_holiday.index = populated_holidays['date']
+                result.append(result_per_holiday.groupby(level=0).sum())
+            elif style in ["impact", 'series_flag']:
+                temp = populated_holidays.pivot(index='date', columns='series', values='holiday_name').reindex(columns=df_cols)
+                if style == "series_flag":
+                    result = result + temp.where(temp.isnull(), 1).fillna(0)
+                else:
+                    if holiday_impacts:
+                        result = result + temp.replace(holiday_impacts)
+                    else:
+                        result = result.replace(0, "") + (temp.astype(str) + ",").replace("nan,", "")
             else:
-                result = result + (temp.astype(str) + f",").replace("nan,", "")
-        else:
-            result.append(populated_holidays)
-        # result_flag = result.where(result.isnull(), 1).fillna(0)
-    if style in ['long','prophet']:
+                result.append(populated_holidays)
+    if style in ['long', 'prophet']:
         result = pd.concat(result, axis=0)
     elif style == "flag":
-        result = pd.concat(result, axis=1)
+        return pd.concat(result, axis=1)
+    elif style == "series_flag":
+        return result.clip(upper=1.0).astype(int)
     if style == "prophet":
         return pd.DataFrame(
             {'ds': result['date'], 'holiday': result['holiday_name'],
              'lower_window': 0, 'upper_window': 0, 'series': result['series']}
         )  # needs to cover future, and at the time of object creation
-    return populated_holidays
+    else:
+        return result
 
 
 def holiday_new_params(method='random'):

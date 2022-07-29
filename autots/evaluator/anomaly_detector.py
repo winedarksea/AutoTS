@@ -5,7 +5,8 @@ Created on Mon Jul 18 14:19:55 2022
 @author: Colin
 """
 import random
-from autots.tools.anomaly_utils import anomaly_new_params, detect_anomalies, limits_to_anomalies, anomaly_df_to_holidays, holiday_new_params
+import numpy as np
+from autots.tools.anomaly_utils import anomaly_new_params, detect_anomalies, limits_to_anomalies, anomaly_df_to_holidays, holiday_new_params, dates_to_holidays
 from autots.tools.transform import RandomTransform, GeneralTransformer
 from autots.evaluator.auto_model import random_model
 from autots.evaluator.auto_model import back_forecast
@@ -178,8 +179,11 @@ class HolidayDetector(object):
         self.anomaly_model = AnomalyDetector(output='multivariate', **self.anomaly_detector_params)
 
     def detect(self, df):
+        """Run holiday detection. Input wide-style pandas time series."""
         self.anomaly_model.detect(df)
-        self.day_holidays, self.wkdom_holidays, self.wkdeom_holidays, self.lunar_holidays_df, self.lunar_wkd_holidays_df, self.islamic_holidays_df, self.hebrew_holidays_df = anomaly_df_to_holidays(
+        if np.min(self.anomaly_model.anomalies.values) != -1:
+            print("No anomalies detected.")
+        self.day_holidays, self.wkdom_holidays, self.wkdeom_holidays, self.lunar_holidays, self.lunar_weekday, self.islamic_holidays, self.hebrew_holidays = anomaly_df_to_holidays(
             self.anomaly_model.anomalies, splash_threshold=self.splash_threshold,
             threshold=self.threshold,
             actuals=df, anomaly_scores=self.anomaly_model.scores,
@@ -190,12 +194,37 @@ class HolidayDetector(object):
             use_islamic_holidays=self.use_islamic_holidays,
             use_hebrew_holidays=self.use_hebrew_holidays,
         )
+        self.df = df
+        self.df_cols = df.columns
 
     def plot_anomaly(self, kwargs={}):
         self.anomaly_model.plot(**kwargs)
 
-    def generate_holiday_flags(dates, style="multivariate_flag"):
-        pass
+    def plot(self, series_name=None, title=None, plot_kwargs={}):
+        import matplotlib.pyplot as plt
+
+        if series_name is None:
+            series_name = random.choice(self.df.columns)
+        if title is None:
+            title = series_name[0:50] + f" with {self.anomaly_detector_params['method']} holidays"
+        fig, ax = plt.subplots()
+        i_anom = self.dates_to_holidays(self.df.index, style="series_flag")[series_name]
+        i_anom = i_anom.index[i_anom == 1]
+        self.df[series_name].plot(ax=ax, title=title, **plot_kwargs)
+        if len(i_anom) > 0:
+            ax.scatter(i_anom.tolist(), self.df.loc[i_anom, :][series_name], c="green")
+
+    def dates_to_holidays(self, dates, style="flag"):
+        return dates_to_holidays(
+            dates, self.day_holidays, self.df_cols,
+            style=style, holiday_impacts=False,
+            wkdom_holidays=self.wkdom_holidays,
+            wkdeom_holidays=self.wkdeom_holidays,
+            lunar_holidays=self.lunar_holidays,
+            lunar_weekday=self.lunar_weekday,
+            islamic_holidays=self.islamic_holidays,
+            hebrew_holidays=self.hebrew_holidays,
+        )
 
     @staticmethod
     def get_new_params(method="random"):
