@@ -88,6 +88,9 @@ class AnomalyDetector(object):
                     self.df_anomaly = self.df_anomaly.tail(self.eval_period) - backcast.forecast
                 else:
                     self.df_anomaly = self.df_anomaly - backcast.forecast
+        
+        if not all(self.df_anomaly.columns == df.columns):
+            self.df_anomaly.columns = df.columns
 
         if self.method in ["prediction_interval"]:
             self.anomalies, self.scores = limits_to_anomalies(
@@ -200,7 +203,7 @@ class HolidayDetector(object):
     def plot_anomaly(self, kwargs={}):
         self.anomaly_model.plot(**kwargs)
 
-    def plot(self, series_name=None, title=None, plot_kwargs={}):
+    def plot(self, series_name=None, include_anomalies=True, title=None, plot_kwargs={}):
         import matplotlib.pyplot as plt
 
         if series_name is None:
@@ -208,9 +211,19 @@ class HolidayDetector(object):
         if title is None:
             title = series_name[0:50] + f" with {self.anomaly_detector_params['method']} holidays"
         fig, ax = plt.subplots()
+        self.df[series_name].plot(ax=ax, title=title, **plot_kwargs)
+        if include_anomalies:
+            # directly copied from above
+            if self.anomaly_model.output == "univariate":
+                i_anom = self.anomaly_model.anomalies.index[self.anomaly_model.anomalies.iloc[:, 0] == -1]
+            else:
+                series_anom = self.anomaly_model.anomalies[series_name]
+                i_anom = series_anom[series_anom == -1].index
+            if len(i_anom) > 0:
+                ax.scatter(i_anom.tolist(), self.df.loc[i_anom, :][series_name], c="red")
+        # now the actual holidays
         i_anom = self.dates_to_holidays(self.df.index, style="series_flag")[series_name]
         i_anom = i_anom.index[i_anom == 1]
-        self.df[series_name].plot(ax=ax, title=title, **plot_kwargs)
         if len(i_anom) > 0:
             ax.scatter(i_anom.tolist(), self.df.loc[i_anom, :][series_name], c="green")
 

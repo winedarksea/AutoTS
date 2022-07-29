@@ -401,15 +401,17 @@ def detect_anomalies(
     elif method in ["IQR"]:
         iqr_thresh = method_params.get("iqr_threshold", 2.0)
         iqr_quantiles = method_params.get("iqr_quantiles", [0.25, 0.75])
-        resid_q = nan_quantile(df_anomaly, iqr_quantiles)
-        iqr = resid_q[1] - resid_q[0]
-        limits = resid_q + (iqr_thresh * iqr)
+        resid_q_0 = nan_quantile(df_anomaly, iqr_quantiles[0])
+        resid_q_1 = nan_quantile(df_anomaly, iqr_quantiles[1])
+        iqr = resid_q_1 - resid_q_0
+        limit_0 = resid_q_0 - (iqr_thresh * iqr)
+        limit_1 = resid_q_1 + (iqr_thresh * iqr)
         res, scores = limits_to_anomalies(
             df_anomaly,
             output=output,
             method_params=method_params,
-            upper_limit=limits[1],
-            lower_limit=limits[0],
+            upper_limit=limit_1,
+            lower_limit=limit_0,
         )
     elif method in "nonparametric":
         res, scores = values_to_anomalies(
