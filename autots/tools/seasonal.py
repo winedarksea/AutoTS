@@ -144,6 +144,7 @@ def date_part(
                 'month': pd.Categorical(DTindex.month, categories=list(range(12)), ordered=True),
                 'weekday': pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True),
                 'day': pd.Categorical(DTindex.day, categories=list(range(31)), ordered=True),
+                'weekdayofmonth': (DTindex.day - 1) // 7 + 1,
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'quarter': DTindex.quarter,
                 'epoch': pd.to_numeric(
@@ -151,7 +152,7 @@ def date_part(
                 ).values,
             }
         )
-        date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday', 'day'])
+        date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday', 'day', 'weekdayofmonth'])
     else:
         # method == "simple"
         date_part_df = pd.DataFrame(
@@ -179,6 +180,7 @@ def date_part(
                         int
                     ),  # 2 season
                     'weekend': (DTindex.weekday > 4).astype(int),
+                    'weekdayofmonth': (DTindex.day - 1) // 7 + 1,
                     'month_end': (DTindex.is_month_end).astype(int),
                     'month_start': (DTindex.is_month_start).astype(int),
                     "quarter_end": (DTindex.is_quarter_end).astype(int),

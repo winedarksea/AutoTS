@@ -135,7 +135,10 @@ class AnomalyDetector(object):
         method_choice, method_params, transform_dict = anomaly_new_params(method=method)
         if transform_dict == "random":
             transform_dict = RandomTransform(transformer_list='fast', transformer_max_depth=2)
-        preforecast = random.choices([True, False], [0.05, 0.95])[0]
+        if method == "fast":
+            preforecast = False
+        else:
+            preforecast = random.choices([True, False], [0.05, 0.95])[0]
 
         if preforecast or method_choice == "prediction_interval":
             forecast_params = random_model(
@@ -242,5 +245,5 @@ class HolidayDetector(object):
     @staticmethod
     def get_new_params(method="random"):
         holiday_params = holiday_new_params()
-        holiday_params['anomaly_detector_params'] = AnomalyDetector.get_new_params()
+        holiday_params['anomaly_detector_params'] = AnomalyDetector.get_new_params(method=method)
         return holiday_params

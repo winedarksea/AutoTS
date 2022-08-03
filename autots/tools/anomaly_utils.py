@@ -722,7 +722,7 @@ def anomaly_df_to_holidays(
                 lambda df: (df["occurrence_rate"] >= threshold) & (df["count"] >= min_occurrences),
             ]
         ).reset_index(drop=False)
-        islamic_holidays['holiday_name'] = 'dom_' + islamic_holidays['month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + islamic_holidays['day'].astype(str).str.pad(2, side='left', fillchar="0")
+        islamic_holidays['holiday_name'] = 'islamic_' + islamic_holidays['month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + islamic_holidays['day'].astype(str).str.pad(2, side='left', fillchar="0")
     else:
         islamic_holidays = None
     if use_hebrew_holidays:
@@ -738,7 +738,7 @@ def anomaly_df_to_holidays(
                 lambda df: (df["occurrence_rate"] >= threshold) & (df["count"] >= min_occurrences),
             ]
         ).reset_index(drop=False)
-        hebrew_holidays['holiday_name'] = 'dom_' + hebrew_holidays['month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + hebrew_holidays['day'].astype(str).str.pad(2, side='left', fillchar="0")
+        hebrew_holidays['holiday_name'] = 'hebrew_' + hebrew_holidays['month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + hebrew_holidays['day'].astype(str).str.pad(2, side='left', fillchar="0")
     else:
         hebrew_holidays = None
     return day_holidays, wkdom_holidays, wkdeom_holidays, lunar_holidays, lunar_weekday, islamic_holidays, hebrew_holidays
