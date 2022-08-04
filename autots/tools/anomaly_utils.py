@@ -588,9 +588,10 @@ def create_dates_df(dates):
 def anomaly_df_to_holidays(
         anomaly_df, actuals=None, anomaly_scores=None,
         threshold=0.8, min_occurrences=2, splash_threshold=0.65,
-        use_wkdom_holidays=True, use_wkdeom_holidays=True,
-        use_lunar_holidays=True, use_lunar_weekday=False,
-        use_islamic_holidays=True, use_hebrew_holidays=True,
+        use_dayofmonth_holidays=True,
+        use_wkdom_holidays=True, use_wkdeom_holidays=False,
+        use_lunar_holidays=False, use_lunar_weekday=False,
+        use_islamic_holidays=False, use_hebrew_holidays=False,
 ):
     if isinstance(anomaly_df, pd.Series):
         stacked = anomaly_df.copy()  # [anomaly_df == -1]
@@ -624,28 +625,31 @@ def anomaly_df_to_holidays(
     dates_df = dates_df.merge(stacked, left_index=True, right_index=True, how="outer")
     dates_df['occurrence_rate'] = dates_df['count']
 
-    day_holidays = dates_df.groupby(["series", "month", "day"]).agg(agg_dict)
-    if splash_threshold is not None:
-        day_holidays = day_holidays.loc[
-            lambda df: ((df["occurrence_rate"] >= threshold) | (df['occurrence_rate'].rolling(3, min_periods=1, center=True).mean() > splash_threshold)) & (df["count"] >= min_occurrences),
-        ].reset_index(drop=False)
+    if use_dayofmonth_holidays:
+        day_holidays = dates_df.groupby(["series", "month", "day"]).agg(agg_dict)
+        if splash_threshold is not None:
+            day_holidays = day_holidays.loc[
+                lambda df: ((df["occurrence_rate"] >= threshold) | (df['occurrence_rate'].rolling(3, min_periods=1, center=True).mean() > splash_threshold)) & (df["count"] >= min_occurrences),
+            ].reset_index(drop=False)
+        else:
+            day_holidays = day_holidays.loc[
+                lambda df: (df["occurrence_rate"] >= threshold) & (df["count"] >= min_occurrences),
+            ].reset_index(drop=False)
+        day_holidays['holiday_name'] = 'dom_' + day_holidays['month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + day_holidays['day'].astype(str).str.pad(2, side='left', fillchar="0")
+        # replace a few major names
+        day_holidays['holiday_name'] = day_holidays['holiday_name'].replace({
+            'dom_12_25': "Christmas",
+            'dom_12_26': "BoxingDay",
+            'dom_12_24': "ChristmasEve",
+            'dom_07_04': "July4th",
+            'dom_01_01': "NewYearsDay",
+            'dom_12_31': "NewYearsEve",
+            'dom_02_14': 'ValentinesDay',
+            'dom_10-31': 'Halloween',
+            'dom_11-11': 'ArmisticeDay',
+        })
     else:
-        day_holidays = day_holidays.loc[
-            lambda df: (df["occurrence_rate"] >= threshold) & (df["count"] >= min_occurrences),
-        ].reset_index(drop=False)
-    day_holidays['holiday_name'] = 'dom_' + day_holidays['month'].astype(str).str.pad(2, side='left', fillchar="0") + "_" + day_holidays['day'].astype(str).str.pad(2, side='left', fillchar="0")
-    # replace a few major names
-    day_holidays['holiday_name'] = day_holidays['holiday_name'].replace({
-        'dom_12_25': "Christmas",
-        'dom_12_26': "BoxingDay",
-        'dom_12_24': "ChristmasEve",
-        'dom_07_04': "July4th",
-        'dom_01_01': "NewYearsDay",
-        'dom_12_31': "NewYearsEve",
-        'dom_02_14': 'ValentinesDay',
-        'dom_10-31': 'Halloween',
-        'dom_11-11': 'ArmisticeDay',
-    })
+        day_holidays = None
     if use_wkdom_holidays:
         wkdom_holidays = dates_df.groupby(["series", "month", "weekofmonth", "dayofweek"]).agg(agg_dict)
         if splash_threshold is not None:
@@ -745,8 +749,9 @@ def anomaly_df_to_holidays(
 
 
 def dates_to_holidays(
-        dates, day_holidays, df_cols,
+        dates, df_cols,
         style="long", holiday_impacts=False,
+        day_holidays=None,
         wkdom_holidays=None,
         wkdeom_holidays=None, lunar_holidays=None,
         lunar_weekday=None, islamic_holidays=None,
@@ -767,6 +772,7 @@ def dates_to_holidays(
     """
     # need index in column for merge
     dates_df = create_dates_df(dates).reset_index(drop=False)
+
     if style in ['long', 'flag', 'prophet']:
         result = []
     elif style in ["impact", 'series_flag']:
@@ -775,7 +781,30 @@ def dates_to_holidays(
         raise ValueError("`style` arg not recognized in dates_to_holidays")
     for holiday_df in [day_holidays, wkdom_holidays, wkdeom_holidays, lunar_holidays, lunar_weekday, islamic_holidays, hebrew_holidays]:
         if holiday_df is not None:
-            populated_holidays = dates_df.merge(day_holidays, on=['month', 'day'], how="left")
+            # handle the different holiday calendars
+            if "lunar_month" in holiday_df.columns:
+                lunar_dates = gregorian_to_chinese(dates)
+                if "weekofmonth" in holiday_df.columns:
+                    on = ["lunar_month", "weekofmonth", 'dayofweek']
+                    lunar_dates["weekofmonth"] = (lunar_dates["lunar_day"] - 1) // 7 + 1
+                    lunar_dates['dayofweek'] = lunar_dates.index.dayofweek
+                else:
+                    on = ["lunar_month", "lunar_day"]
+                populated_holidays = lunar_dates.reset_index(drop=False).merge(holiday_df, on=on, how="left")
+            else:
+                on = ['month', 'day']
+                if "weekofmonth" in holiday_df.columns:
+                    on = ["month", "weekofmonth", "dayofweek"]
+                elif "weekfromend" in holiday_df.columns:
+                    on = ["month", "weekfromend", "dayofweek"]
+                sample = holiday_df['holiday_name'].iloc[0]
+                if "hebrew" in sample:
+                    populated_holidays = gregorian_to_hebrew(dates).reset_index(drop=False).merge(holiday_df, on=on, how="left")
+                elif "islamic" in sample:
+                    populated_holidays = gregorian_to_islamic(dates).reset_index(drop=False).merge(holiday_df, on=on, how="left")
+                else:
+                    populated_holidays = dates_df.merge(holiday_df, on=on, how="left")
+            # reorg results depending on style
             if style == "flag":
                 result_per_holiday = pd.get_dummies(populated_holidays['holiday_name'])
                 result_per_holiday.index = populated_holidays['date']
@@ -810,6 +839,7 @@ def holiday_new_params(method='random'):
     return {
         'threshold': random.choices([1.0, 0.9, 0.8, 0.7], [0.1, 0.4, 0.4, 0.1])[0],
         'splash_threshold': random.choices([None, 0.85, 0.65, 0.4], [0.95, 0.05, 0.05, 0.05])[0],
+        'use_dayofmonth_holidays': random.choices([True, False], [0.95, 0.05])[0],
         'use_wkdom_holidays': random.choices([True, False], [0.9, 0.1])[0],
         'use_wkdeom_holidays': random.choices([True, False], [0.05, 0.95])[0],
         'use_lunar_holidays': random.choices([True, False], [0.1, 0.9])[0],

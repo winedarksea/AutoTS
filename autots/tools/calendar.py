@@ -83,7 +83,7 @@ def gregorian_to_chinese(datetime_index):
     expanded_dates['lunar_month'] = expanded_dates['lunar_month'].ffill()
     expanded_dates['lunar_day'] = expanded_dates.groupby(['syear', 'lunar_month']).cumcount() + 1
     expanded_dates['lunar_year'] = expanded_dates['syear'] + min_year
-    return expanded_dates.loc[datetime_index, ['lunar_year', 'lunar_month', 'lunar_day']].astype(int)
+    return expanded_dates.loc[datetime_index, ['lunar_year', 'lunar_month', 'lunar_day']].astype(int).rename_axis(index='date')
 
 
 def to_jd(year, month, day):
@@ -107,7 +107,7 @@ def gregorian_to_islamic(date, epoch_adjustment=1.5):
     year = np.floor(((30 * (jd - 1948439.5)) + 10646) / 10631)
     month = np.minimum(12, np.ceil((jd - (29 + to_jd(year, 1, 1))) / 29.5) + 1)
     day = (jd - to_jd(year, month, 1)).astype(int) + 1
-    return pd.DataFrame({'year': year, 'month': month, 'day': day}, index=date).astype(int)
+    return pd.DataFrame({'year': year, 'month': month, 'day': day}, index=date).astype(int).rename_axis(index='date')
 
 
 def heb_is_leap(year):
@@ -224,4 +224,4 @@ def gregorian_to_hebrew(dates):
                     "year": year, "month": month, 'day': days_remaining + 1
                 }, index=[dates[idx]]))
                 break
-    return pd.concat(date_list, axis=0)
+    return pd.concat(date_list, axis=0).rename_axis(index='date')

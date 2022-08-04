@@ -160,6 +160,7 @@ class HolidayDetector(object):
         self,
         anomaly_detector_params={},
         threshold=0.8, min_occurrences=2, splash_threshold=0.65,
+        use_dayofmonth_holidays=True,
         use_wkdom_holidays=True, use_wkdeom_holidays=True,
         use_lunar_holidays=True, use_lunar_weekday=False,
         use_islamic_holidays=True, use_hebrew_holidays=True,
@@ -176,6 +177,7 @@ class HolidayDetector(object):
         self.threshold = threshold
         self.min_occurrences = min_occurrences
         self.splash_threshold = splash_threshold
+        self.use_dayofmonth_holidays = use_dayofmonth_holidays
         self.use_wkdom_holidays = use_wkdom_holidays
         self.use_wkdeom_holidays = use_wkdeom_holidays
         self.use_lunar_holidays = use_lunar_holidays
@@ -193,6 +195,7 @@ class HolidayDetector(object):
             self.anomaly_model.anomalies, splash_threshold=self.splash_threshold,
             threshold=self.threshold,
             actuals=df, anomaly_scores=self.anomaly_model.scores,
+            use_dayofmonth_holidays=self.use_dayofmonth_holidays,
             use_wkdom_holidays=self.use_wkdom_holidays,
             use_wkdeom_holidays=self.use_wkdeom_holidays,
             use_lunar_holidays=self.use_lunar_holidays,
@@ -232,8 +235,9 @@ class HolidayDetector(object):
 
     def dates_to_holidays(self, dates, style="flag"):
         return dates_to_holidays(
-            dates, self.day_holidays, self.df_cols,
+            dates, self.df_cols,
             style=style, holiday_impacts=False,
+            day_holidays=self.day_holidays,
             wkdom_holidays=self.wkdom_holidays,
             wkdeom_holidays=self.wkdeom_holidays,
             lunar_holidays=self.lunar_holidays,
