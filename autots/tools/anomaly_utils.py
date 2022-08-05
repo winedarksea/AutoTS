@@ -781,45 +781,46 @@ def dates_to_holidays(
         raise ValueError("`style` arg not recognized in dates_to_holidays")
     for holiday_df in [day_holidays, wkdom_holidays, wkdeom_holidays, lunar_holidays, lunar_weekday, islamic_holidays, hebrew_holidays]:
         if holiday_df is not None:
-            # handle the different holiday calendars
-            if "lunar_month" in holiday_df.columns:
-                lunar_dates = gregorian_to_chinese(dates)
-                if "weekofmonth" in holiday_df.columns:
-                    on = ["lunar_month", "weekofmonth", 'dayofweek']
-                    lunar_dates["weekofmonth"] = (lunar_dates["lunar_day"] - 1) // 7 + 1
-                    lunar_dates['dayofweek'] = lunar_dates.index.dayofweek
-                else:
-                    on = ["lunar_month", "lunar_day"]
-                populated_holidays = lunar_dates.reset_index(drop=False).merge(holiday_df, on=on, how="left")
-            else:
-                on = ['month', 'day']
-                if "weekofmonth" in holiday_df.columns:
-                    on = ["month", "weekofmonth", "dayofweek"]
-                elif "weekfromend" in holiday_df.columns:
-                    on = ["month", "weekfromend", "dayofweek"]
-                sample = holiday_df['holiday_name'].iloc[0]
-                if "hebrew" in sample:
-                    populated_holidays = gregorian_to_hebrew(dates).reset_index(drop=False).merge(holiday_df, on=on, how="left")
-                elif "islamic" in sample:
-                    populated_holidays = gregorian_to_islamic(dates).reset_index(drop=False).merge(holiday_df, on=on, how="left")
-                else:
-                    populated_holidays = dates_df.merge(holiday_df, on=on, how="left")
-            # reorg results depending on style
-            if style == "flag":
-                result_per_holiday = pd.get_dummies(populated_holidays['holiday_name'])
-                result_per_holiday.index = populated_holidays['date']
-                result.append(result_per_holiday.groupby(level=0).sum())
-            elif style in ["impact", 'series_flag']:
-                temp = populated_holidays.pivot(index='date', columns='series', values='holiday_name').reindex(columns=df_cols)
-                if style == "series_flag":
-                    result = result + temp.where(temp.isnull(), 1).fillna(0)
-                else:
-                    if holiday_impacts:
-                        result = result + temp.replace(holiday_impacts)
+            if not holiday_df.empty:
+                # handle the different holiday calendars
+                if "lunar_month" in holiday_df.columns:
+                    lunar_dates = gregorian_to_chinese(dates)
+                    if "weekofmonth" in holiday_df.columns:
+                        on = ["lunar_month", "weekofmonth", 'dayofweek']
+                        lunar_dates["weekofmonth"] = (lunar_dates["lunar_day"] - 1) // 7 + 1
+                        lunar_dates['dayofweek'] = lunar_dates.index.dayofweek
                     else:
-                        result = result.replace(0, "") + (temp.astype(str) + ",").replace("nan,", "")
-            else:
-                result.append(populated_holidays)
+                        on = ["lunar_month", "lunar_day"]
+                    populated_holidays = lunar_dates.reset_index(drop=False).merge(holiday_df, on=on, how="left")
+                else:
+                    on = ['month', 'day']
+                    if "weekofmonth" in holiday_df.columns:
+                        on = ["month", "weekofmonth", "dayofweek"]
+                    elif "weekfromend" in holiday_df.columns:
+                        on = ["month", "weekfromend", "dayofweek"]
+                    sample = holiday_df['holiday_name'].iloc[0]
+                    if "hebrew" in sample:
+                        populated_holidays = gregorian_to_hebrew(dates).reset_index(drop=False).merge(holiday_df, on=on, how="left")
+                    elif "islamic" in sample:
+                        populated_holidays = gregorian_to_islamic(dates).reset_index(drop=False).merge(holiday_df, on=on, how="left")
+                    else:
+                        populated_holidays = dates_df.merge(holiday_df, on=on, how="left")
+                # reorg results depending on style
+                if style == "flag":
+                    result_per_holiday = pd.get_dummies(populated_holidays['holiday_name'])
+                    result_per_holiday.index = populated_holidays['date']
+                    result.append(result_per_holiday.groupby(level=0).sum())
+                elif style in ["impact", 'series_flag']:
+                    temp = populated_holidays.pivot(index='date', columns='series', values='holiday_name').reindex(columns=df_cols)
+                    if style == "series_flag":
+                        result = result + temp.where(temp.isnull(), 1).fillna(0)
+                    else:
+                        if holiday_impacts:
+                            result = result + temp.replace(holiday_impacts)
+                        else:
+                            result = result.replace(0, "") + (temp.astype(str) + ",").replace("nan,", "")
+                else:
+                    result.append(populated_holidays)
     if style in ['long', 'prophet']:
         result = pd.concat(result, axis=0)
     elif style == "flag":

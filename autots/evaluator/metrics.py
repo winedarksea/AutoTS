@@ -221,16 +221,19 @@ def contour(A, F):
     return contour_result
 
 
-def threshold_loss(actual, forecast, threshold):
-    """Run once for overestimate then again for underestimate. Add.
+def threshold_loss(actual, forecast, threshold, penalty_threshold=None):
+    """Run once for overestimate then again for underestimate. Add both for combined view.
 
     Args:
         actual/forecast: 2D wide style data DataFrame or np.array
-        threshold: 0.9 (10% underestimate) and 1.1 (overestimate by 10%)
+        threshold: (0, 2), 0.9 (penalize 10% and greater underestimates) and 1.1 (penalize overestimate over 10%)
+        penalty_threshold: defaults to same as threshold, adjust strength of penalty
     """
+    if penalty_threshold is None:
+        penalty_threshold = threshold
     actual_threshold = actual * threshold
     abs_err = abs(actual - forecast)
-    ls = np.where(actual_threshold >= forecast, (1 / threshold) * abs_err, threshold * abs_err)
+    ls = np.where(actual_threshold >= forecast, (1 / penalty_threshold) * abs_err, penalty_threshold * abs_err)
     return np.nanmean(ls, axis=0)
 
 
