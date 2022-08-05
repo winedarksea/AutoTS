@@ -221,6 +221,20 @@ def contour(A, F):
     return contour_result
 
 
+def threshold_loss(actual, forecast, threshold):
+    """Run once for overestimate then again for underestimate. Add.
+
+    Args:
+        actual/forecast: 2D wide style data DataFrame or np.array
+        threshold: 0.9 (10% underestimate) and 1.1 (overestimate by 10%)
+    """
+    actual_threshold = actual * threshold
+    abs_err = abs(actual - forecast)
+    ls = np.where(actual_threshold >= forecast, (1 / threshold) * abs_err, threshold * abs_err)
+    return np.nanmean(ls, axis=0)
+
+
+
 def mda(A, F):
     """A measure of how well the actual and forecast follow the same pattern of change.
     Expects two, 2-D numpy arrays of forecast_length * n series
