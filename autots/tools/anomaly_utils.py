@@ -821,6 +821,8 @@ def dates_to_holidays(
                             result = result.replace(0, "") + (temp.astype(str) + ",").replace("nan,", "")
                 else:
                     result.append(populated_holidays)
+    if not result:
+        return pd.DataFrame(columns=['ds', 'date', 'holiday', 'holiday_name', 'series', 'lower_window', 'upper_window'])
     if style in ['long', 'prophet']:
         result = pd.concat(result, axis=0)
     elif style == "flag":
