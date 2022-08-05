@@ -24,9 +24,12 @@
 * added subsidiary transformer for cleaning in Detrend and Datepart detrend Transformers
 * sped up SinTrend transformer
 * new AnomalyRemoval transformer
+* added HolidayTransformer
+* added auto holidays to Prophet
 
 * test cointegration with pinv!
-* test new models and transformers (Align, Anomaly, Sine) with high dimensionality!
+* test new models and transformers (Align, Anomaly, Holiday, Sine) with high dimensionality!
+* test new Prophet
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

@@ -750,7 +750,7 @@ def anomaly_df_to_holidays(
 
 def dates_to_holidays(
         dates, df_cols,
-        style="long", holiday_impacts=False,
+        style="long", holiday_impacts="value",
         day_holidays=None,
         wkdom_holidays=None,
         wkdeom_holidays=None, lunar_holidays=None,
@@ -815,14 +815,25 @@ def dates_to_holidays(
                     if style == "series_flag":
                         result = result + temp.where(temp.isnull(), 1).fillna(0)
                     else:
-                        if holiday_impacts:
-                            result = result + temp.replace(holiday_impacts)
+                        if isinstance(holiday_impacts, dict):
+                            result = result + temp.replace(holiday_impacts).astype(float)
+                        # if multiple holidays overlap, take the GREATER of the them, but don't ADD
+                        # this also rather assumes most holidays will have a positive impact on values
+                        elif holiday_impacts == "anomaly_score":
+                            temp2 = holiday_df.pivot(index='holiday_name', columns='series', values='avg_anomaly_score').reindex(columns=df_cols)
+                            replace_dict = temp2.to_dict()
+                            result = np.maximum(result, temp.replace(replace_dict).astype(float).fillna(0))
+                        elif holiday_impacts == "value":
+                            temp2 = holiday_df.pivot(index='holiday_name', columns='series', values='avg_value').reindex(columns=df_cols)
+                            replace_dict = temp2.to_dict()
+                            result = np.maximum(result, temp.replace(replace_dict).astype(float).fillna(0))
                         else:
                             result = result.replace(0, "") + (temp.astype(str) + ",").replace("nan,", "")
                 else:
                     result.append(populated_holidays)
-    if not result:
-        return pd.DataFrame(columns=['ds', 'date', 'holiday', 'holiday_name', 'series', 'lower_window', 'upper_window'])
+    if isinstance(result, list):
+        if not result:
+            return pd.DataFrame(columns=['ds', 'date', 'holiday', 'holiday_name', 'series', 'lower_window', 'upper_window'])
     if style in ['long', 'prophet']:
         result = pd.concat(result, axis=0)
     elif style == "flag":

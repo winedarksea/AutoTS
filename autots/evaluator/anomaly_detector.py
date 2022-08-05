@@ -129,6 +129,9 @@ class AnomalyDetector(object):
         if len(i_anom) > 0:
             ax.scatter(i_anom.tolist(), self.df.loc[i_anom, :][series_name], c="red")
 
+    def fit(self, df):
+        return self.detect(df)
+
     @staticmethod
     def get_new_params(method="random"):
         forecast_params = None
@@ -233,10 +236,10 @@ class HolidayDetector(object):
         if len(i_anom) > 0:
             ax.scatter(i_anom.tolist(), self.df.loc[i_anom, :][series_name], c="green")
 
-    def dates_to_holidays(self, dates, style="flag"):
+    def dates_to_holidays(self, dates, style="flag", holiday_impacts=False):
         return dates_to_holidays(
             dates, self.df_cols,
-            style=style, holiday_impacts=False,
+            style=style, holiday_impacts=holiday_impacts,
             day_holidays=self.day_holidays,
             wkdom_holidays=self.wkdom_holidays,
             wkdeom_holidays=self.wkdeom_holidays,
@@ -245,6 +248,9 @@ class HolidayDetector(object):
             islamic_holidays=self.islamic_holidays,
             hebrew_holidays=self.hebrew_holidays,
         )
+
+    def fit(self, df):
+        return self.detect(df)
 
     @staticmethod
     def get_new_params(method="random"):

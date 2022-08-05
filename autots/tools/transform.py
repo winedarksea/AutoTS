@@ -7,10 +7,8 @@ from autots.tools.impute import FillNA, df_interpolate
 from autots.tools.seasonal import date_part, seasonal_int
 from autots.tools.cointegration import coint_johansen, btcd_decompose
 from autots.models.sklearn import generate_regressor_params, retrieve_regressor
-from autots.tools.anomaly_utils import (
-    anomaly_new_params,
-    detect_anomalies,
-)
+from autots.tools.anomaly_utils import anomaly_new_params, detect_anomalies, anomaly_df_to_holidays, holiday_new_params, dates_to_holidays
+
 try:
     from joblib import Parallel, delayed
 except Exception:
@@ -1104,7 +1102,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             "transform_dict": random_cleaners(),
         }
 
-    def fit(self, df):
+    def fit(self, df, regressor=None):
         """Fits trend for later detrending.
 
         Args:
@@ -1127,6 +1125,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
         )
+        if regressor is not None:
+            X = pd.concat([X, regressor], axis=1)
+            self.X = X  # diagnostic
         multioutput = True
         if y.ndim < 2:
             multioutput = False
@@ -1143,16 +1144,16 @@ class DatepartRegressionTransformer(EmptyTransformer):
         self.shape = df.shape
         return self
 
-    def fit_transform(self, df):
+    def fit_transform(self, df, regressor=None):
         """Fit and Return Detrended DataFrame.
 
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        self.fit(df)
-        return self.transform(df)
+        self.fit(df, regressor=regressor)
+        return self.transform(df, regressor=regressor)
 
-    def transform(self, df):
+    def transform(self, df, regressor=None):
         """Return detrended data.
 
         Args:
@@ -1168,12 +1169,14 @@ class DatepartRegressionTransformer(EmptyTransformer):
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
         )
+        if regressor is not None:
+            X = pd.concat([X, regressor], axis=1)
         # X.columns = [str(xc) for xc in X.columns]
         y = pd.DataFrame(self.model.predict(X), columns=df.columns, index=df.index)
         df = df - y
         return df
 
-    def inverse_transform(self, df):
+    def inverse_transform(self, df, regressor=None):
         """Return data to original form.
 
         Args:
@@ -1189,6 +1192,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
         )
+        if regressor is not None:
+            X = pd.concat([X, regressor], axis=1)
         y = pd.DataFrame(self.model.predict(X), columns=df.columns, index=df.index)
         df = df + y
         return df
@@ -2556,6 +2561,7 @@ class AnomalyRemoval(EmptyTransformer):
             fillna (str): how to fill anomaly values removed
             n_jobs (int): multiprocessing jobs, used by some methods
         """
+        super().__init__(name="AnomalyRemoval")
         self.output = output
         self.method = method
         self.transform_dict = transform_dict
@@ -2613,6 +2619,140 @@ class AnomalyRemoval(EmptyTransformer):
                 [0.01, 0.39, 0.1, 0.3, 0.15, 0.05],
             )[0],
         }
+
+
+class HolidayTransformer(EmptyTransformer):
+    def __init__(
+        self,
+        anomaly_detector_params={},
+        threshold=0.8, min_occurrences=2, splash_threshold=0.65,
+        use_dayofmonth_holidays=True,
+        use_wkdom_holidays=True, use_wkdeom_holidays=True,
+        use_lunar_holidays=True, use_lunar_weekday=False,
+        use_islamic_holidays=True, use_hebrew_holidays=True,
+        remove_excess_anomalies=True,
+        impact=None,
+        regression_params={},
+    ):
+        """Detect anomalies, then mark as holidays (events, festivals, etc) any that reoccur to a calendar.
+
+        Args:
+            anomaly_detector_params (dict): anomaly detection params passed to detector class
+            threshold (float): percent of date occurrences that must be anomalous (0 - 1)
+            splash_threshold (float): None, or % required, avg of nearest 2 neighbors to point
+            use* (bool): whether to use these calendars for holiday detection
+        """
+        super().__init__(name="HolidayTransformer")
+        self.anomaly_detector_params = anomaly_detector_params
+        self.threshold = threshold
+        self.min_occurrences = min_occurrences
+        self.splash_threshold = splash_threshold
+        self.use_dayofmonth_holidays = use_dayofmonth_holidays
+        self.use_wkdom_holidays = use_wkdom_holidays
+        self.use_wkdeom_holidays = use_wkdeom_holidays
+        self.use_lunar_holidays = use_lunar_holidays
+        self.use_lunar_weekday = use_lunar_weekday
+        self.use_islamic_holidays = use_islamic_holidays
+        self.use_hebrew_holidays = use_hebrew_holidays
+        self.anomaly_model = AnomalyRemoval(output='multivariate', **self.anomaly_detector_params)
+        self.remove_excess_anomalies = remove_excess_anomalies
+        self.fillna = anomaly_detector_params.get("fillna", None)
+        self.impact = impact
+        self.regression_params = regression_params
+        self.holiday_count = 0
+
+    def dates_to_holidays(self, dates, style="flag", holiday_impacts=False):
+        return dates_to_holidays(
+            dates, self.df_cols,
+            style=style, holiday_impacts=holiday_impacts,
+            day_holidays=self.day_holidays,
+            wkdom_holidays=self.wkdom_holidays,
+            wkdeom_holidays=self.wkdeom_holidays,
+            lunar_holidays=self.lunar_holidays,
+            lunar_weekday=self.lunar_weekday,
+            islamic_holidays=self.islamic_holidays,
+            hebrew_holidays=self.hebrew_holidays,
+        )
+
+    def fit(self, df):
+        """Run holiday detection. Input wide-style pandas time series."""
+        self.anomaly_model.fit(df)
+        if np.min(self.anomaly_model.anomalies.values) != -1:
+            print("No anomalies detected.")
+        self.day_holidays, self.wkdom_holidays, self.wkdeom_holidays, self.lunar_holidays, self.lunar_weekday, self.islamic_holidays, self.hebrew_holidays = anomaly_df_to_holidays(
+            self.anomaly_model.anomalies, splash_threshold=self.splash_threshold,
+            threshold=self.threshold,
+            actuals=df, anomaly_scores=self.anomaly_model.scores,
+            use_dayofmonth_holidays=self.use_dayofmonth_holidays,
+            use_wkdom_holidays=self.use_wkdom_holidays,
+            use_wkdeom_holidays=self.use_wkdeom_holidays,
+            use_lunar_holidays=self.use_lunar_holidays,
+            use_lunar_weekday=self.use_lunar_weekday,
+            use_islamic_holidays=self.use_islamic_holidays,
+            use_hebrew_holidays=self.use_hebrew_holidays,
+        )
+        self.df_cols = df.columns
+
+    def transform(self, df):
+        if self.remove_excess_anomalies:
+            holidays = self.dates_to_holidays(df.index, style='series_flag')
+            df2 = df[~((self.anomaly_model.anomalies == -1) & (holidays != 1))]
+            self.holiday_count = np.count_nonzero(holidays)
+        else:
+            df2 = df.copy()
+
+        if self.fillna is not None:
+            df2 = FillNA(df2, method=self.fillna, window=10)
+
+        if self.impact == "regression":
+            self.holidays = self.dates_to_holidays(df.index, style='flag')
+            self.regression_model = DatepartRegression(**self.regression_params)
+            return self.regression_model.fit_transform(df2, regressor=self.holidays.astype(float))
+        elif self.impact == "median_value":
+            holidays = self.dates_to_holidays(df.index, style='impact', holiday_impacts="value")
+            self.medians = df2.median()
+            holidays = holidays.where(holidays == 0, holidays - self.medians)
+            return df2 - holidays
+        elif self.impact == "anomaly_score":
+            holidays = self.dates_to_holidays(df.index, style='impact', holiday_impacts="anomaly_score")
+            self.medians = self.anomaly_model.scores.median().fillna(1)
+            return df2 * (holidays / self.medians).replace(0.0, 1.0)
+        elif self.impact is None:
+            return df2
+        else:
+            raise ValueError("`impact` arg not recognized in HolidayTransformer")
+
+    def fit_transform(self, df):
+        self.fit(df)
+        return self.transform(df)
+
+    def inverse_transform(self, df):
+        if self.impact == "regression":
+            holidays = self.dates_to_holidays(df.index, style='flag')
+            return self.regression_model.inverse_transform(df, regressor=holidays.astype(float))
+        elif self.impact == "median_value":
+            holidays = self.dates_to_holidays(df.index, style='impact', holiday_impacts="value")
+            holidays = holidays.where(holidays == 0, holidays - self.medians)
+            return df + holidays
+        elif self.impact == "anomaly_score":
+            holidays = self.dates_to_holidays(df.index, style='impact', holiday_impacts="anomaly_score")
+            return df / (holidays / self.medians).replace(0.0, 1.0)
+        return df
+
+    @staticmethod
+    def get_new_params(method="fast"):
+        holiday_params = holiday_new_params(method='fast')
+        holiday_params['anomaly_detector_params'] = AnomalyRemoval.get_new_params(method="fast")
+        holiday_params['remove_excess_anomalies'] = random.choices([True, False], [0.9, 0.1])[0]
+        holiday_params['impact'] = random.choices(
+            [None, 'median_value', 'anomaly_score', 'regression'],
+            [0.1, 0.2, 0.3, 0.4],
+        )[0]
+        if holiday_params['impact'] == 'regression':
+            holiday_params['regression_params'] = DatepartRegression.get_new_params(method=method)
+        else:
+            holiday_params['regression_params'] = {}
+        return holiday_params
 
 
 # lookup dict for all non-parameterized transformers
@@ -2678,8 +2818,9 @@ have_params = {
     "Cointegration": Cointegration,
     "AlignLastValue": AlignLastValue,
     "AnomalyRemoval": AnomalyRemoval,  # not shared as long as output is 'multivariate'
+    "HolidayDetector": HolidayTransformer,
 }
-# where will results will vary if not all series are included together
+# where results will vary if not all series are included together
 shared_trans = [
     "PCA",
     "FastICA",
@@ -2687,6 +2828,7 @@ shared_trans = [
     "MeanDifference",
     "BTCD",
     "Cointegration",
+    "HolidayDetector",
 ]
 # transformers not defined in AutoTS
 external_transformers = [
@@ -3143,6 +3285,7 @@ transformer_dict = {
     "Cointegration": 0.01,
     "AlignLastValue": 0.1,
     "AnomalyRemoval": 0.03,
+    'HolidayTransformer': 0.01,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
