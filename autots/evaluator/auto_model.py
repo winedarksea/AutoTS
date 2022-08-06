@@ -94,6 +94,7 @@ def ModelMonster(
         parameters (dict): Dictionary of parameters to pass through to model
     """
     model = str(model)
+    model_lower = model.lower()
 
     if model in ['ZeroesNaive', 'ConstantNaive']:
         return ConstantNaive(
@@ -502,7 +503,7 @@ def ModelMonster(
             forecast_length=forecast_length,
             **parameters,
         )
-    elif model == 'ARCH':
+    elif model_lower == 'arch':
         return ARCH(
             frequency=frequency,
             prediction_interval=prediction_interval,
@@ -524,7 +525,7 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
-    elif model == 'MAR':
+    elif model_lower == 'mar':
         return MAR(
             frequency=frequency,
             prediction_interval=prediction_interval,

@@ -2818,7 +2818,7 @@ have_params = {
     "Cointegration": Cointegration,
     "AlignLastValue": AlignLastValue,
     "AnomalyRemoval": AnomalyRemoval,  # not shared as long as output is 'multivariate'
-    "HolidayDetector": HolidayTransformer,
+    "HolidayTransformer": HolidayTransformer,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -2828,7 +2828,7 @@ shared_trans = [
     "MeanDifference",
     "BTCD",
     "Cointegration",
-    "HolidayDetector",
+    "HolidayTransformer",
 ]
 # transformers not defined in AutoTS
 external_transformers = [
@@ -2908,6 +2908,7 @@ class GeneralTransformer(object):
             "BTCD" - Box Tiao decomposition
             'AlignLastValue': align forecast start to end of training data
             'AnomalyRemoval': more tailored anomaly removal options
+            'HolidayTransformer': detects holidays and wishes good cheer to all
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
