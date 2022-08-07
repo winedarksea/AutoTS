@@ -80,6 +80,9 @@ class TestAnomalies(unittest.TestCase):
                 future = m.make_future_dataframe(forecast_length)
                 fcst = m.predict(future).set_index('ds')  # noqa
                 # m.plot_components(fcst)
-
+        temp = mod.dates_to_holidays(full_dates, style="flag")
+        temp = mod.dates_to_holidays(full_dates, style="series_flag")
+        temp = mod.dates_to_holidays(full_dates, style="impact")
+        temp = mod.dates_to_holidays(full_dates, style="long")  # noqa
         # this is a weak test, but will capture some functionality
         self.assertEqual(holidays_detected, 1, "no methods detected holidays")

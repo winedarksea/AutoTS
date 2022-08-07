@@ -243,6 +243,7 @@ class AutoTS(object):
                 "horizontal",
                 "horizontal-max",
                 "mosaic",
+                'mosaic-window',
                 "subsample",
             ]
         elif ensemble == 'auto':
@@ -421,6 +422,115 @@ class AutoTS(object):
                 print("\N{dagger} " + msg)
             except Exception:
                 print(msg)
+
+    @staticmethod
+    def get_new_params(method='random'):
+        ensemble_choice = random.choices(
+            [
+                None, ['simple'], ['simple', 'horizontal-max'],
+                ['simple', "distance", "horizontal", "horizontal-max", "mosaic", 'mosaic-window', "subsample"],
+            ],
+            [0.3, 0.1, 0.2, 0.2]
+        )[0]
+        metric_weighting = {
+            'smape_weighting': random.choices([0, 1, 5, 10], [0.1, 0.2, 0.3, 0.1])[0],
+            'mae_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+            'rmse_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+            'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[0],
+            'mage_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+            'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+            'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+            'spl_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+            'containment_weighting': random.choices([0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0])[0],
+            'contour_weighting': random.choices([0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05])[0],
+            'runtime_weighting': random.choices([0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1])[0],
+        }
+        return {
+            'max_generations': random.choices([5, 10, 20, 50], [0.2, 0.5, 0.1, 0.4])[0],
+            'model_list': random.choices(
+                ['fast', 'superfast', 'default', 'fast_parallel', 'all', 'motifs'],
+                [0.2, 0.2, 0.2, 0.2, 0.05, 0.05],
+            )[0],
+            'transformer_list': random.choices(
+                ['all', 'fast', 'superfast'],
+                [0.2, 0.5, 0.3],
+            )[0],
+            'transformer_max_depth': random.choices(
+                [1, 2, 4, 6, 8, 10],
+                [0.1, 0.2, 0.3, 0.3, 0.2, 0.1],
+            )[0],
+            'num_validations': random.choice([0, 1, 2, 3, 4, 5]),
+            'validation_method': random.choice(['backwards', 'even', 'similarity', 'seasonal 364']),
+            'models_to_validate': random.choices([0.15, 0.10, 0.25, 0.35, 0.45], [0.3, 0.1, 0.3, 0.3, 0.1])[0],
+            'ensemble': ensemble_choice,
+            'initial_template': random.choices(['random', 'general+random'], [0.8, 0.2])[0],
+            'subset': random.choices([None, 10, 100], [0.8, 0.1, 0.1])[0],
+            'models_mode': random.choices(['random', 'regressor'], [0.9, 0.1])[0],
+            'drop_most_recent': random.choices([0, 1, 2], [0.6, 0.2, 0.2])[0],
+            'introduce_na': random.choice([None, True, False]),
+            'prefill_na': None,
+            'remove_leading_zeroes': False,
+            'constraint': random.choices(
+                [
+                    None,
+                    {
+                        "constraint_method": "stdev_min", "constraint_regularization": 0.7,
+                        "upper_constraint": 1, "lower_constraint": 1, "bounds": True
+                    },
+                    {
+                        "constraint_method": "stdev", "constraint_regularization": 1,
+                        "upper_constraint": 2, "lower_constraint": 2, "bounds": False
+                    },
+                    {
+                        "constraint_method": "quantile", "constraint_regularization": 0.9,
+                        "upper_constraint": 0.99, "lower_constraint": 0.01, "bounds": True
+                    },
+                    {
+                        "constraint_method": "quantile", "constraint_regularization": 0.4,
+                        "upper_constraint": 0.9, "lower_constraint": 0.1, "bounds": False
+                    },
+                ],
+                [0.9, 0.1, 0.1, 0.1, 0.1],
+            ),
+            'preclean': random.choices(
+                [
+                    None,
+                    {
+                        "fillna": "ffill",
+                        "transformations": {"0": "EWMAFilter"},
+                        "transformation_params": {
+                            "0": {"span": 3},
+                        },
+                    },
+                    {
+                        "fillna": "mean",
+                        "transformations": {"0": "EWMAFilter"},
+                        "transformation_params": {
+                            "0": {"span": 7},
+                        },
+                    },
+                    {
+                        "fillna": None,
+                        "transformations": {"0": "StandardScaler"},
+                        "transformation_params": {0: {}},
+                    },
+                    {
+                        "fillna": None,
+                        "transformations": {"0": "QuantileTransformer"},
+                        "transformation_params": {0: {}},
+                    },
+                    {
+                        "fillna": None,
+                        "transformations": {"0": "AnomalyRemoval"},
+                        "transformation_params": {0: {
+                            "method": "IQR", "transform_dict": {}, "method_params": {}, "fillna": 'ffill'}
+                        },
+                    },
+                ],
+                [0.9, 0.1, 0.05, 0.1, 0.1, 0.1]
+            ),
+            'metric_weighting': metric_weighting,
+        }
 
     def __repr__(self):
         """Print."""

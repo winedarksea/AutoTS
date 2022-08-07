@@ -26,6 +26,7 @@
 * new AnomalyRemoval transformer
 * added HolidayTransformer
 * added auto holidays to Prophet
+* added get_new_params method to AutoTS class
 
 * test cointegration with pinv!
 * test new models and transformers (Align, Anomaly, Holiday, Sine) with high dimensionality!
@@ -39,7 +40,7 @@
 
 ## New Transformer Checklist:
 	* Make sure that if it modifies the size (more/fewer columns or rows) it returns pd.DataFrame with proper index/columns
-	* add to "all" transformer_dict
+	* add to transformer_dict
 	* add to trans_dict or have_params or external
 	* add to shared_trans if so
 	* oddities_list for those with forecast/original transform difference
@@ -54,3 +55,4 @@
 	* Add to generate_score_per_series (if per_series metrics will be used)
 	* Add to validation_aggregation
 	* Update test_metrics results
+	* metric_weighting in AutoTS, get_new_params, prod example, test
