@@ -437,20 +437,20 @@ available_methods = [
     "rolling_zscore",
     "mad",
     "minmax",
-    "prediction_interval",
+    "prediction_interval",  # ridiculously slow
     "IQR",
     "nonparametric",
 ]
 
 
-def anomaly_new_params(method='random'):
+def anomaly_new_params(method='fast'):
     if method == "fast":
         method_choice = random.choices(
             [
                 "LOF", "EE", "zscore", "rolling_zscore", "mad",
                 "minmax", "IQR", "nonparametric", "IsolationForest"
-            ],  # Isolation Forest is good but slow (parallelized also)
-            [0.05, 0.1, 0.25, 0.25, 0.1, 0.1, 0.2, 0.1, 0.01]
+            ],  # Isolation Forest is good but slower (parallelized also)
+            [0.05, 0.1, 0.25, 0.25, 0.1, 0.1, 0.2, 0.1, 0.05]
         )[0]
     else:
         method_choice = random.choices(
