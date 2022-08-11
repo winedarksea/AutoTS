@@ -443,8 +443,21 @@ available_methods = [
 ]
 
 
-def anomaly_new_params(method='fast'):
-    if method == "fast":
+def anomaly_new_params(method='random'):
+    if method == "deep":
+        method_choice = random.choices(
+            available_methods,
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1, 0.15],
+        )[0]
+    elif method == "fast":
+        method_choice = random.choices(
+            [
+                "zscore", "rolling_zscore", "mad",
+                "minmax", "IQR", "nonparametric",
+            ],
+            [0.25, 0.25, 0.1, 0.1, 0.2, 0.1]
+        )[0]
+    else:
         method_choice = random.choices(
             [
                 "LOF", "EE", "zscore", "rolling_zscore", "mad",
@@ -452,11 +465,7 @@ def anomaly_new_params(method='fast'):
             ],  # Isolation Forest is good but slower (parallelized also)
             [0.05, 0.1, 0.25, 0.25, 0.1, 0.1, 0.2, 0.1, 0.05]
         )[0]
-    else:
-        method_choice = random.choices(
-            available_methods,
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1, 0.15],
-        )[0]
+
     if method_choice == "IsolationForest":
         method_params = {
             'contamination': random.choices(['auto', 0.1, 0.05], [0.8, 0.1, 0.1])[0],

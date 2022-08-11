@@ -2605,7 +2605,7 @@ class AnomalyRemoval(EmptyTransformer):
         return self.transform(df)
 
     @staticmethod
-    def get_new_params(method="fast"):
+    def get_new_params(method="random"):
         method_choice, method_params, transform_dict = anomaly_new_params(method=method)
         if transform_dict == "random":
             transform_dict = RandomTransform(
@@ -2744,8 +2744,8 @@ class HolidayTransformer(EmptyTransformer):
         return df
 
     @staticmethod
-    def get_new_params(method="fast"):
-        holiday_params = holiday_new_params(method='fast')
+    def get_new_params(method="random"):
+        holiday_params = holiday_new_params(method=method)
         holiday_params['anomaly_detector_params'] = AnomalyRemoval.get_new_params(method="fast")
         holiday_params['remove_excess_anomalies'] = random.choices([True, False], [0.9, 0.1])[0]
         holiday_params['impact'] = random.choices(

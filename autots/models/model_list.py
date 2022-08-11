@@ -49,8 +49,7 @@ default = {
     'GLM': 1,
     'ETS': 1,
     'FBProphet': 0.5,
-    # 'RollingRegression': 1,  # maybe not?
-    'GluonTS': 0.5,  # downweight if that becomes an option
+    'GluonTS': 0.5,
     'UnobservedComponents': 1,
     'VAR': 1,
     'VECM': 1,
@@ -64,7 +63,7 @@ default = {
     'NVAR': 1,
     'Theta': 1,
     'ARDL': 1,
-    # 'DynamicFactorMQ': 1,
+    'ARCH': 1,
 }
 best = [
     'LastValueNaive',
@@ -91,6 +90,7 @@ best = [
     'SectionalMotif',
     'Theta',
     'ARDL',
+    'ARCH',
 ]
 # fastest models at any scale
 superfast = [

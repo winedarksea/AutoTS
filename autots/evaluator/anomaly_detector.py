@@ -288,6 +288,6 @@ class HolidayDetector(object):
 
     @staticmethod
     def get_new_params(method="random"):
-        holiday_params = holiday_new_params()
+        holiday_params = holiday_new_params(method=method)
         holiday_params['anomaly_detector_params'] = AnomalyDetector.get_new_params(method=method)
         return holiday_params

@@ -307,7 +307,7 @@ class FBProphet(ModelObject):
         """Return dict of new parameters for parameter tuning."""
         holiday_choice = random.choices([True, False, 'auto'], [0.3, 0.4, 0.3])[0]
         if holiday_choice == 'auto':
-            holiday_choice = HolidayDetector.get_new_params(method="fast")
+            holiday_choice = HolidayDetector.get_new_params(method=method)
         if "regressor" in method:
             regression_choice = "User"
         else:
