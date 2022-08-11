@@ -448,9 +448,9 @@ def anomaly_new_params(method='random'):
         method_choice = random.choices(
             [
                 "LOF", "EE", "zscore", "rolling_zscore", "mad",
-                "minmax", "IQR", "nonparametric",
-            ],
-            [0.1, 0.1, 0.25, 0.25, 0.1, 0.1, 0.2, 0.1]
+                "minmax", "IQR", "nonparametric", "IsolationForest"
+            ],  # Isolation Forest is good but slow (parallelized also)
+            [0.05, 0.1, 0.25, 0.25, 0.1, 0.1, 0.2, 0.1, 0.01]
         )[0]
     else:
         method_choice = random.choices(
@@ -460,7 +460,7 @@ def anomaly_new_params(method='random'):
     if method_choice == "IsolationForest":
         method_params = {
             'contamination': random.choices(['auto', 0.1, 0.05], [0.8, 0.1, 0.1])[0],
-            'n_estimators': random.choices([50, 100, 200], [0.3, 0.4, 0.3])[0],
+            'n_estimators': random.choices([20, 50, 100, 200], [0.3, 0.4, 0.2, 0.01])[0],
             'max_features': random.choices([1.0, 0.5], [0.9, 0.1])[0],
             'bootstrap': random.choices([False, True], [0.9, 0.1])[0],
         }
@@ -606,7 +606,7 @@ def anomaly_df_to_holidays(
         # anomalies = stacked.index[(stacked == -1)].get_level_values('date').unique()
     stacked.name = "count"
     # all anomaly values MUST be == -1
-    stacked = stacked.where(stacked == -1, 0).abs()
+    stacked = stacked.where(stacked == -1, 0).abs().rename_axis(index=['date', 'series'])
     agg_dict = {"count": 'sum', "occurrence_rate": 'mean'}
     if actuals is not None:
         stacked = stacked.to_frame().merge(actuals.stack().rename("avg_value").rename_axis(index=['date', 'series']), left_index=True, right_index=True)

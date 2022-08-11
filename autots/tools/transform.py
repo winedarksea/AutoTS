@@ -2635,6 +2635,7 @@ class HolidayTransformer(EmptyTransformer):
         remove_excess_anomalies=True,
         impact=None,
         regression_params={},
+        n_jobs: int = 1,
     ):
         """Detect anomalies, then mark as holidays (events, festivals, etc) any that reoccur to a calendar.
 
@@ -2656,11 +2657,12 @@ class HolidayTransformer(EmptyTransformer):
         self.use_lunar_weekday = use_lunar_weekday
         self.use_islamic_holidays = use_islamic_holidays
         self.use_hebrew_holidays = use_hebrew_holidays
-        self.anomaly_model = AnomalyRemoval(output='multivariate', **self.anomaly_detector_params)
+        self.anomaly_model = AnomalyRemoval(output='multivariate', **self.anomaly_detector_params, n_jobs=n_jobs)
         self.remove_excess_anomalies = remove_excess_anomalies
         self.fillna = anomaly_detector_params.get("fillna", None)
         self.impact = impact
         self.regression_params = regression_params
+        self.n_jobs = n_jobs
         self.holiday_count = 0
 
     def dates_to_holidays(self, dates, style="flag", holiday_impacts=False):
@@ -2797,6 +2799,7 @@ n_jobs_trans = {
     "SinTrend": SinTrend(),
     "SineTrend": SinTrend(),
     "AnomalyRemoval": AnomalyRemoval,
+    'HolidayTransformer': HolidayTransformer,
 }
 # transformers with parameter pass through (internal only)
 have_params = {
@@ -3292,7 +3295,7 @@ transformer_dict = {
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
-del fast_transformer_dict["SinTrend"]
+# del fast_transformer_dict["SinTrend"]
 del fast_transformer_dict["FastICA"]
 del fast_transformer_dict["ScipyFilter"]
 del fast_transformer_dict["Cointegration"]
@@ -3371,14 +3374,14 @@ def RandomTransform(
 ):
     """Return a dict of randomly choosen transformation selections.
 
-    SinTrend is used as a signal that slow parameters are allowed.
+    BTCD is used as a signal that slow parameters are allowed.
     """
     transformer_list, transformer_prob = transformer_list_to_dict(transformer_list)
 
     # adjust fast/slow based on Transformers allowed
     if fast_params is None:
         fast_params = True
-        slow_flags = ["SinTrend"]
+        slow_flags = ["BTCD"]
         intersects = [i for i in slow_flags if i in transformer_list]
         if intersects:
             fast_params = False
@@ -3515,7 +3518,7 @@ def random_cleaners():
                 },
             },
         ],
-        [0.8, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.1],
+        [0.8, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05],
     )[0]
     if transform_dict == "random":
         transform_dict = RandomTransform(

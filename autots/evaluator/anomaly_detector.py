@@ -175,6 +175,7 @@ class HolidayDetector(object):
         use_wkdom_holidays=True, use_wkdeom_holidays=True,
         use_lunar_holidays=True, use_lunar_weekday=False,
         use_islamic_holidays=True, use_hebrew_holidays=True,
+        n_jobs: int = 1,
     ):
         """Detect anomalies, then mark as holidays (events, festivals, etc) any that reoccur to a calendar.
 
@@ -206,7 +207,8 @@ class HolidayDetector(object):
         self.use_lunar_weekday = use_lunar_weekday
         self.use_islamic_holidays = use_islamic_holidays
         self.use_hebrew_holidays = use_hebrew_holidays
-        self.anomaly_model = AnomalyDetector(output='multivariate', **self.anomaly_detector_params)
+        self.n_jobs = n_jobs
+        self.anomaly_model = AnomalyDetector(output='multivariate', **self.anomaly_detector_params, n_jobs=n_jobs)
 
     def detect(self, df):
         """Run holiday detection. Input wide-style pandas time series."""
