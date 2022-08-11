@@ -35,6 +35,8 @@ class AnomalyDetector(object):
         n_jobs=1,
     ):
         """Detect anomalies on a historic dataset.
+        Note anomaly score patterns vary by method.
+        Anomaly flag is standard -1 = anomaly; 1 = regular
 
         Args:
             output (str): 'multivariate' (each series unique outliers), or 'univariate' (all series together for one outlier flag per timestamp)
@@ -47,6 +49,12 @@ class AnomalyDetector(object):
 
         Methods:
             detect()
+            plot()
+            get_new_params()
+
+        Attributes:
+            anomalies
+            scores
         """
         self.output = output
         self.method = method
@@ -170,11 +178,22 @@ class HolidayDetector(object):
     ):
         """Detect anomalies, then mark as holidays (events, festivals, etc) any that reoccur to a calendar.
 
+        Be aware of timezone, especially combining series from multiple time zones. Dates then may not accurately align.
+        Can pick up a holiday on the wrong calendar especially for extended holidays (Christmas) and with short (several years is short here) history.
+        Holidays on unusual days or weekdays of month (5th Monday of April) may occur
+        No multiyear patterns (election year) are detected - would need lots of history
+
         Args:
             anomaly_detector_params (dict): anomaly detection params passed to detector class
             threshold (float): percent of date occurrences that must be anomalous (0 - 1)
             splash_threshold (float): None, or % required, avg of nearest 2 neighbors to point
             use* (bool): whether to use these calendars for holiday detection
+
+        Methods:
+            detect()
+            dates_to_holidays()
+            plot()
+            get_new_params()
         """
         self.anomaly_detector_params = anomaly_detector_params
         self.threshold = threshold
@@ -237,6 +256,19 @@ class HolidayDetector(object):
             ax.scatter(i_anom.tolist(), self.df.loc[i_anom, :][series_name], c="green")
 
     def dates_to_holidays(self, dates, style="flag", holiday_impacts=False):
+        """Populate date information for a given pd.DatetimeIndex.
+
+        Args:
+            dates (pd.DatetimeIndex): list of dates
+            day_holidays (pd.DataFrame): list of month/day holidays. Pass None if not available
+            style (str): option for how to return information
+                "long" - return date, name, series for all holidays in a long style dataframe
+                "impact" - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
+                'flag' - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
+                'prophet' - return format required for prophet. Will need to be filtered on `series` for multivariate case
+                'series_flag' - dates, series 0/1 for if holiday occurred in any calendar
+            holiday_impacts (dict): a dict passed to .replace contaning values for holiday_names, or str 'value' or 'anomaly_score'
+        """
         return dates_to_holidays(
             dates, self.df_cols,
             style=style, holiday_impacts=holiday_impacts,

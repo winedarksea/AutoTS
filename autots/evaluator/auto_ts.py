@@ -523,7 +523,7 @@ class AutoTS(object):
                         "fillna": None,
                         "transformations": {"0": "AnomalyRemoval"},
                         "transformation_params": {0: {
-                            "method": "IQR", "transform_dict": {}, "method_params": {}, "fillna": 'ffill'}
+                            "method": "IQR", "transform_dict": {}, "method_params": {"iqr_threshold": 2.0, "iqr_quantiles": [0.4, 0.6]}, "fillna": 'ffill'}
                         },
                     },
                 ],

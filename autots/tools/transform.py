@@ -262,14 +262,16 @@ class Detrend(EmptyTransformer):
 
             self.trained_model = GLS(Y, X, missing="drop").fit()
         else:
-            self.trained_model = self._retrieve_detrend(detrend=self.model)
-            if self.model in self.need_positive:
-                self.trnd_trans = PositiveShift(
-                    log=False, center_one=True, squared=False
-                )
-                Y = pd.DataFrame(self.trnd_trans.fit_transform(df)).to_numpy()
-            X = X.reshape((-1, 1))
-            self.trained_model.fit(X, Y)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                self.trained_model = self._retrieve_detrend(detrend=self.model)
+                if self.model in self.need_positive:
+                    self.trnd_trans = PositiveShift(
+                        log=False, center_one=True, squared=False
+                    )
+                    Y = pd.DataFrame(self.trnd_trans.fit_transform(df)).to_numpy()
+                X = X.reshape((-1, 1))
+                self.trained_model.fit(X, Y)
         self.shape = df.shape
         return self
 

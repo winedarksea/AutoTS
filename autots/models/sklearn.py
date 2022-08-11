@@ -476,7 +476,7 @@ sklearn_model_dict = {
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
     'Ridge': 0.02,
-    'GaussianProcessRegressor': 0.02,
+    # 'GaussianProcessRegressor': 0.02,  # slow
 }
 multivariate_model_dict = {
     'RandomForest': 0.02,

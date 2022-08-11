@@ -768,7 +768,7 @@ def dates_to_holidays(
             'flag' - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
             'prophet' - return format required for prophet. Will need to be filtered on `series` for multivariate case
             'series_flag' - dates, series 0/1 for if holiday occurred in any calendar
-        holiday_impacts (dict): a dict passed to .replace contaning values for holiday_names
+        holiday_impacts (dict): a dict passed to .replace contaning values for holiday_names, or str 'value' or 'anomaly_score'
     """
     # need index in column for merge
     dates_df = create_dates_df(dates).reset_index(drop=False)
