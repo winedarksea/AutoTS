@@ -34,29 +34,6 @@ try:
 except Exception:
     pass
 
-# need to remove actual outliers first, or maybe scale data
-
-# Anomaly Methods
-# sklearn methods (isolation forest, LOF, EE)
-# AutoTS Backforecast with Naive (anomaly above prediction interval)
-# AutoTS Backforecast with Naive (anomaly by threshold detection on error)
-# https://github.com/datamllab/tods/blob/d0a5f9d87f6b3cf57b849d8fb8481905b5930bd4/tods/detection_algorithm/core/utils/errors.py#L334
-# _calc_anomaly_scores from https://facebookresearch.github.io/Kats/api/_modules/kats/detectors/outlier.html#MultivariateAnomalyDetector
-# Kats Outlier Detections models
-# abnormal diff
-
-# update back_forecast to do forecast_length 1 except for reverse on start
-# allow eval_period if detection only on a fraction of history
-
-# Univariate models (one in, one out)
-# Multivariate in but Univariate Return
-# Multvariate in with Multivariate Out
-# df of anomaly scores, pandas Series for univariate
-# df of anomaly class, pandas Series for univariate
-# for univariate case, flatten after taking log or normalizing
-# remove in advance values with extremely high score
-# runtime, number of holidays, prediction forecast gain
-
 
 def sk_outliers(df, method, method_params={}):
     """scikit-learn outlier methods wrapper."""
@@ -455,7 +432,7 @@ def anomaly_new_params(method='random'):
                 "zscore", "rolling_zscore", "mad",
                 "minmax", "IQR", "nonparametric",
             ],
-            [0.25, 0.25, 0.1, 0.1, 0.2, 0.1]
+            [0.4, 0.3, 0.1, 0.1, 0.4, 0.05]
         )[0]
     else:
         method_choice = random.choices(
@@ -554,8 +531,20 @@ def anomaly_new_params(method='random'):
                     0: {
                         "datepart_method": "simple_3",
                         "regression_model": {
+                            "model": "FastRidge",
+                            "model_params": {},
+                        },
+                    }
+                },
+            },
+            {
+                "transformations": {0: "DatepartRegression"},
+                "transformation_params": {
+                    0: {
+                        "datepart_method": "simple_3",
+                        "regression_model": {
                             "model": "DecisionTree",
-                            "model_params": {"max_depth": None, "min_samples_split": 0.05},
+                            "model_params": {"max_depth": None, "min_samples_split": 0.1},
                         },
                     }
                 },
@@ -578,7 +567,7 @@ def anomaly_new_params(method='random'):
                     "0": {"method": "clip", "std_threshold": 6},
                 },
             },
-        ], [0.5, 0.2, 0.3, 0.1, 0.1, 0.1, 0.1],
+        ], [0.5, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
     )[0]
     return method_choice, method_params, transform_dict
 

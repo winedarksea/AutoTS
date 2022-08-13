@@ -181,7 +181,7 @@ class AutoTS(object):
         prefill_na: str = None,
         introduce_na: bool = None,
         preclean: dict = None,
-        model_interrupt: bool = False,
+        model_interrupt: bool = True,
         current_model_file: str = None,
         verbose: int = 1,
         n_jobs: int = -2,
