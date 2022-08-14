@@ -18,8 +18,6 @@ all_models = [
     'MotifSimulation',
     'WindowRegression',
     'VAR',
-    'TFPRegression',
-    'ComponentAnalysis',
     'DatepartRegression',
     "UnivariateRegression",
     "Greykite",
@@ -64,6 +62,7 @@ default = {
     'Theta': 1,
     'ARDL': 1,
     'ARCH': 1,
+    # RRVAR, MAR, TMF, LATC
 }
 best = [
     'LastValueNaive',
@@ -118,6 +117,8 @@ fast = {
     'MultivariateMotif': 0.8,
     'SectionalMotif': 1,
     'NVAR': 1,
+    'MAR': 1,
+    'RRVAR': 1,
 }
 # models that can scale well if many CPU cores are available
 parallel = {
