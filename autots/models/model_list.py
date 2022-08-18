@@ -75,7 +75,6 @@ best = [
     'GluonTS',
     'SeasonalNaive',
     'UnobservedComponents',
-    # 'VARMAX',
     'VECM',
     # 'MotifSimulation',
     # 'UnivariateRegression',
@@ -108,7 +107,6 @@ fast = {
     'SeasonalNaive': 1,
     'GLM': 1,
     'ETS': 1,
-    # 'UnobservedComponents': 1,  # it's fast enough but I'll leave for parallel
     'VAR': 0.8,
     'VECM': 1,
     'WindowRegression': 0.5,  # this gets slow with Transformer, KerasRNN

@@ -418,6 +418,10 @@ available_methods = [
     "IQR",
     "nonparametric",
 ]
+fast_methods = [
+    "zscore", "rolling_zscore", "mad",
+    "minmax", "IQR", "nonparametric",
+]
 
 
 def anomaly_new_params(method='random'):
@@ -428,10 +432,7 @@ def anomaly_new_params(method='random'):
         )[0]
     elif method == "fast":
         method_choice = random.choices(
-            [
-                "zscore", "rolling_zscore", "mad",
-                "minmax", "IQR", "nonparametric",
-            ],
+            fast_methods,
             [0.4, 0.3, 0.1, 0.1, 0.4, 0.05]
         )[0]
     else:

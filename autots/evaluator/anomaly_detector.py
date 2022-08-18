@@ -156,6 +156,7 @@ class AnomalyDetector(object):
                 model_list=['LastValueNaive', 'GLS', 'RRVAR'],
                 model_prob=[0.8, 0.1, 0.1],
                 transformer_max_depth=5,
+                transformer_list="superfast",
                 keyword_format=True,
             )
         return {
