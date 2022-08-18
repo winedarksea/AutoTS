@@ -245,8 +245,8 @@ def load_live_daily(
         observation_end (str):  %Y-%m-%d most recent day to retrieve
         fred_key (str): https://fred.stlouisfed.org/docs/api/api_key.html
         fred_series (list): list of FRED series IDs. This requires fredapi package
-        tickers (list): list of stock tickers, requires yfinance
-        trends_list (list): list of search keywords, requires pytrends. None to skip.
+        tickers (list): list of stock tickers, requires yfinance pypi package
+        trends_list (list): list of search keywords, requires pytrends pypi package. None to skip.
         weather_data_types (list): from NCEI NOAA api data types, GHCN Daily Weather Elements
             PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG
         weather_stations (list): from NCEI NOAA api station ids. Pass empty list to skip.

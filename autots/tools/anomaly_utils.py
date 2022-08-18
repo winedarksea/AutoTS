@@ -283,10 +283,13 @@ def nonparametric_multivariate(df, output, method_params, n_jobs=1):
             )
         else:
             # this particular take of univariate is a bit awkward
-            cnts = np.unique(
-                np.tile(np.arange(df.shape[0]), df.shape[1])[mod.i_anom],
-                return_counts=True,
-            )
+            if mod.i_anom is not None:
+                cnts = np.unique(
+                    np.tile(np.arange(df.shape[0]), df.shape[1])[mod.i_anom],
+                    return_counts=True,
+                )
+            else:
+                cnts = [[], []]
             scores = (
                 1
                 - pd.Series(

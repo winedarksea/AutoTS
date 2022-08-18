@@ -172,7 +172,7 @@ class Benchmark(object):
                             "bootstrap": True,
                         },
                     },
-                    "datepart_method": "expanded",
+                    "datepart_method": "simple_binarized",
                     "regression_type": None,
                 },
                 model_transform_dict={

@@ -1924,7 +1924,8 @@ class DatepartRegression(ModelObject):
             )
             return prediction
 
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         model_choice = generate_regressor_params(model_dict=datepart_model_dict)
         datepart_choice = random.choices(
@@ -2268,7 +2269,8 @@ class UnivariateRegression(ModelObject):
             )
             return prediction
 
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         if method == "deep":
             x_transform_choice = random.choices(
@@ -2719,7 +2721,8 @@ class MultivariateRegression(ModelObject):
             )
             return prediction
 
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         if method == "deep":
             model_choice = generate_regressor_params(
