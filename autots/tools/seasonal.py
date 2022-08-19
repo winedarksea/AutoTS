@@ -105,7 +105,7 @@ def date_part(
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'epoch': pd.to_numeric(
                     DTindex, errors='coerce', downcast='integer'
-                ).values,
+                ).values / 100000000000,
             }
         )
     elif method in ["simple_3", "lunar_phase"]:
@@ -116,9 +116,7 @@ def date_part(
                 'weekday': pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True),
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'quarter': DTindex.quarter,
-                'epoch': pd.to_numeric(
-                    DTindex, errors='coerce', downcast='integer'
-                ).values,
+                'epoch': DTindex.to_julian_date(),
             }
         )
         date_part_df['weekday'] = date_part_df['month'].astype(
@@ -147,9 +145,7 @@ def date_part(
                 'weekdayofmonth': (DTindex.day - 1) // 7 + 1,
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'quarter': DTindex.quarter,
-                'epoch': pd.to_numeric(
-                    DTindex, errors='coerce', downcast='integer'
-                ).values,
+                'epoch': DTindex.to_julian_date(),
             }
         )
         date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday', 'day', 'weekdayofmonth'])
@@ -188,7 +184,7 @@ def date_part(
                     'daysinmonth': DTindex.daysinmonth,
                     'epoch': pd.to_numeric(
                         DTindex, errors='coerce', downcast='integer'
-                    ).values,
+                    ).values - 946684800000000000,
                     'us_election_year': (DTindex.year % 4 == 0).astype(int),
                 }
             )

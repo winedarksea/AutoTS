@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 
-def holiday_flag(DTindex, country: str = 'US', encode_holiday_type: bool = False):
+def holiday_flag(DTindex, country: str = 'US', encode_holiday_type: bool = False, holidays_subdiv=None):
     """Create a 0/1 flag for given datetime index.
 
     Args:
@@ -18,7 +18,7 @@ def holiday_flag(DTindex, country: str = 'US', encode_holiday_type: bool = False
     if country in ['US', "USA", "UNITED STATES"]:
         try:
             holi_days = query_holidays(
-                DTindex, country="US", encode_holiday_type=encode_holiday_type
+                DTindex, country="US", encode_holiday_type=encode_holiday_type, holidays_subdiv=holidays_subdiv
             )
         except Exception:
             from pandas.tseries.holiday import USFederalHolidayCalendar
@@ -34,13 +34,13 @@ def holiday_flag(DTindex, country: str = 'US', encode_holiday_type: bool = False
             holi_days.rename("HolidayFlag", inplace=True)
     else:
         holi_days = query_holidays(
-            DTindex, country=country, encode_holiday_type=encode_holiday_type
+            DTindex, country=country, encode_holiday_type=encode_holiday_type, holidays_subdiv=holidays_subdiv
         )
 
     return holi_days
 
 
-def query_holidays(DTindex, country: str, encode_holiday_type: bool = False):
+def query_holidays(DTindex, country: str, encode_holiday_type: bool = False, holidays_subdiv=None):
     """Query holidays package for dates.
 
     Args:
@@ -51,7 +51,7 @@ def query_holidays(DTindex, country: str, encode_holiday_type: bool = False):
     import holidays
 
     years = list(range(DTindex[0].year, DTindex[-1].year + 1))
-    country_holidays_base = holidays.CountryHoliday(country, years=years)
+    country_holidays_base = holidays.CountryHoliday(country, years=years, subdiv=holidays_subdiv)
     if encode_holiday_type:
         from sklearn.preprocessing import OrdinalEncoder
 
