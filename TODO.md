@@ -27,10 +27,8 @@
 * added HolidayTransformer
 * added auto holidays to Prophet
 * added get_new_params method to AutoTS class
+* more holidays options to create_regressor
 
-* test cointegration with pinv!
-* test new models and transformers (Align, Anomaly, Holiday, Sine) with high dimensionality!
-* test new Prophet
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

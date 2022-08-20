@@ -13,7 +13,7 @@ def create_regressor(
     forecast_length,
     frequency: str = "infer",
     holiday_countries: list = ["US"],
-    datepart_method: str = "recurring",
+    datepart_method: str = "simple_binarized",
     drop_most_recent: int = 0,
     scale: bool = True,
     summarize: str = "auto",
@@ -22,7 +22,7 @@ def create_regressor(
     fill_na: str = 'ffill',
     aggfunc: str = "first",
     holidays_subdiv=None,
-    holiday_detector_params=None,
+    holiday_detector_params={"threshold": 0.8, "splash_threshold": None, "use_dayofmonth_holidays": True, "use_wkdom_holidays": True, "use_wkdeom_holidays": False, "use_lunar_holidays": True, "use_lunar_weekday": False, "use_islamic_holidays": False, "use_hebrew_holidays": False, "anomaly_detector_params": {"method": "rolling_zscore", "transform_dict": {"fillna": None, "transformations": {"0": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 6}}}, "forecast_params": None, "method_params": {"distribution": "norm", "alpha": 0.1, "rolling_periods": 300, "center": True}}},
     holiday_regr_style="flag",
 ):
     """Create a regressor from information available in the existing dataset.
@@ -36,7 +36,7 @@ def create_regressor(
 
     Args:
         df (pd.DataFrame): WIDE style dataframe (use long_to_wide if the data isn't already)
-            categorical features will be discard for this, if present
+            categorical series will be discard for this, if present
         forecast_length (int): time ahead that will be forecast
         frequency (str): those annoying offset codes you have to always use for time series
         holiday_countries (list): list of countries to pull holidays for. Reqs holidays pkg
@@ -51,7 +51,7 @@ def create_regressor(
         fill_na (str): method to prefill NAs in data, same methods as available elsewhere
         aggfunc (str): str or func, used if frequency is resampled
         holidays_subdiv (str): passed to `holidays` subdiv arg (state, etc)
-        holiday_detector_params (dict): passed to Holiday Detector
+        holiday_detector_params (dict): passed to HolidayDetector, or None
         holiday_regr_style (str): passed to detector's dates_to_holidays 'flag', 'series_flag', 'impact'
 
     Returns:
@@ -90,7 +90,7 @@ def create_regressor(
         fill_na=fill_na,
     )
     # datepart
-    if datepart_method in ['simple', 'expanded', 'recurring', "simple_2"]:
+    if datepart_method is not None:
         regr_train = pd.concat(
             [regr_train, date_part(regr_train.index, method=datepart_method)],
             axis=1,
@@ -136,12 +136,15 @@ def create_regressor(
     if holiday_detector_params is not None:
         mod = HolidayDetector(**holiday_detector_params)
         mod.detect(df)
+        train_holidays = mod.dates_to_holidays(regr_train.index, style=holiday_regr_style)
+        fcst_holidays = mod.dates_to_holidays(regr_fcst.index, style=holiday_regr_style)
+        all_cols = train_holidays.columns.union(fcst_holidays.columns)
         regr_train = pd.concat(
-            [regr_train, mod.dates_to_holidays(regr_train.index, style=holiday_regr_style)],
+            [regr_train, train_holidays.reindex(columns=all_cols).fillna(0)],
             axis=1,
         )
         regr_fcst = pd.concat(
-            [regr_fcst, mod.dates_to_holidays(regr_fcst.index, style=holiday_regr_style)],
+            [regr_fcst, fcst_holidays.reindex(columns=all_cols).fillna(0)],
             axis=1,
         )
 

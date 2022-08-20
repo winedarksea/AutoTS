@@ -444,10 +444,14 @@ class GluonTS(ModelObject):
             all_forecast = pd.DataFrame()
             for result in gluon_results:
                 current_id = self.train_index[i]
+                if isinstance(result.start_date, pd.Period):
+                    start_date = test_index[0]
+                else:
+                    start_date = result.start_date
                 rowForecast = pd.DataFrame(
                     {
                         "ForecastDate": pd.date_range(
-                            start=result.start_date,
+                            start=start_date,
                             periods=self.ts_metadata['forecast_length'],
                             freq=self.frequency,
                         ),
