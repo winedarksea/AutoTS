@@ -21,7 +21,6 @@ def create_regressor(
     n_jobs: str = "auto",
     fill_na: str = 'ffill',
     aggfunc: str = "first",
-    holidays_subdiv=None,
     holiday_detector_params={"threshold": 0.8, "splash_threshold": None, "use_dayofmonth_holidays": True, "use_wkdom_holidays": True, "use_wkdeom_holidays": False, "use_lunar_holidays": True, "use_lunar_weekday": False, "use_islamic_holidays": False, "use_hebrew_holidays": False, "anomaly_detector_params": {"method": "rolling_zscore", "transform_dict": {"fillna": None, "transformations": {"0": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 6}}}, "forecast_params": None, "method_params": {"distribution": "norm", "alpha": 0.1, "rolling_periods": 300, "center": True}}},
     holiday_regr_style="flag",
 ):
@@ -40,6 +39,7 @@ def create_regressor(
         forecast_length (int): time ahead that will be forecast
         frequency (str): those annoying offset codes you have to always use for time series
         holiday_countries (list): list of countries to pull holidays for. Reqs holidays pkg
+            also can be a dict of {'country': "subdiv"} to include subdivision (state)
         datepart_method (str): see date_part from seasonal
         scale (bool): if True, use the StandardScaler to standardize the features
         summarize (str): options to summarize the features, if large:
@@ -50,7 +50,6 @@ def create_regressor(
             "DatepartRegression" - backfill with DatepartRegression
         fill_na (str): method to prefill NAs in data, same methods as available elsewhere
         aggfunc (str): str or func, used if frequency is resampled
-        holidays_subdiv (str): passed to `holidays` subdiv arg (state, etc)
         holiday_detector_params (dict): passed to HolidayDetector, or None
         holiday_regr_style (str): passed to detector's dates_to_holidays 'flag', 'series_flag', 'impact'
 
@@ -103,8 +102,10 @@ def create_regressor(
     if holiday_countries is not None:
         if isinstance(holiday_countries, str):
             holiday_countries = holiday_countries.split(",")
+        if isinstance(holiday_countries, list):
+            holiday_countries = {x: None for x in holiday_countries}
 
-        for holiday_country in holiday_countries:
+        for holiday_country, holidays_subdiv in holiday_countries.items():
             if holiday_country == "RU":
                 holiday_country = "UA"
             elif holiday_country == 'CN':
