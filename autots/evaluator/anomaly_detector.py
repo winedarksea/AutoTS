@@ -176,6 +176,7 @@ class HolidayDetector(object):
         use_wkdom_holidays=True, use_wkdeom_holidays=True,
         use_lunar_holidays=True, use_lunar_weekday=False,
         use_islamic_holidays=True, use_hebrew_holidays=True,
+        output: str = "multivariate",
         n_jobs: int = 1,
     ):
         """Detect anomalies, then mark as holidays (events, festivals, etc) any that reoccur to a calendar.
@@ -190,6 +191,7 @@ class HolidayDetector(object):
             threshold (float): percent of date occurrences that must be anomalous (0 - 1)
             splash_threshold (float): None, or % required, avg of nearest 2 neighbors to point
             use* (bool): whether to use these calendars for holiday detection
+            output (str): "multivariate" or "univariate", for univariate not all dates_to_holidays styles will work
 
         Methods:
             detect()
@@ -209,7 +211,8 @@ class HolidayDetector(object):
         self.use_islamic_holidays = use_islamic_holidays
         self.use_hebrew_holidays = use_hebrew_holidays
         self.n_jobs = n_jobs
-        self.anomaly_model = AnomalyDetector(output='multivariate', **self.anomaly_detector_params, n_jobs=n_jobs)
+        self.output = output
+        self.anomaly_model = AnomalyDetector(output=output, **self.anomaly_detector_params, n_jobs=n_jobs)
 
     def detect(self, df):
         """Run holiday detection. Input wide-style pandas time series."""
@@ -219,7 +222,8 @@ class HolidayDetector(object):
         self.day_holidays, self.wkdom_holidays, self.wkdeom_holidays, self.lunar_holidays, self.lunar_weekday, self.islamic_holidays, self.hebrew_holidays = anomaly_df_to_holidays(
             self.anomaly_model.anomalies, splash_threshold=self.splash_threshold,
             threshold=self.threshold,
-            actuals=df, anomaly_scores=self.anomaly_model.scores,
+            actuals=df if self.output != "univariate" else None,
+            anomaly_scores=self.anomaly_model.scores if self.output != "univariate" else None,
             use_dayofmonth_holidays=self.use_dayofmonth_holidays,
             use_wkdom_holidays=self.use_wkdom_holidays,
             use_wkdeom_holidays=self.use_wkdeom_holidays,

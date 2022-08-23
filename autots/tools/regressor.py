@@ -21,7 +21,21 @@ def create_regressor(
     n_jobs: str = "auto",
     fill_na: str = 'ffill',
     aggfunc: str = "first",
-    holiday_detector_params={"threshold": 0.8, "splash_threshold": None, "use_dayofmonth_holidays": True, "use_wkdom_holidays": True, "use_wkdeom_holidays": False, "use_lunar_holidays": True, "use_lunar_weekday": False, "use_islamic_holidays": False, "use_hebrew_holidays": False, "anomaly_detector_params": {"method": "rolling_zscore", "transform_dict": {"fillna": None, "transformations": {"0": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 6}}}, "forecast_params": None, "method_params": {"distribution": "norm", "alpha": 0.1, "rolling_periods": 300, "center": True}}},
+    holiday_detector_params={
+        "threshold": 0.8, "splash_threshold": None,
+        "use_dayofmonth_holidays": True, "use_wkdom_holidays": True,
+        "use_wkdeom_holidays": False, "use_lunar_holidays": True,
+        "use_lunar_weekday": False, "use_islamic_holidays": False,
+        "use_hebrew_holidays": False,
+        "output": 'univariate',
+        "anomaly_detector_params": {
+            "method": "rolling_zscore",
+            "transform_dict": {
+                "fillna": None,
+                "transformations": {"0": "ClipOutliers"},
+                "transformation_params": {"0": {"method": "clip", "std_threshold": 6}}}, "forecast_params": None, "method_params": {"distribution": "norm", "alpha": 0.1, "rolling_periods": 300, "center": True}
+        }
+    },
     holiday_regr_style="flag",
 ):
     """Create a regressor from information available in the existing dataset.
@@ -135,19 +149,22 @@ def create_regressor(
                     f"holiday_future columns failed to add for {holiday_country}, likely due to complex datetime index"
                 )
     if holiday_detector_params is not None:
-        mod = HolidayDetector(**holiday_detector_params)
-        mod.detect(df)
-        train_holidays = mod.dates_to_holidays(regr_train.index, style=holiday_regr_style)
-        fcst_holidays = mod.dates_to_holidays(regr_fcst.index, style=holiday_regr_style)
-        all_cols = train_holidays.columns.union(fcst_holidays.columns)
-        regr_train = pd.concat(
-            [regr_train, train_holidays.reindex(columns=all_cols).fillna(0)],
-            axis=1,
-        )
-        regr_fcst = pd.concat(
-            [regr_fcst, fcst_holidays.reindex(columns=all_cols).fillna(0)],
-            axis=1,
-        )
+        try:
+            mod = HolidayDetector(**holiday_detector_params)
+            mod.detect(df)
+            train_holidays = mod.dates_to_holidays(regr_train.index, style=holiday_regr_style)
+            fcst_holidays = mod.dates_to_holidays(regr_fcst.index, style=holiday_regr_style)
+            all_cols = train_holidays.columns.union(fcst_holidays.columns)
+            regr_train = pd.concat(
+                [regr_train, train_holidays.reindex(columns=all_cols).fillna(0)],
+                axis=1,
+            )
+            regr_fcst = pd.concat(
+                [regr_fcst, fcst_holidays.reindex(columns=all_cols).fillna(0)],
+                axis=1,
+            )
+        except Exception as e:
+            print(repr(e))
 
     # columns all as strings
     regr_train.columns = [str(xc) for xc in regr_train.columns]

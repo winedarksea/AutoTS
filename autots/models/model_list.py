@@ -51,6 +51,7 @@ default = {
     'UnobservedComponents': 1,
     'VAR': 1,
     'VECM': 1,
+    'ARIMA': 0.4,
     'WindowRegression': 0.5,
     'DatepartRegression': 1,
     'UnivariateRegression': 0.3,
@@ -62,7 +63,6 @@ default = {
     'Theta': 1,
     'ARDL': 1,
     'ARCH': 1,
-    # RRVAR, MAR, TMF, LATC
 }
 best = [
     'LastValueNaive',

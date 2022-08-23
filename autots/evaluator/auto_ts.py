@@ -1786,7 +1786,7 @@ or otherwise increase models available."""
             include_results (bool): whether to include performance metrics
         """
         if models == 'all':
-            export_template = self.initial_results.model_results[self.template_cols]
+            export_template = self.initial_results.model_results[self.template_cols_id]
             export_template = export_template.drop_duplicates()
         elif models == 'best':
             # skip to the answer if just n==1
@@ -1822,11 +1822,12 @@ or otherwise increase models available."""
                         .reset_index()
                     )
                 export_template = export_template.nsmallest(n, columns=['Score'])
-                if not include_results:
-                    export_template = export_template[self.template_cols]
+                if self.best_model_id not in export_template['ID']:
                     export_template = pd.concat(
-                        [self.best_model, export_template]
+                        [self.validation_results.model_results[self.validation_results.model_results['ID'] == self.best_model_id], export_template]
                     ).drop_duplicates()
+                if not include_results:
+                    export_template = export_template[self.template_cols_id]
         else:
             raise ValueError("`models` must be 'all' or 'best'")
         try:

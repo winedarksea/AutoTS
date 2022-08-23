@@ -598,7 +598,7 @@ def anomaly_df_to_holidays(
     if isinstance(anomaly_df, pd.Series):
         stacked = anomaly_df.copy()  # [anomaly_df == -1]
         stacked.index.name = 'date'
-        stacked = pd.concat([stacked], keys=["all"], names=["series"])
+        stacked = pd.concat([stacked], keys=["all"], names=["series"])  # .reorder_levels([1, 0])
         # anomalies = anomaly_df.index[(anomaly_df == -1).iloc[:, 0]]
     else:
         anomaly_df.columns.name = "series"
@@ -843,10 +843,11 @@ def dates_to_holidays(
     elif style == "series_flag":
         return result.clip(upper=1.0).astype(int)
     if style == "prophet":
-        return pd.DataFrame(
+        prophet_holidays = pd.DataFrame(
             {'ds': result['date'], 'holiday': result['holiday_name'],
              'lower_window': 0, 'upper_window': 0, 'series': result['series']}
         )  # needs to cover future, and at the time of object creation
+        return prophet_holidays[~pd.isnull(prophet_holidays['holiday'])]
     else:
         return result
 

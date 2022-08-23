@@ -7,7 +7,7 @@ Created on Mon Jul 18 16:27:48 2022
 import unittest
 import numpy as np
 import pandas as pd
-from autots.tools.anomaly_utils import available_methods
+from autots.tools.anomaly_utils import available_methods, fast_methods
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 from autots.datasets import load_live_daily
 
@@ -38,7 +38,7 @@ class TestAnomalies(unittest.TestCase):
     def test_anomalies(self):
         tried = []
         while not all(x in tried for x in available_methods):
-            params = AnomalyDetector.get_new_params()
+            params = AnomalyDetector.get_new_params(method="deep")
             with self.subTest(i=params['method']):
                 tried.append(params['method'])
                 mod = AnomalyDetector(output='multivariate', **params)
@@ -61,8 +61,9 @@ class TestAnomalies(unittest.TestCase):
         forecast_length = 28
         holidays_detected = 0
         full_dates = self.df.index.union(pd.date_range(self.df.index.max(), freq="D", periods=forecast_length))
-        while not all(x in tried for x in available_methods):
-            params = HolidayDetector.get_new_params()
+
+        while not all(x in tried for x in fast_methods):
+            params = HolidayDetector.get_new_params(method="fast")
             tried.append(params['anomaly_detector_params']['method'])
             mod = HolidayDetector(**params)
             mod.detect(self.df)
