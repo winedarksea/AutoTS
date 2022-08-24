@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.models package &#8212; AutoTS 0.4.2 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.5.0 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -1303,6 +1303,354 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd></dl>
 
 </section>
+<section id="module-autots.models.matrix_var">
+<span id="autots-models-matrix-var-module"></span><h2>autots.models.matrix_var module<a class="headerlink" href="#module-autots.models.matrix_var" title="Permalink to this headline">¶</a></h2>
+<p>VAR models based on matrix factorization and related methods.</p>
+<p>Heavily borrowing on the work of Xinyu Chen
+See <a class="reference external" href="https://github.com/xinychen/transdim">https://github.com/xinychen/transdim</a> and corresponding Medium articles</p>
+<p>Thrown around a lot of np.nan_to_num before pinv to prevent the following crash:
+On entry to DLASCL parameter number  4 had an illegal value</p>
+<dl class="class">
+<dt id="autots.models.matrix_var.LATC">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">LATC</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'LATC', frequency: str = 'infer', prediction_interval: float = 0.9, time_horizon: float = 1, seasonality: int = 7, time_lags: list = [1], lambda0: float = 1, learning_rate: float = 1, theta: float = 1, window: int = 30, epsilon: float = 0.0001, alpha: list = [0.33333333, 0.33333333, 0.33333333], maxiter: int = 100, holiday_country: str = 'US', random_seed: int = 2022, verbose: int = 0, n_jobs: int = None, **kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.LATC" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>Low Rank Autoregressive Tensor Completion.
+Based on <a class="reference external" href="https://arxiv.org/abs/2104.14936">https://arxiv.org/abs/2104.14936</a>
+and <a class="reference external" href="https://github.com/xinychen/tensor-learning/blob/master/mats/LATC-predictor.ipynb">https://github.com/xinychen/tensor-learning/blob/master/mats/LATC-predictor.ipynb</a>
+rho: learning rate
+lambda: weight parameter</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>regression_type</strong> (<em>str</em>) – type of regression (None, ‘User’, or ‘Holiday’)</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em>) – passed to joblib for multiprocessing. Set to none for context manager.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.matrix_var.LATC.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.LATC.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied .</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.matrix_var.LATC.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.LATC.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.matrix_var.LATC.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.LATC.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.matrix_var.LATC.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.LATC.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.models.matrix_var.MAR">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">MAR</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'MAR'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">seasonality: float = 7</em>, <em class="sig-param">family: str = 'gaussian'</em>, <em class="sig-param">maxiter: int = 200</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2022</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.MAR" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>Matrix Autoregressive model based on the code of Xinyu Chen.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>regression_type</strong> (<em>str</em>) – type of regression (None, ‘User’, or ‘Holiday’)</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em>) – passed to joblib for multiprocessing. Set to none for context manager.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.matrix_var.MAR.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.MAR.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied .</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.matrix_var.MAR.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.MAR.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.matrix_var.MAR.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.MAR.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.matrix_var.MAR.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.MAR.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.models.matrix_var.RRVAR">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">RRVAR</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'RRVAR'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">method: str = 'als'</em>, <em class="sig-param">rank: float = 0.1</em>, <em class="sig-param">maxiter: int = 200</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2022</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.RRVAR" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>Reduced Rank VAR models based on the code of Xinyu Chen.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>regression_type</strong> (<em>str</em>) – type of regression (None, ‘User’, or ‘Holiday’)</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em>) – passed to joblib for multiprocessing. Set to none for context manager.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.matrix_var.RRVAR.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.RRVAR.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied .</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.matrix_var.RRVAR.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.RRVAR.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.matrix_var.RRVAR.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.RRVAR.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.matrix_var.RRVAR.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.RRVAR.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.models.matrix_var.TMF">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">TMF</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'TMF'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">d: int = 1</em>, <em class="sig-param">lambda0: float = 1</em>, <em class="sig-param">rho: float = 1</em>, <em class="sig-param">rank: float = 0.4</em>, <em class="sig-param">maxiter: int = 100</em>, <em class="sig-param">inner_maxiter: int = 10</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2022</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.TMF" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>Temporal Matrix Factorization VAR model based on the code of Xinyu Chen.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>regression_type</strong> (<em>str</em>) – type of regression (None, ‘User’, or ‘Holiday’)</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em>) – passed to joblib for multiprocessing. Set to none for context manager.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.matrix_var.TMF.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.TMF.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied .</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.matrix_var.TMF.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.TMF.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.matrix_var.TMF.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.TMF.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.matrix_var.TMF.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.TMF.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate forecast data immediately following dates of index supplied to .fit().</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.conj_grad_w">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">conj_grad_w</code><span class="sig-paren">(</span><em class="sig-param">sparse_mat</em>, <em class="sig-param">ind</em>, <em class="sig-param">W</em>, <em class="sig-param">X</em>, <em class="sig-param">rho</em>, <em class="sig-param">maxiter=5</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.conj_grad_w" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.conj_grad_x">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">conj_grad_x</code><span class="sig-paren">(</span><em class="sig-param">sparse_mat</em>, <em class="sig-param">ind</em>, <em class="sig-param">W</em>, <em class="sig-param">X</em>, <em class="sig-param">A</em>, <em class="sig-param">Psi</em>, <em class="sig-param">d</em>, <em class="sig-param">lambda0</em>, <em class="sig-param">rho</em>, <em class="sig-param">maxiter=5</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.conj_grad_x" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.dmd">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">dmd</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">r</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.dmd" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dynamic Mode Decomposition (DMD) algorithm.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.dmd4cast">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">dmd4cast</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">r</em>, <em class="sig-param">pred_step</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.dmd4cast" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.ell_w">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">ell_w</code><span class="sig-paren">(</span><em class="sig-param">ind</em>, <em class="sig-param">W</em>, <em class="sig-param">X</em>, <em class="sig-param">rho</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.ell_w" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.ell_x">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">ell_x</code><span class="sig-paren">(</span><em class="sig-param">ind</em>, <em class="sig-param">W</em>, <em class="sig-param">X</em>, <em class="sig-param">A</em>, <em class="sig-param">Psi</em>, <em class="sig-param">d</em>, <em class="sig-param">lambda0</em>, <em class="sig-param">rho</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.ell_x" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.generate_Psi">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">generate_Psi</code><span class="sig-paren">(</span><em class="sig-param">T</em>, <em class="sig-param">d</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.generate_Psi" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.latc_imputer">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">latc_imputer</code><span class="sig-paren">(</span><em class="sig-param">sparse_tensor</em>, <em class="sig-param">time_lags</em>, <em class="sig-param">alpha</em>, <em class="sig-param">rho0</em>, <em class="sig-param">lambda0</em>, <em class="sig-param">theta</em>, <em class="sig-param">epsilon</em>, <em class="sig-param">maxiter</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.latc_imputer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Low-Rank Autoregressive Tensor Completion, LATC-imputer.
+Recognizes 0 as NaN.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.latc_predictor">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">latc_predictor</code><span class="sig-paren">(</span><em class="sig-param">sparse_mat</em>, <em class="sig-param">pred_time_steps</em>, <em class="sig-param">time_horizon</em>, <em class="sig-param">time_intervals</em>, <em class="sig-param">time_lags</em>, <em class="sig-param">alpha</em>, <em class="sig-param">rho</em>, <em class="sig-param">lambda0</em>, <em class="sig-param">theta</em>, <em class="sig-param">window</em>, <em class="sig-param">epsilon</em>, <em class="sig-param">maxiter</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.latc_predictor" title="Permalink to this definition">¶</a></dt>
+<dd><p>LATC-predictor kernel.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.mar">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">mar</code><span class="sig-paren">(</span><em class="sig-param">X</em>, <em class="sig-param">pred_step</em>, <em class="sig-param">family='gaussian'</em>, <em class="sig-param">maxiter=100</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.mar" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.mat2ten">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">mat2ten</code><span class="sig-paren">(</span><em class="sig-param">mat</em>, <em class="sig-param">dim</em>, <em class="sig-param">mode</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.mat2ten" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.rrvar">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">rrvar</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">R</em>, <em class="sig-param">pred_step</em>, <em class="sig-param">maxiter=100</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.rrvar" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reduced-rank VAR algorithm using ALS.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.svt_tnn">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">svt_tnn</code><span class="sig-paren">(</span><em class="sig-param">mat</em>, <em class="sig-param">tau</em>, <em class="sig-param">theta</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.svt_tnn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.ten2mat">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">ten2mat</code><span class="sig-paren">(</span><em class="sig-param">tensor</em>, <em class="sig-param">mode</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.ten2mat" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.tmf">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">tmf</code><span class="sig-paren">(</span><em class="sig-param">sparse_mat</em>, <em class="sig-param">rank</em>, <em class="sig-param">d</em>, <em class="sig-param">lambda0</em>, <em class="sig-param">rho</em>, <em class="sig-param">maxiter=50</em>, <em class="sig-param">inner_maxiter=10</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.tmf" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.update_cg">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">update_cg</code><span class="sig-paren">(</span><em class="sig-param">var</em>, <em class="sig-param">r</em>, <em class="sig-param">q</em>, <em class="sig-param">Aq</em>, <em class="sig-param">rold</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.update_cg" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.var">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">var</code><span class="sig-paren">(</span><em class="sig-param">X</em>, <em class="sig-param">pred_step</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.var" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simple VAR.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.matrix_var.var4cast">
+<code class="sig-prename descclassname">autots.models.matrix_var.</code><code class="sig-name descname">var4cast</code><span class="sig-paren">(</span><em class="sig-param">X</em>, <em class="sig-param">A</em>, <em class="sig-param">d</em>, <em class="sig-param">delta</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.matrix_var.var4cast" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</section>
 <section id="module-autots.models.model_list">
 <span id="autots-models-model-list-module"></span><h2>autots.models.model_list module<a class="headerlink" href="#module-autots.models.model_list" title="Permalink to this headline">¶</a></h2>
 <p>Lists of models grouped by aspects.</p>
@@ -1603,7 +1951,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.sklearn.DatepartRegression.get_new_params">
-<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.DatepartRegression.get_new_params" title="Permalink to this definition">¶</a></dt>
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.DatepartRegression.get_new_params" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return dict of new parameters for parameter tuning.</p>
 </dd></dl>
 
@@ -1667,7 +2015,7 @@ A multiariate version of rolling regression: ie each series is lagged independen
 
 <dl class="method">
 <dt id="autots.models.sklearn.MultivariateRegression.get_new_params">
-<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.MultivariateRegression.get_new_params" title="Permalink to this definition">¶</a></dt>
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.MultivariateRegression.get_new_params" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return dict of new parameters for parameter tuning.</p>
 </dd></dl>
 
@@ -1797,7 +2145,7 @@ A univariate version of rolling regression: ie each series is modeled independen
 
 <dl class="method">
 <dt id="autots.models.sklearn.UnivariateRegression.get_new_params">
-<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.UnivariateRegression.get_new_params" title="Permalink to this definition">¶</a></dt>
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.sklearn.UnivariateRegression.get_new_params" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return dict of new parameters for parameter tuning.</p>
 </dd></dl>
 

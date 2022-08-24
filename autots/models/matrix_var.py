@@ -203,15 +203,9 @@ class RRVAR(ModelObject):
         elif self.method == "dmd":
             if np.isnan(np.sum(data)):
                 raise ValueError("DMD method does not allow NaN")
-            forecast = dmd4cast(
-                data, self.rank, forecast_length
-            ).T
+            forecast = dmd4cast(data, self.rank, forecast_length).T
 
-        forecast = pd.DataFrame(
-            forecast,
-            index=test_index,
-            columns=self.column_names
-        )
+        forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
         if just_point_forecast:
             return forecast
         else:
@@ -333,11 +327,7 @@ class MAR(ModelObject):
             mar(shifted, pred_steps, family=self.family, maxiter=self.maxiter).T
         ).T[:forecast_length]
 
-        forecast = pd.DataFrame(
-            forecast,
-            index=test_index,
-            columns=self.column_names
-        )
+        forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
         if just_point_forecast:
             return forecast
         else:
@@ -369,14 +359,7 @@ class MAR(ModelObject):
         return {
             'seasonality': seasonal_int(include_one=False, very_small=True),
             'family': random.choices(
-                [
-                    'gaussian',
-                    'poisson',
-                    'negativebinomial',
-                    'gamma',
-                    'chi2',
-                    'uniform'
-                ],
+                ['gaussian', 'poisson', 'negativebinomial', 'gamma', 'chi2', 'uniform'],
                 [0.6, 0.05, 0.05, 0.2, 0.05, 0.05],
             )[0],
             'maxiter': 200,
@@ -421,11 +404,11 @@ def ell_x(ind, W, X, A, Psi, d, lambda0, rho):
     rank, dim2 = X.shape
     temp = np.zeros((d * rank, Psi[0].shape[0]))
     for k in range(1, d + 1):
-        temp[(k - 1) * rank: k * rank, :] = X @ Psi[k].T
+        temp[(k - 1) * rank : k * rank, :] = X @ Psi[k].T
     temp1 = X @ Psi[0].T - A @ temp
     temp2 = np.zeros((rank, dim2))
     for k in range(d):
-        temp2 += A[:, k * rank: (k + 1) * rank].T @ temp1 @ Psi[k + 1]
+        temp2 += A[:, k * rank : (k + 1) * rank].T @ temp1 @ Psi[k + 1]
     return W @ ((W.T @ X) * ind) + rho * X + lambda0 * (temp1 @ Psi[0] - temp2)
 
 
@@ -475,7 +458,7 @@ def tmf(sparse_mat, rank, d, lambda0, rho, maxiter=50, inner_maxiter=10):
         W = conj_grad_w(sparse_mat, ind, W, X, rho, inner_maxiter)
         X = conj_grad_x(sparse_mat, ind, W, X, A, Psi, d, lambda0, rho, inner_maxiter)
         for k in range(1, d + 1):
-            temp[(k - 1) * rank: k * rank, :] = X @ Psi[k].T
+            temp[(k - 1) * rank : k * rank, :] = X @ Psi[k].T
         A = X @ Psi[0].T @ np.linalg.pinv((temp))
         mat_hat = W.T @ X
     return mat_hat, W, X, A
@@ -576,16 +559,17 @@ class TMF(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
 
         _, W, X, A = tmf(
-            np.nan_to_num(self.df_train.to_numpy().T), self.rank, self.d,
-            self.lambda0, self.rho, self.maxiter, self.inner_maxiter,
+            np.nan_to_num(self.df_train.to_numpy().T),
+            self.rank,
+            self.d,
+            self.lambda0,
+            self.rho,
+            self.maxiter,
+            self.inner_maxiter,
         )
         forecast = (W.T @ var4cast(X, A, self.d, forecast_length)).T
 
-        forecast = pd.DataFrame(
-            forecast,
-            index=test_index,
-            columns=self.column_names
-        )
+        forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
         if just_point_forecast:
             return forecast
         else:
@@ -906,11 +890,7 @@ class LATC(ModelObject):
         )
         forecast = mat_hat.T
 
-        forecast = pd.DataFrame(
-            forecast,
-            index=test_index,
-            columns=self.column_names
-        )
+        forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
         if just_point_forecast:
             return forecast
         else:
@@ -939,16 +919,32 @@ class LATC(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        learning_rate = random.choices([1, 1e-7, 1e-6, 1e-5, 5e-4, 1e-4], [0.2, 0.1, 0.1, 0.1, 0.1, 0.1])[0]
+        learning_rate = random.choices(
+            [1, 1e-7, 1e-6, 1e-5, 5e-4, 1e-4], [0.2, 0.1, 0.1, 0.1, 0.1, 0.1]
+        )[0]
         lags = random.choice([1, 2])
-        time_lags = sorted([seasonal_int(include_one=True, very_small=True), seasonal_int(include_one=True, very_small=True)])
+        time_lags = sorted(
+            [
+                seasonal_int(include_one=True, very_small=True),
+                seasonal_int(include_one=True, very_small=True),
+            ]
+        )
         if lags == 1:
             time_lags = time_lags[:1]
         return {
             "time_horizon": random.choice([1, 2, 0.25, 0.5]),
             'seasonality': seasonal_int(include_one=True, very_small=True),
             'time_lags': time_lags,
-            "lambda0": random.choice([1, 0, 0.1 * learning_rate, 0.5 * learning_rate, 1 * learning_rate, 10 * learning_rate]),
+            "lambda0": random.choice(
+                [
+                    1,
+                    0,
+                    0.1 * learning_rate,
+                    0.5 * learning_rate,
+                    1 * learning_rate,
+                    10 * learning_rate,
+                ]
+            ),
             "learning_rate": learning_rate,
             'theta': random.choice([1, 2, 4]),
             'window': random.choice([None, 14, 30, 90]),

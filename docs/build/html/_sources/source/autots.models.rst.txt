@@ -60,6 +60,14 @@ autots.models.greykite module
    :undoc-members:
    :show-inheritance:
 
+autots.models.matrix\_var module
+--------------------------------
+
+.. automodule:: autots.models.matrix_var
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.models.model\_list module
 --------------------------------
 

@@ -192,6 +192,7 @@ class AutoTSTest(unittest.TestCase):
             model_interrupt=True,
             drop_most_recent=1,
             verbose=verbose,
+            random_seed=1234,
         )
         model = model.fit(
             df,

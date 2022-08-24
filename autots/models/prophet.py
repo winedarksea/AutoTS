@@ -238,7 +238,9 @@ class FBProphet(ModelObject):
         if isinstance(self.holiday, dict):
             mod = HolidayDetector(**self.holiday)
             mod.detect(self.df_train)
-            args['holiday'] = mod.dates_to_holidays(self.df_train.index.union(test_index), style="prophet")
+            args['holiday'] = mod.dates_to_holidays(
+                self.df_train.index.union(test_index), style="prophet"
+            )
 
         parallel = True
         cols = self.df_train.columns.tolist()

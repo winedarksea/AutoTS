@@ -7,7 +7,13 @@ from autots.tools.impute import FillNA, df_interpolate
 from autots.tools.seasonal import date_part, seasonal_int
 from autots.tools.cointegration import coint_johansen, btcd_decompose
 from autots.models.sklearn import generate_regressor_params, retrieve_regressor
-from autots.tools.anomaly_utils import anomaly_new_params, detect_anomalies, anomaly_df_to_holidays, holiday_new_params, dates_to_holidays
+from autots.tools.anomaly_utils import (
+    anomaly_new_params,
+    detect_anomalies,
+    anomaly_df_to_holidays,
+    holiday_new_params,
+    dates_to_holidays,
+)
 
 try:
     from joblib import Parallel, delayed
@@ -567,9 +573,7 @@ class SinTrend(EmptyTransformer):
         def sinfunc(t, A, w, p, c):
             return A * np.sin(w * t + p) + c
 
-        popt, pcov = curve_fit(
-            sinfunc, tt, yy, p0=guess, maxfev=10000, method=method
-        )
+        popt, pcov = curve_fit(sinfunc, tt, yy, p0=guess, maxfev=10000, method=method)
         A, w, p, c = popt
         # f = w/(2.*np.pi)
         # fitfunc = lambda t: A * np.sin(w*t + p) + c
@@ -606,7 +610,9 @@ class SinTrend(EmptyTransformer):
             else:
                 df_list = []
                 for col in cols:
-                    df_list.append(self.fit_sin(X, df[col].to_numpy(), method=self.method))
+                    df_list.append(
+                        self.fit_sin(X, df[col].to_numpy(), method=self.method)
+                    )
         self.sin_params = pd.DataFrame(df_list)
 
         self.shape = df.shape
@@ -645,8 +651,12 @@ class SinTrend(EmptyTransformer):
         """
         X = np.repeat(X[..., np.newaxis], df.shape[1], axis=1)
         sin_df = pd.DataFrame(
-            self.sin_params['amp'].to_frame().to_numpy().T * np.sin(self.sin_params['omega'].to_frame().to_numpy().T * X + self.sin_params['phase'].to_frame().to_numpy().T),
-            columns=df.columns
+            self.sin_params['amp'].to_frame().to_numpy().T
+            * np.sin(
+                self.sin_params['omega'].to_frame().to_numpy().T * X
+                + self.sin_params['phase'].to_frame().to_numpy().T
+            ),
+            columns=df.columns,
         )
         df_index = df.index
         df = df.astype(float).reset_index(drop=True) - sin_df.reset_index(drop=True)
@@ -665,8 +675,12 @@ class SinTrend(EmptyTransformer):
         X = pd.to_numeric(df.index, errors="coerce", downcast="integer").to_numpy()
         X = np.repeat(X[..., np.newaxis], df.shape[1], axis=1)
         sin_df = pd.DataFrame(
-            self.sin_params['amp'].to_frame().to_numpy().T * np.sin(self.sin_params['omega'].to_frame().to_numpy().T * X + self.sin_params['phase'].to_frame().to_numpy().T),
-            columns=df.columns
+            self.sin_params['amp'].to_frame().to_numpy().T
+            * np.sin(
+                self.sin_params['omega'].to_frame().to_numpy().T * X
+                + self.sin_params['phase'].to_frame().to_numpy().T
+            ),
+            columns=df.columns,
         )
 
         df_index = df.index
@@ -2627,11 +2641,16 @@ class HolidayTransformer(EmptyTransformer):
     def __init__(
         self,
         anomaly_detector_params={},
-        threshold=0.8, min_occurrences=2, splash_threshold=0.65,
+        threshold=0.8,
+        min_occurrences=2,
+        splash_threshold=0.65,
         use_dayofmonth_holidays=True,
-        use_wkdom_holidays=True, use_wkdeom_holidays=True,
-        use_lunar_holidays=True, use_lunar_weekday=False,
-        use_islamic_holidays=True, use_hebrew_holidays=True,
+        use_wkdom_holidays=True,
+        use_wkdeom_holidays=True,
+        use_lunar_holidays=True,
+        use_lunar_weekday=False,
+        use_islamic_holidays=True,
+        use_hebrew_holidays=True,
         remove_excess_anomalies=True,
         impact=None,
         regression_params={},
@@ -2657,7 +2676,9 @@ class HolidayTransformer(EmptyTransformer):
         self.use_lunar_weekday = use_lunar_weekday
         self.use_islamic_holidays = use_islamic_holidays
         self.use_hebrew_holidays = use_hebrew_holidays
-        self.anomaly_model = AnomalyRemoval(output='multivariate', **self.anomaly_detector_params, n_jobs=n_jobs)
+        self.anomaly_model = AnomalyRemoval(
+            output='multivariate', **self.anomaly_detector_params, n_jobs=n_jobs
+        )
         self.remove_excess_anomalies = remove_excess_anomalies
         self.fillna = anomaly_detector_params.get("fillna", None)
         self.impact = impact
@@ -2667,8 +2688,10 @@ class HolidayTransformer(EmptyTransformer):
 
     def dates_to_holidays(self, dates, style="flag", holiday_impacts=False):
         return dates_to_holidays(
-            dates, self.df_cols,
-            style=style, holiday_impacts=holiday_impacts,
+            dates,
+            self.df_cols,
+            style=style,
+            holiday_impacts=holiday_impacts,
             day_holidays=self.day_holidays,
             wkdom_holidays=self.wkdom_holidays,
             wkdeom_holidays=self.wkdeom_holidays,
@@ -2683,10 +2706,20 @@ class HolidayTransformer(EmptyTransformer):
         self.anomaly_model.fit(df)
         if np.min(self.anomaly_model.anomalies.values) != -1:
             print("No anomalies detected.")
-        self.day_holidays, self.wkdom_holidays, self.wkdeom_holidays, self.lunar_holidays, self.lunar_weekday, self.islamic_holidays, self.hebrew_holidays = anomaly_df_to_holidays(
-            self.anomaly_model.anomalies, splash_threshold=self.splash_threshold,
+        (
+            self.day_holidays,
+            self.wkdom_holidays,
+            self.wkdeom_holidays,
+            self.lunar_holidays,
+            self.lunar_weekday,
+            self.islamic_holidays,
+            self.hebrew_holidays,
+        ) = anomaly_df_to_holidays(
+            self.anomaly_model.anomalies,
+            splash_threshold=self.splash_threshold,
             threshold=self.threshold,
-            actuals=df, anomaly_scores=self.anomaly_model.scores,
+            actuals=df,
+            anomaly_scores=self.anomaly_model.scores,
             use_dayofmonth_holidays=self.use_dayofmonth_holidays,
             use_wkdom_holidays=self.use_wkdom_holidays,
             use_wkdeom_holidays=self.use_wkdeom_holidays,
@@ -2711,14 +2744,20 @@ class HolidayTransformer(EmptyTransformer):
         if self.impact == "regression":
             self.holidays = self.dates_to_holidays(df.index, style='flag')
             self.regression_model = DatepartRegression(**self.regression_params)
-            return self.regression_model.fit_transform(df2, regressor=self.holidays.astype(float))
+            return self.regression_model.fit_transform(
+                df2, regressor=self.holidays.astype(float)
+            )
         elif self.impact == "median_value":
-            holidays = self.dates_to_holidays(df.index, style='impact', holiday_impacts="value")
+            holidays = self.dates_to_holidays(
+                df.index, style='impact', holiday_impacts="value"
+            )
             self.medians = df2.median()
             holidays = holidays.where(holidays == 0, holidays - self.medians)
             return df2 - holidays
         elif self.impact == "anomaly_score":
-            holidays = self.dates_to_holidays(df.index, style='impact', holiday_impacts="anomaly_score")
+            holidays = self.dates_to_holidays(
+                df.index, style='impact', holiday_impacts="anomaly_score"
+            )
             self.medians = self.anomaly_model.scores.median().fillna(1)
             return df2 * (holidays / self.medians).replace(0.0, 1.0)
         elif self.impact is None:
@@ -2733,27 +2772,39 @@ class HolidayTransformer(EmptyTransformer):
     def inverse_transform(self, df):
         if self.impact == "regression":
             holidays = self.dates_to_holidays(df.index, style='flag')
-            return self.regression_model.inverse_transform(df, regressor=holidays.astype(float))
+            return self.regression_model.inverse_transform(
+                df, regressor=holidays.astype(float)
+            )
         elif self.impact == "median_value":
-            holidays = self.dates_to_holidays(df.index, style='impact', holiday_impacts="value")
+            holidays = self.dates_to_holidays(
+                df.index, style='impact', holiday_impacts="value"
+            )
             holidays = holidays.where(holidays == 0, holidays - self.medians)
             return df + holidays
         elif self.impact == "anomaly_score":
-            holidays = self.dates_to_holidays(df.index, style='impact', holiday_impacts="anomaly_score")
+            holidays = self.dates_to_holidays(
+                df.index, style='impact', holiday_impacts="anomaly_score"
+            )
             return df / (holidays / self.medians).replace(0.0, 1.0)
         return df
 
     @staticmethod
     def get_new_params(method="random"):
         holiday_params = holiday_new_params(method=method)
-        holiday_params['anomaly_detector_params'] = AnomalyRemoval.get_new_params(method="fast")
-        holiday_params['remove_excess_anomalies'] = random.choices([True, False], [0.9, 0.1])[0]
+        holiday_params['anomaly_detector_params'] = AnomalyRemoval.get_new_params(
+            method="fast"
+        )
+        holiday_params['remove_excess_anomalies'] = random.choices(
+            [True, False], [0.9, 0.1]
+        )[0]
         holiday_params['impact'] = random.choices(
             [None, 'median_value', 'anomaly_score', 'regression'],
             [0.1, 0.2, 0.3, 0.4],
         )[0]
         if holiday_params['impact'] == 'regression':
-            holiday_params['regression_params'] = DatepartRegression.get_new_params(method=method)
+            holiday_params['regression_params'] = DatepartRegression.get_new_params(
+                method=method
+            )
         else:
             holiday_params['regression_params'] = {}
         return holiday_params

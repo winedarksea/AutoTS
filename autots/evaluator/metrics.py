@@ -233,9 +233,12 @@ def threshold_loss(actual, forecast, threshold, penalty_threshold=None):
         penalty_threshold = threshold
     actual_threshold = actual * threshold
     abs_err = abs(actual - forecast)
-    ls = np.where(actual_threshold >= forecast, (1 / penalty_threshold) * abs_err, penalty_threshold * abs_err)
+    ls = np.where(
+        actual_threshold >= forecast,
+        (1 / penalty_threshold) * abs_err,
+        penalty_threshold * abs_err,
+    )
     return np.nanmean(ls, axis=0)
-
 
 
 def mda(A, F):

@@ -271,7 +271,9 @@ def load_live_daily(
         current_date = observation_end
     if observation_start is None:
         # should take from observation_end but that's expected as a string
-        observation_start = datetime.datetime.utcnow() - datetime.timedelta(days=365 * 5)
+        observation_start = datetime.datetime.utcnow() - datetime.timedelta(
+            days=365 * 5
+        )
         observation_start = observation_start.strftime("%Y-%m-%d")
     try:
         import requests
@@ -420,7 +422,9 @@ def load_live_daily(
             print(f"analytics.gov data failed with {repr(e)}")
 
     if wikipedia_pages is not None:
-        str_start = pd.to_datetime(observation_start, infer_datetime_format=True).strftime("%Y%m%d00")
+        str_start = pd.to_datetime(
+            observation_start, infer_datetime_format=True
+        ).strftime("%Y%m%d00")
         str_end = current_date.strftime("%Y%m%d00")
         headers = {
             'User-Agent': 'AutoTS load_live_daily',

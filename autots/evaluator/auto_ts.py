@@ -320,9 +320,11 @@ class AutoTS(object):
                 transformer_max_depth=self.transformer_max_depth,
                 models_mode=self.models_mode,
             )
-            self.initial_template = pd.concat(
-                [general_template, random_template], axis=0
-            ).drop_duplicates().reset_index(drop=True)
+            self.initial_template = (
+                pd.concat([general_template, random_template], axis=0)
+                .drop_duplicates()
+                .reset_index(drop=True)
+            )
         elif isinstance(initial_template, pd.DataFrame):
             self.initial_template = initial_template
         else:
@@ -427,10 +429,20 @@ class AutoTS(object):
     def get_new_params(method='random'):
         ensemble_choice = random.choices(
             [
-                None, ['simple'], ['simple', 'horizontal-max'],
-                ['simple', "distance", "horizontal", "horizontal-max", "mosaic", 'mosaic-window', "subsample"],
+                None,
+                ['simple'],
+                ['simple', 'horizontal-max'],
+                [
+                    'simple',
+                    "distance",
+                    "horizontal",
+                    "horizontal-max",
+                    "mosaic",
+                    'mosaic-window',
+                    "subsample",
+                ],
             ],
-            [0.3, 0.1, 0.2, 0.2]
+            [0.3, 0.1, 0.2, 0.2],
         )[0]
         metric_weighting = {
             'smape_weighting': random.choices([0, 1, 5, 10], [0.1, 0.2, 0.3, 0.1])[0],
@@ -441,9 +453,15 @@ class AutoTS(object):
             'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
             'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
             'spl_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-            'containment_weighting': random.choices([0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0])[0],
-            'contour_weighting': random.choices([0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05])[0],
-            'runtime_weighting': random.choices([0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1])[0],
+            'containment_weighting': random.choices(
+                [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
+            )[0],
+            'contour_weighting': random.choices([0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05])[
+                0
+            ],
+            'runtime_weighting': random.choices(
+                [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
+            )[0],
         }
         return {
             'max_generations': random.choices([5, 10, 20, 50], [0.2, 0.5, 0.1, 0.4])[0],
@@ -460,10 +478,16 @@ class AutoTS(object):
                 [0.1, 0.2, 0.3, 0.3, 0.2, 0.1],
             )[0],
             'num_validations': random.choice([0, 1, 2, 3, 4, 5]),
-            'validation_method': random.choice(['backwards', 'even', 'similarity', 'seasonal 364']),
-            'models_to_validate': random.choices([0.15, 0.10, 0.25, 0.35, 0.45], [0.3, 0.1, 0.3, 0.3, 0.1])[0],
+            'validation_method': random.choice(
+                ['backwards', 'even', 'similarity', 'seasonal 364']
+            ),
+            'models_to_validate': random.choices(
+                [0.15, 0.10, 0.25, 0.35, 0.45], [0.3, 0.1, 0.3, 0.3, 0.1]
+            )[0],
             'ensemble': ensemble_choice,
-            'initial_template': random.choices(['random', 'general+random'], [0.8, 0.2])[0],
+            'initial_template': random.choices(
+                ['random', 'general+random'], [0.8, 0.2]
+            )[0],
             'subset': random.choices([None, 10, 100], [0.8, 0.1, 0.1])[0],
             'models_mode': random.choices(['random', 'regressor'], [0.9, 0.1])[0],
             'drop_most_recent': random.choices([0, 1, 2], [0.6, 0.2, 0.2])[0],
@@ -474,20 +498,32 @@ class AutoTS(object):
                 [
                     None,
                     {
-                        "constraint_method": "stdev_min", "constraint_regularization": 0.7,
-                        "upper_constraint": 1, "lower_constraint": 1, "bounds": True
+                        "constraint_method": "stdev_min",
+                        "constraint_regularization": 0.7,
+                        "upper_constraint": 1,
+                        "lower_constraint": 1,
+                        "bounds": True,
                     },
                     {
-                        "constraint_method": "stdev", "constraint_regularization": 1,
-                        "upper_constraint": 2, "lower_constraint": 2, "bounds": False
+                        "constraint_method": "stdev",
+                        "constraint_regularization": 1,
+                        "upper_constraint": 2,
+                        "lower_constraint": 2,
+                        "bounds": False,
                     },
                     {
-                        "constraint_method": "quantile", "constraint_regularization": 0.9,
-                        "upper_constraint": 0.99, "lower_constraint": 0.01, "bounds": True
+                        "constraint_method": "quantile",
+                        "constraint_regularization": 0.9,
+                        "upper_constraint": 0.99,
+                        "lower_constraint": 0.01,
+                        "bounds": True,
                     },
                     {
-                        "constraint_method": "quantile", "constraint_regularization": 0.4,
-                        "upper_constraint": 0.9, "lower_constraint": 0.1, "bounds": False
+                        "constraint_method": "quantile",
+                        "constraint_regularization": 0.4,
+                        "upper_constraint": 0.9,
+                        "lower_constraint": 0.1,
+                        "bounds": False,
                     },
                 ],
                 [0.9, 0.1, 0.1, 0.1, 0.1],
@@ -522,12 +558,20 @@ class AutoTS(object):
                     {
                         "fillna": None,
                         "transformations": {"0": "AnomalyRemoval"},
-                        "transformation_params": {0: {
-                            "method": "IQR", "transform_dict": {}, "method_params": {"iqr_threshold": 2.0, "iqr_quantiles": [0.4, 0.6]}, "fillna": 'ffill'}
+                        "transformation_params": {
+                            0: {
+                                "method": "IQR",
+                                "transform_dict": {},
+                                "method_params": {
+                                    "iqr_threshold": 2.0,
+                                    "iqr_quantiles": [0.4, 0.6],
+                                },
+                                "fillna": 'ffill',
+                            }
                         },
                     },
                 ],
-                [0.9, 0.1, 0.05, 0.1, 0.1, 0.1]
+                [0.9, 0.1, 0.05, 0.1, 0.1, 0.1],
             ),
             'metric_weighting': metric_weighting,
         }
@@ -1824,7 +1868,13 @@ or otherwise increase models available."""
                 export_template = export_template.nsmallest(n, columns=['Score'])
                 if self.best_model_id not in export_template['ID']:
                     export_template = pd.concat(
-                        [self.validation_results.model_results[self.validation_results.model_results['ID'] == self.best_model_id], export_template]
+                        [
+                            self.validation_results.model_results[
+                                self.validation_results.model_results['ID']
+                                == self.best_model_id
+                            ],
+                            export_template,
+                        ]
                     ).drop_duplicates()
                 if not include_results:
                     export_template = export_template[self.template_cols_id]
@@ -2394,9 +2444,7 @@ or otherwise increase models available."""
                 **kwargs,
             )
 
-    def plot_horizontal_model_count(
-        self, color_list=None, top_n: int = 20, **kwargs
-    ):
+    def plot_horizontal_model_count(self, color_list=None, top_n: int = 20, **kwargs):
         """Plots most common models. Does not factor in nested in non-horizontal Ensembles."""
         if self.best_model.empty:
             raise ValueError("AutoTS not yet fit.")

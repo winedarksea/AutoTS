@@ -12,7 +12,9 @@ def lunar_from_lunar(new_moon):
     """Assumes continuous daily data and pre-needed start."""
     new_moon_dates = new_moon[new_moon == 1]
     # assuming the rule "first new moon on or after January 21st"
-    filtered = new_moon_dates[~((new_moon_dates.index.month == 1) & (new_moon_dates.index.day < 21))].to_frame()
+    filtered = new_moon_dates[
+        ~((new_moon_dates.index.month == 1) & (new_moon_dates.index.day < 21))
+    ].to_frame()
     filtered['year'] = filtered.index.year
     filtered['datetime'] = filtered.index
     new_years = filtered.groupby('year')['datetime'].min()
@@ -28,7 +30,9 @@ def lunar_from_lunar_full(full_moon):
     """Assumes continuous daily data and pre-needed start."""
     full_moon_dates = full_moon[full_moon == 1]
     # assuming the rule "first full moon on or after January 21st"
-    filtered = full_moon_dates[~((full_moon_dates.index.month <= 3) & (full_moon_dates.index.day < 23))].to_frame()
+    filtered = full_moon_dates[
+        ~((full_moon_dates.index.month <= 3) & (full_moon_dates.index.day < 23))
+    ].to_frame()
     filtered['year'] = filtered.index.year
     filtered['datetime'] = filtered.index
     new_years = filtered.groupby('year')['datetime'].min()
@@ -54,14 +58,21 @@ def gregorian_to_christian_lunar(datetime_index):
     min_year = np.min(expanded_dates.year)
     moon_df = moon_phase_df(expanded_dates, epoch=2444238.5)
     lunar_months = lunar_from_lunar_full(moon_df['full_moon'])
-    expanded_dates = pd.concat([pd.Series(0, index=expanded_dates, name="date"), lunar_months], axis=1)
+    expanded_dates = pd.concat(
+        [pd.Series(0, index=expanded_dates, name="date"), lunar_months], axis=1
+    )
     expanded_dates['syear'] = expanded_dates['syear'].ffill()
     expanded_dates['lunar_month'] = expanded_dates['lunar_month'].ffill()
-    expanded_dates['lunar_day'] = expanded_dates.groupby(['syear', 'lunar_month']).cumcount() + 1
+    expanded_dates['lunar_day'] = (
+        expanded_dates.groupby(['syear', 'lunar_month']).cumcount() + 1
+    )
     expanded_dates['lunar_year'] = expanded_dates['syear'] + min_year
     expanded_dates["weekofmonth"] = (expanded_dates["lunar_day"] - 1) // 7 + 1
     expanded_dates['dayofweek'] = expanded_dates.index.dayofweek
-    return expanded_dates.loc[datetime_index, ['lunar_year', 'lunar_month', 'lunar_day', 'weekofmonth', 'dayofweek']].astype(int)
+    return expanded_dates.loc[
+        datetime_index,
+        ['lunar_year', 'lunar_month', 'lunar_day', 'weekofmonth', 'dayofweek'],
+    ].astype(int)
 
 
 def gregorian_to_chinese(datetime_index):
@@ -78,25 +89,36 @@ def gregorian_to_chinese(datetime_index):
     min_year = np.min(expanded_dates.year)
     moon_df = moon_phase_df(expanded_dates, epoch=2444238.5)
     lunar_months = lunar_from_lunar(moon_df['new_moon'])
-    expanded_dates = pd.concat([pd.Series(0, index=expanded_dates, name="date"), lunar_months], axis=1)
+    expanded_dates = pd.concat(
+        [pd.Series(0, index=expanded_dates, name="date"), lunar_months], axis=1
+    )
     expanded_dates['syear'] = expanded_dates['syear'].ffill()
     expanded_dates['lunar_month'] = expanded_dates['lunar_month'].ffill()
-    expanded_dates['lunar_day'] = expanded_dates.groupby(['syear', 'lunar_month']).cumcount() + 1
+    expanded_dates['lunar_day'] = (
+        expanded_dates.groupby(['syear', 'lunar_month']).cumcount() + 1
+    )
     expanded_dates['lunar_year'] = expanded_dates['syear'] + min_year
-    return expanded_dates.loc[datetime_index, ['lunar_year', 'lunar_month', 'lunar_day']].astype(int).rename_axis(index='date')
+    return (
+        expanded_dates.loc[datetime_index, ['lunar_year', 'lunar_month', 'lunar_day']]
+        .astype(int)
+        .rename_axis(index='date')
+    )
 
 
 def to_jd(year, month, day):
     """Determine Julian day count from Islamic date. From convertdate by fitnr."""
     return (
-        day + np.ceil(29.5 * (month - 1)) + (year - 1) * 354
-        + np.floor((3 + (11 * year)) / 30) + 1948439.5
+        day
+        + np.ceil(29.5 * (month - 1))
+        + (year - 1) * 354
+        + np.floor((3 + (11 * year)) / 30)
+        + 1948439.5
     ) - 1
 
 
 def gregorian_to_islamic(date, epoch_adjustment=1.5):
     """Calculate Islamic dates for pandas DatetimeIndex. Approximately. From convertdate by fitnr.
-    
+
     Args:
         epoch_adjustment (float): 1.0 and that needs to be adjusted by about +/- 0.5 to account for timezone
     """
@@ -107,7 +129,11 @@ def gregorian_to_islamic(date, epoch_adjustment=1.5):
     year = np.floor(((30 * (jd - 1948439.5)) + 10646) / 10631)
     month = np.minimum(12, np.ceil((jd - (29 + to_jd(year, 1, 1))) / 29.5) + 1)
     day = (jd - to_jd(year, month, 1)).astype(int) + 1
-    return pd.DataFrame({'year': year, 'month': month, 'day': day}, index=date).astype(int).rename_axis(index='date')
+    return (
+        pd.DataFrame({'year': year, 'month': month, 'day': day}, index=date)
+        .astype(int)
+        .rename_axis(index='date')
+    )
 
 
 def heb_is_leap(year):
@@ -220,8 +246,11 @@ def gregorian_to_hebrew(dates):
             if days_remaining >= _month_length(year, month):
                 days_remaining -= _month_length(year, month)
             else:
-                date_list.append(pd.DataFrame({
-                    "year": year, "month": month, 'day': days_remaining + 1
-                }, index=[dates[idx]]))
+                date_list.append(
+                    pd.DataFrame(
+                        {"year": year, "month": month, 'day': days_remaining + 1},
+                        index=[dates[idx]],
+                    )
+                )
                 break
     return pd.concat(date_list, axis=0).rename_axis(index='date')

@@ -10,6 +10,10 @@ evolve = True allows the timeseries to automatically adapt to changes.
 
 There is a slight risk of it getting caught in suboptimal position however.
 It should probably be coupled with some basic data sanity checks.
+
+cd ./AutoTS
+conda activate py38
+nohup python production_example.py > /dev/null &
 """
 try:  # needs to go first
     from sklearnex import patch_sklearn
@@ -34,7 +38,7 @@ graph = True  # whether to plot graphs
 frequency = (
     "D"  # "infer" for automatic alignment, but specific offsets are most reliable
 )
-forecast_length = 28  # number of periods to forecast ahead
+forecast_length = 60  # number of periods to forecast ahead
 drop_most_recent = 1  # whether to discard the n most recent records (as incomplete)
 num_validations = (
     4  # number of cross validation runs. More is better but slower, usually
@@ -50,14 +54,14 @@ archive_templates = True  # save a copy of the model template used with a timest
 save_location = None  # "C:/Users/Colin/Downloads"  # directory to save templates to. Defaults to working dir
 template_filename = f"autots_forecast_template_{forecast_name}.csv"
 forecast_csv_name = None  # f"autots_forecast_{forecast_name}.csv"  # or None, point forecast only is written
-model_list = "default"
+model_list = "fast_parallel"
 transformer_list = "fast"  # 'superfast'
 transformer_max_depth = 5
 models_mode = "default"  # "deep", "regressor"
 initial_template = 'random'  # 'random' 'general+random'
 preclean = None
-{  # preclean this or None
-    "fillna": 'ffill',  # "mean" or "median" are most consistent
+{  # preclean option
+    "fillna": 'ffill',
     "transformations": {"0": "EWMAFilter"},
     "transformation_params": {
         "0": {"span": 14},
@@ -79,17 +83,17 @@ if initial_training == "auto":
 # set max generations based on settings, increase for slower but greater chance of highest accuracy
 # if include_ensemble is specified in import_templates, ensembles can progressively nest over generations
 if initial_training:
-    gens = 50
+    gens = 100
     models_to_validate = 0.35
-    ensemble = ["horizontal-max", "dist", "simple", "mosaic", "mosaic-window"]
+    ensemble = ["horizontal-max", "dist", "simple"]  # , "mosaic", "mosaic-window"
 elif evolve:
-    gens = 20
-    models_to_validate = 0.4
-    ensemble = ["horizontal-max", "mosaic", "mosaic-window", "dist", "simple"]
+    gens = 10
+    models_to_validate = 0.3
+    ensemble = ["horizontal-max", "dist", "simple"]  # "mosaic", "mosaic-window", "subsample"
 else:
     gens = 0
     models_to_validate = 0.99
-    ensemble = ["horizontal-max", "mosaic", "mosaic-window", "dist", "simple"]
+    ensemble = ["horizontal-max", "dist", "simple"]  # "mosaic", "mosaic-window",
 
 # only save the very best model if not evolve
 if evolve:
@@ -119,11 +123,14 @@ df = load_live_daily(
     weather_years=3,
     london_air_days=700,
     gsa_key=gsa_key,
-    gov_domain_list=['usajobs.gov', 'usps.com', 'weather.gov'],
+    gov_domain_list=None,  # ['usajobs.gov', 'usps.com', 'weather.gov'],
     gov_domain_limit=700,
 )
 # remove "volume" data as it skews MAE (another solution is to adjust metric_weighting)
 df = df[[x for x in df.columns if "_volume" not in x]]
+# remove dividends and stock splits as it skews metrics (too intermittent)
+df = df[[x for x in df.columns if "_dividends" not in x]]
+df = df[[x for x in df.columns if "stock_splits" not in x]]
 
 df = df[df.index.year > 1999]
 start_time = datetime.datetime.now()
@@ -139,6 +146,9 @@ print(
     f"Series with most NaN: {df.head(365).isnull().sum().sort_values(ascending=False).head(5)}"
 )
 
+df.to_csv(f"training_data_{forecast_name}.csv")
+# df = pd.read_csv(f"training_data_{forecast_name}.csv", index_col=0, parse_dates=[0])
+
 # example regressor with some things we can glean from data and datetime index
 # note this only accepts `wide` style input dataframes
 regr_train, regr_fcst = create_regressor(
@@ -150,8 +160,9 @@ regr_train, regr_fcst = create_regressor(
     summarize="auto",
     backfill="bfill",
     fill_na="spline",
-    holiday_countries=["US"],  # requires holidays package
-    datepart_method="simple_2",
+    holiday_countries={"US": None},  # requires holidays package
+    encode_holiday_type=True,
+    # datepart_method="simple_2",
 )
 
 # remove the first forecast_length rows (because those are lost in regressor)
@@ -287,10 +298,12 @@ if graph:
         model.plot_horizontal_transformers()
         # plt.savefig("transformers.png", dpi=300)
         plt.show()
+        model.plot_horizontal_model_count()
+        plt.show()
 
         model.plot_horizontal()
         plt.show()
-        # plt.savefig("horizontal.png", dpi=300)
+        # plt.savefig("horizontal.png", dpi=300, bbox_inches="tight")
 
         if str(model_parameters["model_name"]).lower() in ["mosaic", "mosaic-window"]:
             mosaic_df = model.mosaic_to_df()

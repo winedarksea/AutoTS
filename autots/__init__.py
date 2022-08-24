@@ -21,8 +21,10 @@ from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.tools.shaping import long_to_wide
 from autots.tools.regressor import create_lagged_regressor, create_regressor
 from autots.evaluator.auto_model import model_forecast
+from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 
-__version__ = '0.4.2'
+
+__version__ = '0.5.0'
 
 TransformTS = GeneralTransformer
 
@@ -45,4 +47,6 @@ __all__ = [
     'create_lagged_regressor',
     'create_regressor',
     'EventRiskForecast',
+    'AnomalyDetector',
+    'HolidayDetector',
 ]

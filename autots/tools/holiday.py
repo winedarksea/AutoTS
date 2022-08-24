@@ -3,7 +3,12 @@ import numpy as np
 import pandas as pd
 
 
-def holiday_flag(DTindex, country: str = 'US', encode_holiday_type: bool = False, holidays_subdiv=None):
+def holiday_flag(
+    DTindex,
+    country: str = 'US',
+    encode_holiday_type: bool = False,
+    holidays_subdiv=None,
+):
     """Create a 0/1 flag for given datetime index. Includes fallback to pandas for US holidays if holidays package unavailable.
 
     Args:
@@ -18,7 +23,10 @@ def holiday_flag(DTindex, country: str = 'US', encode_holiday_type: bool = False
     if country in ['US', "USA", "UNITED STATES"]:
         try:
             holi_days = query_holidays(
-                DTindex, country="US", encode_holiday_type=encode_holiday_type, holidays_subdiv=holidays_subdiv
+                DTindex,
+                country="US",
+                encode_holiday_type=encode_holiday_type,
+                holidays_subdiv=holidays_subdiv,
             )
         except Exception:
             from pandas.tseries.holiday import USFederalHolidayCalendar
@@ -27,20 +35,25 @@ def holiday_flag(DTindex, country: str = 'US', encode_holiday_type: bool = False
             holi_days = (
                 USFederalHolidayCalendar()
                 .holidays()
-                .to_series()[DTindex[0]: DTindex[-1]]
+                .to_series()[DTindex[0] : DTindex[-1]]
             )
             holi_days = pd.Series(np.repeat(1, len(holi_days)), index=holi_days)
             holi_days = holi_days.reindex(DTindex).fillna(0)
             holi_days = holi_days.rename("holiday_flag")
     else:
         holi_days = query_holidays(
-            DTindex, country=country, encode_holiday_type=encode_holiday_type, holidays_subdiv=holidays_subdiv
+            DTindex,
+            country=country,
+            encode_holiday_type=encode_holiday_type,
+            holidays_subdiv=holidays_subdiv,
         )
 
     return holi_days
 
 
-def query_holidays(DTindex, country: str, encode_holiday_type: bool = False, holidays_subdiv=None):
+def query_holidays(
+    DTindex, country: str, encode_holiday_type: bool = False, holidays_subdiv=None
+):
     """Query holidays package for dates.
 
     Args:
@@ -51,7 +64,9 @@ def query_holidays(DTindex, country: str, encode_holiday_type: bool = False, hol
     import holidays
 
     years = list(range(DTindex[0].year, DTindex[-1].year + 1))
-    country_holidays_base = holidays.CountryHoliday(country, years=years, subdiv=holidays_subdiv)
+    country_holidays_base = holidays.CountryHoliday(
+        country, years=years, subdiv=holidays_subdiv
+    )
     if encode_holiday_type:
         # sorting to hopefully get consistent encoding across runs (requires long period...)
         country_holidays = pd.Series(country_holidays_base).sort_values()

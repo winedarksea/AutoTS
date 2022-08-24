@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.evaluator package &#8212; AutoTS 0.4.2 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 0.5.0 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -38,6 +38,100 @@
 <section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
 </section>
+<section id="module-autots.evaluator.anomaly_detector">
+<span id="autots-evaluator-anomaly-detector-module"></span><h2>autots.evaluator.anomaly_detector module<a class="headerlink" href="#module-autots.evaluator.anomaly_detector" title="Permalink to this headline">¶</a></h2>
+<p>Anomaly Detector
+Created on Mon Jul 18 14:19:55 2022</p>
+<p>&#64;author: Colin</p>
+<dl class="class">
+<dt id="autots.evaluator.anomaly_detector.AnomalyDetector">
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.anomaly_detector.</code><code class="sig-name descname">AnomalyDetector</code><span class="sig-paren">(</span><em class="sig-param">output='multivariate'</em>, <em class="sig-param">method='zscore'</em>, <em class="sig-param">transform_dict={'transformation_params': {0: {'datepart_method': 'simple_3'</em>, <em class="sig-param">'regression_model': {'model': 'ElasticNet'</em>, <em class="sig-param">'model_params': {}}}}</em>, <em class="sig-param">'transformations': {0: 'DatepartRegression'}}</em>, <em class="sig-param">forecast_params=None</em>, <em class="sig-param">method_params={}</em>, <em class="sig-param">eval_period=None</em>, <em class="sig-param">n_jobs=1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.AnomalyDetector" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="method">
+<dt id="autots.evaluator.anomaly_detector.AnomalyDetector.detect">
+<code class="sig-name descname">detect</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.AnomalyDetector.detect" title="Permalink to this definition">¶</a></dt>
+<dd><p>All will return -1 for anomalies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pd.DataFrame</em>) – pandas wide-style data</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>pd.DataFrame (classifications, -1 = outlier, 1 = not outlier), pd.DataFrame s(scores)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.evaluator.anomaly_detector.AnomalyDetector.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.AnomalyDetector.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.evaluator.anomaly_detector.AnomalyDetector.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.AnomalyDetector.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.evaluator.anomaly_detector.AnomalyDetector.plot">
+<code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">series_name=None</em>, <em class="sig-param">title=None</em>, <em class="sig-param">plot_kwargs={}</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.AnomalyDetector.plot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.evaluator.anomaly_detector.HolidayDetector">
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.anomaly_detector.</code><code class="sig-name descname">HolidayDetector</code><span class="sig-paren">(</span><em class="sig-param">anomaly_detector_params={}</em>, <em class="sig-param">threshold=0.8</em>, <em class="sig-param">min_occurrences=2</em>, <em class="sig-param">splash_threshold=0.65</em>, <em class="sig-param">use_dayofmonth_holidays=True</em>, <em class="sig-param">use_wkdom_holidays=True</em>, <em class="sig-param">use_wkdeom_holidays=True</em>, <em class="sig-param">use_lunar_holidays=True</em>, <em class="sig-param">use_lunar_weekday=False</em>, <em class="sig-param">use_islamic_holidays=True</em>, <em class="sig-param">use_hebrew_holidays=True</em>, <em class="sig-param">output: str = 'multivariate'</em>, <em class="sig-param">n_jobs: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="method">
+<dt id="autots.evaluator.anomaly_detector.HolidayDetector.dates_to_holidays">
+<code class="sig-name descname">dates_to_holidays</code><span class="sig-paren">(</span><em class="sig-param">dates</em>, <em class="sig-param">style='flag'</em>, <em class="sig-param">holiday_impacts=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.dates_to_holidays" title="Permalink to this definition">¶</a></dt>
+<dd><p>Populate date information for a given pd.DatetimeIndex.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dates</strong> (<em>pd.DatetimeIndex</em>) – list of dates</p></li>
+<li><p><strong>day_holidays</strong> (<em>pd.DataFrame</em>) – list of month/day holidays. Pass None if not available</p></li>
+<li><p><strong>style</strong> (<em>str</em>) – option for how to return information
+“long” - return date, name, series for all holidays in a long style dataframe
+“impact” - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
+‘flag’ - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
+‘prophet’ - return format required for prophet. Will need to be filtered on <cite>series</cite> for multivariate case
+‘series_flag’ - dates, series 0/1 for if holiday occurred in any calendar</p></li>
+<li><p><strong>holiday_impacts</strong> (<em>dict</em>) – a dict passed to .replace contaning values for holiday_names, or str ‘value’ or ‘anomaly_score’</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.evaluator.anomaly_detector.HolidayDetector.detect">
+<code class="sig-name descname">detect</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.detect" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run holiday detection. Input wide-style pandas time series.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.evaluator.anomaly_detector.HolidayDetector.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.evaluator.anomaly_detector.HolidayDetector.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.evaluator.anomaly_detector.HolidayDetector.plot">
+<code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">series_name=None</em>, <em class="sig-param">include_anomalies=True</em>, <em class="sig-param">title=None</em>, <em class="sig-param">plot_kwargs={}</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.plot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.evaluator.anomaly_detector.HolidayDetector.plot_anomaly">
+<code class="sig-name descname">plot_anomaly</code><span class="sig-paren">(</span><em class="sig-param">kwargs={}</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.HolidayDetector.plot_anomaly" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
 <section id="module-autots.evaluator.auto_model">
 <span id="autots-evaluator-auto-model-module"></span><h2>autots.evaluator.auto_model module<a class="headerlink" href="#module-autots.evaluator.auto_model" title="Permalink to this headline">¶</a></h2>
 <p>Mid-level helper functions for AutoTS.</p>
@@ -57,7 +151,7 @@
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.ModelPrediction">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">ModelPrediction</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">forecast_length: int</em>, <em class="sig-param">transformation_dict: dict</em>, <em class="sig-param">model_str: str</em>, <em class="sig-param">parameter_dict: dict</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">future_regressor_train=None</em>, <em class="sig-param">future_regressor_forecast=None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">startTimeStamps=None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">fail_on_forecast_nan: bool = True</em>, <em class="sig-param">return_model: bool = False</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">current_model_file: str = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.ModelPrediction" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">ModelPrediction</code><span class="sig-paren">(</span><em class="sig-param">df_train</em>, <em class="sig-param">forecast_length: int</em>, <em class="sig-param">transformation_dict: dict</em>, <em class="sig-param">model_str: str</em>, <em class="sig-param">parameter_dict: dict</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">future_regressor_train=None</em>, <em class="sig-param">future_regressor_forecast=None</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">startTimeStamps=None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">fail_on_forecast_nan: bool = True</em>, <em class="sig-param">return_model: bool = False</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = None</em>, <em class="sig-param">current_model_file: str = None</em>, <em class="sig-param">model_count: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.ModelPrediction" title="Permalink to this definition">¶</a></dt>
 <dd><p>Feed parameters into modeling pipeline</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -209,7 +303,7 @@ only provided for ‘mosaic’ ensembling</p>
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.back_forecast">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">back_forecast</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">model_name</em>, <em class="sig-param">model_param_dict</em>, <em class="sig-param">model_transform_dict</em>, <em class="sig-param">future_regressor_train=None</em>, <em class="sig-param">n_splits: int = 'auto'</em>, <em class="sig-param">forecast_length=14</em>, <em class="sig-param">frequency='infer'</em>, <em class="sig-param">prediction_interval=0.9</em>, <em class="sig-param">no_negatives=False</em>, <em class="sig-param">constraint=None</em>, <em class="sig-param">holiday_country='US'</em>, <em class="sig-param">random_seed=123</em>, <em class="sig-param">n_jobs='auto'</em>, <em class="sig-param">verbose=0</em>, <em class="sig-param">eval_periods: int = None</em>, <em class="sig-param">current_model_file: str = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.back_forecast" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">back_forecast</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">model_name</em>, <em class="sig-param">model_param_dict</em>, <em class="sig-param">model_transform_dict</em>, <em class="sig-param">future_regressor_train=None</em>, <em class="sig-param">n_splits: int = 'auto'</em>, <em class="sig-param">forecast_length=7</em>, <em class="sig-param">frequency='infer'</em>, <em class="sig-param">prediction_interval=0.9</em>, <em class="sig-param">no_negatives=False</em>, <em class="sig-param">constraint=None</em>, <em class="sig-param">holiday_country='US'</em>, <em class="sig-param">random_seed=123</em>, <em class="sig-param">n_jobs='auto'</em>, <em class="sig-param">verbose=0</em>, <em class="sig-param">eval_periods: int = None</em>, <em class="sig-param">current_model_file: str = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.back_forecast" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create forecasts for the historical training data, ie. backcast or back forecast.</p>
 <p>This actually forecasts on historical data, these are not fit model values as are often returned by other packages.
 As such, this will be slower, but more representative of real world model performance.
@@ -266,7 +360,7 @@ Runtime - smaller is better</p>
 
 <dl class="function">
 <dt id="autots.evaluator.auto_model.model_forecast">
-<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">model_forecast</code><span class="sig-paren">(</span><em class="sig-param">model_name, model_param_dict, model_transform_dict, df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=None, future_regressor_forecast=None, holiday_country: str = 'US', startTimeStamps=None, grouping_ids=None, fail_on_forecast_nan: bool = True, random_seed: int = 2020, verbose: int = 0, n_jobs: int = 'auto', template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], horizontal_subset: list = None, return_model: bool = False, current_model_file: str = None, **kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.model_forecast" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">model_forecast</code><span class="sig-paren">(</span><em class="sig-param">model_name, model_param_dict, model_transform_dict, df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=None, future_regressor_forecast=None, holiday_country: str = 'US', startTimeStamps=None, grouping_ids=None, fail_on_forecast_nan: bool = True, random_seed: int = 2020, verbose: int = 0, n_jobs: int = 'auto', template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], horizontal_subset: list = None, return_model: bool = False, current_model_file: str = None, model_count: int = 0, **kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.model_forecast" title="Permalink to this definition">¶</a></dt>
 <dd><p>Takes numeric data, returns numeric forecasts.</p>
 <p>Only one model (albeit potentially an ensemble)!
 Horizontal ensembles can not be nested, other ensemble types can be.</p>
@@ -310,6 +404,12 @@ pass an empty dictionary if no transformations are desired.</p></li>
 <dt id="autots.evaluator.auto_model.model_list_to_dict">
 <code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">model_list_to_dict</code><span class="sig-paren">(</span><em class="sig-param">model_list</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.model_list_to_dict" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convert various possibilities to dict.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.evaluator.auto_model.random_model">
+<code class="sig-prename descclassname">autots.evaluator.auto_model.</code><code class="sig-name descname">random_model</code><span class="sig-paren">(</span><em class="sig-param">model_list</em>, <em class="sig-param">model_prob</em>, <em class="sig-param">transformer_list='fast'</em>, <em class="sig-param">transformer_max_depth=2</em>, <em class="sig-param">models_mode='random'</em>, <em class="sig-param">counter=15</em>, <em class="sig-param">n_models=5</em>, <em class="sig-param">keyword_format=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_model.random_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate a random model from a given list of models and probabilities.</p>
 </dd></dl>
 
 <dl class="function">
@@ -638,6 +738,11 @@ used in 0.2.x but not 0.3.x+ versions. retained for potential future use</p></li
 </dd></dl>
 
 <dl class="method">
+<dt id="autots.evaluator.auto_ts.AutoTS.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
 <dt id="autots.evaluator.auto_ts.AutoTS.horizontal_per_generation">
 <code class="sig-name descname">horizontal_per_generation</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.horizontal_per_generation" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
@@ -727,6 +832,12 @@ doesn’t account for the benefits seen for ensembling.</p>
 </ul>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.evaluator.auto_ts.AutoTS.plot_horizontal_model_count">
+<code class="sig-name descname">plot_horizontal_model_count</code><span class="sig-paren">(</span><em class="sig-param">color_list=None</em>, <em class="sig-param">top_n: int = 20</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.plot_horizontal_model_count" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plots most common models. Does not factor in nested in non-horizontal Ensembles.</p>
 </dd></dl>
 
 <dl class="method">
@@ -1398,6 +1509,21 @@ Also doesn’t like zeroes in either forecast or actual - results in poor error 
 </dl>
 <p class="rubric">References</p>
 <p><a class="reference external" href="https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error">https://en.wikipedia.org/wiki/Symmetric_mean_absolute_percentage_error</a></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.evaluator.metrics.threshold_loss">
+<code class="sig-prename descclassname">autots.evaluator.metrics.</code><code class="sig-name descname">threshold_loss</code><span class="sig-paren">(</span><em class="sig-param">actual</em>, <em class="sig-param">forecast</em>, <em class="sig-param">threshold</em>, <em class="sig-param">penalty_threshold=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.metrics.threshold_loss" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run once for overestimate then again for underestimate. Add both for combined view.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>actual/forecast</strong> – 2D wide style data DataFrame or np.array</p></li>
+<li><p><strong>threshold</strong> – (0, 2), 0.9 (penalize 10% and greater underestimates) and 1.1 (penalize overestimate over 10%)</p></li>
+<li><p><strong>penalty_threshold</strong> – defaults to same as threshold, adjust strength of penalty</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 </section>

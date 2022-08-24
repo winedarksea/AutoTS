@@ -9,6 +9,7 @@ import datetime
 import json
 from hashlib import md5
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
+from autots.models.base import PredictionObject
 from autots.models.ensemble import (
     EnsembleForecast,
     generalize_horizontal,
@@ -1578,7 +1579,8 @@ def random_model(
     transformer_list='fast',
     transformer_max_depth=2,
     models_mode='random',
-    counter=15, n_models=5,
+    counter=15,
+    n_models=5,
     keyword_format=False,
 ):
     """Generate a random model from a given list of models and probabilities."""
@@ -2094,7 +2096,9 @@ def generate_score(
             model_results['TotalRuntimeSeconds'],
         )
     else:
-        model_results['TotalRuntimeSeconds'] = model_results['TotalRuntime'].dt.total_seconds().round(4)
+        model_results['TotalRuntimeSeconds'] = (
+            model_results['TotalRuntime'].dt.total_seconds().round(4)
+        )
     # generate minimizing scores, where smaller = better accuracy
     try:
         model_results = model_results.replace([np.inf, -np.inf], np.nan)
@@ -2175,15 +2179,11 @@ def generate_score(
             runtime_scaler = runtime.min()  # [runtime != 0]
             runtime_score = runtime / runtime_scaler
             # this scales it into a similar range as SMAPE
-            runtime_score = runtime_score * (
-                smape_median / runtime_score.median()
-            )
+            runtime_score = runtime_score * (smape_median / runtime_score.median())
             overall_score = overall_score + (runtime_score * runtime_weighting)
         # these have values in the range 0 to 1
         if contour_weighting > 0:
-            contour_score = (
-                2 - model_results['contour_weighted']
-            ) * smape_median
+            contour_score = (2 - model_results['contour_weighted']) * smape_median
             overall_score = overall_score + (contour_score * contour_weighting)
         if oda_weighting > 0:
             oda_score = (2 - model_results['oda_weighted']) * smape_median
@@ -2447,6 +2447,7 @@ def back_forecast(
                 b_forecast_low.index = result_idx
         except Exception as e:
             print(f"back_forecast split {n} failed with {repr(e)}")
+            df_forecast = PredictionObject()
             b_df = pd.DataFrame(
                 np.nan, index=df.index[int_idx:int_idx_1], columns=df.columns
             )

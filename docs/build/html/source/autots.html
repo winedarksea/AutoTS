@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>autots package &#8212; AutoTS 0.4.2 documentation</title>
+    <title>autots package &#8212; AutoTS 0.5.0 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -47,6 +47,7 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="autots.evaluator.html">autots.evaluator package</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="autots.evaluator.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.evaluator.html#module-autots.evaluator.anomaly_detector">autots.evaluator.anomaly_detector module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.evaluator.html#module-autots.evaluator.auto_model">autots.evaluator.auto_model module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.evaluator.html#module-autots.evaluator.auto_ts">autots.evaluator.auto_ts module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.evaluator.html#module-autots.evaluator.benchmark">autots.evaluator.benchmark module</a></li>
@@ -64,6 +65,7 @@
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.ensemble">autots.models.ensemble module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.gluonts">autots.models.gluonts module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.greykite">autots.models.greykite module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.matrix_var">autots.models.matrix_var module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.model_list">autots.models.model_list module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.prophet">autots.models.prophet module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.pytorch">autots.models.pytorch module</a></li>
@@ -81,17 +83,21 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="autots.tools.html">autots.tools package</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.anomaly_utils">autots.tools.anomaly_utils module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.calendar">autots.tools.calendar module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.cointegration">autots.tools.cointegration module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.cpu_count">autots.tools.cpu_count module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.hierarchial">autots.tools.hierarchial module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.holiday">autots.tools.holiday module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.impute">autots.tools.impute module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.lunar">autots.tools.lunar module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.percentile">autots.tools.percentile module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.probabilistic">autots.tools.probabilistic module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.profile">autots.tools.profile module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.regressor">autots.tools.regressor module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.seasonal">autots.tools.seasonal module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.shaping">autots.tools.shaping module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.thresholding">autots.tools.thresholding module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.transform">autots.tools.transform module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.window_functions">autots.tools.window_functions module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools">Module contents</a></li>
@@ -158,18 +164,21 @@ if False, return a Series with dt index</p></li>
 
 <dl class="function">
 <dt id="autots.load_live_daily">
-<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">load_live_daily</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False, fred_key: str = None, fred_series=['DGS10', 'T5YIE', 'SP500', 'DCOILWTICO', 'DEXUSEU', 'WPU0911'], observation_start: str = '2000-01-01', tickers: list = ['MSFT'], trends_list: list = ['forecasting', 'cycling', 'microsoft'], trends_geo: str = 'US', weather_data_types: list = ['AWND', 'WSF2', 'TAVG'], weather_stations: list = ['USW00094846', 'USW00014925'], weather_years: int = 10, london_air_stations: list = ['CT3', 'SK8'], london_air_species: str = 'PM25', london_air_days: int = 180, earthquake_days: int = 180, earthquake_min_magnitude: int = 5, gsa_key: str = None, gov_domain_list=['nasa.gov'], gov_domain_limit: int = 600, weather_event_types=['%28Z%29+Winter+Weather', '%28Z%29+Winter+Storm'], timeout: float = 300.05, sleep_seconds: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.load_live_daily" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">load_live_daily</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False, observation_start: str = None, observation_end: str = None, fred_key: str = None, fred_series=['DGS10', 'T5YIE', 'SP500', 'DCOILWTICO', 'DEXUSEU', 'WPU0911'], tickers: list = ['MSFT'], trends_list: list = ['forecasting', 'cycling', 'microsoft'], trends_geo: str = 'US', weather_data_types: list = ['AWND', 'WSF2', 'TAVG'], weather_stations: list = ['USW00094846', 'USW00014925'], weather_years: int = 10, london_air_stations: list = ['CT3', 'SK8'], london_air_species: str = 'PM25', london_air_days: int = 180, earthquake_days: int = 180, earthquake_min_magnitude: int = 5, gsa_key: str = None, gov_domain_list=['nasa.gov'], gov_domain_limit: int = 600, wikipedia_pages: list = ['Microsoft_Office', 'List_of_highest-grossing_films'], wiki_language: str = 'en', weather_event_types=['%28Z%29+Winter+Weather', '%28Z%29+Winter+Storm'], timeout: float = 300.05, sleep_seconds: int = 2</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.load_live_daily" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates a dataframe of data up to the present day. Requires active internet connection.
+Try to be respectful of these free data sources by not calling too much too heavily.
 Pass None instead of specification lists to exclude a data source.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>long</strong> (<em>bool</em>) – whether to return in long format or wide</p></li>
+<li><p><strong>observation_start</strong> (<em>str</em>) – %Y-%m-%d earliest day to retrieve, passed to Fred.get_series and yfinance.history
+note that apis with more restricts have other default lengths below which ignore this</p></li>
+<li><p><strong>observation_end</strong> (<em>str</em>) – %Y-%m-%d most recent day to retrieve</p></li>
 <li><p><strong>fred_key</strong> (<em>str</em>) – <a class="reference external" href="https://fred.stlouisfed.org/docs/api/api_key.html">https://fred.stlouisfed.org/docs/api/api_key.html</a></p></li>
 <li><p><strong>fred_series</strong> (<em>list</em>) – list of FRED series IDs. This requires fredapi package</p></li>
-<li><p><strong>observation_start</strong> (<em>datetime</em>) – earliest day to retrieve, passed to Fred.get_series and yfinance.history</p></li>
-<li><p><strong>tickers</strong> (<em>list</em>) – list of stock tickers, requires yfinance</p></li>
-<li><p><strong>trends_list</strong> (<em>list</em>) – list of search keywords, requires pytrends. None to skip.</p></li>
+<li><p><strong>tickers</strong> (<em>list</em>) – list of stock tickers, requires yfinance pypi package</p></li>
+<li><p><strong>trends_list</strong> (<em>list</em>) – list of search keywords, requires pytrends pypi package. None to skip.</p></li>
 <li><p><strong>weather_data_types</strong> (<em>list</em>) – from NCEI NOAA api data types, GHCN Daily Weather Elements
 PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG</p></li>
 <li><p><strong>weather_stations</strong> (<em>list</em>) – from NCEI NOAA api station ids. Pass empty list to skip.</p></li>
@@ -180,6 +189,7 @@ PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG</p></li>
 <li><p><strong>gov_domain_list</strong> (<em>list</em>) – dist of government run domains to get traffic data for. Can be very slow, so fewer is better.
 some examples: [‘usps.com’, ‘ncbi.nlm.nih.gov’, ‘cdc.gov’, ‘weather.gov’, ‘irs.gov’, “usajobs.gov”, “studentaid.gov”, ‘nasa.gov’, “uk.usembassy.gov”, “tsunami.gov”]</p></li>
 <li><p><strong>gov_domain_limit</strong> (<em>int</em>) – max number of records. Smaller will be faster. Max is currently 10000.</p></li>
+<li><p><strong>wikipedia_pages</strong> (<em>list</em>) – list of Wikipedia pages, html encoded if needed (underscore for space)</p></li>
 <li><p><strong>weather_event_types</strong> (<em>list</em>) – list of html encoded severe weather event types <a class="reference external" href="https://www1.ncdc.noaa.gov/pub/data/swdi/stormevents/csvfiles/Storm-Data-Export-Format.pdf">https://www1.ncdc.noaa.gov/pub/data/swdi/stormevents/csvfiles/Storm-Data-Export-Format.pdf</a></p></li>
 <li><p><strong>timeout</strong> (<em>float</em>) – used by some queries</p></li>
 <li><p><strong>sleep_seconds</strong> (<em>int</em>) – increasing this may reduce probability of server download failures</p></li>
@@ -509,6 +519,11 @@ used in 0.2.x but not 0.3.x+ versions. retained for potential future use</p></li
 </dd></dl>
 
 <dl class="method">
+<dt id="autots.AutoTS.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
 <dt id="autots.AutoTS.horizontal_per_generation">
 <code class="sig-name descname">horizontal_per_generation</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.horizontal_per_generation" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
@@ -598,6 +613,12 @@ doesn’t account for the benefits seen for ensembling.</p>
 </ul>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.AutoTS.plot_horizontal_model_count">
+<code class="sig-name descname">plot_horizontal_model_count</code><span class="sig-paren">(</span><em class="sig-param">color_list=None</em>, <em class="sig-param">top_n: int = 20</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.plot_horizontal_model_count" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plots most common models. Does not factor in nested in non-horizontal Ensembles.</p>
 </dd></dl>
 
 <dl class="method">
@@ -709,7 +730,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="class">
 <dt id="autots.GeneralTransformer">
-<em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">GeneralTransformer</code><span class="sig-paren">(</span><em class="sig-param">fillna: str = None</em>, <em class="sig-param">transformations: dict = {}</em>, <em class="sig-param">transformation_params: dict = {}</em>, <em class="sig-param">grouping: str = None</em>, <em class="sig-param">reconciliation: str = None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">random_seed: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">GeneralTransformer</code><span class="sig-paren">(</span><em class="sig-param">fillna: str = None</em>, <em class="sig-param">transformations: dict = {}</em>, <em class="sig-param">transformation_params: dict = {}</em>, <em class="sig-param">grouping: str = None</em>, <em class="sig-param">reconciliation: str = None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">n_jobs: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Remove fillNA and then mathematical transformations.</p>
 <p>Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a ‘wide’ (one column per series) shape.</p>
@@ -789,7 +810,10 @@ most of the interpolate methods from pandas.interpolate</p>
 “EWMAFilter” - use an exponential weighted moving average to smooth data
 “MeanDifference” - joint version of differencing
 “Cointegration” - VECM but just the vectors
-“BTCD” - Box Tiao decomposition</p>
+“BTCD” - Box Tiao decomposition
+‘AlignLastValue’: align forecast start to end of training data
+‘AnomalyRemoval’: more tailored anomaly removal options
+‘HolidayTransformer’: detects holidays and wishes good cheer to all</p>
 </p></li>
 <li><p><strong>transformation_params</strong> (<em>dict</em>) – params of transformers {0: {}, 1: {‘model’: ‘Poisson’}, …}
 pass through dictionary of empty dictionaries to utilize defaults</p></li>
@@ -831,6 +855,11 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 </dd></dl>
 
 <dl class="method">
+<dt id="autots.GeneralTransformer.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
 <dt id="autots.GeneralTransformer.inverse_transform">
 <code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em>, <em class="sig-param">fillzero: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Undo the madness.</p>
@@ -847,7 +876,7 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 
 <dl class="method">
 <dt id="autots.GeneralTransformer.retrieve_transformer">
-<em class="property">classmethod </em><code class="sig-name descname">retrieve_transformer</code><span class="sig-paren">(</span><em class="sig-param">transformation: str = None</em>, <em class="sig-param">param: dict = {}</em>, <em class="sig-param">df=None</em>, <em class="sig-param">random_seed: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer.retrieve_transformer" title="Permalink to this definition">¶</a></dt>
+<em class="property">classmethod </em><code class="sig-name descname">retrieve_transformer</code><span class="sig-paren">(</span><em class="sig-param">transformation: str = None</em>, <em class="sig-param">param: dict = {}</em>, <em class="sig-param">df=None</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">n_jobs: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer.retrieve_transformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Retrieves a specific transformer object from a string.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -873,9 +902,9 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 
 <dl class="function">
 <dt id="autots.RandomTransform">
-<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.07</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.01</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.03</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01</em>, <em class="sig-param">'EWMAFilter': 0.02</em>, <em class="sig-param">'MeanDifference': 0.002</em>, <em class="sig-param">'BTCD': 0.01</em>, <em class="sig-param">'Cointegration': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.4</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.1</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.05</em>, <em class="sig-param">'mean': 0.06</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.03</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.4</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">superfast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.RandomTransform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.07</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.01</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.03</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01</em>, <em class="sig-param">'EWMAFilter': 0.02</em>, <em class="sig-param">'MeanDifference': 0.002</em>, <em class="sig-param">'BTCD': 0.01</em>, <em class="sig-param">'Cointegration': 0.01</em>, <em class="sig-param">'AlignLastValue': 0.1</em>, <em class="sig-param">'AnomalyRemoval': 0.03</em>, <em class="sig-param">'HolidayTransformer': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.4</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.1</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.05</em>, <em class="sig-param">'mean': 0.06</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.03</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.4</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">superfast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.RandomTransform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a dict of randomly choosen transformation selections.</p>
-<p>SinTrend is used as a signal that slow parameters are allowed.</p>
+<p>BTCD is used as a signal that slow parameters are allowed.</p>
 </dd></dl>
 
 <dl class="function">
@@ -908,7 +937,7 @@ if categorical data is provided, <cite>aggfunc=’first’</cite> is recommended
 
 <dl class="function">
 <dt id="autots.model_forecast">
-<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">model_forecast</code><span class="sig-paren">(</span><em class="sig-param">model_name, model_param_dict, model_transform_dict, df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=None, future_regressor_forecast=None, holiday_country: str = 'US', startTimeStamps=None, grouping_ids=None, fail_on_forecast_nan: bool = True, random_seed: int = 2020, verbose: int = 0, n_jobs: int = 'auto', template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], horizontal_subset: list = None, return_model: bool = False, current_model_file: str = None, **kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.model_forecast" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">model_forecast</code><span class="sig-paren">(</span><em class="sig-param">model_name, model_param_dict, model_transform_dict, df_train, forecast_length: int, frequency: str = 'infer', prediction_interval: float = 0.9, no_negatives: bool = False, constraint: float = None, future_regressor_train=None, future_regressor_forecast=None, holiday_country: str = 'US', startTimeStamps=None, grouping_ids=None, fail_on_forecast_nan: bool = True, random_seed: int = 2020, verbose: int = 0, n_jobs: int = 'auto', template_cols: list = ['Model', 'ModelParameters', 'TransformationParameters', 'Ensemble'], horizontal_subset: list = None, return_model: bool = False, current_model_file: str = None, model_count: int = 0, **kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.model_forecast" title="Permalink to this definition">¶</a></dt>
 <dd><p>Takes numeric data, returns numeric forecasts.</p>
 <p>Only one model (albeit potentially an ensemble)!
 Horizontal ensembles can not be nested, other ensemble types can be.</p>
@@ -979,7 +1008,7 @@ Useful to some models that don’t otherwise use such information.</p>
 
 <dl class="function">
 <dt id="autots.create_regressor">
-<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">create_regressor</code><span class="sig-paren">(</span><em class="sig-param">df, forecast_length, frequency: str = 'infer', holiday_countries: list = ['US'], datepart_method: str = 'recurring', drop_most_recent: int = 0, scale: bool = True, summarize: str = 'auto', backfill: str = 'bfill', n_jobs: str = 'auto', fill_na: str = 'ffill', aggfunc: str = 'first'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.create_regressor" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">create_regressor</code><span class="sig-paren">(</span><em class="sig-param">df, forecast_length, frequency: str = 'infer', holiday_countries: list = ['US'], datepart_method: str = 'simple_binarized', drop_most_recent: int = 0, scale: bool = True, summarize: str = 'auto', backfill: str = 'bfill', n_jobs: str = 'auto', fill_na: str = 'ffill', aggfunc: str = 'first', encode_holiday_type=False, holiday_detector_params={'anomaly_detector_params': {'forecast_params': None, 'method': 'mad', 'method_params': {'alpha': 0.05, 'distribution': 'gamma'}, 'transform_dict': {'fillna': None, 'transformation_params': {'0': {}}, 'transformations': {'0': 'DifferencedTransformer'}}}, 'output': 'univariate', 'splash_threshold': None, 'threshold': 0.8, 'use_dayofmonth_holidays': True, 'use_hebrew_holidays': False, 'use_islamic_holidays': False, 'use_lunar_holidays': False, 'use_lunar_weekday': False, 'use_wkdeom_holidays': False, 'use_wkdom_holidays': True}, holiday_regr_style='flag'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.create_regressor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a regressor from information available in the existing dataset.
 Components: are lagged data, datepart information, and holiday.</p>
 <p>All of this info and more is already created by the ~Regression models, but this may help some other models (GLM, WindowRegression)</p>
@@ -990,10 +1019,11 @@ If you don’t want the lagged features, set summarize=”median” which will o
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pd.DataFrame</em>) – WIDE style dataframe (use long_to_wide if the data isn’t already)
-categorical features will be discard for this, if present</p></li>
+categorical series will be discard for this, if present</p></li>
 <li><p><strong>forecast_length</strong> (<em>int</em>) – time ahead that will be forecast</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – those annoying offset codes you have to always use for time series</p></li>
-<li><p><strong>holiday_countries</strong> (<em>list</em>) – list of countries to pull holidays for. Reqs holidays pkg</p></li>
+<li><p><strong>holiday_countries</strong> (<em>list</em>) – list of countries to pull holidays for. Reqs holidays pkg
+also can be a dict of {‘country’: “subdiv”} to include subdivision (state)</p></li>
 <li><p><strong>datepart_method</strong> (<em>str</em>) – see date_part from seasonal</p></li>
 <li><p><strong>scale</strong> (<em>bool</em>) – if True, use the StandardScaler to standardize the features</p></li>
 <li><p><strong>summarize</strong> (<em>str</em>) – options to summarize the features, if large:
@@ -1004,6 +1034,9 @@ categorical features will be discard for this, if present</p></li>
 “DatepartRegression” - backfill with DatepartRegression</p></li>
 <li><p><strong>fill_na</strong> (<em>str</em>) – method to prefill NAs in data, same methods as available elsewhere</p></li>
 <li><p><strong>aggfunc</strong> (<em>str</em>) – str or func, used if frequency is resampled</p></li>
+<li><p><strong>encode_holiday_type</strong> (<em>bool</em>) – if True, returns column per holiday, ONLY for holidays package country holidays (not Detector)</p></li>
+<li><p><strong>holiday_detector_params</strong> (<em>dict</em>) – passed to HolidayDetector, or None</p></li>
+<li><p><strong>holiday_regr_style</strong> (<em>str</em>) – passed to detector’s dates_to_holidays ‘flag’, ‘series_flag’, ‘impact’</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -1223,6 +1256,94 @@ If manual numpy array limits are used, the limits will need to be appropriate sh
 </dd>
 </dl>
 </dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.AnomalyDetector">
+<em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">AnomalyDetector</code><span class="sig-paren">(</span><em class="sig-param">output='multivariate'</em>, <em class="sig-param">method='zscore'</em>, <em class="sig-param">transform_dict={'transformation_params': {0: {'datepart_method': 'simple_3'</em>, <em class="sig-param">'regression_model': {'model': 'ElasticNet'</em>, <em class="sig-param">'model_params': {}}}}</em>, <em class="sig-param">'transformations': {0: 'DatepartRegression'}}</em>, <em class="sig-param">forecast_params=None</em>, <em class="sig-param">method_params={}</em>, <em class="sig-param">eval_period=None</em>, <em class="sig-param">n_jobs=1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AnomalyDetector" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="method">
+<dt id="autots.AnomalyDetector.detect">
+<code class="sig-name descname">detect</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AnomalyDetector.detect" title="Permalink to this definition">¶</a></dt>
+<dd><p>All will return -1 for anomalies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pd.DataFrame</em>) – pandas wide-style data</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>pd.DataFrame (classifications, -1 = outlier, 1 = not outlier), pd.DataFrame s(scores)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.AnomalyDetector.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AnomalyDetector.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.AnomalyDetector.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AnomalyDetector.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.AnomalyDetector.plot">
+<code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">series_name=None</em>, <em class="sig-param">title=None</em>, <em class="sig-param">plot_kwargs={}</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AnomalyDetector.plot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.HolidayDetector">
+<em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">HolidayDetector</code><span class="sig-paren">(</span><em class="sig-param">anomaly_detector_params={}</em>, <em class="sig-param">threshold=0.8</em>, <em class="sig-param">min_occurrences=2</em>, <em class="sig-param">splash_threshold=0.65</em>, <em class="sig-param">use_dayofmonth_holidays=True</em>, <em class="sig-param">use_wkdom_holidays=True</em>, <em class="sig-param">use_wkdeom_holidays=True</em>, <em class="sig-param">use_lunar_holidays=True</em>, <em class="sig-param">use_lunar_weekday=False</em>, <em class="sig-param">use_islamic_holidays=True</em>, <em class="sig-param">use_hebrew_holidays=True</em>, <em class="sig-param">output: str = 'multivariate'</em>, <em class="sig-param">n_jobs: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.HolidayDetector" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="method">
+<dt id="autots.HolidayDetector.dates_to_holidays">
+<code class="sig-name descname">dates_to_holidays</code><span class="sig-paren">(</span><em class="sig-param">dates</em>, <em class="sig-param">style='flag'</em>, <em class="sig-param">holiday_impacts=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.HolidayDetector.dates_to_holidays" title="Permalink to this definition">¶</a></dt>
+<dd><p>Populate date information for a given pd.DatetimeIndex.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dates</strong> (<em>pd.DatetimeIndex</em>) – list of dates</p></li>
+<li><p><strong>day_holidays</strong> (<em>pd.DataFrame</em>) – list of month/day holidays. Pass None if not available</p></li>
+<li><p><strong>style</strong> (<em>str</em>) – option for how to return information
+“long” - return date, name, series for all holidays in a long style dataframe
+“impact” - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
+‘flag’ - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
+‘prophet’ - return format required for prophet. Will need to be filtered on <cite>series</cite> for multivariate case
+‘series_flag’ - dates, series 0/1 for if holiday occurred in any calendar</p></li>
+<li><p><strong>holiday_impacts</strong> (<em>dict</em>) – a dict passed to .replace contaning values for holiday_names, or str ‘value’ or ‘anomaly_score’</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.HolidayDetector.detect">
+<code class="sig-name descname">detect</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.HolidayDetector.detect" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run holiday detection. Input wide-style pandas time series.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.HolidayDetector.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.HolidayDetector.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.HolidayDetector.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.HolidayDetector.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.HolidayDetector.plot">
+<code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">series_name=None</em>, <em class="sig-param">include_anomalies=True</em>, <em class="sig-param">title=None</em>, <em class="sig-param">plot_kwargs={}</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.HolidayDetector.plot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.HolidayDetector.plot_anomaly">
+<code class="sig-name descname">plot_anomaly</code><span class="sig-paren">(</span><em class="sig-param">kwargs={}</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.HolidayDetector.plot_anomaly" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
 
 </dd></dl>
 

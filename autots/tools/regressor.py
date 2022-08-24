@@ -23,10 +23,14 @@ def create_regressor(
     aggfunc: str = "first",
     encode_holiday_type=False,
     holiday_detector_params={
-        "threshold": 0.8, "splash_threshold": None,
-        "use_dayofmonth_holidays": True, "use_wkdom_holidays": True,
-        "use_wkdeom_holidays": False, "use_lunar_holidays": False,
-        "use_lunar_weekday": False, "use_islamic_holidays": False,
+        "threshold": 0.8,
+        "splash_threshold": None,
+        "use_dayofmonth_holidays": True,
+        "use_wkdom_holidays": True,
+        "use_wkdeom_holidays": False,
+        "use_lunar_holidays": False,
+        "use_lunar_weekday": False,
+        "use_islamic_holidays": False,
         "use_hebrew_holidays": False,
         "output": 'univariate',
         "anomaly_detector_params": {
@@ -34,8 +38,11 @@ def create_regressor(
             "transform_dict": {
                 "fillna": None,
                 "transformations": {"0": "DifferencedTransformer"},
-                "transformation_params": {"0": {}}}, "forecast_params": None, "method_params": {"distribution": "gamma", "alpha": 0.05}
-        }
+                "transformation_params": {"0": {}},
+            },
+            "forecast_params": None,
+            "method_params": {"distribution": "gamma", "alpha": 0.05},
+        },
     },
     holiday_regr_style="flag",
 ):
@@ -127,24 +134,42 @@ def create_regressor(
             elif holiday_country == 'CN':
                 holiday_country = 'TW'
             # create holiday flag for historic regressor
-            regr_train = pd.concat([regr_train, holiday_flag(
-                regr_train.index, country=holiday_country,
-                holidays_subdiv=holidays_subdiv, encode_holiday_type=encode_holiday_type,
-            )], axis=1)
+            regr_train = pd.concat(
+                [
+                    regr_train,
+                    holiday_flag(
+                        regr_train.index,
+                        country=holiday_country,
+                        holidays_subdiv=holidays_subdiv,
+                        encode_holiday_type=encode_holiday_type,
+                    ),
+                ],
+                axis=1,
+            )
             # now do again for future regressor
-            regr_fcst = pd.concat([regr_fcst, holiday_flag(
-                regr_fcst.index, country=holiday_country,
-                holidays_subdiv=holidays_subdiv, encode_holiday_type=encode_holiday_type,
-            )], axis=1)
+            regr_fcst = pd.concat(
+                [
+                    regr_fcst,
+                    holiday_flag(
+                        regr_fcst.index,
+                        country=holiday_country,
+                        holidays_subdiv=holidays_subdiv,
+                        encode_holiday_type=encode_holiday_type,
+                    ),
+                ],
+                axis=1,
+            )
             # now try it for future days
             try:
                 holiday_future = holiday_flag(
-                    regr_train.index.shift(1, freq=frequency), country=holiday_country,
+                    regr_train.index.shift(1, freq=frequency),
+                    country=holiday_country,
                     holidays_subdiv=holidays_subdiv,
                 )
                 holiday_future.index = regr_train.index
                 holiday_future_2 = holiday_flag(
-                    regr_fcst.index.shift(1, freq=frequency), country=holiday_country,
+                    regr_fcst.index.shift(1, freq=frequency),
+                    country=holiday_country,
                     holidays_subdiv=holidays_subdiv,
                 )
                 holiday_future_2.index = regr_fcst.index
@@ -158,8 +183,12 @@ def create_regressor(
         try:
             mod = HolidayDetector(**holiday_detector_params)
             mod.detect(df)
-            train_holidays = mod.dates_to_holidays(regr_train.index, style=holiday_regr_style)
-            fcst_holidays = mod.dates_to_holidays(regr_fcst.index, style=holiday_regr_style)
+            train_holidays = mod.dates_to_holidays(
+                regr_train.index, style=holiday_regr_style
+            )
+            fcst_holidays = mod.dates_to_holidays(
+                regr_fcst.index, style=holiday_regr_style
+            )
             all_cols = train_holidays.columns.union(fcst_holidays.columns)
             regr_train = pd.concat(
                 [regr_train, train_holidays.reindex(columns=all_cols).fillna(0)],

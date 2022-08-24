@@ -1215,7 +1215,15 @@ class RollingRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.8, 0.05, 0.05, 0.05, 0.05]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring', "simple_2", "simple_binarized", "expanded_binarized"],
+            [
+                None,
+                'simple',
+                'expanded',
+                'recurring',
+                "simple_2",
+                "simple_binarized",
+                "expanded_binarized",
+            ],
             [0.7, 0.05, 0.05, 0.05, 0.05, 0.1, 0.01],
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
@@ -1929,7 +1937,15 @@ class DatepartRegression(ModelObject):
         """Return dict of new parameters for parameter tuning."""
         model_choice = generate_regressor_params(model_dict=datepart_model_dict)
         datepart_choice = random.choices(
-            ["recurring", "simple", "expanded", "simple_2", "simple_binarized", "expanded_binarized"], [0.4, 0.3, 0.3, 0.3, 0.4, 0.05]
+            [
+                "recurring",
+                "simple",
+                "expanded",
+                "simple_2",
+                "simple_binarized",
+                "expanded_binarized",
+            ],
+            [0.4, 0.3, 0.3, 0.3, 0.4, 0.05],
         )[0]
         if datepart_choice in ["simple", "simple_2", "recurring", "simple_binarized"]:
             polynomial_choice = random.choices([None, 2, 3], [0.5, 0.2, 0.01])[0]
@@ -2334,7 +2350,15 @@ class UnivariateRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.86, 0.01, 0.01, 0.01, 0.01]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring', "simple_2", "simple_2_poly", "simple_binarized"],
+            [
+                None,
+                'simple',
+                'expanded',
+                'recurring',
+                "simple_2",
+                "simple_2_poly",
+                "simple_binarized",
+            ],
             [0.8, 0.05, 0.1, 0.1, 0.05, 0.05, 0.05],
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
@@ -2772,7 +2796,15 @@ class MultivariateRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.4, 0.01, 0.01, 0.01, 0.01]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring', "simple_2", "simple_2_poly", "simple_binarized"],
+            [
+                None,
+                'simple',
+                'expanded',
+                'recurring',
+                "simple_2",
+                "simple_2_poly",
+                "simple_binarized",
+            ],
             [0.5, 0.05, 0.1, 0.1, 0.05, 0.1, 0.05],
         )[0]
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]

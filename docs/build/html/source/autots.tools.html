@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>autots.tools package &#8212; AutoTS 0.4.2 documentation</title>
+    <title>autots.tools package &#8212; AutoTS 0.5.0 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -36,6 +36,185 @@
 <h1>autots.tools package<a class="headerlink" href="#autots-tools-package" title="Permalink to this headline">¶</a></h1>
 <section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-autots.tools.anomaly_utils">
+<span id="autots-tools-anomaly-utils-module"></span><h2>autots.tools.anomaly_utils module<a class="headerlink" href="#module-autots.tools.anomaly_utils" title="Permalink to this headline">¶</a></h2>
+<p>Created on Fri Jul  1 15:41:21 2022</p>
+<p>&#64;author: Colin</p>
+<p>point, contextual, and collective. Point anomalies are single values
+that fall within low-density regions of values, collective anomalies
+indicate that a sequence of values is anomalous rather than any
+single value by itself, and contextual anomalies are single values
+that do not fall within low-density regions yet are anomalous with
+regard to local values - <a class="reference external" href="https://arxiv.org/pdf/1802.04431.pdf">https://arxiv.org/pdf/1802.04431.pdf</a></p>
+<dl class="function">
+<dt id="autots.tools.anomaly_utils.anomaly_df_to_holidays">
+<code class="sig-prename descclassname">autots.tools.anomaly_utils.</code><code class="sig-name descname">anomaly_df_to_holidays</code><span class="sig-paren">(</span><em class="sig-param">anomaly_df</em>, <em class="sig-param">actuals=None</em>, <em class="sig-param">anomaly_scores=None</em>, <em class="sig-param">threshold=0.8</em>, <em class="sig-param">min_occurrences=2</em>, <em class="sig-param">splash_threshold=0.65</em>, <em class="sig-param">use_dayofmonth_holidays=True</em>, <em class="sig-param">use_wkdom_holidays=True</em>, <em class="sig-param">use_wkdeom_holidays=False</em>, <em class="sig-param">use_lunar_holidays=False</em>, <em class="sig-param">use_lunar_weekday=False</em>, <em class="sig-param">use_islamic_holidays=False</em>, <em class="sig-param">use_hebrew_holidays=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.anomaly_df_to_holidays" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.anomaly_utils.anomaly_new_params">
+<code class="sig-prename descclassname">autots.tools.anomaly_utils.</code><code class="sig-name descname">anomaly_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.anomaly_new_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.anomaly_utils.create_dates_df">
+<code class="sig-prename descclassname">autots.tools.anomaly_utils.</code><code class="sig-name descname">create_dates_df</code><span class="sig-paren">(</span><em class="sig-param">dates</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.create_dates_df" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take a pd.DatetimeIndex and create simple date parts.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.anomaly_utils.dates_to_holidays">
+<code class="sig-prename descclassname">autots.tools.anomaly_utils.</code><code class="sig-name descname">dates_to_holidays</code><span class="sig-paren">(</span><em class="sig-param">dates</em>, <em class="sig-param">df_cols</em>, <em class="sig-param">style='long'</em>, <em class="sig-param">holiday_impacts='value'</em>, <em class="sig-param">day_holidays=None</em>, <em class="sig-param">wkdom_holidays=None</em>, <em class="sig-param">wkdeom_holidays=None</em>, <em class="sig-param">lunar_holidays=None</em>, <em class="sig-param">lunar_weekday=None</em>, <em class="sig-param">islamic_holidays=None</em>, <em class="sig-param">hebrew_holidays=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.dates_to_holidays" title="Permalink to this definition">¶</a></dt>
+<dd><p>Populate date information for a given pd.DatetimeIndex.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dates</strong> (<em>pd.DatetimeIndex</em>) – list of dates</p></li>
+<li><p><strong>day_holidays</strong> (<em>pd.DataFrame</em>) – list of month/day holidays. Pass None if not available</p></li>
+<li><p><strong>style</strong> (<em>str</em>) – option for how to return information
+“long” - return date, name, series for all holidays in a long style dataframe
+“impact” - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
+‘flag’ - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
+‘prophet’ - return format required for prophet. Will need to be filtered on <cite>series</cite> for multivariate case
+‘series_flag’ - dates, series 0/1 for if holiday occurred in any calendar</p></li>
+<li><p><strong>holiday_impacts</strong> (<em>dict</em>) – a dict passed to .replace contaning values for holiday_names, or str ‘value’ or ‘anomaly_score’</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.anomaly_utils.detect_anomalies">
+<code class="sig-prename descclassname">autots.tools.anomaly_utils.</code><code class="sig-name descname">detect_anomalies</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">output</em>, <em class="sig-param">method</em>, <em class="sig-param">transform_dict=None</em>, <em class="sig-param">method_params={}</em>, <em class="sig-param">eval_period=None</em>, <em class="sig-param">n_jobs=1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.detect_anomalies" title="Permalink to this definition">¶</a></dt>
+<dd><p>All will return -1 for anomalies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>output</strong> (<em>str</em>) – ‘multivariate’ (each series unique outliers), or ‘univariate’ (all series together for one outlier flag per timestamp)</p></li>
+<li><p><strong>transform_dict</strong> (<em>dict</em>) – option but helpful, often datepart, differencing, or other standard AutoTS transformer params</p></li>
+<li><p><strong>forecast_params</strong> (<em>dict</em>) – used to backcast and identify ‘unforecastable’ values, required only for predict_interval method</p></li>
+<li><p><strong>eval_periods</strong> (<em>int</em>) – only use this length tail of data, currently only implemented for forecast_params forecasting if used</p></li>
+<li><p><strong>n_jobs</strong> (<em>int</em>) – multiprocessing jobs, used by some methods</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>pd.DataFrame (classifications, -1 = outlier, 1 = not outlier), pd.DataFrame s(scores)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.anomaly_utils.holiday_new_params">
+<code class="sig-prename descclassname">autots.tools.anomaly_utils.</code><code class="sig-name descname">holiday_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.holiday_new_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.anomaly_utils.limits_to_anomalies">
+<code class="sig-prename descclassname">autots.tools.anomaly_utils.</code><code class="sig-name descname">limits_to_anomalies</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">output</em>, <em class="sig-param">upper_limit</em>, <em class="sig-param">lower_limit</em>, <em class="sig-param">method_params=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.limits_to_anomalies" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.anomaly_utils.loop_sk_outliers">
+<code class="sig-prename descclassname">autots.tools.anomaly_utils.</code><code class="sig-name descname">loop_sk_outliers</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">method</em>, <em class="sig-param">method_params={}</em>, <em class="sig-param">n_jobs=1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.loop_sk_outliers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Multiprocessing on each series for multivariate outliers with sklearn.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.anomaly_utils.nonparametric_multivariate">
+<code class="sig-prename descclassname">autots.tools.anomaly_utils.</code><code class="sig-name descname">nonparametric_multivariate</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">output</em>, <em class="sig-param">method_params</em>, <em class="sig-param">n_jobs=1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.nonparametric_multivariate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.anomaly_utils.sk_outliers">
+<code class="sig-prename descclassname">autots.tools.anomaly_utils.</code><code class="sig-name descname">sk_outliers</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">method</em>, <em class="sig-param">method_params={}</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.sk_outliers" title="Permalink to this definition">¶</a></dt>
+<dd><p>scikit-learn outlier methods wrapper.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.anomaly_utils.values_to_anomalies">
+<code class="sig-prename descclassname">autots.tools.anomaly_utils.</code><code class="sig-name descname">values_to_anomalies</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">output</em>, <em class="sig-param">threshold_method</em>, <em class="sig-param">method_params</em>, <em class="sig-param">n_jobs=1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.values_to_anomalies" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.anomaly_utils.zscore_survival_function">
+<code class="sig-prename descclassname">autots.tools.anomaly_utils.</code><code class="sig-name descname">zscore_survival_function</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">output='multivariate'</em>, <em class="sig-param">method='zscore'</em>, <em class="sig-param">distribution='norm'</em>, <em class="sig-param">rolling_periods: int = 200</em>, <em class="sig-param">center: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.anomaly_utils.zscore_survival_function" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take a dataframe and generate zscores and then generating survival probabilities (smaller = more outliery).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pd.DataFramme</em>) – wide style time series data (datetimeindex, series)</p></li>
+<li><p><strong>output</strong> (<em>str</em>) – univariate (1 series from all) or multivariate (all series input returned unique)</p></li>
+<li><p><strong>method</strong> (<em>str</em>) – zscore, rolling_zscore, mad (median abs dev)</p></li>
+<li><p><strong>distribution</strong> (<em>str</em>) – distribution to sample sf/outliers from</p></li>
+<li><p><strong>rolling_period</strong> (<em>int</em>) – &gt;1, used for rolling_zscore period</p></li>
+<li><p><strong>center</strong> (<em>bool</em>) – passed to pd.rolling for rolliing_zscore, True for holiday detection, False for anomaly detection generally</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>pd.Dataframe of p-values</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.calendar">
+<span id="autots-tools-calendar-module"></span><h2>autots.tools.calendar module<a class="headerlink" href="#module-autots.tools.calendar" title="Permalink to this headline">¶</a></h2>
+<p>Calendar conversion functions.</p>
+<p>Includes Lunar, Chinese lunar, and Arabic lunar</p>
+<dl class="function">
+<dt id="autots.tools.calendar.gregorian_to_chinese">
+<code class="sig-prename descclassname">autots.tools.calendar.</code><code class="sig-name descname">gregorian_to_chinese</code><span class="sig-paren">(</span><em class="sig-param">datetime_index</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.calendar.gregorian_to_chinese" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a pandas DatetimeIndex to Chinese Lunar calendar. Potentially has errors.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.calendar.gregorian_to_christian_lunar">
+<code class="sig-prename descclassname">autots.tools.calendar.</code><code class="sig-name descname">gregorian_to_christian_lunar</code><span class="sig-paren">(</span><em class="sig-param">datetime_index</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.calendar.gregorian_to_christian_lunar" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a pandas DatetimeIndex to Christian Lunar calendar. Aspiration it doesn’t work exactly.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.calendar.gregorian_to_hebrew">
+<code class="sig-prename descclassname">autots.tools.calendar.</code><code class="sig-name descname">gregorian_to_hebrew</code><span class="sig-paren">(</span><em class="sig-param">dates</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.calendar.gregorian_to_hebrew" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert pd.Datetimes to a Hebrew date. From pyluach by simlist.</p>
+<p>This is the slowest of the lot and needs to be improved.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.calendar.gregorian_to_islamic">
+<code class="sig-prename descclassname">autots.tools.calendar.</code><code class="sig-name descname">gregorian_to_islamic</code><span class="sig-paren">(</span><em class="sig-param">date</em>, <em class="sig-param">epoch_adjustment=1.5</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.calendar.gregorian_to_islamic" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate Islamic dates for pandas DatetimeIndex. Approximately. From convertdate by fitnr.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>epoch_adjustment</strong> (<em>float</em>) – 1.0 and that needs to be adjusted by about +/- 0.5 to account for timezone</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.calendar.heb_is_leap">
+<code class="sig-prename descclassname">autots.tools.calendar.</code><code class="sig-name descname">heb_is_leap</code><span class="sig-paren">(</span><em class="sig-param">year</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.calendar.heb_is_leap" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.calendar.lunar_from_lunar">
+<code class="sig-prename descclassname">autots.tools.calendar.</code><code class="sig-name descname">lunar_from_lunar</code><span class="sig-paren">(</span><em class="sig-param">new_moon</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.calendar.lunar_from_lunar" title="Permalink to this definition">¶</a></dt>
+<dd><p>Assumes continuous daily data and pre-needed start.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.calendar.lunar_from_lunar_full">
+<code class="sig-prename descclassname">autots.tools.calendar.</code><code class="sig-name descname">lunar_from_lunar_full</code><span class="sig-paren">(</span><em class="sig-param">full_moon</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.calendar.lunar_from_lunar_full" title="Permalink to this definition">¶</a></dt>
+<dd><p>Assumes continuous daily data and pre-needed start.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.calendar.to_jd">
+<code class="sig-prename descclassname">autots.tools.calendar.</code><code class="sig-name descname">to_jd</code><span class="sig-paren">(</span><em class="sig-param">year</em>, <em class="sig-param">month</em>, <em class="sig-param">day</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.calendar.to_jd" title="Permalink to this definition">¶</a></dt>
+<dd><p>Determine Julian day count from Islamic date. From convertdate by fitnr.</p>
+</dd></dl>
+
 </section>
 <section id="module-autots.tools.cointegration">
 <span id="autots-tools-cointegration-module"></span><h2>autots.tools.cointegration module<a class="headerlink" href="#module-autots.tools.cointegration" title="Permalink to this headline">¶</a></h2>
@@ -150,14 +329,14 @@ and order.</p>
 <p>Manage holiday features.</p>
 <dl class="function">
 <dt id="autots.tools.holiday.holiday_flag">
-<code class="sig-prename descclassname">autots.tools.holiday.</code><code class="sig-name descname">holiday_flag</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em>, <em class="sig-param">country: str = 'US'</em>, <em class="sig-param">encode_holiday_type: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.holiday.holiday_flag" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create a 0/1 flag for given datetime index.</p>
+<code class="sig-prename descclassname">autots.tools.holiday.</code><code class="sig-name descname">holiday_flag</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em>, <em class="sig-param">country: str = 'US'</em>, <em class="sig-param">encode_holiday_type: bool = False</em>, <em class="sig-param">holidays_subdiv=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.holiday.holiday_flag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a 0/1 flag for given datetime index. Includes fallback to pandas for US holidays if holidays package unavailable.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>DTindex</strong> (<em>panda.DatetimeIndex</em>) – DatetimeIndex of dates to create flags</p></li>
 <li><p><strong>country</strong> (<em>str</em>) – to pass through to python package Holidays</p></li>
-<li><p><strong>encode_holiday_type</strong> (<em>bool</em>) – if True, each holiday gets a unique integer, if False, 0/1 for all holidays</p></li>
+<li><p><strong>encode_holiday_type</strong> (<em>bool</em>) – if True, each holiday gets a unique integer column, if False, 0/1 for all holidays</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -168,14 +347,14 @@ and order.</p>
 
 <dl class="function">
 <dt id="autots.tools.holiday.query_holidays">
-<code class="sig-prename descclassname">autots.tools.holiday.</code><code class="sig-name descname">query_holidays</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em>, <em class="sig-param">country: str</em>, <em class="sig-param">encode_holiday_type: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.holiday.query_holidays" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.holiday.</code><code class="sig-name descname">query_holidays</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em>, <em class="sig-param">country: str</em>, <em class="sig-param">encode_holiday_type: bool = False</em>, <em class="sig-param">holidays_subdiv=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.holiday.query_holidays" title="Permalink to this definition">¶</a></dt>
 <dd><p>Query holidays package for dates.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>DTindex</strong> (<em>panda.DatetimeIndex</em>) – DatetimeIndex of dates to create flags</p></li>
 <li><p><strong>country</strong> (<em>str</em>) – to pass through to python package Holidays</p></li>
-<li><p><strong>encode_holiday_type</strong> (<em>bool</em>) – if True, each holiday gets a unique integer, if False, 0/1 for all holidays</p></li>
+<li><p><strong>encode_holiday_type</strong> (<em>bool</em>) – if True, each holiday gets a unique integer column, if False, 0/1 for all holidays</p></li>
 </ul>
 </dd>
 </dl>
@@ -301,6 +480,220 @@ Return a dataframe where na values are removed and values shifted forward.</p>
 <dt id="autots.tools.impute.rolling_mean">
 <code class="sig-prename descclassname">autots.tools.impute.</code><code class="sig-name descname">rolling_mean</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">window: int = 10</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.impute.rolling_mean" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fill NaN with mean of last window values.</p>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.lunar">
+<span id="autots-tools-lunar-module"></span><h2>autots.tools.lunar module<a class="headerlink" href="#module-autots.tools.lunar" title="Permalink to this headline">¶</a></h2>
+<p>Phases of the moon.
+Modified from <a class="reference external" href="https://stackoverflow.com/a/2531541/9492254">https://stackoverflow.com/a/2531541/9492254</a>
+by keturn and earlier from John Walker</p>
+<dl class="class">
+<dt id="autots.tools.lunar.AstronomicalConstants">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">AstronomicalConstants</code><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.earth_radius">
+<code class="sig-name descname">earth_radius</code><em class="property"> = 6378.16</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.earth_radius" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.eccentricity">
+<code class="sig-name descname">eccentricity</code><em class="property"> = 0.016718</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.eccentricity" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.ecliptic_longitude_epoch">
+<code class="sig-name descname">ecliptic_longitude_epoch</code><em class="property"> = 278.83354</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.ecliptic_longitude_epoch" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.ecliptic_longitude_perigee">
+<code class="sig-name descname">ecliptic_longitude_perigee</code><em class="property"> = 282.596403</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.ecliptic_longitude_perigee" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.epoch">
+<code class="sig-name descname">epoch</code><em class="property"> = 2444238.5</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.epoch" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.lunations_base">
+<code class="sig-name descname">lunations_base</code><em class="property"> = 2423436.0</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.lunations_base" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.moon_angular_size">
+<code class="sig-name descname">moon_angular_size</code><em class="property"> = 0.5181</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_angular_size" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.moon_eccentricity">
+<code class="sig-name descname">moon_eccentricity</code><em class="property"> = 0.0549</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_eccentricity" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.moon_inclination">
+<code class="sig-name descname">moon_inclination</code><em class="property"> = 5.145396</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_inclination" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.moon_mean_longitude_epoch">
+<code class="sig-name descname">moon_mean_longitude_epoch</code><em class="property"> = 64.975464</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_mean_longitude_epoch" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.moon_mean_perigee_epoch">
+<code class="sig-name descname">moon_mean_perigee_epoch</code><em class="property"> = 349.383063</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_mean_perigee_epoch" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.moon_parallax">
+<code class="sig-name descname">moon_parallax</code><em class="property"> = 0.9507</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_parallax" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.moon_smaxis">
+<code class="sig-name descname">moon_smaxis</code><em class="property"> = 384401.0</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_smaxis" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.node_mean_longitude_epoch">
+<code class="sig-name descname">node_mean_longitude_epoch</code><em class="property"> = 151.950429</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.node_mean_longitude_epoch" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.sun_angular_size_smaxis">
+<code class="sig-name descname">sun_angular_size_smaxis</code><em class="property"> = 0.533128</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.sun_angular_size_smaxis" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.sun_smaxis">
+<code class="sig-name descname">sun_smaxis</code><em class="property"> = 149585000.0</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.sun_smaxis" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.tools.lunar.AstronomicalConstants.synodic_month">
+<code class="sig-name descname">synodic_month</code><em class="property"> = 29.53058868</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.synodic_month" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.lunar.MoonPhase">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">MoonPhase</code><span class="sig-paren">(</span><em class="sig-param">date=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.MoonPhase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Describe the phase of the moon.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>- a DateTime instance</strong> (<em>date</em>) – </p></li>
+<li><p><strong>- my phase</strong><strong>, </strong><strong>in the range 0.0 .. 1.0</strong> (<em>phase</em>) – </p></li>
+<li><p><strong>- a string describing my phase</strong> (<em>phase_text</em>) – </p></li>
+<li><p><strong>- the percentage of the face of the moon illuminated</strong> (<em>illuminated</em>) – </p></li>
+<li><p><strong>- as seen from Earth</strong><strong>, </strong><strong>in degrees.</strong> (<em>sun_angular_diameter</em>) – </p></li>
+<li><p><strong>- as seen from Earth</strong><strong>, </strong><strong>in degrees.</strong> – </p></li>
+<li><p><strong>- the date of the most recent new moon</strong> (<em>new_date</em>) – </p></li>
+<li><p><strong>- the date the moon reaches 1st quarter in this cycle</strong> (<em>q1_date</em>) – </p></li>
+<li><p><strong>- the date of the full moon in this cycle</strong> (<em>full_date</em>) – </p></li>
+<li><p><strong>- the date the moon reaches 3rd quarter in this cycle</strong> (<em>q3_date</em>) – </p></li>
+<li><p><strong>- the date of the next new moon</strong> (<em>nextnew_date</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.lunar.dcos">
+<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">dcos</code><span class="sig-paren">(</span><em class="sig-param">d</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.dcos" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.lunar.dsin">
+<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">dsin</code><span class="sig-paren">(</span><em class="sig-param">d</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.dsin" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.lunar.fixangle">
+<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">fixangle</code><span class="sig-paren">(</span><em class="sig-param">a</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.fixangle" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.lunar.kepler">
+<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">kepler</code><span class="sig-paren">(</span><em class="sig-param">m</em>, <em class="sig-param">ecc=0.016718</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.kepler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Solve the equation of Kepler.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.lunar.meanphase">
+<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">meanphase</code><span class="sig-paren">(</span><em class="sig-param">sdate</em>, <em class="sig-param">k</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.meanphase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates time of the mean new Moon for a given base date.</p>
+<p>This argument K to this function is the precomputed synodic month
+index, given by:</p>
+<blockquote>
+<div><p>K = (year - 1900) * 12.3685</p>
+</div></blockquote>
+<p>where year is expressed as a year and fractional year.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.lunar.moon_phase">
+<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">moon_phase</code><span class="sig-paren">(</span><em class="sig-param">datetime_index</em>, <em class="sig-param">epsilon=1e-06</em>, <em class="sig-param">epoch=2444237.905</em>, <em class="sig-param">ecliptic_longitude_epoch=278.83354</em>, <em class="sig-param">ecliptic_longitude_perigee=282.596403</em>, <em class="sig-param">eccentricity=0.016718</em>, <em class="sig-param">moon_mean_longitude_epoch=64.975464</em>, <em class="sig-param">moon_mean_perigee_epoch=349.383063</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.moon_phase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Numpy version. Takes a pd.DatetimeIndex and returns moon phase (%illuminated).
+Epoch can be adjust slightly (0.5 = half day) to adjust for time zones. This is for US. epoch=2444238.5 for Asia generally.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.lunar.moon_phase_df">
+<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">moon_phase_df</code><span class="sig-paren">(</span><em class="sig-param">datetime_index</em>, <em class="sig-param">epoch=2444237.905</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.moon_phase_df" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert pandas DatetimeIndex to moon phases. Note timezone and hour can matter slightly.
+Epoch can be adjust slightly (0.5 = half day) to adjust for time zones.
+2444237.905 is for US Central. epoch=2444238.5 for Asia generally.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.lunar.phase">
+<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">phase</code><span class="sig-paren">(</span><em class="sig-param">phase_date=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.phase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate phase of moon as a fraction:</p>
+<p>The argument is the time for which the phase is requested,
+expressed in either a datetime or by Julian Day Number.</p>
+<p>Returns a dictionary containing the terminator phase angle as a
+percentage of a full circle (i.e., 0 to 1), the illuminated
+fraction of the Moon’s disc, the Moon’s age in days and fraction,
+the distance of the Moon from the centre of the Earth, and the
+angular diameter subtended by the Moon as seen by an observer at
+the centre of the Earth.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.lunar.phase_hunt">
+<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">phase_hunt</code><span class="sig-paren">(</span><em class="sig-param">sdate</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.phase_hunt" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find time of phases of the moon which surround the current date.</p>
+<p>Five phases are found, starting and ending with the new moons
+which bound the current lunation.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.lunar.phase_string">
+<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">phase_string</code><span class="sig-paren">(</span><em class="sig-param">p</em>, <em class="sig-param">precision=0.05</em>, <em class="sig-param">new=0.0</em>, <em class="sig-param">first=0.25</em>, <em class="sig-param">full=0.4</em>, <em class="sig-param">last=0.75</em>, <em class="sig-param">nextnew=1.0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.phase_string" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.lunar.todeg">
+<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">todeg</code><span class="sig-paren">(</span><em class="sig-param">r</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.todeg" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.lunar.torad">
+<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">torad</code><span class="sig-paren">(</span><em class="sig-param">d</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.torad" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.lunar.truephase">
+<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">truephase</code><span class="sig-paren">(</span><em class="sig-param">k</em>, <em class="sig-param">tphase</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.truephase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given a K value used to determine the mean phase of the new
+moon, and a phase selector (0.0, 0.25, 0.5, 0.75), obtain the
+true, corrected phase time.</p>
 </dd></dl>
 
 </section>
@@ -460,7 +853,7 @@ Useful to some models that don’t otherwise use such information.</p>
 
 <dl class="function">
 <dt id="autots.tools.regressor.create_regressor">
-<code class="sig-prename descclassname">autots.tools.regressor.</code><code class="sig-name descname">create_regressor</code><span class="sig-paren">(</span><em class="sig-param">df, forecast_length, frequency: str = 'infer', holiday_countries: list = ['US'], datepart_method: str = 'recurring', drop_most_recent: int = 0, scale: bool = True, summarize: str = 'auto', backfill: str = 'bfill', n_jobs: str = 'auto', fill_na: str = 'ffill', aggfunc: str = 'first'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.regressor.create_regressor" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.regressor.</code><code class="sig-name descname">create_regressor</code><span class="sig-paren">(</span><em class="sig-param">df, forecast_length, frequency: str = 'infer', holiday_countries: list = ['US'], datepart_method: str = 'simple_binarized', drop_most_recent: int = 0, scale: bool = True, summarize: str = 'auto', backfill: str = 'bfill', n_jobs: str = 'auto', fill_na: str = 'ffill', aggfunc: str = 'first', encode_holiday_type=False, holiday_detector_params={'anomaly_detector_params': {'forecast_params': None, 'method': 'mad', 'method_params': {'alpha': 0.05, 'distribution': 'gamma'}, 'transform_dict': {'fillna': None, 'transformation_params': {'0': {}}, 'transformations': {'0': 'DifferencedTransformer'}}}, 'output': 'univariate', 'splash_threshold': None, 'threshold': 0.8, 'use_dayofmonth_holidays': True, 'use_hebrew_holidays': False, 'use_islamic_holidays': False, 'use_lunar_holidays': False, 'use_lunar_weekday': False, 'use_wkdeom_holidays': False, 'use_wkdom_holidays': True}, holiday_regr_style='flag'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.regressor.create_regressor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a regressor from information available in the existing dataset.
 Components: are lagged data, datepart information, and holiday.</p>
 <p>All of this info and more is already created by the ~Regression models, but this may help some other models (GLM, WindowRegression)</p>
@@ -471,10 +864,11 @@ If you don’t want the lagged features, set summarize=”median” which will o
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>df</strong> (<em>pd.DataFrame</em>) – WIDE style dataframe (use long_to_wide if the data isn’t already)
-categorical features will be discard for this, if present</p></li>
+categorical series will be discard for this, if present</p></li>
 <li><p><strong>forecast_length</strong> (<em>int</em>) – time ahead that will be forecast</p></li>
 <li><p><strong>frequency</strong> (<em>str</em>) – those annoying offset codes you have to always use for time series</p></li>
-<li><p><strong>holiday_countries</strong> (<em>list</em>) – list of countries to pull holidays for. Reqs holidays pkg</p></li>
+<li><p><strong>holiday_countries</strong> (<em>list</em>) – list of countries to pull holidays for. Reqs holidays pkg
+also can be a dict of {‘country’: “subdiv”} to include subdivision (state)</p></li>
 <li><p><strong>datepart_method</strong> (<em>str</em>) – see date_part from seasonal</p></li>
 <li><p><strong>scale</strong> (<em>bool</em>) – if True, use the StandardScaler to standardize the features</p></li>
 <li><p><strong>summarize</strong> (<em>str</em>) – options to summarize the features, if large:
@@ -485,6 +879,9 @@ categorical features will be discard for this, if present</p></li>
 “DatepartRegression” - backfill with DatepartRegression</p></li>
 <li><p><strong>fill_na</strong> (<em>str</em>) – method to prefill NAs in data, same methods as available elsewhere</p></li>
 <li><p><strong>aggfunc</strong> (<em>str</em>) – str or func, used if frequency is resampled</p></li>
+<li><p><strong>encode_holiday_type</strong> (<em>bool</em>) – if True, returns column per holiday, ONLY for holidays package country holidays (not Detector)</p></li>
+<li><p><strong>holiday_detector_params</strong> (<em>dict</em>) – passed to HolidayDetector, or None</p></li>
+<li><p><strong>holiday_regr_style</strong> (<em>str</em>) – passed to detector’s dates_to_holidays ‘flag’, ‘series_flag’, ‘impact’</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -509,7 +906,11 @@ categorical features will be discard for this, if present</p></li>
 <li><p><strong>method</strong> (<em>str</em>) – expanded, recurring, or simple
 simple - just day, year, month, weekday
 expanded - all available futures
-recurring - all features that should commonly repeat without aging</p></li>
+recurring - all features that should commonly repeat without aging
+simple_2
+simple_3
+simple_binarized
+expanded_binarized</p></li>
 <li><p><strong>set_index</strong> (<em>bool</em>) – if True, return DTindex as index of df</p></li>
 <li><p><strong>polynomial_degree</strong> (<em>int</em>) – add this degree of sklearn polynomial features if not None</p></li>
 </ul>
@@ -717,10 +1118,331 @@ note this includes NaNs in current configuration</p>
 </dl>
 </dd></dl>
 
+<dl class="function">
+<dt id="autots.tools.shaping.wide_to_3d">
+<code class="sig-prename descclassname">autots.tools.shaping.</code><code class="sig-name descname">wide_to_3d</code><span class="sig-paren">(</span><em class="sig-param">wide_arr</em>, <em class="sig-param">seasonality=7</em>, <em class="sig-param">output_shape='gst'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.shaping.wide_to_3d" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates 3d (groups/seasonality, series, time steps) from wide (time step, series) numpy array.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>wide_arr</strong> (<em>np.array</em>) – wide style (timesteps, series) numpy time series</p></li>
+<li><p><strong>seasonality</strong> (<em>int</em>) – seasonality of the series to use, avoid really large values</p></li>
+<li><p><strong>output_shape</strong> (<em>str</em>) – either ‘gst’ or ‘sgt’ which is output shape
+gst: (groups/seasonality, series, time steps)
+sgt: (series, groups/seasonality, time steps)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-autots.tools.thresholding">
+<span id="autots-tools-thresholding-module"></span><h2>autots.tools.thresholding module<a class="headerlink" href="#module-autots.tools.thresholding" title="Permalink to this headline">¶</a></h2>
+<p>Created on Thu Jul  7 10:27:46 2022</p>
+<p>&#64;author: Colin</p>
+<dl class="class">
+<dt id="autots.tools.thresholding.ErrorWindow">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.thresholding.</code><code class="sig-name descname">ErrorWindow</code><span class="sig-paren">(</span><em class="sig-param">y_test</em>, <em class="sig-param">config</em>, <em class="sig-param">start_idx</em>, <em class="sig-param">end_idx</em>, <em class="sig-param">e_s</em>, <em class="sig-param">window_num</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.ErrorWindow" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="method">
+<dt id="autots.tools.thresholding.ErrorWindow.compare_to_epsilon">
+<code class="sig-name descname">compare_to_epsilon</code><span class="sig-paren">(</span><em class="sig-param">errors_all</em>, <em class="sig-param">inverse=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.ErrorWindow.compare_to_epsilon" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compare smoothed error values to epsilon (error threshold) and group
+consecutive errors together into sequences.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>errors_all</strong> (<em>obj</em>) – Errors class object containing list of all</p></li>
+<li><p><strong>identified anomalies in test set</strong> (<em>previously</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.thresholding.ErrorWindow.find_epsilon">
+<code class="sig-name descname">find_epsilon</code><span class="sig-paren">(</span><em class="sig-param">inverse=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.ErrorWindow.find_epsilon" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find the anomaly threshold that maximizes function representing
+tradeoff between:</p>
+<blockquote>
+<div><ol class="loweralpha simple">
+<li><p>number of anomalies and anomalous ranges</p></li>
+</ol>
+<p>b) the reduction in mean and st dev if anomalous points are removed
+from errors</p>
+</div></blockquote>
+<p>(see <a class="reference external" href="https://arxiv.org/pdf/1802.04431.pdf">https://arxiv.org/pdf/1802.04431.pdf</a>)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>inverse</strong> (<em>bool</em>) – If true, epsilon is calculated for inverted errors</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.thresholding.ErrorWindow.prune_anoms">
+<code class="sig-name descname">prune_anoms</code><span class="sig-paren">(</span><em class="sig-param">inverse=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.ErrorWindow.prune_anoms" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove anomalies that don’t meet minimum separation from the next
+closest anomaly or error value</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>inverse</strong> (<em>bool</em>) – If true, epsilon is calculated for inverted errors</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.thresholding.ErrorWindow.score_anomalies">
+<code class="sig-name descname">score_anomalies</code><span class="sig-paren">(</span><em class="sig-param">prior_idx</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.ErrorWindow.score_anomalies" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate anomaly scores based on max distance from epsilon
+for each anomalous sequence.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>prior_idx</strong> (<em>int</em>) – starting index of window within full set of test
+values for channel</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.thresholding.Errors">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.thresholding.</code><code class="sig-name descname">Errors</code><span class="sig-paren">(</span><em class="sig-param">y_test</em>, <em class="sig-param">y_hat</em>, <em class="sig-param">config</em>, <em class="sig-param">run_id=None</em>, <em class="sig-param">c_id='C-1'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.Errors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="method">
+<dt id="autots.tools.thresholding.Errors.adjust_window_size">
+<code class="sig-name descname">adjust_window_size</code><span class="sig-paren">(</span><em class="sig-param">y_test</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.Errors.adjust_window_size" title="Permalink to this definition">¶</a></dt>
+<dd><p>Decrease the historical error window size (h) if number of test
+values is limited.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>channel</strong> (<em>obj</em>) – Channel class object containing train/test data
+for X,y for a single channel</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.thresholding.Errors.merge_scores">
+<code class="sig-name descname">merge_scores</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.Errors.merge_scores" title="Permalink to this definition">¶</a></dt>
+<dd><p>If anomalous sequences from subsequent batches are adjacent they
+will automatically be combined. This combines the scores for these
+initial adjacent sequences (scores are calculated as each batch is
+processed) where applicable.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.thresholding.Errors.process_batches">
+<code class="sig-name descname">process_batches</code><span class="sig-paren">(</span><em class="sig-param">y_test</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.Errors.process_batches" title="Permalink to this definition">¶</a></dt>
+<dd><p>Top-level function for the Error class that loops through batches
+of values for y_test</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>channel</strong> (<em>obj</em>) – Channel class object containing train/test data
+for X,y for a single channel</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.thresholding.NonparametricThreshold">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.thresholding.</code><code class="sig-name descname">NonparametricThreshold</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">warmup_pts: int = 1</em>, <em class="sig-param">p=0.1</em>, <em class="sig-param">error_buffer=1</em>, <em class="sig-param">z_init=2.5</em>, <em class="sig-param">z_limit=12.0</em>, <em class="sig-param">z_step=0.5</em>, <em class="sig-param">max_contamination=0.25</em>, <em class="sig-param">mean_weight: float = 10</em>, <em class="sig-param">sd_weight: float = 10</em>, <em class="sig-param">anomaly_count_weight: float = 1</em>, <em class="sig-param">inverse: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.NonparametricThreshold" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="method">
+<dt id="autots.tools.thresholding.NonparametricThreshold.compare_to_epsilon">
+<code class="sig-name descname">compare_to_epsilon</code><span class="sig-paren">(</span><em class="sig-param">inverse=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.NonparametricThreshold.compare_to_epsilon" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compare smoothed error values to epsilon (error threshold) and group
+consecutive errors together into sequences.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>errors_all</strong> (<em>obj</em>) – Errors class object containing list of all</p></li>
+<li><p><strong>identified anomalies in test set</strong> (<em>previously</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.thresholding.NonparametricThreshold.find_epsilon">
+<code class="sig-name descname">find_epsilon</code><span class="sig-paren">(</span><em class="sig-param">inverse=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.NonparametricThreshold.find_epsilon" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find the anomaly threshold that maximizes function representing
+tradeoff between:</p>
+<blockquote>
+<div><ol class="loweralpha simple">
+<li><p>number of anomalies and anomalous ranges</p></li>
+</ol>
+<p>b) the reduction in mean and st dev if anomalous points are removed
+from errors</p>
+</div></blockquote>
+<p>(see <a class="reference external" href="https://arxiv.org/pdf/1802.04431.pdf">https://arxiv.org/pdf/1802.04431.pdf</a>)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>inverse</strong> (<em>bool</em>) – If true, epsilon is calculated for inverted errors</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.thresholding.NonparametricThreshold.prune_anoms">
+<code class="sig-name descname">prune_anoms</code><span class="sig-paren">(</span><em class="sig-param">inverse=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.NonparametricThreshold.prune_anoms" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove anomalies that don’t meet minimum separation from the next
+closest anomaly or error value</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>inverse</strong> (<em>bool</em>) – If true, epsilon is calculated for inverted errors</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.thresholding.NonparametricThreshold.score_anomalies">
+<code class="sig-name descname">score_anomalies</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.NonparametricThreshold.score_anomalies" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate anomaly scores based on max distance from epsilon
+for each anomalous sequence.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.thresholding.consecutive_groups">
+<code class="sig-prename descclassname">autots.tools.thresholding.</code><code class="sig-name descname">consecutive_groups</code><span class="sig-paren">(</span><em class="sig-param">iterable</em>, <em class="sig-param">ordering=&lt;function &lt;lambda&gt;&gt;</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.consecutive_groups" title="Permalink to this definition">¶</a></dt>
+<dd><p>Yield groups of consecutive items using <code class="xref py py-func docutils literal notranslate"><span class="pre">itertools.groupby()</span></code>.</p>
+<p>From more_itertools package, see description there for details (circa mid 2022)</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.thresholding.nonparametric">
+<code class="sig-prename descclassname">autots.tools.thresholding.</code><code class="sig-name descname">nonparametric</code><span class="sig-paren">(</span><em class="sig-param">series</em>, <em class="sig-param">method_params</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.nonparametric" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
 </section>
 <section id="module-autots.tools.transform">
 <span id="autots-tools-transform-module"></span><h2>autots.tools.transform module<a class="headerlink" href="#module-autots.tools.transform" title="Permalink to this headline">¶</a></h2>
 <p>Preprocessing data methods.</p>
+<dl class="class">
+<dt id="autots.tools.transform.AlignLastValue">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">AlignLastValue</code><span class="sig-paren">(</span><em class="sig-param">rows: int = 1</em>, <em class="sig-param">lag: int = 1</em>, <em class="sig-param">method: str = 'additive'</em>, <em class="sig-param">strength: float = 1.0</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AlignLastValue" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
+<p>Shift all data relative to the last value(s) of the series.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rows</strong> (<em>int</em>) – number of rows to average as last record</p></li>
+<li><p><strong>lag</strong> (<em>int</em>) – use last value as this lag back, 1 is no shift, 2 is lag one from end, ie second to last</p></li>
+<li><p><strong>method</strong> (<em>str</em>) – ‘additive’, ‘multiplicative’</p></li>
+<li><p><strong>strength</strong> (<em>float</em>) – softening parameter [0, 1], 1.0 for full difference</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.tools.transform.AlignLastValue.find_centerpoint">
+<em class="property">static </em><code class="sig-name descname">find_centerpoint</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">rows</em>, <em class="sig-param">lag</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AlignLastValue.find_centerpoint" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.AlignLastValue.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AlignLastValue.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Learn behavior of data to change.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.AlignLastValue.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AlignLastValue.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns <em>Magical</em> DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.AlignLastValue.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AlignLastValue.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate new random parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.AlignLastValue.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AlignLastValue.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data to original <em>or</em> forecast form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.AlignLastValue.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AlignLastValue.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return changed data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.AnomalyRemoval">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">AnomalyRemoval</code><span class="sig-paren">(</span><em class="sig-param">output='multivariate'</em>, <em class="sig-param">method='zscore'</em>, <em class="sig-param">transform_dict={'transformation_params': {0: {'datepart_method': 'simple_3'</em>, <em class="sig-param">'regression_model': {'model': 'ElasticNet'</em>, <em class="sig-param">'model_params': {}}}}</em>, <em class="sig-param">'transformations': {0: 'DatepartRegression'}}</em>, <em class="sig-param">method_params={}</em>, <em class="sig-param">fillna=None</em>, <em class="sig-param">n_jobs=1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AnomalyRemoval" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
+<dl class="method">
+<dt id="autots.tools.transform.AnomalyRemoval.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AnomalyRemoval.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>All will return -1 for anomalies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pd.DataFrame</em>) – pandas wide-style data</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>pd.DataFrame (classifications, -1 = outlier, 1 = not outlier), pd.DataFrame s(scores)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.AnomalyRemoval.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AnomalyRemoval.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns <em>Magical</em> DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.AnomalyRemoval.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AnomalyRemoval.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate new random parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.AnomalyRemoval.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AnomalyRemoval.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return changed data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 <dl class="class">
 <dt id="autots.tools.transform.BTCD">
 <em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">BTCD</code><span class="sig-paren">(</span><em class="sig-param">regression_model: dict = {'model': 'LinearRegression'</em>, <em class="sig-param">'model_params': {}}</em>, <em class="sig-param">max_lags: int = 1</em>, <em class="sig-param">name: str = 'BTCD'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.BTCD" title="Permalink to this definition">¶</a></dt>
@@ -1026,12 +1748,12 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="class">
 <dt id="autots.tools.transform.DatepartRegressionTransformer">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">DatepartRegressionTransformer</code><span class="sig-paren">(</span><em class="sig-param">regression_model: dict = {'model': 'DecisionTree'</em>, <em class="sig-param">'model_params': {'max_depth': 5</em>, <em class="sig-param">'min_samples_split': 2}}</em>, <em class="sig-param">datepart_method: str = 'expanded'</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">DatepartRegressionTransformer</code><span class="sig-paren">(</span><em class="sig-param">regression_model: dict = {'model': 'DecisionTree'</em>, <em class="sig-param">'model_params': {'max_depth': 5</em>, <em class="sig-param">'min_samples_split': 2}}</em>, <em class="sig-param">datepart_method: str = 'expanded'</em>, <em class="sig-param">polynomial_degree: int = None</em>, <em class="sig-param">transform_dict=None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
 <p>Remove a regression on datepart from the data. See tools.seasonal.date_part</p>
 <dl class="method">
 <dt id="autots.tools.transform.DatepartRegressionTransformer.fit">
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer.fit" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer.fit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fits trend for later detrending.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1042,7 +1764,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="method">
 <dt id="autots.tools.transform.DatepartRegressionTransformer.fit_transform">
-<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer.fit_transform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer.fit_transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fit and Return Detrended DataFrame.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1059,7 +1781,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="method">
 <dt id="autots.tools.transform.DatepartRegressionTransformer.inverse_transform">
-<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return data to original form.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1070,7 +1792,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="method">
 <dt id="autots.tools.transform.DatepartRegressionTransformer.transform">
-<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer.transform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.DatepartRegressionTransformer.transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return detrended data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1083,7 +1805,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="class">
 <dt id="autots.tools.transform.Detrend">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">Detrend</code><span class="sig-paren">(</span><em class="sig-param">model: str = 'GLS'</em>, <em class="sig-param">phi: float = 1.0</em>, <em class="sig-param">window: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Detrend" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">Detrend</code><span class="sig-paren">(</span><em class="sig-param">model: str = 'GLS'</em>, <em class="sig-param">phi: float = 1.0</em>, <em class="sig-param">window: int = None</em>, <em class="sig-param">transform_dict=None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.Detrend" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
 <p>Remove a linear trend from the data.</p>
 <dl class="method">
@@ -1427,7 +2149,7 @@ None - no discretization
 
 <dl class="class">
 <dt id="autots.tools.transform.GeneralTransformer">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">GeneralTransformer</code><span class="sig-paren">(</span><em class="sig-param">fillna: str = None</em>, <em class="sig-param">transformations: dict = {}</em>, <em class="sig-param">transformation_params: dict = {}</em>, <em class="sig-param">grouping: str = None</em>, <em class="sig-param">reconciliation: str = None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">random_seed: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">GeneralTransformer</code><span class="sig-paren">(</span><em class="sig-param">fillna: str = None</em>, <em class="sig-param">transformations: dict = {}</em>, <em class="sig-param">transformation_params: dict = {}</em>, <em class="sig-param">grouping: str = None</em>, <em class="sig-param">reconciliation: str = None</em>, <em class="sig-param">grouping_ids=None</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">n_jobs: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Remove fillNA and then mathematical transformations.</p>
 <p>Expects a chronologically sorted pandas.DataFrame with a DatetimeIndex, only numeric data, and a ‘wide’ (one column per series) shape.</p>
@@ -1507,7 +2229,10 @@ most of the interpolate methods from pandas.interpolate</p>
 “EWMAFilter” - use an exponential weighted moving average to smooth data
 “MeanDifference” - joint version of differencing
 “Cointegration” - VECM but just the vectors
-“BTCD” - Box Tiao decomposition</p>
+“BTCD” - Box Tiao decomposition
+‘AlignLastValue’: align forecast start to end of training data
+‘AnomalyRemoval’: more tailored anomaly removal options
+‘HolidayTransformer’: detects holidays and wishes good cheer to all</p>
 </p></li>
 <li><p><strong>transformation_params</strong> (<em>dict</em>) – params of transformers {0: {}, 1: {‘model’: ‘Poisson’}, …}
 pass through dictionary of empty dictionaries to utilize defaults</p></li>
@@ -1549,6 +2274,11 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 </dd></dl>
 
 <dl class="method">
+<dt id="autots.tools.transform.GeneralTransformer.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
 <dt id="autots.tools.transform.GeneralTransformer.inverse_transform">
 <code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em>, <em class="sig-param">fillzero: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Undo the madness.</p>
@@ -1565,7 +2295,7 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 
 <dl class="method">
 <dt id="autots.tools.transform.GeneralTransformer.retrieve_transformer">
-<em class="property">classmethod </em><code class="sig-name descname">retrieve_transformer</code><span class="sig-paren">(</span><em class="sig-param">transformation: str = None</em>, <em class="sig-param">param: dict = {}</em>, <em class="sig-param">df=None</em>, <em class="sig-param">random_seed: int = 2020</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.retrieve_transformer" title="Permalink to this definition">¶</a></dt>
+<em class="property">classmethod </em><code class="sig-name descname">retrieve_transformer</code><span class="sig-paren">(</span><em class="sig-param">transformation: str = None</em>, <em class="sig-param">param: dict = {}</em>, <em class="sig-param">df=None</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">n_jobs: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.retrieve_transformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Retrieves a specific transformer object from a string.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1620,6 +2350,62 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 <dt id="autots.tools.transform.HPFilter.transform">
 <code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.HPFilter.transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return detrended data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.HolidayTransformer">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">HolidayTransformer</code><span class="sig-paren">(</span><em class="sig-param">anomaly_detector_params={}</em>, <em class="sig-param">threshold=0.8</em>, <em class="sig-param">min_occurrences=2</em>, <em class="sig-param">splash_threshold=0.65</em>, <em class="sig-param">use_dayofmonth_holidays=True</em>, <em class="sig-param">use_wkdom_holidays=True</em>, <em class="sig-param">use_wkdeom_holidays=True</em>, <em class="sig-param">use_lunar_holidays=True</em>, <em class="sig-param">use_lunar_weekday=False</em>, <em class="sig-param">use_islamic_holidays=True</em>, <em class="sig-param">use_hebrew_holidays=True</em>, <em class="sig-param">remove_excess_anomalies=True</em>, <em class="sig-param">impact=None</em>, <em class="sig-param">regression_params={}</em>, <em class="sig-param">n_jobs: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.HolidayTransformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
+<dl class="method">
+<dt id="autots.tools.transform.HolidayTransformer.dates_to_holidays">
+<code class="sig-name descname">dates_to_holidays</code><span class="sig-paren">(</span><em class="sig-param">dates</em>, <em class="sig-param">style='flag'</em>, <em class="sig-param">holiday_impacts=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.HolidayTransformer.dates_to_holidays" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.HolidayTransformer.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.HolidayTransformer.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run holiday detection. Input wide-style pandas time series.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.HolidayTransformer.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.HolidayTransformer.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns <em>Magical</em> DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.HolidayTransformer.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.HolidayTransformer.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate new random parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.HolidayTransformer.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.HolidayTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data to original <em>or</em> forecast form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.HolidayTransformer.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.HolidayTransformer.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return changed data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
@@ -1928,9 +2714,9 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="function">
 <dt id="autots.tools.transform.RandomTransform">
-<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.07</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.01</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.03</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01</em>, <em class="sig-param">'EWMAFilter': 0.02</em>, <em class="sig-param">'MeanDifference': 0.002</em>, <em class="sig-param">'BTCD': 0.01</em>, <em class="sig-param">'Cointegration': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.4</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.1</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.05</em>, <em class="sig-param">'mean': 0.06</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.03</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.4</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">superfast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.07</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.01</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.03</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01</em>, <em class="sig-param">'EWMAFilter': 0.02</em>, <em class="sig-param">'MeanDifference': 0.002</em>, <em class="sig-param">'BTCD': 0.01</em>, <em class="sig-param">'Cointegration': 0.01</em>, <em class="sig-param">'AlignLastValue': 0.1</em>, <em class="sig-param">'AnomalyRemoval': 0.03</em>, <em class="sig-param">'HolidayTransformer': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.4</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.1</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.05</em>, <em class="sig-param">'mean': 0.06</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.03</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.4</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">superfast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a dict of randomly choosen transformation selections.</p>
-<p>SinTrend is used as a signal that slow parameters are allowed.</p>
+<p>BTCD is used as a signal that slow parameters are allowed.</p>
 </dd></dl>
 
 <dl class="class">
@@ -2240,7 +3026,7 @@ Inverse transformed values returned will also not return as ‘exactly’ equals
 
 <dl class="class">
 <dt id="autots.tools.transform.SinTrend">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">SinTrend</code><span class="sig-paren">(</span><em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SinTrend" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">SinTrend</code><span class="sig-paren">(</span><em class="sig-param">n_jobs=1</em>, <em class="sig-param">method='lm'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SinTrend" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
 <p>Modelling sin.</p>
 <dl class="method">
@@ -2253,7 +3039,7 @@ Inverse transformed values returned will also not return as ‘exactly’ equals
 
 <dl class="method">
 <dt id="autots.tools.transform.SinTrend.fit_sin">
-<code class="sig-name descname">fit_sin</code><span class="sig-paren">(</span><em class="sig-param">tt</em>, <em class="sig-param">yy</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SinTrend.fit_sin" title="Permalink to this definition">¶</a></dt>
+<em class="property">static </em><code class="sig-name descname">fit_sin</code><span class="sig-paren">(</span><em class="sig-param">tt</em>, <em class="sig-param">yy</em>, <em class="sig-param">method='lm'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SinTrend.fit_sin" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fit sin to the input time sequence, and return fitting parameters “amp”, “omega”, “phase”, “offset”, “freq”, “period” and “fitfunc”</p>
 <p>from user unsym &#64; <a class="reference external" href="https://stackoverflow.com/questions/16716302/how-do-i-fit-a-sine-curve-to-my-data-with-pylab-and-numpy">https://stackoverflow.com/questions/16716302/how-do-i-fit-a-sine-curve-to-my-data-with-pylab-and-numpy</a></p>
 </dd></dl>
@@ -2264,6 +3050,12 @@ Inverse transformed values returned will also not return as ‘exactly’ equals
 <dd><p>Fits and Returns Detrended DataFrame
 :param df: input dataframe
 :type df: pandas.DataFrame</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.SinTrend.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.SinTrend.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate new random parameters</p>
 </dd></dl>
 
 <dl class="method">
@@ -2402,6 +3194,12 @@ Inverse transformed values returned will also not return as ‘exactly’ equals
 <dt id="autots.tools.transform.get_transformer_params">
 <code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">get_transformer_params</code><span class="sig-paren">(</span><em class="sig-param">transformer: str = 'EmptyTransformer'</em>, <em class="sig-param">method: str = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.get_transformer_params" title="Permalink to this definition">¶</a></dt>
 <dd><p>Retrieve new random params for new Transformers.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.transform.random_cleaners">
+<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">random_cleaners</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.random_cleaners" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns transformation params that clean data without shifting.</p>
 </dd></dl>
 
 <dl class="function">

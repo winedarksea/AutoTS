@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Tutorial &#8212; AutoTS 0.4.2 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.5.0 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -221,7 +221,7 @@ One thing to note is that, as AutoTS is still under development, template format
 <p>While the above version of deployment, with  evolving templates and cross_validation on every run, is the recommended deployment, it is also possible to run a single fixed model.</p>
 <p>Coming from the deeper internals of AutoTS, this function can only take the <code class="docutils literal notranslate"><span class="pre">wide</span></code> style data (there is a long_to_wide function available).
 Data must already be fairly clean - all numerics (or np.nan).
-This will run Ensembles.</p>
+This will run Ensembles, and as such is generally recommended over loading the models directly. Subsidiary models use the sklearn format.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">autots</span> <span class="kn">import</span> <span class="n">load_daily</span><span class="p">,</span> <span class="n">model_forecast</span>
 
 
@@ -463,7 +463,7 @@ python -m pip install --upgrade numpy pandas --exists-action i  <span class="c1"
 python -m pip install autots --exists-action i
 </pre></div>
 </div>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>mamba install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>mamba install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests xgboost -c conda-forge
 pip install mxnet --no-deps
 pip install yfinance pytrends fredapi gluonts arch
 pip install intel-tensorflow scikit-learn-intelex
@@ -651,9 +651,11 @@ To enforce the use of future_regressor for simulation forecasting, a few paramet
 It may be necessary to rerun multiple times until a model with satisfactory variable response is found,
 or to try with a subset of the regressor model list like <code class="docutils literal notranslate"><span class="pre">['FBProphet',</span> <span class="pre">'GLM',</span> <span class="pre">'ARDL',</span> <span class="pre">'DatepartRegression']</span></code>.</p>
 </section>
-<section id="event-risk-forecasting-1">
-<h2>Event Risk Forecasting<a class="headerlink" href="#event-risk-forecasting-1" title="Permalink to this headline">¶</a></h2>
-<p>Generate a risk score (0 to 1, but usually close to 0) for a future event exceeding user specified upper or lower bounds.</p>
+<section id="event-risk-forecasting-and-anomaly-detection">
+<h2>Event Risk Forecasting and Anomaly Detection<a class="headerlink" href="#event-risk-forecasting-and-anomaly-detection" title="Permalink to this headline">¶</a></h2>
+<p>Anomaly (or Outlier) Detection is historic and Event Risk Forecasting is forward looking.</p>
+<p>Event Risk Forecasting
+Generate a risk score (0 to 1, but usually close to 0) for a future event exceeding user specified upper or lower bounds.</p>
 <p>Upper and lower limits can be one of four types, and may each be different.</p>
 <ol class="arabic simple">
 <li><p>None (no risk score calculated for this direction)</p></li>
@@ -716,6 +718,47 @@ Forecast_length effects how far ahead each forecast step is. Larger is faster, s
     <span class="s2">&quot;model_transform_dict&quot;</span><span class="p">:</span> <span class="p">{},</span>
     <span class="s2">&quot;prediction_interval&quot;</span><span class="p">:</span> <span class="mf">0.9</span><span class="p">,</span>
 <span class="p">}</span>
+</pre></div>
+</div>
+<p>Anomaly Detection</p>
+<p>Multiple methods are available, including use of <code class="docutils literal notranslate"><span class="pre">forecast_params</span></code> which can be used to analyze the historic deviations of an AutoTS forecasting model.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">autots.evaluator.anomaly_detector</span> <span class="kn">import</span> <span class="n">AnomalyDetector</span>
+<span class="kn">from</span> <span class="nn">autots.datasets</span> <span class="kn">import</span> <span class="n">load_live_daily</span>
+
+<span class="c1"># internet connection required to load this df</span>
+<span class="n">wiki_pages</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;Standard_deviation&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Christmas&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Thanksgiving&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;all&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">load_live_daily</span><span class="p">(</span>
+    <span class="n">long</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">fred_series</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">tickers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">trends_list</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">earthquake_min_magnitude</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">weather_stations</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">london_air_stations</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">gov_domain_list</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">weather_event_types</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">wikipedia_pages</span><span class="o">=</span><span class="n">wiki_pages</span><span class="p">,</span>
+    <span class="n">sleep_seconds</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">params</span> <span class="o">=</span> <span class="n">AnomalyDetector</span><span class="o">.</span><span class="n">get_new_params</span><span class="p">()</span>
+<span class="n">mod</span> <span class="o">=</span> <span class="n">AnomalyDetector</span><span class="p">(</span><span class="n">output</span><span class="o">=</span><span class="s1">&#39;multivariate&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span>
+<span class="n">mod</span><span class="o">.</span><span class="n">detect</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+<span class="n">mod</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
+
+<span class="c1"># holiday detection, random parameters</span>
+<span class="n">holiday_params</span> <span class="o">=</span> <span class="n">HolidayDetector</span><span class="o">.</span><span class="n">get_new_params</span><span class="p">()</span>
+<span class="n">mod</span> <span class="o">=</span> <span class="n">HolidayDetector</span><span class="p">(</span><span class="o">**</span><span class="n">holiday_params</span><span class="p">)</span>
+<span class="n">mod</span><span class="o">.</span><span class="n">detect</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+<span class="c1"># several outputs are possible, you&#39;ll need to subset results from multivariate inputs</span>
+<span class="n">full_dates</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">date_range</span><span class="p">(</span><span class="s2">&quot;2014-01-01&quot;</span><span class="p">,</span> <span class="s2">&quot;2024-01-01&quot;</span><span class="p">,</span> <span class="n">freq</span><span class="o">=</span><span class="s1">&#39;D&#39;</span><span class="p">)</span>
+<span class="n">prophet_holidays</span> <span class="o">=</span> <span class="n">mod</span><span class="o">.</span><span class="n">dates_to_holidays</span><span class="p">(</span><span class="n">full_dates</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;prophet&quot;</span><span class="p">)</span>
+<span class="n">mod</span><span class="o">.</span><span class="n">plot</span><span class="p">()</span>
 </pre></div>
 </div>
 <section id="a-hack-for-passing-in-parameters-that-aren-t-otherwise-available">
@@ -1063,6 +1106,26 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
+<tr class="row-even"><td><p>RRVAR, MAR, TMF</p></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>LATC</p></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+</tr>
 <tr class="row-even"><td><p>NeuralProphet</p></td>
 <td><p>neuralprophet</p></td>
 <td></td>
@@ -1124,7 +1187,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 </tr>
 <tr class="row-even"><td><p>TFPRegression</p></td>
-<td><p>tensorflow_probability</p></td>
+<td><p>(deprecated)</p></td>
 <td></td>
 <td><p>True</p></td>
 <td></td>
@@ -1134,7 +1197,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 </tr>
 <tr class="row-odd"><td><p>ComponentAnalysis</p></td>
-<td><p>sklearn</p></td>
+<td><p>(deprecated)</p></td>
 <td></td>
 <td></td>
 <td></td>
@@ -1190,7 +1253,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <li class="toctree-l2"><a class="reference internal" href="#installation-and-dependency-versioning">Installation and Dependency Versioning</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#caveats-and-advice">Caveats and Advice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#simulation-forecasting-1">Simulation Forecasting</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#event-risk-forecasting-1">Event Risk Forecasting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#event-risk-forecasting-and-anomaly-detection">Event Risk Forecasting and Anomaly Detection</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#using-the-transformers-independently">Using the Transformers independently</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#models-1">Models</a></li>
 </ul>

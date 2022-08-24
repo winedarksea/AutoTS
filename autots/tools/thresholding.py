@@ -64,9 +64,7 @@ class Errors:
 
         if not len(y_hat) == len(y_test):
             raise ValueError(
-                "len(y_hat) != len(y_test): {}, {}".format(
-                    len(y_hat), len(y_test)
-                )
+                "len(y_hat) != len(y_test): {}, {}".format(len(y_hat), len(y_test))
             )
 
         if config['smoothing_perc'] is not None:
@@ -92,9 +90,7 @@ class Errors:
             if run_id is None:
                 run_id = datetime.datetime.now().strftime("%Y%m%d%H%M")
             np.save(
-                os.path.join(
-                    "data", run_id, "smoothed_errors", "{}.npy".format(c_id)
-                ),
+                os.path.join("data", run_id, "smoothed_errors", "{}.npy".format(c_id)),
                 np.array(self.e_s),
             )
 
@@ -457,7 +453,7 @@ class ErrorWindow:
         if len(E_seq) == 0:
             return
 
-        E_seq_max = np.array([max(e_s[e[0]: e[1] + 1]) for e in E_seq])
+        E_seq_max = np.array([max(e_s[e[0] : e[1] + 1]) for e in E_seq])
         E_seq_max_sorted = np.sort(E_seq_max)[::-1]
         E_seq_max_sorted = np.append(E_seq_max_sorted, [non_anom_max])
 
@@ -536,14 +532,19 @@ class ErrorWindow:
 
 class NonparametricThreshold:
     def __init__(
-            self, data, warmup_pts: int = 1, p=0.1,
-            error_buffer=1, z_init=2.5, z_limit=12.0,
-            z_step=0.5,
-            max_contamination=0.25,
-            mean_weight: float = 10,
-            sd_weight: float = 10,
-            anomaly_count_weight: float = 1,
-            inverse: bool = False,
+        self,
+        data,
+        warmup_pts: int = 1,
+        p=0.1,
+        error_buffer=1,
+        z_init=2.5,
+        z_limit=12.0,
+        z_step=0.5,
+        max_contamination=0.25,
+        mean_weight: float = 10,
+        sd_weight: float = 10,
+        anomaly_count_weight: float = 1,
+        inverse: bool = False,
     ):
         """
         Data and outlier calculations for a 1D numpy array.
@@ -708,7 +709,10 @@ class NonparametricThreshold:
                     self.mean_e_s - np.mean(pruned_e_s)
                 ) / self.mean_e_s
                 sd_perc_decrease = (self.sd_e_s - np.std(pruned_e_s)) / self.sd_e_s
-                score = ((1 + mean_perc_decrease) ** self.mean_weight + (1 + sd_perc_decrease) ** self.sd_weight) / (
+                score = (
+                    (1 + mean_perc_decrease) ** self.mean_weight
+                    + (1 + sd_perc_decrease) ** self.sd_weight
+                ) / (
                     len(i_anom) ** self.anomaly_count_weight  # + len(E_seq) ** 2
                 )
                 """
@@ -720,7 +724,8 @@ class NonparametricThreshold:
 
                 # set epsilon if score is highest seen
                 if (
-                    score >= max_score and len(i_anom) < (len(e_s) * self.max_contamination)
+                    score >= max_score
+                    and len(i_anom) < (len(e_s) * self.max_contamination)
                     # and len(E_seq) <= 5
                 ):
                     max_score = score
@@ -748,9 +753,7 @@ class NonparametricThreshold:
         e_s = self.e_s if not inverse else self.e_s_inv
         epsilon = self.epsilon if not inverse else self.epsilon_inv
 
-        i_anom = np.argwhere(
-            (e_s >= epsilon)
-        ).reshape(
+        i_anom = np.argwhere((e_s >= epsilon)).reshape(
             -1,
         )
         i_anom = np.sort(np.unique(i_anom))
@@ -866,10 +869,7 @@ class NonparametricThreshold:
 
 
 def nonparametric(series, method_params):
-    mod = NonparametricThreshold(
-        series.to_numpy().flatten(),
-        **method_params
-    )
+    mod = NonparametricThreshold(series.to_numpy().flatten(), **method_params)
     mod.find_epsilon()
     mod.prune_anoms()
     i_anom = mod.i_anom

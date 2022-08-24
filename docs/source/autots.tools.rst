@@ -4,6 +4,22 @@ autots.tools package
 Submodules
 ----------
 
+autots.tools.anomaly\_utils module
+----------------------------------
+
+.. automodule:: autots.tools.anomaly_utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+autots.tools.calendar module
+----------------------------
+
+.. automodule:: autots.tools.calendar
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.cointegration module
 ---------------------------------
 
@@ -40,6 +56,14 @@ autots.tools.impute module
 --------------------------
 
 .. automodule:: autots.tools.impute
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+autots.tools.lunar module
+-------------------------
+
+.. automodule:: autots.tools.lunar
    :members:
    :undoc-members:
    :show-inheritance:
@@ -88,6 +112,14 @@ autots.tools.shaping module
 ---------------------------
 
 .. automodule:: autots.tools.shaping
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+autots.tools.thresholding module
+--------------------------------
+
+.. automodule:: autots.tools.thresholding
    :members:
    :undoc-members:
    :show-inheritance:

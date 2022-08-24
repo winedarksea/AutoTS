@@ -105,15 +105,20 @@ def date_part(
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'epoch': pd.to_numeric(
                     DTindex, errors='coerce', downcast='integer'
-                ).values / 100000000000,
+                ).values
+                / 100000000000,
             }
         )
     elif method in ["simple_3", "lunar_phase"]:
         # trying to *prevent* it from learning holidays for this one
         date_part_df = pd.DataFrame(
             {
-                'month': pd.Categorical(DTindex.month, categories=list(range(12)), ordered=True),
-                'weekday': pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True),
+                'month': pd.Categorical(
+                    DTindex.month, categories=list(range(12)), ordered=True
+                ),
+                'weekday': pd.Categorical(
+                    DTindex.weekday, categories=list(range(7)), ordered=True
+                ),
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'quarter': DTindex.quarter,
                 'epoch': DTindex.to_julian_date(),
@@ -128,8 +133,12 @@ def date_part(
     elif "simple_binarized" in method:
         date_part_df = pd.DataFrame(
             {
-                'month': pd.Categorical(DTindex.month, categories=list(range(12)), ordered=True),
-                'weekday': pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True),
+                'month': pd.Categorical(
+                    DTindex.month, categories=list(range(12)), ordered=True
+                ),
+                'weekday': pd.Categorical(
+                    DTindex.weekday, categories=list(range(7)), ordered=True
+                ),
                 'day': DTindex.day,
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'epoch': DTindex.to_julian_date(),
@@ -139,16 +148,24 @@ def date_part(
     elif method in "expanded_binarized":
         date_part_df = pd.DataFrame(
             {
-                'month': pd.Categorical(DTindex.month, categories=list(range(12)), ordered=True),
-                'weekday': pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True),
-                'day': pd.Categorical(DTindex.day, categories=list(range(31)), ordered=True),
+                'month': pd.Categorical(
+                    DTindex.month, categories=list(range(12)), ordered=True
+                ),
+                'weekday': pd.Categorical(
+                    DTindex.weekday, categories=list(range(7)), ordered=True
+                ),
+                'day': pd.Categorical(
+                    DTindex.day, categories=list(range(31)), ordered=True
+                ),
                 'weekdayofmonth': (DTindex.day - 1) // 7 + 1,
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'quarter': DTindex.quarter,
                 'epoch': DTindex.to_julian_date(),
             }
         )
-        date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday', 'day', 'weekdayofmonth'])
+        date_part_df = pd.get_dummies(
+            date_part_df, columns=['month', 'weekday', 'day', 'weekdayofmonth']
+        )
     else:
         # method == "simple"
         date_part_df = pd.DataFrame(
@@ -184,7 +201,8 @@ def date_part(
                     'daysinmonth': DTindex.daysinmonth,
                     'epoch': pd.to_numeric(
                         DTindex, errors='coerce', downcast='integer'
-                    ).values - 946684800000000000,
+                    ).values
+                    - 946684800000000000,
                     'us_election_year': (DTindex.year % 4 == 0).astype(int),
                 }
             )

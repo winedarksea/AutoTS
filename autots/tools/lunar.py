@@ -11,13 +11,14 @@ import pandas as pd
 
 
 def moon_phase(
-        datetime_index, epsilon=1e-6,
-        epoch=2444237.905,
-        ecliptic_longitude_epoch=278.833540,
-        ecliptic_longitude_perigee=282.596403,
-        eccentricity=0.016718,
-        moon_mean_longitude_epoch=64.975464,
-        moon_mean_perigee_epoch=349.383063,
+    datetime_index,
+    epsilon=1e-6,
+    epoch=2444237.905,
+    ecliptic_longitude_epoch=278.833540,
+    ecliptic_longitude_perigee=282.596403,
+    eccentricity=0.016718,
+    moon_mean_longitude_epoch=64.975464,
+    moon_mean_perigee_epoch=349.383063,
 ):
     """Numpy version. Takes a pd.DatetimeIndex and returns moon phase (%illuminated).
     Epoch can be adjust slightly (0.5 = half day) to adjust for time zones. This is for US. epoch=2444238.5 for Asia generally.
@@ -279,7 +280,7 @@ def kepler(m, ecc=0.016718):
 
 
 def phase_string(
-        p, precision=0.05, new=0.0, first=0.25, full=0.4, last=0.75, nextnew=1.0
+    p, precision=0.05, new=0.0, first=0.25, full=0.4, last=0.75, nextnew=1.0
 ):
     phase_strings = (
         (new + precision, "new"),
@@ -478,8 +479,10 @@ def meanphase(sdate, k):
     t3 = t2 * t
 
     nt1 = (
-        2415020.75933 + 29.53058868 * k  # c.synodic_month * k
-        + 0.0001178 * t2 - 0.000000155 * t3
+        2415020.75933
+        + 29.53058868 * k  # c.synodic_month * k
+        + 0.0001178 * t2
+        - 0.000000155 * t3
         + 0.00033 * dsin(166.56 + 132.87 * t - 0.009173 * t2)
     )
 
@@ -503,8 +506,10 @@ def truephase(k, tphase):
 
     # Mean time of phase
     pt = (
-        2415020.75933 + 29.53058868 * k  # c.synodic_month * k
-        + 0.0001178 * t2 - 0.000000155 * t3
+        2415020.75933
+        + 29.53058868 * k  # c.synodic_month * k
+        + 0.0001178 * t2
+        - 0.000000155 * t3
         + 0.00033 * dsin(166.56 + 132.87 * t - 0.009173 * t2)
     )
 

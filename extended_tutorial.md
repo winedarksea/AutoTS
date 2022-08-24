@@ -197,7 +197,7 @@ While the above version of deployment, with  evolving templates and cross_valida
 
 Coming from the deeper internals of AutoTS, this function can only take the `wide` style data (there is a long_to_wide function available). 
 Data must already be fairly clean - all numerics (or np.nan). 
-This will run Ensembles.
+This will run Ensembles, and as such is generally recommended over loading the models directly. Subsidiary models use the sklearn format.
 
 ```python
 from autots import load_daily, model_forecast
@@ -455,7 +455,7 @@ python -m pip install autots --exists-action i
 ```
 
 ```shell
-mamba install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests -c conda-forge
+mamba install scikit-learn pandas statsmodels prophet numexpr bottleneck tqdm holidays lightgbm matplotlib requests xgboost -c conda-forge
 pip install mxnet --no-deps
 pip install yfinance pytrends fredapi gluonts arch
 pip install intel-tensorflow scikit-learn-intelex
@@ -640,7 +640,10 @@ Note, this does not necessarily force the model to place any great value on the 
 It may be necessary to rerun multiple times until a model with satisfactory variable response is found, 
 or to try with a subset of the regressor model list like `['FBProphet', 'GLM', 'ARDL', 'DatepartRegression']`.
 
-## Event Risk Forecasting
+## Event Risk Forecasting and Anomaly Detection
+Anomaly (or Outlier) Detection is historic and Event Risk Forecasting is forward looking.
+
+Event Risk Forecasting
 Generate a risk score (0 to 1, but usually close to 0) for a future event exceeding user specified upper or lower bounds.
 
 Upper and lower limits can be one of four types, and may each be different.
@@ -705,6 +708,48 @@ lower_limit = {
 }
 ```
 
+Anomaly Detection
+
+Multiple methods are available, including use of `forecast_params` which can be used to analyze the historic deviations of an AutoTS forecasting model.
+```python
+from autots.evaluator.anomaly_detector import AnomalyDetector
+from autots.datasets import load_live_daily
+
+# internet connection required to load this df
+wiki_pages = [
+	"Standard_deviation",
+	"Christmas",
+	"Thanksgiving",
+	"all",
+]
+df = load_live_daily(
+	long=False,
+	fred_series=None,
+	tickers=None,
+	trends_list=None,
+	earthquake_min_magnitude=None,
+	weather_stations=None,
+	london_air_stations=None,
+	gov_domain_list=None,
+	weather_event_types=None,
+	wikipedia_pages=wiki_pages,
+	sleep_seconds=5,
+)
+
+params = AnomalyDetector.get_new_params()
+mod = AnomalyDetector(output='multivariate', **params)
+mod.detect(df)
+mod.plot()
+
+# holiday detection, random parameters
+holiday_params = HolidayDetector.get_new_params()
+mod = HolidayDetector(**holiday_params)
+mod.detect(df)
+# several outputs are possible, you'll need to subset results from multivariate inputs
+full_dates = pd.date_range("2014-01-01", "2024-01-01", freq='D')
+prophet_holidays = mod.dates_to_holidays(full_dates, style="prophet")
+mod.plot()
+```
 ### A Hack for Passing in Parameters (that aren't otherwise available)
 There are a lot of parameters available here, but not always all of the options available for a particular parameter are actually used in generated templates. 
 Usually, very slow options are left out. If you are familiar with a model, you can try manualy adding those parameter values in for a run in this way... 
@@ -797,13 +842,15 @@ Currently `MultivariateRegression` has the option to utilize a stock GradientBoo
 | Univariate/MultivariateMotif | scipy.distance.cdist |            |    True       |     joblib      |       | *            |              |               |
 |  SectionalMotif         | scipy.distance.cdist |  sklearn        |    True       |                 |       | True         |              | True          |
 |  NVAR                   |              |                         |    True       |   blas/lapack   |       | True         |              |               |
+|  RRVAR, MAR, TMF        |              |                         |               |                 |       | True         |              |               |
+|  LATC                   |              |                         |               |                 |       | True         |              |               |
 |  NeuralProphet          | neuralprophet |                        |    nyi        |     pytorch     | yes   |              |              | True          |
 |  PytorchForecasting     | pytorch-forecasting |                  |    True       |     pytorch     | yes   | True         |              |               |
 |  ARCH                   | arch         |                         |    True       |     joblib      |       |              |              | True          |
 |  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         | nyi           |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  TensorflowSTS          | tensorflow_probability |               |    True       |                 | yes   | True         | True         |               |
-|  TFPRegression          | tensorflow_probability |               |    True       |                 | yes   | True         | True         | True          |
-|  ComponentAnalysis      | sklearn      |                         |               |                 |       | True         | True         | _             |
+|  TFPRegression          | (deprecated) |               |    True       |                 | yes   | True         | True         | True          |
+|  ComponentAnalysis      | (deprecated) |                         |               |                 |       | True         | True         | _             |
 
 *nyi = not yet implemented*
