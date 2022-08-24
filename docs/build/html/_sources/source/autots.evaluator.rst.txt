@@ -4,6 +4,14 @@ autots.evaluator package
 Submodules
 ----------
 
+autots.evaluator.anomaly\_detector module
+-----------------------------------------
+
+.. automodule:: autots.evaluator.anomaly_detector
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.evaluator.auto\_model module
 -----------------------------------
 

@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
+from autots.evaluator.anomaly_detector import HolidayDetector
 import logging
 
 # optional packages at the high level
@@ -170,8 +171,13 @@ class FBProphet(ModelObject):
                 seasonality_prior_scale=self.seasonality_prior_scale,
                 holidays_prior_scale=self.holidays_prior_scale,
             )
-            if args['holiday']:
-                m.add_country_holidays(country_name=args['holiday_country'])
+            if isinstance(args['holiday'], pd.DataFrame):
+                m.holidays = args['holiday'][args['holiday']['series'] == series]
+            elif isinstance(args['holiday'], bool):
+                if args['holiday']:
+                    m.add_country_holidays(country_name=args['holiday_country'])
+            else:
+                raise ValueError("`holiday` arg for Prophet not recognized")
             if args['regression_type'] == 'User':
                 current_series = pd.concat(
                     [current_series, args['regressor_train']], axis=1
@@ -220,7 +226,6 @@ class FBProphet(ModelObject):
             logging.getLogger('fbprophet').setLevel(logging.CRITICAL)
             logging.getLogger('fbprophet.models').setLevel(logging.CRITICAL)
             logging.getLogger('prophet').setLevel(logging.CRITICAL)
-
         args = {
             'holiday': self.holiday,
             'holiday_country': self.holiday_country,
@@ -230,6 +235,13 @@ class FBProphet(ModelObject):
             'dimensionality_reducer': self.dimensionality_reducer,
             'prediction_interval': self.prediction_interval,
         }
+        if isinstance(self.holiday, dict):
+            mod = HolidayDetector(**self.holiday)
+            mod.detect(self.df_train)
+            args['holiday'] = mod.dates_to_holidays(
+                self.df_train.index.union(test_index), style="prophet"
+            )
+
         parallel = True
         cols = self.df_train.columns.tolist()
         if self.n_jobs in [0, 1] or len(cols) < 4:
@@ -295,7 +307,9 @@ class FBProphet(ModelObject):
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
-        holiday_choice = random.choices([True, False], [0.5, 0.5])[0]
+        holiday_choice = random.choices([True, False, 'auto'], [0.3, 0.4, 0.3])[0]
+        if holiday_choice == 'auto':
+            holiday_choice = HolidayDetector.get_new_params(method=method)
         if "regressor" in method:
             regression_choice = "User"
         else:

@@ -210,9 +210,10 @@ def load_weekdays(long: bool = False, categorical: bool = True, periods: int = 1
 
 def load_live_daily(
     long: bool = False,
+    observation_start: str = None,
+    observation_end: str = None,
     fred_key: str = None,
     fred_series=["DGS10", "T5YIE", "SP500", "DCOILWTICO", "DEXUSEU", "WPU0911"],
-    observation_start: str = "2000-01-01",
     tickers: list = ["MSFT"],
     trends_list: list = ["forecasting", "cycling", "microsoft"],
     trends_geo: str = "US",
@@ -227,20 +228,25 @@ def load_live_daily(
     gsa_key: str = None,  # https://open.gsa.gov/api/dap/
     gov_domain_list=['nasa.gov'],
     gov_domain_limit: int = 600,
+    wikipedia_pages: list = ['Microsoft_Office', "List_of_highest-grossing_films"],
+    wiki_language: str = "en",
     weather_event_types=["%28Z%29+Winter+Weather", "%28Z%29+Winter+Storm"],
     timeout: float = 300.05,
-    sleep_seconds: int = 1,
+    sleep_seconds: int = 2,
 ):
     """Generates a dataframe of data up to the present day. Requires active internet connection.
+    Try to be respectful of these free data sources by not calling too much too heavily.
     Pass None instead of specification lists to exclude a data source.
 
     Args:
         long (bool): whether to return in long format or wide
+        observation_start (str): %Y-%m-%d earliest day to retrieve, passed to Fred.get_series and yfinance.history
+            note that apis with more restricts have other default lengths below which ignore this
+        observation_end (str):  %Y-%m-%d most recent day to retrieve
         fred_key (str): https://fred.stlouisfed.org/docs/api/api_key.html
         fred_series (list): list of FRED series IDs. This requires fredapi package
-        observation_start (datetime): earliest day to retrieve, passed to Fred.get_series and yfinance.history
-        tickers (list): list of stock tickers, requires yfinance
-        trends_list (list): list of search keywords, requires pytrends. None to skip.
+        tickers (list): list of stock tickers, requires yfinance pypi package
+        trends_list (list): list of search keywords, requires pytrends pypi package. None to skip.
         weather_data_types (list): from NCEI NOAA api data types, GHCN Daily Weather Elements
             PRCP, SNOW, TMAX, TMIN, TAVG, AWND, WSF1, WSF2, WSF5, WSFG
         weather_stations (list): from NCEI NOAA api station ids. Pass empty list to skip.
@@ -251,12 +257,24 @@ def load_live_daily(
         gov_domain_list (list): dist of government run domains to get traffic data for. Can be very slow, so fewer is better.
             some examples: ['usps.com', 'ncbi.nlm.nih.gov', 'cdc.gov', 'weather.gov', 'irs.gov', "usajobs.gov", "studentaid.gov", 'nasa.gov', "uk.usembassy.gov", "tsunami.gov"]
         gov_domain_limit (int): max number of records. Smaller will be faster. Max is currently 10000.
+        wikipedia_pages (list): list of Wikipedia pages, html encoded if needed (underscore for space)
         weather_event_types (list): list of html encoded severe weather event types https://www1.ncdc.noaa.gov/pub/data/swdi/stormevents/csvfiles/Storm-Data-Export-Format.pdf
         timeout (float): used by some queries
         sleep_seconds (int): increasing this may reduce probability of server download failures
     """
+    assert sleep_seconds >= 0.5, "sleep_seconds must be >=0.5"
+
     dataset_lists = []
-    current_date = datetime.datetime.utcnow()
+    if observation_end is None:
+        current_date = datetime.datetime.utcnow()
+    else:
+        current_date = observation_end
+    if observation_start is None:
+        # should take from observation_end but that's expected as a string
+        observation_start = datetime.datetime.utcnow() - datetime.timedelta(
+            days=365 * 5
+        )
+        observation_start = observation_start.strftime("%Y-%m-%d")
     try:
         import requests
 
@@ -403,6 +421,34 @@ def load_live_daily(
         except Exception as e:
             print(f"analytics.gov data failed with {repr(e)}")
 
+    if wikipedia_pages is not None:
+        str_start = pd.to_datetime(
+            observation_start, infer_datetime_format=True
+        ).strftime("%Y%m%d00")
+        str_end = current_date.strftime("%Y%m%d00")
+        headers = {
+            'User-Agent': 'AutoTS load_live_daily',
+        }
+        for page in wikipedia_pages:
+            try:
+                if page == "all":
+                    url = f"https://wikimedia.org/api/rest_v1/metrics/pageviews/aggregate/all-projects/all-access/all-agents/daily/{str_start}/{str_end}?maxlag=5"
+                else:
+                    url = f"https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/{wiki_language}.wikipedia/all-access/all-agents/{page}/daily/{str_start}/{str_end}?maxlag=5"
+                data = s.get(url, timeout=timeout, headers=headers)
+                data_js = data.json()
+                if "items" not in data_js.keys():
+                    print(data_js)
+                gdf = pd.DataFrame(data_js['items'])
+                gdf['date'] = pd.to_datetime(gdf['timestamp'], format="%Y%m%d00")
+                gresult = gdf.set_index('date')['views'].fillna(0)
+                gresult.name = "wiki_" + str(page)[0:80]
+                dataset_lists.append(gresult.to_frame())
+                time.sleep(sleep_seconds)
+            except Exception as e:
+                print(f"Wikipedia api failed with error {repr(e)}")
+                time.sleep(10)
+
     if weather_event_types is not None:
         try:
             for event_type in weather_event_types:
@@ -462,6 +508,7 @@ def load_live_daily(
             dataset_lists,
         )
     print(f"{df.shape[1]} series downloaded.")
+    s.close()
 
     if not long:
         return df

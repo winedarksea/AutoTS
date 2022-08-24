@@ -420,3 +420,23 @@ def clean_weights(weights, series, verbose=0):
             except Exception:
                 weights[key] = 1
     return weights
+
+
+def wide_to_3d(wide_arr, seasonality=7, output_shape="gst"):
+    """Generates 3d (groups/seasonality, series, time steps) from wide (time step, series) numpy array.
+
+    Args:
+        wide_arr (np.array): wide style (timesteps, series) numpy time series
+        seasonality (int): seasonality of the series to use, avoid really large values
+        output_shape (str): either 'gst' or 'sgt' which is output shape
+            gst: (groups/seasonality, series, time steps)
+            sgt: (series, groups/seasonality, time steps)
+    """
+    excess = wide_arr.shape[0] % seasonality
+    cuts = np.arange(seasonality, wide_arr.shape[0] - excess, step=seasonality)
+    if output_shape == "sgt":
+        shifted = np.array(np.vsplit(wide_arr[excess:], cuts)).T
+    else:
+        shifted = np.array(np.vsplit(wide_arr[excess:], cuts))
+        shifted = np.moveaxis(shifted, 0, -1)
+    return shifted

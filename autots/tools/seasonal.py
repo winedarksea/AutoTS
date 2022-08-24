@@ -6,6 +6,7 @@ seasonal
 """
 import random
 import pandas as pd
+from autots.tools.lunar import moon_phase
 
 
 def seasonal_int(include_one: bool = False, small=False, very_small=False):
@@ -66,6 +67,10 @@ def date_part(
             simple - just day, year, month, weekday
             expanded - all available futures
             recurring - all features that should commonly repeat without aging
+            simple_2
+            simple_3
+            simple_binarized
+            expanded_binarized
         set_index (bool): if True, return DTindex as index of df
         polynomial_degree (int): add this degree of sklearn polynomial features if not None
 
@@ -100,8 +105,66 @@ def date_part(
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'epoch': pd.to_numeric(
                     DTindex, errors='coerce', downcast='integer'
-                ).values,
+                ).values
+                / 100000000000,
             }
+        )
+    elif method in ["simple_3", "lunar_phase"]:
+        # trying to *prevent* it from learning holidays for this one
+        date_part_df = pd.DataFrame(
+            {
+                'month': pd.Categorical(
+                    DTindex.month, categories=list(range(12)), ordered=True
+                ),
+                'weekday': pd.Categorical(
+                    DTindex.weekday, categories=list(range(7)), ordered=True
+                ),
+                'weekend': (DTindex.weekday > 4).astype(int),
+                'quarter': DTindex.quarter,
+                'epoch': DTindex.to_julian_date(),
+            }
+        )
+        date_part_df['weekday'] = date_part_df['month'].astype(
+            pd.CategoricalDtype(categories=list(range(6)))
+        )
+        date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday'])
+        if method == "lunar_phase":
+            date_part_df['phase'] = moon_phase(DTindex)
+    elif "simple_binarized" in method:
+        date_part_df = pd.DataFrame(
+            {
+                'month': pd.Categorical(
+                    DTindex.month, categories=list(range(12)), ordered=True
+                ),
+                'weekday': pd.Categorical(
+                    DTindex.weekday, categories=list(range(7)), ordered=True
+                ),
+                'day': DTindex.day,
+                'weekend': (DTindex.weekday > 4).astype(int),
+                'epoch': DTindex.to_julian_date(),
+            }
+        )
+        date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday'])
+    elif method in "expanded_binarized":
+        date_part_df = pd.DataFrame(
+            {
+                'month': pd.Categorical(
+                    DTindex.month, categories=list(range(12)), ordered=True
+                ),
+                'weekday': pd.Categorical(
+                    DTindex.weekday, categories=list(range(7)), ordered=True
+                ),
+                'day': pd.Categorical(
+                    DTindex.day, categories=list(range(31)), ordered=True
+                ),
+                'weekdayofmonth': (DTindex.day - 1) // 7 + 1,
+                'weekend': (DTindex.weekday > 4).astype(int),
+                'quarter': DTindex.quarter,
+                'epoch': DTindex.to_julian_date(),
+            }
+        )
+        date_part_df = pd.get_dummies(
+            date_part_df, columns=['month', 'weekday', 'day', 'weekdayofmonth']
         )
     else:
         # method == "simple"
@@ -130,6 +193,7 @@ def date_part(
                         int
                     ),  # 2 season
                     'weekend': (DTindex.weekday > 4).astype(int),
+                    'weekdayofmonth': (DTindex.day - 1) // 7 + 1,
                     'month_end': (DTindex.is_month_end).astype(int),
                     'month_start': (DTindex.is_month_start).astype(int),
                     "quarter_end": (DTindex.is_quarter_end).astype(int),
@@ -137,7 +201,9 @@ def date_part(
                     'daysinmonth': DTindex.daysinmonth,
                     'epoch': pd.to_numeric(
                         DTindex, errors='coerce', downcast='integer'
-                    ).values,
+                    ).values
+                    - 946684800000000000,
+                    'us_election_year': (DTindex.year % 4 == 0).astype(int),
                 }
             )
             date_part_df = pd.concat([date_part_df, date_part_df2], axis=1)

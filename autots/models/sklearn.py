@@ -116,7 +116,7 @@ def rolling_x_regressor(
             lambda x: x.autocorr(), raw=False
         )
         X.append(temp)
-    if add_date_part in ['simple', 'expanded', 'recurring', "simple_2"]:
+    if add_date_part not in [None, "None", "none"]:
         date_part_df = date_part(df.index, method=add_date_part)
         date_part_df.index = df.index
         X.append(date_part_df)
@@ -476,7 +476,7 @@ sklearn_model_dict = {
     'PoissonRegresssion': 0.03,
     'RANSAC': 0.05,
     'Ridge': 0.02,
-    'GaussianProcessRegressor': 0.02,
+    # 'GaussianProcessRegressor': 0.02,  # slow
 }
 multivariate_model_dict = {
     'RandomForest': 0.02,
@@ -1215,8 +1215,16 @@ class RollingRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.8, 0.05, 0.05, 0.05, 0.05]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring', "simple_2"],
-            [0.7, 0.05, 0.1, 0.1, 0.05],
+            [
+                None,
+                'simple',
+                'expanded',
+                'recurring',
+                "simple_2",
+                "simple_binarized",
+                "expanded_binarized",
+            ],
+            [0.7, 0.05, 0.05, 0.05, 0.05, 0.1, 0.01],
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.99, 0.01])[0]
@@ -1372,7 +1380,7 @@ class WindowRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
-        self.regr = self.regr.fit(X, Y)
+        self.regr = self.regr.fit(X.astype(float), Y.astype(float))
         self.last_window = df.tail(self.window_size)
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -1442,7 +1450,7 @@ class WindowRegression(ModelObject):
                 pred = pd.concat([pred, tmerg], axis=1)
             if isinstance(pred, pd.DataFrame):
                 pred = pred.to_numpy()
-            cY = pd.DataFrame(self.regr.predict(pred))
+            cY = pd.DataFrame(self.regr.predict(pred.astype(float)))
             if self.input_dim == 'multivariate':
                 cY.index = ['values']
                 cY.columns = np.tile(self.column_names, reps=self.forecast_length)
@@ -1655,7 +1663,7 @@ class ComponentAnalysis(ModelObject):
                 verbose=self.verbose,
                 n_jobs=self.n_jobs,
                 forecast_length=self.forecast_length,
-            ).fit(X, future_regressor=future_regressor)
+            ).fit(X.astype(float), future_regressor=future_regressor)
         except Exception as e:
             raise ValueError(f"Model {str(self.model)} with error: {repr(e)}")
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -1924,13 +1932,22 @@ class DatepartRegression(ModelObject):
             )
             return prediction
 
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         model_choice = generate_regressor_params(model_dict=datepart_model_dict)
         datepart_choice = random.choices(
-            ["recurring", "simple", "expanded", "simple_2"], [0.4, 0.3, 0.3, 0.3]
+            [
+                "recurring",
+                "simple",
+                "expanded",
+                "simple_2",
+                "simple_binarized",
+                "expanded_binarized",
+            ],
+            [0.4, 0.3, 0.3, 0.3, 0.4, 0.05],
         )[0]
-        if datepart_choice in ["simple", "simple_2", "recurring"]:
+        if datepart_choice in ["simple", "simple_2", "recurring", "simple_binarized"]:
             polynomial_choice = random.choices([None, 2, 3], [0.5, 0.2, 0.01])[0]
         else:
             polynomial_choice = None
@@ -2268,7 +2285,8 @@ class UnivariateRegression(ModelObject):
             )
             return prediction
 
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         if method == "deep":
             x_transform_choice = random.choices(
@@ -2332,8 +2350,16 @@ class UnivariateRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.86, 0.01, 0.01, 0.01, 0.01]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring', "simple_2", "simple_2_poly"],
-            [0.8, 0.05, 0.1, 0.1, 0.05, 0.05],
+            [
+                None,
+                'simple',
+                'expanded',
+                'recurring',
+                "simple_2",
+                "simple_2_poly",
+                "simple_binarized",
+            ],
+            [0.8, 0.05, 0.1, 0.1, 0.05, 0.05, 0.05],
         )[0]
         holiday_choice = random.choices([True, False], [0.2, 0.8])[0]
         polynomial_degree_choice = None
@@ -2719,7 +2745,8 @@ class MultivariateRegression(ModelObject):
             )
             return prediction
 
-    def get_new_params(self, method: str = 'random'):
+    @staticmethod
+    def get_new_params(method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         if method == "deep":
             model_choice = generate_regressor_params(
@@ -2769,8 +2796,16 @@ class MultivariateRegression(ModelObject):
             [None, 2, 7, 12, 30], [0.4, 0.01, 0.01, 0.01, 0.01]
         )[0]
         add_date_part_choice = random.choices(
-            [None, 'simple', 'expanded', 'recurring', "simple_2", "simple_2_poly"],
-            [0.5, 0.05, 0.1, 0.1, 0.05, 0.1],
+            [
+                None,
+                'simple',
+                'expanded',
+                'recurring',
+                "simple_2",
+                "simple_2_poly",
+                "simple_binarized",
+            ],
+            [0.5, 0.05, 0.1, 0.1, 0.05, 0.1, 0.05],
         )[0]
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]

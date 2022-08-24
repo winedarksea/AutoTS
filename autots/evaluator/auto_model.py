@@ -9,6 +9,7 @@ import datetime
 import json
 from hashlib import md5
 from autots.tools.transform import RandomTransform, GeneralTransformer, shared_trans
+from autots.models.base import PredictionObject
 from autots.models.ensemble import (
     EnsembleForecast,
     generalize_horizontal,
@@ -49,6 +50,7 @@ from autots.models.statsmodels import (
     DynamicFactorMQ,
 )
 from autots.models.arch import ARCH
+from autots.models.matrix_var import RRVAR, MAR, TMF, LATC
 
 
 def create_model_id(
@@ -93,6 +95,7 @@ def ModelMonster(
         parameters (dict): Dictionary of parameters to pass through to model
     """
     model = str(model)
+    model_lower = model.lower()
 
     if model in ['ZeroesNaive', 'ConstantNaive']:
         return ConstantNaive(
@@ -501,8 +504,52 @@ def ModelMonster(
             forecast_length=forecast_length,
             **parameters,
         )
-    elif model == 'ARCH':
+    elif model_lower == 'arch':
         return ARCH(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'RRVAR':
+        return RRVAR(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model_lower == 'mar':
+        return MAR(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'TMF':
+        return TMF(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            forecast_length=forecast_length,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == 'LATC':
+        return LATC(
             frequency=frequency,
             prediction_interval=prediction_interval,
             holiday_country=holiday_country,
@@ -539,6 +586,7 @@ def ModelPrediction(
     verbose: int = 0,
     n_jobs: int = None,
     current_model_file: str = None,
+    model_count: int = 0,
 ):
     """Feed parameters into modeling pipeline
 
@@ -569,6 +617,7 @@ def ModelPrediction(
             with open(f'{current_model_file}.json', 'w') as f:
                 json.dump(
                     {
+                        "model_number": model_count,
                         "model_name": model_str,
                         "model_param_dict": parameter_dict,
                         "model_transform_dict": transformation_dict,
@@ -584,7 +633,7 @@ def ModelPrediction(
                 pass
             print(error_msg)
 
-    transformer_object = GeneralTransformer(**transformation_dict)
+    transformer_object = GeneralTransformer(**transformation_dict, n_jobs=n_jobs)
     df_train_transformed = transformer_object._fit(df_train)
 
     # make sure regressor has same length. This could be a problem if wrong size regressor is passed.
@@ -893,6 +942,7 @@ def model_forecast(
     horizontal_subset: list = None,
     return_model: bool = False,
     current_model_file: str = None,
+    model_count: int = 0,
     **kwargs,
 ):
     """Takes numeric data, returns numeric forecasts.
@@ -1004,6 +1054,7 @@ def model_forecast(
                     template_cols=template_cols,
                     horizontal_subset=horizontal_subset,
                     current_model_file=current_model_file,
+                    model_count=model_count,
                 )
                 model_id = create_model_id(
                     df_forecast.model_name,
@@ -1089,6 +1140,7 @@ def model_forecast(
             n_jobs=n_jobs,
             return_model=return_model,
             current_model_file=current_model_file,
+            model_count=model_count,
         )
 
         sys.stdout.flush()
@@ -1261,6 +1313,7 @@ def TemplateWizard(
                 n_jobs=n_jobs,
                 template_cols=template_cols,
                 current_model_file=current_model_file,
+                model_count=template_result.model_count,
             )
             if verbose > 1:
                 post_memory_percent = virtual_memory().percent
@@ -1520,6 +1573,48 @@ def model_list_to_dict(model_list):
     return model_list, model_prob
 
 
+def random_model(
+    model_list,
+    model_prob,
+    transformer_list='fast',
+    transformer_max_depth=2,
+    models_mode='random',
+    counter=15,
+    n_models=5,
+    keyword_format=False,
+):
+    """Generate a random model from a given list of models and probabilities."""
+    if counter < n_models:
+        model_str = model_list[counter]
+    else:
+        model_str = random.choices(model_list, model_prob, k=1)[0]
+    param_dict = ModelMonster(model_str).get_new_params(method=models_mode)
+    if counter % 4 == 0:
+        trans_dict = RandomTransform(
+            transformer_list=transformer_list,
+            transformer_max_depth=transformer_max_depth,
+            traditional_order=True,
+        )
+    else:
+        trans_dict = RandomTransform(
+            transformer_list=transformer_list,
+            transformer_max_depth=transformer_max_depth,
+        )
+    if keyword_format:
+        return {
+            'model_name': model_str,
+            'model_param_dict': param_dict,
+            'model_transform_dict': trans_dict,
+        }
+    else:
+        return {
+            'Model': model_str,
+            'ModelParameters': json.dumps(param_dict),
+            'TransformationParameters': json.dumps(trans_dict),
+            'Ensemble': 0,
+        }
+
+
 def RandomTemplate(
     n: int = 10,
     model_list: list = [
@@ -1548,30 +1643,19 @@ def RandomTemplate(
     template_list = []
     while len(template_list) < n:
         # this assures all models get choosen at least once
-        if counter < n_models:
-            model_str = model_list[counter]
-        else:
-            model_str = random.choices(model_list, model_prob, k=1)[0]
-        param_dict = ModelMonster(model_str).get_new_params(method=models_mode)
-        if counter % 4 == 0:
-            trans_dict = RandomTransform(
-                transformer_list=transformer_list,
-                transformer_max_depth=transformer_max_depth,
-                traditional_order=True,
-            )
-        else:
-            trans_dict = RandomTransform(
-                transformer_list=transformer_list,
-                transformer_max_depth=transformer_max_depth,
-            )
+        random_mod = random_model(
+            model_list=model_list,
+            model_prob=model_prob,
+            transformer_list=transformer_list,
+            transformer_max_depth=transformer_max_depth,
+            models_mode=models_mode,
+            counter=counter,
+            n_models=n_models,
+        )
+
         template_list.append(
             pd.DataFrame(
-                {
-                    'Model': model_str,
-                    'ModelParameters': json.dumps(param_dict),
-                    'TransformationParameters': json.dumps(trans_dict),
-                    'Ensemble': 0,
-                },
+                random_mod,
                 index=[0],
             )
         )
@@ -1957,7 +2041,7 @@ def validation_aggregation(validation_results):
     col_names = validation_results.model_results.columns
     col_aggs = {x: y for x, y in col_aggs.items() if x in col_names}
     validation_results.model_results['TotalRuntimeSeconds'] = (
-        validation_results.model_results['TotalRuntime'].dt.seconds + 1
+        validation_results.model_results['TotalRuntime'].dt.total_seconds().round(4)
     )
     validation_results.model_results = validation_results.model_results[
         pd.isnull(validation_results.model_results['Exceptions'])
@@ -2006,24 +2090,15 @@ def generate_score(
     mqae_weighting = metric_weighting.get('mqae_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
-        if 'TotalRuntime' in model_results.columns:
-            try:
-                outz = model_results['TotalRuntime'].dt.seconds
-            except Exception:
-                outz = model_results['TotalRuntime'].astype(float)
-            model_results['TotalRuntimeSeconds'] = np.where(
-                model_results['TotalRuntimeSeconds'].isna(),
-                outz,
-                model_results['TotalRuntimeSeconds'],
-            )
-        else:
-            model_results['TotalRuntimeSeconds'] = np.where(
-                model_results['TotalRuntimeSeconds'].isna(),
-                model_results['TotalRuntimeSeconds'].max(),
-                model_results['TotalRuntimeSeconds'],
-            )
+        model_results['TotalRuntimeSeconds'] = np.where(
+            model_results['TotalRuntimeSeconds'].isna(),
+            model_results['TotalRuntimeSeconds'].max(),
+            model_results['TotalRuntimeSeconds'],
+        )
     else:
-        model_results['TotalRuntimeSeconds'] = model_results['TotalRuntime'].dt.seconds
+        model_results['TotalRuntimeSeconds'] = (
+            model_results['TotalRuntime'].dt.total_seconds().round(4)
+        )
     # generate minimizing scores, where smaller = better accuracy
     try:
         model_results = model_results.replace([np.inf, -np.inf], np.nan)
@@ -2098,28 +2173,25 @@ def generate_score(
             ].min()
             spl_score = model_results['spl_weighted'] / spl_scaler
             overall_score = overall_score + (spl_score * spl_weighting)
+        smape_median = smape_score.median()
         if runtime_weighting > 0:
-            runtime = model_results['TotalRuntimeSeconds'] + 120
-            runtime_scaler = runtime[runtime != 0].min()
+            runtime = model_results['TotalRuntimeSeconds'] + 100
+            runtime_scaler = runtime.min()  # [runtime != 0]
             runtime_score = runtime / runtime_scaler
             # this scales it into a similar range as SMAPE
-            runtime_score = runtime_score * (
-                smape_score.median() / runtime_score.median()
-            )
+            runtime_score = runtime_score * (smape_median / runtime_score.median())
             overall_score = overall_score + (runtime_score * runtime_weighting)
         # these have values in the range 0 to 1
         if contour_weighting > 0:
-            contour_score = (
-                2 - model_results['contour_weighted']
-            ) * smape_score.median()
+            contour_score = (2 - model_results['contour_weighted']) * smape_median
             overall_score = overall_score + (contour_score * contour_weighting)
         if oda_weighting > 0:
-            oda_score = (2 - model_results['oda_weighted']) * smape_score.median()
+            oda_score = (2 - model_results['oda_weighted']) * smape_median
             overall_score = overall_score + (oda_score * oda_weighting)
         if containment_weighting > 0:
             containment_score = (
                 1 + abs(prediction_interval - model_results['containment_weighted'])
-            ) * smape_score.median()
+            ) * smape_median
             overall_score = overall_score + (containment_score * containment_weighting)
 
     except Exception as e:
@@ -2265,7 +2337,7 @@ def back_forecast(
     model_transform_dict,
     future_regressor_train=None,
     n_splits: int = "auto",
-    forecast_length=14,
+    forecast_length=7,
     frequency="infer",
     prediction_interval=0.9,
     no_negatives=False,
@@ -2375,6 +2447,7 @@ def back_forecast(
                 b_forecast_low.index = result_idx
         except Exception as e:
             print(f"back_forecast split {n} failed with {repr(e)}")
+            df_forecast = PredictionObject()
             b_df = pd.DataFrame(
                 np.nan, index=df.index[int_idx:int_idx_1], columns=df.columns
             )
@@ -2382,9 +2455,10 @@ def back_forecast(
             b_forecast_up = pd.concat([b_forecast_up, b_df])
             b_forecast_low = pd.concat([b_forecast_low, b_df])
 
-    df_forecast.forecast = b_forecast
-    df_forecast.upper_forecast = b_forecast_up
-    df_forecast.lower_forecast = b_forecast_low
+    # interpolation may hide errors in backcast
+    df_forecast.forecast = b_forecast.interpolate('linear')
+    df_forecast.upper_forecast = b_forecast_up.interpolate('linear')
+    df_forecast.lower_forecast = b_forecast_low.interpolate('linear')
     return df_forecast
 
 

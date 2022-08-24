@@ -18,8 +18,6 @@ all_models = [
     'MotifSimulation',
     'WindowRegression',
     'VAR',
-    'TFPRegression',
-    'ComponentAnalysis',
     'DatepartRegression',
     "UnivariateRegression",
     "Greykite",
@@ -34,6 +32,10 @@ all_models = [
     'DynamicFactorMQ',
     'PytorchForecasting',
     'ARCH',
+    'RRVAR',
+    'MAR',
+    'TMF',
+    'LATC',
 ]
 # downweight slower models
 default = {
@@ -45,22 +47,22 @@ default = {
     'GLM': 1,
     'ETS': 1,
     'FBProphet': 0.5,
-    # 'RollingRegression': 1,  # maybe not?
-    'GluonTS': 0.5,  # downweight if that becomes an option
+    'GluonTS': 0.5,
     'UnobservedComponents': 1,
     'VAR': 1,
     'VECM': 1,
+    'ARIMA': 0.4,
     'WindowRegression': 0.5,
     'DatepartRegression': 1,
-    'UnivariateRegression': 0.2,
-    'MultivariateRegression': 0.2,
+    'UnivariateRegression': 0.3,
+    'MultivariateRegression': 0.4,
     'UnivariateMotif': 1,
     'MultivariateMotif': 1,
     'SectionalMotif': 1,
     'NVAR': 1,
     'Theta': 1,
     'ARDL': 1,
-    # 'DynamicFactorMQ': 1,
+    'ARCH': 1,
 }
 best = [
     'LastValueNaive',
@@ -69,13 +71,10 @@ best = [
     'GLM',
     'ETS',
     'FBProphet',
-    # 'RollingRegression',
     'GluonTS',
     'SeasonalNaive',
     'UnobservedComponents',
-    # 'VARMAX',
     'VECM',
-    # 'MotifSimulation',
     # 'UnivariateRegression',
     'MultivariateRegression',
     'WindowRegression',
@@ -87,6 +86,7 @@ best = [
     'SectionalMotif',
     'Theta',
     'ARDL',
+    'ARCH',
 ]
 # fastest models at any scale
 superfast = [
@@ -105,7 +105,6 @@ fast = {
     'SeasonalNaive': 1,
     'GLM': 1,
     'ETS': 1,
-    # 'UnobservedComponents': 1,  # it's fast enough but I'll leave for parallel
     'VAR': 0.8,
     'VECM': 1,
     'WindowRegression': 0.5,  # this gets slow with Transformer, KerasRNN
@@ -114,6 +113,8 @@ fast = {
     'MultivariateMotif': 0.8,
     'SectionalMotif': 1,
     'NVAR': 1,
+    'MAR': 1,
+    'RRVAR': 1,
 }
 # models that can scale well if many CPU cores are available
 parallel = {
@@ -178,6 +179,10 @@ multivariate = [
     'SectionalMotif',
     'DynamicFactorMQ',
     'PytorchForecasting',
+    'RRVAR',
+    'MAR',
+    'TMF',
+    'LATC',
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -212,6 +217,10 @@ recombination_approved = [
     'DynamicFactorMQ',
     'PytorchForecasting',
     'ARCH',
+    'RRVAR',
+    'MAR',
+    'TMF',
+    'LATC',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [

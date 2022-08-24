@@ -1,6 +1,6 @@
 # AutoTS
 
-<img src="/img/autots_logo.png" width="400" height="184" title="AutoTS Logo">
+<img src="/img/autots_1280.png" width="400" height="184" title="AutoTS Logo">
 
 AutoTS is a time series package for Python designed for rapidly deploying high-accuracy forecasts at scale. 
 
