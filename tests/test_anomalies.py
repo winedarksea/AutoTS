@@ -33,9 +33,10 @@ class TestAnomalies(unittest.TestCase):
             weather_event_types=None,
             wikipedia_pages=wiki_pages,
             sleep_seconds=5,
-        )
+        ).fillna(0).replace(np.inf, 0)
 
-    def test_anomalies(self):
+    def test_anomaly_holiday_detectors(self):
+        """Combininng these to minimize live data download."""
         tried = []
         while not all(x in tried for x in available_methods):
             params = AnomalyDetector.get_new_params(method="deep")
@@ -46,15 +47,14 @@ class TestAnomalies(unittest.TestCase):
                 mod.detect(self.df[np.random.choice(self.df.columns, num_cols, replace=False)])
                 # detected = mod.anomalies
                 # print(params)
-                mod.plot()
+                # mod.plot()
                 self.assertEqual(mod.anomalies.shape, (self.df.shape[0], num_cols))
 
                 mod = AnomalyDetector(output='univariate', **params)
                 mod.detect(self.df[np.random.choice(self.df.columns, num_cols, replace=False)])
-                mod.plot()
                 self.assertEqual(mod.anomalies.shape, (self.df.shape[0], 1))
+        mod.plot()
 
-    def test_holidays(self):
         from prophet import Prophet
 
         tried = []
@@ -68,7 +68,6 @@ class TestAnomalies(unittest.TestCase):
             mod = HolidayDetector(**params)
             mod.detect(self.df)
             prophet_holidays = mod.dates_to_holidays(full_dates, style="prophet")
-            mod.plot()
 
             for series in self.df.columns:
                 # series = "wiki_George_Washington"
@@ -81,6 +80,7 @@ class TestAnomalies(unittest.TestCase):
                 future = m.make_future_dataframe(forecast_length)
                 fcst = m.predict(future).set_index('ds')  # noqa
                 # m.plot_components(fcst)
+        mod.plot()
         temp = mod.dates_to_holidays(full_dates, style="flag")
         temp = mod.dates_to_holidays(full_dates, style="series_flag")
         temp = mod.dates_to_holidays(full_dates, style="impact")

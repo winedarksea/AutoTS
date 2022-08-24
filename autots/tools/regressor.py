@@ -21,19 +21,20 @@ def create_regressor(
     n_jobs: str = "auto",
     fill_na: str = 'ffill',
     aggfunc: str = "first",
+    encode_holiday_type=False,
     holiday_detector_params={
         "threshold": 0.8, "splash_threshold": None,
         "use_dayofmonth_holidays": True, "use_wkdom_holidays": True,
-        "use_wkdeom_holidays": False, "use_lunar_holidays": True,
+        "use_wkdeom_holidays": False, "use_lunar_holidays": False,
         "use_lunar_weekday": False, "use_islamic_holidays": False,
         "use_hebrew_holidays": False,
         "output": 'univariate',
         "anomaly_detector_params": {
-            "method": "rolling_zscore",
+            "method": "mad",
             "transform_dict": {
                 "fillna": None,
-                "transformations": {"0": "ClipOutliers"},
-                "transformation_params": {"0": {"method": "clip", "std_threshold": 6}}}, "forecast_params": None, "method_params": {"distribution": "norm", "alpha": 0.1, "rolling_periods": 300, "center": True}
+                "transformations": {"0": "DifferencedTransformer"},
+                "transformation_params": {"0": {}}}, "forecast_params": None, "method_params": {"distribution": "gamma", "alpha": 0.05}
         }
     },
     holiday_regr_style="flag",
@@ -64,6 +65,7 @@ def create_regressor(
             "DatepartRegression" - backfill with DatepartRegression
         fill_na (str): method to prefill NAs in data, same methods as available elsewhere
         aggfunc (str): str or func, used if frequency is resampled
+        encode_holiday_type (bool): if True, returns column per holiday, ONLY for holidays package country holidays (not Detector)
         holiday_detector_params (dict): passed to HolidayDetector, or None
         holiday_regr_style (str): passed to detector's dates_to_holidays 'flag', 'series_flag', 'impact'
 
@@ -125,21 +127,25 @@ def create_regressor(
             elif holiday_country == 'CN':
                 holiday_country = 'TW'
             # create holiday flag for historic regressor
-            regr_train[f"holiday_flag_{holiday_country}"] = holiday_flag(
-                regr_train.index, country=holiday_country, holidays_subdiv=holidays_subdiv,
-            )
+            regr_train = pd.concat([regr_train, holiday_flag(
+                regr_train.index, country=holiday_country,
+                holidays_subdiv=holidays_subdiv, encode_holiday_type=encode_holiday_type,
+            )], axis=1)
             # now do again for future regressor
-            regr_fcst[f"holiday_flag_{holiday_country}"] = holiday_flag(
-                regr_fcst.index, country=holiday_country, holidays_subdiv=holidays_subdiv,
-            )
+            regr_fcst = pd.concat([regr_fcst, holiday_flag(
+                regr_fcst.index, country=holiday_country,
+                holidays_subdiv=holidays_subdiv, encode_holiday_type=encode_holiday_type,
+            )], axis=1)
             # now try it for future days
             try:
                 holiday_future = holiday_flag(
-                    regr_train.index.shift(1, freq=frequency), country=holiday_country, holidays_subdiv=holidays_subdiv,
+                    regr_train.index.shift(1, freq=frequency), country=holiday_country,
+                    holidays_subdiv=holidays_subdiv,
                 )
                 holiday_future.index = regr_train.index
                 holiday_future_2 = holiday_flag(
-                    regr_fcst.index.shift(1, freq=frequency), country=holiday_country, holidays_subdiv=holidays_subdiv,
+                    regr_fcst.index.shift(1, freq=frequency), country=holiday_country,
+                    holidays_subdiv=holidays_subdiv,
                 )
                 holiday_future_2.index = regr_fcst.index
                 regr_train[f"holiday_flag_{holiday_country}_future"] = holiday_future

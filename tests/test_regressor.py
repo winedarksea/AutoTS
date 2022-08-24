@@ -3,18 +3,6 @@
 
 import unittest
 from autots import create_lagged_regressor, load_daily, create_regressor
-from autots.tools.holiday import holiday_flag
-
-
-class TestHoliday(unittest.TestCase):
-    def test_holiday(self):
-        df = load_daily(long=False)
-        hflag = holiday_flag(df.index, country="US")
-        test_result = hflag[(hflag.index.month == 7) & (hflag.index.day == 4)].mean()
-        self.assertEqual(test_result, 1)
-        hflag = holiday_flag(df.index, country="US", encode_holiday_type=True)
-        test_result_2 = hflag[(hflag.index.month == 1) & (hflag.index.day == 1)].mean()
-        self.assertGreater(test_result_2, 1)
 
 
 class test_create_lagged_regressor(unittest.TestCase):
