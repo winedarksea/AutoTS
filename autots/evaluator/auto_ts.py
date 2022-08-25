@@ -16,7 +16,7 @@ from autots.tools.shaping import (
     clean_weights,
     infer_frequency,
 )
-from autots.tools.transform import GeneralTransformer
+from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.evaluator.auto_model import (
     TemplateEvalObject,
     NewGeneticTemplate,
@@ -453,6 +453,9 @@ class AutoTS(object):
             'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
             'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
             'spl_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+            'oda_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+            'mqae_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+            'maxe_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
             'containment_weighting': random.choices(
                 [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
             )[0],
@@ -463,11 +466,61 @@ class AutoTS(object):
                 [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
             )[0],
         }
+        preclean_choice = random.choices(
+            [
+                None,
+                {
+                    "fillna": "ffill",
+                    "transformations": {"0": "EWMAFilter"},
+                    "transformation_params": {
+                        "0": {"span": 3},
+                    },
+                },
+                {
+                    "fillna": "mean",
+                    "transformations": {"0": "EWMAFilter"},
+                    "transformation_params": {
+                        "0": {"span": 7},
+                    },
+                },
+                {
+                    "fillna": None,
+                    "transformations": {"0": "StandardScaler"},
+                    "transformation_params": {0: {}},
+                },
+                {
+                    "fillna": None,
+                    "transformations": {"0": "QuantileTransformer"},
+                    "transformation_params": {0: {}},
+                },
+                {
+                    "fillna": None,
+                    "transformations": {"0": "AnomalyRemoval"},
+                    "transformation_params": {
+                        0: {
+                            "method": "IQR",
+                            "transform_dict": {},
+                            "method_params": {
+                                "iqr_threshold": 2.0,
+                                "iqr_quantiles": [0.4, 0.6],
+                            },
+                            "fillna": 'ffill',
+                        }
+                    },
+                },
+                'random',
+            ],
+            [0.9, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1],
+        )[0]
+        if preclean_choice == "random":
+            preclean_choice = RandomTransform(
+                transformer_list="fast", transformer_max_depth=2
+            )
         return {
             'max_generations': random.choices([5, 10, 20, 50], [0.2, 0.5, 0.1, 0.4])[0],
             'model_list': random.choices(
-                ['fast', 'superfast', 'default', 'fast_parallel', 'all', 'motifs'],
-                [0.2, 0.2, 0.2, 0.2, 0.05, 0.05],
+                ['fast', 'superfast', 'default', 'fast_parallel', 'all', 'motifs', 'no_shared_fast'],
+                [0.2, 0.2, 0.2, 0.2, 0.05, 0.05, 0.05],
             )[0],
             'transformer_list': random.choices(
                 ['all', 'fast', 'superfast'],
@@ -477,10 +530,11 @@ class AutoTS(object):
                 [1, 2, 4, 6, 8, 10],
                 [0.1, 0.2, 0.3, 0.3, 0.2, 0.1],
             )[0],
-            'num_validations': random.choice([0, 1, 2, 3, 4, 5]),
-            'validation_method': random.choice(
-                ['backwards', 'even', 'similarity', 'seasonal 364']
-            ),
+            'num_validations': random.choice([0, 1, 2, 3, 4, 6]),
+            'validation_method': random.choices(
+                ['backwards', 'even', 'similarity', 'seasonal 364'],
+                [0.4, 0.1, 0.3, 0.3]
+            )[0],
             'models_to_validate': random.choices(
                 [0.15, 0.10, 0.25, 0.35, 0.45], [0.3, 0.1, 0.3, 0.3, 0.1]
             )[0],
@@ -488,9 +542,9 @@ class AutoTS(object):
             'initial_template': random.choices(
                 ['random', 'general+random'], [0.8, 0.2]
             )[0],
-            'subset': random.choices([None, 10, 100], [0.8, 0.1, 0.1])[0],
-            'models_mode': random.choices(['random', 'regressor'], [0.9, 0.1])[0],
-            'drop_most_recent': random.choices([0, 1, 2], [0.6, 0.2, 0.2])[0],
+            'subset': random.choices([None, 10, 100], [0.9, 0.05, 0.05])[0],
+            'models_mode': random.choices(['random', 'regressor'], [0.95, 0.05])[0],
+            'drop_most_recent': random.choices([0, 1, 2], [0.8, 0.1, 0.1])[0],
             'introduce_na': random.choice([None, True, False]),
             'prefill_na': None,
             'remove_leading_zeroes': False,
@@ -527,52 +581,8 @@ class AutoTS(object):
                     },
                 ],
                 [0.9, 0.1, 0.1, 0.1, 0.1],
-            ),
-            'preclean': random.choices(
-                [
-                    None,
-                    {
-                        "fillna": "ffill",
-                        "transformations": {"0": "EWMAFilter"},
-                        "transformation_params": {
-                            "0": {"span": 3},
-                        },
-                    },
-                    {
-                        "fillna": "mean",
-                        "transformations": {"0": "EWMAFilter"},
-                        "transformation_params": {
-                            "0": {"span": 7},
-                        },
-                    },
-                    {
-                        "fillna": None,
-                        "transformations": {"0": "StandardScaler"},
-                        "transformation_params": {0: {}},
-                    },
-                    {
-                        "fillna": None,
-                        "transformations": {"0": "QuantileTransformer"},
-                        "transformation_params": {0: {}},
-                    },
-                    {
-                        "fillna": None,
-                        "transformations": {"0": "AnomalyRemoval"},
-                        "transformation_params": {
-                            0: {
-                                "method": "IQR",
-                                "transform_dict": {},
-                                "method_params": {
-                                    "iqr_threshold": 2.0,
-                                    "iqr_quantiles": [0.4, 0.6],
-                                },
-                                "fillna": 'ffill',
-                            }
-                        },
-                    },
-                ],
-                [0.9, 0.1, 0.05, 0.1, 0.1, 0.1],
-            ),
+            )[0],
+            'preclean': preclean_choice,
             'metric_weighting': metric_weighting,
         }
 

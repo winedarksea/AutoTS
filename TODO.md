@@ -12,22 +12,7 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# Latest :space_invader: :space_invader: :space_invader:
-* added AnomalyDetector
-* added HolidayDetector
-* added observation_end and Wikipedia data to load_live_daily
-* added binarized versions of datepart method (should have done ages ago!)
-* addded RRVAR, MAR, TMF, LATC models
-* added AlignLastValue transformer
-* added plot_horizontal_model_count and fixed an error in horizontal generation plot
-* adjusted TotalRuntime to higher precision, and no longer + 1
-* added subsidiary transformer for cleaning in Detrend and Datepart detrend Transformers
-* sped up SinTrend transformer
-* new AnomalyRemoval transformer
-* added HolidayTransformer
-* added auto holidays to Prophet
-* added get_new_params method to AutoTS class
-* more holidays options to create_regressor
+# Latest :mage_man: :mage_man: :mage_man:
 
 
 ### New Model Checklist:
