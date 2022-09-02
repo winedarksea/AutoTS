@@ -36,7 +36,7 @@ from autots.models.ensemble import (
     HorizontalTemplateGenerator,
     generate_mosaic_template,
 )
-from autots.models.model_list import model_lists
+from autots.models.model_list import model_lists, no_shared
 from autots.tools import cpu_count
 from autots.tools.window_functions import retrieve_closest_indices
 
@@ -2117,9 +2117,9 @@ or otherwise increase models available."""
         )
 
     def back_forecast(
-        self, column=None, n_splits: int = 3, tail: int = None, verbose: int = 0
+        self, series=None, n_splits: int = "auto", tail: int = "auto", verbose: int = 0
     ):
-        """Create forecasts for the historical training data, ie. backcast or back forecast.
+        """Create forecasts for the historical training data, ie. backcast or back forecast. OUT OF SAMPLE
 
         This actually forecasts on historical data, these are not fit model values as are often returned by other packages.
         As such, this will be slower, but more representative of real world model performance.
@@ -2127,7 +2127,7 @@ or otherwise increase models available."""
 
         Args are same as for model_forecast except...
         n_splits(int): how many pieces to split data into. Pass 2 for fastest, or "auto" for best accuracy
-        column (str): if to run on only one column, pass column name. Faster than full.
+        series (str): if to run on only one column, pass column name. Faster than full.
         tail (int): df.tail() of the dataset, back_forecast is only run on n most recent observations.
             which points at eval_periods of lower-level back_forecast function
 
@@ -2135,13 +2135,16 @@ or otherwise increase models available."""
         """
         if self.best_model.empty:
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
-        if column is not None:
-            input_df = pd.DataFrame(self.df_wide_numeric[column])
+        if series is not None and (self.best_model_name in no_shared or self.best_model_ensemble == 2):
+            input_df = pd.DataFrame(self.df_wide_numeric[series])
         else:
             input_df = self.df_wide_numeric
         eval_periods = None
         if tail is not None:
-            eval_periods = tail
+            if tail == "auto":
+                eval_periods = self.forecast_length * (self.num_validations + 1)
+            else:
+                eval_periods = tail
         result = back_forecast(
             df=input_df,
             model_name=self.best_model_name,
@@ -2286,39 +2289,73 @@ or otherwise increase models available."""
         )
 
     def plot_backforecast(
-        self, series=None, n_splits: int = 3, start_date=None, **kwargs
+        self, series=None, n_splits: int = "auto", start_date="auto",
+        title=None, alpha=0.25,
+        facecolor="black", loc="upper left",
+        **kwargs
     ):
-        """Plot the historical data and fit forecast on historic.
+        """Plot the historical data and fit forecast on historic. Out of sample in chunks = forecast_length by default.
 
         Args:
             series (str or list): column names of time series
             n_splits (int or str): "auto", number > 2, higher more accurate but slower
+            start_date (datetime.datetime): or "auto"
+            title (str)
             **kwargs passed to pd.DataFrame.plot()
         """
         if series is None:
             series = random.choice(self.df_wide_numeric.columns)
+        if title is None:
+            title = f"Out of Sample Back Forecasts for {str(series)[0:40]}"
         tail = None
         if start_date is not None:
-            tail = len(
-                self.df_wide_numeric.index[self.df_wide_numeric.index >= start_date]
-            )
-            if tail == len(self.df_wide_numeric.index):
-                tail = None
-        b_df = self.back_forecast(
-            column=series, n_splits=n_splits, verbose=0, tail=tail
-        ).forecast
-        b_df = b_df.rename(columns=lambda x: str(x) + "_forecast")
+            if start_date == "auto":
+                tail = self.forecast_length * (self.num_validations + 1)
+                start_date = self.df_wide_numeric.index[-tail]
+            else:
+                tail = len(
+                    self.df_wide_numeric.index[self.df_wide_numeric.index >= start_date]
+                )
+                if tail == len(self.df_wide_numeric.index):
+                    tail = None
+        bd = self.back_forecast(
+            series=series, n_splits=n_splits, verbose=0, tail=tail
+        )
+        b_df = pd.DataFrame(bd.forecast[series]).rename(columns=lambda x: str(x) + "_forecast")
+        b_df_up = pd.DataFrame(bd.upper_forecast[series]).rename(columns=lambda x: str(x) + "_upper_forecast")
+        b_df_low = pd.DataFrame(bd.lower_forecast[series]).rename(columns=lambda x: str(x) + "_lower_forecast")
         plot_df = pd.concat(
             [
                 pd.DataFrame(self.df_wide_numeric[series]),
                 b_df,
+                b_df_up, b_df_low
             ],
             axis=1,
         )
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         plot_df = remove_leading_zeros(plot_df)
-        plot_df.plot(**kwargs)
+        try:
+            import matplotlib.pyplot as plt
+            ax = plt.subplot()
+            ax.set_title(title)
+            ax.fill_between(
+                plot_df.index, plot_df.iloc[:, 3], plot_df.iloc[:, 2],
+                facecolor=facecolor, alpha=alpha, interpolate=True,
+                label=f"{self.prediction_interval * 100}% upper/lower forecast"
+            )
+            ax.plot(plot_df.index, plot_df.iloc[:, 1], label="forecast", **kwargs)
+            ax.plot(plot_df.index, plot_df.iloc[:, 0], label="actuals")
+            ax.legend(loc=loc)
+            for label in ax.get_xticklabels():
+                label.set_ha("right")
+                label.set_rotation(45)
+            return ax
+        except Exception:
+            plot_df.plot(title=title, **kwargs)
+
+    def plot_back_forecast(self, **kwargs):
+        return self.plot_backforecast(**kwargs)
 
     def list_failed_model_types(self):
         """Return a list of model types (ie ETS, LastValueNaive) that failed.

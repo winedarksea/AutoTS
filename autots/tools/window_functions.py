@@ -452,3 +452,14 @@ def rolling_window_view(array, window_shape=(0,), axis=None, writeable=False):
     return np.lib.stride_tricks.as_strided(
         array, shape=new_shape, strides=new_strides, writeable=writeable
     )
+
+
+def window_lin_reg(x, y, w):
+    '''From https://stackoverflow.com/questions/70296498/efficient-computation-of-moving-linear-regression-with-numpy-numba/70304475#70304475'''
+    sx = sliding_window_view(x, w, axis=0).sum(axis=-1)
+    sy = sliding_window_view(y, w, axis=0).sum(axis=-1)
+    sx2 = sliding_window_view(x**2, w, axis=0).sum(axis=-1)
+    sxy = sliding_window_view(x * y, w, axis=0).sum(axis=-1)
+    slope = (w * sxy - sx * sy) / (w * sx2 - sx**2)
+    intercept = (sy - slope * sx) / w
+    return slope, intercept

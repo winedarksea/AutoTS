@@ -1417,7 +1417,6 @@ def TemplateWizard(
             template_result.per_series_mqae.append(
                 _ps_metric(ps_metric, 'mqae', model_id)
             )
-
             if 'distance' in ensemble:
                 cur_smape = model_error.per_timestamp.loc['weighted_smape']
                 cur_smape = pd.DataFrame(cur_smape).transpose()

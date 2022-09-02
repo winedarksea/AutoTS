@@ -105,8 +105,7 @@ def date_part(
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'epoch': pd.to_numeric(
                     DTindex, errors='coerce', downcast='integer'
-                ).values
-                / 100000000000,
+                ).values / 100000000000,
             }
         )
     elif method in ["simple_3", "lunar_phase"]:
@@ -157,7 +156,10 @@ def date_part(
                 'day': pd.Categorical(
                     DTindex.day, categories=list(range(31)), ordered=True
                 ),
-                'weekdayofmonth': (DTindex.day - 1) // 7 + 1,
+                'weekdayofmonth': pd.Categorical(
+                    (DTindex.day - 1) // 7 + 1,
+                    categories=list(range(5)), ordered=True,
+                ),
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'quarter': DTindex.quarter,
                 'epoch': DTindex.to_julian_date(),

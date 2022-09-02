@@ -431,6 +431,8 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 	tensorflow-probability
 	fredapi
 	greykite
+	matplotlib
+	pytorch-forecasting
 	
 Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs. 
 
@@ -711,6 +713,8 @@ lower_limit = {
 Anomaly Detection
 
 Multiple methods are available, including use of `forecast_params` which can be used to analyze the historic deviations of an AutoTS forecasting model.
+
+Holiday detection may also pick up events or 'anti-holidays' ie days of low demand. It won't pick up holidays that don't usually have a significant impact.
 ```python
 from autots.evaluator.anomaly_detector import AnomalyDetector
 from autots.datasets import load_live_daily

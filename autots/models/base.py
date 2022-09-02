@@ -366,6 +366,9 @@ class PredictionObject(object):
         remove_zeroes: bool = False,
         interpolate: str = None,
         start_date: str = None,
+        alpha=0.25,
+        facecolor="black",
+        loc="upper left",
         title=None,
         **kwargs,
     ):

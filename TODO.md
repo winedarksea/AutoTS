@@ -12,8 +12,9 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# Latest :mage_man: :mage_man: :mage_man:
-
+# 0.5.1 :mage_man: :mage_man: :mage_man:
+* 'LocalLinearTrend' transformer
+* update to AutoTS().back_forecast including breaking change of `column` arg renamed to `series`
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
@@ -28,6 +29,7 @@
 	* add to shared_trans if so
 	* oddities_list for those with forecast/original transform difference
 	* add to docstring of GeneralTransformer
+	* add to test_transform call
 
 ## New Metric Checklist:
 	* Create function in metrics.py

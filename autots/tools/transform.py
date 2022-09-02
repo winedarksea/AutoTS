@@ -14,6 +14,7 @@ from autots.tools.anomaly_utils import (
     holiday_new_params,
     dates_to_holidays,
 )
+from autots.tools.window_functions import window_lin_reg
 
 try:
     from joblib import Parallel, delayed
@@ -2810,6 +2811,160 @@ class HolidayTransformer(EmptyTransformer):
         return holiday_params
 
 
+class LocalLinearTrend(EmptyTransformer):
+    """Base transformer returning raw data."""
+
+    def __init__(
+        self,
+        rolling_window: float = 0.1,
+        n_tails: float = 0.1,
+        n_future: float = 0.2,
+        method: str = "mean",
+        **kwargs,
+    ):
+        super().__init__(name="LocalLinearTrend")
+        self.rolling_window = rolling_window
+        self.n_tails = n_tails
+        self.n_future = n_future
+        self.method = method
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.dates = df.index.to_julian_date()
+        if self.rolling_window <= 0:
+            raise ValueError(f"rolling_window {self.rolling_window} arg is not valid")
+        elif self.rolling_window < 1:
+            self.rolling_window = int(self.rolling_window * len(self.dates))
+
+        if self.n_tails <= 0:
+            raise ValueError(f"n_tails {self.n_tails} arg is not valid")
+        elif self.n_tails < 1:
+            self.n_tails = int(self.n_tails * len(self.dates))
+
+        if self.n_future <= 0:
+            raise ValueError(f"n_future {self.n_future} arg is not valid")
+        elif self.n_future < 1:
+            self.n_future = int(self.n_future * len(self.dates))
+
+        self.dates_2d = np.repeat(
+            self.dates.to_numpy()[..., None],
+            df.shape[1], axis=1
+        )
+        slope, intercept = window_lin_reg(
+            self.dates_2d,
+            df.values,
+            w=self.rolling_window,
+        )
+        w_1 = self.rolling_window - 1
+        self.slope = np.concatenate(
+            [
+                np.repeat(slope[0:self.n_tails].mean(axis=0)[None, ...], int(w_1 / 2), axis=0),
+                slope,
+                np.repeat(slope[-self.n_tails:].mean(axis=0)[None, ...], w_1 - int(w_1 / 2), axis=0)
+            ]
+        )
+        self.intercept = np.concatenate([
+            np.repeat(intercept[0:self.n_tails].mean(axis=0)[None, ...], int(w_1 / 2), axis=0),
+            intercept,
+            np.repeat(intercept[-self.n_tails:].mean(axis=0)[None, ...], w_1 - int(w_1 / 2), axis=0)
+        ])
+        if self.method == "mean":
+            futslp = np.array([np.mean(slope[-self.n_future:], axis=0)])
+            self.full_slope = np.concatenate([
+                [np.mean(slope[0:self.n_future], axis=0)],
+                self.slope,
+                futslp, futslp  # twice to have an N+1 size
+            ])
+            futinc = np.array([np.mean(intercept[-self.n_future:], axis=0)])
+            self.full_intercept = np.concatenate([
+                [np.mean(intercept[0:self.n_future], axis=0)],
+                self.intercept,
+                futinc, futinc
+            ])
+            # self.greater_slope = self.slope[-self.n_future:].mean()
+            # self.greater_intercept = self.intercept[-self.n_future:].mean()
+            # self.lesser_slope = self.slope[0:self.n_future].mean()
+            # self.lesser_intercept = self.intercept[0:self.n_future].mean()
+        elif self.method == "median":
+            futslp = np.array([np.median(slope[-self.n_future:], axis=0)])
+            self.full_slope = np.concatenate([
+                [np.median(slope[0:self.n_future], axis=0)],
+                self.slope,
+                futslp, futslp  # twice to have an N+1 size
+            ])
+            futinc = np.array([np.median(intercept[-self.n_future:], axis=0)])
+            self.full_intercept = np.concatenate([
+                [np.median(intercept[0:self.n_future], axis=0)],
+                self.intercept,
+                futinc, futinc
+            ])
+        self.full_dates = np.concatenate([
+            [self.dates.min() - 0.01],
+            self.dates,
+            [self.dates.max() + 0.01],
+        ])
+        return df - (self.slope * self.dates_2d + self.intercept)
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        dates = df.index.to_julian_date()
+        dates_2d = np.repeat(
+            dates.to_numpy()[..., None],
+            df.shape[1], axis=1
+        )
+        idx = self.full_dates.searchsorted(dates)
+        return df - (self.full_slope[idx] * dates_2d + self.full_intercept[idx])
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        dates = df.index.to_julian_date()
+        dates_2d = np.repeat(
+            dates.to_numpy()[..., None],
+            df.shape[1], axis=1
+        )
+        idx = self.full_dates.searchsorted(dates)
+        return df + (self.full_slope[idx] * dates_2d + self.full_intercept[idx])
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        return {
+            "rolling_window": random.choices([0.1, 90, 30, 180, 360, 0.05], [0.5, 0.1, 0.1, 0.1, 0.1, 0.2])[0],
+            "n_tails": random.choices([0.1, 90, 30, 180, 360, 0.05], [0.5, 0.1, 0.1, 0.1, 0.1, 0.2])[0],
+            "n_future": random.choices([0.2, 90, 360, 0.1, 0.05], [0.5, 0.1, 0.1, 0.1, 0.2])[0],
+            "method": random.choice(["mean", "median"]),
+        }
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -2875,6 +3030,7 @@ have_params = {
     "AlignLastValue": AlignLastValue,
     "AnomalyRemoval": AnomalyRemoval,  # not shared as long as output is 'multivariate'
     "HolidayTransformer": HolidayTransformer,
+    "LocalLinearTrend": LocalLinearTrend,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -2965,6 +3121,7 @@ class GeneralTransformer(object):
             'AlignLastValue': align forecast start to end of training data
             'AnomalyRemoval': more tailored anomaly removal options
             'HolidayTransformer': detects holidays and wishes good cheer to all
+            'LocalLinearTrend': rolling local trend, using tails for future and past trend
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -3343,6 +3500,7 @@ transformer_dict = {
     "AlignLastValue": 0.1,
     "AnomalyRemoval": 0.03,
     'HolidayTransformer': 0.01,
+    'LocalLinearTrend': 0.01,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()

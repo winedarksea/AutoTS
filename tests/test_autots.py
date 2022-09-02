@@ -486,6 +486,8 @@ class ModelTest(unittest.TestCase):
             'DifferencedTransformer', 'PctChangeTransformer', 'PositiveShift',
             'SineTrend', 'convolution_filter', 'CumSumTransformer',
             'AlignLastValue',  # new 0.4.3
+            'AnomalyRemoval', "HolidayTransformer",  # new 0.5.0
+            'LocalLinearTrend',  # new 0.5.1
         ]
 
         timings = {}
@@ -511,8 +513,6 @@ class ModelTest(unittest.TestCase):
         forecasts2 = {}
         upper_forecasts2 = {}
         lower_forecasts2 = {}
-        # following are not consistent with seed:
-        # "MotifSimulation"
 
         for x in transforms:
             print(x)
