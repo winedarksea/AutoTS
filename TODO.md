@@ -17,6 +17,7 @@
 * improved ScipyFilter focusing on Butter and Savitzky–Golay filters
 * update to AutoTS().back_forecast including breaking change of `column` arg renamed to `series`
 * add KalmanSmoothing transformer
+* add KalmanStateSpace model (Kalman Filter + 'any' state space models)
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

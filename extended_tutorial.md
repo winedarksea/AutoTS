@@ -409,6 +409,9 @@ You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_co
 	statsmodels
 		>= 0.13 ARDL and UECM
 	scipy.uniform_filter1d (for mosaic-window ensemble only)
+	scipy.stats (anomaly detection, Kalman)
+	scipy.signal (ScipyFilter)
+	scipy.spatial.cdist (Motifs)
 
 Of these, numpy and pandas are critical. 
 Limited functionality should exist without scikit-learn. 
@@ -433,6 +436,7 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 	greykite
 	matplotlib
 	pytorch-forecasting
+	scipy
 	
 Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs. 
 

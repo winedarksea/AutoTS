@@ -36,6 +36,7 @@ all_models = [
     'MAR',
     'TMF',
     'LATC',
+    'KalmanStateSpace',
 ]
 # downweight slower models
 default = {
@@ -115,6 +116,7 @@ fast = {
     'NVAR': 1,
     'MAR': 1,
     'RRVAR': 1,
+    'KalmanStateSpace': 1,
 }
 # models that can scale well if many CPU cores are available
 parallel = {
@@ -163,6 +165,7 @@ probabilistic = [
     'PytorchForecasting',
     # 'MultivariateRegression',
     'ARCH',
+    'KalmanStateSpace',
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -221,6 +224,7 @@ recombination_approved = [
     'MAR',
     'TMF',
     'LATC',
+    'KalmanStateSpace',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -242,6 +246,7 @@ no_shared = [
     'ARDL',
     'NeuralProphet',
     'ARCH',
+    'KalmanStateSpace',
 ]
 # allow the use of a regressor, need to accept "User" (fail if not given), have 'regressor' param method
 regressor = [

@@ -3010,8 +3010,11 @@ class KalmanSmoothing(EmptyTransformer):
         # predefined, or random
         params = random.choices(
             [
-                ([[1, 1], [0, 1]], [[0.1, 0.0], [0.0, 0.01]], [[1, 0]], 1.0), "random"],
-            [0.5, 0.5]
+                ([[1, 1], [0, 1]], [[0.1, 0.0], [0.0, 0.01]], [[1, 0]], 1.0),
+                ([[1, 1, 0], [0, 1, 0], [0, 0, 1]], [[0.1, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0, 0.0, 0.1]], [[1, 1, 1]], 1.0),
+                "random"
+            ],
+            [0.25, 0.25, 0.5],
         )[0]
         if params == "random":
             st, procnois, obsmod, obsnois = random_state_space()

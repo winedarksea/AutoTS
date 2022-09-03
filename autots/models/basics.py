@@ -12,10 +12,14 @@ from autots.tools import seasonal_int
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 from autots.tools.window_functions import window_id_maker, sliding_window_view
 from autots.tools.percentile import nan_quantile
+from autots.tools.fast_kalman import KalmanFilter, random_state_space
+
 
 # these are all optional packages
 try:
     from scipy.spatial.distance import cdist
+    from scipy.stats import norm
+    # from scipy.stats import t as studentt
 except Exception:
     pass
 try:
@@ -240,7 +244,7 @@ class AverageValueNaive(ModelObject):
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
-        method: str = 'Median',
+        method: str = 'median',
         window: int = None,
         **kwargs
     ):
@@ -2004,4 +2008,139 @@ class SectionalMotif(ModelObject):
             "k": self.k,
             "stride_size": self.stride_size,
             'regression_type': self.regression_type,
+        }
+
+
+class KalmanStateSpace(ModelObject):
+    """Forecast using a state space model solved by a Kalman Filter.
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+
+    """
+
+    def __init__(
+        self,
+        name: str = "KalmanStateSpace",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        holiday_country: str = 'US',
+        random_seed: int = 2020,
+        verbose: int = 0,
+        state_transition=[[1, 1], [0, 1]],
+        process_noise=[[0.1, 0.0], [0.0, 0.01]],
+        observation_model=[[1, 0]],
+        observation_noise: float = 1.0,
+        **kwargs
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+        )
+        self.state_transition = state_transition
+        self.process_noise = process_noise
+        self.observation_model = observation_model
+        self.observation_noise = observation_noise
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        df = self.basic_profile(df)
+
+        self.kf = KalmanFilter(
+            state_transition=self.state_transition,  # matrix A
+            process_noise=self.process_noise,  # Q
+            observation_model=self.observation_model,  # H
+            observation_noise=self.observation_noise,  # R
+        )
+        self.df_train = df
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        result = self.kf.predict(self.df_train.to_numpy().T, forecast_length)
+        df = pd.DataFrame(
+            result.observations.mean.T,
+            index=self.create_forecast_index(forecast_length), columns=self.df_train.columns
+        )
+
+        if just_point_forecast:
+            return df
+        else:
+            df_stdev = np.sqrt(result.observations.cov).T
+            bound = df_stdev * norm.ppf(self.prediction_interval)
+            upper_forecast = df + bound
+            lower_forecast = df - bound
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=df.index,
+                forecast_columns=df.columns,
+                lower_forecast=lower_forecast,
+                forecast=df,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+            return prediction
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        # predefined, or random
+        params = random.choices(
+            [
+                ([[1, 1], [0, 1]], [[0.1, 0.0], [0.0, 0.01]], [[1, 0]], 1.0),
+                ([[1, 1, 0], [0, 1, 0], [0, 0, 1]], [[0.1, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0, 0.0, 0.1]], [[1, 1, 1]], 1.0),
+                "random",
+            ],
+            [0.25, 0.25, 0.5]
+        )[0]
+        if params == "random":
+            st, procnois, obsmod, obsnois = random_state_space()
+            st = st.tolist()
+            procnois = procnois.tolist()
+            obsmod = obsmod.tolist()
+        else:
+            st, procnois, obsmod, obsnois = params
+        return {
+            "state_transition": st,
+            "process_noise": procnois,
+            "observation_model": obsmod,
+            "observation_noise": obsnois,
+        }
+
+    def get_params(self):
+        """Return dict of current parameters."""
+        return {
+            "state_transition": self.state_transition,
+            "process_noise": self.process_noise,
+            "observation_model": self.observation_model,
+            "observation_noise": self.observation_noise,
         }
