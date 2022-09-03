@@ -14,6 +14,7 @@
 
 # 0.5.1 :mage_man: :mage_man: :mage_man:
 * 'LocalLinearTrend' transformer
+* improved ScipyFilter focusing on Butter and Savitzky–Golay filters
 * update to AutoTS().back_forecast including breaking change of `column` arg renamed to `series`
 
 ### New Model Checklist:
@@ -29,6 +30,7 @@
 	* add to shared_trans if so
 	* oddities_list for those with forecast/original transform difference
 	* add to docstring of GeneralTransformer
+	* add to dictionary by type: filter, scaler, transformer
 	* add to test_transform call
 
 ## New Metric Checklist:
