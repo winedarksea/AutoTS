@@ -13,9 +13,10 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # 0.5.1 :mage_man: :mage_man: :mage_man:
-* 'LocalLinearTrend' transformer
+* add LocalLinearTrend transformer
 * improved ScipyFilter focusing on Butter and Savitzky–Golay filters
 * update to AutoTS().back_forecast including breaking change of `column` arg renamed to `series`
+* add KalmanSmoothing transformer
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

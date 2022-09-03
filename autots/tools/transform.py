@@ -15,6 +15,7 @@ from autots.tools.anomaly_utils import (
     dates_to_holidays,
 )
 from autots.tools.window_functions import window_lin_reg
+from autots.tools.fast_kalman import KalmanFilter, random_state_space
 
 try:
     from joblib import Parallel, delayed
@@ -2980,6 +2981,97 @@ class LocalLinearTrend(EmptyTransformer):
         }
 
 
+class KalmanSmoothing(EmptyTransformer):
+    """Apply a Kalman Filter to smooth data given a transition matrix.
+
+    Args:
+        rows (int): number of rows to average as last record
+        lag (int): use last value as this lag back, 1 is no shift, 2 is lag one from end, ie second to last
+        method (str): 'additive', 'multiplicative'
+        strength (float): softening parameter [0, 1], 1.0 for full difference
+    """
+
+    def __init__(
+        self,
+        state_transition=[[1, 1], [0, 1]],
+        process_noise=[[0.1, 0.0], [0.0, 0.01]],
+        observation_model=[[1, 0]],
+        observation_noise: float = 1.0,
+        **kwargs,
+    ):
+        super().__init__(name="KalmanSmoothing")
+        self.state_transition = state_transition
+        self.process_noise = process_noise
+        self.observation_model = observation_model
+        self.observation_noise = observation_noise
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        # predefined, or random
+        params = random.choices(
+            [
+                ([[1, 1], [0, 1]], [[0.1, 0.0], [0.0, 0.01]], [[1, 0]], 1.0), "random"],
+            [0.5, 0.5]
+        )[0]
+        if params == "random":
+            st, procnois, obsmod, obsnois = random_state_space()
+            st = st.tolist()
+            procnois = procnois.tolist()
+            obsmod = obsmod.tolist()
+        else:
+            st, procnois, obsmod, obsnois = params
+        return {
+            "state_transition": st,
+            "process_noise": procnois,
+            "observation_model": obsmod,
+            "observation_noise": obsnois,
+        }
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.kf = KalmanFilter(
+            state_transition=self.state_transition,  # matrix A
+            process_noise=self.process_noise,  # Q
+            observation_model=self.observation_model,  # H
+            observation_noise=self.observation_noise,  # R
+        )
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+
+        result = self.kf.smooth(df.to_numpy().T)
+        return pd.DataFrame(
+            result.observations.mean.T,
+            index=df.index, columns=df.columns
+        )
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -3046,6 +3138,7 @@ have_params = {
     "AnomalyRemoval": AnomalyRemoval,  # not shared as long as output is 'multivariate'
     "HolidayTransformer": HolidayTransformer,
     "LocalLinearTrend": LocalLinearTrend,
+    "KalmanSmoothing": KalmanSmoothing,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -3137,6 +3230,7 @@ class GeneralTransformer(object):
             'AnomalyRemoval': more tailored anomaly removal options
             'HolidayTransformer': detects holidays and wishes good cheer to all
             'LocalLinearTrend': rolling local trend, using tails for future and past trend
+            'KalmanSmoothing': smooth using a state space model
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -3516,6 +3610,7 @@ transformer_dict = {
     "AnomalyRemoval": 0.03,
     'HolidayTransformer': 0.01,
     'LocalLinearTrend': 0.01,
+    'KalmanSmoothing': 0.01,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
@@ -3554,6 +3649,7 @@ filters = {
     "bkfilter": 0.1,
     "Slice": 0.02,  # sorta horizontal filter
     "AlignLastValue": 0.1,
+    "KalmanSmoothing": 0.1,
 }
 scalers = {
     "MinMaxScaler": 0.05,
