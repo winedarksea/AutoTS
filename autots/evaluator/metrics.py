@@ -290,10 +290,7 @@ def mae(ae):
 
 def medae(ae, nan_flag=True):
     """Accepting abs error already calculated"""
-    if nan_flag:
-        return np.nanmedian(ae, axis=0)
-    else:
-        return np.median(ae, axis=0)
+    return np.nanmedian(ae, axis=0) if nan_flag else np.median(ae, axis=0)
 
 
 def smape(actual, forecast, ae, nan_flag=True):
@@ -360,12 +357,9 @@ def mqae(ae, q=0.85, nan_flag=True):
         vals = ae
     else:
         qi = int(ae.shape[0] * q)
-        qi = qi if qi > 1 else 1
+        qi = max(qi, 1)
         vals = np.partition(ae, qi, axis=0)[:qi]
-    if nan_flag:
-        return np.nanmean(vals, axis=0)
-    else:
-        return np.mean(vals, axis=0)
+    return np.nanmean(vals, axis=0) if nan_flag else np.mean(vals, axis=0)
 
 
 def mlvb(A, F, last_of_array):

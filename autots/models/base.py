@@ -62,7 +62,7 @@ class ModelObject(object):
         self.holiday_country = holiday_country
         self.random_seed = random_seed
         self.verbose = verbose
-        self.verbose_bool = True if self.verbose > 1 else False
+        self.verbose_bool = self.verbose > 1
         self.n_jobs = n_jobs
 
     def __repr__(self):
@@ -297,10 +297,7 @@ class PredictionObject(object):
 
     def __bool__(self):
         """bool version of class."""
-        if isinstance(self.forecast, pd.DataFrame):
-            return True
-        else:
-            return False
+        return isinstance(self.forecast, pd.DataFrame)
 
     def long_form_results(
         self,
@@ -386,11 +383,10 @@ class PredictionObject(object):
             series = random.choice(self.forecast.columns)
 
         model_name = self.model_name
-        if model_name == "Ensemble":
-            if 'series' in self.model_parameters.keys():
-                h_params = self.model_parameters['series'][series]
-                if isinstance(h_params, str):
-                    model_name = self.model_parameters['models'][h_params]['Model']
+        if model_name == "Ensemble" and 'series' in self.model_parameters.keys():
+            h_params = self.model_parameters['series'][series]
+            if isinstance(h_params, str):
+                model_name = self.model_parameters['models'][h_params]['Model']
 
         if df_wide is not None:
             plot_df = pd.DataFrame(
@@ -427,7 +423,7 @@ class PredictionObject(object):
                 raise ValueError("start_date is more recent than all data provided")
             plot_df = plot_df[plot_df.index >= start_date]
         if title is None:
-            title = f"{series} with model {str(model_name)[0:80]}"
+            title = f"{series} with model {str(model_name)[:80]}"
         plot_df.plot(title=title, **kwargs)
 
     def evaluate(

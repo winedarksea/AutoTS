@@ -19,13 +19,13 @@ def load_daily(long: bool = True):
     data_file_name = join(module_path, 'data', 'covid_daily.zip')
 
     df_wide = pd.read_csv(data_file_name, index_col=0, parse_dates=True)
-    if not long:
-        return df_wide
-    else:
-        df_long = df_wide.reset_index(drop=False).melt(
+    return (
+        df_wide.reset_index(drop=False).melt(
             id_vars=['datetime'], var_name='series_id', value_name='value'
         )
-        return df_long
+        if long
+        else df_wide
+    )
 
 
 def load_fred_monthly():
@@ -59,18 +59,16 @@ def load_monthly(long: bool = True):
     """Federal Reserve of St. Louis monthly economic indicators."""
     if long:
         return load_fred_monthly()
-    else:
-        from autots.tools.shaping import long_to_wide
+    from autots.tools.shaping import long_to_wide
 
-        df_long = load_fred_monthly()
-        df_wide = long_to_wide(
-            df_long,
-            date_col='datetime',
-            value_col='value',
-            id_col='series_id',
-            aggfunc='first',
-        )
-        return df_wide
+    df_long = load_fred_monthly()
+    return long_to_wide(
+        df_long,
+        date_col='datetime',
+        value_col='value',
+        id_col='series_id',
+        aggfunc='first',
+    )
 
 
 def load_fred_yearly():
@@ -107,18 +105,16 @@ def load_yearly(long: bool = True):
     """Federal Reserve of St. Louis annual economic indicators."""
     if long:
         return load_fred_yearly()
-    else:
-        from autots.tools.shaping import long_to_wide
+    from autots.tools.shaping import long_to_wide
 
-        df_long = load_fred_yearly()
-        df_wide = long_to_wide(
-            df_long,
-            date_col='datetime',
-            value_col='value',
-            id_col='series_id',
-            aggfunc='first',
-        )
-        return df_wide
+    df_long = load_fred_yearly()
+    return long_to_wide(
+        df_long,
+        date_col='datetime',
+        value_col='value',
+        id_col='series_id',
+        aggfunc='first',
+    )
 
 
 def load_traffic_hourly(long: bool = True):
@@ -132,13 +128,13 @@ def load_traffic_hourly(long: bool = True):
     df_wide = pd.read_csv(
         data_file_name, index_col=0, parse_dates=True, compression='zip'
     )
-    if not long:
-        return df_wide
-    else:
-        df_long = df_wide.reset_index(drop=False).melt(
+    return (
+        df_wide.reset_index(drop=False).melt(
             id_vars=['datetime'], var_name='series_id', value_name='value'
         )
-        return df_long
+        if long
+        else df_wide
+    )
 
 
 def load_hourly(long: bool = True):
@@ -162,18 +158,16 @@ def load_weekly(long: bool = True):
     """Weekly petroleum industry data from the EIA."""
     if long:
         return load_eia_weekly()
-    else:
-        from autots.tools.shaping import long_to_wide
+    from autots.tools.shaping import long_to_wide
 
-        df_long = load_eia_weekly()
-        df_wide = long_to_wide(
-            df_long,
-            date_col='datetime',
-            value_col='value',
-            id_col='series_id',
-            aggfunc='first',
-        )
-        return df_wide
+    df_long = load_eia_weekly()
+    return long_to_wide(
+        df_long,
+        date_col='datetime',
+        value_col='value',
+        id_col='series_id',
+        aggfunc='first',
+    )
 
 
 def load_weekdays(long: bool = False, categorical: bool = True, periods: int = 180):
@@ -202,10 +196,7 @@ def load_weekdays(long: bool = False, categorical: bool = True, periods: int = 1
                 7: "Mon",
             }
         )
-    if long:
-        return df_wide.reset_index()
-    else:
-        return df_wide
+    return df_wide.reset_index() if long else df_wide
 
 
 def load_live_daily(

@@ -1,4 +1,5 @@
 """Lists of models grouped by aspects."""
+
 all_models = [
     'ConstantNaive',
     'LastValueNaive',
@@ -131,7 +132,7 @@ parallel = {
     'ARCH': 1,
 }
 # models that should be fast given many CPU cores
-fast_parallel = {**parallel, **fast}
+fast_parallel = parallel | fast
 # models that are explicitly not production ready
 experimental = [
     'MotifSimulation',

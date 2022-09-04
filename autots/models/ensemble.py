@@ -13,8 +13,7 @@ horizontal_aliases = ['horizontal', 'probabilistic', 'horizontal-max', 'horizont
 
 def summarize_series(df):
     """Summarize time series data. For now just df.describe()."""
-    df_sum = df.describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
-    return df_sum
+    return df.describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
 
 
 def mosaic_or_horizontal(all_series: dict):
@@ -24,10 +23,7 @@ def mosaic_or_horizontal(all_series: dict):
         all_series (dict): dict of series: model (or list of models)
     """
     first_value = all_series[next(iter(all_series))]
-    if isinstance(first_value, dict):
-        return "mosaic"
-    else:
-        return "horizontal"
+    return "mosaic" if isinstance(first_value, dict) else "horizontal"
 
 
 def parse_horizontal(all_series: dict, model_id: str = None, series_id: str = None):
@@ -47,16 +43,21 @@ def parse_horizontal(all_series: dict, model_id: str = None, series_id: str = No
         )
 
     if mosaic_or_horizontal(all_series) == 'mosaic':
-        if model_id is not None:
-            return [ser for ser, mod in all_series.items() if model_id in mod.values()]
-        else:
-            return list(set(all_series[series_id].values()))
+        return (
+            [
+                ser
+                for ser, mod in all_series.items()
+                if model_id in mod.values()
+            ]
+            if model_id is not None
+            else list(set(all_series[series_id].values()))
+        )
+
+    if model_id is not None:
+        return [ser for ser, mod in all_series.items() if mod == model_id]
     else:
-        if model_id is not None:
-            return [ser for ser, mod in all_series.items() if mod == model_id]
-        else:
-            # list(set([mod for ser, mod in all_series.items() if ser == series_id]))
-            return [all_series[series_id]]
+        # list(set([mod for ser, mod in all_series.items() if ser == series_id]))
+        return [all_series[series_id]]
 
 
 def BestNEnsemble(
@@ -147,29 +148,23 @@ def BestNEnsemble(
                     np.quantile(u_forecast_array, q=0.25, axis=0)
                     + np.quantile(u_forecast_array, q=0.75, axis=0)
                 ) / 2
+        elif nan_flag:
+            ens_df = np.nanmedian(forecast_array, axis=0)
+            ens_df_lower = np.nanmedian(l_forecast_array, axis=0)
+            ens_df_upper = np.nanmedian(u_forecast_array, axis=0)
         else:
-            if nan_flag:
-                ens_df = np.nanmedian(forecast_array, axis=0)
-                ens_df_lower = np.nanmedian(l_forecast_array, axis=0)
-                ens_df_upper = np.nanmedian(u_forecast_array, axis=0)
-            else:
-                ens_df = np.median(forecast_array, axis=0)
-                ens_df_lower = np.median(l_forecast_array, axis=0)
-                ens_df_upper = np.median(u_forecast_array, axis=0)
+            ens_df = np.median(forecast_array, axis=0)
+            ens_df_lower = np.median(l_forecast_array, axis=0)
+            ens_df_upper = np.median(u_forecast_array, axis=0)
 
         ens_df = pd.DataFrame(ens_df, index=indices, columns=columnz)
         ens_df_lower = pd.DataFrame(ens_df_lower, index=indices, columns=columnz)
         ens_df_upper = pd.DataFrame(ens_df_upper, index=indices, columns=columnz)
     else:
-        # these might be faster but the current method works fine
-        # np.average(forecast_array, axis=0, weights=model_weights.values())
-        # np.average(l_forecast_array, axis=0, weights=model_weights.values())
-        # np.average(u_forecast_array, axis=0, weights=model_weights.values())
-
-        model_divisor = 0
         ens_df = pd.DataFrame(0, index=indices, columns=columnz)
         ens_df_lower = pd.DataFrame(0, index=indices, columns=columnz)
         ens_df_upper = pd.DataFrame(0, index=indices, columns=columnz)
+        model_divisor = 0
         for idx, x in forecasts.items():
             current_weight = float(model_weights.get(idx, 1))
             ens_df = ens_df + (x * current_weight)
@@ -186,7 +181,7 @@ def BestNEnsemble(
     for x in forecasts_runtime.values():
         ens_runtime = ens_runtime + x
 
-    ens_result = PredictionObject(
+    return PredictionObject(
         model_name="Ensemble",
         forecast_length=len(ens_df.index),
         forecast_index=ens_df.index,
@@ -199,7 +194,6 @@ def BestNEnsemble(
         fit_runtime=ens_runtime,
         model_parameters=ensemble_params,
     )
-    return ens_result
 
 
 def DistEnsemble(
@@ -249,7 +243,7 @@ def DistEnsemble(
         if idx in model_indexes:
             ens_runtime = ens_runtime + forecasts_runtime[idx]
 
-    ens_result_obj = PredictionObject(
+    return PredictionObject(
         model_name="Ensemble",
         forecast_length=len(ens_df.index),
         forecast_index=ens_df.index,
@@ -262,7 +256,6 @@ def DistEnsemble(
         fit_runtime=ens_runtime,
         model_parameters=ensemble_params,
     )
-    return ens_result_obj
 
 
 def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
@@ -292,11 +285,9 @@ def horizontal_classifier(df_train, known: dict, method: str = "whatever"):
     clf.fit(Xt, Y)
     result = clf.predict(Xf)
     result_d = dict(zip(Xf.index.tolist(), result))
-    # since this only has estimates, overwrite with known that includes more
-    final = {**result_d, **known}
     # temp = pd.DataFrame({'series': list(final.keys()), 'model': list(final.values())})
     # temp2 = temp.merge(X, left_on='series', right_index=True)
-    return final
+    return result_d | known
 
 
 def mosaic_classifier(df_train, known):
@@ -387,37 +378,40 @@ def generalize_horizontal(
         # so we can fill some missing by just using a forward fill, should be good enough
         mosaicy.fillna(method='ffill', limit=5, inplace=True)
         mosaicy.fillna(method='bfill', limit=5, inplace=True)
-        if mosaicy.isna().any().any() or mosaicy.shape[1] != df_train.shape[1]:
-            if full_models is not None:
-                k2 = pd.DataFrame(mosaicy[mosaicy.isin(full_models)])
-            else:
-                k2 = mosaicy.copy()
-            final = mosaic_classifier(df_train, known=k2)
-            return final.to_dict()
-        else:
+        if (
+            not mosaicy.isna().any().any()
+            and mosaicy.shape[1] == df_train.shape[1]
+        ):
             return mosaicy.to_dict()
 
+        k2 = (
+            pd.DataFrame(mosaicy[mosaicy.isin(full_models)])
+            if full_models is not None
+            else mosaicy.copy()
+        )
+
+        final = mosaic_classifier(df_train, known=k2)
+        return final.to_dict()
     else:
         # remove any unavailable models
         k = {ser: mod for ser, mod in known_matches.items() if mod in available_models}
         # check if any series are missing from model list
         if not k:
             raise ValueError("Horizontal template has no models matching this data!")
-        # test if generalization is needed
-        if len(set(org_list) - set(list(k.keys()))) > 0:
+        if len(set(org_list) - set(list(k.keys()))) <= 0:
+            return known_matches
             # filter down to only models available for all
             # print(f"Models not available: {[ser for ser, mod in known_matches.items() if mod not in available_models]}")
             # print(f"Series not available: {[ser for ser in df_train.columns if ser not in list(known_matches.keys())]}")
-            if full_models is not None:
-                k2 = {ser: mod for ser, mod in k.items() if mod in full_models}
-            else:
-                k2 = k.copy()
-            all_series_part = horizontal_classifier(df_train, k2)
+        k2 = (
+            {ser: mod for ser, mod in k.items() if mod in full_models}
+            if full_models is not None
+            else k.copy()
+        )
+
+        all_series_part = horizontal_classifier(df_train, k2)
             # since this only has "full", overwrite with known that includes more
-            all_series = {**all_series_part, **k}
-        else:
-            all_series = known_matches
-        return all_series
+        return {**all_series_part, **k}
 
 
 def HorizontalEnsemble(
@@ -480,7 +474,7 @@ def HorizontalEnsemble(
     except Exception:
         ens_runtime = datetime.timedelta(0)
 
-    ens_result = PredictionObject(
+    return PredictionObject(
         model_name="Ensemble",
         forecast_length=len(forecast_df.index),
         forecast_index=forecast_df.index,
@@ -493,7 +487,6 @@ def HorizontalEnsemble(
         fit_runtime=ens_runtime,
         model_parameters=ensemble_params,
     )
-    return ens_result
 
 
 def HDistEnsemble(

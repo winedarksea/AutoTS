@@ -309,23 +309,22 @@ class ARCH(ModelObject):
 
         if just_point_forecast:
             return forecast
-        else:
-            predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(
-                model_name=self.name,
-                forecast_length=forecast_length,
-                forecast_index=test_index,
-                forecast_columns=forecast.columns,
-                lower_forecast=lower_forecast,
-                forecast=forecast,
-                upper_forecast=upper_forecast,
-                prediction_interval=self.prediction_interval,
-                predict_runtime=predict_runtime,
-                fit_runtime=self.fit_runtime,
-                model_parameters=self.get_params(),
-            )
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        prediction = PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=test_index,
+            forecast_columns=forecast.columns,
+            lower_forecast=lower_forecast,
+            forecast=forecast,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
 
-            return prediction
+        return prediction
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""

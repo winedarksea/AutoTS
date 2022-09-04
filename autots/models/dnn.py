@@ -61,8 +61,8 @@ class KerasRNN(object):
         random_seed: int = 2020,
     ):
         self.name = 'KerasRNN'
-        verbose = 0 if verbose < 0 else verbose
-        verbose = 2 if verbose > 2 else verbose
+        verbose = max(verbose, 0)
+        verbose = min(verbose, 2)
         self.verbose = verbose
         self.random_seed = random_seed
         self.kernel_initializer = kernel_initializer
@@ -129,7 +129,7 @@ class KerasRNN(object):
             self.model = tf.keras.models.Model(encoder_inputs, decoder_outputs2)
         if self.rnn_type == "CNN":
             if len(self.hidden_layer_sizes) == 1:
-                kernel_size = 10 if INPUT_SHAPE[0] > 10 else INPUT_SHAPE[0]
+                kernel_size = min(INPUT_SHAPE[0], 10)
                 self.model = tf.keras.Sequential(
                     [
                         tf.keras.layers.Conv1D(
@@ -344,8 +344,8 @@ class Transformer(object):
         random_seed: int = 2020,
     ):
         self.name = 'Transformer'
-        verbose = 0 if verbose < 0 else verbose
-        verbose = 2 if verbose > 2 else verbose
+        verbose = max(verbose, 0)
+        verbose = min(verbose, 2)
         self.verbose = verbose
         self.random_seed = random_seed
         self.epochs = epochs
@@ -388,10 +388,7 @@ class Transformer(object):
             dropout=self.dropout,
         )
 
-        if self.loss == 'Huber':
-            loss = tf.keras.losses.Huber()
-        else:
-            loss = self.loss
+        loss = tf.keras.losses.Huber() if self.loss == 'Huber' else self.loss
         optimizer = self.optimizer
         if optimizer == "adam":
             optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
