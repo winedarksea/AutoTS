@@ -25,7 +25,7 @@ def rrvar(data, R, pred_step, maxiter=100):
     X1 = data[:, :-1]
     X2 = data[:, 1:]
     V = np.random.randn(R, N)
-    for it in range(maxiter):
+    for _ in range(maxiter):
         W = X2 @ np.linalg.pinv((V @ X1))
         V = np.linalg.pinv(W) @ X2 @ np.linalg.pinv((X1))
     mat = np.append(data, np.zeros((N, pred_step)), axis=1)
@@ -80,20 +80,20 @@ def dmd4cast(data, r, pred_step):
 def mar(X, pred_step, family="gaussian", maxiter=100):
     m, n, T = X.shape
     family = str(family).lower()
-    if family == "poisson":
-        B = np.random.poisson(size=(n, n))
+    if family == "chi2":
+        B = np.random.chisquare(1, size=(n, n))
     elif family == "gamma":
         B = np.random.standard_gamma(2, size=(n, n))
     elif family == "negativebinomial":
         B = np.random.negative_binomial(1, 0.5, size=(n, n))
-    elif family == "chi2":
-        B = np.random.chisquare(1, size=(n, n))
+    elif family == "poisson":
+        B = np.random.poisson(size=(n, n))
     elif family == "uniform":
         B = np.random.uniform(size=(n, n))
-    else:  # 'Gaussian'
+    else:
         B = np.random.randn(n, n)
 
-    for it in range(maxiter):
+    for _ in range(maxiter):
         temp0 = B.T @ B
         temp1 = np.zeros((m, m))
         temp2 = np.zeros((m, m))
@@ -163,16 +163,10 @@ class RRVAR(ModelObject):
 
         df = self.basic_profile(df)
         self.regressor_train = None
-        self.verbose_bool = False
-        if self.verbose > 1:
-            self.verbose_bool = True
-
+        self.verbose_bool = self.verbose > 1
         if self.rank < 1 and self.rank > 0:
             self.rank = int(self.rank * df.shape[1])
             self.rank = self.rank if self.rank > 0 else 1
-        if self.rank > df.shape[1]:
-            pass
-
         self.df_train = df
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -208,29 +202,26 @@ class RRVAR(ModelObject):
         forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
         if just_point_forecast:
             return forecast
-        else:
-            upper_forecast, lower_forecast = Point_to_Probability(
-                self.df_train,
-                forecast,
-                method='inferred_normal',
-                prediction_interval=self.prediction_interval,
-            )
-            predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(
-                model_name=self.name,
-                forecast_length=forecast_length,
-                forecast_index=test_index,
-                forecast_columns=forecast.columns,
-                lower_forecast=lower_forecast,
-                forecast=forecast,
-                upper_forecast=upper_forecast,
-                prediction_interval=self.prediction_interval,
-                predict_runtime=predict_runtime,
-                fit_runtime=self.fit_runtime,
-                model_parameters=self.get_params(),
-            )
-
-            return prediction
+        upper_forecast, lower_forecast = Point_to_Probability(
+            self.df_train,
+            forecast,
+            method='inferred_normal',
+            prediction_interval=self.prediction_interval,
+        )
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        return PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=test_index,
+            forecast_columns=forecast.columns,
+            lower_forecast=lower_forecast,
+            forecast=forecast,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
@@ -330,29 +321,26 @@ class MAR(ModelObject):
         forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
         if just_point_forecast:
             return forecast
-        else:
-            upper_forecast, lower_forecast = Point_to_Probability(
-                self.df_train,
-                forecast,
-                method='inferred_normal',
-                prediction_interval=self.prediction_interval,
-            )
-            predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(
-                model_name=self.name,
-                forecast_length=forecast_length,
-                forecast_index=test_index,
-                forecast_columns=forecast.columns,
-                lower_forecast=lower_forecast,
-                forecast=forecast,
-                upper_forecast=upper_forecast,
-                prediction_interval=self.prediction_interval,
-                predict_runtime=predict_runtime,
-                fit_runtime=self.fit_runtime,
-                model_parameters=self.get_params(),
-            )
-
-            return prediction
+        upper_forecast, lower_forecast = Point_to_Probability(
+            self.df_train,
+            forecast,
+            method='inferred_normal',
+            prediction_interval=self.prediction_interval,
+        )
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        return PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=test_index,
+            forecast_columns=forecast.columns,
+            lower_forecast=lower_forecast,
+            forecast=forecast,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
@@ -393,7 +381,7 @@ def conj_grad_w(sparse_mat, ind, W, X, rho, maxiter=5):
     r = np.reshape(X @ sparse_mat.T - ell_w(ind, W, X, rho), -1, order="F")
     q = r.copy()
     rold = np.inner(r, r)
-    for it in range(maxiter):
+    for _ in range(maxiter):
         Q = np.reshape(q, (rank, dim1), order="F")
         Aq = np.reshape(ell_w(ind, Q, X, rho), -1, order="F")
         w, r, q, rold = update_cg(w, r, q, Aq, rold)
@@ -420,7 +408,7 @@ def conj_grad_x(sparse_mat, ind, W, X, A, Psi, d, lambda0, rho, maxiter=5):
     )
     q = r.copy()
     rold = np.inner(r, r)
-    for it in range(maxiter):
+    for _ in range(maxiter):
         Q = np.reshape(q, (rank, dim2), order="F")
         Aq = np.reshape(ell_x(ind, W, Q, A, Psi, d, lambda0, rho), -1, order="F")
         x, r, q, rold = update_cg(x, r, q, Aq, rold)
@@ -429,7 +417,7 @@ def conj_grad_x(sparse_mat, ind, W, X, A, Psi, d, lambda0, rho, maxiter=5):
 
 def generate_Psi(T, d):
     Psi = []
-    for k in range(0, d + 1):
+    for k in range(d + 1):
         if k == 0:
             Psi.append(np.append(np.zeros((T - d, d)), np.eye(T - d), axis=1))
         else:
@@ -454,7 +442,7 @@ def tmf(sparse_mat, rank, d, lambda0, rho, maxiter=50, inner_maxiter=10):
     A = 0.01 * np.random.randn(rank, d * rank)
     Psi = generate_Psi(dim2, d)
     temp = np.zeros((d * rank, dim2 - d))
-    for it in range(maxiter):
+    for _ in range(maxiter):
         W = conj_grad_w(sparse_mat, ind, W, X, rho, inner_maxiter)
         X = conj_grad_x(sparse_mat, ind, W, X, A, Psi, d, lambda0, rho, inner_maxiter)
         for k in range(1, d + 1):
@@ -533,9 +521,6 @@ class TMF(ModelObject):
         if self.rank < 1 and self.rank > 0:
             self.rank = int(self.rank * df.shape[1])
             self.rank = self.rank if self.rank > 0 else 1
-        if self.rank > df.shape[1]:
-            pass
-
         self.df_train = df
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -572,29 +557,26 @@ class TMF(ModelObject):
         forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
         if just_point_forecast:
             return forecast
-        else:
-            upper_forecast, lower_forecast = Point_to_Probability(
-                self.df_train,
-                forecast,
-                method='inferred_normal',
-                prediction_interval=self.prediction_interval,
-            )
-            predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(
-                model_name=self.name,
-                forecast_length=forecast_length,
-                forecast_index=test_index,
-                forecast_columns=forecast.columns,
-                lower_forecast=lower_forecast,
-                forecast=forecast,
-                upper_forecast=upper_forecast,
-                prediction_interval=self.prediction_interval,
-                predict_runtime=predict_runtime,
-                fit_runtime=self.fit_runtime,
-                model_parameters=self.get_params(),
-            )
-
-            return prediction
+        upper_forecast, lower_forecast = Point_to_Probability(
+            self.df_train,
+            forecast,
+            method='inferred_normal',
+            prediction_interval=self.prediction_interval,
+        )
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        return PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=test_index,
+            forecast_columns=forecast.columns,
+            lower_forecast=lower_forecast,
+            forecast=forecast,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
@@ -625,8 +607,7 @@ def ten2mat(tensor, mode):
 
 
 def mat2ten(mat, dim, mode):
-    index = list()
-    index.append(mode)
+    index = [mode]
     for i in range(dim.shape[0]):
         if i != mode:
             index.append(i)
@@ -716,10 +697,6 @@ def latc_imputer(
         tol = np.linalg.norm((mat_hat - last_mat), "fro") / snorm
         last_mat = mat_hat.copy()
         it += 1
-        if it % 100 == 0:
-            pass
-            # print("Iter: {}".format(it))
-            # print("Tolerance: {:.6}".format(tol))
         if (tol < epsilon) or (it >= maxiter):
             break
 
@@ -749,15 +726,21 @@ def latc_predictor(
     pred_cycles = np.ceil(pred_time_steps / time_horizon)
     mat_hat = []
     pred_cycles = int(pred_cycles)
-    for t in range(pred_cycles):
-        if window is not None:
-            temp2 = np.concatenate(
-                [sparse_mat[:, -window:], np.zeros((num_series, time_horizon))], axis=1
+    for _ in range(pred_cycles):
+        temp2 = (
+            np.concatenate(
+                [
+                    sparse_mat[:, -window:],
+                    np.zeros((num_series, time_horizon)),
+                ],
+                axis=1,
             )
-        else:
-            temp2 = np.concatenate(
+            if window is not None
+            else np.concatenate(
                 [sparse_mat, np.zeros((num_series, time_horizon))], axis=1
             )
+        )
+
         cuts = int(temp2.shape[1] / (time_intervals))
         start_2 = temp2.shape[1] % time_intervals
         dim = np.array([num_series, time_intervals, cuts])
@@ -893,29 +876,26 @@ class LATC(ModelObject):
         forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
         if just_point_forecast:
             return forecast
-        else:
-            upper_forecast, lower_forecast = Point_to_Probability(
-                self.df_train,
-                forecast,
-                method='inferred_normal',
-                prediction_interval=self.prediction_interval,
-            )
-            predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(
-                model_name=self.name,
-                forecast_length=forecast_length,
-                forecast_index=test_index,
-                forecast_columns=forecast.columns,
-                lower_forecast=lower_forecast,
-                forecast=forecast,
-                upper_forecast=upper_forecast,
-                prediction_interval=self.prediction_interval,
-                predict_runtime=predict_runtime,
-                fit_runtime=self.fit_runtime,
-                model_parameters=self.get_params(),
-            )
-
-            return prediction
+        upper_forecast, lower_forecast = Point_to_Probability(
+            self.df_train,
+            forecast,
+            method='inferred_normal',
+            prediction_interval=self.prediction_interval,
+        )
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        return PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=test_index,
+            forecast_columns=forecast.columns,
+            lower_forecast=lower_forecast,
+            forecast=forecast,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""

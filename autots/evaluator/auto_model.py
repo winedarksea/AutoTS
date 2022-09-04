@@ -58,11 +58,13 @@ def create_model_id(
 ):
     """Create a hash ID which should be unique to the model parameters."""
     str_repr = (
-        str(model_str) + json.dumps(parameter_dict) + json.dumps(transformation_dict)
+        model_str
+        + json.dumps(parameter_dict)
+        + json.dumps(transformation_dict)
     )
+
     str_repr = ''.join(str_repr.split())
-    hashed = md5(str_repr.encode('utf-8')).hexdigest()
-    return hashed
+    return md5(str_repr.encode('utf-8')).hexdigest()
 
 
 def horizontal_template_to_model_list(template):
@@ -94,10 +96,10 @@ def ModelMonster(
         model (str): Name of Model Function
         parameters (dict): Dictionary of parameters to pass through to model
     """
-    model = str(model)
+    model = model
     model_lower = model.lower()
 
-    if model in ['ZeroesNaive', 'ConstantNaive']:
+    if model in {'ZeroesNaive', 'ConstantNaive'}:
         return ConstantNaive(
             frequency=frequency, prediction_interval=prediction_interval, **parameters
         )
@@ -311,16 +313,8 @@ def ModelMonster(
     elif model == 'TensorflowSTS':
         from autots.models.tfp import TensorflowSTS
 
-        if parameters == {}:
-            model = TensorflowSTS(
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                holiday_country=holiday_country,
-                random_seed=random_seed,
-                verbose=verbose,
-            )
-        else:
-            model = TensorflowSTS(
+        model = (
+            TensorflowSTS(
                 frequency=frequency,
                 prediction_interval=prediction_interval,
                 holiday_country=holiday_country,
@@ -332,20 +326,22 @@ def ModelMonster(
                 fit_method=parameters['fit_method'],
                 num_steps=parameters['num_steps'],
             )
-        return model
-    elif model == 'TFPRegression':
-        from autots.models.tfp import TFPRegression
-
-        if parameters == {}:
-            model = TFPRegression(
+            if parameters
+            else TensorflowSTS(
                 frequency=frequency,
                 prediction_interval=prediction_interval,
                 holiday_country=holiday_country,
                 random_seed=random_seed,
                 verbose=verbose,
             )
-        else:
-            model = TFPRegression(
+        )
+
+        return model
+    elif model == 'TFPRegression':
+        from autots.models.tfp import TFPRegression
+
+        model = (
+            TFPRegression(
                 frequency=frequency,
                 prediction_interval=prediction_interval,
                 holiday_country=holiday_country,
@@ -359,21 +355,22 @@ def ModelMonster(
                 dist=parameters['dist'],
                 regression_type=parameters['regression_type'],
             )
-        return model
-    elif model == 'ComponentAnalysis':
-        from autots.models.sklearn import ComponentAnalysis
-
-        if parameters == {}:
-            model = ComponentAnalysis(
+            if parameters
+            else TFPRegression(
                 frequency=frequency,
                 prediction_interval=prediction_interval,
                 holiday_country=holiday_country,
                 random_seed=random_seed,
                 verbose=verbose,
-                forecast_length=forecast_length,
             )
-        else:
-            model = ComponentAnalysis(
+        )
+
+        return model
+    elif model == 'ComponentAnalysis':
+        from autots.models.sklearn import ComponentAnalysis
+
+        model = (
+            ComponentAnalysis(
                 frequency=frequency,
                 prediction_interval=prediction_interval,
                 holiday_country=holiday_country,
@@ -385,6 +382,17 @@ def ModelMonster(
                 n_components=parameters['n_components'],
                 forecast_length=forecast_length,
             )
+            if parameters
+            else ComponentAnalysis(
+                frequency=frequency,
+                prediction_interval=prediction_interval,
+                holiday_country=holiday_country,
+                random_seed=random_seed,
+                verbose=verbose,
+                forecast_length=forecast_length,
+            )
+        )
+
         return model
     elif model == 'DatepartRegression':
         from autots.models.sklearn import DatepartRegression
@@ -560,9 +568,7 @@ def ModelMonster(
             **parameters,
         )
     else:
-        raise AttributeError(
-            ("Model String '{}' not a recognized model type").format(model)
-        )
+        raise AttributeError(f"Model String '{model}' not a recognized model type")
 
 
 def ModelPrediction(
@@ -660,13 +666,14 @@ def ModelPrediction(
 
     # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
     # can maybe remove this eventually and just keep the later one
-    if fail_on_forecast_nan:
-        if df_forecast.forecast.isnull().any().astype(int).sum() > 0:
-            raise ValueError(
-                "Model {} returned NaN for one or more series. fail_on_forecast_nan=True".format(
-                    model_str
-                )
-            )
+    if (
+        fail_on_forecast_nan
+        and df_forecast.forecast.isnull().any().astype(int).sum() > 0
+    ):
+        raise ValueError(
+            f"Model {model_str} returned NaN for one or more series. fail_on_forecast_nan=True"
+        )
+
 
     # CHECK Forecasts are proper length!
     if df_forecast.forecast.shape[0] != forecast_length:
@@ -701,8 +708,8 @@ def ModelPrediction(
             bounds = constraint.get("bounds", False)
         else:
             constraint_method = "stdev_min"
-            lower_constraint = float(constraint)
-            upper_constraint = float(constraint)
+            lower_constraint = constraint
+            upper_constraint = constraint
             constraint_regularization = 1
             bounds = False
         if verbose > 3:
@@ -729,13 +736,14 @@ def ModelPrediction(
         df_forecast.transformer = transformer_object
 
     # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
-    if fail_on_forecast_nan:
-        if df_forecast.forecast.isnull().any().astype(int).sum() > 0:
-            raise ValueError(
-                "Model returned NaN due to a preprocessing transformer {}. fail_on_forecast_nan=True".format(
-                    str(transformation_dict)
-                )
-            )
+    if (
+        fail_on_forecast_nan
+        and df_forecast.forecast.isnull().any().astype(int).sum() > 0
+    ):
+        raise ValueError(
+            f"Model returned NaN due to a preprocessing transformer {transformation_dict}. fail_on_forecast_nan=True"
+        )
+
 
     return df_forecast
 

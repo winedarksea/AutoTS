@@ -49,9 +49,10 @@ def seek_the_oracle(
     if regressors is not None:
         inner_regr = regressors.copy()
         new_names = [
-            'rrrr' + str(x) if x in inner_df.columns else str(x)
+            f'rrrr{str(x)}' if x in inner_df.columns else str(x)
             for x in inner_regr.columns
         ]
+
         inner_regr.columns = new_names
         inner_regr.index.name = 'ts'
         inner_regr.reset_index(drop=False, inplace=True)
@@ -211,57 +212,52 @@ class Greykite(ModelObject):
                 )
                 for col in cols
             )
-            complete = pd.concat(df_list)
         else:
-            df_list = []
-            for col in cols:
-                df_list.append(
-                    seek_the_oracle(
-                        self.df_train.index,
-                        self.df_train[col],
-                        col,
-                        forecast_length,
-                        freq=self.frequency,
-                        prediction_interval=self.prediction_interval,
-                        growth=dict(growth_term=self.growth),
-                        holiday=self.holiday,
-                        holiday_country=self.holiday_country,
-                        regressors=regressors,
-                        inner_n_jobs=self.n_jobs,
-                    )
+            df_list = [
+                seek_the_oracle(
+                    self.df_train.index,
+                    self.df_train[col],
+                    col,
+                    forecast_length,
+                    freq=self.frequency,
+                    prediction_interval=self.prediction_interval,
+                    growth=dict(growth_term=self.growth),
+                    holiday=self.holiday,
+                    holiday_country=self.holiday_country,
+                    regressors=regressors,
+                    inner_n_jobs=self.n_jobs,
                 )
-            complete = pd.concat(df_list)
+                for col in cols
+            ]
 
+        complete = pd.concat(df_list)
         forecast = complete.pivot_table(
             values="forecast", index="ts", columns="series_id", aggfunc="sum"
         )
 
         if just_point_forecast:
             return forecast
-        else:
-            upper_forecast = complete.pivot_table(
-                values="forecast_upper", index="ts", columns="series_id", aggfunc="sum"
-            )
-            lower_forecast = complete.pivot_table(
-                values="forecast_lower", index="ts", columns="series_id", aggfunc="sum"
-            )
+        upper_forecast = complete.pivot_table(
+            values="forecast_upper", index="ts", columns="series_id", aggfunc="sum"
+        )
+        lower_forecast = complete.pivot_table(
+            values="forecast_lower", index="ts", columns="series_id", aggfunc="sum"
+        )
 
-            predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(
-                model_name=self.name,
-                forecast_length=forecast_length,
-                forecast_index=forecast.index,
-                forecast_columns=forecast.columns,
-                lower_forecast=lower_forecast,
-                forecast=forecast,
-                upper_forecast=upper_forecast,
-                prediction_interval=self.prediction_interval,
-                predict_runtime=predict_runtime,
-                fit_runtime=self.fit_runtime,
-                model_parameters=self.get_params(),
-            )
-
-            return prediction
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        return PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=forecast.index,
+            forecast_columns=forecast.columns,
+            lower_forecast=lower_forecast,
+            forecast=forecast,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
@@ -273,18 +269,16 @@ class Greykite(ModelObject):
             [None, 'linear', 'quadratic', 'sqrt'], [0.3, 0.3, 0.1, 0.1]
         )[0]
 
-        parameter_dict = {
+        return {
             'holiday': holiday_choice,
             'regression_type': regression_choice,
             'growth': growth_choice,
         }
-        return parameter_dict
 
     def get_params(self):
         """Return dict of current parameters."""
-        parameter_dict = {
+        return {
             'holiday': self.holiday,
             'regression_type': self.regression_type,
             'growth': self.growth,
         }
-        return parameter_dict

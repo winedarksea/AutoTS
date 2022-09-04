@@ -94,23 +94,20 @@ class ConstantNaive(ModelObject):
         )
         if just_point_forecast:
             return df
-        else:
-            predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(
-                model_name=self.name,
-                forecast_length=forecast_length,
-                forecast_index=df.index,
-                forecast_columns=df.columns,
-                lower_forecast=df,
-                forecast=df,
-                upper_forecast=df,
-                prediction_interval=self.prediction_interval,
-                predict_runtime=predict_runtime,
-                fit_runtime=self.fit_runtime,
-                model_parameters=self.get_params(),
-            )
-
-            return prediction
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        return PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=df.index,
+            forecast_columns=df.columns,
+            lower_forecast=df,
+            forecast=df,
+            upper_forecast=df,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
@@ -194,24 +191,22 @@ class LastValueNaive(ModelObject):
         )
         if just_point_forecast:
             return df
-        else:
-            upper_forecast = df.astype(float) + (self.upper * 0.9)
-            lower_forecast = df.astype(float) - (self.lower * 0.9)
-            predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(
-                model_name=self.name,
-                forecast_length=forecast_length,
-                forecast_index=df.index,
-                forecast_columns=df.columns,
-                lower_forecast=lower_forecast,
-                forecast=df,
-                upper_forecast=upper_forecast,
-                prediction_interval=self.prediction_interval,
-                predict_runtime=predict_runtime,
-                fit_runtime=self.fit_runtime,
-                model_parameters=self.get_params(),
-            )
-            return prediction
+        upper_forecast = df.astype(float) + (self.upper * 0.9)
+        lower_forecast = df.astype(float) - (self.lower * 0.9)
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        return PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=df.index,
+            forecast_columns=df.columns,
+            lower_forecast=lower_forecast,
+            forecast=df,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
@@ -264,11 +259,7 @@ class AverageValueNaive(ModelObject):
         """
         df = self.basic_profile(df)
         method = str(self.method).lower()
-        if self.window is not None:
-            df_used = df[-self.window :]
-        else:
-            df_used = df
-
+        df_used = df[-self.window :] if self.window is not None else df
         if method == 'median':
             self.average_values = df_used.median(axis=0).to_numpy()
         elif method == 'mean':
@@ -282,7 +273,7 @@ class AverageValueNaive(ModelObject):
             q1 = nan_quantile(results, q=0.25, axis=0)
             q2 = nan_quantile(results, q=0.75, axis=0)
             self.average_values = (q1 + q2) / 2
-        elif method in ["weighted_mean", "exp_weighted_mean"]:
+        elif method in {"weighted_mean", "exp_weighted_mean"}:
             weights = pd.to_numeric(df_used.index)
             weights = weights - weights.min()
             if method == "exp_weighted_mean":
@@ -318,24 +309,22 @@ class AverageValueNaive(ModelObject):
         )
         if just_point_forecast:
             return df
-        else:
-            upper_forecast = df.astype(float) + self.upper
-            lower_forecast = df.astype(float) - self.lower
-            predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(
-                model_name=self.name,
-                forecast_length=forecast_length,
-                forecast_index=df.index,
-                forecast_columns=df.columns,
-                lower_forecast=lower_forecast,
-                forecast=df,
-                upper_forecast=upper_forecast,
-                prediction_interval=self.prediction_interval,
-                predict_runtime=predict_runtime,
-                fit_runtime=self.fit_runtime,
-                model_parameters=self.get_params(),
-            )
-            return prediction
+        upper_forecast = df.astype(float) + self.upper
+        lower_forecast = df.astype(float) - self.lower
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        return PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=df.index,
+            forecast_columns=df.columns,
+            lower_forecast=lower_forecast,
+            forecast=df,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
 
     def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
@@ -401,13 +390,13 @@ class SeasonalNaive(ModelObject):
             random_seed=random_seed,
             verbose=verbose,
         )
-        self.lag_1 = abs(int(lag_1))
+        self.lag_1 = abs(lag_1)
         self.lag_2 = lag_2
         if str(self.lag_2).isdigit():
-            self.lag_2 = abs(int(self.lag_2))
+            self.lag_2 = abs(self.lag_2)
             if str(self.lag_2) == str(self.lag_1):
                 self.lag_2 = 1
-        self.method = str(method).lower()
+        self.method = method.lower()
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -472,53 +461,56 @@ class SeasonalNaive(ModelObject):
         tile_len = len(self.tile_values_lag_1.index)
         df = pd.DataFrame(
             np.tile(
-                self.tile_values_lag_1, (int(np.ceil(forecast_length / tile_len)), 1)
-            )[0:forecast_length],
+                self.tile_values_lag_1,
+                (int(np.ceil(forecast_length / tile_len)), 1),
+            )[:forecast_length],
             columns=self.column_names,
             index=self.create_forecast_index(forecast_length=forecast_length),
         )
+
         if str(self.lag_2).isdigit():
             y = pd.DataFrame(
                 np.tile(
                     self.tile_values_lag_2,
                     (
                         int(
-                            np.ceil(forecast_length / len(self.tile_values_lag_2.index))
+                            np.ceil(
+                                forecast_length / len(self.tile_values_lag_2.index)
+                            )
                         ),
                         1,
                     ),
-                )[0:forecast_length],
+                )[:forecast_length],
                 columns=self.column_names,
                 index=self.create_forecast_index(forecast_length=forecast_length),
             )
+
             df = (df + y) / 2
         # df = df.apply(pd.to_numeric, errors='coerce')
         df = df.astype(float)
         if just_point_forecast:
             return df
-        else:
-            upper_forecast, lower_forecast = Point_to_Probability(
-                self.df_train,
-                df,
-                method='inferred_normal',
-                prediction_interval=self.prediction_interval,
-            )
+        upper_forecast, lower_forecast = Point_to_Probability(
+            self.df_train,
+            df,
+            method='inferred_normal',
+            prediction_interval=self.prediction_interval,
+        )
 
-            predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(
-                model_name=self.name,
-                forecast_length=forecast_length,
-                forecast_index=df.index,
-                forecast_columns=df.columns,
-                lower_forecast=lower_forecast,
-                forecast=df,
-                upper_forecast=upper_forecast,
-                prediction_interval=self.prediction_interval,
-                predict_runtime=predict_runtime,
-                fit_runtime=self.fit_runtime,
-                model_parameters=self.get_params(),
-            )
-            return prediction
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        return PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=df.index,
+            forecast_columns=df.columns,
+            lower_forecast=lower_forecast,
+            forecast=df,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""

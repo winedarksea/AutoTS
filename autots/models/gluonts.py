@@ -73,7 +73,7 @@ class GluonTS(ModelObject):
             verbose=verbose,
         )
         self.gluon_model = gluon_model
-        if self.gluon_model in ['NPTS', 'Rotbaum']:
+        if self.gluon_model in {'NPTS', 'Rotbaum'}:
             self.epochs = 20
             self.learning_rate = 0.001
         else:
@@ -108,11 +108,10 @@ class GluonTS(ModelObject):
         self.train_columns = df.index
 
         gluon_freq = str(self.frequency).split('-')[0]
-        if self.regression_type == "User":
-            if future_regressor is None:
-                raise ValueError(
-                    "regression_type='User' but no future_regressor supplied"
-                )
+        if self.regression_type == "User" and future_regressor is None:
+            raise ValueError(
+                "regression_type='User' but no future_regressor supplied"
+            )
         if gluon_freq in ["MS", "1MS"]:
             gluon_freq = "M"
 
@@ -164,34 +163,33 @@ class GluonTS(ModelObject):
                     freq=ts_metadata['freq'],
                     one_dim_target=False,
                 )
+        elif self.regression_type == "User":
+            self.gluon_train = gluon_train
+            regr = future_regressor.to_numpy().T
+            self.regr_train = regr
+            self.test_ds = ListDataset(
+                [
+                    {
+                        FieldName.TARGET: target,
+                        FieldName.START: ts_metadata['start_ts'],
+                        FieldName.FEAT_DYNAMIC_REAL: regr,
+                    }
+                    for target in gluon_train
+                ],
+                freq=ts_metadata['freq'],
+            )
         else:
-            if self.regression_type == "User":
-                self.gluon_train = gluon_train
-                regr = future_regressor.to_numpy().T
-                self.regr_train = regr
-                self.test_ds = ListDataset(
-                    [
-                        {
-                            FieldName.TARGET: target,
-                            FieldName.START: ts_metadata['start_ts'],
-                            FieldName.FEAT_DYNAMIC_REAL: regr,
-                        }
-                        for target in gluon_train
-                    ],
-                    freq=ts_metadata['freq'],
-                )
-            else:
-                # use the actual start date, if NaN given (semi-hidden)
-                # ts_metadata['gluon_start'] = df.notna().idxmax().tolist()
-                self.test_ds = ListDataset(
-                    [
-                        {FieldName.TARGET: target, FieldName.START: start}
-                        for (target, start) in zip(
-                            gluon_train, ts_metadata['gluon_start']
-                        )
-                    ],
-                    freq=ts_metadata['freq'],
-                )
+            # use the actual start date, if NaN given (semi-hidden)
+            # ts_metadata['gluon_start'] = df.notna().idxmax().tolist()
+            self.test_ds = ListDataset(
+                [
+                    {FieldName.TARGET: target, FieldName.START: start}
+                    for (target, start) in zip(
+                        gluon_train, ts_metadata['gluon_start']
+                    )
+                ],
+                freq=ts_metadata['freq'],
+            )
         if self.gluon_model == 'DeepAR':
             from gluonts.model.deepar import DeepAREstimator
 
@@ -398,7 +396,7 @@ class GluonTS(ModelObject):
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
-        if int(forecast_length) > int(self.forecast_length):
+        if forecast_length > int(self.forecast_length):
             raise ValueError("GluonTS must be refit to change forecast length!")
         predictStartTime = datetime.datetime.now()
         test_index = self.create_forecast_index(
@@ -440,9 +438,8 @@ class GluonTS(ModelObject):
                 columns=self.column_names,
             )
         else:
-            i = 0
             all_forecast = pd.DataFrame()
-            for result in gluon_results:
+            for i, result in enumerate(gluon_results):
                 current_id = self.train_index[i]
                 if isinstance(result.start_date, pd.Period):
                     start_date = test_index[0]
@@ -466,7 +463,6 @@ class GluonTS(ModelObject):
                 all_forecast = pd.concat(
                     [all_forecast, rowForecast], ignore_index=True
                 ).reset_index(drop=True)
-                i += 1
             if result.start_date != test_index[0] and int(self.verbose) > 0:
                 print(
                     f"GluonTS start_date is {result.start_date} vs created index {test_index[0]}"
@@ -489,22 +485,20 @@ class GluonTS(ModelObject):
 
         if just_point_forecast:
             return forecast
-        else:
-            predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(
-                model_name=self.name,
-                forecast_length=forecast_length,
-                forecast_index=forecast.index,
-                forecast_columns=forecast.columns,
-                lower_forecast=lower_forecast,
-                forecast=forecast,
-                upper_forecast=upper_forecast,
-                prediction_interval=self.prediction_interval,
-                predict_runtime=predict_runtime,
-                fit_runtime=self.fit_runtime,
-                model_parameters=self.get_params(),
-            )
-            return prediction
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        return PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=forecast.index,
+            forecast_columns=forecast.columns,
+            lower_forecast=lower_forecast,
+            forecast=forecast,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
@@ -614,11 +608,10 @@ class GluonTS(ModelObject):
             context_length_choice = random.choice([5, 7, 12])
         if "regressor" in method:
             regression_choice = "User"
+        elif gluon_model_choice in self.multivariate_mods:
+            regression_choice = None
         else:
-            if gluon_model_choice in self.multivariate_mods:
-                regression_choice = None
-            else:
-                regression_choice = random.choices([None, "User"], [0.8, 0.4])[0]
+            regression_choice = random.choices([None, "User"], [0.8, 0.4])[0]
 
         return {
             'gluon_model': gluon_model_choice,
@@ -631,14 +624,13 @@ class GluonTS(ModelObject):
 
     def get_params(self):
         """Return dict of current parameters."""
-        parameter_dict = {
+        return {
             'gluon_model': self.gluon_model,
             'epochs': self.epochs,
             'learning_rate': self.learning_rate,
             'context_length': self.context_length,
             'regression_type': self.regression_type,
         }
-        return parameter_dict
 
 
 """

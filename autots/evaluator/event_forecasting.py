@@ -320,16 +320,16 @@ class EventRiskForecast(object):
             "ARCH",  # simulations not motifs but similar
             "PytorchForecasting",
         ]
-        # these are those that require a parameter, and return a dict
-        diff_window_motif_list = [
-            "UnivariateMotif",
-            "MultivariateMotif",
-            "Motif",
-            "ARCH",
-        ]
         if model_name in all_motif_list:
             if isinstance(prediction_interval, list):
                 prediction_interval = prediction_interval[0]
+            # these are those that require a parameter, and return a dict
+            diff_window_motif_list = [
+                "UnivariateMotif",
+                "MultivariateMotif",
+                "Motif",
+                "ARCH",
+            ]
             if model_name in diff_window_motif_list:
                 model_param_dict = {
                     **model_param_dict,
@@ -355,24 +355,23 @@ class EventRiskForecast(object):
                 )
             if result_windows.ndim == 4:
                 result_windows = result_windows[0]
-            transformed_array = []
-            # bring these back to the original feature space, as they aren't already
-            for samp in result_windows:
-                transformed_array.append(
-                    forecasts.transformer.inverse_transform(
-                        pd.DataFrame(
-                            samp,
-                            index=forecasts.forecast.index,
-                            columns=forecasts.forecast.columns,
-                        )
+            transformed_array = [
+                forecasts.transformer.inverse_transform(
+                    pd.DataFrame(
+                        samp,
+                        index=forecasts.forecast.index,
+                        columns=forecasts.forecast.columns,
                     )
                 )
+                for samp in result_windows
+            ]
+
             result_windows = np.array(transformed_array)
             lower_forecast = forecasts.lower_forecast
             upper_forecast = forecasts.upper_forecast
         else:
             if isinstance(prediction_interval, float):
-                prediction_interval = list(set([prediction_interval, 0.95, 0.8, 0.5]))
+                prediction_interval = list({prediction_interval, 0.95, 0.8, 0.5})
             result_windows_list = []
             point_included = False
             for interval in prediction_interval:
@@ -394,8 +393,10 @@ class EventRiskForecast(object):
                     lower_forecast = forecasts.lower_forecast
                     upper_forecast = forecasts.upper_forecast
                     point_included = True
-                result_windows_list.append(forecasts.upper_forecast)
-                result_windows_list.append(forecasts.lower_forecast)
+                result_windows_list.extend(
+                    (forecasts.upper_forecast, forecasts.lower_forecast)
+                )
+
             result_windows = np.array(result_windows_list)
         return result_windows, forecasts.forecast, upper_forecast, lower_forecast
 
@@ -429,8 +430,7 @@ class EventRiskForecast(object):
                 limit.shape == target_shape
             ), f"{direction}_limit, if array, must be 2d np array of shape forecast_length, n_series"
             return limit
-        # handle a limit as a quantile defined by float
-        elif isinstance(limit, float) or isinstance(limit, int):
+        elif isinstance(limit, (float, int)):
             assert (
                 limit >= 0 and limit <= 1
             ), f"{direction}_limit if float must be in the range [0, 1], received {limit}"
@@ -439,10 +439,8 @@ class EventRiskForecast(object):
                 target_shape[0],
                 axis=0,
             )
-        # handle None
         elif limit is None:
             return None
-        # handle a limit defined by a forecast algorithm
         elif isinstance(limit, dict):
             if period == "historic":
                 upper, lower = set_limit_forecast_historic(
@@ -489,12 +487,12 @@ class EventRiskForecast(object):
                         "future_regressor_forecast", None
                     ),
                 )
-            if direction == "upper":
-                return upper
+            if direction == "both":
+                return upper, lower
             elif direction == "lower":
                 return lower
-            elif direction == "both":
-                return upper, lower
+            elif direction == "upper":
+                return upper
         else:
             raise ValueError(
                 f"{direction}_limit was not recognized dtype, input was {limit}"

@@ -146,10 +146,14 @@ class Benchmark(object):
                         "0": {},
                         "1": {},
                         "2": {"fixed": False, "window": 28},
-                        "3": {"decimals": 0, "on_transform": False, "on_inverse": True},
+                        "3": {
+                            "decimals": 0,
+                            "on_transform": False,
+                            "on_inverse": True,
+                        },
                     },
                 },
-                df_train=df[df.columns[0:600]],
+                df_train=df[df.columns[:600]],
                 forecast_length=12,
                 frequency="D",
                 prediction_interval=0.9,
@@ -157,6 +161,7 @@ class Benchmark(object):
                 verbose=0,
                 n_jobs=n_jobs,
             )
+
             self.nvar_runtime = self.nvar_runtime + timeit.default_timer() - start_time
 
             print("Beginning Datepart RandomForest")
@@ -244,7 +249,7 @@ class Benchmark(object):
                         "2": {"fixed": False, "window": 28},
                     },
                 },
-                df_train=df[df.columns[0:150]],
+                df_train=df[df.columns[:150]],
                 forecast_length=12,
                 frequency="D",
                 prediction_interval=0.9,
@@ -252,6 +257,7 @@ class Benchmark(object):
                 verbose=0,
                 n_jobs=n_jobs,
             )
+
             self.theta_runtime = (
                 self.theta_runtime + timeit.default_timer() - start_time
             )
@@ -270,7 +276,7 @@ class Benchmark(object):
                         "0": {'model': 'Linear'},
                     },
                 },
-                df_train=df[df.columns[0:60]],
+                df_train=df[df.columns[:60]],
                 forecast_length=12,
                 frequency="D",
                 prediction_interval=0.9,
@@ -278,6 +284,7 @@ class Benchmark(object):
                 verbose=0,
                 n_jobs=n_jobs,
             )
+
             self.arima_runtime = (
                 self.arima_runtime + timeit.default_timer() - start_time
             )
@@ -315,7 +322,7 @@ class Benchmark(object):
                     "transformations": {"0": "MaxAbsScaler"},
                     "transformation_params": {"0": {}},
                 },
-                df_train=df[df.columns[0:100]],
+                df_train=df[df.columns[:100]],
                 forecast_length=12,
                 frequency="D",
                 prediction_interval=0.9,
@@ -323,6 +330,7 @@ class Benchmark(object):
                 verbose=0,
                 n_jobs=n_jobs,
             )
+
             self.multivariate_knn_runtime = (
                 self.multivariate_knn_runtime + timeit.default_timer() - start_time
             )
