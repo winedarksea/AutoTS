@@ -135,7 +135,7 @@ class AnomalyDetector(object):
         if series_name is None:
             series_name = random.choice(self.df.columns)
         if title is None:
-            title = series_name[0:50] + f" with {self.method} outliers"
+            title = series_name[:50] + f" with {self.method} outliers"
         fig, ax = plt.subplots()
         self.df[series_name].plot(ax=ax, title=title, **plot_kwargs)
         if self.output == "univariate":
@@ -276,9 +276,10 @@ class HolidayDetector(object):
             series_name = random.choice(self.df.columns)
         if title is None:
             title = (
-                series_name[0:50]
+                series_name[:50]
                 + f" with {self.anomaly_detector_params['method']} holidays"
             )
+
         fig, ax = plt.subplots()
         self.df[series_name].plot(ax=ax, title=title, **plot_kwargs)
         if include_anomalies:

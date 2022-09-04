@@ -98,31 +98,31 @@ class FBProphet(ModelObject):
                 raise ValueError(
                     "regression_type='User' but no future_regressor passed"
                 )
-            else:
-                if future_regressor.ndim > 1:
-                    if future_regressor.shape[1] > 1:
-                        regr = pd.concat(
-                            [df.mean(axis=1).to_frame(), df.std(axis=1).to_frame()],
-                            axis=1,
-                        )
-                        regr.columns = [0, 1]
-                    else:
-                        regr = future_regressor
-                    regr.columns = [
-                        str(colr) if colr not in df.columns else str(colr) + "xxxxx"
-                        for colr in regr.columns
-                    ]
-                    self.regressor_train = regr
-                    self.regressor_name = regr.columns.tolist()
-
+            if future_regressor.ndim > 1:
+                if future_regressor.shape[1] > 1:
+                    regr = pd.concat(
+                        [df.mean(axis=1).to_frame(), df.std(axis=1).to_frame()],
+                        axis=1,
+                    )
+                    regr.columns = [0, 1]
                 else:
-                    self.regressor_train = future_regressor.copy()
-                    # this is a hack to utilize regressors with a name unlikely to exist
-                    random_two = "n9032380gflljWfu8233koWQop3"
-                    random_one = "prophet_staging_regressor"
-                    self.regressor_name = [
-                        random_one if random_one not in df.columns else random_two
-                    ]
+                    regr = future_regressor
+                regr.columns = [
+                    str(colr) if colr not in df.columns else f"{str(colr)}xxxxx"
+                    for colr in regr.columns
+                ]
+
+                self.regressor_train = regr
+                self.regressor_name = regr.columns.tolist()
+
+            else:
+                self.regressor_train = future_regressor.copy()
+                # this is a hack to utilize regressors with a name unlikely to exist
+                random_two = "n9032380gflljWfu8233koWQop3"
+                random_one = "prophet_staging_regressor"
+                self.regressor_name = [
+                    random_one if random_one not in df.columns else random_two
+                ]
         self.df_train = df
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -287,23 +287,22 @@ class FBProphet(ModelObject):
 
         if just_point_forecast:
             return forecast
-        else:
-            predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(
-                model_name=self.name,
-                forecast_length=forecast_length,
-                forecast_index=forecast.index,
-                forecast_columns=forecast.columns,
-                lower_forecast=lower_forecast,
-                forecast=forecast,
-                upper_forecast=upper_forecast,
-                prediction_interval=self.prediction_interval,
-                predict_runtime=predict_runtime,
-                fit_runtime=self.fit_runtime,
-                model_parameters=self.get_params(),
-            )
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        prediction = PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=forecast.index,
+            forecast_columns=forecast.columns,
+            lower_forecast=lower_forecast,
+            forecast=forecast,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
 
-            return prediction
+        return prediction
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
@@ -449,31 +448,31 @@ class NeuralProphet(ModelObject):
                 raise ValueError(
                     "regression_type='User' but no future_regressor passed"
                 )
-            else:
-                if future_regressor.ndim > 1:
-                    if future_regressor.shape[1] > 1:
-                        regr = pd.concat(
-                            [df.mean(axis=1).to_frame(), df.std(axis=1).to_frame()],
-                            axis=1,
-                        )
-                        regr.columns = [0, 1]
-                    else:
-                        regr = future_regressor
-                    regr.columns = [
-                        str(colr) if colr not in df.columns else str(colr) + "xxxxx"
-                        for colr in regr.columns
-                    ]
-                    self.regressor_train = regr
-                    self.regressor_name = regr.columns.tolist()
-
+            if future_regressor.ndim > 1:
+                if future_regressor.shape[1] > 1:
+                    regr = pd.concat(
+                        [df.mean(axis=1).to_frame(), df.std(axis=1).to_frame()],
+                        axis=1,
+                    )
+                    regr.columns = [0, 1]
                 else:
-                    self.regressor_train = future_regressor.copy()
-                    # this is a hack to utilize regressors with a name unlikely to exist
-                    random_two = "n9032380gflljWfu8233koWQop3"
-                    random_one = "prophet_staging_regressor"
-                    self.regressor_name = [
-                        random_one if random_one not in df.columns else random_two
-                    ]
+                    regr = future_regressor
+                regr.columns = [
+                    str(colr) if colr not in df.columns else f"{str(colr)}xxxxx"
+                    for colr in regr.columns
+                ]
+
+                self.regressor_train = regr
+                self.regressor_name = regr.columns.tolist()
+
+            else:
+                self.regressor_train = future_regressor.copy()
+                # this is a hack to utilize regressors with a name unlikely to exist
+                random_two = "n9032380gflljWfu8233koWQop3"
+                random_one = "prophet_staging_regressor"
+                self.regressor_name = [
+                    random_one if random_one not in df.columns else random_two
+                ]
         self.df_train = df
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -682,23 +681,22 @@ class NeuralProphet(ModelObject):
 
         if just_point_forecast:
             return forecast
-        else:
-            predict_runtime = datetime.datetime.now() - predictStartTime
-            prediction = PredictionObject(
-                model_name=self.name,
-                forecast_length=forecast_length,
-                forecast_index=forecast.index,
-                forecast_columns=forecast.columns,
-                lower_forecast=lower_forecast,
-                forecast=forecast,
-                upper_forecast=upper_forecast,
-                prediction_interval=self.prediction_interval,
-                predict_runtime=predict_runtime,
-                fit_runtime=self.fit_runtime,
-                model_parameters=self.get_params(),
-            )
+        predict_runtime = datetime.datetime.now() - predictStartTime
+        prediction = PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=forecast.index,
+            forecast_columns=forecast.columns,
+            lower_forecast=lower_forecast,
+            forecast=forecast,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=predict_runtime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
 
-            return prediction
+        return prediction
 
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
@@ -726,7 +724,7 @@ class NeuralProphet(ModelObject):
             ]
             trend_reg_threshold = random.choices([True, False], [0.1, 0.9])[0]
 
-        parameter_dict = {
+        return {
             'holiday': holiday_choice,
             'regression_type': regression_choice,
             "growth": growth,
@@ -741,8 +739,12 @@ class NeuralProphet(ModelObject):
             "weekly_seasonality": random.choices(["auto", False], [0.1, 0.5])[0],
             "daily_seasonality": random.choices(["auto", False], [0.1, 0.5])[0],
             "seasonality_mode": random.choice(['additive', 'multiplicative']),
-            "seasonality_reg": random.choices([0, 0.1, 1, 10], [0.7, 0.1, 0.1, 0.1])[0],
-            "n_lags": random.choices([0, 1, 2, 3, 7], [0.8, 0.2, 0.1, 0.05, 0.1])[0],
+            "seasonality_reg": random.choices(
+                [0, 0.1, 1, 10], [0.7, 0.1, 0.1, 0.1]
+            )[0],
+            "n_lags": random.choices([0, 1, 2, 3, 7], [0.8, 0.2, 0.1, 0.05, 0.1])[
+                0
+            ],
             "num_hidden_layers": num_hidden,
             'd_hidden': d_hidden,
             "learning_rate": random.choices(
@@ -752,13 +754,14 @@ class NeuralProphet(ModelObject):
             # "train_speed": random.choices(
             #     [None, -1, -2, -3, 1, 2, 3], [0.9, 0.01, 0.01, 0.01, 0.05, 0.05, 0.05]
             # )[0],
-            "normalize": random.choices(['off', 'auto', 'soft1'], [0.4, 0.3, 0.3])[0],
+            "normalize": random.choices(['off', 'auto', 'soft1'], [0.4, 0.3, 0.3])[
+                0
+            ],
         }
-        return parameter_dict
 
     def get_params(self):
         """Return dict of current parameters."""
-        parameter_dict = {
+        return {
             'holiday': self.holiday,
             'regression_type': self.regression_type,
             "growth": self.growth,
@@ -780,4 +783,3 @@ class NeuralProphet(ModelObject):
             # "train_speed": self.train_speed,
             "normalize": self.normalize,
         }
-        return parameter_dict

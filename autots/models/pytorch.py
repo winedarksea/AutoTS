@@ -133,9 +133,7 @@ class PytorchForecasting(ModelObject):
             self.range_idx_name = "range_datetime"
         else:
             while self.range_idx_name is None:
-                temp_name = ''.join(
-                    random.choice('0123456789ABCDEF') for i in range(14)
-                )
+                temp_name = ''.join(random.choice('0123456789ABCDEF') for _ in range(14))
                 if temp_name not in df.columns:
                     self.range_idx_name = temp_name
 
@@ -173,28 +171,18 @@ class PytorchForecasting(ModelObject):
             data,
             time_idx=self.range_idx_name,
             target="value",
-            time_varying_unknown_reals=["value"],  # needed for DeepAR
-            # weight="weight",
+            time_varying_unknown_reals=["value"],
             group_ids=["series_id"],
-            # static_categoricals=["series_id"],  # recommeded for DeepAR
             max_encoder_length=self.max_encoder_length,
             max_prediction_length=self.forecast_length,
             target_normalizer=encoder,
-            # static_categoricals=[ ... ],
-            # static_reals=[ ... ],
-            # time_varying_known_categoricals=self.date_part_cols,
             time_varying_known_reals=self.date_part_cols,
-            # time_varying_unknown_categoricals=[ ... ],
-            # time_varying_unknown_reals=[ ... ],
-            # allow_missing_timesteps=True,
-            # scalers={0: RobustScaler()},
             add_target_scales=self.add_target_scales,
-            # min_encoder_length=3,
             lags=self.lags,
-            add_relative_time_idx=False
-            if self.model in ["NHiTS", "DecoderMLP", "NBeats"]
-            else True,
+            add_relative_time_idx=self.model
+            not in ["NHiTS", "DecoderMLP", "NBeats"],
         )
+
 
         # create validation and training dataset
         validation = TimeSeriesDataSet.from_dataset(
