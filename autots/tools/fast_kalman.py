@@ -112,7 +112,7 @@ from functools import wraps
 
 def random_state_space():
     """Return randomly generated statespace models."""
-    n_dims = random.choices([1, 2, 3], [0.3, 0.3, 0.3])[0]
+    n_dims = random.choices([1, 2, 3, 4], [0.3, 0.3, 0.3])[0]
     if n_dims == 1:
         st = np.array([[1]])
         obsmod = np.random.randint(1, 3, (1, n_dims))
@@ -1138,68 +1138,3 @@ def ensure_matrix(x, dim=1):
     except Exception:
         x = np.eye(dim) * x
     return x
-
-
-class ExampleEKF:
-    """
-    Vectorized EKF model for estimating the positions of the trackables
-    based on noisy distance data
-    """
-
-    def __init__(self, simulation):
-        # these parameters are assumed to be known and fixed
-        self.n_trackables = len(simulation.trackables)
-        self.sensors = simulation.sensor_positions
-
-        # the state per trackable is the xy-position
-        STATE_DIM = 2
-
-        self.m = np.zeros((self.n_trackables, STATE_DIM, 1))
-        self.P = np.zeros((self.n_trackables, STATE_DIM, STATE_DIM))
-
-        # initial position guesses: at origin, lots of noise
-        INITIAL_POS_NOISE = 10.0
-        for i in range(self.n_trackables):
-            self.P[i, ...] = np.eye(STATE_DIM) * INITIAL_POS_NOISE
-
-        # measurements are distances (1-d) to each sensor
-        OBS_DIM = len(self.sensors)
-        OBS_NOISE = 0.1
-
-        # A simple random walk model is assumed for the time evolution of
-        # the estimated positions. Extending to something more sophisticated,
-        # e.g., with estimated velocities in the state, can give better results
-        RANDOM_WALK_NOISE = 0.05
-
-        # these matrices are fixed in this example, but could also vary
-        # dynamically in other models
-        self.R = np.zeros((self.n_trackables, OBS_DIM, OBS_DIM))
-        self.A = np.zeros((self.n_trackables, STATE_DIM, STATE_DIM))
-        self.Q = np.zeros((self.n_trackables, STATE_DIM, STATE_DIM))
-
-        for i in range(self.n_trackables):
-            self.A[i, ...] = np.eye(STATE_DIM)
-            self.Q[i, ...] = np.eye(STATE_DIM) * RANDOM_WALK_NOISE**2
-
-            self.R[i, ...] = np.eye(OBS_DIM) * OBS_NOISE**2
-
-    def predict(self):
-        self.m, self.P = predict(self.m, self.P, self.A, self.Q)
-
-    def update(self, observations):
-        # EKF update: different H on every step, formed in a vectorized manner
-
-        # axes: m: (obj_i, xy, dummy), sensors: (sensor_i, xy)
-        # -> est_deltas: (obj_i, sensor_i, xy)
-        est_deltas = self.m[:, np.newaxis, :, 0] - self.sensors[np.newaxis, :, :]
-        est_distances = np.sqrt(np.sum(est_deltas**2, axis=2))[..., np.newaxis]
-
-        # Jacobian matrix
-        # D dist = D sqrt(v.v) = 1/2 * 1/sqrt(v.v) * (v.Dv + Dv.v) = v.Dv / dist
-        # => grad dist = v / dist = normalize(v)
-        H = est_deltas / est_distances
-
-        # EKF update as using the fully linear KF update equations
-        y_lin = observations - est_distances + ddot(H, self.m)
-
-        self.m, self.P = update(self.m, self.P, H, self.R, y_lin)

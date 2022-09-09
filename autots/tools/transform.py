@@ -2477,6 +2477,7 @@ class AlignLastValue(EmptyTransformer):
         lag: int = 1,
         method: str = "additive",
         strength: float = 1.0,
+        first_value_only: bool = False,
         **kwargs,
     ):
         super().__init__(name="AlignLastValue")
@@ -2484,6 +2485,7 @@ class AlignLastValue(EmptyTransformer):
         self.lag = lag
         self.method = method
         self.strength = strength
+        self.first_value_only = first_value_only
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -2494,6 +2496,7 @@ class AlignLastValue(EmptyTransformer):
             "strength": random.choices(
                 [1.0, 0.9, 0.7, 0.5, 0.2], [0.8, 0.05, 0.05, 0.05, 0.05]
             )[0],
+            'first_value_only': random.choices([True, False], [0.1, 0.9])[0],
         }
 
     def fit(self, df):
@@ -2519,7 +2522,7 @@ class AlignLastValue(EmptyTransformer):
                 center = df.iloc[-1, :]
         else:
             if lag > 1:
-                center = df.iloc[-(lag + rows - 1) : -(lag - 1), :].mean()
+                center = df.iloc[-(lag + rows - 1): - (lag - 1), :].mean()
             else:
                 center = df.tail(rows).mean()
         return center
@@ -2532,19 +2535,31 @@ class AlignLastValue(EmptyTransformer):
         """
         return df
 
-    def inverse_transform(self, df, trans_method: str = "forecast"):
+    def inverse_transform(self, df, trans_method: str = "forecast", bounds=False):
         """Return data to original *or* forecast form.
 
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        if trans_method == "original":
+        if trans_method == "original" or bounds:
             return df
         else:
-            if self.method == "multiplicative":
-                return df * (1 + ((self.center / df.iloc[0]) - 1) * self.strength)
+            if self.first_value_only:
+                if self.method == "multiplicative":
+                    return pd.concat([
+                        df.iloc[0:1] * (1 + ((self.center / df.iloc[0]) - 1) * self.strength),
+                        df.iloc[1:]
+                    ], axis=0)
+                else:
+                    return pd.concat([
+                        df.iloc[0:1] + self.strength * (self.center - df.iloc[0]),
+                        df.iloc[1:]
+                    ], axis=0)
             else:
-                return df + self.strength * (self.center - df.iloc[0])
+                if self.method == "multiplicative":
+                    return df * (1 + ((self.center / df.iloc[0]) - 1) * self.strength)
+                else:
+                    return df + self.strength * (self.center - df.iloc[0])
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -3268,6 +3283,11 @@ class GeneralTransformer(object):
         self.random_seed = random_seed
         self.n_jobs = n_jobs
         self.transformers = {}
+        # upper/lower forecast inverses are different
+        self.bounded_oddities = [
+            "AlignLastValue"
+        ]
+        # trans methods are different
         self.oddities_list = [
             "DifferencedTransformer",
             "RollingMean100thN",
@@ -3516,7 +3536,7 @@ class GeneralTransformer(object):
         return df
 
     def inverse_transform(
-        self, df, trans_method: str = "forecast", fillzero: bool = False
+        self, df, trans_method: str = "forecast", fillzero: bool = False, bounds: bool = False
     ):
         """Undo the madness.
 
@@ -3530,20 +3550,26 @@ class GeneralTransformer(object):
         # df = df.replace([np.inf, -np.inf], 0)  # .fillna(0)
         try:
             for i in sorted(self.transformations.keys(), reverse=True):
-                if self.transformations[i] in self.oddities_list:
-                    df = self.transformers[i].inverse_transform(
-                        df, trans_method=trans_method
-                    )
+                c_trans_n = self.transformations[i]
+                if c_trans_n in self.oddities_list:
+                    if c_trans_n in self.bounded_oddities:
+                        df = self.transformers[i].inverse_transform(
+                            df, trans_method=trans_method, bounds=bounds
+                        )
+                    else:
+                        df = self.transformers[i].inverse_transform(
+                            df, trans_method=trans_method
+                        )
                 else:
                     df = self.transformers[i].inverse_transform(df)
                 if not isinstance(df, pd.DataFrame):
                     df = pd.DataFrame(df, index=self.df_index, columns=self.df_colnames)
-                elif self.transformations[i] in ["FastICA", "PCA"]:
+                elif c_trans_n in ["FastICA", "PCA"]:
                     self.df_colnames = df.columns
                 # df = df.replace([np.inf, -np.inf], 0)
         except Exception as e:
             raise Exception(
-                f"Transformer {self.transformations[i]} failed on inverse"
+                f"Transformer {c_trans_n} failed on inverse"
             ) from e
 
         if fillzero:

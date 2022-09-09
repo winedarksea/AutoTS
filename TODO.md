@@ -18,6 +18,7 @@
 * update to AutoTS().back_forecast including breaking change of `column` arg renamed to `series`
 * add KalmanSmoothing transformer
 * add KalmanStateSpace model (Kalman Filter + 'any' state space models)
+* AlignLastValue no longer applied to upper/lower forecast bounds
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

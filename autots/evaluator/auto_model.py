@@ -689,10 +689,10 @@ def ModelPrediction(
         transformer_object.inverse_transform(df_forecast.forecast)
     )
     df_forecast.lower_forecast = pd.DataFrame(
-        transformer_object.inverse_transform(df_forecast.lower_forecast, fillzero=True)
+        transformer_object.inverse_transform(df_forecast.lower_forecast, fillzero=True, bounds=True)
     )
     df_forecast.upper_forecast = pd.DataFrame(
-        transformer_object.inverse_transform(df_forecast.upper_forecast, fillzero=True)
+        transformer_object.inverse_transform(df_forecast.upper_forecast, fillzero=True, bounds=True)
     )
 
     df_forecast.transformation_parameters = transformation_dict

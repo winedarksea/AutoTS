@@ -2370,7 +2370,7 @@ or otherwise increase models available."""
 
     def plot_per_series_smape(
         self,
-        title: str = "Top Series Contributing SMAPE Error",
+        title: str = None,
         max_series: int = 10,
         max_name_chars: int = 25,
         color: str = "#ff9912",
@@ -2391,6 +2391,8 @@ or otherwise increase models available."""
         """
         if self.best_model.empty:
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
+        if title is None:
+            title = f"Top {max_series} Series Contributing SMAPE Error"
         best_model_per_series_mae = self.initial_results.per_series_mae[
             self.initial_results.per_series_mae.index == self.best_model_id
         ].mean(axis=0)
@@ -2416,7 +2418,7 @@ or otherwise increase models available."""
 
         if kind == "pie":
             temp.set_index("Series").plot(
-                y="SMAPE", kind="pie", title=title, figsize=figsize, **kwargs
+                y="SMAPE", kind="pie", title=title, figsize=figsize, legend=False, **kwargs
             )
         else:
             temp.plot(
