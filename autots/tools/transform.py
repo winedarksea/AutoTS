@@ -3685,8 +3685,10 @@ scalers = {
     "MaxAbsScaler": 0.05,
     "StandardScaler": 0.05,
     "RobustScaler": 0.05,
-    "Log": 0.05,
+    "Log": 0.03,
     "Discretize": 0.03,
+    "QuantileTransformer": 0.1,
+    "PowerTransformer": 0.05,
 }
 transformer_class = {}
 
