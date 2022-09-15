@@ -2680,6 +2680,7 @@ class HolidayTransformer(EmptyTransformer):
         impact=None,
         regression_params={},
         n_jobs: int = 1,
+        output="multivariate",  # really can only be this for preprocessing
     ):
         """Detect anomalies, then mark as holidays (events, festivals, etc) any that reoccur to a calendar.
 
@@ -2701,8 +2702,9 @@ class HolidayTransformer(EmptyTransformer):
         self.use_lunar_weekday = use_lunar_weekday
         self.use_islamic_holidays = use_islamic_holidays
         self.use_hebrew_holidays = use_hebrew_holidays
+        self.output = output
         self.anomaly_model = AnomalyRemoval(
-            output='multivariate', **self.anomaly_detector_params, n_jobs=n_jobs
+            output=output, **self.anomaly_detector_params, n_jobs=n_jobs
         )
         self.remove_excess_anomalies = remove_excess_anomalies
         self.fillna = anomaly_detector_params.get("fillna", None)
@@ -2743,8 +2745,12 @@ class HolidayTransformer(EmptyTransformer):
             self.anomaly_model.anomalies,
             splash_threshold=self.splash_threshold,
             threshold=self.threshold,
-            actuals=df,
-            anomaly_scores=self.anomaly_model.scores,
+            actuals=df if self.output != "univariate" else None,
+            anomaly_scores=self.anomaly_model.scores
+            if self.output != "univariate"
+            else None,
+            # actuals=df,
+            # anomaly_scores=self.anomaly_model.scores,
             use_dayofmonth_holidays=self.use_dayofmonth_holidays,
             use_wkdom_holidays=self.use_wkdom_holidays,
             use_wkdeom_holidays=self.use_wkdeom_holidays,
@@ -2766,12 +2772,18 @@ class HolidayTransformer(EmptyTransformer):
         if self.fillna is not None:
             df2 = FillNA(df2, method=self.fillna, window=10)
 
-        if self.impact == "regression":
+        if self.impact == "datepart_regression":
             self.holidays = self.dates_to_holidays(df.index, style='flag')
             self.regression_model = DatepartRegression(**self.regression_params)
             return self.regression_model.fit_transform(
                 df2, regressor=self.holidays.astype(float)
             )
+        if self.impact == "regression":
+            self.holidays = self.dates_to_holidays(df.index, style='flag')
+            self.holidays['intercept'] = 1
+            weights = (np.arange(df2.shape[0]) ** 0.6)[..., None]
+            self.model_coef = np.linalg.lstsq(self.holidays.to_numpy() * weights, df2.to_numpy() * weights, rcond=None)[0]
+            return df2 - np.dot(self.holidays.iloc[:, 0: -1], self.model_coef[0:-1])
         elif self.impact == "median_value":
             holidays = self.dates_to_holidays(
                 df.index, style='impact', holiday_impacts="value"
@@ -2785,7 +2797,7 @@ class HolidayTransformer(EmptyTransformer):
             )
             self.medians = self.anomaly_model.scores.median().fillna(1)
             return df2 * (holidays / self.medians).replace(0.0, 1.0)
-        elif self.impact is None:
+        elif self.impact is None or self.impact == "create_feature":
             return df2
         else:
             raise ValueError("`impact` arg not recognized in HolidayTransformer")
@@ -2795,11 +2807,15 @@ class HolidayTransformer(EmptyTransformer):
         return self.transform(df)
 
     def inverse_transform(self, df):
-        if self.impact == "regression":
+        if self.impact == "datepart_regression":
             holidays = self.dates_to_holidays(df.index, style='flag')
             return self.regression_model.inverse_transform(
                 df, regressor=holidays.astype(float)
             )
+        elif self.impact == "regression":
+            holidays = self.dates_to_holidays(df.index, style='flag')
+            holidays['intercept'] = 1
+            return df + np.dot(holidays.iloc[:, 0: -1], self.model_coef[0:-1])
         elif self.impact == "median_value":
             holidays = self.dates_to_holidays(
                 df.index, style='impact', holiday_impacts="value"
@@ -2823,10 +2839,10 @@ class HolidayTransformer(EmptyTransformer):
             [True, False], [0.9, 0.1]
         )[0]
         holiday_params['impact'] = random.choices(
-            [None, 'median_value', 'anomaly_score', 'regression'],
-            [0.1, 0.2, 0.3, 0.4],
+            [None, 'median_value', 'anomaly_score', 'datepart_regression', 'regression'],
+            [0.1, 0.3, 0.3, 0.2, 0.2],
         )[0]
-        if holiday_params['impact'] == 'regression':
+        if holiday_params['impact'] == 'datepart_regression':
             holiday_params['regression_params'] = DatepartRegression.get_new_params(
                 method=method
             )
@@ -3686,7 +3702,7 @@ scalers = {
     "StandardScaler": 0.05,
     "RobustScaler": 0.05,
     "Log": 0.03,
-    "Discretize": 0.03,
+    "Discretize": 0.01,
     "QuantileTransformer": 0.1,
     "PowerTransformer": 0.05,
 }
@@ -3740,6 +3756,9 @@ def RandomTransform(
     fast_params: bool = None,
     superfast_params: bool = None,
     traditional_order: bool = False,
+    transformer_min_depth: int = 1,
+    allow_none: bool = True,
+    no_nan_fill: bool = False,
 ):
     """Return a dict of randomly choosen transformation selections.
 
@@ -3780,16 +3799,19 @@ def RandomTransform(
     #     na_probabilities = [float(i) / sum_nas for i in na_probabilities]
 
     # choose FillNA
-    na_choice = random.choices(na_probs_list, na_probabilities)[0]
-    if na_choice == "interpolate":
-        na_choice = random.choices(
-            list(df_interpolate.keys()), list(df_interpolate.values())
-        )[0]
+    if no_nan_fill:
+        na_choice = None
+    else:
+        na_choice = random.choices(na_probs_list, na_probabilities)[0]
+        if na_choice == "interpolate":
+            na_choice = random.choices(
+                list(df_interpolate.keys()), list(df_interpolate.values())
+            )[0]
 
     # choose length of transformers
-    num_trans = random.randint(1, transformer_max_depth)
+    num_trans = random.randint(transformer_min_depth, transformer_max_depth)
     # sometimes return no transformation
-    if num_trans == 1:
+    if num_trans == 1 and allow_none:
         test = random.choices(["None", "Some"], [0.1, 0.9])[0]
         if test == "None":
             return {
@@ -3844,6 +3866,18 @@ def random_cleaners():
             },
             {
                 "fillna": None,
+                "transformations": {"0": "ScipyFilter"},
+                "transformation_params": {
+                    "0": {
+                        'method': 'savgol_filter',
+                        'method_args': {'window_length': 31,
+                                        'polyorder': 3, 'deriv': 0,
+                                        'mode': 'interp'}
+                    },
+                },
+            },
+            {
+                "fillna": None,
                 "transformations": {"0": "ClipOutliers"},
                 "transformation_params": {
                     "0": {"method": "clip", "std_threshold": 3},
@@ -3887,7 +3921,7 @@ def random_cleaners():
                 },
             },
         ],
-        [0.8, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05],
+        [0.8, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05],
     )[0]
     if transform_dict == "random":
         transform_dict = RandomTransform(

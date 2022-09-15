@@ -19,6 +19,7 @@
 * add KalmanSmoothing transformer
 * add KalmanStateSpace model (Kalman Filter + 'any' state space models)
 * AlignLastValue no longer applied to upper/lower forecast bounds
+* modified `regression` impact in HolidayTransformer to weighted least squares, moved existing to 'datepart_regression'
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

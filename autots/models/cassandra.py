@@ -4,11 +4,15 @@ Created on Tue Sep 13 19:45:57 2022
 
 @author: Colin
 """
+import random
 import numpy as np
 import pandas as pd
+from autots.tools.transform import GeneralTransformer, RandomTransform, scalers, filters, HolidayTransformer, AnomalyRemoval
+from autots.tools import cpu_count
+from autots.models.base import ModelObject
 
 
-class Cassandra(object):
+class Cassandra(ModelObject):
     """Explainable decomposition-based forecasting with advanced trend modeling and preprocessing.
 
     Tunc etiam fatis aperit Cassandra futuris
@@ -23,8 +27,8 @@ class Cassandra(object):
 
     def __init__(
         self,
-        preprocessing_transformation: dict = {},  # filters by default only
-        scaler: str = "BaseScaler",  # pulled out from transformation as a scaler is not optional, maybe allow a list
+        preprocessing_transformation: dict = None,  # filters by default only
+        scaling: str = "BaseScaler",  # pulled out from transformation as a scaler is not optional, maybe allow a list
         past_impacts_intervention: bool = False,  # 'remove', 'plot_only', 'regressor'
         seasonalities: dict = {},  # interactions added if fourier and order matches
         ar_lags: list = None,
@@ -50,23 +54,89 @@ class Cassandra(object):
         trend_phi: float = None,
         constraints: dict = None,
         # not modeling related:
-        freq: str = 'infer',
+        frequency: str = 'infer',
         prediction_interval: float = 0.9,
         random_seed: int = 2022,
         verbose: int = 0,
-        n_jobs: int = None,
+        n_jobs: int = "auto",
     ):
-        return NotImplemented
+        self.preprocessing_transformation = preprocessing_transformation
+        self.scaling = scaling
+        self.past_impacts_intervention = past_impacts_intervention
+        self.seasonalities = seasonalities
+        self.ar_lags = ar_lags
+        self.ar_interaction_seasonality = ar_interaction_seasonality
+        self.anomaly_detector_params = anomaly_detector_params
+        self.anomaly_intervention = anomaly_intervention
+        self.holiday_detector_params = holiday_detector_params
+        self.holiday_intervention = holiday_intervention
+        self.holiday_countries = holiday_countries
+        self.holiday_countries_used = holiday_countries_used
+        self.multivariate_feature = multivariate_feature
+        self.multivariate_transformation = multivariate_transformation
+        self.regressor_transformation = regressor_transformation
+        self.regressors_used = regressors_used
+        self.linear_model = linear_model
+        self.randomwalk_n = randomwalk_n
+        self.trend_window = trend_window
+        self.trend_standin = trend_standin
+        self.trend_anomaly_detector_params = trend_anomaly_detector_params
+        self.trend_anomaly_intervention = trend_anomaly_intervention
+        self.trend_transformation = trend_transformation
+        self.trend_model = trend_model
+        self.trend_phi = trend_phi
+        self.constraints = constraints
+        self.frequency = frequency
+        self.prediction_interval = prediction_interval
+        self.random_seed = self.random_seed
+        self.verbose = verbose
+        self.n_jobs = n_jobs
+        if self.n_jobs == 'auto':
+            self.n_jobs = cpu_count(modifier=0.75)
+            if verbose > 0:
+                print(f"Using {self.n_jobs} cpus for n_jobs.")
+        self.starting_params = self.get_params()
 
     @staticmethod
     def base_scaler(df):
         return (df - np.mean(df, axis=0)) / np.std(df, axis=0)
 
     def fit(self, df, future_regressor, regressor_per_series, flag_regressors, categorical_groups, past_impacts):
-        # store 'original' params to return to if auto_fit or next_fit used
         # flag regressors bypass preprocessing
-        # regressor_per_series += ar lags, holidays detect (multivar), anomaly (multivar), holiday_countries (dict)
         # ideally allow both pd.DataFrame and np.array inputs (index for array?
+        self.df = df.copy()
+        self.basic_profile(self.df)
+
+        # what features will require separate models to be fit as X will not be consistent for all
+        self.loop_required = (
+            (self.ar_lags is not None) or (
+            ) or (
+                isinstance(self.holiday_countries, dict) and self.holiday_countries_used
+            ) or (
+                (regressor_per_series is not None) and self.regressors_used
+            ) or (
+                (anom is not None) and self.regressors_used
+            ) or (
+                (hold is not None) and self.regressors_used
+            )
+        )
+        if self.anomaly_detector_params is not None:
+            self.anomaly_detector = AnomalyRemoval(**self.anomaly_detector_params).fit(self.df)
+            self.anomaly_intervention  # remove, create feature, model
+        if self.holiday_detector_params is not None:
+            self.holiday_detector = HolidayTransformer(**self.holiday_detector_params)
+            # do I make one holiday feature for all detected holidays??
+            OUT = self.holiday_detector.fit_transform(self.df)
+            self.holiday_intervention  # remove, create feature
+        if self.preprocessing_transformation is not None:
+            self.preprocesser = GeneralTransformer(**self.preprocessing_transformation)
+            self.preprocesser.fit_transform(self.df)
+        if self.scaling is not None:
+            if self.scaling == "BaseScaler":
+                self.base_scaler(self.df)
+            else:
+                self.scaler = GeneralTransformer(**self.scaling)
+
         return NotImplemented
 
     def predict(self, forecast_length, future_regressor, regressor_per_series, flag_regressors, future_impacts, new_df=None):
@@ -76,11 +146,14 @@ class Cassandra(object):
     def auto_fit(self, df, validation_method):  # also add regressor input
         # run cross validation to choose
         # return metrics of best model, set base params
+        self.starting_params = self.get_params()
         return NotImplemented
 
     def next_fit(self):
         # option to print a graph of each while going (run again until you see one you like)
         # append to an internal record, print new params
+        # plot: 3 stacked, in sample, then each validation
+        # maybe use genetic optimization if this used after auto_fit
         return NotImplemented
 
     def cross_validate(self, df, validation_method):
@@ -103,12 +176,76 @@ class Cassandra(object):
         return NotImplemented
 
     @staticmethod
-    def get_new_params():
+    def get_new_params(method='fast'):
         # have fast option that avoids any of the loop approaches
-        return {}
+        scaling = random.choice(['BaseScaler', 'other'])
+        if scaling == "other":
+            scaling = RandomTransform(
+                transformer_list=scalers, transformer_max_depth=1,
+                allow_none=False, no_nan_fill=True
+            )
+        holiday_intervention = random.choice(['create_feature', 'use_impact'])
+        holiday_params = HolidayTransformer.get_new_params(method=method)
+        return {
+            "preprocessing_transformation": RandomTransform(
+                transformer_list=filters, transformer_max_depth=2, allow_none=True
+            ),
+            "scaling": scaling,
+            "past_impacts_intervention": self.past_impacts_intervention,
+            "seasonalities": self.seasonalities,
+            "ar_lags": self.ar_lags,
+            "ar_interaction_seasonality": self.ar_interaction_seasonality,
+            "anomaly_detector_params": AnomalyRemoval.get_new_params(method=method),
+            "anomaly_intervention": self.anomaly_intervention,
+            "holiday_detector_params": holiday_params,
+            "holiday_intervention": holiday_intervention,
+            "holiday_countries": self.holiday_countries,
+            "holiday_countries_used": self.holiday_countries_used,
+            "multivariate_feature": self.multivariate_feature,
+            "multivariate_transformation": self.multivariate_transformation,
+            "regressor_transformation": self.regressor_transformation,
+            "regressors_used": self.regressors_used,
+            "linear_model": self.linear_model,
+            "randomwalk_n": self.randomwalk_n,
+            "trend_window": self.trend_window,
+            "trend_standin": self.trend_standin,
+            "trend_anomaly_detector_params": self.trend_anomaly_detector_params,
+            "trend_anomaly_intervention": self.trend_anomaly_intervention,
+            "trend_transformation": self.trend_transformation,
+            "trend_model": self.trend_model,
+            "trend_phi": self.trend_phi,
+            "constraints": self.constraints,
+        }
 
-    def get_params():
-        return {}
+    def get_params(self):
+        return {
+            "preprocessing_transformation": self.preprocessing_transformation,
+            "scaling": self.scaling,
+            "past_impacts_intervention": self.past_impacts_intervention,
+            "seasonalities": self.seasonalities,
+            "ar_lags": self.ar_lags,
+            "ar_interaction_seasonality": self.ar_interaction_seasonality,
+            "anomaly_detector_params": self.anomaly_detector_params,
+            "anomaly_intervention": self.anomaly_intervention,
+            "holiday_detector_params": self.holiday_detector_params,
+            "holiday_intervention": self.holiday_intervention,
+            "holiday_countries": self.holiday_countries,
+            "holiday_countries_used": self.holiday_countries_used,
+            "multivariate_feature": self.multivariate_feature,
+            "multivariate_transformation": self.multivariate_transformation,
+            "regressor_transformation": self.regressor_transformation,
+            "regressors_used": self.regressors_used,
+            "linear_model": self.linear_model,
+            "randomwalk_n": self.randomwalk_n,
+            "trend_window": self.trend_window,
+            "trend_standin": self.trend_standin,
+            "trend_anomaly_detector_params": self.trend_anomaly_detector_params,
+            "trend_anomaly_intervention": self.trend_anomaly_intervention,
+            "trend_transformation": self.trend_transformation,
+            "trend_model": self.trend_model,
+            "trend_phi": self.trend_phi,
+            "constraints": self.constraints,
+        }
 
     def plot_things():  # placeholder for later plotting functions
         # plot components
