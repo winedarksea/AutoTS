@@ -11,6 +11,8 @@ import pandas as pd
 from autots.tools.transform import GeneralTransformer, RandomTransform, scalers, filters, HolidayTransformer, AnomalyRemoval, EmptyTransformer
 from autots.tools import cpu_count
 from autots.models.base import ModelObject
+from autots.templates.general import general_template
+from autots.tools.holiday import holiday_flag
 
 
 class Cassandra(ModelObject):
@@ -21,6 +23,8 @@ class Cassandra(ModelObject):
     Nos delubra deum miseri, quibus ultimus esset
     ille dies, festa velamus fronde per urbem.
     -Aeneid 2.246-2.249
+
+    Warn about remove_excess_anomalies from holiday detector if relying on anomaly prediction
 
     Args:
         pass
@@ -69,8 +73,9 @@ class Cassandra(ModelObject):
         self.anomaly_detector_params = anomaly_detector_params
         self.anomaly_intervention = anomaly_intervention
         self.holiday_detector_params = holiday_detector_params
-        self.holiday_intervention = holiday_intervention
         self.holiday_countries = holiday_countries
+        if isinstance(self.holiday_countries, str):
+            self.holiday_countries = self.holiday_countries.split(",")
         self.holiday_countries_used = holiday_countries_used
         self.multivariate_feature = multivariate_feature
         self.multivariate_transformation = multivariate_transformation
@@ -116,8 +121,12 @@ class Cassandra(ModelObject):
         # ideally allow both pd.DataFrame and np.array inputs (index for array?
         self.df = df.copy()
         self.basic_profile(self.df)
+        self.past_impacts = past_impacts
 
         # what features will require separate models to be fit as X will not be consistent for all
+        if isinstance(self.anomaly_detector_params, dict):
+            anomaly_not_uni = self.anomaly_detector_params.get('output', None) != 'univariate'
+        self.anomaly_not_uni = False
         self.loop_required = (
             (self.ar_lags is not None) or (
             ) or (
@@ -125,31 +134,40 @@ class Cassandra(ModelObject):
             ) or (
                 (regressor_per_series is not None) and self.regressors_used
             ) or (
-                (anom is not None) and self.regressors_used
+                isinstance(self.anomaly_intervention, dict) and anomaly_not_uni
             )
         )
-        # if past impacts given, assume removal
+
+        # if past impacts given, assume removal unless otherwise specified
         if self.past_impacts_intervention is None and past_impacts is not None:
             self.past_impacts_intervention = "remove"
-        # remove past impacts
+        elif past_impacts is None:
+            self.past_impacts_intervention = None
+        # remove past impacts to find "organic"
         if self.past_impacts_intervention == "remove":
-            NotImplemented
+            self.df = self.df * (1 + past_impacts)
         # holiday detection first, don't want any anomalies removed yet, and has own preprocessing
         if self.holiday_detector_params is not None:
             self.holiday_detector = HolidayTransformer(**self.holiday_detector_params).fit(self.df)
+            self.holidays = self.holiday_detector.dates_to_holidays(df.index, style='series_flag')
+            self.holiday_count = np.count_nonzero(self.holidays)
             if self.holiday_detector_params["remove_excess_anomalies"]:
-                holidays = self.holiday_detector.dates_to_holidays(df.index, style='series_flag')
-                self.df = self.df[~((self.holiday_detector.anomaly_model.anomalies == -1) & (holidays != 1))]
-                self.holiday_count = np.count_nonzero(holidays)
-        # remove, create feature (maybe with Bayesian 0/1, anom deviation), model (predict anom score as feature, anom_score to anomaly classifier)
-        # have anom_model (if None but params, remove)
-        # np.linalg.lstsq(trans.anomaly_model.scores.to_numpy(), trans.anomaly_model.anomalies, rcond=None)[0]
-        # or flag * longest seasonality, but still have to predict flag
+                self.df = self.df[~((self.holiday_detector.anomaly_model.anomalies == -1) & (self.holidays != 1))]
+        # find anomalies, and either remove or setup for modeling the anomaly scores
         if self.anomaly_detector_params is not None:
             self.anomaly_detector = AnomalyRemoval(**self.anomaly_detector_params).fit(self.df)
-            self.anomaly_intervention
+            # REMOVE HOLIDAYS from anomalies, as they may look like anomalies but are dealt with by holidays
+            # this, however, does nothing to preserve country holidays
+            if self.holiday_detector_params is not None:
+                hol_filt = (self.holidays == 1) & (self.anomaly_detector.anomalies == -1)
+                self.anomaly_detector.anomalies[hol_filt] = 1
+                # assume most are not anomalies so median is not anom
+                self.anomaly_detector.scores[hol_filt] = np.median(self.anomaly_detector.scores)
             if self.anomaly_intervention == "remove":
                 self.df = self.anomaly_detector.transform(self.df)
+            elif isinstance(self.anomaly_intervention, dict):
+                self.anomaly_detector.fit_anomaly_classifier()
+        # now do standard preprocessing
         if self.preprocessing_transformation is not None:
             self.preprocesser = GeneralTransformer(**self.preprocessing_transformation)
             self.df = self.preprocesser.fit_transform(self.df)
@@ -161,10 +179,28 @@ class Cassandra(ModelObject):
                 self.df = self.scaler.fit_transform(self.df)
 
         self.holiday_detector.dates_to_holidays(self.df.index, style="flag").clip(upper=1)
+        if isinstance(self.anomaly_intervention, dict):
+            self.anomaly_detector.scores
+        if self.past_impacts_intervention == "regressor":
+            NotImplemented
+        if self.holiday_countries_used and self.holiday_countries is not None and not isinstance(self.holiday_countries, dict):
+            for holiday_country in self.holiday_countries:
+                holiday_flag(
+                    df.index,
+                    country=holiday_country,
+                    encode_holiday_type=True,
+                )
+        if self.multivariate_feature is not None:
+            NotImplemented
+        # remove colinear features
         return NotImplemented
 
     def predict(self, forecast_length, future_regressor, regressor_per_series, flag_regressors, future_impacts, new_df=None):
         # if future regressors are None (& USED), but were provided for history, instead use forecasts of these features (warn)
+        if forecast_length is None:
+            # use historic data
+            # don't forget to add in past_impacts (use future impacts again?)
+            NotImplemented
         return NotImplemented
 
     def auto_fit(self, df, validation_method):  # also add regressor input
@@ -200,6 +236,10 @@ class Cassandra(ModelObject):
         # cluster and choose the biggest cluster (as avg value naive method, maybe round or filter first)
         return NotImplemented
 
+    def feature_importance(self):
+        # rank coefficients by importance
+        return NotImplemented
+
     @staticmethod
     def get_new_params(method='fast'):
         # have fast option that avoids any of the loop approaches
@@ -220,7 +260,11 @@ class Cassandra(ModelObject):
                 [True, False], [0.05, 0.95]
             )[0]
             holiday_params['output'] = random.choices(['multivariate', 'univariate'], [0.9, 0.1])[0]
-        anomaly_intervention = random.choices(['remove', 'model'], [0.5, 0.5])[0]
+        anomaly_intervention = random.choices([None, 'remove', 'model'], [0.9, 0.3, 0.3])[0]
+        if anomaly_intervention is not None:
+            anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
+            if anomaly_intervention == "model":
+                anomaly_intervention = general_template.sample(1).to_dict("records")[0]  # placeholder, probably
         return {
             "preprocessing_transformation": RandomTransform(
                 transformer_list=filters, transformer_max_depth=2, allow_none=True
@@ -230,7 +274,7 @@ class Cassandra(ModelObject):
             "seasonalities": self.seasonalities,
             "ar_lags": self.ar_lags,
             "ar_interaction_seasonality": self.ar_interaction_seasonality,
-            "anomaly_detector_params": AnomalyRemoval.get_new_params(method=method),
+            "anomaly_detector_params": anomaly_detector_params,
             "anomaly_intervention": anomaly_intervention,
             "holiday_detector_params": holiday_params,
             # "holiday_countries": self.holiday_countries,
@@ -289,6 +333,8 @@ class Cassandra(ModelObject):
 
     def plot_things():  # placeholder for later plotting functions
         # plot components
+        # plot transformed df if preprocess or anomaly removal
+        # plot past impacts
         # plot % contribution of components
         # plot eval (show actuals, alongside full and components to diagnose)
         # plot residual distribution/PACF
