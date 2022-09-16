@@ -2678,7 +2678,7 @@ class HolidayTransformer(EmptyTransformer):
         use_hebrew_holidays=True,
         remove_excess_anomalies=True,
         impact=None,
-        regression_params={},
+        regression_params=None,
         n_jobs: int = 1,
         output="multivariate",  # really can only be this for preprocessing
     ):
@@ -2714,6 +2714,15 @@ class HolidayTransformer(EmptyTransformer):
         self.holiday_count = 0
 
     def dates_to_holidays(self, dates, style="flag", holiday_impacts=False):
+        """
+        dates (pd.DatetimeIndex): list of dates
+        style (str): option for how to return information
+            "long" - return date, name, series for all holidays in a long style dataframe
+            "impact" - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
+            'flag' - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
+            'prophet' - return format required for prophet. Will need to be filtered on `series` for multivariate case
+            'series_flag' - dates, series 0/1 for if holiday occurred in any calendar
+        """
         return dates_to_holidays(
             dates,
             self.df_cols,
@@ -2779,7 +2788,7 @@ class HolidayTransformer(EmptyTransformer):
                 df2, regressor=self.holidays.astype(float)
             )
         if self.impact == "regression":
-            self.holidays = self.dates_to_holidays(df.index, style='flag')
+            self.holidays = self.dates_to_holidays(df.index, style='flag').clip(upper=1)
             self.holidays['intercept'] = 1
             weights = (np.arange(df2.shape[0]) ** 0.6)[..., None]
             self.model_coef = np.linalg.lstsq(self.holidays.to_numpy() * weights, df2.to_numpy() * weights, rcond=None)[0]
@@ -2813,7 +2822,7 @@ class HolidayTransformer(EmptyTransformer):
                 df, regressor=holidays.astype(float)
             )
         elif self.impact == "regression":
-            holidays = self.dates_to_holidays(df.index, style='flag')
+            holidays = self.dates_to_holidays(df.index, style='flag').clip(upper=1)
             holidays['intercept'] = 1
             return df + np.dot(holidays.iloc[:, 0: -1], self.model_coef[0:-1])
         elif self.impact == "median_value":
