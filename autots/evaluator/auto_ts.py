@@ -445,7 +445,7 @@ class AutoTS(object):
             [0.3, 0.1, 0.2, 0.2],
         )[0]
         metric_weighting = {
-            'smape_weighting': random.choices([0, 1, 5, 10], [0.1, 0.2, 0.3, 0.1])[0],
+            'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[0],
             'mae_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
             'rmse_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
             'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[0],
@@ -520,7 +520,7 @@ class AutoTS(object):
             'max_generations': random.choices([5, 10, 20, 50], [0.2, 0.5, 0.1, 0.4])[0],
             'model_list': random.choices(
                 ['fast', 'superfast', 'default', 'fast_parallel', 'all', 'motifs', 'no_shared_fast'],
-                [0.2, 0.2, 0.2, 0.2, 0.05, 0.05, 0.05],
+                [0.2, 0.2, 0.2, 0.2, 0.05, 0.05, 0.1],
             )[0],
             'transformer_list': random.choices(
                 ['all', 'fast', 'superfast'],

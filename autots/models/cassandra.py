@@ -103,6 +103,8 @@ class Cassandra(ModelObject):
         self.starting_params = self.get_params()
         self.scaler = EmptyTransformer()
         self.preprocesser = EmptyTransformer()
+        self.ds_min = pd.Timestamp("2000-01-01")
+        self.ds_max = pd.Timestamp("2025-01-01")
 
     def base_scaler(self, df):
         self.scaler_mean = np.mean(df, axis=0)
@@ -116,12 +118,22 @@ class Cassandra(ModelObject):
         else:
             return self.scaler.inverse_transform(self.preprocesser.inverse_transform(df))
 
-    def fit(self, df, future_regressor, regressor_per_series, flag_regressors, categorical_groups, past_impacts=None):
+    def create_t(self, DTindex):
+        return (DTindex - self.ds_min) / (self.ds_max - self.ds_min)
+
+    def fit(self, df, future_regressor=None, regressor_per_series=None, flag_regressors=None, categorical_groups=None, past_impacts=None):
         # flag regressors bypass preprocessing
         # ideally allow both pd.DataFrame and np.array inputs (index for array?
         self.df = df.copy()
         self.basic_profile(self.df)
+        # standardize groupings (extra/missing dealt with)
+        if categorical_groups is None:
+            categorical_groups = {}
+        self.categorical_groups = {col: (categorical_groups[col] if col in categorical_groups.keys() else "other") for col in df.columns}
         self.past_impacts = past_impacts
+        self.ds_min = df.index.min()
+        self.ds_max = df.index.max()
+        self.t_train = self.create_t(df.index)
 
         # what features will require separate models to be fit as X will not be consistent for all
         if isinstance(self.anomaly_detector_params, dict):
@@ -177,22 +189,69 @@ class Cassandra(ModelObject):
             else:
                 self.scaler = GeneralTransformer(**self.scaling)
                 self.df = self.scaler.fit_transform(self.df)
+        # additional transforms before multivariate feature creation
+        if self.multivariate_transformation is not None:
+            self.multivariate_transformer = GeneralTransformer(**self.multivariate_transformation).fit(self.df.copy())
 
-        self.holiday_detector.dates_to_holidays(self.df.index, style="flag").clip(upper=1)
+        # BEGIN CONSTRUCTION OF X ARRAY
+        x_list = []
+        if self.holiday_detector_params is not None:
+            x_list.append(self.holiday_detector.dates_to_holidays(self.df.index, style="flag").clip(upper=1))
         if isinstance(self.anomaly_intervention, dict):
-            self.anomaly_detector.scores
-        if self.past_impacts_intervention == "regressor":
-            NotImplemented
-        if self.holiday_countries_used and self.holiday_countries is not None and not isinstance(self.holiday_countries, dict):
-            for holiday_country in self.holiday_countries:
-                holiday_flag(
-                    df.index,
-                    country=holiday_country,
-                    encode_holiday_type=True,
-                )
+            # need to model these for prediction
+            x_list.append(self.anomaly_detector.scores)
+        # all of the following are 1 day past lagged
         if self.multivariate_feature is not None:
-            NotImplemented
+            if self.multivariate_feature == "feature_agglomeration":
+                from sklearn.cluster import FeatureAgglomeration
+
+                self.agglomerator = FeatureAgglomeration(n_clusters=10)
+                self.agglomerator.fit_transform(self.df)[:-1]
+            elif self.multivariate_feature == "group_average":
+                df.groupby(self.categorical_groups, axis=1).mean()[:-1]
+            elif self.multivariate_feature == "oscillator":
+                np.count_nonzero((df - df.shift(1)).clip(upper=0))[:-1]
+        if self.seasonalities is not None:
+            for seasonality in self.seasonalities:
+                x_list.append(create_seasonality_feature(df.index, self.t_train, seasonality))
+                # INTERACTIONS NOT IMPLEMENTED
+        if self.randomwalk_n is not None:
+            x_list.append(pd.DataFrame(
+                np.random.normal(size=(len(self.df), self.randomwalk_n)).cumsum(axis=0),
+                columns=["randomwalk_" + str(x) for x in range(self.randomwalk_n)],
+                index=self.df.index,
+            ))
+        if self.trend_standin is not None:
+            if self.trend_standin == "random_normal":
+                x_list.append(pd.DataFrame(
+                    np.random.normal(size=(len(self.df), 4)),
+                    columns=["randnorm_" + str(x) for x in range(self.randomwalk_n)],
+                    index=self.df.index,
+                ))
+            elif self.trend_standin == "rolling_trend":
+                NotImplemented
+        if future_regressor is not None and self.regressors_used:
+            if self.regressor_transformation is not None:
+                self.regressor_transformer = GeneralTransformer(**self.regressor_transformation)
+            x_list.append(self.regressor_transformer.fit_transform(clean_regressor(future_regressor)))
+        if flag_regressors is not None and self.regressors_used:
+            x_list.append(clean_regressor(flag_regressors, prefix="regrflags_"))
+        if self.holiday_countries is not None and not isinstance(self.holiday_countries, dict) and self.holiday_countries_used:
+            for holiday_country in self.holiday_countries:
+                x_list.append(
+                    holiday_flag(
+                        self.df.index,
+                        country=holiday_country,
+                        encode_holiday_type=True,
+                    ),  # may want to rename DF columns here
+                )
+        # regressor_per_series, AR lags, and holiday_countries (dict)
+        # if self.past_impacts_intervention == "regressor":  # select only column
+        # RUN LINEAR MODEL
+        x_array = pd.concat(x_list, axis=1)
         # remove colinear features
+        # run model
+        self.params = np.linalg.lstsq(x_array, df, rcond=None)[0]
         return NotImplemented
 
     def predict(self, forecast_length, future_regressor, regressor_per_series, flag_regressors, future_impacts, new_df=None):
@@ -240,6 +299,9 @@ class Cassandra(ModelObject):
         # rank coefficients by importance
         return NotImplemented
 
+    def compare_actual_components(self):
+        return NotImplemented
+
     @staticmethod
     def get_new_params(method='fast'):
         # have fast option that avoids any of the loop approaches
@@ -270,8 +332,11 @@ class Cassandra(ModelObject):
                 transformer_list=filters, transformer_max_depth=2, allow_none=True
             ),
             "scaling": scaling,
-            "past_impacts_intervention": self.past_impacts_intervention,
-            "seasonalities": self.seasonalities,
+            # "past_impacts_intervention": self.past_impacts_intervention,
+            seasonalities": random.choices(
+                [[7, 365.25], ["dayofweek", 365.25], []],
+                [],
+            )[0],
             "ar_lags": self.ar_lags,
             "ar_interaction_seasonality": self.ar_interaction_seasonality,
             "anomaly_detector_params": anomaly_detector_params,
@@ -279,7 +344,10 @@ class Cassandra(ModelObject):
             "holiday_detector_params": holiday_params,
             # "holiday_countries": self.holiday_countries,
             "holiday_countries_used": random.choices([True, False], [0.5, 0.5])[0],
-            "multivariate_feature": self.multivariate_feature,
+            "multivariate_feature": random.choice(
+                [None, "feature_agglomeration", 'group_average', 'oscillator'],
+                [0.7, 0.1, 0.1, 0.1]
+            )[0],
             "multivariate_transformation": RandomTransform(
                 transformer_list="fast", transformer_max_depth=3  # probably want some more usable defaults first as many random are senseless
             ),
@@ -290,7 +358,10 @@ class Cassandra(ModelObject):
             "linear_model": self.linear_model,
             "randomwalk_n": random.choices([None, 10], [0.5, 0.5])[0],
             "trend_window": random.choices([3, 15, 90, 365], [0.2, 0.2, 0.2, 0.2])[0],
-            "trend_standin": self.trend_standin,
+            "trend_standin": random.choices(
+                [None, 'random_normal', 'rolling_trend'],
+                [0.5, 0.4, 0.1],
+            )[0],
             "trend_anomaly_detector_params": self.trend_anomaly_detector_params,
             "trend_anomaly_intervention": self.trend_anomaly_intervention,
             "trend_transformation": RandomTransform(
@@ -339,15 +410,96 @@ class Cassandra(ModelObject):
         # plot eval (show actuals, alongside full and components to diagnose)
         # plot residual distribution/PACF
         # plot inflection points (filtering or smoothing first)
+        # plot highest error series, plot highest/lowest growth
         return NotImplemented
 
 
+def multivariate_feature(df, categorical_groups):
+    # 1 day lag
+    # Feature Agglomeration
+    # Advancing:Declining (growth/decline over previous day)
+    # Above/Below moving average %
+    # McClellan Oscillator
+    return NotImplemented
+
+
+def clean_regressor(in_d, prefix="regr_"):
+    if not isinstance(in_d, pd.DataFrame):
+        df = pd.DataFrame(in_d)
+    else:
+        df = in_d.copy()
+    df.columns = [prefix + col for col in df.columns]
+    return df
+
+
+def create_t(ds):
+    return (ds - ds.min()) / (ds.max() - ds.min())
+
+
+def fourier_series(t, p=365.25, n=10):
+    # 2 pi n / p
+    x = 2 * np.pi * np.arange(1, n + 1) / p
+    # 2 pi n / p * t
+    x = x * t[:, None]
+    x = np.concatenate((np.cos(x), np.sin(x)), axis=1)
+    return x
+
+
+def create_seasonality_feature(DTindex, t, seasonality):
+    # fourier orders
+    if isinstance(seasonality, (int, float)):
+        fourier_series(t, seasonality, n=10)
+    # dateparts
+    elif seasonality == "dayofweek":
+        return pd.get_dummies(pd.Categorical(
+            DTindex.weekday, categories=list(range(7)), ordered=True
+        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
+    elif seasonality == "month":
+        return pd.get_dummies(pd.Categorical(
+            DTindex.month, categories=list(range(12)), ordered=True
+        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
+    elif seasonality == "weekend":
+        return pd.DataFrame((DTindex.weekday > 4).astype(int), columns=["weekend"])
+    elif seasonality == "weekdayofmonth":
+        return pd.get_dummies(pd.Categorical(
+            (DTindex.day - 1) // 7 + 1,
+            categories=list(range(5)), ordered=True,
+        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
+    elif seasonality == "hour":
+        return pd.get_dummies(pd.Categorical(
+            DTindex.hour, categories=list(range(24)), ordered=True
+        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
+    elif seasonality == "daysinmonth":
+        return pd.DataFrame({'daysinmonth': DTindex.daysinmonth})
+    elif seasonality == "quarter":
+        return pd.get_dummies(pd.Categorical(
+            DTindex.quarter, categories=list(range(4)), ordered=True
+        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
+    else:
+        return ValueError(f"Seasonality `{seasonality}` not recognized")
+
+
+categorical_groups = {
+    "wiki_United_States": 'country',
+    "wiki_Germany": 'country',
+    "wiki_Jesus": 'holiday',
+    "wiki_Michael_Jackson": 'person',
+    "wiki_Easter": 'holiday',
+    "wiki_Christmas": 'holiday',
+    "wiki_Chinese_New_Year": 'holiday',
+    "wiki_Thanksgiving": 'holiday',
+    "wiki_Elizabeth_II": 'person',
+    "wiki_William_Shakespeare": 'person',
+    "wiki_George_Washington": 'person',
+    "wiki_Cleopatra": 'person',
+}
 # Seasonalities
     # maybe fixed 3 seasonalities
     # interaction effect only on first two seasonalities if order matches
 # Holiday countries (mapped countries per series)
     # make it holiday 1, holiday 2 so per country?
 # Regressor (preprocessing)
+    # PREPEND REGR_ to name of regressor features
 # Flag Regressors
 # Multivariate Summaries (pre and post processing)
 # AR Lags
@@ -374,6 +526,8 @@ class Cassandra(ModelObject):
         # only if create feature, not removal (plot in this case)
     # Multivariate Anomaly Detector
         # only if create feature, not removal
+
+# could do partial pooling by minimizing a function that mixes shared and unshared coefficients (multiplicative)
 
 # search space:
 # fast on lstsqs model

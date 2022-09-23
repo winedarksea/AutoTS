@@ -19,6 +19,10 @@ def holiday_flag(
     Returns:
         pandas.Series() with DatetimeIndex and name 'HolidayFlag'
     """
+    if country == "RU":
+        country = "UA"
+    elif country == 'CN':
+        country = 'TW'
     country = str(country).upper()
     if country in ['US', "USA", "UNITED STATES"]:
         try:
