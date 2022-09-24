@@ -13,6 +13,7 @@ from autots.tools import cpu_count
 from autots.models.base import ModelObject
 from autots.templates.general import general_template
 from autots.tools.holiday import holiday_flag
+from autots.tools.window_functions import sliding_window_view
 
 
 class Cassandra(ModelObject):
@@ -215,6 +216,7 @@ class Cassandra(ModelObject):
             for seasonality in self.seasonalities:
                 x_list.append(create_seasonality_feature(df.index, self.t_train, seasonality))
                 # INTERACTIONS NOT IMPLEMENTED
+                # ORDER SPECIFICATIO NOT IMPLEMENTED
         if self.randomwalk_n is not None:
             x_list.append(pd.DataFrame(
                 np.random.normal(size=(len(self.df), self.randomwalk_n)).cumsum(axis=0),
@@ -249,9 +251,53 @@ class Cassandra(ModelObject):
         # if self.past_impacts_intervention == "regressor":  # select only column
         # RUN LINEAR MODEL
         x_array = pd.concat(x_list, axis=1)
+        x_array['intercept'] = 1
         # remove colinear features
+        corr = np.corrcoef(x_array, rowvar=0)
+        w, vec = np.linalg.eig(corr)
+        np.fill_diagonal(corr, 0)
+        corel = x_array.columns[np.min(corr * np.tri(corr.shape[0]), axis=0) > 0.98]
+        colin = x_array.columns[w < 0.005]
+        if len(corel) > 0:
+            print(f"Dropping colinear feature columns {corel}")
+            x_array = x_array.drop(columns=corel)
+        if len(colin) > 0:
+            print(f"Dropping multi-colinear feature columns {colin}")
+            x_array = x_array.drop(columns=colin)
+        # things we want modeled but want to discard from evaluation (standins)
+        remove_patterns = ["randnorm_", "rolling_trend_", "randomwalk_"]
+        keep_cols = [col for col in x_array.columns if not any(remove_patterns in col)]
+        self.keep_cols_idx = x_array.columns.get_indexer_for(keep_cols)
         # run model
         self.params = np.linalg.lstsq(x_array, df, rcond=None)[0]
+        trend_residuals = df - np.dot(x_array[keep_cols], self.params[self.keep_cols_idx])
+        # rolling trend
+        dates_2d = np.repeat(
+            self.t_train[..., None],
+            # df_holiday_scaled.index.to_julian_date().to_numpy()[..., None],
+            df.shape[1], axis=1
+        )
+        w_1 = self.trend_window - 1
+        y0 = np.repeat(trend_residuals[0:1], int(w_1 / 2), axis=0)
+        d0 = -1 * dates_2d[1:y0.shape[0] + 1][::-1]
+        shape2 = (w_1 - int(w_1 / 2), y0.shape[1])
+        y2 = np.concatenate(
+            [
+                y0,
+                trend_residuals,
+                np.full(shape2, np.nan),
+            ]
+        )
+        d = np.concatenate(
+            [
+                d0,
+                dates_2d,
+                np.full(shape2, np.nan),
+            ]
+        )
+        slope, intercept = window_lin_reg_mean(d, y2, w)
+        trend_posterior = slope * self.t_train[..., None] + intercept
+        # option to run trend model on full residuals or on rolling trend
         return NotImplemented
 
     def predict(self, forecast_length, future_regressor, regressor_per_series, flag_regressors, future_impacts, new_df=None):
@@ -333,9 +379,9 @@ class Cassandra(ModelObject):
             ),
             "scaling": scaling,
             # "past_impacts_intervention": self.past_impacts_intervention,
-            seasonalities": random.choices(
-                [[7, 365.25], ["dayofweek", 365.25], []],
-                [],
+            "seasonalities": random.choices(
+                [[7, 365.25], ["dayofweek", 365.25], ["month", "dayofweek", "weekdayofmonth"]],
+                [0.1, 0.1, 0.1],
             )[0],
             "ar_lags": self.ar_lags,
             "ar_interaction_seasonality": self.ar_interaction_seasonality,
@@ -477,6 +523,40 @@ def create_seasonality_feature(DTindex, t, seasonality):
         )).rename(columns=lambda x: f"{seasonality}_" + str(x))
     else:
         return ValueError(f"Seasonality `{seasonality}` not recognized")
+
+
+def window_sum(x, w, axis=0):
+    return sliding_window_view(x, w, axis=axis).sum(axis=-1)
+
+
+def window_sum_nan(x, w, axis=0):
+    return np.nansum(sliding_window_view(x, w, axis=axis), axis=-1)
+
+
+def window_lin_reg(x, y, w):
+    '''From https://stackoverflow.com/questions/70296498/efficient-computation-of-moving-linear-regression-with-numpy-numba/70304475#70304475'''
+    sx = window_sum(x, w)
+    sy = window_sum_nan(y, w)
+    sx2 = window_sum(x**2, w)
+    sxy = window_sum_nan(x * y, w)
+    slope = (w * sxy - sx * sy) / (w * sx2 - sx**2)
+    intercept = (sy - slope * sx) / w
+    return slope, intercept
+
+
+def window_sum_nan_mean(x, w, axis=0):
+    return np.nanmean(sliding_window_view(x, w, axis=axis), axis=-1)
+
+
+def window_lin_reg_mean(x, y, w):
+    '''From https://stackoverflow.com/questions/70296498/efficient-computation-of-moving-linear-regression-with-numpy-numba/70304475#70304475'''
+    sx = window_sum_nan_mean(x, w)
+    sy = window_sum_nan_mean(y, w)
+    sx2 = window_sum_nan_mean(x**2, w)
+    sxy = window_sum_nan_mean(x * y, w)
+    slope = (sxy - sx * sy) / (sx2 - sx**2)
+    intercept = (sy - slope * sx)
+    return slope, intercept
 
 
 categorical_groups = {
