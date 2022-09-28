@@ -95,7 +95,7 @@ class Cassandra(ModelObject):
         self.constraints = constraints
         self.frequency = frequency
         self.prediction_interval = prediction_interval
-        self.random_seed = self.random_seed
+        self.random_seed = random_seed
         self.verbose = verbose
         self.n_jobs = n_jobs
         if self.n_jobs == 'auto':
@@ -162,7 +162,8 @@ class Cassandra(ModelObject):
             self.df = self.df * (1 + past_impacts)
         # holiday detection first, don't want any anomalies removed yet, and has own preprocessing
         if self.holiday_detector_params is not None:
-            self.holiday_detector = HolidayTransformer(**self.holiday_detector_params).fit(self.df)
+            self.holiday_detector = HolidayTransformer(**self.holiday_detector_params)
+            self.holiday_detector.fit(self.df)
             self.holidays = self.holiday_detector.dates_to_holidays(df.index, style='series_flag')
             self.holiday_count = np.count_nonzero(self.holidays)
             if self.holiday_detector_params["remove_excess_anomalies"]:
@@ -214,6 +215,7 @@ class Cassandra(ModelObject):
             elif self.multivariate_feature == "group_average":
                 df.groupby(self.categorical_groups, axis=1).mean()[:-1]
             elif self.multivariate_feature == "oscillator":
+                return NotImplemented
                 np.count_nonzero((df - df.shift(1)).clip(upper=0))[:-1]
         if self.seasonalities is not None:
             for seasonality in self.seasonalities:
@@ -228,9 +230,10 @@ class Cassandra(ModelObject):
             ))
         if self.trend_standin is not None:
             if self.trend_standin == "random_normal":
+                num_standin = 4
                 x_list.append(pd.DataFrame(
-                    np.random.normal(size=(len(self.df), 4)),
-                    columns=["randnorm_" + str(x) for x in range(self.randomwalk_n)],
+                    np.random.normal(size=(len(self.df), num_standin)),
+                    columns=["randnorm_" + str(x) for x in range(num_standin)],
                     index=self.df.index,
                 ))
             elif self.trend_standin == "rolling_trend":
@@ -259,9 +262,10 @@ class Cassandra(ModelObject):
             return NotImplemented
         # RUN LINEAR MODEL
         x_array = pd.concat(x_list, axis=1)
-        x_array['intercept'] = 1
-        # remove colinear features
+        self.x_array = x_array
+        # remove zero variance
         corr = np.corrcoef(x_array, rowvar=0)
+        # remove colinear features
         w, vec = np.linalg.eig(corr)
         np.fill_diagonal(corr, 0)
         corel = x_array.columns[np.min(corr * np.tri(corr.shape[0]), axis=0) > 0.98]
@@ -276,10 +280,12 @@ class Cassandra(ModelObject):
         remove_patterns = ["randnorm_", "rolling_trend_", "randomwalk_"]
         keep_cols = [col for col in x_array.columns if not any(remove_patterns in col)]
         self.keep_cols_idx = x_array.columns.get_indexer_for(keep_cols)
+        x_array['intercept'] = 1
         # run model
         self.params = np.linalg.lstsq(x_array, df, rcond=None)[0]
         trend_residuals = df - np.dot(x_array[keep_cols], self.params[self.keep_cols_idx])
         self.trend_train = trend_residuals
+        self.x_array = x_array
         if self.trend_anomaly_detector_params is not None or self.trend_window is not None:
             # rolling trend
             dates_2d = np.repeat(
@@ -314,7 +320,7 @@ class Cassandra(ModelObject):
             trend_posterior = slope * self.t_train[..., None] + intercept
             if self.trend_window is not None:
                 self.trend_train = trend_posterior
-        # INFLECTION POINTS (cross zero), CHANGEPOINTS (trend of trend changes)
+        # INFLECTION POINTS (cross zero), CHANGEPOINTS (trend of trend changes, on bigger window)
         if self.trend_anomaly_detector_params is not None:
             self.trend_anomaly_detector = AnomalyRemoval(**self.trend_anomaly_detector_params)
             # DIFF the length of W (or w-1?)
@@ -323,13 +329,12 @@ class Cassandra(ModelObject):
             shft_idx = np.concatenate([np.repeat([0], wind), np.arange(len(slope))])[0:len(slope)]
             slope_diff = slope_diff + slope_diff[shft_idx]
 
-            np.cumsum(slope, axis=0)
-            pd.DataFrame(slope).rolling(90, center=True, min_periods=2).mean()
-            pd.DataFrame(slope, index=df.index).rolling(365, center=True, min_periods=2).mean()[0].plot()
+            # np.cumsum(slope, axis=0)
+            # pd.DataFrame(slope).rolling(90, center=True, min_periods=2).mean()
+            # pd.DataFrame(slope, index=df.index).rolling(365, center=True, min_periods=2).mean()[0].plot()
             self.trend_anomaly_detector.fit(
-                (slope - slope[shft_idx])
+                pd.DataFrame((slope - slope[shft_idx]), index=self.df.index)
             )
-            NotImplemented
         # option to run trend model on full residuals or on rolling trend
 
         return self
@@ -422,9 +427,9 @@ class Cassandra(ModelObject):
                 allow_none=False, no_nan_fill=True
             )
         holiday_params = random.choices([None, 'any'], [0.5, 0.5])[0]
-        holiday_intervention = None
-        if holiday_intervention == "any":
-            holiday_intervention = random.choice(['create_feature', 'use_impact'])
+        # holiday_intervention = None
+        if holiday_params is not None:
+            # holiday_intervention = random.choice(['create_feature', 'use_impact'])
             holiday_params = HolidayTransformer.get_new_params(method=method)
             holiday_params['impact'] = None
             holiday_params['regression_params'] = None
@@ -437,6 +442,8 @@ class Cassandra(ModelObject):
             anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
             if anomaly_intervention == "model":
                 anomaly_intervention = general_template.sample(1).to_dict("records")[0]  # placeholder, probably
+        else:
+            anomaly_detector_params = None
         model_str = random.choices(['AverageValueNaive', 'UnivariateMotif'], [0.5, 0.4], k=1)[0]
         trend_model = {'Model': model_str}
         trend_model['ModelParameters'] = ModelMonster(model_str).get_new_params(method=method)
@@ -446,6 +453,8 @@ class Cassandra(ModelObject):
             trend_anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
             if trend_anomaly_intervention == "model":  # Probably will NOT allow modeling for trend anomalies
                 trend_anomaly_intervention = general_template.sample(1).to_dict("records")[0]  # placeholder, probably
+        else:
+            trend_anomaly_detector_params = None
         return {
             "preprocessing_transformation": RandomTransform(
                 transformer_list=filters, transformer_max_depth=2, allow_none=True
@@ -456,14 +465,14 @@ class Cassandra(ModelObject):
                 [[7, 365.25], ["dayofweek", 365.25], ["month", "dayofweek", "weekdayofmonth"]],
                 [0.1, 0.1, 0.1],
             )[0],
-            "ar_lags": NotImplemented,
+            "ar_lags": None,  # NotImplemented
             "ar_interaction_seasonality": NotImplemented,
             "anomaly_detector_params": anomaly_detector_params,
             "anomaly_intervention": anomaly_intervention,
             "holiday_detector_params": holiday_params,
             # "holiday_countries": self.holiday_countries,
             "holiday_countries_used": random.choices([True, False], [0.5, 0.5])[0],
-            "multivariate_feature": random.choice(
+            "multivariate_feature": random.choices(
                 [None, "feature_agglomeration", 'group_average', 'oscillator'],
                 [0.7, 0.1, 0.1, 0.1]
             )[0],
@@ -502,7 +511,7 @@ class Cassandra(ModelObject):
             "anomaly_detector_params": self.anomaly_detector_params,
             "anomaly_intervention": self.anomaly_intervention,
             "holiday_detector_params": self.holiday_detector_params,
-            "holiday_intervention": self.holiday_intervention,
+            # "holiday_intervention": self.holiday_intervention,
             "holiday_countries": self.holiday_countries,
             "holiday_countries_used": self.holiday_countries_used,
             "multivariate_feature": self.multivariate_feature,
@@ -699,6 +708,8 @@ categorical_groups = {
     # FINALLY covariate lags (feature selection definitely needed)
 
 
+mod = Cassandra(**Cassandra.get_new_params())
+mod.fit(df_holiday)
 
 # Automation
 # allow some config inputs, or automated fit
