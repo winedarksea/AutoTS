@@ -113,7 +113,7 @@ def date_part(
         date_part_df = pd.DataFrame(
             {
                 'month': pd.Categorical(
-                    DTindex.month, categories=list(range(12)), ordered=True
+                    DTindex.month, categories=list(range(1, 13)), ordered=True
                 ),
                 'weekday': pd.Categorical(
                     DTindex.weekday, categories=list(range(7)), ordered=True
@@ -123,9 +123,7 @@ def date_part(
                 'epoch': DTindex.to_julian_date(),
             }
         )
-        date_part_df['weekday'] = date_part_df['month'].astype(
-            pd.CategoricalDtype(categories=list(range(6)))
-        )
+        # date_part_df['weekday'] = date_part_df['month'].astype(pd.CategoricalDtype(categories=list(range(6))))
         date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday'])
         if method == "lunar_phase":
             date_part_df['phase'] = moon_phase(DTindex)
@@ -133,7 +131,7 @@ def date_part(
         date_part_df = pd.DataFrame(
             {
                 'month': pd.Categorical(
-                    DTindex.month, categories=list(range(12)), ordered=True
+                    DTindex.month, categories=list(range(1, 13)), ordered=True
                 ),
                 'weekday': pd.Categorical(
                     DTindex.weekday, categories=list(range(7)), ordered=True
@@ -148,17 +146,17 @@ def date_part(
         date_part_df = pd.DataFrame(
             {
                 'month': pd.Categorical(
-                    DTindex.month, categories=list(range(12)), ordered=True
+                    DTindex.month, categories=list(range(1, 13)), ordered=True
                 ),
                 'weekday': pd.Categorical(
                     DTindex.weekday, categories=list(range(7)), ordered=True
                 ),
                 'day': pd.Categorical(
-                    DTindex.day, categories=list(range(31)), ordered=True
+                    DTindex.day, categories=list(range(1, 32)), ordered=True
                 ),
                 'weekdayofmonth': pd.Categorical(
                     (DTindex.day - 1) // 7 + 1,
-                    categories=list(range(5)), ordered=True,
+                    categories=list(range(1, 6)), ordered=True,
                 ),
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'quarter': DTindex.quarter,

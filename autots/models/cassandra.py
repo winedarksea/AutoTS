@@ -107,6 +107,7 @@ class Cassandra(ModelObject):
         self.preprocesser = EmptyTransformer()
         self.ds_min = pd.Timestamp("2000-01-01")
         self.ds_max = pd.Timestamp("2025-01-01")
+        self.name = "Cassandra"
 
     def base_scaler(self, df):
         self.scaler_mean = np.mean(df, axis=0)
@@ -200,8 +201,6 @@ class Cassandra(ModelObject):
 
         # BEGIN CONSTRUCTION OF X ARRAY
         x_list = []
-        if self.holiday_detector_params is not None:
-            x_list.append(self.holiday_detector.dates_to_holidays(self.df.index, style="flag").clip(upper=1))
         if isinstance(self.anomaly_intervention, dict):
             # need to model these for prediction
             x_list.append(self.anomaly_detector.scores)
@@ -218,10 +217,14 @@ class Cassandra(ModelObject):
                 return NotImplemented
                 np.count_nonzero((df - df.shift(1)).clip(upper=0))[:-1]
         if self.seasonalities is not None:
+            s_list = []
             for seasonality in self.seasonalities:
-                x_list.append(create_seasonality_feature(df.index, self.t_train, seasonality))
+                s_list.append(create_seasonality_feature(df.index, self.t_train, seasonality))
                 # INTERACTIONS NOT IMPLEMENTED
                 # ORDER SPECIFICATION NOT IMPLEMENTED
+            s_df = pd.concat(s_list, axis=1)
+            s_df.index = self.df.index
+            x_list.append(s_df)
         if self.randomwalk_n is not None:
             x_list.append(pd.DataFrame(
                 np.random.normal(size=(len(self.df), self.randomwalk_n)).cumsum(axis=0),
@@ -255,6 +258,9 @@ class Cassandra(ModelObject):
                         encode_holiday_type=True,
                     ),  # may want to rename DF columns here
                 )
+        # put this to the end as it takes up lots of space sometimes
+        if self.holiday_detector_params is not None:
+            x_list.append(self.holiday_detector.dates_to_holidays(self.df.index, style="flag").clip(upper=1))
         # regressor_per_series, AR lags, and holiday_countries (dict)
         if self.loop_required:
             return NotImplemented
@@ -265,7 +271,12 @@ class Cassandra(ModelObject):
         self.x_array = x_array
         # remove zero variance
         corr = np.corrcoef(x_array, rowvar=0)
+        nearz = x_array.columns[np.isnan(corr).all(axis=1)]
+        if len(nearz) > 0:
+            print(f"Dropping zero variance feature columns {nearz}")
+            x_array = x_array.drop(columns=nearz)
         # remove colinear features
+        corr = np.corrcoef(x_array, rowvar=0)  # second one
         w, vec = np.linalg.eig(corr)
         np.fill_diagonal(corr, 0)
         corel = x_array.columns[np.min(corr * np.tri(corr.shape[0]), axis=0) > 0.98]
@@ -278,7 +289,8 @@ class Cassandra(ModelObject):
             x_array = x_array.drop(columns=colin)
         # things we want modeled but want to discard from evaluation (standins)
         remove_patterns = ["randnorm_", "rolling_trend_", "randomwalk_"]
-        keep_cols = [col for col in x_array.columns if not any(remove_patterns in col)]
+        keep_cols = x_array.columns[~x_array.columns.str.contains("|".join(remove_patterns))]
+        # keep_cols = [col for col in x_array.columns if not any(remove_patterns in col)]
         self.keep_cols_idx = x_array.columns.get_indexer_for(keep_cols)
         x_array['intercept'] = 1
         # run model
@@ -296,7 +308,7 @@ class Cassandra(ModelObject):
             wind = 30 if self.trend_window is None else self.trend_window
             w_1 = wind - 1
             steps_ahd = int(w_1 / 2)
-            y0 = np.repeat(trend_residuals[0:1], steps_ahd, axis=0)
+            y0 = np.repeat(np.array(trend_residuals[0:1]), steps_ahd, axis=0)
             d0 = -1 * dates_2d[1:y0.shape[0] + 1][::-1]
             shape2 = (w_1 - steps_ahd, y0.shape[1])
             y2 = np.concatenate(
@@ -576,7 +588,7 @@ def fourier_series(t, p=365.25, n=10):
 def create_seasonality_feature(DTindex, t, seasonality):
     # fourier orders
     if isinstance(seasonality, (int, float)):
-        fourier_series(t, seasonality, n=10)
+        return pd.DataFrame(fourier_series(t, seasonality, n=10)).rename(columns=lambda x: f"seasonality_{seasonality}_" + str(x))
     # dateparts
     elif seasonality == "dayofweek":
         return pd.get_dummies(pd.Categorical(
@@ -584,24 +596,24 @@ def create_seasonality_feature(DTindex, t, seasonality):
         )).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "month":
         return pd.get_dummies(pd.Categorical(
-            DTindex.month, categories=list(range(12)), ordered=True
+            DTindex.month, categories=list(range(1, 13)), ordered=True
         )).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "weekend":
         return pd.DataFrame((DTindex.weekday > 4).astype(int), columns=["weekend"])
     elif seasonality == "weekdayofmonth":
         return pd.get_dummies(pd.Categorical(
             (DTindex.day - 1) // 7 + 1,
-            categories=list(range(5)), ordered=True,
+            categories=list(range(1, 6)), ordered=True,
         )).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "hour":
         return pd.get_dummies(pd.Categorical(
-            DTindex.hour, categories=list(range(24)), ordered=True
+            DTindex.hour, categories=list(range(1, 25)), ordered=True
         )).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "daysinmonth":
         return pd.DataFrame({'daysinmonth': DTindex.daysinmonth})
     elif seasonality == "quarter":
         return pd.get_dummies(pd.Categorical(
-            DTindex.quarter, categories=list(range(4)), ordered=True
+            DTindex.quarter, categories=list(range(1, 5)), ordered=True
         )).rename(columns=lambda x: f"{seasonality}_" + str(x))
     else:
         return ValueError(f"Seasonality `{seasonality}` not recognized")
@@ -708,8 +720,10 @@ categorical_groups = {
     # FINALLY covariate lags (feature selection definitely needed)
 
 
-mod = Cassandra(**Cassandra.get_new_params())
-mod.fit(df_holiday)
+if False:
+    params = Cassandra.get_new_params()
+    mod = Cassandra(**params)
+    mod.fit(df_holiday)
 
 # Automation
 # allow some config inputs, or automated fit
