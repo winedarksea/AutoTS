@@ -13,7 +13,7 @@ from autots.tools import cpu_count
 from autots.models.base import ModelObject
 from autots.templates.general import general_template
 from autots.tools.holiday import holiday_flag
-from autots.tools.window_functions import sliding_window_view
+from autots.tools.window_functions import sliding_window_view, window_lin_reg_mean
 from autots.evaluator.auto_model import ModelMonster, model_forecast
 
 
@@ -150,6 +150,8 @@ class Cassandra(ModelObject):
                 (regressor_per_series is not None) and self.regressors_used
             ) or (
                 isinstance(self.anomaly_intervention, dict) and anomaly_not_uni
+            ) or (
+                self.past_impacts_intervention == "regressor" and past_impacts is not None
             )
         )
 
@@ -197,7 +199,7 @@ class Cassandra(ModelObject):
                 self.df = self.scaler.fit_transform(self.df)
         # additional transforms before multivariate feature creation
         if self.multivariate_transformation is not None:
-            self.multivariate_transformer = GeneralTransformer(**self.multivariate_transformation).fit(self.df.copy())
+            self.multivariate_transformer = GeneralTransformer(**self.multivariate_transformation)
 
         # BEGIN CONSTRUCTION OF X ARRAY
         x_list = []
@@ -206,13 +208,26 @@ class Cassandra(ModelObject):
             x_list.append(self.anomaly_detector.scores)
         # all of the following are 1 day past lagged
         if self.multivariate_feature is not None:
+            # includes backfill
+            lag_1_indx = np.concatenate([[0], np.arange(len(self.df))])[0:len(self.df)]
             if self.multivariate_feature == "feature_agglomeration":
                 from sklearn.cluster import FeatureAgglomeration
 
-                self.agglomerator = FeatureAgglomeration(n_clusters=10)
-                self.agglomerator.fit_transform(self.df)[:-1]
+                n_clusters = 5
+                self.agglomerator = FeatureAgglomeration(n_clusters=n_clusters)
+                x_list.append(pd.DataFrame(
+                    self.agglomerator.fit_transform(
+                        self.multivariate_transformer.fit_transform(self.df)
+                    )[lag_1_indx],
+                    index=self.df.index,
+                    columns=["multivar_" + str(x) for x in range(n_clusters)]
+                ))
             elif self.multivariate_feature == "group_average":
-                df.groupby(self.categorical_groups, axis=1).mean()[:-1]
+                multivar_df = self.multivariate_transformer.fit_transform(
+                    self.df
+                ).groupby(self.categorical_groups, axis=1).mean().iloc[lag_1_indx]
+                multivar_df.index = self.df.index
+                x_list.append(multivar_df)
             elif self.multivariate_feature == "oscillator":
                 return NotImplemented
                 np.count_nonzero((df - df.shift(1)).clip(upper=0))[:-1]
@@ -261,11 +276,7 @@ class Cassandra(ModelObject):
         # put this to the end as it takes up lots of space sometimes
         if self.holiday_detector_params is not None:
             x_list.append(self.holiday_detector.dates_to_holidays(self.df.index, style="flag").clip(upper=1))
-        # regressor_per_series, AR lags, and holiday_countries (dict)
-        if self.loop_required:
-            return NotImplemented
-        if self.past_impacts_intervention == "regressor":  # select only column
-            return NotImplemented
+
         # RUN LINEAR MODEL
         x_array = pd.concat(x_list, axis=1)
         self.x_array = x_array
@@ -289,13 +300,19 @@ class Cassandra(ModelObject):
             x_array = x_array.drop(columns=colin)
         # things we want modeled but want to discard from evaluation (standins)
         remove_patterns = ["randnorm_", "rolling_trend_", "randomwalk_"]
-        keep_cols = x_array.columns[~x_array.columns.str.contains("|".join(remove_patterns))]
+        self.keep_cols = x_array.columns[~x_array.columns.str.contains("|".join(remove_patterns))]
         # keep_cols = [col for col in x_array.columns if not any(remove_patterns in col)]
-        self.keep_cols_idx = x_array.columns.get_indexer_for(keep_cols)
+        self.keep_cols_idx = x_array.columns.get_indexer_for(self.keep_cols)
         x_array['intercept'] = 1
+        # regressor_per_series, AR lags, and holiday_countries (dict), past_impacts_intervention == "regressor"
+        if self.loop_required:
+            for col in self.df.columns:
+                x_array
+            return NotImplemented
         # run model
         self.params = np.linalg.lstsq(x_array, df, rcond=None)[0]
-        trend_residuals = df - np.dot(x_array[keep_cols], self.params[self.keep_cols_idx])
+        trend_residuals = df - np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
+        # option to run trend model on full residuals or on rolling trend
         self.trend_train = trend_residuals
         self.x_array = x_array
         if self.trend_anomaly_detector_params is not None or self.trend_window is not None:
@@ -332,7 +349,14 @@ class Cassandra(ModelObject):
             trend_posterior = slope * self.t_train[..., None] + intercept
             if self.trend_window is not None:
                 self.trend_train = trend_posterior
-        # INFLECTION POINTS (cross zero), CHANGEPOINTS (trend of trend changes, on bigger window)
+        # INFLECTION POINTS (cross zero), CHANGEPOINTS (trend of trend changes, on bigger window) (DIFF then find 0)
+        # desired behavior is staying >=0 or staying <= 0, only getting beyond 0 count as turning point
+        # numpy.where(numpy.diff(numpy.sign(a)))[0] (this favors previous point, add 1 to be after)
+        # replacing 0 with -1 above might work
+        # https://stackoverflow.com/questions/3843017/efficiently-detect-sign-changes-in-python
+        # np.where(np.diff(np.signbit(a)))[0] (finds zero at beginning and not at end)
+        # np.where(np.bitwise_xor(positive[1:], positive[:-1]))[0]
+        # LEVEL SHIFT not yet accounted for (anomaly on SLOPE @ CHNG PTS)
         if self.trend_anomaly_detector_params is not None:
             self.trend_anomaly_detector = AnomalyRemoval(**self.trend_anomaly_detector_params)
             # DIFF the length of W (or w-1?)
@@ -347,46 +371,80 @@ class Cassandra(ModelObject):
             self.trend_anomaly_detector.fit(
                 pd.DataFrame((slope - slope[shft_idx]), index=self.df.index)
             )
-        # option to run trend model on full residuals or on rolling trend
 
         return self
 
     def predict(self, forecast_length, future_regressor, regressor_per_series, flag_regressors, future_impacts, new_df=None):
         # if future regressors are None (& USED), but were provided for history, instead use forecasts of these features (warn)
+        # use historic data
         if forecast_length is None:
-            # use historic data
+            self.trend_train
+            np.dot(self.x_array[self.keep_cols], self.params[self.keep_cols_idx])
+            residual = df - predicted
+            nec_std = norm.ppf(0.95)
+            upper = predicted + residual.std() * nec_std
+            lower = predicted - residual.std() * nec_std
             # don't forget to add in past_impacts (use future impacts again?)
             NotImplemented
-        # forecast trend
-        df_forecast = model_forecast(
-            model_name=self.trend_model['Model'],
-            model_param_dict=self.trend_model['ModelParameters'],
-            model_transform_dict=self.trend_transformation,
-            df_train=self.trend_residuals,
-            forecast_length=forecast_length,
-            frequency=self.frequency,
-            prediction_interval=self.prediction_interval,
-            # no_negatives=no_negatives,
-            # constraint=constraint,
-            future_regressor_train=self.future_regressor_train,
-            future_regressor_forecast=future_regressor,
-            # holiday_country=holiday_country,
-            fail_on_forecast_nan=True,
-            random_seed=self.random_seed,
-            verbose=self.verbose,
-            n_jobs=self.n_jobs,
-            current_model_file=None,
-        )
-        # phi is on future predict step only
-        if self.trend_phi is not None and self.trend_phi != 1:
-            xxxx = NotImplemented
-            temp = xxxx.mul(
-                pd.Series([self.phi] * xxxx.shape[0], index=xxxx.index).pow(
-                    range(xxxx.shape[0])
-                ),
-                axis=0,
+        else:
+            # forecast trend
+            trend_forecast = model_forecast(
+                model_name=self.trend_model['Model'],
+                model_param_dict=self.trend_model['ModelParameters'],
+                model_transform_dict=self.trend_transformation,
+                df_train=self.trend_residuals,
+                forecast_length=forecast_length,
+                frequency=self.frequency,
+                prediction_interval=self.prediction_interval,
+                # no_negatives=no_negatives,
+                # constraint=constraint,
+                future_regressor_train=self.future_regressor_train,
+                future_regressor_forecast=future_regressor,
+                # holiday_country=holiday_country,
+                fail_on_forecast_nan=True,
+                random_seed=self.random_seed,
+                verbose=self.verbose,
+                n_jobs=self.n_jobs,
             )
-            xxxx = xxxx + temp
+            # phi is on future predict step only
+            if self.trend_phi is not None and self.trend_phi != 1:
+                temp = trend_forecast.forecast.mul(
+                    pd.Series([self.phi] * trend_forecast.forecast.shape[0], index=trend_forecast.forecast.index).pow(
+                        range(trend_forecast.forecast.shape[0])
+                    ),
+                    axis=0,
+                )
+                # overwrite bounds if using phi
+                trend_forecast.forecast = trend_forecast.forecast + temp
+                trend_forecast.upper_forecast = trend_forecast.forecast
+                trend_forecast.lower_forecast = trend_forecast.forecast
+        if self.constraint is not None:
+            if isinstance(self.constraint, dict):
+                constraint_method = self.constraint.get("constraint_method", "quantile")
+                constraint_regularization = self.constraint.get("constraint_regularization", 1)
+                lower_constraint = self.constraint.get("lower_constraint", 0)
+                upper_constraint = self.constraint.get("upper_constraint", 1)
+                bounds = self.constraint.get("bounds", False)
+            else:
+                constraint_method = "stdev_min"
+                lower_constraint = float(self.constraint)
+                upper_constraint = float(self.constraint)
+                constraint_regularization = 1
+                bounds = False
+            if self.verbose >= 3:
+                print(
+                    f"Using constraint with method: {constraint_method}, {constraint_regularization}, {lower_constraint}, {upper_constraint}, {bounds}"
+                )
+
+            df_forecast = df_forecast.apply_constraints(
+                constraint_method,
+                constraint_regularization,
+                upper_constraint,
+                lower_constraint,
+                bounds,
+                df_train,
+            )
+        # don't forget to add in past_impacts (use future impacts again?)
         return NotImplemented
 
     def auto_fit(self, df, validation_method):  # also add regressor input
@@ -449,7 +507,7 @@ class Cassandra(ModelObject):
                 [True, False], [0.05, 0.95]
             )[0]
             holiday_params['output'] = random.choices(['multivariate', 'univariate'], [0.9, 0.1])[0]
-        anomaly_intervention = random.choices([None, 'remove', 'detect_only', 'model'], [0.9, 0.3, 0.1, 0.3])[0]
+        anomaly_intervention = random.choices([None, 'remove', 'detect_only', 'model'], [0.9, 0.3, 0.1, 0.1])[0]
         if anomaly_intervention is not None:
             anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
             if anomaly_intervention == "model":
@@ -486,7 +544,7 @@ class Cassandra(ModelObject):
             "holiday_countries_used": random.choices([True, False], [0.5, 0.5])[0],
             "multivariate_feature": random.choices(
                 [None, "feature_agglomeration", 'group_average', 'oscillator'],
-                [0.7, 0.1, 0.1, 0.1]
+                [0.9, 0.1, 0.1, 0.01]
             )[0],
             "multivariate_transformation": RandomTransform(
                 transformer_list="fast", transformer_max_depth=3  # probably want some more usable defaults first as many random are senseless
@@ -500,7 +558,7 @@ class Cassandra(ModelObject):
             "trend_window": random.choices([3, 15, 90, 365], [0.2, 0.2, 0.2, 0.2])[0],
             "trend_standin": random.choices(
                 [None, 'random_normal', 'rolling_trend'],
-                [0.5, 0.4, 0.1],
+                [0.5, 0.4, 0.01],
             )[0],
             "trend_anomaly_detector_params": trend_anomaly_detector_params,
             "trend_anomaly_intervention": trend_anomaly_intervention,
@@ -638,35 +696,6 @@ def window_lin_reg(x, y, w):
     return slope, intercept
 
 
-def window_sum_nan_mean(x, w, axis=0):
-    return np.nanmean(sliding_window_view(x, w, axis=axis), axis=-1)
-
-
-def window_lin_reg_mean(x, y, w):
-    '''From https://stackoverflow.com/questions/70296498/efficient-computation-of-moving-linear-regression-with-numpy-numba/70304475#70304475'''
-    sx = window_sum_nan_mean(x, w)
-    sy = window_sum_nan_mean(y, w)
-    sx2 = window_sum_nan_mean(x**2, w)
-    sxy = window_sum_nan_mean(x * y, w)
-    slope = (sxy - sx * sy) / (sx2 - sx**2)
-    intercept = (sy - slope * sx)
-    return slope, intercept
-
-
-categorical_groups = {
-    "wiki_United_States": 'country',
-    "wiki_Germany": 'country',
-    "wiki_Jesus": 'holiday',
-    "wiki_Michael_Jackson": 'person',
-    "wiki_Easter": 'holiday',
-    "wiki_Christmas": 'holiday',
-    "wiki_Chinese_New_Year": 'holiday',
-    "wiki_Thanksgiving": 'holiday',
-    "wiki_Elizabeth_II": 'person',
-    "wiki_William_Shakespeare": 'person',
-    "wiki_George_Washington": 'person',
-    "wiki_Cleopatra": 'person',
-}
 # Seasonalities
     # maybe fixed 3 seasonalities
     # interaction effect only on first two seasonalities if order matches
@@ -719,11 +748,25 @@ categorical_groups = {
     # then multivariate summaries
     # FINALLY covariate lags (feature selection definitely needed)
 
+categorical_groups = {
+    "wiki_United_States": 'country',
+    "wiki_Germany": 'country',
+    "wiki_Jesus": 'holiday',
+    "wiki_Michael_Jackson": 'person',
+    "wiki_Easter": 'holiday',
+    "wiki_Christmas": 'holiday',
+    "wiki_Chinese_New_Year": 'holiday',
+    "wiki_Thanksgiving": 'holiday',
+    "wiki_Elizabeth_II": 'person',
+    "wiki_William_Shakespeare": 'person',
+    "wiki_George_Washington": 'person',
+    "wiki_Cleopatra": 'person',
+}
 
 if False:
     params = Cassandra.get_new_params()
     mod = Cassandra(**params)
-    mod.fit(df_holiday)
+    mod.fit(df_holiday, categorical_groups=categorical_groups)
 
 # Automation
 # allow some config inputs, or automated fit
