@@ -695,6 +695,7 @@ class AutoTS(object):
             assert (
                 type(df_wide.index) is pd.DatetimeIndex
             ), "df index is not pd.DatetimeIndex"
+            df_wide = df_wide.sort_index(ascending=True)
         else:
             df_wide = long_to_wide(
                 df,

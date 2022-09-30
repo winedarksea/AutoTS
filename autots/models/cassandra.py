@@ -54,7 +54,7 @@ class Cassandra(ModelObject):
         trend_window: int = 30,  # set to None to use raw residuals
         trend_standin: str = None,  # rolling fit, intercept-only, random.normal features
         trend_anomaly_detector_params: dict = None,  # difference first, run on slope only, use Window n/2 diff to rule out return to
-        trend_anomaly_intervention: str = None,
+        # trend_anomaly_intervention: str = None,
         trend_transformation: dict = {},
         trend_model: dict = {},  # have one or two in built, then redirect to any AutoTS model for other choices
         trend_phi: float = None,
@@ -88,7 +88,7 @@ class Cassandra(ModelObject):
         self.trend_window = trend_window
         self.trend_standin = trend_standin
         self.trend_anomaly_detector_params = trend_anomaly_detector_params
-        self.trend_anomaly_intervention = trend_anomaly_intervention
+        # self.trend_anomaly_intervention = trend_anomaly_intervention
         self.trend_transformation = trend_transformation
         self.trend_model = trend_model
         self.trend_phi = trend_phi
@@ -350,8 +350,11 @@ class Cassandra(ModelObject):
             if self.trend_window is not None:
                 self.trend_train = trend_posterior
         # INFLECTION POINTS (cross zero), CHANGEPOINTS (trend of trend changes, on bigger window) (DIFF then find 0)
+        zero_crossings = np.diff(np.signbit(slope), axis=0)  # Use on earliest, fill end
+        accel = np.diff(slope, axis=0)
+        changepoints = np.diff(np.signbit(accel), axis=0)
         # desired behavior is staying >=0 or staying <= 0, only getting beyond 0 count as turning point
-        # numpy.where(numpy.diff(numpy.sign(a)))[0] (this favors previous point, add 1 to be after)
+        # np.nonzero(np.diff(np.sign(slope), axis=0)) (this favors previous point, add 1 to be after)
         # replacing 0 with -1 above might work
         # https://stackoverflow.com/questions/3843017/efficiently-detect-sign-changes-in-python
         # np.where(np.diff(np.signbit(a)))[0] (finds zero at beginning and not at end)
@@ -377,6 +380,7 @@ class Cassandra(ModelObject):
     def predict(self, forecast_length, future_regressor, regressor_per_series, flag_regressors, future_impacts, new_df=None):
         # if future regressors are None (& USED), but were provided for history, instead use forecasts of these features (warn)
         # use historic data
+        # first construct time-only features (seasonality, regressors, holidays)
         if forecast_length is None:
             self.trend_train
             np.dot(self.x_array[self.keep_cols], self.params[self.keep_cols_idx])
@@ -445,6 +449,7 @@ class Cassandra(ModelObject):
                 df_train,
             )
         # don't forget to add in past_impacts (use future impacts again?)
+        # return components (long style) option
         return NotImplemented
 
     def auto_fit(self, df, validation_method):  # also add regressor input
@@ -487,6 +492,10 @@ class Cassandra(ModelObject):
     def compare_actual_components(self):
         return NotImplemented
 
+    def evaluate(self, fcst, actual):
+        # return metrics for comparison, match on datetime index ('ds', 'datetime', 'date')
+        return NotImplemented
+
     @staticmethod
     def get_new_params(method='fast'):
         # have fast option that avoids any of the loop approaches
@@ -518,11 +527,9 @@ class Cassandra(ModelObject):
         trend_model = {'Model': model_str}
         trend_model['ModelParameters'] = ModelMonster(model_str).get_new_params(method=method)
 
-        trend_anomaly_intervention = random.choices([None, 'remove', 'detect_only', 'model'], [0.9, 0.3, 0.1, 0.3])[0]
+        trend_anomaly_intervention = random.choices([None, 'detect_only'], [0.5, 0.5])[0]
         if trend_anomaly_intervention is not None:
             trend_anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
-            if trend_anomaly_intervention == "model":  # Probably will NOT allow modeling for trend anomalies
-                trend_anomaly_intervention = general_template.sample(1).to_dict("records")[0]  # placeholder, probably
         else:
             trend_anomaly_detector_params = None
         return {
@@ -561,7 +568,7 @@ class Cassandra(ModelObject):
                 [0.5, 0.4, 0.01],
             )[0],
             "trend_anomaly_detector_params": trend_anomaly_detector_params,
-            "trend_anomaly_intervention": trend_anomaly_intervention,
+            # "trend_anomaly_intervention": trend_anomaly_intervention,
             "trend_transformation": RandomTransform(
                 transformer_list="fast", transformer_max_depth=3  # probably want some more usable defaults first as many random are senseless
             ),
@@ -592,7 +599,7 @@ class Cassandra(ModelObject):
             "randomwalk_n": self.randomwalk_n,
             "trend_window": self.trend_window,
             "trend_standin": self.trend_standin,
-            "trend_anomaly_detector_params": self.trend_anomaly_detector_params,
+            # "trend_anomaly_detector_params": self.trend_anomaly_detector_params,
             "trend_anomaly_intervention": self.trend_anomaly_intervention,
             "trend_transformation": self.trend_transformation,
             "trend_model": self.trend_model,
@@ -609,6 +616,7 @@ class Cassandra(ModelObject):
         # plot residual distribution/PACF
         # plot inflection points (filtering or smoothing first)
         # plot highest error series, plot highest/lowest growth
+        # trend: one color for growth, another for decline (darker as accelerating, ligher as slowing)
         return NotImplemented
 
 
@@ -767,6 +775,12 @@ if False:
     params = Cassandra.get_new_params()
     mod = Cassandra(**params)
     mod.fit(df_holiday, categorical_groups=categorical_groups)
+
+# transfer learning
+# graphics (AMFM watermark)
+     # compare across past forecasts
+# stability
+# make it more modular (separate usable functions)
 
 # Automation
 # allow some config inputs, or automated fit
