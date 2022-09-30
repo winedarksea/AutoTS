@@ -59,9 +59,6 @@ def df_cleanup(
         if sum(dupes) > 0:
             print("Warning, series ids are not unique: {df_wide.columns[dupes]}")
 
-    # make sure time series is in ascending order to infer frequency  
-    df_wide.sort_index(inplace=True)
-
     # infer frequency
     if frequency == 'infer':
         frequency = infer_frequency(df_wide)

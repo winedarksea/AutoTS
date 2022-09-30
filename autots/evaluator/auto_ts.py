@@ -693,7 +693,7 @@ class AutoTS(object):
                 id_col=self.id_col,
                 aggfunc=self.aggfunc,
             )
-
+            df_wide = df_wide.sort_index(ascending=True)  
         df_wide = df_cleanup(
             df_wide,
             frequency=self.frequency,
