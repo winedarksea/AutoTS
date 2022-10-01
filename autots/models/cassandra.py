@@ -44,11 +44,11 @@ class Cassandra(ModelObject):
         anomaly_intervention: str = None,  # remove, create feature, model
         holiday_detector_params: dict = None,
         holiday_countries: dict = None,  # list or dict
-        holiday_countries_used: bool = None,
+        holiday_countries_used: bool = True,
         multivariate_feature: str = None,  # by group, if given
         multivariate_transformation: str = None,  # applied before creating feature
         regressor_transformation: dict = None,  # applied to future_regressor and regressor_per_series
-        regressors_used: bool = None,  # on/off of additional user inputs
+        regressors_used: bool = True,  # on/off of additional user inputs
         linear_model: dict = None,  # lstsq WEIGHTED Ridge, bayesian, bayesian hierarchial, l1 normed or other loss (numba),
         randomwalk_n: int = None,  # use stats of source df
         trend_window: int = 30,  # set to None to use raw residuals
@@ -137,6 +137,11 @@ class Cassandra(ModelObject):
         self.ds_min = df.index.min()
         self.ds_max = df.index.max()
         self.t_train = self.create_t(df.index)
+        # if past impacts given, assume removal unless otherwise specified
+        if self.past_impacts_intervention is None and past_impacts is not None:
+            self.past_impacts_intervention = "remove"
+        elif past_impacts is None:
+            self.past_impacts_intervention = None
 
         # what features will require separate models to be fit as X will not be consistent for all
         if isinstance(self.anomaly_detector_params, dict):
@@ -155,14 +160,9 @@ class Cassandra(ModelObject):
             )
         )
 
-        # if past impacts given, assume removal unless otherwise specified
-        if self.past_impacts_intervention is None and past_impacts is not None:
-            self.past_impacts_intervention = "remove"
-        elif past_impacts is None:
-            self.past_impacts_intervention = None
         # remove past impacts to find "organic"
         if self.past_impacts_intervention == "remove":
-            self.df = self.df * (1 + past_impacts)
+            self.df = self.df * (1 + past_impacts)  # MINUS OR PLUS HERE???
         # holiday detection first, don't want any anomalies removed yet, and has own preprocessing
         if self.holiday_detector_params is not None:
             self.holiday_detector = HolidayTransformer(**self.holiday_detector_params)
@@ -214,11 +214,12 @@ class Cassandra(ModelObject):
                 from sklearn.cluster import FeatureAgglomeration
 
                 n_clusters = 5
+                trs_df = self.multivariate_transformer.fit_transform(self.df)
+                if trs_df.shape != self.df.shape:
+                    raise ValueError("Multivariate Transformer not usable for this role.")
                 self.agglomerator = FeatureAgglomeration(n_clusters=n_clusters)
                 x_list.append(pd.DataFrame(
-                    self.agglomerator.fit_transform(
-                        self.multivariate_transformer.fit_transform(self.df)
-                    )[lag_1_indx],
+                    self.agglomerator.fit_transform(trs_df)[lag_1_indx],
                     index=self.df.index,
                     columns=["multivar_" + str(x) for x in range(n_clusters)]
                 ))
@@ -234,7 +235,7 @@ class Cassandra(ModelObject):
         if self.seasonalities is not None:
             s_list = []
             for seasonality in self.seasonalities:
-                s_list.append(create_seasonality_feature(df.index, self.t_train, seasonality))
+                s_list.append(create_seasonality_feature(self.df.index, self.t_train, seasonality))
                 # INTERACTIONS NOT IMPLEMENTED
                 # ORDER SPECIFICATION NOT IMPLEMENTED
             s_df = pd.concat(s_list, axis=1)
@@ -271,26 +272,29 @@ class Cassandra(ModelObject):
                         self.df.index,
                         country=holiday_country,
                         encode_holiday_type=True,
-                    ),  # may want to rename DF columns here
+                    ).rename(columns=lambda x: "holiday_" + str(x)),
                 )
-        # put this to the end as it takes up lots of space sometimes
+        # put this to the end as it takes up lots of feature space sometimes
         if self.holiday_detector_params is not None:
-            x_list.append(self.holiday_detector.dates_to_holidays(self.df.index, style="flag").clip(upper=1))
+            x_list.append(self.holiday_detector.dates_to_holidays(self.df.index, style="flag").clip(upper=1).rename(columns=lambda x: "holiday_" + str(x)))
 
-        # RUN LINEAR MODEL
+        # FINAL FEATURE PROCESSING
         x_array = pd.concat(x_list, axis=1)
-        self.x_array = x_array
-        # remove zero variance
+        self.x_array = x_array  # can remove this later, it is for debugging
+        if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
+            raise ValueError("nan values in x_array")
+        # remove zero variance (corr is nan)
         corr = np.corrcoef(x_array, rowvar=0)
         nearz = x_array.columns[np.isnan(corr).all(axis=1)]
         if len(nearz) > 0:
             print(f"Dropping zero variance feature columns {nearz}")
             x_array = x_array.drop(columns=nearz)
         # remove colinear features
+        # NOTE THESE REMOVALS REMOVE THE FIRST OF PAIR COLUMN FIRST
         corr = np.corrcoef(x_array, rowvar=0)  # second one
         w, vec = np.linalg.eig(corr)
         np.fill_diagonal(corr, 0)
-        corel = x_array.columns[np.min(corr * np.tri(corr.shape[0]), axis=0) > 0.98]
+        corel = x_array.columns[np.min(corr * np.tri(corr.shape[0]), axis=0) > 0.99]
         colin = x_array.columns[w < 0.005]
         if len(corel) > 0:
             print(f"Dropping colinear feature columns {corel}")
@@ -299,28 +303,89 @@ class Cassandra(ModelObject):
             print(f"Dropping multi-colinear feature columns {colin}")
             x_array = x_array.drop(columns=colin)
         # things we want modeled but want to discard from evaluation (standins)
-        remove_patterns = ["randnorm_", "rolling_trend_", "randomwalk_"]
-        self.keep_cols = x_array.columns[~x_array.columns.str.contains("|".join(remove_patterns))]
-        # keep_cols = [col for col in x_array.columns if not any(remove_patterns in col)]
-        self.keep_cols_idx = x_array.columns.get_indexer_for(self.keep_cols)
-        x_array['intercept'] = 1
-        # regressor_per_series, AR lags, and holiday_countries (dict), past_impacts_intervention == "regressor"
+        remove_patterns = ["randnorm_", "rolling_trend_", "randomwalk_"]  # "intercept" added after, so not included
+
+        # RUN LINEAR MODEL
+        # add x features that don't apply to all, and need to be looped
         if self.loop_required:
+            self.params = {}
+            self.keep_cols = {}
+            self.x_array = {}
+            self.keep_cols_idx = {}
+            trend_residuals = []
             for col in self.df.columns:
-                x_array
-            return NotImplemented
-        # run model
-        self.params = np.linalg.lstsq(x_array, df, rcond=None)[0]
-        trend_residuals = df - np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
+                c_x = x_array.copy()
+                # implement per_series holiday countries flag
+                if isinstance(self.holiday_countries, dict) and self.holiday_countries_used:
+                    hc = self.holiday_countries.get(col, None)
+                    if hc is not None:
+                        c_x = pd.concat([
+                            c_x,
+                            holiday_flag(
+                                self.df.index,
+                                country=hc,
+                                encode_holiday_type=True,
+                            ).rename(columns=lambda x: "holiday_" + str(x))
+                        ], axis=1)
+                # implement regressors per series
+                if isinstance(regressor_per_series, dict) and self.regressors_used:
+                    hc = regressor_per_series.get(col, None)
+                    if hc is not None:
+                        c_x = pd.concat([
+                            c_x,
+                            pd.DataFrame(hc).rename(columns=lambda x: "regrperseries_" + str(x))
+                        ], axis=1)
+                # implement past_impacts as regressor
+                if isinstance(past_impacts, pd.DataFrame):
+                    hc = regressor_per_series.get(col, None)
+                    if hc is not None:
+                        c_x = pd.concat([
+                            c_x,
+                            past_impacts[col].to_frame().rename(columns=lambda x: "impacts_" + str(x))
+                        ], axis=1)
+                # add AR features
+                if self.ar_lags is not None:
+                    for lag in self.ar_lags:
+                        lag_idx = np.concatenate([np.repeat([0], lag), np.arange(len(self.df))])[0:len(self.df)]
+                        lag_s = self.df[col].iloc[lag_idx].rename(f"lag{lag}_")
+                        lag_s.index = self.df.index
+                        self.df[col].iloc[lag_idx]
+                        c_x = pd.concat([
+                            c_x,
+                            lag_s
+                        ], axis=1)
+                # NOTE THERE IS NO REMOVING OF COLINEAR FEATURES ADDED HERE
+                self.keep_cols[col] = c_x.columns[~c_x.columns.str.contains("|".join(remove_patterns))]
+                self.keep_cols_idx[col] = c_x.columns.get_indexer_for(self.keep_cols[col])
+                c_x['intercept'] = 1
+                # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
+                self.params[col] = np.linalg.lstsq(c_x, self.df[col], rcond=None)[0]
+                trend_residuals.append(
+                    self.df[col] - pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]), name=col)
+                )
+                self.x_array[col] = c_x
+            trend_residuals = pd.concat(trend_residuals, axis=1)
+        else:
+            # RUN LINEAR MODEL, WHEN NO LOOPED FEATURES
+            self.keep_cols = x_array.columns[~x_array.columns.str.contains("|".join(remove_patterns))]
+            self.keep_cols_idx = x_array.columns.get_indexer_for(self.keep_cols)
+            x_array['intercept'] = 1
+            # run model
+            self.params = np.linalg.lstsq(x_array, self.df, rcond=None)[0]
+            if self.linear_model == 'something_else':
+                # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
+                NotImplemented
+            trend_residuals = self.df - np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
+            self.x_array = x_array
+
         # option to run trend model on full residuals or on rolling trend
         self.trend_train = trend_residuals
-        self.x_array = x_array
         if self.trend_anomaly_detector_params is not None or self.trend_window is not None:
             # rolling trend
             dates_2d = np.repeat(
                 self.t_train[..., None],
                 # df_holiday_scaled.index.to_julian_date().to_numpy()[..., None],
-                df.shape[1], axis=1
+                self.df.shape[1], axis=1
             )
             wind = 30 if self.trend_window is None else self.trend_window
             w_1 = wind - 1
@@ -342,9 +407,6 @@ class Cassandra(ModelObject):
                     np.full(shape2, np.nan),
                 ]
             )
-            if self.linear_model == 'something_else':
-                # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
-                NotImplemented
             slope, intercept = window_lin_reg_mean(d, y2, wind)
             trend_posterior = slope * self.t_train[..., None] + intercept
             if self.trend_window is not None:
@@ -377,10 +439,42 @@ class Cassandra(ModelObject):
 
         return self
 
-    def predict(self, forecast_length, future_regressor, regressor_per_series, flag_regressors, future_impacts, new_df=None):
+    def _predict_linear(self, dates, history_df, future_regressor, regressor_per_series, flag_regressors, impacts):
+        # don't need removing collinear
+        # By component!
+        # use new_df if given
+        impacts.reindex(dates).fillna(0)
+        pass
+
+    def predict(self, forecast_length, future_regressor=None, regressor_per_series=None, flag_regressors=None, future_impacts=None, new_df=None):
         # if future regressors are None (& USED), but were provided for history, instead use forecasts of these features (warn)
+        if future_regressor is None and self.future_regressor_train is not None:
+            print("future_regressor not provided, using forecasts of historical")
+            future_regressor = model_forecast(
+                model_name=self.trend_model['Model'],
+                model_param_dict=self.trend_model['ModelParameters'],
+                model_transform_dict=self.preprocessing_transformation,
+                df_train=self.future_regressor_train,
+                forecast_length=forecast_length,
+                frequency=self.frequency,
+                prediction_interval=self.prediction_interval,
+                # no_negatives=no_negatives,
+                # constraint=constraint,
+                # holiday_country=holiday_country,
+                fail_on_forecast_nan=False,
+                random_seed=self.random_seed,
+                verbose=self.verbose,
+                n_jobs=self.n_jobs,
+            ).forecast
+            full_regr = pd.concat([self.future_regressor_train, future_regressor])
+        if future_regressor is not None:
+            full_regr = pd.concat([self.future_regressor_train, self.regressor_transformer.fit_transform(clean_regressor(future_regressor))])
         # use historic data
-        # first construct time-only features (seasonality, regressors, holidays)
+        self._predict_linear(future_regr=full_regr)
+        self.params
+        # construct x_array
+        # ar_lags, multivariate features require 1 step loop
+        # ADD PREPROCESSING BEFORE TREND (FIT X, REVERSE on PREDICT, THEN TREND)
         if forecast_length is None:
             self.trend_train
             np.dot(self.x_array[self.keep_cols], self.params[self.keep_cols_idx])
@@ -542,7 +636,10 @@ class Cassandra(ModelObject):
                 [[7, 365.25], ["dayofweek", 365.25], ["month", "dayofweek", "weekdayofmonth"]],
                 [0.1, 0.1, 0.1],
             )[0],
-            "ar_lags": None,  # NotImplemented
+            "ar_lags": random.choices(
+                [None, [1], [1, 7], [7]],
+                [0.9, 0.05, 0.05, 0.05],
+            )[0],
             "ar_interaction_seasonality": NotImplemented,
             "anomaly_detector_params": anomaly_detector_params,
             "anomaly_intervention": anomaly_intervention,
@@ -557,7 +654,8 @@ class Cassandra(ModelObject):
                 transformer_list="fast", transformer_max_depth=3  # probably want some more usable defaults first as many random are senseless
             ),
             "regressor_transformation": RandomTransform(
-                transformer_list="fast", transformer_max_depth=3  # probably want some more usable defaults first as many random are senseless
+                transformer_list=scalers, transformer_max_depth=1,
+                allow_none=False, no_nan_fill=False  # probably want some more usable defaults first as many random are senseless
             ),
             "regressors_used": random.choices([True, False], [0.5, 0.5])[0],
             "linear_model": 'lstsq',
@@ -599,8 +697,8 @@ class Cassandra(ModelObject):
             "randomwalk_n": self.randomwalk_n,
             "trend_window": self.trend_window,
             "trend_standin": self.trend_standin,
-            # "trend_anomaly_detector_params": self.trend_anomaly_detector_params,
-            "trend_anomaly_intervention": self.trend_anomaly_intervention,
+            "trend_anomaly_detector_params": self.trend_anomaly_detector_params,
+            # "trend_anomaly_intervention": self.trend_anomaly_intervention,
             "trend_transformation": self.trend_transformation,
             "trend_model": self.trend_model,
             "trend_phi": self.trend_phi,
@@ -772,9 +870,15 @@ categorical_groups = {
 }
 
 if False:
+    # test holiday countries, regressors, impacts
     params = Cassandra.get_new_params()
     mod = Cassandra(**params)
     mod.fit(df_holiday, categorical_groups=categorical_groups)
+
+# MULTIPLICATIVE SEASONALITY AND HOLIDAYS
+
+# Make sure x features are all scaled
+# Remove seasonality from regressors
 
 # transfer learning
 # graphics (AMFM watermark)

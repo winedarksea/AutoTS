@@ -1033,17 +1033,20 @@ def dates_to_holidays(
                     result.append(populated_holidays)
     if isinstance(result, list):
         if not result:
-            return pd.DataFrame(
-                columns=[
-                    'ds',
-                    'date',
-                    'holiday',
-                    'holiday_name',
-                    'series',
-                    'lower_window',
-                    'upper_window',
-                ]
-            )
+            if style == "flag":
+                return pd.DataFrame(index=dates)
+            else:
+                return pd.DataFrame(
+                    columns=[
+                        'ds',
+                        'date',
+                        'holiday',
+                        'holiday_name',
+                        'series',
+                        'lower_window',
+                        'upper_window',
+                    ]
+                )
     if style in ['long', 'prophet']:
         result = pd.concat(result, axis=0)
     elif style == "flag":
