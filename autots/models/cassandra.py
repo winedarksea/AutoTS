@@ -134,9 +134,6 @@ class Cassandra(ModelObject):
             categorical_groups = {}
         self.categorical_groups = {col: (categorical_groups[col] if col in categorical_groups.keys() else "other") for col in df.columns}
         self.past_impacts = past_impacts
-        self.ds_min = df.index.min()
-        self.ds_max = df.index.max()
-        self.t_train = self.create_t(df.index)
         # if past impacts given, assume removal unless otherwise specified
         if self.past_impacts_intervention is None and past_impacts is not None:
             self.past_impacts_intervention = "remove"
@@ -200,6 +197,10 @@ class Cassandra(ModelObject):
         # additional transforms before multivariate feature creation
         if self.multivariate_transformation is not None:
             self.multivariate_transformer = GeneralTransformer(**self.multivariate_transformation)
+        # needs to come after preprocessing because of 'slice' transformer
+        self.ds_min = self.df.index.min()
+        self.ds_max = self.df.index.max()
+        self.t_train = self.create_t(self.df.index)
 
         # BEGIN CONSTRUCTION OF X ARRAY
         x_list = []
@@ -210,13 +211,13 @@ class Cassandra(ModelObject):
         if self.multivariate_feature is not None:
             # includes backfill
             lag_1_indx = np.concatenate([[0], np.arange(len(self.df))])[0:len(self.df)]
+            trs_df = self.multivariate_transformer.fit_transform(self.df)
+            if trs_df.shape != self.df.shape:
+                raise ValueError("Multivariate Transformer not usable for this role.")
             if self.multivariate_feature == "feature_agglomeration":
                 from sklearn.cluster import FeatureAgglomeration
 
                 n_clusters = 5
-                trs_df = self.multivariate_transformer.fit_transform(self.df)
-                if trs_df.shape != self.df.shape:
-                    raise ValueError("Multivariate Transformer not usable for this role.")
                 self.agglomerator = FeatureAgglomeration(n_clusters=n_clusters)
                 x_list.append(pd.DataFrame(
                     self.agglomerator.fit_transform(trs_df)[lag_1_indx],
@@ -294,7 +295,7 @@ class Cassandra(ModelObject):
         corr = np.corrcoef(x_array, rowvar=0)  # second one
         w, vec = np.linalg.eig(corr)
         np.fill_diagonal(corr, 0)
-        corel = x_array.columns[np.min(corr * np.tri(corr.shape[0]), axis=0) > 0.99]
+        corel = x_array.columns[np.min(corr * np.tri(corr.shape[0]), axis=0) > 0.998]
         colin = x_array.columns[w < 0.005]
         if len(corel) > 0:
             print(f"Dropping colinear feature columns {corel}")
@@ -361,7 +362,7 @@ class Cassandra(ModelObject):
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
                 self.params[col] = np.linalg.lstsq(c_x, self.df[col], rcond=None)[0]
                 trend_residuals.append(
-                    self.df[col] - pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]), name=col)
+                    self.df[col] - pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]), name=col, index=self.df.index)
                 )
                 self.x_array[col] = c_x
             trend_residuals = pd.concat(trend_residuals, axis=1)
