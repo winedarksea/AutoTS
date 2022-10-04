@@ -156,6 +156,8 @@ class Cassandra(ModelObject):
                 self.past_impacts_intervention == "regressor" and past_impacts is not None
             )
         )
+        # check if rolling prediction is required
+        self.predict_loop_req = (self.ar_lags is not None) or (self.multivariate_feature is not None)
 
         # remove past impacts to find "organic"
         if self.past_impacts_intervention == "remove":
@@ -217,17 +219,15 @@ class Cassandra(ModelObject):
             if self.multivariate_feature == "feature_agglomeration":
                 from sklearn.cluster import FeatureAgglomeration
 
-                n_clusters = 5
-                self.agglomerator = FeatureAgglomeration(n_clusters=n_clusters)
+                self.agglom_n_clusters = 5
+                self.agglomerator = FeatureAgglomeration(n_clusters=self.agglom_n_clusters)
                 x_list.append(pd.DataFrame(
                     self.agglomerator.fit_transform(trs_df)[lag_1_indx],
                     index=self.df.index,
-                    columns=["multivar_" + str(x) for x in range(n_clusters)]
+                    columns=["multivar_" + str(x) for x in range(self.agglom_n_clusters)]
                 ))
             elif self.multivariate_feature == "group_average":
-                multivar_df = self.multivariate_transformer.fit_transform(
-                    self.df
-                ).groupby(self.categorical_groups, axis=1).mean().iloc[lag_1_indx]
+                multivar_df = trs_df.groupby(self.categorical_groups, axis=1).mean().iloc[lag_1_indx]
                 multivar_df.index = self.df.index
                 x_list.append(multivar_df)
             elif self.multivariate_feature == "oscillator":
@@ -242,6 +242,7 @@ class Cassandra(ModelObject):
             s_df = pd.concat(s_list, axis=1)
             s_df.index = self.df.index
             x_list.append(s_df)
+        # These features are to prevent overfitting and standin for unobserved components here
         if self.randomwalk_n is not None:
             x_list.append(pd.DataFrame(
                 np.random.normal(size=(len(self.df), self.randomwalk_n)).cumsum(axis=0),
@@ -264,8 +265,10 @@ class Cassandra(ModelObject):
                 self.regressor_transformer = GeneralTransformer(**self.regressor_transformation)
                 self.future_regressor_train = self.regressor_transformer.fit_transform(clean_regressor(future_regressor))
             x_list.append(self.future_regressor_train)
+        self.flag_regressor_train = None
         if flag_regressors is not None and self.regressors_used:
-            x_list.append(clean_regressor(flag_regressors, prefix="regrflags_"))
+            self.flag_regressor_train = clean_regressor(flag_regressors, prefix="regrflags_")
+            x_list.append(self.flag_regressor_train)
         if self.holiday_countries is not None and not isinstance(self.holiday_countries, dict) and self.holiday_countries_used:
             for holiday_country in self.holiday_countries:
                 x_list.append(
@@ -308,6 +311,7 @@ class Cassandra(ModelObject):
 
         # RUN LINEAR MODEL
         # add x features that don't apply to all, and need to be looped
+        self.regr_per_series_tr = None
         if self.loop_required:
             self.params = {}
             self.keep_cols = {}
@@ -330,6 +334,7 @@ class Cassandra(ModelObject):
                         ], axis=1)
                 # implement regressors per series
                 if isinstance(regressor_per_series, dict) and self.regressors_used:
+                    self.regr_per_series_tr = regressor_per_series
                     hc = regressor_per_series.get(col, None)
                     if hc is not None:
                         c_x = pd.concat([
@@ -337,20 +342,17 @@ class Cassandra(ModelObject):
                             pd.DataFrame(hc).rename(columns=lambda x: "regrperseries_" + str(x))
                         ], axis=1)
                 # implement past_impacts as regressor
-                if isinstance(past_impacts, pd.DataFrame):
-                    hc = regressor_per_series.get(col, None)
-                    if hc is not None:
-                        c_x = pd.concat([
-                            c_x,
-                            past_impacts[col].to_frame().rename(columns=lambda x: "impacts_" + str(x))
-                        ], axis=1)
+                if isinstance(past_impacts, pd.DataFrame) and self.past_impacts_intervention == "regressor":
+                    c_x = pd.concat([
+                        c_x,
+                        past_impacts[col].to_frame().rename(columns=lambda x: "impacts_" + str(x))
+                    ], axis=1)
                 # add AR features
                 if self.ar_lags is not None:
                     for lag in self.ar_lags:
                         lag_idx = np.concatenate([np.repeat([0], lag), np.arange(len(self.df))])[0:len(self.df)]
                         lag_s = self.df[col].iloc[lag_idx].rename(f"lag{lag}_")
                         lag_s.index = self.df.index
-                        self.df[col].iloc[lag_idx]
                         c_x = pd.concat([
                             c_x,
                             lag_s
@@ -360,7 +362,7 @@ class Cassandra(ModelObject):
                 self.keep_cols_idx[col] = c_x.columns.get_indexer_for(self.keep_cols[col])
                 c_x['intercept'] = 1
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
-                self.params[col] = np.linalg.lstsq(c_x, self.df[col], rcond=None)[0]
+                self.params[col] = linear_model(c_x, self.df[col])
                 trend_residuals.append(
                     self.df[col] - pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]), name=col, index=self.df.index)
                 )
@@ -372,7 +374,7 @@ class Cassandra(ModelObject):
             self.keep_cols_idx = x_array.columns.get_indexer_for(self.keep_cols)
             x_array['intercept'] = 1
             # run model
-            self.params = np.linalg.lstsq(x_array, self.df, rcond=None)[0]
+            self.params = linear_model(x_array, self.df)
             if self.linear_model == 'something_else':
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
                 NotImplemented
@@ -444,12 +446,129 @@ class Cassandra(ModelObject):
         # don't need removing collinear
         # By component!
         # use new_df if given
+        self.t_predict = self.create_t(dates)
         impacts.reindex(dates).fillna(0)
-        pass
+        ##############
+        x_list = []
+        if isinstance(self.anomaly_intervention, dict):
+            # need to model these for prediction
+            x_list.append(self.anomaly_detector.scores)
+            return NotImplemented
+        # all of the following are 1 day past lagged
+        if self.multivariate_feature is not None:
+            # includes backfill
+            lag_1_indx = np.concatenate([[0], np.arange(len(history_df))])
+            trs_df = self.multivariate_transformer.transform(history_df)
+            if self.multivariate_feature == "feature_agglomeration":
+
+                x_list.append(pd.DataFrame(
+                    self.agglomerator.transform(trs_df)[lag_1_indx],
+                    index=dates,
+                    columns=["multivar_" + str(x) for x in range(self.agglom_n_clusters)]
+                ))
+            elif self.multivariate_feature == "group_average":
+                multivar_df = trs_df.groupby(self.categorical_groups, axis=1).mean().iloc[lag_1_indx]
+                multivar_df.index = dates
+                x_list.append(multivar_df)
+            elif self.multivariate_feature == "oscillator":
+                return NotImplemented
+        if self.seasonalities is not None:
+            s_list = []
+            for seasonality in self.seasonalities:
+                s_list.append(create_seasonality_feature(dates, self.t_predict, seasonality))
+                # INTERACTIONS NOT IMPLEMENTED
+                # ORDER SPECIFICATION NOT IMPLEMENTED
+            s_df = pd.concat(s_list, axis=1)
+            s_df.index = dates
+            x_list.append(s_df)
+        if future_regressor is not None and self.regressors_used:
+            x_list.append(future_regressor.reindex(dates))
+        if flag_regressors is not None and self.regressors_used:
+            x_list.append(flag_regressors.reindex(dates))  # doesn't check for missing data
+        if self.holiday_countries is not None and not isinstance(self.holiday_countries, dict) and self.holiday_countries_used:
+            for holiday_country in self.holiday_countries:
+                x_list.append(
+                    holiday_flag(
+                        dates,
+                        country=holiday_country,
+                        encode_holiday_type=True,
+                    ).rename(columns=lambda x: "holiday_" + str(x)),
+                )
+        # put this to the end as it takes up lots of feature space sometimes
+        if self.holiday_detector_params is not None:
+            x_list.append(self.holiday_detector.dates_to_holidays(dates, style="flag").clip(upper=1).rename(columns=lambda x: "holiday_" + str(x)))
+
+        # FINAL FEATURE PROCESSING
+        x_array = pd.concat(x_list, axis=1)
+        self.predict_x_array = x_array  # can remove this later, it is for debugging
+        if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
+            raise ValueError("nan values in predict_x_array")
+
+        # RUN LINEAR MODEL
+        # add x features that don't apply to all, and need to be looped
+        if self.loop_required:
+            self.predict_x_array = {}
+            predicts = []
+            for col in self.df.columns:
+                c_x = x_array.copy()
+                # implement per_series holiday countries flag
+                if isinstance(self.holiday_countries, dict) and self.holiday_countries_used:
+                    hc = self.holiday_countries.get(col, None)
+                    if hc is not None:
+                        c_x = pd.concat([
+                            c_x,
+                            holiday_flag(
+                                dates,
+                                country=hc,
+                                encode_holiday_type=True,
+                            ).rename(columns=lambda x: "holiday_" + str(x))
+                        ], axis=1)
+                # implement regressors per series
+                if isinstance(regressor_per_series, dict) and self.regressors_used:
+                    hc = regressor_per_series.get(col, None)
+                    if hc is not None:
+                        c_x = pd.concat([
+                            c_x,
+                            pd.DataFrame(hc).rename(columns=lambda x: "regrperseries_" + str(x)).reindex(dates)
+                        ], axis=1)
+                # implement past_impacts as regressor
+                if isinstance(impacts, pd.DataFrame):
+                    c_x = pd.concat([
+                        c_x,
+                        impacts.reindex(dates)[col].to_frame().fillna(0).rename(columns=lambda x: "impacts_" + str(x))
+                    ], axis=1)
+                # add AR features
+                if self.ar_lags is not None:
+                    for lag in self.ar_lags:
+                        lag_idx = np.concatenate([np.repeat([0], lag), np.arange(len(history_df))])[0:len(history_df)]
+                        lag_s = history_df[col].iloc[lag_idx].rename(f"lag{lag}_")
+                        lag_s.index = dates
+                        c_x = pd.concat([
+                            c_x,
+                            lag_s
+                        ], axis=1)
+
+                # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
+                self.params[col] = linear_model(c_x, self.df[col])
+                predicts.append(
+                    pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]), name=col, index=dates)
+                )
+                self.predict_x_array[col] = c_x
+            return pd.concat(predicts, axis=1)
+        else:
+            # run model
+            self.params = linear_model(x_array, self.df)
+            if self.linear_model == 'something_else':
+                # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
+                NotImplemented
+            return np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
 
     def predict(self, forecast_length, future_regressor=None, regressor_per_series=None, flag_regressors=None, future_impacts=None, new_df=None):
         # if future regressors are None (& USED), but were provided for history, instead use forecasts of these features (warn)
-        if future_regressor is None and self.future_regressor_train is not None:
+        if forecast_length is not None:
+            dates = self.df.union(self.create_forecast_index(forecast_length))
+            # new_df
+        if future_regressor is None and self.future_regressor_train is not None and forecast_length is not None:
             print("future_regressor not provided, using forecasts of historical")
             future_regressor = model_forecast(
                 model_name=self.trend_model['Model'],
@@ -470,9 +589,29 @@ class Cassandra(ModelObject):
             full_regr = pd.concat([self.future_regressor_train, future_regressor])
         if future_regressor is not None:
             full_regr = pd.concat([self.future_regressor_train, self.regressor_transformer.fit_transform(clean_regressor(future_regressor))])
+        if flag_regressors is not None and forecast_length is not None:
+            all_flags = pd.concat([self.flag_regressor_train, clean_regressor(flag_regressors, prefix="regrflags_")])
+        else:
+            if self.flag_regressor_train is not None and forecast_length is not None and self.regressors_used:
+                raise ValueError("flag_regressors supplied in training but not predict")
+            all_flags = self.flag_regressor_train
+        if future_impacts is not None and forecast_length is not None:
+            impacts = pd.concat([self.past_impacts, future_impacts])
+        else:
+            impacts = self.past_impacts
+        if regressor_per_series is not None and self.regressors_used:
+            if not isinstance(regressor_per_series, dict):
+                raise ValueError("regressor_per_series must be dict")
+            regr_ps_fore = {}
+            for key, value in self.regr_per_series_tr.items():
+                regr_ps_fore[key] = pd.concat([self.regr_per_series_tr[key], regressor_per_series[key]])
+        else:
+            regr_ps_fore = self.regr_per_series_tr
         # use historic data
-        self._predict_linear(future_regr=full_regr)
+        history_df = new_df
+        self._predict_linear(dates, future_regr=full_regr, flag_regressors=all_flags, impacts=impacts, regressor_per_series=regr_ps_fore)
         self.params
+        self.predict_loop_req
         # construct x_array
         # ar_lags, multivariate features require 1 step loop
         # ADD PREPROCESSING BEFORE TREND (FIT X, REVERSE on PREDICT, THEN TREND)
@@ -802,6 +941,8 @@ def window_lin_reg(x, y, w):
     intercept = (sy - slope * sx) / w
     return slope, intercept
 
+def linear_model(x, y):
+    return np.linalg.lstsq(x, y, rcond=None)[0]
 
 # Seasonalities
     # maybe fixed 3 seasonalities
