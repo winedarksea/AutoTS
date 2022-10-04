@@ -82,7 +82,7 @@ class ModelObject(object):
 
         return df
 
-    def create_forecast_index(self, forecast_length: int):
+    def create_forecast_index(self, forecast_length: int, last_date=None):
         """Generate a pd.DatetimeIndex appropriate for a new forecast.
 
         Warnings:
@@ -93,7 +93,8 @@ class ModelObject(object):
                 "create_forecast_index run without specific frequency, run basic_profile first or pass proper frequency to model init"
             )
         self.forecast_index = pd.date_range(
-            freq=self.frequency, start=self.train_last_date, periods=forecast_length + 1
+            freq=self.frequency, start=self.train_last_date if last_date is None else last_date,
+            periods=forecast_length + 1
         )[
             1:
         ]  # note the disposal of the first (already extant) date
@@ -107,6 +108,8 @@ class ModelObject(object):
         """Return dict of new parameters for parameter tuning."""
         return {}
 
+    def time():
+        return datetime.datetime.now()
 
 def apply_constraints(
     forecast,

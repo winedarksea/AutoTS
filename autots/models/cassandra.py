@@ -10,11 +10,12 @@ import pandas as pd
 # using transformer version of Anomaly/Holiday to use a lower level import than evaluator
 from autots.tools.transform import GeneralTransformer, RandomTransform, scalers, filters, HolidayTransformer, AnomalyRemoval, EmptyTransformer
 from autots.tools import cpu_count
-from autots.models.base import ModelObject
+from autots.models.base import ModelObject, PredictionObject
 from autots.templates.general import general_template
 from autots.tools.holiday import holiday_flag
 from autots.tools.window_functions import sliding_window_view, window_lin_reg_mean
 from autots.evaluator.auto_model import ModelMonster, model_forecast
+from scipy.stats import norm
 
 
 class Cassandra(ModelObject):
@@ -93,6 +94,7 @@ class Cassandra(ModelObject):
         self.trend_model = trend_model
         self.trend_phi = trend_phi
         self.constraints = constraints
+        # other parameters
         self.frequency = frequency
         self.prediction_interval = prediction_interval
         self.random_seed = random_seed
@@ -443,12 +445,10 @@ class Cassandra(ModelObject):
         return self
 
     def _predict_linear(self, dates, history_df, future_regressor, regressor_per_series, flag_regressors, impacts):
-        # don't need removing collinear
-        # By component!
-        # use new_df if given
+        # accepts any date in history (or lag beyond) as long as regressors include those dates in index as well
+        # BY COMPONENT!!!
+
         self.t_predict = self.create_t(dates)
-        impacts.reindex(dates).fillna(0)
-        ##############
         x_list = []
         if isinstance(self.anomaly_intervention, dict):
             # need to model these for prediction
@@ -457,19 +457,20 @@ class Cassandra(ModelObject):
         # all of the following are 1 day past lagged
         if self.multivariate_feature is not None:
             # includes backfill
+            full_idx = history_df.index.union(self.create_forecast_index(forecast_length=1, last_date=history_df.index[-1]))
             lag_1_indx = np.concatenate([[0], np.arange(len(history_df))])
             trs_df = self.multivariate_transformer.transform(history_df)
             if self.multivariate_feature == "feature_agglomeration":
 
                 x_list.append(pd.DataFrame(
                     self.agglomerator.transform(trs_df)[lag_1_indx],
-                    index=dates,
+                    index=full_idx,
                     columns=["multivar_" + str(x) for x in range(self.agglom_n_clusters)]
-                ))
+                ).reindex(dates))
             elif self.multivariate_feature == "group_average":
                 multivar_df = trs_df.groupby(self.categorical_groups, axis=1).mean().iloc[lag_1_indx]
-                multivar_df.index = dates
-                x_list.append(multivar_df)
+                multivar_df.index = full_idx
+                x_list.append(multivar_df.reindex(dates))
             elif self.multivariate_feature == "oscillator":
                 return NotImplemented
         if self.seasonalities is not None:
@@ -532,23 +533,27 @@ class Cassandra(ModelObject):
                             pd.DataFrame(hc).rename(columns=lambda x: "regrperseries_" + str(x)).reindex(dates)
                         ], axis=1)
                 # implement past_impacts as regressor
-                if isinstance(impacts, pd.DataFrame):
+                if isinstance(impacts, pd.DataFrame) and self.past_impacts_intervention == "regressor":
                     c_x = pd.concat([
                         c_x,
                         impacts.reindex(dates)[col].to_frame().fillna(0).rename(columns=lambda x: "impacts_" + str(x))
                     ], axis=1)
                 # add AR features
                 if self.ar_lags is not None:
+                    # somewhat inefficient to create full df of dates, but simplest this way for 'any date'
                     for lag in self.ar_lags:
+                        full_idx = history_df.index.union(self.create_forecast_index(forecast_length=lag, last_date=history_df.index[-1]))
                         lag_idx = np.concatenate([np.repeat([0], lag), np.arange(len(history_df))])[0:len(history_df)]
                         lag_s = history_df[col].iloc[lag_idx].rename(f"lag{lag}_")
-                        lag_s.index = dates
+                        lag_s.index = full_idx
                         c_x = pd.concat([
                             c_x,
-                            lag_s
+                            lag_s.reindex(dates)
                         ], axis=1)
 
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
+                if np.any(np.isnan(c_x.astype(float))):  # remove later, for debugging
+                    raise ValueError("nan values in predict c_x_array")
                 self.params[col] = linear_model(c_x, self.df[col])
                 predicts.append(
                     pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]), name=col, index=dates)
@@ -564,10 +569,22 @@ class Cassandra(ModelObject):
             return np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
 
     def predict(self, forecast_length, future_regressor=None, regressor_per_series=None, flag_regressors=None, future_impacts=None, new_df=None):
-        # if future regressors are None (& USED), but were provided for history, instead use forecasts of these features (warn)
+        predictStartTime = self.time()
+
         if forecast_length is not None:
             dates = self.df.union(self.create_forecast_index(forecast_length))
-            # new_df
+        # scale new_df if given
+        if new_df is not None:
+            if self.preprocessing_transformation is not None:
+                df = self.preprocesser.transform(new_df.copy())
+            if self.scaling is not None:
+                if self.scaling == "BaseScaler":
+                    df = self.base_scaler(df)
+                else:
+                    df = self.scaler.transform(df)
+        else:
+            df = self.df.copy()
+        # if future regressors are None (& USED), but were provided for history, instead use forecasts of these features (warn)
         if future_regressor is None and self.future_regressor_train is not None and forecast_length is not None:
             print("future_regressor not provided, using forecasts of historical")
             future_regressor = model_forecast(
@@ -599,6 +616,7 @@ class Cassandra(ModelObject):
             impacts = pd.concat([self.past_impacts, future_impacts])
         else:
             impacts = self.past_impacts
+        # I don't think there is a more efficient way to combine these dicts of dataframes
         if regressor_per_series is not None and self.regressors_used:
             if not isinstance(regressor_per_series, dict):
                 raise ValueError("regressor_per_series must be dict")
@@ -607,11 +625,9 @@ class Cassandra(ModelObject):
                 regr_ps_fore[key] = pd.concat([self.regr_per_series_tr[key], regressor_per_series[key]])
         else:
             regr_ps_fore = self.regr_per_series_tr
-        # use historic data
-        history_df = new_df
-        self._predict_linear(dates, future_regr=full_regr, flag_regressors=all_flags, impacts=impacts, regressor_per_series=regr_ps_fore)
-        self.params
-        self.predict_loop_req
+        if self.predict_loop_req:
+        self._predict_linear(dates, history_df=df, future_regr=full_regr, flag_regressors=all_flags, impacts=impacts, regressor_per_series=regr_ps_fore)
+        
         # construct x_array
         # ar_lags, multivariate features require 1 step loop
         # ADD PREPROCESSING BEFORE TREND (FIT X, REVERSE on PREDICT, THEN TREND)
@@ -619,7 +635,7 @@ class Cassandra(ModelObject):
             self.trend_train
             np.dot(self.x_array[self.keep_cols], self.params[self.keep_cols_idx])
             residual = df - predicted
-            nec_std = norm.ppf(0.95)
+            nec_std = norm.ppf(0.5 + 0.5 * self.prediction_interval) # 2 to 1 sided interval
             upper = predicted + residual.std() * nec_std
             lower = predicted - residual.std() * nec_std
             # don't forget to add in past_impacts (use future impacts again?)
@@ -656,6 +672,19 @@ class Cassandra(ModelObject):
                 trend_forecast.forecast = trend_forecast.forecast + temp
                 trend_forecast.upper_forecast = trend_forecast.forecast
                 trend_forecast.lower_forecast = trend_forecast.forecast
+        df_forecast = PredictionObject(
+            model_name=self.name,
+            forecast_length=forecast_length,
+            forecast_index=trend_forecast.forecast.index,
+            forecast_columns=trend_forecast.forecast.columns,
+            lower_forecast=lower_forecast,
+            forecast=forecast,
+            upper_forecast=upper_forecast,
+            prediction_interval=self.prediction_interval,
+            predict_runtime=self.time() - predictStartTime,
+            fit_runtime=self.fit_runtime,
+            model_parameters=self.get_params(),
+        )
         if self.constraint is not None:
             if isinstance(self.constraint, dict):
                 constraint_method = self.constraint.get("constraint_method", "quantile")
@@ -680,9 +709,10 @@ class Cassandra(ModelObject):
                 upper_constraint,
                 lower_constraint,
                 bounds,
-                df_train,
+                self.df,
             )
-        # don't forget to add in past_impacts (use future impacts again?)
+        # undo preprocessing and scaling
+        # don't forget to add in past_impacts (use future impacts again?) AFTER unscaling
         # return components (long style) option
         return NotImplemented
 
