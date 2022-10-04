@@ -108,6 +108,7 @@ class ModelObject(object):
         """Return dict of new parameters for parameter tuning."""
         return {}
 
+    @staticmethod
     def time():
         return datetime.datetime.now()
 
