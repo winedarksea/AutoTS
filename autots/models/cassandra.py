@@ -118,6 +118,10 @@ class Cassandra(ModelObject):
         self.ds_min = pd.Timestamp("2000-01-01")
         self.ds_max = pd.Timestamp("2025-01-01")
         self.name = "Cassandra"
+        self.future_regressor_train = None
+        self.flag_regressor_train = None
+        self.regr_per_series_tr = None
+        self.trend_train = None
 
     def base_scaler(self, df):
         self.scaler_mean = np.mean(df, axis=0)
@@ -209,7 +213,7 @@ class Cassandra(ModelObject):
                 self.df = self.anomaly_detector.transform(self.df)
             elif isinstance(self.anomaly_intervention, dict):
                 self.anomaly_detector.fit_anomaly_classifier()
-                NotImplemented
+                return NotImplemented
             # detect_only = pass
         # now do standard preprocessing
         if self.preprocessing_transformation is not None:
@@ -283,14 +287,12 @@ class Cassandra(ModelObject):
                     index=self.df.index,
                 ))
             elif self.trend_standin == "rolling_trend":
-                NotImplemented
-        self.future_regressor_train = None
+                return NotImplemented
         if future_regressor is not None and self.regressors_used:
             if self.regressor_transformation is not None:
                 self.regressor_transformer = GeneralTransformer(**self.regressor_transformation)
                 self.future_regressor_train = self.regressor_transformer.fit_transform(clean_regressor(future_regressor))
             x_list.append(self.future_regressor_train)
-        self.flag_regressor_train = None
         if flag_regressors is not None and self.regressors_used:
             self.flag_regressor_train = clean_regressor(flag_regressors, prefix="regrflags_")
             x_list.append(self.flag_regressor_train)
@@ -336,7 +338,6 @@ class Cassandra(ModelObject):
 
         # RUN LINEAR MODEL
         # add x features that don't apply to all, and need to be looped
-        self.regr_per_series_tr = None
         if self.loop_required:
             self.params = {}
             self.keep_cols = {}
@@ -402,7 +403,7 @@ class Cassandra(ModelObject):
             self.params = linear_model(x_array, self.df)
             if self.linear_model == 'something_else':
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
-                NotImplemented
+                return NotImplemented
             trend_residuals = self.df - np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
             self.x_array = x_array
 
@@ -596,7 +597,7 @@ class Cassandra(ModelObject):
             # run model
             if self.linear_model == 'something_else':
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
-                NotImplemented
+                return NotImplemented
             return np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
 
     def _predict_step(self, dates, trend_component, history_df, future_regressor, flag_regressors, impacts, regressor_per_series):
@@ -625,6 +626,8 @@ class Cassandra(ModelObject):
 
     def predict(self, forecast_length, include_history=False, future_regressor=None, regressor_per_series=None, flag_regressors=None, future_impacts=None, new_df=None):
         predictStartTime = self.time()
+        if self.trend_train is None:
+            raise ValueError("Cassandra must first be .fit() successfully.")
 
         # scale new_df if given
         if new_df is not None:
@@ -705,7 +708,7 @@ class Cassandra(ModelObject):
             # phi is on future predict step only
             if self.trend_phi is not None and self.trend_phi != 1:
                 temp = trend_forecast.forecast.mul(
-                    pd.Series([self.phi] * trend_forecast.forecast.shape[0], index=trend_forecast.forecast.index).pow(
+                    pd.Series([self.trend_phi] * trend_forecast.forecast.shape[0], index=trend_forecast.forecast.index).pow(
                         range(trend_forecast.forecast.shape[0])
                     ),
                     axis=0,
@@ -1069,24 +1072,6 @@ def create_seasonality_feature(DTindex, t, seasonality):
         return ValueError(f"Seasonality `{seasonality}` not recognized")
 
 
-def window_sum(x, w, axis=0):
-    return sliding_window_view(x, w, axis=axis).sum(axis=-1)
-
-
-def window_sum_nan(x, w, axis=0):
-    return np.nansum(sliding_window_view(x, w, axis=axis), axis=-1)
-
-
-def window_lin_reg(x, y, w):
-    '''From https://stackoverflow.com/questions/70296498/efficient-computation-of-moving-linear-regression-with-numpy-numba/70304475#70304475'''
-    sx = window_sum(x, w)
-    sy = window_sum_nan(y, w)
-    sx2 = window_sum(x**2, w)
-    sxy = window_sum_nan(x * y, w)
-    slope = (w * sxy - sx * sy) / (w * sx2 - sx**2)
-    intercept = (sy - slope * sx) / w
-    return slope, intercept
-
 def linear_model(x, y):
     return np.linalg.lstsq(x, y, rcond=None)[0]
 
@@ -1162,8 +1147,8 @@ if False:
     from autots import load_daily
     df_holiday = load_daily(long=False)
 
-    params = Cassandra.get_new_params()
-    mod = Cassandra(**params)
+    c_params = Cassandra.get_new_params()
+    mod = Cassandra(n_jobs=1, **c_params)
     mod.fit(df_holiday, categorical_groups=categorical_groups)
     mod.predict(forecast_length=10).forecast
 

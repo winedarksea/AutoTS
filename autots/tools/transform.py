@@ -2737,6 +2737,7 @@ class HolidayTransformer(EmptyTransformer):
         self.regression_params = regression_params
         self.n_jobs = n_jobs
         self.holiday_count = 0
+        self.df_cols = None
 
     def dates_to_holidays(self, dates, style="flag", holiday_impacts=False):
         """
@@ -2748,6 +2749,8 @@ class HolidayTransformer(EmptyTransformer):
             'prophet' - return format required for prophet. Will need to be filtered on `series` for multivariate case
             'series_flag' - dates, series 0/1 for if holiday occurred in any calendar
         """
+        if self.df_cols is None:
+            return ValueError("HolidayTransformer has not yet been .fit()")
         return dates_to_holidays(
             dates,
             self.df_cols,

@@ -985,6 +985,9 @@ def dates_to_holidays(
                         )
                 # reorg results depending on style
                 if style == "flag":
+                    populated_holidays['holiday_name'] = pd.Categorical(
+                        populated_holidays['holiday_name'], categories=holiday_df['holiday_name'].unique(), ordered=True
+                    )
                     result_per_holiday = pd.get_dummies(
                         populated_holidays['holiday_name']
                     )
