@@ -343,6 +343,7 @@ class Cassandra(ModelObject):
             self.keep_cols = {}
             self.x_array = {}
             self.keep_cols_idx = {}
+            self.col_groupings = {}
             trend_residuals = []
             for col in self.df.columns:
                 c_x = x_array.copy()
@@ -386,6 +387,7 @@ class Cassandra(ModelObject):
                 # NOTE THERE IS NO REMOVING OF COLINEAR FEATURES ADDED HERE
                 self.keep_cols[col] = c_x.columns[~c_x.columns.str.contains("|".join(remove_patterns))]
                 self.keep_cols_idx[col] = c_x.columns.get_indexer_for(self.keep_cols[col])
+                self.col_groupings[col] = self.keep_cols[col].str.partition("_").get_level_values(0)
                 c_x['intercept'] = 1
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
                 self.params[col] = linear_model(c_x, self.df[col])
@@ -398,6 +400,7 @@ class Cassandra(ModelObject):
             # RUN LINEAR MODEL, WHEN NO LOOPED FEATURES
             self.keep_cols = x_array.columns[~x_array.columns.str.contains("|".join(remove_patterns))]
             self.keep_cols_idx = x_array.columns.get_indexer_for(self.keep_cols)
+            self.col_groupings = self.keep_cols.str.partition("_").get_level_values(0)
             x_array['intercept'] = 1
             # run model
             self.params = linear_model(x_array, self.df)
@@ -478,7 +481,7 @@ class Cassandra(ModelObject):
         trend_posterior = slope * t[..., None] + intercept
         return trend_posterior, slope, intercept
 
-    def _predict_linear(self, dates, history_df, future_regressor, regressor_per_series, flag_regressors, impacts):
+    def _predict_linear(self, dates, history_df, future_regressor, regressor_per_series, flag_regressors, impacts, return_components=False):
         # accepts any date in history (or lag beyond) as long as regressors include those dates in index as well
         # BY COMPONENT!!!
 
@@ -588,9 +591,12 @@ class Cassandra(ModelObject):
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
                 if np.any(np.isnan(c_x.astype(float))):  # remove later, for debugging
                     raise ValueError("nan values in predict c_x_array")
-                predicts.append(
-                    pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]), name=col, index=dates)
-                )
+                if return_components:
+                    pass
+                else:
+                    predicts.append(
+                        pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]), name=col, index=dates)
+                    )
                 self.predict_x_array[col] = c_x
             return pd.concat(predicts, axis=1)
         else:
@@ -598,7 +604,11 @@ class Cassandra(ModelObject):
             if self.linear_model == 'something_else':
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
                 return NotImplemented
-            return np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
+            if not return_components:
+                return np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
+            else:
+                comps = x_array[self.keep_cols] * self.params[self.keep_cols_idx]
+                return comps.groupby(self.col_groupings, axis=1).sum()
 
     def _predict_step(self, dates, trend_component, history_df, future_regressor, flag_regressors, impacts, regressor_per_series):
         # Note this is scaled and doesn't account for impacts
@@ -719,17 +729,17 @@ class Cassandra(ModelObject):
                 trend_forecast.lower_forecast = trend_forecast.forecast
             if include_history:
                 trend_forecast.forecast = pd.concat([
-                    self.trend_residuals, trend_forecast.forecast
+                    self.trend_train, trend_forecast.forecast
                 ])
                 trend_forecast.lower_forecast = pd.concat([
-                    self.trend_residuals, trend_forecast.lower_forecast
+                    self.trend_train, trend_forecast.lower_forecast
                 ])
                 trend_forecast.upper_forecast = pd.concat([
-                    self.trend_residuals, trend_forecast.upper_forecast
+                    self.trend_train, trend_forecast.upper_forecast
                 ])
         else:
             trend_forecast = PredictionObject(
-                forecast=self.trend_residuals, lower_forecast=self.trend_residuals, upper_forecast=self.trend_residuals
+                forecast=self.trend_train, lower_forecast=self.trend_train, upper_forecast=self.trend_train
             )
         # ar_lags, multivariate features require 1 step loop
         if forecast_length is None:
@@ -741,6 +751,7 @@ class Cassandra(ModelObject):
         elif self.predict_loop_req:
             for step in range(forecast_length):
                 forecast_index = df.index.union(self.create_forecast_index(1, last_date=df.index[-1]))
+                print(forecast_index)
                 df_forecast = self._predict_step(
                     dates=forecast_index, trend_component=trend_forecast, history_df=df,
                     future_regressor=full_regr, flag_regressors=all_flags,
@@ -772,16 +783,17 @@ class Cassandra(ModelObject):
             df_forecast.lower_forecast = self.to_origin_space(df_forecast.lower_forecast, trans_method='forecast')
             df_forecast.upper_forecast = self.to_origin_space(df_forecast.upper_forecast, trans_method='forecast')
         else:
+            hdn = len(df_forecast.forecast) - forecast_length
             df_forecast.forecast = pd.concat([
-                self.to_origin_space(df_forecast.forecast.head(len(df)), trans_method='original'),
+                self.to_origin_space(df_forecast.forecast.head(hdn), trans_method='original'),
                 self.to_origin_space(df_forecast.forecast.tail(forecast_length), trans_method='forecast'),
             ])
             df_forecast.lower_forecast = pd.concat([
-                self.to_origin_space(df_forecast.lower_forecast.head(len(df)), trans_method='original'),
+                self.to_origin_space(df_forecast.lower_forecast.head(hdn), trans_method='original'),
                 self.to_origin_space(df_forecast.lower_forecast.tail(forecast_length), trans_method='forecast'),
             ])
             df_forecast.upper_forecast = pd.concat([
-                self.to_origin_space(df_forecast.upper_forecast.head(len(df)), trans_method='original'),
+                self.to_origin_space(df_forecast.upper_forecast.head(hdn), trans_method='original'),
                 self.to_origin_space(df_forecast.upper_forecast.tail(forecast_length), trans_method='forecast'),
             ])
 
@@ -874,10 +886,6 @@ class Cassandra(ModelObject):
         return NotImplemented
 
     def compare_actual_components(self):
-        return NotImplemented
-
-    def evaluate(self, fcst, actual):
-        # return metrics for comparison, match on datetime index ('ds', 'datetime', 'date')
         return NotImplemented
 
     @staticmethod
@@ -1041,7 +1049,7 @@ def fourier_series(t, p=365.25, n=10):
 def create_seasonality_feature(DTindex, t, seasonality):
     # fourier orders
     if isinstance(seasonality, (int, float)):
-        return pd.DataFrame(fourier_series(t, seasonality, n=10)).rename(columns=lambda x: f"seasonality_{seasonality}_" + str(x))
+        return pd.DataFrame(fourier_series(t, seasonality, n=10)).rename(columns=lambda x: f"seasonality{seasonality}_" + str(x))
     # dateparts
     elif seasonality == "dayofweek":
         return pd.get_dummies(pd.Categorical(
@@ -1109,6 +1117,21 @@ def linear_model(x, y):
     # Multivariate Anomaly Detector
         # only if create feature, not removal
 
+# what is still needed:
+    # returning components
+    # more linear model options
+    # anomaly modeling
+    # seasonality interactions
+    # ar seasonality interaction (or remove)
+    # level shift anomaly detection
+    # the MASTER plot
+    # test and bug fix everything
+
+# TEST
+    # new_df
+    # impacts
+    # regressor types
+
 # could do partial pooling by minimizing a function that mixes shared and unshared coefficients (multiplicative)
 
 # search space:
@@ -1141,16 +1164,40 @@ categorical_groups = {
     "wiki_George_Washington": 'person',
     "wiki_Cleopatra": 'person',
 }
+holiday_countries = {
+    'wiki_Elizabeth_II': 'uk',
+    'wiki_United_States': 'us',
+    'wiki_Germany': 'de',
+}
 
 if False:
     # test holiday countries, regressors, impacts
     from autots import load_daily
-    df_holiday = load_daily(long=False)
+    df_daily = load_daily(long=False)
+    forecast_length = 10
+    df_train = df_daily[:-forecast_length]
+    df_test = df_daily[-forecast_length:]
+    constraint = {
+        'constraint_method': 'quantile',
+        'lower_constraint': 0,
+        'upper_constraint': None,
+        "bounds": True
+    }
 
     c_params = Cassandra.get_new_params()
-    mod = Cassandra(n_jobs=1, **c_params)
-    mod.fit(df_holiday, categorical_groups=categorical_groups)
-    mod.predict(forecast_length=10).forecast
+
+    mod = Cassandra(n_jobs=1, **c_params, constraint=constraint)
+    mod.fit(df_train, categorical_groups=categorical_groups)
+    include_history = True
+    pred = mod.predict(forecast_length=forecast_length, include_history=include_history)
+    result = pred.forecast
+    pred.plot(df_daily if include_history else df_test)
+    pred.evaluate(df_daily if include_history else df_test)
+    print(pred.avg_metrics.round(1))
+
+
+    s = mod.x_array.columns.str.partition("_").get_level_values(0)
+    mod.x_array.groupby(s, axis=1).sum()
 
 # MULTIPLICATIVE SEASONALITY AND HOLIDAYS
 
