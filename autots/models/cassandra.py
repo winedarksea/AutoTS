@@ -4,6 +4,8 @@ Created on Tue Sep 13 19:45:57 2022
 
 @author: Colin
 """
+from operator import itemgetter
+from itertools import groupby
 import random
 import numpy as np
 import pandas as pd
@@ -35,9 +37,24 @@ class Cassandra(ModelObject):
     -Aeneid 2.246-2.249
 
     Warn about remove_excess_anomalies from holiday detector if relying on anomaly prediction
+    Linear components are always model elements, but trend is actuals (history) and model (future)
 
     Args:
         pass
+
+    Methods:
+         holiday_detector.dates_to_holidays
+
+    Attributes:
+        .anomaly_detector.anomalies
+        .anomaly_detector.scores
+        .holiday_count
+        .holidays (series flags, holiday detector only)
+        .params
+        .keep_cols, .keep_cols_idx
+        .x_array
+        .predict_x_array
+        .trend_train
     """
 
     def __init__(
@@ -604,11 +621,20 @@ class Cassandra(ModelObject):
             if self.linear_model == 'something_else':
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
                 return NotImplemented
+
+            res = np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
             if not return_components:
-                return np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
+                return res
             else:
-                comps = x_array[self.keep_cols] * self.params[self.keep_cols_idx]
-                return comps.groupby(self.col_groupings, axis=1).sum()
+                arr = x_array[self.keep_cols].to_numpy()
+                temp = (np.moveaxis(np.broadcast_to(arr, [self.params.shape[1], arr.shape[0], arr.shape[1]]), 0, 2) * self.params[self.keep_cols_idx])
+                indices = [tuple(group)[-1][0] for key, group in groupby(enumerate(self.col_groupings), key=itemgetter(1))][:-1]
+                new_indx = [0]
+                # new_indx.extend(indices)
+                new_indx.extend([x + 1 for x in indices])
+                comps = np.add.reduceat(temp, sorted(new_indx), axis=1)
+                # np.allclose(np.add.reduceat(temp, [0], axis=1)[:, 0, :], np.dot(mod.predict_x_array[mod.keep_cols], mod.params[mod.keep_cols_idx]))
+                return res, comps.groupby(self.col_groupings, axis=1).sum()
 
     def _predict_step(self, dates, trend_component, history_df, future_regressor, flag_regressors, impacts, regressor_per_series):
         # Note this is scaled and doesn't account for impacts
@@ -1174,7 +1200,7 @@ if False:
     # test holiday countries, regressors, impacts
     from autots import load_daily
     df_daily = load_daily(long=False)
-    forecast_length = 10
+    forecast_length = 180
     df_train = df_daily[:-forecast_length]
     df_test = df_daily[-forecast_length:]
     constraint = {
@@ -1191,13 +1217,9 @@ if False:
     include_history = True
     pred = mod.predict(forecast_length=forecast_length, include_history=include_history)
     result = pred.forecast
-    pred.plot(df_daily if include_history else df_test)
+    pred.plot(df_daily if include_history else df_test, vline=df_test.index[0], start_date="2019-01-01")
     pred.evaluate(df_daily if include_history else df_test)
     print(pred.avg_metrics.round(1))
-
-
-    s = mod.x_array.columns.str.partition("_").get_level_values(0)
-    mod.x_array.groupby(s, axis=1).sum()
 
 # MULTIPLICATIVE SEASONALITY AND HOLIDAYS
 

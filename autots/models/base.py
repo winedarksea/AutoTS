@@ -374,6 +374,7 @@ class PredictionObject(object):
         facecolor="black",
         loc="upper left",
         title=None,
+        vline=None,
         **kwargs,
     ):
         """Generate an example plot of one series. Does not handle non-numeric forecasts.
@@ -385,6 +386,7 @@ class PredictionObject(object):
             remove_zeroes (bool): if True, don't plot any zeroes
             interpolate (str): if not None, a method to pass to pandas interpolate
             start_date (str): Y-m-d string or Timestamp to remove all data before
+            vline (datetime): datetime of dashed vertical line to plot
             **kwargs passed to pd.DataFrame.plot()
         """
         if series is None:
@@ -435,7 +437,12 @@ class PredictionObject(object):
             plot_df = plot_df[plot_df.index >= start_date]
         if title is None:
             title = f"{series} with model {str(model_name)[0:80]}"
-        plot_df.plot(title=title, **kwargs)
+        if vline is None:
+            plot_df.plot(title=title, **kwargs)
+        else:
+            ax = plot_df.plot(title=title, **kwargs)
+            ax.vlines(x=vline, ls='--', lw=1, colors='darkred', ymin=plot_df.min().min(), ymax=plot_df.max().max())
+            ax
 
     def evaluate(
         self,
