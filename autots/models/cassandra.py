@@ -38,6 +38,7 @@ class Cassandra(ModelObject):
 
     Warn about remove_excess_anomalies from holiday detector if relying on anomaly prediction
     Linear components are always model elements, but trend is actuals (history) and model (future)
+    Running predict updates some internal attributes used in plotting and other figures, generally expect to use functions to latest predict
 
     Args:
         pass
@@ -139,6 +140,7 @@ class Cassandra(ModelObject):
         self.flag_regressor_train = None
         self.regr_per_series_tr = None
         self.trend_train = None
+        self.components = None
 
     def base_scaler(self, df):
         self.scaler_mean = np.mean(df, axis=0)
@@ -309,10 +311,10 @@ class Cassandra(ModelObject):
             if self.regressor_transformation is not None:
                 self.regressor_transformer = GeneralTransformer(**self.regressor_transformation)
                 self.future_regressor_train = self.regressor_transformer.fit_transform(clean_regressor(future_regressor))
-            x_list.append(self.future_regressor_train)
+            x_list.append(self.future_regressor_train.reindex(self.df.index))
         if flag_regressors is not None and self.regressors_used:
             self.flag_regressor_train = clean_regressor(flag_regressors, prefix="regrflags_")
-            x_list.append(self.flag_regressor_train)
+            x_list.append(self.flag_regressor_train.reindex(self.df.index))
         if self.holiday_countries is not None and not isinstance(self.holiday_countries, dict) and self.holiday_countries_used:
             for holiday_country in self.holiday_countries:
                 x_list.append(
@@ -368,23 +370,28 @@ class Cassandra(ModelObject):
                 if isinstance(self.holiday_countries, dict) and self.holiday_countries_used:
                     hc = self.holiday_countries.get(col, None)
                     if hc is not None:
-                        c_x = pd.concat([
-                            c_x,
-                            holiday_flag(
-                                self.df.index,
-                                country=hc,
-                                encode_holiday_type=True,
-                            ).rename(columns=lambda x: "holiday_" + str(x))
-                        ], axis=1)
+                        c_hc = holiday_flag(
+                            self.df.index,
+                            country=hc,
+                            encode_holiday_type=True,
+                        ).rename(columns=lambda x: "holiday_" + str(x))
+                    else:
+                        c_hc = pd.DataFrame(0, index=self.df.index, columns=["holiday_0"])
+                    c_x = pd.concat([
+                        c_x,
+                        c_hc
+                    ], axis=1)
                 # implement regressors per series
                 if isinstance(regressor_per_series, dict) and self.regressors_used:
-                    self.regr_per_series_tr = regressor_per_series
                     hc = regressor_per_series.get(col, None)
                     if hc is not None:
-                        c_x = pd.concat([
-                            c_x,
-                            pd.DataFrame(hc).rename(columns=lambda x: "regrperseries_" + str(x))
-                        ], axis=1)
+                        c_hc = pd.DataFrame(hc).rename(columns=lambda x: "regrperseries_" + str(x)).reindex(self.df.index)
+                    else:
+                        c_hc = pd.DataFrame(0, index=self.df.index, columns=["regrperseries_0"])
+                    c_x = pd.concat([
+                        c_x,
+                        c_hc
+                    ], axis=1)
                 # implement past_impacts as regressor
                 if isinstance(past_impacts, pd.DataFrame) and self.past_impacts_intervention == "regressor":
                     c_x = pd.concat([
@@ -500,7 +507,6 @@ class Cassandra(ModelObject):
 
     def _predict_linear(self, dates, history_df, future_regressor, regressor_per_series, flag_regressors, impacts, return_components=False):
         # accepts any date in history (or lag beyond) as long as regressors include those dates in index as well
-        # BY COMPONENT!!!
 
         self.t_predict = self.create_t(dates)
         x_list = []
@@ -563,6 +569,7 @@ class Cassandra(ModelObject):
         # add x features that don't apply to all, and need to be looped
         if self.loop_required:
             self.predict_x_array = {}
+            self.components = []
             predicts = []
             for col in self.df.columns:
                 c_x = x_array.copy()
@@ -570,22 +577,28 @@ class Cassandra(ModelObject):
                 if isinstance(self.holiday_countries, dict) and self.holiday_countries_used:
                     hc = self.holiday_countries.get(col, None)
                     if hc is not None:
-                        c_x = pd.concat([
-                            c_x,
-                            holiday_flag(
-                                dates,
-                                country=hc,
-                                encode_holiday_type=True,
-                            ).rename(columns=lambda x: "holiday_" + str(x))
-                        ], axis=1)
+                        c_hc = holiday_flag(
+                            dates,
+                            country=hc,
+                            encode_holiday_type=True,
+                        ).rename(columns=lambda x: "holiday_" + str(x))
+                    else:
+                        c_hc = pd.DataFrame(0, index=dates, columns=["holiday_0"])
+                    c_x = pd.concat([
+                        c_x,
+                        c_hc
+                    ], axis=1)
                 # implement regressors per series
                 if isinstance(regressor_per_series, dict) and self.regressors_used:
                     hc = regressor_per_series.get(col, None)
                     if hc is not None:
-                        c_x = pd.concat([
-                            c_x,
-                            pd.DataFrame(hc).rename(columns=lambda x: "regrperseries_" + str(x)).reindex(dates)
-                        ], axis=1)
+                        c_hc = pd.DataFrame(hc).rename(columns=lambda x: "regrperseries_" + str(x)).reindex(dates)
+                    else:
+                        c_hc = pd.DataFrame(0, index=dates, columns=["regrperseries_0"])
+                    c_x = pd.concat([
+                        c_x,
+                        c_hc
+                    ], axis=1)
                 # implement past_impacts as regressor
                 if isinstance(impacts, pd.DataFrame) and self.past_impacts_intervention == "regressor":
                     c_x = pd.concat([
@@ -597,7 +610,7 @@ class Cassandra(ModelObject):
                     # somewhat inefficient to create full df of dates, but simplest this way for 'any date'
                     for lag in self.ar_lags:
                         full_idx = history_df.index.union(self.create_forecast_index(forecast_length=lag, last_date=history_df.index[-1]))
-                        lag_idx = np.concatenate([np.repeat([0], lag), np.arange(len(history_df))])[0:len(history_df)]
+                        lag_idx = np.concatenate([np.repeat([0], lag), np.arange(len(history_df))])  # [0:len(history_df)]
                         lag_s = history_df[col].iloc[lag_idx].rename(f"lag{lag}_")
                         lag_s.index = full_idx
                         c_x = pd.concat([
@@ -608,13 +621,17 @@ class Cassandra(ModelObject):
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
                 if np.any(np.isnan(c_x.astype(float))):  # remove later, for debugging
                     raise ValueError("nan values in predict c_x_array")
-                if return_components:
-                    pass
-                else:
-                    predicts.append(
-                        pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]), name=col, index=dates)
-                    )
+                predicts.append(
+                    pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]), name=col, index=dates)
+                )
                 self.predict_x_array[col] = c_x
+                if return_components:
+                    indices = [tuple(group)[-1][0] for key, group in groupby(enumerate(self.col_groupings[col]), key=itemgetter(1))][:-1]
+                    new_indx = [0] + [x + 1 for x in indices]
+                    temp = c_x[self.keep_cols[col]] * self.params[col][self.keep_cols_idx[col]]
+                    self.components.append(np.add.reduceat(np.asarray(temp), sorted(new_indx), axis=1))
+            if return_components:
+                self.components = np.moveaxis(np.array(self.components), 0, 2)
             return pd.concat(predicts, axis=1)
         else:
             # run model
@@ -623,24 +640,46 @@ class Cassandra(ModelObject):
                 return NotImplemented
 
             res = np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
-            if not return_components:
-                return res
-            else:
+            if return_components:
                 arr = x_array[self.keep_cols].to_numpy()
                 temp = (np.moveaxis(np.broadcast_to(arr, [self.params.shape[1], arr.shape[0], arr.shape[1]]), 0, 2) * self.params[self.keep_cols_idx])
                 indices = [tuple(group)[-1][0] for key, group in groupby(enumerate(self.col_groupings), key=itemgetter(1))][:-1]
-                new_indx = [0]
-                # new_indx.extend(indices)
-                new_indx.extend([x + 1 for x in indices])
-                comps = np.add.reduceat(temp, sorted(new_indx), axis=1)
+                new_indx = [0] + [x + 1 for x in indices]
+                self.component_indx = new_indx
+                self.components = np.add.reduceat(temp, sorted(new_indx), axis=1)  # (dates, comps, series)
                 # np.allclose(np.add.reduceat(temp, [0], axis=1)[:, 0, :], np.dot(mod.predict_x_array[mod.keep_cols], mod.params[mod.keep_cols_idx]))
-                return res, comps.groupby(self.col_groupings, axis=1).sum()
+            return res
+
+    def process_components(self, to_origin_space=True):
+        """Scale and standardize component outputs."""
+        if self.components is None:
+            raise ValueError("Model has not yet had a prediction generated.")
+
+        comp_list = []
+        # unfortunately, no choice but to loop that I see to apply inverse trans
+        for comp in range(self.components.shape[1]):
+            if to_origin_space:
+                # will have issues on inverse with some transformers
+                comp_df = self.to_origin_space(pd.DataFrame(
+                    self.components[:, comp, :],
+                    index=self.predict_x_array.index, columns=self.column_names,
+                ))
+            else:
+                comp_df = (pd.DataFrame(
+                    self.components[:, comp, :],
+                    index=self.predict_x_array.index, columns=self.column_names,
+                ))
+            # column name needs to be unlikely to occur in an actual dataset
+            comp_df['csmod_component'] = self.col_groupings[self.component_indx[comp]]
+            comp_list.append(comp_df)
+        return pd.pivot(pd.concat(comp_list, axis=0), columns='csmod_component')
 
     def _predict_step(self, dates, trend_component, history_df, future_regressor, flag_regressors, impacts, regressor_per_series):
         # Note this is scaled and doesn't account for impacts
         linear_pred = self._predict_linear(
             dates, history_df=history_df, future_regressor=future_regressor,
-            flag_regressors=flag_regressors, impacts=impacts, regressor_per_series=regressor_per_series
+            flag_regressors=flag_regressors, impacts=impacts, regressor_per_series=regressor_per_series,
+            return_components=True
         )
         # ADD PREPROCESSING BEFORE TREND (FIT X, REVERSE on PREDICT, THEN TREND)
 
@@ -804,10 +843,12 @@ class Cassandra(ModelObject):
             df_forecast.forecast = self.to_origin_space(df_forecast.forecast, trans_method='original')
             df_forecast.lower_forecast = self.to_origin_space(df_forecast.lower_forecast, trans_method='original')
             df_forecast.upper_forecast = self.to_origin_space(df_forecast.upper_forecast, trans_method='original')
+            self.predicted_trend = self.to_origin_space(trend_forecast.forecast, trans_method='original')
         elif not include_history:
             df_forecast.forecast = self.to_origin_space(df_forecast.forecast, trans_method='forecast')
             df_forecast.lower_forecast = self.to_origin_space(df_forecast.lower_forecast, trans_method='forecast')
             df_forecast.upper_forecast = self.to_origin_space(df_forecast.upper_forecast, trans_method='forecast')
+            self.predicted_trend = self.to_origin_space(trend_forecast.forecast, trans_method='forecast')
         else:
             hdn = len(df_forecast.forecast) - forecast_length
             df_forecast.forecast = pd.concat([
@@ -822,6 +863,13 @@ class Cassandra(ModelObject):
                 self.to_origin_space(df_forecast.upper_forecast.head(hdn), trans_method='original'),
                 self.to_origin_space(df_forecast.upper_forecast.tail(forecast_length), trans_method='forecast'),
             ])
+            if True:  # REMOVE THIS LATER
+                self.predicted_trend = pd.concat([
+                    self.to_origin_space(trend_forecast.forecast.head(hdn), trans_method='original'),
+                    self.to_origin_space(trend_forecast.forecast.tail(forecast_length), trans_method='forecast'),
+                ])
+            else:
+                self.predicted_trend = trend_forecast.forecast
 
         # don't forget to add in past_impacts (use future impacts again?) AFTER unscaling
         if future_impacts is not None and self.past_impacts is None:
@@ -1028,6 +1076,16 @@ class Cassandra(ModelObject):
             # "constraint": self.constraint,
         }
 
+    def plot_components(self, prediction=None, series=None, figsize=(16, 9), to_origin_space=True):
+        if series is None:
+            series = random.choice(self.column_names)
+        plot_list = []
+        if prediction is not None:
+            plot_list.append(prediction.forecast[series].rename("forecast"))
+            plot_list.append(self.predicted_trend[series].rename("trend"))
+        plot_list.append(self.process_components(to_origin_space=to_origin_space)[series])
+        return pd.concat(plot_list, axis=1).plot(subplots=True, figsize=figsize)
+
     def plot_things():  # placeholder for later plotting functions
         # plot components
         # plot transformed df if preprocess or anomaly removal
@@ -1144,13 +1202,12 @@ def linear_model(x, y):
         # only if create feature, not removal
 
 # what is still needed:
-    # returning components
     # more linear model options
     # anomaly modeling
     # seasonality interactions
     # ar seasonality interaction (or remove)
     # level shift anomaly detection
-    # the MASTER plot
+    # colors to trend and anomaly points
     # test and bug fix everything
 
 # TEST
@@ -1199,6 +1256,7 @@ holiday_countries = {
 if False:
     # test holiday countries, regressors, impacts
     from autots import load_daily
+    import matplotlib.pyplot as plt
     df_daily = load_daily(long=False)
     forecast_length = 180
     df_train = df_daily[:-forecast_length]
@@ -1217,7 +1275,10 @@ if False:
     include_history = True
     pred = mod.predict(forecast_length=forecast_length, include_history=include_history)
     result = pred.forecast
-    pred.plot(df_daily if include_history else df_test, vline=df_test.index[0], start_date="2019-01-01")
+    with plt.style.context("seaborn-white"):
+        ax = pred.plot(df_daily if include_history else df_test, vline=df_test.index[0], start_date="2019-01-01")
+        plt.show()
+        mod.plot_components(pred, to_origin_space=False)
     pred.evaluate(df_daily if include_history else df_test)
     print(pred.avg_metrics.round(1))
 

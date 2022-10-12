@@ -2418,11 +2418,11 @@ or otherwise increase models available."""
             )
 
         if kind == "pie":
-            temp.set_index("Series").plot(
+            return temp.set_index("Series").plot(
                 y="SMAPE", kind="pie", title=title, figsize=figsize, legend=False, **kwargs
             )
         else:
-            temp.plot(
+            return temp.plot(
                 x="Series",
                 y="SMAPE",
                 kind=kind,

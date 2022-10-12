@@ -438,11 +438,11 @@ class PredictionObject(object):
         if title is None:
             title = f"{series} with model {str(model_name)[0:80]}"
         if vline is None:
-            plot_df.plot(title=title, **kwargs)
+            return plot_df.plot(title=title, **kwargs)
         else:
             ax = plot_df.plot(title=title, **kwargs)
             ax.vlines(x=vline, ls='--', lw=1, colors='darkred', ymin=plot_df.min().min(), ymax=plot_df.max().max())
-            ax
+            return ax
 
     def evaluate(
         self,

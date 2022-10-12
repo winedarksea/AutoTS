@@ -3753,7 +3753,7 @@ filters = {
     "RollingMeanTransformer": 0.1,
     "EWMAFilter": 0.1,
     "bkfilter": 0.1,
-    "Slice": 0.02,  # sorta horizontal filter
+    "Slice": 0.01,  # sorta horizontal filter
     "AlignLastValue": 0.1,
     "KalmanSmoothing": 0.1,
 }
