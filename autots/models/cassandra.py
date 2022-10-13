@@ -15,7 +15,7 @@ from autots.tools import cpu_count
 from autots.models.base import ModelObject, PredictionObject
 from autots.templates.general import general_template
 from autots.tools.holiday import holiday_flag
-from autots.tools.window_functions import sliding_window_view, window_lin_reg_mean
+from autots.tools.window_functions import window_lin_reg_mean  # sliding_window_view
 from autots.evaluator.auto_model import ModelMonster, model_forecast
 # scipy is technically optional but most likely is present
 try:
@@ -39,6 +39,7 @@ class Cassandra(ModelObject):
     Warn about remove_excess_anomalies from holiday detector if relying on anomaly prediction
     Linear components are always model elements, but trend is actuals (history) and model (future)
     Running predict updates some internal attributes used in plotting and other figures, generally expect to use functions to latest predict
+    Seasonalities are hard-coded to be as days so 7 will always = weekly even if data isn't daily
 
     Args:
         pass
@@ -251,6 +252,7 @@ class Cassandra(ModelObject):
         self.ds_min = self.df.index.min()
         self.ds_max = self.df.index.max()
         self.t_train = self.create_t(self.df.index)
+        self.history_days = (self.ds_max - self.ds_min).days
 
         # BEGIN CONSTRUCTION OF X ARRAY
         x_list = []
@@ -284,7 +286,7 @@ class Cassandra(ModelObject):
         if self.seasonalities is not None:
             s_list = []
             for seasonality in self.seasonalities:
-                s_list.append(create_seasonality_feature(self.df.index, self.t_train, seasonality))
+                s_list.append(create_seasonality_feature(self.df.index, self.t_train, seasonality, history_days=self.history_days))
                 # INTERACTIONS NOT IMPLEMENTED
                 # ORDER SPECIFICATION NOT IMPLEMENTED
             s_df = pd.concat(s_list, axis=1)
@@ -446,10 +448,17 @@ class Cassandra(ModelObject):
             self.trend_train = trend_posterior
         else:
             self.trend_train = pd.DataFrame(trend_residuals, index=self.df.index, columns=self.df.columns)
+
+        false_row = np.zeros((1, slope.shape[1])).astype(bool)
         # INFLECTION POINTS (cross zero), CHANGEPOINTS (trend of trend changes, on bigger window) (DIFF then find 0)
-        zero_crossings = np.diff(np.signbit(slope), axis=0)  # Use on earliest, fill end
+        # zero_crossings = np.vstack((zero_crossings, np.broadcast_to(zero_crossings[-1:, :], (1, zero_crossings.shape[1]))))
+        zero_crossings = np.vstack((np.diff(np.signbit(slope), axis=0), false_row))  # Use on earliest, fill end
         accel = np.diff(slope, axis=0)
-        changepoints = np.diff(np.signbit(accel), axis=0)
+        changepoints = np.vstack((false_row, np.diff(np.signbit(accel), axis=0), false_row))
+        # np.where(changepoints, slope, 0)
+        if self.trend_anomaly_detector_params is not None:
+            self.trend_anomaly_detector = AnomalyRemoval(**self.trend_anomaly_detector_params)
+            self.trend_anomaly_detector.fit(np.where(changepoints, slope, 0))
         # desired behavior is staying >=0 or staying <= 0, only getting beyond 0 count as turning point
         # np.nonzero(np.diff(np.sign(slope), axis=0)) (this favors previous point, add 1 to be after)
         # replacing 0 with -1 above might work
@@ -457,14 +466,13 @@ class Cassandra(ModelObject):
         # np.where(np.diff(np.signbit(a)))[0] (finds zero at beginning and not at end)
         # np.where(np.bitwise_xor(positive[1:], positive[:-1]))[0]
         # LEVEL SHIFT not yet accounted for (anomaly on SLOPE @ CHNG PTS)
-        if self.trend_anomaly_detector_params is not None:
+        if False:
             self.trend_anomaly_detector = AnomalyRemoval(**self.trend_anomaly_detector_params)
             # DIFF the length of W (or w-1?)
             shft_idx = np.concatenate([[0], np.arange(len(slope))])[0:len(slope)]
             slope_diff = slope - slope[shft_idx]
             shft_idx = np.concatenate([np.repeat([0], self.trend_window), np.arange(len(slope))])[0:len(slope)]
             slope_diff = slope_diff + slope_diff[shft_idx]
-
             # np.cumsum(slope, axis=0)
             # pd.DataFrame(slope).rolling(90, center=True, min_periods=2).mean()
             # pd.DataFrame(slope, index=df.index).rolling(365, center=True, min_periods=2).mean()[0].plot()
@@ -536,7 +544,7 @@ class Cassandra(ModelObject):
         if self.seasonalities is not None:
             s_list = []
             for seasonality in self.seasonalities:
-                s_list.append(create_seasonality_feature(dates, self.t_predict, seasonality))
+                s_list.append(create_seasonality_feature(dates, self.t_predict, seasonality, history_days=self.history_days))
                 # INTERACTIONS NOT IMPLEMENTED
                 # ORDER SPECIFICATION NOT IMPLEMENTED
             s_df = pd.concat(s_list, axis=1)
@@ -1076,15 +1084,17 @@ class Cassandra(ModelObject):
             # "constraint": self.constraint,
         }
 
-    def plot_components(self, prediction=None, series=None, figsize=(16, 9), to_origin_space=True):
+    def plot_components(self, prediction=None, series=None, figsize=(16, 9), to_origin_space=True, title=None):
         if series is None:
             series = random.choice(self.column_names)
+        if title is None:
+            title = f"Model Components for {series}"
         plot_list = []
         if prediction is not None:
             plot_list.append(prediction.forecast[series].rename("forecast"))
             plot_list.append(self.predicted_trend[series].rename("trend"))
         plot_list.append(self.process_components(to_origin_space=to_origin_space)[series])
-        return pd.concat(plot_list, axis=1).plot(subplots=True, figsize=figsize)
+        return pd.concat(plot_list, axis=1).plot(subplots=True, figsize=figsize, title=title)
 
     def plot_things():  # placeholder for later plotting functions
         # plot components
@@ -1097,15 +1107,6 @@ class Cassandra(ModelObject):
         # plot highest error series, plot highest/lowest growth
         # trend: one color for growth, another for decline (darker as accelerating, ligher as slowing)
         return NotImplemented
-
-
-def multivariate_feature(df, categorical_groups):
-    # 1 day lag
-    # Feature Agglomeration
-    # Advancing:Declining (growth/decline over previous day)
-    # Above/Below moving average %
-    # McClellan Oscillator
-    return NotImplemented
 
 
 def clean_regressor(in_d, prefix="regr_"):
@@ -1130,10 +1131,13 @@ def fourier_series(t, p=365.25, n=10):
     return x
 
 
-def create_seasonality_feature(DTindex, t, seasonality):
+def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
+    # for consistency, all must have a range index, not date index
     # fourier orders
     if isinstance(seasonality, (int, float)):
-        return pd.DataFrame(fourier_series(t, seasonality, n=10)).rename(columns=lambda x: f"seasonality{seasonality}_" + str(x))
+        if history_days is None:
+            history_days = (DTindex.max() - DTindex.min()).days
+        return pd.DataFrame(fourier_series(t, seasonality / history_days, n=10)).rename(columns=lambda x: f"seasonality{seasonality}_" + str(x))
     # dateparts
     elif seasonality == "dayofweek":
         return pd.get_dummies(pd.Categorical(
@@ -1279,10 +1283,14 @@ if False:
         ax = pred.plot(df_daily if include_history else df_test, vline=df_test.index[0], start_date="2019-01-01")
         plt.show()
         mod.plot_components(pred, to_origin_space=False)
+        plt.show()
+        mod.plot_components(pred, to_origin_space=True)
     pred.evaluate(df_daily if include_history else df_test)
     print(pred.avg_metrics.round(1))
 
 # MULTIPLICATIVE SEASONALITY AND HOLIDAYS
+
+# low memory option to delete stored dfs and arrays as soon as possible
 
 # Make sure x features are all scaled
 # Remove seasonality from regressors

@@ -290,13 +290,18 @@ if graph:
         # plt.savefig("model.png", dpi=300)
         plt.show()
 
-    model.plot_per_series_smape()
+    with plt.style.context("seaborn-white"):
+        ax = model.plot_per_series_smape()
+        plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+        plt.show()
+
+    model.plot_backforecast()
     plt.show()
 
     if model.best_model_ensemble == 2:
         plt.subplots_adjust(bottom=0.5)
         model.plot_horizontal_transformers()
-        # plt.savefig("transformers.png", dpi=300)
+        # plt.savefig("transformers.png", dpi=300, bbox_inches="tight")
         plt.show()
         model.plot_horizontal_model_count()
         plt.show()

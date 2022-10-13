@@ -22,6 +22,7 @@
 * modified `regression` impact in HolidayTransformer to weighted least squares, moved existing to 'datepart_regression'
 * draft version of Cassandra model
 * bug fix for Categorical dateparts with 1 starts
+* updated load_daily to Wikimedia page views
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
