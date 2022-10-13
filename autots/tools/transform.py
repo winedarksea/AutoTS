@@ -1772,19 +1772,19 @@ class Discretize(EmptyTransformer):
                 "sklearn-uniform",
                 "sklearn-kmeans",
             ]:
-                df = pd.DataFrame(self.kbins_discretizer.transform(df))
-                df.index = self.df_index
-                df.columns = self.df_colnames
+                df2 = pd.DataFrame(self.kbins_discretizer.transform(df))
+                df2.index = df.index
+                df2.columns = self.df_colnames
             else:
                 binned = (np.abs(df.values - self.bins)).argmin(axis=0)
                 indices = np.indices(binned.shape)[1]
                 bins_reshaped = self.bins.reshape((self.n_bins, df.shape[1]))
-                df = pd.DataFrame(
+                df2 = pd.DataFrame(
                     bins_reshaped[binned, indices],
-                    index=self.df_index,
+                    index=df.index,
                     columns=self.df_colnames,
                 )
-        return df
+        return df2
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.

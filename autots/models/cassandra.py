@@ -40,6 +40,7 @@ class Cassandra(ModelObject):
     Linear components are always model elements, but trend is actuals (history) and model (future)
     Running predict updates some internal attributes used in plotting and other figures, generally expect to use functions to latest predict
     Seasonalities are hard-coded to be as days so 7 will always = weekly even if data isn't daily
+    For slope analysis and zero crossings, a slope of 0 evaluates as a positive sign (=>0). Exactly 0 slope is rare real world data
 
     Args:
         pass
@@ -142,6 +143,11 @@ class Cassandra(ModelObject):
         self.regr_per_series_tr = None
         self.trend_train = None
         self.components = None
+        self.anomaly_detector = None
+        if self.trend_anomaly_detector_params is not None:
+            self.trend_anomaly_detector = AnomalyRemoval(**self.trend_anomaly_detector_params)
+        else:
+            self.trend_anomaly_detector = None
 
     def base_scaler(self, df):
         self.scaler_mean = np.mean(df, axis=0)
@@ -161,10 +167,12 @@ class Cassandra(ModelObject):
     def to_origin_space(self, df, trans_method='forecast'):
         """Take transformed outputs back to original feature space."""
         if self.scaling == "BaseScaler":
-            return self.preprocesser.inverse_transform(df, trans_method=trans_method) * self.scaler_std + self.scaler_mean
+            # return self.preprocesser.inverse_transform(df, trans_method=trans_method) * self.scaler_std + self.scaler_mean
+            return self.preprocesser.inverse_transform(df * self.scaler_std + self.scaler_mean, trans_method=trans_method)
         else:
-            return self.scaler.inverse_transform(
-                self.preprocesser.inverse_transform(df, trans_method=trans_method),
+            # return self.scaler.inverse_transform(self.preprocesser.inverse_transform(df, trans_method=trans_method), trans_method=trans_method)
+            return self.preprocesser.inverse_transform(
+                self.scaler.inverse_transform(df, trans_method=trans_method),
                 trans_method=trans_method,
             )
 
@@ -279,7 +287,7 @@ class Cassandra(ModelObject):
             elif self.multivariate_feature == "group_average":
                 multivar_df = trs_df.groupby(self.categorical_groups, axis=1).mean().iloc[lag_1_indx]
                 multivar_df.index = self.df.index
-                x_list.append(multivar_df)
+                x_list.append(multivar_df.rename(columns=lambda x: "multivar_" + str(x)))
             elif self.multivariate_feature == "oscillator":
                 return NotImplemented
                 np.count_nonzero((df - df.shift(1)).clip(upper=0))[:-1]
@@ -449,23 +457,7 @@ class Cassandra(ModelObject):
         else:
             self.trend_train = pd.DataFrame(trend_residuals, index=self.df.index, columns=self.df.columns)
 
-        false_row = np.zeros((1, slope.shape[1])).astype(bool)
-        # INFLECTION POINTS (cross zero), CHANGEPOINTS (trend of trend changes, on bigger window) (DIFF then find 0)
-        # zero_crossings = np.vstack((zero_crossings, np.broadcast_to(zero_crossings[-1:, :], (1, zero_crossings.shape[1]))))
-        zero_crossings = np.vstack((np.diff(np.signbit(slope), axis=0), false_row))  # Use on earliest, fill end
-        accel = np.diff(slope, axis=0)
-        changepoints = np.vstack((false_row, np.diff(np.signbit(accel), axis=0), false_row))
-        # np.where(changepoints, slope, 0)
-        if self.trend_anomaly_detector_params is not None:
-            self.trend_anomaly_detector = AnomalyRemoval(**self.trend_anomaly_detector_params)
-            self.trend_anomaly_detector.fit(np.where(changepoints, slope, 0))
-        # desired behavior is staying >=0 or staying <= 0, only getting beyond 0 count as turning point
-        # np.nonzero(np.diff(np.sign(slope), axis=0)) (this favors previous point, add 1 to be after)
-        # replacing 0 with -1 above might work
-        # https://stackoverflow.com/questions/3843017/efficiently-detect-sign-changes-in-python
-        # np.where(np.diff(np.signbit(a)))[0] (finds zero at beginning and not at end)
-        # np.where(np.bitwise_xor(positive[1:], positive[:-1]))[0]
-        # LEVEL SHIFT not yet accounted for (anomaly on SLOPE @ CHNG PTS)
+        self.zero_crossings, self.changepoints, self.slope_sign = self.analyze_trend(slope)
         if False:
             self.trend_anomaly_detector = AnomalyRemoval(**self.trend_anomaly_detector_params)
             # DIFF the length of W (or w-1?)
@@ -482,6 +474,27 @@ class Cassandra(ModelObject):
 
         self.fit_runtime = self.time() - self.startTime
         return self
+
+    def analyze_trend(self, slope):
+        # desired behavior is staying >=0 or staying <= 0, only getting beyond 0 count as turning point
+        false_row = np.zeros((1, slope.shape[1])).astype(bool)
+        # where the slope crosses 0 to -1 or reverse
+        slope_sign = np.signbit(slope)
+        zero_crossings = np.vstack((np.diff(slope_sign, axis=0), false_row))  # Use on earliest, fill end
+        # where the rate of change of the rate of change crosses 0 to -1 or reverse
+        changepoints = np.vstack((false_row, np.diff(np.signbit(np.diff(slope, axis=0)), axis=0), false_row))
+        if self.trend_anomaly_detector_params is not None:
+            self.trend_anomaly_detector.fit(pd.DataFrame(
+                np.where(changepoints, slope, 0),
+                index=self.trend_train.index, columns=self.column_names  # Need different source for index
+            ))
+        # Notes on other approaches
+        # np.nonzero(np.diff(np.sign(slope), axis=0)) (this favors previous point, add 1 to be after)
+        # replacing 0 with -1 above might work
+        # https://stackoverflow.com/questions/3843017/efficiently-detect-sign-changes-in-python
+        # np.where(np.diff(np.signbit(a)))[0] (finds zero at beginning and not at end)
+        # np.where(np.bitwise_xor(positive[1:], positive[:-1]))[0]
+        return zero_crossings, changepoints, slope_sign
 
     def rolling_trend(self, trend_residuals, t):
         dates_2d = np.repeat(
@@ -538,7 +551,7 @@ class Cassandra(ModelObject):
             elif self.multivariate_feature == "group_average":
                 multivar_df = trs_df.groupby(self.categorical_groups, axis=1).mean().iloc[lag_1_indx]
                 multivar_df.index = full_idx
-                x_list.append(multivar_df.reindex(dates))
+                x_list.append(multivar_df.reindex(dates).rename(columns=lambda x: "multivar_" + str(x)))
             elif self.multivariate_feature == "oscillator":
                 return NotImplemented
         if self.seasonalities is not None:
@@ -640,6 +653,7 @@ class Cassandra(ModelObject):
                     self.components.append(np.add.reduceat(np.asarray(temp), sorted(new_indx), axis=1))
             if return_components:
                 self.components = np.moveaxis(np.array(self.components), 0, 2)
+                self.component_indx = new_indx  # hopefully no mismatching for diff series
             return pd.concat(predicts, axis=1)
         else:
             # run model
@@ -664,21 +678,23 @@ class Cassandra(ModelObject):
             raise ValueError("Model has not yet had a prediction generated.")
 
         comp_list = []
+        t_indx = next(iter(self.predict_x_array.values())).index if isinstance(self.predict_x_array, dict) else self.predict_x_array.index
+        col_group = next(iter(self.col_groupings.values())) if isinstance(self.col_groupings, dict) else self.col_groupings
         # unfortunately, no choice but to loop that I see to apply inverse trans
         for comp in range(self.components.shape[1]):
             if to_origin_space:
                 # will have issues on inverse with some transformers
                 comp_df = self.to_origin_space(pd.DataFrame(
                     self.components[:, comp, :],
-                    index=self.predict_x_array.index, columns=self.column_names,
+                    index=t_indx, columns=self.column_names,
                 ))
             else:
                 comp_df = (pd.DataFrame(
                     self.components[:, comp, :],
-                    index=self.predict_x_array.index, columns=self.column_names,
+                    index=t_indx, columns=self.column_names,
                 ))
             # column name needs to be unlikely to occur in an actual dataset
-            comp_df['csmod_component'] = self.col_groupings[self.component_indx[comp]]
+            comp_df['csmod_component'] = col_group[self.component_indx[comp]]
             comp_list.append(comp_df)
         return pd.pivot(pd.concat(comp_list, axis=0), columns='csmod_component')
 
@@ -707,7 +723,7 @@ class Cassandra(ModelObject):
         )
         return df_forecast
 
-    def predict(self, forecast_length, include_history=False, future_regressor=None, regressor_per_series=None, flag_regressors=None, future_impacts=None, new_df=None):
+    def predict(self, forecast_length, include_history=True, future_regressor=None, regressor_per_series=None, flag_regressors=None, future_impacts=None, new_df=None):
         predictStartTime = self.time()
         if self.trend_train is None:
             raise ValueError("Cassandra must first be .fit() successfully.")
@@ -814,6 +830,7 @@ class Cassandra(ModelObject):
             trend_forecast = PredictionObject(
                 forecast=self.trend_train, lower_forecast=self.trend_train, upper_forecast=self.trend_train
             )
+
         # ar_lags, multivariate features require 1 step loop
         if forecast_length is None:
             df_forecast = self._predict_step(
@@ -824,7 +841,6 @@ class Cassandra(ModelObject):
         elif self.predict_loop_req:
             for step in range(forecast_length):
                 forecast_index = df.index.union(self.create_forecast_index(1, last_date=df.index[-1]))
-                print(forecast_index)
                 df_forecast = self._predict_step(
                     dates=forecast_index, trend_component=trend_forecast, history_df=df,
                     future_regressor=full_regr, flag_regressors=all_flags,
@@ -990,7 +1006,7 @@ class Cassandra(ModelObject):
                 [True, False], [0.05, 0.95]
             )[0]
             holiday_params['output'] = random.choices(['multivariate', 'univariate'], [0.9, 0.1])[0]
-        anomaly_intervention = random.choices([None, 'remove', 'detect_only', 'model'], [0.9, 0.3, 0.1, 0.1])[0]
+        anomaly_intervention = random.choices([None, 'remove', 'detect_only', 'model'], [0.9, 0.3, 0.05, 0.1])[0]
         if anomaly_intervention is not None:
             anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
             if anomaly_intervention == "model":
@@ -1096,6 +1112,9 @@ class Cassandra(ModelObject):
         plot_list.append(self.process_components(to_origin_space=to_origin_space)[series])
         return pd.concat(plot_list, axis=1).plot(subplots=True, figsize=figsize, title=title)
 
+    def plot_trend(self):
+        pass
+
     def plot_things():  # placeholder for later plotting functions
         # plot components
         # plot transformed df if preprocess or anomaly removal
@@ -1137,7 +1156,7 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
     if isinstance(seasonality, (int, float)):
         if history_days is None:
             history_days = (DTindex.max() - DTindex.min()).days
-        return pd.DataFrame(fourier_series(t, seasonality / history_days, n=10)).rename(columns=lambda x: f"seasonality{seasonality}_" + str(x))
+        return pd.DataFrame(fourier_series(np.asarray(t), seasonality / history_days, n=10)).rename(columns=lambda x: f"seasonality{seasonality}_" + str(x))
     # dateparts
     elif seasonality == "dayofweek":
         return pd.get_dummies(pd.Categorical(
@@ -1213,6 +1232,9 @@ def linear_model(x, y):
     # level shift anomaly detection
     # colors to trend and anomaly points
     # test and bug fix everything
+    # PLOT IMPACTS
+    # overfitting to Lag 1
+    # components scaled back to space aren't right
 
 # TEST
     # new_df
@@ -1273,6 +1295,7 @@ if False:
     }
 
     c_params = Cassandra.get_new_params()
+    c_params
 
     mod = Cassandra(n_jobs=1, **c_params, constraint=constraint)
     mod.fit(df_train, categorical_groups=categorical_groups)
@@ -1280,12 +1303,13 @@ if False:
     pred = mod.predict(forecast_length=forecast_length, include_history=include_history)
     result = pred.forecast
     with plt.style.context("seaborn-white"):
-        ax = pred.plot(df_daily if include_history else df_test, vline=df_test.index[0], start_date="2019-01-01")
+        series = random.choice(mod.column_names)
+        ax = pred.plot(df_daily if include_history else df_test, series=series, vline=df_test.index[0], start_date="2019-01-01")
         plt.show()
-        mod.plot_components(pred, to_origin_space=False)
-        plt.show()
-        mod.plot_components(pred, to_origin_space=True)
-    pred.evaluate(df_daily if include_history else df_test)
+        # mod.plot_components(pred, series=series, to_origin_space=False)
+        # plt.show()
+        mod.plot_components(pred, series=series, to_origin_space=True)
+    pred.evaluate(df_daily.reindex(result.index) if include_history else df_test)
     print(pred.avg_metrics.round(1))
 
 # MULTIPLICATIVE SEASONALITY AND HOLIDAYS
