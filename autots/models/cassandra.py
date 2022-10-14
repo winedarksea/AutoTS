@@ -144,6 +144,7 @@ class Cassandra(ModelObject):
         self.trend_train = None
         self.components = None
         self.anomaly_detector = None
+        self.holiday_detector = None
         if self.trend_anomaly_detector_params is not None:
             self.trend_anomaly_detector = AnomalyRemoval(**self.trend_anomaly_detector_params)
         else:
@@ -457,7 +458,7 @@ class Cassandra(ModelObject):
         else:
             self.trend_train = pd.DataFrame(trend_residuals, index=self.df.index, columns=self.df.columns)
 
-        self.zero_crossings, self.changepoints, self.slope_sign = self.analyze_trend(slope)
+        self.zero_crossings, self.changepoints, self.slope_sign, self.accel = self.analyze_trend(slope, index=self.trend_train.index)
         if False:
             self.trend_anomaly_detector = AnomalyRemoval(**self.trend_anomaly_detector_params)
             # DIFF the length of W (or w-1?)
@@ -475,18 +476,19 @@ class Cassandra(ModelObject):
         self.fit_runtime = self.time() - self.startTime
         return self
 
-    def analyze_trend(self, slope):
+    def analyze_trend(self, slope, index):
         # desired behavior is staying >=0 or staying <= 0, only getting beyond 0 count as turning point
         false_row = np.zeros((1, slope.shape[1])).astype(bool)
         # where the slope crosses 0 to -1 or reverse
         slope_sign = np.signbit(slope)
         zero_crossings = np.vstack((np.diff(slope_sign, axis=0), false_row))  # Use on earliest, fill end
         # where the rate of change of the rate of change crosses 0 to -1 or reverse
-        changepoints = np.vstack((false_row, np.diff(np.signbit(np.diff(slope, axis=0)), axis=0), false_row))
+        accel = np.diff(slope, axis=0)
+        changepoints = np.vstack((false_row, np.diff(np.signbit(accel), axis=0), false_row))
         if self.trend_anomaly_detector_params is not None:
             self.trend_anomaly_detector.fit(pd.DataFrame(
                 np.where(changepoints, slope, 0),
-                index=self.trend_train.index, columns=self.column_names  # Need different source for index
+                index=index, columns=self.column_names  # Need different source for index
             ))
         # Notes on other approaches
         # np.nonzero(np.diff(np.sign(slope), axis=0)) (this favors previous point, add 1 to be after)
@@ -494,7 +496,7 @@ class Cassandra(ModelObject):
         # https://stackoverflow.com/questions/3843017/efficiently-detect-sign-changes-in-python
         # np.where(np.diff(np.signbit(a)))[0] (finds zero at beginning and not at end)
         # np.where(np.bitwise_xor(positive[1:], positive[:-1]))[0]
-        return zero_crossings, changepoints, slope_sign
+        return zero_crossings, changepoints, slope_sign, accel
 
     def rolling_trend(self, trend_residuals, t):
         dates_2d = np.repeat(
@@ -887,13 +889,15 @@ class Cassandra(ModelObject):
                 self.to_origin_space(df_forecast.upper_forecast.head(hdn), trans_method='original'),
                 self.to_origin_space(df_forecast.upper_forecast.tail(forecast_length), trans_method='forecast'),
             ])
-            if True:  # REMOVE THIS LATER
-                self.predicted_trend = pd.concat([
-                    self.to_origin_space(trend_forecast.forecast.head(hdn), trans_method='original'),
-                    self.to_origin_space(trend_forecast.forecast.tail(forecast_length), trans_method='forecast'),
-                ])
-            else:
-                self.predicted_trend = trend_forecast.forecast
+            self.predicted_trend = pd.concat([
+                self.to_origin_space(trend_forecast.forecast.head(hdn), trans_method='original'),
+                self.to_origin_space(trend_forecast.forecast.tail(forecast_length), trans_method='forecast'),
+            ])
+
+        # update trend analysis based on trend forecast as well
+        if forecast_length is not None and include_history:
+            trend_posterior, self.slope, intercept = self.rolling_trend(self.predicted_trend, np.array(self.t_predict))
+            self.zero_crossings, self.changepoints, self.slope_sign, self.accel = self.analyze_trend(self.slope, index=self.predicted_trend.index)
 
         # don't forget to add in past_impacts (use future impacts again?) AFTER unscaling
         if future_impacts is not None and self.past_impacts is None:
@@ -1112,8 +1116,40 @@ class Cassandra(ModelObject):
         plot_list.append(self.process_components(to_origin_space=to_origin_space)[series])
         return pd.concat(plot_list, axis=1).plot(subplots=True, figsize=figsize, title=title)
 
-    def plot_trend(self):
-        pass
+    def plot_trend(
+            self, series=None, vline=None,
+            colors=["#d4f74f", "#82ab5a", "#c12600", "#ff6c05"],
+            title=None, start_date=None, **kwargs
+    ):
+        if series is None:
+            series = random.choice(self.column_names)
+        if title is None:
+            title = f"Trend Breakdown for {series}"
+        p_indx = self.column_names.get_loc(series)
+        cur_trend = self.predicted_trend[series]
+        plot_df = pd.DataFrame({
+            'decline_decelerating': cur_trend[np.hstack((np.signbit(self.accel[:, p_indx]), False)) & self.slope_sign[:, p_indx]],
+            'decline_accelerating': cur_trend[(~ np.hstack((np.signbit(self.accel[:, p_indx]), False))) & self.slope_sign[:, p_indx]],
+            'growth_decelerating': cur_trend[np.hstack((np.signbit(self.accel[:, p_indx]), False)) & (~ self.slope_sign[:, p_indx])],
+            'growth_accelerating': cur_trend[(~ np.hstack((np.signbit(self.accel[:, p_indx]), False))) & (~ self.slope_sign[:, p_indx])],
+        }, index=cur_trend.index)
+        if start_date is not None:
+            plot_df = plot_df[plot_df.index >= start_date]
+        ax = plot_df.plot(title=title, color=colors, **kwargs)
+        ax.scatter(cur_trend.index[self.changepoints[:, p_indx]], cur_trend[self.changepoints[:, p_indx]], c='#fdcc09')
+        ax.scatter(cur_trend.index[self.zero_crossings[:, p_indx]], cur_trend[self.zero_crossings[:, p_indx]], c='#512f74')
+        if mod.trend_anomaly_detector is not None:
+            if mod.trend_anomaly_detector.output == "univariate":
+                i_anom = mod.trend_anomaly_detector.anomalies.index[mod.anomaly_detector.anomalies.iloc[:, 0] == -1]
+            else:
+                series_anom = mod.trend_anomaly_detector.anomalies[series]
+                i_anom = series_anom[series_anom == -1].index
+            if start_date is not None:
+                i_anom = i_anom[i_anom >= start_date]
+            ax.scatter(i_anom.tolist(), cur_trend.loc[i_anom], c="red")
+        if vline is not None:
+            ax.vlines(x=vline, ls='--', lw=1, colors='darkred', ymin=cur_trend.min(), ymax=cur_trend.max())
+        return ax
 
     def plot_things():  # placeholder for later plotting functions
         # plot components
@@ -1229,12 +1265,10 @@ def linear_model(x, y):
     # anomaly modeling
     # seasonality interactions
     # ar seasonality interaction (or remove)
-    # level shift anomaly detection
-    # colors to trend and anomaly points
     # test and bug fix everything
     # PLOT IMPACTS
     # overfitting to Lag 1
-    # components scaled back to space aren't right
+    # components scaled back to space aren't perfectly right
 
 # TEST
     # new_df
@@ -1304,11 +1338,27 @@ if False:
     result = pred.forecast
     with plt.style.context("seaborn-white"):
         series = random.choice(mod.column_names)
-        ax = pred.plot(df_daily if include_history else df_test, series=series, vline=df_test.index[0], start_date="2019-01-01")
+        start_date = "2019-07-01"
+        ax = pred.plot(df_daily if include_history else df_test, series=series, vline=df_test.index[0], start_date=start_date)
+        if mod.anomaly_detector:
+            if mod.anomaly_detector.output == "univariate":
+                i_anom = mod.anomaly_detector.anomalies.index[mod.anomaly_detector.anomalies.iloc[:, 0] == -1]
+            else:
+                series_anom = mod.anomaly_detector.anomalies[series]
+                i_anom = series_anom[series_anom == -1].index
+                i_anom = i_anom[i_anom >= start_date]
+            ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="red")
+        if mod.holiday_detector:
+            i_anom = mod.holiday_detector.dates_to_holidays(mod.df.index, style="series_flag")[series]
+            i_anom = i_anom.index[i_anom == 1]
+            if len(i_anom) > 0:
+                ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="darkgreen")
         plt.show()
         # mod.plot_components(pred, series=series, to_origin_space=False)
         # plt.show()
         mod.plot_components(pred, series=series, to_origin_space=True)
+        plt.show()
+        mod.plot_trend(series=series, vline=df_test.index[0], start_date=start_date)
     pred.evaluate(df_daily.reindex(result.index) if include_history else df_test)
     print(pred.avg_metrics.round(1))
 
