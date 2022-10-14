@@ -23,6 +23,7 @@
 * draft version of Cassandra model
 * bug fix for Categorical dateparts with 1 starts
 * updated load_daily to Wikimedia page views
+* added dwae metric
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

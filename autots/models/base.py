@@ -532,6 +532,7 @@ class PredictionObject(object):
             mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
         else:
             mage = np.mean(np.abs(np.sum(full_errors, axis=1)))
+        direc_sign = np.sign(F - last_of_array) == np.sign(A - last_of_array)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
@@ -560,10 +561,9 @@ class PredictionObject(object):
                     # maximum error point
                     'maxe': np.nanmax(self.full_mae_errors, axis=0),  # TAKE MAX for AGG
                     # origin directional accuracy
-                    'oda': np.nansum(
-                        np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0
-                    )
-                    / F.shape[0],
+                    'oda': np.nansum(direc_sign, axis=0) / F.shape[0],
+                    # plus one to squared errors to assure errors in 0 to 1 are still bigger than abs error
+                    "dwae": np.nansum(np.where(direc_sign, self.full_mae_errors, self.squared_errors + 1), axis=0) / F.shape[0],
                     # mean of values less than 85th percentile of error
                     'mqae': mqae(self.full_mae_errors, q=0.85, nan_flag=nan_flag),
                     # 90th percentile of error

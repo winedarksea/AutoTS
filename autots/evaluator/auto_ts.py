@@ -454,7 +454,8 @@ class AutoTS(object):
             'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
             'spl_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
             'oda_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-            'mqae_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+            'mqae_weighting': random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
+            'dwae_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
             'maxe_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
             'containment_weighting': random.choices(
                 [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
