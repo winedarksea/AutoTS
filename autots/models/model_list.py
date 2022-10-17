@@ -37,6 +37,7 @@ all_models = [
     'TMF',
     'LATC',
     'KalmanStateSpace',
+    'MetricMotif',
 ]
 # downweight slower models
 default = {
@@ -64,6 +65,7 @@ default = {
     'Theta': 1,
     'ARDL': 1,
     'ARCH': 1,
+    'MetricMotif': 1,
 }
 best = [
     'LastValueNaive',
@@ -117,6 +119,7 @@ fast = {
     'MAR': 1,
     'RRVAR': 1,
     'KalmanStateSpace': 1,
+    'MetricMotif': 1,
 }
 # models that can scale well if many CPU cores are available
 parallel = {
@@ -166,6 +169,7 @@ probabilistic = [
     # 'MultivariateRegression',
     'ARCH',
     'KalmanStateSpace',
+    'MetricMotif',
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -225,6 +229,7 @@ recombination_approved = [
     'TMF',
     'LATC',
     'KalmanStateSpace',
+    'MetricMotif',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -247,6 +252,7 @@ no_shared = [
     'NeuralProphet',
     'ARCH',
     'KalmanStateSpace',
+    'MetricMotif',
 ]
 # allow the use of a regressor, need to accept "User" (fail if not given), have 'regressor' param method
 regressor = [
@@ -273,6 +279,7 @@ motifs = [
     "MultivariateMotif",
     'SectionalMotif',
     'MotifSimulation',
+    'MetricMotif',
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {

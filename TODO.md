@@ -24,6 +24,7 @@
 * bug fix for Categorical dateparts with 1 starts
 * updated load_daily to Wikimedia page views
 * added dwae metric
+* added MetricMotif model
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

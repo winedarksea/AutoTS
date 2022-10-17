@@ -1017,7 +1017,7 @@ class Cassandra(ModelObject):
                 anomaly_intervention = general_template.sample(1).to_dict("records")[0]  # placeholder, probably
         else:
             anomaly_detector_params = None
-        model_str = random.choices(['AverageValueNaive', 'UnivariateMotif'], [0.5, 0.4], k=1)[0]
+        model_str = random.choices(['AverageValueNaive', 'MetricMotif'], [0.5, 0.4], k=1)[0]
         trend_model = {'Model': model_str}
         trend_model['ModelParameters'] = ModelMonster(model_str).get_new_params(method=method)
 
@@ -1136,8 +1136,8 @@ class Cassandra(ModelObject):
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         ax = plot_df.plot(title=title, color=colors, **kwargs)
-        ax.scatter(cur_trend.index[self.changepoints[:, p_indx]], cur_trend[self.changepoints[:, p_indx]], c='#fdcc09')
-        ax.scatter(cur_trend.index[self.zero_crossings[:, p_indx]], cur_trend[self.zero_crossings[:, p_indx]], c='#512f74')
+        ax.scatter(cur_trend.index[self.changepoints[:, p_indx]], cur_trend[self.changepoints[:, p_indx]], c='#fdcc09', s=0.7)
+        ax.scatter(cur_trend.index[self.zero_crossings[:, p_indx]], cur_trend[self.zero_crossings[:, p_indx]], c='#512f74', s=0.7)
         if mod.trend_anomaly_detector is not None:
             if mod.trend_anomaly_detector.output == "univariate":
                 i_anom = mod.trend_anomaly_detector.anomalies.index[mod.anomaly_detector.anomalies.iloc[:, 0] == -1]
@@ -1146,7 +1146,7 @@ class Cassandra(ModelObject):
                 i_anom = series_anom[series_anom == -1].index
             if start_date is not None:
                 i_anom = i_anom[i_anom >= start_date]
-            ax.scatter(i_anom.tolist(), cur_trend.loc[i_anom], c="red")
+            ax.scatter(i_anom.tolist(), cur_trend.loc[i_anom], c="red", s=0.7)
         if vline is not None:
             ax.vlines(x=vline, ls='--', lw=1, colors='darkred', ymin=cur_trend.min(), ymax=cur_trend.max())
         return ax
@@ -1347,12 +1347,12 @@ if False:
                 series_anom = mod.anomaly_detector.anomalies[series]
                 i_anom = series_anom[series_anom == -1].index
                 i_anom = i_anom[i_anom >= start_date]
-            ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="red")
+            ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="red", s=0.7)
         if mod.holiday_detector:
             i_anom = mod.holiday_detector.dates_to_holidays(mod.df.index, style="series_flag")[series]
             i_anom = i_anom.index[i_anom == 1]
             if len(i_anom) > 0:
-                ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="darkgreen")
+                ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="darkgreen", s=0.7)
         plt.show()
         # mod.plot_components(pred, series=series, to_origin_space=False)
         # plt.show()
