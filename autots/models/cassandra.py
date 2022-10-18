@@ -19,6 +19,7 @@ from autots.tools.window_functions import window_lin_reg_mean  # sliding_window_
 from autots.evaluator.auto_model import ModelMonster, model_forecast
 # scipy is technically optional but most likely is present
 try:
+    from scipy.optimize import minimize
     from scipy.stats import norm
 except Exception:
     class norm(object):
@@ -111,7 +112,7 @@ class Cassandra(ModelObject):
         self.multivariate_transformation = multivariate_transformation
         self.regressor_transformation = regressor_transformation
         self.regressors_used = regressors_used
-        self.linear_model = linear_model
+        self.linear_model = linear_model if linear_model is not None else {}
         self.randomwalk_n = randomwalk_n
         self.trend_window = trend_window
         self.trend_standin = trend_standin
@@ -165,11 +166,14 @@ class Cassandra(ModelObject):
                 df = self.scaler.transform(df)
         return df
 
-    def to_origin_space(self, df, trans_method='forecast'):
+    def to_origin_space(self, df, trans_method='forecast', components=False):
         """Take transformed outputs back to original feature space."""
         if self.scaling == "BaseScaler":
             # return self.preprocesser.inverse_transform(df, trans_method=trans_method) * self.scaler_std + self.scaler_mean
-            return self.preprocesser.inverse_transform(df * self.scaler_std + self.scaler_mean, trans_method=trans_method)
+            if components:
+                return self.preprocesser.inverse_transform(df * self.scaler_std, trans_method=trans_method)
+            else:
+                return self.preprocesser.inverse_transform(df * self.scaler_std + self.scaler_mean, trans_method=trans_method)
         else:
             # return self.scaler.inverse_transform(self.preprocesser.inverse_transform(df, trans_method=trans_method), trans_method=trans_method)
             return self.preprocesser.inverse_transform(
@@ -424,12 +428,12 @@ class Cassandra(ModelObject):
                 self.keep_cols_idx[col] = c_x.columns.get_indexer_for(self.keep_cols[col])
                 self.col_groupings[col] = self.keep_cols[col].str.partition("_").get_level_values(0)
                 c_x['intercept'] = 1
-                # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
-                self.params[col] = linear_model(c_x, self.df[col])
-                trend_residuals.append(
-                    self.df[col] - pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]), name=col, index=self.df.index)
-                )
                 self.x_array[col] = c_x
+                # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
+                self.params[col] = linear_model(c_x, self.df[col].to_frame(), params=self.linear_model)
+                trend_residuals.append(
+                    self.df[col] - pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]).flatten(), name=col, index=self.df.index)
+                )
             trend_residuals = pd.concat(trend_residuals, axis=1)
         else:
             # RUN LINEAR MODEL, WHEN NO LOOPED FEATURES
@@ -438,10 +442,7 @@ class Cassandra(ModelObject):
             self.col_groupings = self.keep_cols.str.partition("_").get_level_values(0)
             x_array['intercept'] = 1
             # run model
-            self.params = linear_model(x_array, self.df)
-            if self.linear_model == 'something_else':
-                # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
-                return NotImplemented
+            self.params = linear_model(x_array, self.df, params=self.linear_model)
             trend_residuals = self.df - np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
             self.x_array = x_array
 
@@ -645,13 +646,13 @@ class Cassandra(ModelObject):
                 if np.any(np.isnan(c_x.astype(float))):  # remove later, for debugging
                     raise ValueError("nan values in predict c_x_array")
                 predicts.append(
-                    pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]), name=col, index=dates)
+                    pd.Series(np.dot(c_x[self.keep_cols[col]], self.params[col][self.keep_cols_idx[col]]).flatten(), name=col, index=dates)
                 )
                 self.predict_x_array[col] = c_x
                 if return_components:
                     indices = [tuple(group)[-1][0] for key, group in groupby(enumerate(self.col_groupings[col]), key=itemgetter(1))][:-1]
                     new_indx = [0] + [x + 1 for x in indices]
-                    temp = c_x[self.keep_cols[col]] * self.params[col][self.keep_cols_idx[col]]
+                    temp = c_x[self.keep_cols[col]] * self.params[col][self.keep_cols_idx[col]].flatten()
                     self.components.append(np.add.reduceat(np.asarray(temp), sorted(new_indx), axis=1))
             if return_components:
                 self.components = np.moveaxis(np.array(self.components), 0, 2)
@@ -659,10 +660,6 @@ class Cassandra(ModelObject):
             return pd.concat(predicts, axis=1)
         else:
             # run model
-            if self.linear_model == 'something_else':
-                # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
-                return NotImplemented
-
             res = np.dot(x_array[self.keep_cols], self.params[self.keep_cols_idx])
             if return_components:
                 arr = x_array[self.keep_cols].to_numpy()
@@ -689,7 +686,7 @@ class Cassandra(ModelObject):
                 comp_df = self.to_origin_space(pd.DataFrame(
                     self.components[:, comp, :],
                     index=t_indx, columns=self.column_names,
-                ))
+                ), components=True)
             else:
                 comp_df = (pd.DataFrame(
                     self.components[:, comp, :],
@@ -1017,7 +1014,7 @@ class Cassandra(ModelObject):
                 anomaly_intervention = general_template.sample(1).to_dict("records")[0]  # placeholder, probably
         else:
             anomaly_detector_params = None
-        model_str = random.choices(['AverageValueNaive', 'MetricMotif'], [0.5, 0.4], k=1)[0]
+        model_str = random.choices(['AverageValueNaive', 'MetricMotif'], [0.3, 0.7], k=1)[0]
         trend_model = {'Model': model_str}
         trend_model['ModelParameters'] = ModelMonster(model_str).get_new_params(method=method)
 
@@ -1026,6 +1023,26 @@ class Cassandra(ModelObject):
             trend_anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
         else:
             trend_anomaly_detector_params = None
+        linear_model = random.choices(['lstsq', 'linalg_solve', 'l1_norm'], [0.6, 0.2, 0.1])[0]
+        recency_weighting = random.choices([None, 0.05, 0.1, 0.25], [0.7, 0.1, 0.1, 0.1])[0]
+        if linear_model in ['lstsq']:
+            linear_model = {
+                'model': linear_model,
+                'lambda': random.choices([None, 0.1, 1, 10], [0.7, 0.1, 0.1, 0.1])[0],
+                'recency_weighting': recency_weighting,
+            }
+        if linear_model in ['linalg_solve']:
+            linear_model = {
+                'model': linear_model,
+                'lambda': random.choices([0, 0.1, 1, 10], [0.4, 0.2, 0.2, 0.2])[0],
+                'recency_weighting': recency_weighting,
+            }
+        elif linear_model == 'l1_norm':
+            linear_model = {
+                'model': linear_model,
+                'recency_weighting': recency_weighting,
+                'maxiter': random.choices([250, 15000, 25000], [0.2, 0.6, 0.2])[0],
+            }
         return {
             "preprocessing_transformation": RandomTransform(
                 transformer_list=filters, transformer_max_depth=2, allow_none=True
@@ -1058,7 +1075,7 @@ class Cassandra(ModelObject):
                 allow_none=False, no_nan_fill=False  # probably want some more usable defaults first as many random are senseless
             ),
             "regressors_used": random.choices([True, False], [0.5, 0.5])[0],
-            "linear_model": 'lstsq',
+            "linear_model": linear_model,
             "randomwalk_n": random.choices([None, 10], [0.5, 0.5])[0],
             "trend_window": random.choices([3, 15, 90, 365], [0.2, 0.2, 0.2, 0.2])[0],
             "trend_standin": random.choices(
@@ -1121,23 +1138,24 @@ class Cassandra(ModelObject):
             colors=["#d4f74f", "#82ab5a", "#c12600", "#ff6c05"],
             title=None, start_date=None, **kwargs
     ):
+        # YMAX from PLOT ONLY
         if series is None:
             series = random.choice(self.column_names)
         if title is None:
             title = f"Trend Breakdown for {series}"
         p_indx = self.column_names.get_loc(series)
-        cur_trend = self.predicted_trend[series]
+        cur_trend = self.predicted_trend[series].copy()
         plot_df = pd.DataFrame({
-            'decline_decelerating': cur_trend[np.hstack((np.signbit(self.accel[:, p_indx]), False)) & self.slope_sign[:, p_indx]],
-            'decline_accelerating': cur_trend[(~ np.hstack((np.signbit(self.accel[:, p_indx]), False))) & self.slope_sign[:, p_indx]],
+            'decline_accelerating': cur_trend[np.hstack((np.signbit(self.accel[:, p_indx]), False)) & self.slope_sign[:, p_indx]],
+            'decline_decelerating': cur_trend[(~ np.hstack((np.signbit(self.accel[:, p_indx]), False))) & self.slope_sign[:, p_indx]],
             'growth_decelerating': cur_trend[np.hstack((np.signbit(self.accel[:, p_indx]), False)) & (~ self.slope_sign[:, p_indx])],
             'growth_accelerating': cur_trend[(~ np.hstack((np.signbit(self.accel[:, p_indx]), False))) & (~ self.slope_sign[:, p_indx])],
         }, index=cur_trend.index)
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         ax = plot_df.plot(title=title, color=colors, **kwargs)
-        ax.scatter(cur_trend.index[self.changepoints[:, p_indx]], cur_trend[self.changepoints[:, p_indx]], c='#fdcc09', s=0.7)
-        ax.scatter(cur_trend.index[self.zero_crossings[:, p_indx]], cur_trend[self.zero_crossings[:, p_indx]], c='#512f74', s=0.7)
+        ax.scatter(cur_trend.index[self.changepoints[:, p_indx]], cur_trend[self.changepoints[:, p_indx]], c='#fdcc09', s=3.0)
+        ax.scatter(cur_trend.index[self.zero_crossings[:, p_indx]], cur_trend[self.zero_crossings[:, p_indx]], c='#512f74', s=3.0)
         if mod.trend_anomaly_detector is not None:
             if mod.trend_anomaly_detector.output == "univariate":
                 i_anom = mod.trend_anomaly_detector.anomalies.index[mod.anomaly_detector.anomalies.iloc[:, 0] == -1]
@@ -1146,9 +1164,9 @@ class Cassandra(ModelObject):
                 i_anom = series_anom[series_anom == -1].index
             if start_date is not None:
                 i_anom = i_anom[i_anom >= start_date]
-            ax.scatter(i_anom.tolist(), cur_trend.loc[i_anom], c="red", s=0.7)
+            ax.scatter(i_anom.tolist(), cur_trend.loc[i_anom], c="red", s=3.0)
         if vline is not None:
-            ax.vlines(x=vline, ls='--', lw=1, colors='darkred', ymin=cur_trend.min(), ymax=cur_trend.max())
+            ax.vlines(x=vline, ls='--', lw=1, colors='darkred', ymin=cur_trend[cur_trend.index >= start_date].min(), ymax=cur_trend[cur_trend.index >= start_date].max())
         return ax
 
     def plot_things():  # placeholder for later plotting functions
@@ -1223,8 +1241,69 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
         return ValueError(f"Seasonality `{seasonality}` not recognized")
 
 
-def linear_model(x, y):
-    return np.linalg.lstsq(x, y, rcond=None)[0]
+#####################################
+# JUST LEAST SQUARES UNIVARIATE
+# https://stackoverflow.com/questions/17679140/multiple-linear-regression-with-python
+
+def lstsq_solve(X, y, lamb=1, identity_matrix=None):
+    if identity_matrix is None:
+        identity_matrix = np.zeros((X.shape[1], X.shape[1]))
+        np.fill_diagonal(identity_matrix, 1)
+        identity_matrix[0, 0] = 0
+    XtX_lamb = X.T.dot(X) + lamb * identity_matrix
+    XtY = X.T.dot(y)
+    return np.linalg.solve(XtX_lamb, XtY)
+
+
+def cost_function_l1(params, X, y):
+    return np.sum(np.abs(y - np.dot(X, params.reshape(X.shape[1], y.shape[1]))))
+
+
+def cost_function_quantile(params, X, y, q=0.9):
+    cut = int(y.shape[0] * q)
+    return np.sum(np.partition(np.abs(y - np.dot(X, params.reshape(X.shape[1], y.shape[1]))), cut, axis=0)[0:cut])
+
+
+def cost_function_l2(params, X, y):
+    return np.linalg.norm(y - np.dot(X, params.reshape(X.shape[1], y.shape[1])))
+
+
+# could do partial pooling by minimizing a function that mixes shared and unshared coefficients (multiplicative)
+def lstsq_minimize(X, y, maxiter=15000):
+    """Any cost function version of lin reg."""
+    # start with lstsq fit as estimated point
+    x0 = lstsq_solve(X, y).flatten()
+    # assuming scaled, these should be reasonable bounds
+    bounds = [(-10, 10) for x in x0]
+    return minimize(
+        cost_function_l1, x0, args=(X, y), bounds=bounds,
+        options={'maxiter': maxiter}
+    ).x.reshape(X.shape[1], y.shape[1])
+
+
+def linear_model(x, y, params):
+    model_type = params.get("model", "lstsq")
+    lambd = params.get("lambda", None)
+    rec = params.get("recency_weighting", None)
+    if lambd is not None:
+        id_mat = np.zeros((x.shape[1], x.shape[1]))
+        np.fill_diagonal(id_mat, 1)
+        id_mat[0, 0] = 0
+    if rec is not None:
+        weights = ((np.arange(len(x)) + 1) ** rec)  # 0.05 - 0.25
+        x = x * weights[..., None]
+        y = np.asarray(y) * weights[..., None]
+    if model_type == "lstsq":
+        if lambd is not None:
+            return np.linalg.lstsq(x.T.dot(x) + lambd * id_mat, x.T.dot(y), rcond=None)[0]
+        else:
+            return np.linalg.lstsq(x, y, rcond=None)[0]
+    elif model_type == "linalg_solve":
+        return lstsq_solve(x, y, lamb=lambd, identity_matrix=id_mat)
+    elif model_type == "l1_norm":
+        return lstsq_minimize(x, y, maxiter=params.get("maxiter", 15000))
+    else:
+        raise ValueError("linear model not recognized")
 
 # Seasonalities
     # maybe fixed 3 seasonalities
@@ -1347,20 +1426,24 @@ if False:
                 series_anom = mod.anomaly_detector.anomalies[series]
                 i_anom = series_anom[series_anom == -1].index
                 i_anom = i_anom[i_anom >= start_date]
-            ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="red", s=0.7)
+            ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="red", s=3.0)
         if mod.holiday_detector:
             i_anom = mod.holiday_detector.dates_to_holidays(mod.df.index, style="series_flag")[series]
             i_anom = i_anom.index[i_anom == 1]
             if len(i_anom) > 0:
-                ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="darkgreen", s=0.7)
+                ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="darkgreen", s=3.0)
         plt.show()
+        # plt.savefig("forecast.png", dpi=300)
         # mod.plot_components(pred, series=series, to_origin_space=False)
         # plt.show()
         mod.plot_components(pred, series=series, to_origin_space=True)
+        # plt.savefig("components.png", dpi=300)
         plt.show()
         mod.plot_trend(series=series, vline=df_test.index[0], start_date=start_date)
+        # plt.savefig("trend.png", dpi=300)
     pred.evaluate(df_daily.reindex(result.index) if include_history else df_test)
     print(pred.avg_metrics.round(1))
+    print(c_params['linear_model'])
 
 # MULTIPLICATIVE SEASONALITY AND HOLIDAYS
 
