@@ -862,7 +862,7 @@ class RollingMeanTransformer(EmptyTransformer):
 
     @staticmethod
     def get_new_params(method: str = "random"):
-        bool_c = bool(random.getrandbits(1))
+        bool_c = random.choices([True, False], [0.7, 0.3])[0]
         if method == "fast":
             choice = random.choice([3, 7, 10, 12])
         else:
@@ -934,14 +934,12 @@ class RollingMeanTransformer(EmptyTransformer):
                     temp_row.index = pd.DatetimeIndex([temp_index])
                     staged = pd.concat([staged, temp_row], axis=0)
                 return staged
-
             # current_inversed = current * window - cumsum(window-1 to previous)
-            if trans_method == "forecast":
+            elif trans_method == "forecast":
                 staged = self.last_values
-                df = pd.concat([self.last_rolling, df], axis=0)
-                diffed = ((df.astype(float) - df.shift(1).astype(float)) * window).tail(
-                    len(df.index)
-                )
+                # these are all rolling values at first (forecast rolling and historic)
+                df = pd.concat([self.last_rolling, df], axis=0).astype(float)
+                diffed = ((df - df.shift(1)) * window)
                 diffed = diffed.tail(len(diffed.index) - 1)
                 temp_cols = diffed.columns
                 for n in range(len(diffed.index)):
@@ -954,8 +952,7 @@ class RollingMeanTransformer(EmptyTransformer):
                     )
                     temp_row.index = pd.DatetimeIndex([temp_index])
                     staged = pd.concat([staged, temp_row], axis=0)
-                staged = staged.tail(len(diffed.index))
-                return staged
+                return staged.tail(len(diffed.index))
 
 
 class SeasonalDifference(EmptyTransformer):
@@ -3702,7 +3699,7 @@ transformer_dict = {
     "HPFilter": 0.01,
     "DatepartRegression": 0.01,
     "ClipOutliers": 0.05,
-    "Discretize": 0.03,
+    "Discretize": 0.01,
     "CenterLastValue": 0.01,
     "Round": 0.02,
     "Slice": 0.02,
@@ -3741,7 +3738,7 @@ superfast_transformer_dict = {
     "SeasonalDifference": 0.1,
     "bkfilter": 0.05,
     "ClipOutliers": 0.05,
-    "Discretize": 0.03,
+    "Discretize": 0.01,
     "Slice": 0.02,
     "EWMAFilter": 0.01,
     "AlignLastValue": 0.05,
@@ -3750,11 +3747,11 @@ superfast_transformer_dict = {
 # filters that remain near original space most of the time
 filters = {
     'ScipyFilter': 0.1,
-    "RollingMeanTransformer": 0.1,
+    # "RollingMeanTransformer": 0.1,  # makes for a mess with components if fixed=False
     "EWMAFilter": 0.1,
     "bkfilter": 0.1,
     "Slice": 0.01,  # sorta horizontal filter
-    "AlignLastValue": 0.1,
+    "AlignLastValue": 0.15,
     "KalmanSmoothing": 0.1,
     "ClipOutliers": 0.1,
 }

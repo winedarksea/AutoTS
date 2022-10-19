@@ -37,7 +37,6 @@ from autots.models.basics import (
     KalmanStateSpace,
     MetricMotif,
 )
-from autots.models.cassandra import Cassandra
 from autots.models.statsmodels import (
     GLS,
     GLM,
@@ -583,10 +582,10 @@ def ModelMonster(
             **parameters,
         )
     elif model == "Cassandra":
+        from autots.models.cassandra import Cassandra  # circular import
         return Cassandra(
             frequency=frequency,
             prediction_interval=prediction_interval,
-            holiday_country=holiday_country,
             random_seed=random_seed,
             verbose=verbose,
             n_jobs=n_jobs,

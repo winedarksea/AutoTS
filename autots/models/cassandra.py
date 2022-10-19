@@ -43,6 +43,7 @@ class Cassandra(ModelObject):
     Seasonalities are hard-coded to be as days so 7 will always = weekly even if data isn't daily
     For slope analysis and zero crossings, a slope of 0 evaluates as a positive sign (=>0). Exactly 0 slope is rare real world data
     Does not currently follow the regression_type='User' and fails if no regressor pattern of other models
+    For component decomposition, scale will be inaccurate unless 'BaseScaler' is used, but regardless this won't affect final forecast
 
     Args:
         pass
@@ -67,7 +68,7 @@ class Cassandra(ModelObject):
         preprocessing_transformation: dict = None,  # filters by default only
         scaling: str = "BaseScaler",  # pulled out from transformation as a scaler is not optional, maybe allow a list
         past_impacts_intervention: str = None,  # 'remove', 'plot_only', 'regressor'
-        seasonalities: dict = {},  # interactions added if fourier and order matches
+        seasonalities: dict = None,  # interactions added if fourier and order matches
         ar_lags: list = None,
         ar_interaction_seasonality: dict = None,  # equal or less than number of ar lags
         anomaly_detector_params: dict = None,  # apply before any preprocessing (as has own)
@@ -86,7 +87,7 @@ class Cassandra(ModelObject):
         trend_anomaly_detector_params: dict = None,  # difference first, run on slope only, use Window n/2 diff to rule out return to
         # trend_anomaly_intervention: str = None,
         trend_transformation: dict = {},
-        trend_model: dict = {},  # have one or two in built, then redirect to any AutoTS model for other choices
+        trend_model: dict = {'Model': 'MetricMotif', 'ModelParameters': {}},  # have one or two in built, then redirect to any AutoTS model for other choices
         trend_phi: float = None,
         constraint: dict = None,
         # not modeling related:
@@ -96,6 +97,8 @@ class Cassandra(ModelObject):
         verbose: int = 0,
         n_jobs: int = "auto",
     ):
+        if preprocessing_transformation is None:
+            preprocessing_transformation = {}
         self.preprocessing_transformation = preprocessing_transformation
         self.scaling = scaling
         self.past_impacts_intervention = past_impacts_intervention
@@ -167,19 +170,19 @@ class Cassandra(ModelObject):
                 df = self.scaler.transform(df)
         return df
 
-    def to_origin_space(self, df, trans_method='forecast', components=False):
+    def to_origin_space(self, df, trans_method='forecast', components=False, bounds=False):
         """Take transformed outputs back to original feature space."""
         if self.scaling == "BaseScaler":
             # return self.preprocesser.inverse_transform(df, trans_method=trans_method) * self.scaler_std + self.scaler_mean
             if components:
-                return self.preprocesser.inverse_transform(df * self.scaler_std, trans_method=trans_method)
+                return self.preprocesser.inverse_transform(df * self.scaler_std, trans_method=trans_method, bounds=bounds)
             else:
-                return self.preprocesser.inverse_transform(df * self.scaler_std + self.scaler_mean, trans_method=trans_method)
+                return self.preprocesser.inverse_transform(df * self.scaler_std + self.scaler_mean, trans_method=trans_method, bounds=bounds)
         else:
             # return self.scaler.inverse_transform(self.preprocesser.inverse_transform(df, trans_method=trans_method), trans_method=trans_method)
             return self.preprocesser.inverse_transform(
-                self.scaler.inverse_transform(df, trans_method=trans_method),
-                trans_method=trans_method,
+                self.scaler.inverse_transform(df, trans_method=trans_method, bounds=bounds),
+                trans_method=trans_method, bounds=bounds
             )
 
     def create_t(self, DTindex):
@@ -257,6 +260,8 @@ class Cassandra(ModelObject):
             if self.scaling == "BaseScaler":
                 self.df = self.base_scaler(self.df)
             else:
+                if self.scaling is None:
+                    raise ValueError("scaling must not be None. Try 'BaseScaler'")
                 self.scaler = GeneralTransformer(**self.scaling)
                 self.df = self.scaler.fit_transform(self.df)
         # additional transforms before multivariate feature creation
@@ -724,7 +729,7 @@ class Cassandra(ModelObject):
         return df_forecast
 
     def predict(
-            self, forecast_length, include_history=True, future_regressor=None,
+            self, forecast_length, include_history=False, future_regressor=None,
             regressor_per_series=None, flag_regressors=None, future_impacts=None, new_df=None,
             regressor_forecast_model=None, regressor_forecast_model_params=None, regressor_forecast_transformations=None,
     ):
@@ -791,6 +796,9 @@ class Cassandra(ModelObject):
             elif self.future_regressor_train is not None and self.flag_regressor_train is not None:
                 comp_regr_train = pd.concat([self.future_regressor_train, self.flag_regressor_train], axis=1)
                 comp_regr = pd.concat([future_regressor, flag_regressors], axis=1)
+            else:
+                comp_regr_train = None
+                comp_regr = None
             resid = None
             # create new rolling residual if new data provided
             if new_df is not None:
@@ -895,12 +903,12 @@ class Cassandra(ModelObject):
                 self.to_origin_space(df_forecast.forecast.tail(forecast_length), trans_method='forecast'),
             ])
             df_forecast.lower_forecast = pd.concat([
-                self.to_origin_space(df_forecast.lower_forecast.head(hdn), trans_method='original'),
-                self.to_origin_space(df_forecast.lower_forecast.tail(forecast_length), trans_method='forecast'),
+                self.to_origin_space(df_forecast.lower_forecast.head(hdn), trans_method='original', bounds=True),
+                self.to_origin_space(df_forecast.lower_forecast.tail(forecast_length), trans_method='forecast', bounds=True),
             ])
             df_forecast.upper_forecast = pd.concat([
-                self.to_origin_space(df_forecast.upper_forecast.head(hdn), trans_method='original'),
-                self.to_origin_space(df_forecast.upper_forecast.tail(forecast_length), trans_method='forecast'),
+                self.to_origin_space(df_forecast.upper_forecast.head(hdn), trans_method='original', bounds=True),
+                self.to_origin_space(df_forecast.upper_forecast.tail(forecast_length), trans_method='forecast', bounds=True),
             ])
             self.predicted_trend = pd.concat([
                 self.to_origin_space(trend_forecast.forecast.head(hdn), trans_method='original'),
@@ -1030,7 +1038,7 @@ class Cassandra(ModelObject):
                 anomaly_intervention = general_template.sample(1).to_dict("records")[0]  # placeholder, probably
         else:
             anomaly_detector_params = None
-        model_str = random.choices(['AverageValueNaive', 'MetricMotif'], [0.3, 0.7], k=1)[0]
+        model_str = random.choices(['AverageValueNaive', 'MetricMotif', "LastValueNaive"], [0.2, 0.7, 0.1], k=1)[0]
         trend_model = {'Model': model_str}
         trend_model['ModelParameters'] = ModelMonster(model_str).get_new_params(method=method)
 
@@ -1368,8 +1376,7 @@ def linear_model(x, y, params):
     # ar seasonality interaction (or remove)
     # test and bug fix everything
     # PLOT IMPACTS
-    # overfitting to Lag 1
-    # components scaled back to space aren't perfectly right
+    # l1_norm isn't working
 
 # TEST
     # new_df
@@ -1476,7 +1483,7 @@ if False:
         # plt.savefig("trend.png", dpi=300)
     pred.evaluate(df_daily.reindex(result.index) if include_history else df_test)
     print(pred.avg_metrics.round(1))
-    print(c_params['linear_model'])
+    print(c_params['trend_model'])
 
 # MULTIPLICATIVE SEASONALITY AND HOLIDAYS
 
