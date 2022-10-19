@@ -10,7 +10,7 @@ import random
 import numpy as np
 import pandas as pd
 # using transformer version of Anomaly/Holiday to use a lower level import than evaluator
-from autots.tools.transform import GeneralTransformer, RandomTransform, scalers, filters, HolidayTransformer, AnomalyRemoval, EmptyTransformer
+from autots.tools.transform import GeneralTransformer, RandomTransform, scalers, filters, decompositions, HolidayTransformer, AnomalyRemoval, EmptyTransformer
 from autots.tools import cpu_count
 from autots.models.base import ModelObject, PredictionObject
 from autots.templates.general import general_template
@@ -42,6 +42,7 @@ class Cassandra(ModelObject):
     Running predict updates some internal attributes used in plotting and other figures, generally expect to use functions to latest predict
     Seasonalities are hard-coded to be as days so 7 will always = weekly even if data isn't daily
     For slope analysis and zero crossings, a slope of 0 evaluates as a positive sign (=>0). Exactly 0 slope is rare real world data
+    Does not currently follow the regression_type='User' and fails if no regressor pattern of other models
 
     Args:
         pass
@@ -722,7 +723,12 @@ class Cassandra(ModelObject):
         )
         return df_forecast
 
-    def predict(self, forecast_length, include_history=True, future_regressor=None, regressor_per_series=None, flag_regressors=None, future_impacts=None, new_df=None):
+    def predict(
+            self, forecast_length, include_history=True, future_regressor=None,
+            regressor_per_series=None, flag_regressors=None, future_impacts=None, new_df=None,
+            regressor_forecast_model=None, regressor_forecast_model_params=None, regressor_forecast_transformations=None,
+    ):
+        """Generate a forecast."""
         predictStartTime = self.time()
         if self.trend_train is None:
             raise ValueError("Cassandra must first be .fit() successfully.")
@@ -737,9 +743,9 @@ class Cassandra(ModelObject):
         if future_regressor is None and self.future_regressor_train is not None and forecast_length is not None:
             print("future_regressor not provided, using forecasts of historical")
             future_regressor = model_forecast(
-                model_name=self.trend_model['Model'],
-                model_param_dict=self.trend_model['ModelParameters'],
-                model_transform_dict=self.preprocessing_transformation,
+                model_name=self.trend_model['Model'] if regressor_forecast_model is None else regressor_forecast_model,
+                model_param_dict=self.trend_model['ModelParameters'] if regressor_forecast_model_params is None else regressor_forecast_model_params,
+                model_transform_dict=self.preprocessing_transformation if regressor_forecast_transformations is None else regressor_forecast_transformations,
                 df_train=self.future_regressor_train,
                 forecast_length=forecast_length,
                 frequency=self.frequency,
@@ -775,6 +781,16 @@ class Cassandra(ModelObject):
         # generate trend
         # MAY WANT TO PASS future_regressor HERE
         if forecast_length is not None:
+            # combine regressor types depending on what is given
+            if self.future_regressor_train is None and self.flag_regressor_train is not None:
+                comp_regr_train = self.flag_regressor_train
+                comp_regr = flag_regressors
+            elif self.future_regressor_train is not None and self.flag_regressor_train is None:
+                comp_regr_train = self.future_regressor_train
+                comp_regr = future_regressor
+            elif self.future_regressor_train is not None and self.flag_regressor_train is not None:
+                comp_regr_train = pd.concat([self.future_regressor_train, self.flag_regressor_train], axis=1)
+                comp_regr = pd.concat([future_regressor, flag_regressors], axis=1)
             resid = None
             # create new rolling residual if new data provided
             if new_df is not None:
@@ -795,8 +811,8 @@ class Cassandra(ModelObject):
                 prediction_interval=self.prediction_interval,
                 # no_negatives=no_negatives,
                 # constraint=constraint,
-                future_regressor_train=self.future_regressor_train,
-                future_regressor_forecast=future_regressor,
+                future_regressor_train=comp_regr_train,
+                future_regressor_forecast=comp_regr,
                 # holiday_country=holiday_country,
                 fail_on_forecast_nan=True,
                 random_seed=self.random_seed,
@@ -990,7 +1006,7 @@ class Cassandra(ModelObject):
     @staticmethod
     def get_new_params(method='fast'):
         # have fast option that avoids any of the loop approaches
-        scaling = random.choice(['BaseScaler', 'other'])
+        scaling = random.choices(['BaseScaler', 'other'], [0.8, 0.2])[0]
         if scaling == "other":
             scaling = RandomTransform(
                 transformer_list=scalers, transformer_max_depth=1,
@@ -1043,6 +1059,10 @@ class Cassandra(ModelObject):
                 'recency_weighting': recency_weighting,
                 'maxiter': random.choices([250, 15000, 25000], [0.2, 0.6, 0.2])[0],
             }
+        if method == "regressor":
+            regressors_used = True
+        else:
+            regressors_used = random.choices([True, False], [0.5, 0.5])[0]
         return {
             "preprocessing_transformation": RandomTransform(
                 transformer_list=filters, transformer_max_depth=2, allow_none=True
@@ -1055,7 +1075,7 @@ class Cassandra(ModelObject):
             )[0],
             "ar_lags": random.choices(
                 [None, [1], [1, 7], [7]],
-                [0.9, 0.05, 0.05, 0.05],
+                [0.9, 0.025, 0.025, 0.05],
             )[0],
             "ar_interaction_seasonality": NotImplemented,
             "anomaly_detector_params": anomaly_detector_params,
@@ -1071,10 +1091,10 @@ class Cassandra(ModelObject):
                 transformer_list="fast", transformer_max_depth=3  # probably want some more usable defaults first as many random are senseless
             ),
             "regressor_transformation": RandomTransform(
-                transformer_list=scalers, transformer_max_depth=1,
+                transformer_list={**scalers, **decompositions}, transformer_max_depth=1,
                 allow_none=False, no_nan_fill=False  # probably want some more usable defaults first as many random are senseless
             ),
-            "regressors_used": random.choices([True, False], [0.5, 0.5])[0],
+            "regressors_used": regressors_used,
             "linear_model": linear_model,
             "randomwalk_n": random.choices([None, 10], [0.5, 0.5])[0],
             "trend_window": random.choices([3, 15, 90, 365], [0.2, 0.2, 0.2, 0.2])[0],
@@ -1154,8 +1174,8 @@ class Cassandra(ModelObject):
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         ax = plot_df.plot(title=title, color=colors, **kwargs)
-        ax.scatter(cur_trend.index[self.changepoints[:, p_indx]], cur_trend[self.changepoints[:, p_indx]], c='#fdcc09', s=3.0)
-        ax.scatter(cur_trend.index[self.zero_crossings[:, p_indx]], cur_trend[self.zero_crossings[:, p_indx]], c='#512f74', s=3.0)
+        # ax.scatter(cur_trend.index[self.changepoints[:, p_indx]], cur_trend[self.changepoints[:, p_indx]], c='#fdcc09', s=4.0)
+        # ax.scatter(cur_trend.index[self.zero_crossings[:, p_indx]], cur_trend[self.zero_crossings[:, p_indx]], c='#512f74', s=4.0)
         if mod.trend_anomaly_detector is not None:
             if mod.trend_anomaly_detector.output == "univariate":
                 i_anom = mod.trend_anomaly_detector.anomalies.index[mod.anomaly_detector.anomalies.iloc[:, 0] == -1]
@@ -1164,7 +1184,9 @@ class Cassandra(ModelObject):
                 i_anom = series_anom[series_anom == -1].index
             if start_date is not None:
                 i_anom = i_anom[i_anom >= start_date]
-            ax.scatter(i_anom.tolist(), cur_trend.loc[i_anom], c="red", s=3.0)
+            # only plot if some anomalies, and not way too many anomalies
+            if len(i_anom) > 0 and len(i_anom) < len(plot_df) * 0.5:
+                ax.scatter(i_anom.tolist(), cur_trend.loc[i_anom], c="red", s=16.0)
         if vline is not None:
             ax.vlines(x=vline, ls='--', lw=1, colors='darkred', ymin=cur_trend[cur_trend.index >= start_date].min(), ymax=cur_trend[cur_trend.index >= start_date].max())
         return ax
@@ -1426,12 +1448,23 @@ if False:
                 series_anom = mod.anomaly_detector.anomalies[series]
                 i_anom = series_anom[series_anom == -1].index
                 i_anom = i_anom[i_anom >= start_date]
-            ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="red", s=3.0)
+            if len(i_anom) > 0 and len(i_anom) < len(df_daily) * 0.5:
+                ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="red", s=12.0)
         if mod.holiday_detector:
             i_anom = mod.holiday_detector.dates_to_holidays(mod.df.index, style="series_flag")[series]
             i_anom = i_anom.index[i_anom == 1]
-            if len(i_anom) > 0:
-                ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="darkgreen", s=3.0)
+            if len(i_anom) > 0 and len(i_anom) < len(df_daily) * 0.5:
+                ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="darkgreen", s=12.0)
+        if mod.trend_anomaly_detector is not None:
+            if mod.trend_anomaly_detector.output == "univariate":
+                i_anom = mod.trend_anomaly_detector.anomalies.index[mod.anomaly_detector.anomalies.iloc[:, 0] == -1]
+            else:
+                series_anom = mod.trend_anomaly_detector.anomalies[series]
+                i_anom = series_anom[series_anom == -1].index
+            if start_date is not None:
+                i_anom = i_anom[i_anom >= start_date]
+            if len(i_anom) > 0 and len(i_anom) < len(df_daily) * 0.5:
+                ax.scatter(i_anom.tolist(), df_daily.loc[i_anom][series], c="fuchsia", s=12.0)
         plt.show()
         # plt.savefig("forecast.png", dpi=300)
         # mod.plot_components(pred, series=series, to_origin_space=False)

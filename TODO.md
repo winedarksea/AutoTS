@@ -20,7 +20,7 @@
 * add KalmanStateSpace model (Kalman Filter + 'any' state space models)
 * AlignLastValue no longer applied to upper/lower forecast bounds
 * modified `regression` impact in HolidayTransformer to weighted least squares, moved existing to 'datepart_regression'
-* draft version of Cassandra model
+* added Cassandra model
 * bug fix for Categorical dateparts with 1 starts
 * updated load_daily to Wikimedia page views
 * added dwae metric
@@ -30,7 +30,7 @@
 	* Add to ModelMonster in auto_model.py
 	* add to appropriate model_lists: all, recombination_approved if so, no_shared if so
 	* add to model table in extended_tutorial.md (most columns here have an equivalent model_list)
-	* if model has regressors, make sure it meets Simulation Forecasting needs (method="regressor", fails on no regressor if "User")
+	* if model has regressors, make sure it meets Simulation Forecasting needs (method=="regressor", fails on no regressor if "User")
 
 ## New Transformer Checklist:
 	* Make sure that if it modifies the size (more/fewer columns or rows) it returns pd.DataFrame with proper index/columns

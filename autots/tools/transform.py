@@ -3756,6 +3756,7 @@ filters = {
     "Slice": 0.01,  # sorta horizontal filter
     "AlignLastValue": 0.1,
     "KalmanSmoothing": 0.1,
+    "ClipOutliers": 0.1,
 }
 scalers = {
     "MinMaxScaler": 0.05,
@@ -3766,6 +3767,14 @@ scalers = {
     "Discretize": 0.01,
     "QuantileTransformer": 0.1,
     "PowerTransformer": 0.05,
+}
+# intended to clean up external regressors
+decompositions = {
+    "STLFilter": 0.05,
+    "Detrend": 0.05,
+    "DifferencedTransformer": 0.05,
+    "DatepartRegression": 0.05,
+    "ClipOutliers": 0.05,
 }
 transformer_class = {}
 

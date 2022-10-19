@@ -38,6 +38,7 @@ all_models = [
     'LATC',
     'KalmanStateSpace',
     'MetricMotif',
+    'Cassandra',
 ]
 # downweight slower models
 default = {
@@ -121,6 +122,7 @@ fast = {
     'RRVAR': 1,
     'KalmanStateSpace': 1,
     'MetricMotif': 1,
+    'Cassandra': 1,
 }
 # models that can scale well if many CPU cores are available
 parallel = {
@@ -171,6 +173,7 @@ probabilistic = [
     'ARCH',
     'KalmanStateSpace',
     'MetricMotif',
+    'Cassandra',
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -191,6 +194,7 @@ multivariate = [
     'MAR',
     'TMF',
     'LATC',
+    'Cassandra',  # depends
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -231,6 +235,7 @@ recombination_approved = [
     'LATC',
     'KalmanStateSpace',
     'MetricMotif',
+    'Cassandra',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -274,6 +279,7 @@ regressor = [
     'ARDL',
     'NeuralProphet',
     'ARCH',
+    'Cassandra',
 ]
 motifs = [
     'UnivariateMotif',

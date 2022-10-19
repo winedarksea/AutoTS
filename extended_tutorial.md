@@ -856,6 +856,7 @@ Currently `MultivariateRegression` has the option to utilize a stock GradientBoo
 |  NeuralProphet          | neuralprophet |                        |    nyi        |     pytorch     | yes   |              |              | True          |
 |  PytorchForecasting     | pytorch-forecasting |                  |    True       |     pytorch     | yes   | True         |              |               |
 |  ARCH                   | arch         |                         |    True       |     joblib      |       |              |              | True          |
+|  Cassandra              | scipy        |                         |    True       |                 |       | True         |              | True          |
 |  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         | nyi           |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  TensorflowSTS          | tensorflow_probability |               |    True       |                 | yes   | True         | True         |               |
