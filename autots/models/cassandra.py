@@ -208,7 +208,7 @@ class Cassandra(ModelObject):
 
         # what features will require separate models to be fit as X will not be consistent for all
         if isinstance(self.anomaly_detector_params, dict):
-            anomaly_not_uni = self.anomaly_detector_params.get('output', None) != 'univariate'
+            self.anomaly_not_uni = self.anomaly_detector_params.get('output', None) != 'univariate'
         self.anomaly_not_uni = False
         self.loop_required = (
             (self.ar_lags is not None) or (
@@ -217,7 +217,7 @@ class Cassandra(ModelObject):
             ) or (
                 (regressor_per_series is not None) and self.regressors_used
             ) or (
-                isinstance(self.anomaly_intervention, dict) and anomaly_not_uni
+                isinstance(self.anomaly_intervention, dict) and self.anomaly_not_uni
             ) or (
                 self.past_impacts_intervention == "regressor" and past_impacts is not None
             )
@@ -332,6 +332,8 @@ class Cassandra(ModelObject):
             if self.regressor_transformation is not None:
                 self.regressor_transformer = GeneralTransformer(**self.regressor_transformation)
                 self.future_regressor_train = self.regressor_transformer.fit_transform(clean_regressor(future_regressor))
+            else:
+                self.regressor_transformer = GeneralTransformer(**{})
             x_list.append(self.future_regressor_train.reindex(self.df.index))
         if flag_regressors is not None and self.regressors_used:
             self.flag_regressor_train = clean_regressor(flag_regressors, prefix="regrflags_")
@@ -761,9 +763,9 @@ class Cassandra(ModelObject):
                 n_jobs=self.n_jobs,
             ).forecast
             full_regr = pd.concat([self.future_regressor_train, future_regressor])
-        if future_regressor is not None:
+        if future_regressor is not None and self.regressors_used:
             full_regr = pd.concat([self.future_regressor_train, self.regressor_transformer.fit_transform(clean_regressor(future_regressor))])
-        if flag_regressors is not None and forecast_length is not None:
+        if flag_regressors is not None and forecast_length is not None and self.regressors_used:
             all_flags = pd.concat([self.flag_regressor_train, clean_regressor(flag_regressors, prefix="regrflags_")])
         else:
             if self.flag_regressor_train is not None and forecast_length is not None and self.regressors_used:
@@ -1085,7 +1087,7 @@ class Cassandra(ModelObject):
                 [None, [1], [1, 7], [7]],
                 [0.9, 0.025, 0.025, 0.05],
             )[0],
-            "ar_interaction_seasonality": NotImplemented,
+            "ar_interaction_seasonality": None,
             "anomaly_detector_params": anomaly_detector_params,
             "anomaly_intervention": anomaly_intervention,
             "holiday_detector_params": holiday_params,
