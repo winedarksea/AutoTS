@@ -472,31 +472,31 @@ class AutoTS(object):
                 None,
                 {
                     "fillna": "ffill",
-                    "transformations": {"0": "EWMAFilter"},
+                    "transformations": {0: "EWMAFilter"},
                     "transformation_params": {
-                        "0": {"span": 3},
+                        0: {"span": 3},
                     },
                 },
                 {
                     "fillna": "mean",
-                    "transformations": {"0": "EWMAFilter"},
+                    "transformations": {0: "EWMAFilter"},
                     "transformation_params": {
-                        "0": {"span": 7},
+                        0: {"span": 7},
                     },
                 },
                 {
                     "fillna": None,
-                    "transformations": {"0": "StandardScaler"},
+                    "transformations": {0: "StandardScaler"},
                     "transformation_params": {0: {}},
                 },
                 {
                     "fillna": None,
-                    "transformations": {"0": "QuantileTransformer"},
+                    "transformations": {0: "QuantileTransformer"},
                     "transformation_params": {0: {}},
                 },
                 {
                     "fillna": None,
-                    "transformations": {"0": "AnomalyRemoval"},
+                    "transformations": {0: "AnomalyRemoval"},
                     "transformation_params": {
                         0: {
                             "method": "IQR",
