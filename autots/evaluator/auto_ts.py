@@ -39,6 +39,7 @@ from autots.models.ensemble import (
 from autots.models.model_list import model_lists, no_shared
 from autots.tools import cpu_count
 from autots.tools.window_functions import retrieve_closest_indices
+from autots.tools.seasonal import seasonal_window_match
 
 
 class AutoTS(object):
@@ -95,6 +96,7 @@ class AutoTS(object):
         validation_method (str): 'even', 'backwards', or 'seasonal n' where n is an integer of seasonal
             'backwards' is better for recency and for shorter training sets
             'even' splits the data into equally-sized slices best for more consistent data, a poetic but less effective strategy than others here
+            'seasonal' most similar indexes
             'seasonal n' for example 'seasonal 364' would test all data on each previous year of the forecast_length that would immediately follow the training data.
             'similarity' automatically finds the data sections most similar to the most recent data that will be used for prediction
             'custom' - if used, .fit() needs validation_indexes passed - a list of pd.DatetimeIndex's, tail of each is used as test
@@ -273,7 +275,7 @@ class AutoTS(object):
                 "Sum of metric_weightings is 0, one or more values must be > 0"
             )
 
-        if 'seasonal' in self.validation_method:
+        if 'seasonal' in self.validation_method and self.validation_method != "seasonal":
             val_list = [x for x in str(self.validation_method) if x.isdigit()]
             self.seasonal_val_periods = int(''.join(val_list))
 
@@ -416,6 +418,11 @@ class AutoTS(object):
             "include_differenced": True,
             "window_size": 30,
         }
+        self.seasonal_validation_params = {
+            'window_size': 10,
+            'distance_metric': 'mae',
+            'datepart_method': 'common_fourier_rw',
+        }
 
         if verbose > 2:
             msg = '"Hello. Would you like to destroy some evil today?" - Sanderson'
@@ -533,7 +540,7 @@ class AutoTS(object):
             )[0],
             'num_validations': random.choice([0, 1, 2, 3, 4, 6]),
             'validation_method': random.choices(
-                ['backwards', 'even', 'similarity', 'seasonal 364'],
+                ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
                 [0.4, 0.1, 0.3, 0.3]
             )[0],
             'models_to_validate': random.choices(
@@ -784,7 +791,7 @@ class AutoTS(object):
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
 
         # check how many validations are possible given the length of the data.
-        if 'seasonal' in self.validation_method:
+        if 'seasonal' in self.validation_method and self.validation_method != 'seasonal':
             temp = df_wide_numeric.shape[0] + self.forecast_length
             max_possible = temp / self.seasonal_val_periods
         else:
@@ -841,6 +848,13 @@ class AutoTS(object):
                 for indx in created_idx
             ]
             del sim_df
+        elif self.validation_method == "seasonal":
+            test, _ = seasonal_window_match(
+                DTindex=df_wide_numeric.index, k=num_validations + 1,
+                forecast_length=forecast_length,
+                **self.seasonal_validation_params
+            )
+            self.validation_indexes = [df_wide_numeric.index[0: x[-1]] for x in test.T]
 
         # record if subset or not
         if self.subset is not None:
@@ -866,7 +880,7 @@ class AutoTS(object):
         else:
             df_subset = df_wide_numeric.copy()
         # go to first index
-        if self.validation_method in ['custom', "similarity"]:
+        if self.validation_method in ['custom', "similarity", "seasonal"]:
             first_idx = self.validation_indexes[0]
             if max(first_idx) > max(df_subset.index):
                 raise ValueError(
@@ -1200,7 +1214,7 @@ class AutoTS(object):
                     current_slice = df_wide_numeric.head(
                         validation_size * (y + 1) + forecast_length
                     )
-                elif 'seasonal' in self.validation_method:
+                elif 'seasonal' in self.validation_method and self.validation_method != "seasonal":
                     val_per = (y + 1) * self.seasonal_val_periods
                     if self.seasonal_val_periods < forecast_length:
                         pass
@@ -1208,7 +1222,7 @@ class AutoTS(object):
                         val_per = val_per - forecast_length
                     val_per = df_wide_numeric.shape[0] - val_per
                     current_slice = df_wide_numeric.head(val_per)
-                elif self.validation_method in ['custom', "similarity"]:
+                elif self.validation_method in ['custom', "similarity", "seasonal"]:
                     current_slice = df_wide_numeric.reindex(
                         self.validation_indexes[(y + 1)]
                     )

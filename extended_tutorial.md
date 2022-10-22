@@ -849,7 +849,7 @@ Currently `MultivariateRegression` has the option to utilize a stock GradientBoo
 |  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 | Univariate/MultivariateMotif | scipy.distance.cdist |            |    True       |     joblib      |       | *            |              |               |
 |  SectionalMotif         | scipy.distance.cdist |  sklearn        |    True       |                 |       | True         |              | True          |
-|  MetricMotif            |              |                         |    True       |                 |       |              |              |               |
+|  MetricMotif, SeasonalityMotif |       |                         |    True       |                 |       |              |              |               |
 |  NVAR                   |              |                         |    True       |   blas/lapack   |       | True         |              |               |
 |  RRVAR, MAR, TMF        |              |                         |               |                 |       | True         |              |               |
 |  LATC                   |              |                         |               |                 |       | True         |              |               |

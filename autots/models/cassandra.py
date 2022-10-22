@@ -10,6 +10,7 @@ import random
 import numpy as np
 import pandas as pd
 # using transformer version of Anomaly/Holiday to use a lower level import than evaluator
+from autots.tools.seasonal import create_seasonality_feature
 from autots.tools.transform import GeneralTransformer, RandomTransform, scalers, filters, decompositions, HolidayTransformer, AnomalyRemoval, EmptyTransformer
 from autots.tools import cpu_count
 from autots.models.base import ModelObject, PredictionObject
@@ -1040,7 +1041,7 @@ class Cassandra(ModelObject):
                 anomaly_intervention = general_template.sample(1).to_dict("records")[0]  # placeholder, probably
         else:
             anomaly_detector_params = None
-        model_str = random.choices(['AverageValueNaive', 'MetricMotif', "LastValueNaive"], [0.2, 0.7, 0.1], k=1)[0]
+        model_str = random.choices(['AverageValueNaive', 'MetricMotif', "LastValueNaive", 'SeasonalityMotif'], [0.2, 0.5, 0.1, 0.2], k=1)[0]
         trend_model = {'Model': model_str}
         trend_model['ModelParameters'] = ModelMonster(model_str).get_new_params(method=method)
 
@@ -1080,8 +1081,12 @@ class Cassandra(ModelObject):
             "scaling": scaling,
             # "past_impacts_intervention": self.past_impacts_intervention,
             "seasonalities": random.choices(
-                [[7, 365.25], ["dayofweek", 365.25], ["month", "dayofweek", "weekdayofmonth"]],
-                [0.1, 0.1, 0.1],
+                [
+                    [7, 365.25], ["dayofweek", 365.25],
+                    ["month", "dayofweek", "weekdayofmonth"],
+                    ['weekdayofmonth', 'common_fourier']
+                ],
+                [0.1, 0.1, 0.1, 0.05],
             )[0],
             "ar_lags": random.choices(
                 [None, [1], [1, 7], [7]],
@@ -1225,53 +1230,6 @@ def clean_regressor(in_d, prefix="regr_"):
 
 def create_t(ds):
     return (ds - ds.min()) / (ds.max() - ds.min())
-
-
-def fourier_series(t, p=365.25, n=10):
-    # 2 pi n / p
-    x = 2 * np.pi * np.arange(1, n + 1) / p
-    # 2 pi n / p * t
-    x = x * t[:, None]
-    x = np.concatenate((np.cos(x), np.sin(x)), axis=1)
-    return x
-
-
-def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
-    # for consistency, all must have a range index, not date index
-    # fourier orders
-    if isinstance(seasonality, (int, float)):
-        if history_days is None:
-            history_days = (DTindex.max() - DTindex.min()).days
-        return pd.DataFrame(fourier_series(np.asarray(t), seasonality / history_days, n=10)).rename(columns=lambda x: f"seasonality{seasonality}_" + str(x))
-    # dateparts
-    elif seasonality == "dayofweek":
-        return pd.get_dummies(pd.Categorical(
-            DTindex.weekday, categories=list(range(7)), ordered=True
-        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
-    elif seasonality == "month":
-        return pd.get_dummies(pd.Categorical(
-            DTindex.month, categories=list(range(1, 13)), ordered=True
-        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
-    elif seasonality == "weekend":
-        return pd.DataFrame((DTindex.weekday > 4).astype(int), columns=["weekend"])
-    elif seasonality == "weekdayofmonth":
-        return pd.get_dummies(pd.Categorical(
-            (DTindex.day - 1) // 7 + 1,
-            categories=list(range(1, 6)), ordered=True,
-        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
-    elif seasonality == "hour":
-        return pd.get_dummies(pd.Categorical(
-            DTindex.hour, categories=list(range(1, 25)), ordered=True
-        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
-    elif seasonality == "daysinmonth":
-        return pd.DataFrame({'daysinmonth': DTindex.daysinmonth})
-    elif seasonality == "quarter":
-        return pd.get_dummies(pd.Categorical(
-            DTindex.quarter, categories=list(range(1, 5)), ordered=True
-        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
-    else:
-        return ValueError(f"Seasonality `{seasonality}` not recognized")
-
 
 #####################################
 # JUST LEAST SQUARES UNIVARIATE
@@ -1446,8 +1404,9 @@ if False:
     include_history = True
     pred = mod.predict(forecast_length=forecast_length, include_history=include_history)
     result = pred.forecast
+    series = random.choice(mod.column_names)
+    series = "wiki_Periodic_table"
     with plt.style.context("seaborn-white"):
-        series = random.choice(mod.column_names)
         start_date = "2019-07-01"
         ax = pred.plot(df_daily if include_history else df_test, series=series, vline=df_test.index[0], start_date=start_date)
         if mod.anomaly_detector:

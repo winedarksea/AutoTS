@@ -39,6 +39,7 @@ all_models = [
     'KalmanStateSpace',
     'MetricMotif',
     'Cassandra',
+    'SeasonalityMotif',
 ]
 # downweight slower models
 default = {
@@ -67,6 +68,7 @@ default = {
     'ARDL': 1,
     'ARCH': 1,
     'MetricMotif': 1,
+    'SeasonalityMotif': 1,
 }
 best = [
     'LastValueNaive',
@@ -100,6 +102,7 @@ superfast = [
     'GLS',
     'SeasonalNaive',
     'MetricMotif',
+    'SeasonalityMotif',
 ]
 # relatively fast
 fast = {
@@ -123,6 +126,7 @@ fast = {
     'KalmanStateSpace': 1,
     'MetricMotif': 1,
     'Cassandra': 1,
+    'SeasonalityMotif': 1,
 }
 # models that can scale well if many CPU cores are available
 parallel = {
@@ -174,6 +178,7 @@ probabilistic = [
     'KalmanStateSpace',
     'MetricMotif',
     'Cassandra',
+    'SeasonalityMotif',
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -236,6 +241,7 @@ recombination_approved = [
     'KalmanStateSpace',
     'MetricMotif',
     'Cassandra',
+    'SeasonalityMotif',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -259,6 +265,7 @@ no_shared = [
     'ARCH',
     'KalmanStateSpace',
     'MetricMotif',
+    'SeasonalityMotif',
 ]
 # allow the use of a regressor, need to accept "User" (fail if not given), have 'regressor' param method
 regressor = [
@@ -287,6 +294,7 @@ motifs = [
     'SectionalMotif',
     'MotifSimulation',
     'MetricMotif',
+    'SeasonalityMotif',
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {

@@ -36,6 +36,7 @@ from autots.models.basics import (
     NVAR,
     KalmanStateSpace,
     MetricMotif,
+    SeasonalityMotif,
 )
 from autots.models.statsmodels import (
     GLS,
@@ -573,6 +574,16 @@ def ModelMonster(
         )
     elif model == "MetricMotif":
         return MetricMotif(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == "SeasonalityMotif":
+        return SeasonalityMotif(
             frequency=frequency,
             prediction_interval=prediction_interval,
             holiday_country=holiday_country,

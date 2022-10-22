@@ -25,6 +25,9 @@
 * updated load_daily to Wikimedia page views
 * added dwae metric
 * added MetricMotif model
+* added 'common_fourier' datepart method
+* added SeasonalMotif model
+* added 'seasonal' validation
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

@@ -1944,8 +1944,9 @@ class DatepartRegression(ModelObject):
                 "simple_2",
                 "simple_binarized",
                 "expanded_binarized",
+                'common_fourier',
             ],
-            [0.4, 0.3, 0.3, 0.3, 0.4, 0.05],
+            [0.4, 0.3, 0.3, 0.3, 0.4, 0.05, 0.05],
         )[0]
         if datepart_choice in ["simple", "simple_2", "recurring", "simple_binarized"]:
             polynomial_choice = random.choices([None, 2, 3], [0.5, 0.2, 0.01])[0]
@@ -2804,8 +2805,9 @@ class MultivariateRegression(ModelObject):
                 "simple_2",
                 "simple_2_poly",
                 "simple_binarized",
+                "common_fourier",
             ],
-            [0.5, 0.05, 0.1, 0.1, 0.05, 0.1, 0.05],
+            [0.5, 0.05, 0.1, 0.1, 0.05, 0.1, 0.05, 0.05],
         )[0]
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]
