@@ -112,7 +112,7 @@ from functools import wraps
 
 def random_state_space():
     """Return randomly generated statespace models."""
-    n_dims = random.choices([1, 2, 3, 4], [0.3, 0.3, 0.3, 0.2])[0]
+    n_dims = random.choices([1, 2, 3, 4, 5], [0.1, 0.2, 0.3, 0.4, 0.2])[0]
     if n_dims == 1:
         st = np.array([[1]])
         obsmod = np.random.randint(1, 3, (1, n_dims))

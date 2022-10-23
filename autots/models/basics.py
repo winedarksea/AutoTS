@@ -2117,11 +2117,14 @@ class KalmanStateSpace(ModelObject):
         # predefined, or random
         params = random.choices(
             [
-                ([[1, 1], [0, 1]], [[0.1, 0.0], [0.0, 0.01]], [[1, 0]], 1.0),
+                # floats are phi
+                ([[1, 1], [0, 1]], [[0.1, 0.0], [0.0, 0.01]], [[1, 0]], 1.0),  # local linear trend
+                ([[0, 1], [0, 0]], [[1.2, 0.0], [0.0, 0.2]], [[1, 0]], 1.0),  # MA(1)
+                ([[0.1, 1], [0.1, 0]], [[1, 0]], [[1, 0]], 1.0),  # second order AR
                 ([[1, 1, 0], [0, 1, 0], [0, 0, 1]], [[0.1, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0, 0.0, 0.1]], [[1, 1, 1]], 1.0),
                 "random",
             ],
-            [0.25, 0.25, 0.5]
+            [0.1, 0.1, 0.1, 0.1, 0.5]
         )[0]
         if params == "random":
             st, procnois, obsmod, obsnois = random_state_space()

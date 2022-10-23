@@ -66,6 +66,7 @@ date_part_methods = [
     "simple_binarized_poly",
     "expanded_binarized",
     'common_fourier',
+    'common_fourier_rw',
 ]
 
 
