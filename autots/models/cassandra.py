@@ -728,7 +728,7 @@ class Cassandra(ModelObject):
                 comp_df = self.to_origin_space(pd.DataFrame(
                     self.components[:, comp, :],
                     index=t_indx, columns=self.column_names,
-                ), components=True)
+                ), components=True, bounds=True)  # bounds=True to align better
             else:
                 comp_df = (pd.DataFrame(
                     self.components[:, comp, :],
@@ -770,6 +770,7 @@ class Cassandra(ModelObject):
             regressor_forecast_model=None, regressor_forecast_model_params=None, regressor_forecast_transformations=None,
     ):
         """Generate a forecast."""
+        self.forecast_length = forecast_length
         predictStartTime = self.time()
         if self.trend_train is None:
             raise ValueError("Cassandra must first be .fit() successfully.")
@@ -1202,7 +1203,7 @@ class Cassandra(ModelObject):
         if prediction is not None:
             plot_list.append(prediction.forecast[series].rename("forecast"))
             plot_list.append(self.predicted_trend[series].rename("trend"))
-        plot_list.append(self.process_components(to_origin_space=to_origin_space)[series])
+        plot_list.append(self.process_components(to_origin_space=to_origin_space)[series].loc[prediction.forecast.index])
         return pd.concat(plot_list, axis=1).plot(subplots=True, figsize=figsize, title=title)
 
     def plot_trend(
@@ -1217,15 +1218,17 @@ class Cassandra(ModelObject):
             title = f"Trend Breakdown for {series}"
         p_indx = self.column_names.get_loc(series)
         cur_trend = self.predicted_trend[series].copy()
+        tls = len(cur_trend)
         plot_df = pd.DataFrame({
-            'decline_accelerating': cur_trend[np.hstack((np.signbit(self.accel[:, p_indx]), False)) & self.slope_sign[:, p_indx]],
-            'decline_decelerating': cur_trend[(~ np.hstack((np.signbit(self.accel[:, p_indx]), False))) & self.slope_sign[:, p_indx]],
-            'growth_decelerating': cur_trend[np.hstack((np.signbit(self.accel[:, p_indx]), False)) & (~ self.slope_sign[:, p_indx])],
-            'growth_accelerating': cur_trend[(~ np.hstack((np.signbit(self.accel[:, p_indx]), False))) & (~ self.slope_sign[:, p_indx])],
+            'decline_accelerating': cur_trend[(np.hstack((np.signbit(self.accel[:, p_indx]), False)) & self.slope_sign[:, p_indx])[-tls:]],
+            'decline_decelerating': cur_trend[((~ np.hstack((np.signbit(self.accel[:, p_indx]), False))) & self.slope_sign[:, p_indx])[-tls:]],
+            'growth_decelerating': cur_trend[(np.hstack((np.signbit(self.accel[:, p_indx]), False)) & (~ self.slope_sign[:, p_indx]))[-tls:]],
+            'growth_accelerating': cur_trend[((~ np.hstack((np.signbit(self.accel[:, p_indx]), False))) & (~ self.slope_sign[:, p_indx]))[-tls:]],
         }, index=cur_trend.index)
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         ax = plot_df.plot(title=title, color=colors, **kwargs)
+        handles, labels = ax.get_legend_handles_labels()
         # ax.scatter(cur_trend.index[self.changepoints[:, p_indx]], cur_trend[self.changepoints[:, p_indx]], c='#fdcc09', s=4.0)
         # ax.scatter(cur_trend.index[self.zero_crossings[:, p_indx]], cur_trend[self.zero_crossings[:, p_indx]], c='#512f74', s=4.0)
         if mod.trend_anomaly_detector is not None:
@@ -1236,11 +1239,62 @@ class Cassandra(ModelObject):
                 i_anom = series_anom[series_anom == -1].index
             if start_date is not None:
                 i_anom = i_anom[i_anom >= start_date]
+            i_anom = i_anom[i_anom >= cur_trend.index[0]]
             # only plot if some anomalies, and not way too many anomalies
             if len(i_anom) > 0 and len(i_anom) < len(plot_df) * 0.5:
-                ax.scatter(i_anom.tolist(), cur_trend.loc[i_anom], c="red", s=16.0)
+                scat1 = ax.scatter(i_anom.tolist(), cur_trend.loc[i_anom], c="red", s=16.0)
+                handles += [scat1]
+                labels += ['trend anomalies']
         if vline is not None:
             ax.vlines(x=vline, ls='--', lw=1, colors='darkred', ymin=cur_trend[cur_trend.index >= start_date].min(), ymax=cur_trend[cur_trend.index >= start_date].max())
+        ax.legend(handles, labels)
+        return ax
+
+    def plot_forecast(
+            self, prediction, actuals, series=None, start_date=None,
+            anomaly_color="darkslateblue", holiday_color="darkgreen",
+            trend_anomaly_color='slategray', point_size=12.0,
+    ):
+        if series is None:
+            series = random.choice(self.column_names)
+        vline = None if self.forecast_length is None else prediction.forecast.index[-self.forecast_length]
+        ax = prediction.plot(actuals.loc[prediction.forecast.index], series=series, vline=vline, start_date=start_date)
+        handles, labels = ax.get_legend_handles_labels()
+        if self.anomaly_detector:
+            if self.anomaly_detector.output == "univariate":
+                i_anom = self.anomaly_detector.anomalies.index[self.anomaly_detector.anomalies.iloc[:, 0] == -1]
+            else:
+                series_anom = self.anomaly_detector.anomalies[series]
+                i_anom = series_anom[series_anom == -1].index
+            if start_date is not None:
+                i_anom = i_anom[i_anom >= start_date]
+            i_anom = i_anom[i_anom >= actuals.index[0]]
+            if len(i_anom) > 0 and len(i_anom) < len(actuals) * 0.5:
+                scat1 = ax.scatter(i_anom.tolist(), actuals.loc[i_anom, :][series], c=anomaly_color, s=point_size)
+                handles += [scat1]
+                labels += ["anomalies"]
+        if self.holiday_detector:
+            i_anom = self.holiday_detector.dates_to_holidays(self.df.index, style="series_flag")[series]
+            i_anom = i_anom.index[i_anom == 1]
+            i_anom = i_anom[i_anom >= actuals.index[0]]
+            if len(i_anom) > 0 and len(i_anom) < len(actuals) * 0.5:
+                scat2 = ax.scatter(i_anom.tolist(), actuals.loc[i_anom, :][series], c=holiday_color, s=point_size)
+                handles += [scat2]
+                labels += ["detected holidays"]
+        if self.trend_anomaly_detector is not None:
+            if self.trend_anomaly_detector.output == "univariate":
+                i_anom = self.trend_anomaly_detector.anomalies.index[self.anomaly_detector.anomalies.iloc[:, 0] == -1]
+            else:
+                series_anom = self.trend_anomaly_detector.anomalies[series]
+                i_anom = series_anom[series_anom == -1].index
+            if start_date is not None:
+                i_anom = i_anom[i_anom >= start_date]
+            i_anom = i_anom[i_anom >= actuals.index[0]]
+            if len(i_anom) > 0 and len(i_anom) < len(actuals) * 0.5:
+                scat3 = ax.scatter(i_anom.tolist(), actuals.loc[i_anom][series], c=trend_anomaly_color, s=point_size)
+                handles += [scat3]
+                labels += ["trend anomalies"]
+        ax.legend(handles, labels)
         return ax
 
     def plot_things():  # placeholder for later plotting functions
@@ -1344,14 +1398,15 @@ def linear_model(x, y, params):
 
 # what is still needed:
     # bayesian linear model options
-    # anomaly modeling
     # more multivariate summaries
+    # add anomalies to forecast
     # refine transformations and models generated by get_new_params
     # test and bug fix everything
     # PLOT IMPACTS
     # add points to legends of plots
     # l1_norm isn't working
     # return components
+    # unittests
 
 # TEST
     # new_df
@@ -1375,6 +1430,7 @@ def linear_model(x, y, params):
         # or maybe use a runtime weighting
     # then multivariate summaries
     # FINALLY covariate lags (feature selection definitely needed)
+
 
 categorical_groups = {
     "wiki_United_States": 'country',
@@ -1416,14 +1472,16 @@ if False:
 
     mod = Cassandra(n_jobs=1, **c_params, constraint=constraint)
     mod.fit(df_train, categorical_groups=categorical_groups)
-    include_history = True
+    include_history = False
     pred = mod.predict(forecast_length=forecast_length, include_history=include_history)
     result = pred.forecast
     series = random.choice(mod.column_names)
     series = "wiki_Periodic_table"
     with plt.style.context("seaborn-white"):
         start_date = "2019-07-01"
+        mod.plot_forecast(pred, actuals=df_daily if include_history else df_test, series=series, start_date=start_date)
         ax = pred.plot(df_daily if include_history else df_test, series=series, vline=df_test.index[0], start_date=start_date)
+        handles, labels = ax.get_legend_handles_labels()
         if mod.anomaly_detector:
             if mod.anomaly_detector.output == "univariate":
                 i_anom = mod.anomaly_detector.anomalies.index[mod.anomaly_detector.anomalies.iloc[:, 0] == -1]
@@ -1432,12 +1490,16 @@ if False:
                 i_anom = series_anom[series_anom == -1].index
                 i_anom = i_anom[i_anom >= start_date]
             if len(i_anom) > 0 and len(i_anom) < len(df_daily) * 0.5:
-                ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="red", s=12.0)
+                scat1 = ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="darkslateblue", s=12.0)
+                handles += [scat1]
+                labels += ["anomalies"]
         if mod.holiday_detector:
             i_anom = mod.holiday_detector.dates_to_holidays(mod.df.index, style="series_flag")[series]
             i_anom = i_anom.index[i_anom == 1]
             if len(i_anom) > 0 and len(i_anom) < len(df_daily) * 0.5:
-                ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="darkgreen", s=12.0)
+                scat2 = ax.scatter(i_anom.tolist(), df_daily.loc[i_anom, :][series], c="darkgreen", s=12.0)
+                handles += [scat2]
+                labels += ["detected holidays"]
         if mod.trend_anomaly_detector is not None:
             if mod.trend_anomaly_detector.output == "univariate":
                 i_anom = mod.trend_anomaly_detector.anomalies.index[mod.anomaly_detector.anomalies.iloc[:, 0] == -1]
@@ -1447,7 +1509,10 @@ if False:
             if start_date is not None:
                 i_anom = i_anom[i_anom >= start_date]
             if len(i_anom) > 0 and len(i_anom) < len(df_daily) * 0.5:
-                ax.scatter(i_anom.tolist(), df_daily.loc[i_anom][series], c="fuchsia", s=12.0)
+                scat3 = ax.scatter(i_anom.tolist(), df_daily.loc[i_anom][series], c="slategray", s=12.0)
+                handles += [scat3]
+                labels += ["trend anomalies"]
+        ax.legend(handles, labels)
         plt.show()
         # plt.savefig("forecast.png", dpi=300)
         # mod.plot_components(pred, series=series, to_origin_space=False)

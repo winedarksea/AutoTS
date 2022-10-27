@@ -3619,6 +3619,7 @@ class GeneralTransformer(object):
             df (pandas.DataFrame): Datetime Indexed
             trans_method (str): 'forecast' or 'original' passed through
             fillzero (bool): if inverse returns NaN, fill with zero
+            bounds (bool): currently ignores AlignLastValue transform if True (also used in process_components of Cassandra)
         """
         self.df_index = df.index
         self.df_colnames = df.columns
