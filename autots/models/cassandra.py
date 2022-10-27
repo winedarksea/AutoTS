@@ -208,6 +208,12 @@ class Cassandra(ModelObject):
             self.past_impacts_intervention = None
 
         # what features will require separate models to be fit as X will not be consistent for all
+        # What triggers loop:
+            # AR Lags
+            # Holiday countries as dict (not list)
+            # regressor_per_series (only if regressor used)
+            # Multivariate Holiday Detector, only if create feature, not removal (plot in this case)
+            # Multivariate Anomaly Detector, only if create feature, not removal
         if isinstance(self.anomaly_detector_params, dict):
             self.anomaly_not_uni = self.anomaly_detector_params.get('output', None) != 'univariate'
         self.anomaly_not_uni = False
@@ -251,7 +257,6 @@ class Cassandra(ModelObject):
                 self.df = self.anomaly_detector.transform(self.df)
             elif isinstance(self.anomaly_intervention, dict):
                 self.anomaly_detector.fit_anomaly_classifier()
-                return NotImplemented
             # detect_only = pass
         # now do standard preprocessing
         if self.preprocessing_transformation is not None:
@@ -278,7 +283,7 @@ class Cassandra(ModelObject):
         x_list = []
         if isinstance(self.anomaly_intervention, dict):
             # need to model these for prediction
-            x_list.append(self.anomaly_detector.scores)
+            x_list.append(self.anomaly_detector.scores.rename(columns=lambda x: "anomalyscores_" + str(x)))
         # all of the following are 1 day past lagged
         if self.multivariate_feature is not None:
             # includes backfill
@@ -328,6 +333,8 @@ class Cassandra(ModelObject):
                     index=self.df.index,
                 ))
             elif self.trend_standin == "rolling_trend":
+                # the idea being to have a rolling trend fit first and used as feature
+                # excluded as it would require a loop
                 return NotImplemented
         if future_regressor is not None and self.regressors_used:
             if self.regressor_transformation is not None:
@@ -428,6 +435,10 @@ class Cassandra(ModelObject):
                         lag_idx = np.concatenate([np.repeat([0], lag), np.arange(len(self.df))])[0:len(self.df)]
                         lag_s = self.df[col].iloc[lag_idx].rename(f"lag{lag}_")
                         lag_s.index = self.df.index
+                        if self.ar_interaction_seasonality is not None:
+                            s_feat = create_seasonality_feature(self.df.index, self.t_train, self.ar_interaction_seasonality, history_days=self.history_days)
+                            s_feat.index = lag_s.index
+                            lag_s = s_feat.mul(lag_s, axis=0).rename(columns=lambda x: f"lag{lag}_" + str(x))
                         c_x = pd.concat([
                             c_x,
                             lag_s
@@ -544,9 +555,26 @@ class Cassandra(ModelObject):
         self.t_predict = self.create_t(dates)
         x_list = []
         if isinstance(self.anomaly_intervention, dict):
+            # forecast anomaly scores as time series
+            len_inter = len(dates.intersection(self.anomaly_detector.scores.index))
+            if len_inter < len(dates):
+                new_scores = model_forecast(
+                    model_name=self.anomaly_intervention['Model'],
+                    model_param_dict=self.anomaly_intervention['ModelParameters'],
+                    model_transform_dict=self.anomaly_intervention['TransformationParameters'],
+                    df_train=self.anomaly_detector.scores,
+                    forecast_length=len(dates) - len_inter,
+                    frequency=self.frequency,
+                    prediction_interval=self.prediction_interval,
+                    fail_on_forecast_nan=False,
+                    random_seed=self.random_seed,
+                    verbose=self.verbose,
+                    n_jobs=self.n_jobs,
+                ).forecast
             # need to model these for prediction
-            x_list.append(self.anomaly_detector.scores)
-            return NotImplemented
+            x_list.append(
+                pd.concat([self.anomaly_detector.scores, new_scores], axis=0).reindex(dates).rename(columns=lambda x: "anomalyscores_" + str(x))
+            )
         # all of the following are 1 day past lagged
         if self.multivariate_feature is not None:
             # includes backfill
@@ -646,9 +674,14 @@ class Cassandra(ModelObject):
                         lag_idx = np.concatenate([np.repeat([0], lag), np.arange(len(history_df))])  # [0:len(history_df)]
                         lag_s = history_df[col].iloc[lag_idx].rename(f"lag{lag}_")
                         lag_s.index = full_idx
+                        lag_s = lag_s.reindex(dates)
+                        if self.ar_interaction_seasonality is not None:
+                            s_feat = create_seasonality_feature(dates, self.t_predict, self.ar_interaction_seasonality, history_days=self.history_days)
+                            s_feat.index = lag_s.index
+                            lag_s = s_feat.mul(lag_s, axis=0).rename(columns=lambda x: f"lag{lag}_" + str(x))
                         c_x = pd.concat([
                             c_x,
-                            lag_s.reindex(dates)
+                            lag_s
                         ], axis=1)
 
                 # ADDING RECENCY WEIGHTING AND RIDGE PARAMS
@@ -1034,7 +1067,7 @@ class Cassandra(ModelObject):
                 [True, False], [0.05, 0.95]
             )[0]
             holiday_params['output'] = random.choices(['multivariate', 'univariate'], [0.9, 0.1])[0]
-        anomaly_intervention = random.choices([None, 'remove', 'detect_only', 'model'], [0.9, 0.3, 0.05, 0.1])[0]
+        anomaly_intervention = random.choices([None, 'remove', 'detect_only', 'model'], [0.9, 0.3, 0.05, 0.05])[0]
         if anomaly_intervention is not None:
             anomaly_detector_params = AnomalyRemoval.get_new_params(method=method)
             if anomaly_intervention == "model":
@@ -1055,7 +1088,7 @@ class Cassandra(ModelObject):
         if linear_model in ['lstsq']:
             linear_model = {
                 'model': linear_model,
-                'lambda': random.choices([None, 0.1, 1, 10], [0.7, 0.1, 0.1, 0.1])[0],
+                'lambda': random.choices([None, 0.1, 1, 10, 100], [0.7, 0.1, 0.1, 0.1, 0.05])[0],
                 'recency_weighting': recency_weighting,
             }
         if linear_model in ['linalg_solve']:
@@ -1074,6 +1107,13 @@ class Cassandra(ModelObject):
             regressors_used = True
         else:
             regressors_used = random.choices([True, False], [0.5, 0.5])[0]
+        ar_lags = random.choices(
+            [None, [1], [1, 7], [7]],
+            [0.9, 0.025, 0.025, 0.05],
+        )[0]
+        ar_interaction_seasonality = None
+        if ar_lags is not None:
+            ar_interaction_seasonality = random.choices([None, 7, 'dayofweek', 'common_fourier'], [0.4, 0.2, 0.2, 0.2])[0]
         return {
             "preprocessing_transformation": RandomTransform(
                 transformer_list=filters, transformer_max_depth=2, allow_none=True
@@ -1088,11 +1128,8 @@ class Cassandra(ModelObject):
                 ],
                 [0.1, 0.1, 0.1, 0.05],
             )[0],
-            "ar_lags": random.choices(
-                [None, [1], [1, 7], [7]],
-                [0.9, 0.025, 0.025, 0.05],
-            )[0],
-            "ar_interaction_seasonality": None,
+            "ar_lags": ar_lags,
+            "ar_interaction_seasonality": ar_interaction_seasonality,
             "anomaly_detector_params": anomaly_detector_params,
             "anomaly_intervention": anomaly_intervention,
             "holiday_detector_params": holiday_params,
@@ -1100,7 +1137,7 @@ class Cassandra(ModelObject):
             "holiday_countries_used": random.choices([True, False], [0.5, 0.5])[0],
             "multivariate_feature": random.choices(
                 [None, "feature_agglomeration", 'group_average', 'oscillator'],
-                [0.9, 0.1, 0.1, 0.01]
+                [0.9, 0.1, 0.1, 0.0]
             )[0],
             "multivariate_transformation": RandomTransform(
                 transformer_list="fast", transformer_max_depth=3  # probably want some more usable defaults first as many random are senseless
@@ -1115,7 +1152,7 @@ class Cassandra(ModelObject):
             "trend_window": random.choices([3, 15, 90, 365], [0.2, 0.2, 0.2, 0.2])[0],
             "trend_standin": random.choices(
                 [None, 'random_normal', 'rolling_trend'],
-                [0.5, 0.4, 0.01],
+                [0.5, 0.4, 0.0],
             )[0],
             "trend_anomaly_detector_params": trend_anomaly_detector_params,
             # "trend_anomaly_intervention": trend_anomaly_intervention,
@@ -1170,7 +1207,7 @@ class Cassandra(ModelObject):
 
     def plot_trend(
             self, series=None, vline=None,
-            colors=["#d4f74f", "#82ab5a", "#c12600", "#ff6c05"],
+            colors=["#d4f74f", "#82ab5a", "#ff6c05", "#c12600"],
             title=None, start_date=None, **kwargs
     ):
         # YMAX from PLOT ONLY
@@ -1235,6 +1272,7 @@ def create_t(ds):
 # JUST LEAST SQUARES UNIVARIATE
 # https://stackoverflow.com/questions/17679140/multiple-linear-regression-with-python
 
+
 def lstsq_solve(X, y, lamb=1, identity_matrix=None):
     if identity_matrix is None:
         identity_matrix = np.zeros((X.shape[1], X.shape[1]))
@@ -1298,45 +1336,22 @@ def linear_model(x, y, params):
 # Seasonalities
     # maybe fixed 3 seasonalities
     # interaction effect only on first two seasonalities if order matches
-# Holiday countries (mapped countries per series)
-    # make it holiday 1, holiday 2 so per country?
-# Regressor (preprocessing)
-    # PREPEND REGR_ to name of regressor features
-# Flag Regressors
-# Multivariate Summaries (pre and post processing)
-# AR Lags
-    # could this vary per series?
+
 # Categorical Features
     # (multivariate summaries by group)
 
-# initial preprocessing (only filters + Quantile Transformer)
-# scaler
-# holiday detection
-# anomaly detection
-    # anomaly risk model
-# whether to pre-include rolling fit, intercept-only, random_walk, or random.normal features
-# anomaly on rolling (difference first)
-# constraints (copied)
 # past impacts (option to not enforce, only show)
-# phi on Trend model (to flat)
-
-# What triggers loop:
-    # AR Lags
-    # Holiday countries as dict (not list)
-    # regressor_per_series (only if regressor used)
-    # Multivariate Holiday Detector
-        # only if create feature, not removal (plot in this case)
-    # Multivariate Anomaly Detector
-        # only if create feature, not removal
 
 # what is still needed:
-    # more linear model options
+    # bayesian linear model options
     # anomaly modeling
-    # seasonality interactions
-    # ar seasonality interaction (or remove)
+    # more multivariate summaries
+    # refine transformations and models generated by get_new_params
     # test and bug fix everything
     # PLOT IMPACTS
+    # add points to legends of plots
     # l1_norm isn't working
+    # return components
 
 # TEST
     # new_df
