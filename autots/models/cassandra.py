@@ -210,6 +210,8 @@ class Cassandra(ModelObject):
             self.past_impacts_intervention = "remove"
         elif past_impacts is None:
             self.past_impacts_intervention = None
+        if regressor_per_series is not None:
+            self.regr_per_series_tr = regressor_per_series
 
         # what features will require separate models to be fit as X will not be consistent for all
         # What triggers loop:
@@ -235,6 +237,8 @@ class Cassandra(ModelObject):
         )
         # check if rolling prediction is required
         self.predict_loop_req = (self.ar_lags is not None) or (self.multivariate_feature is not None)
+        # check if component processing must loop
+        # self.component_loop_req = (isinstance(regressor_per_series, dict) and self.regressors_used) or (isinstance(self.holiday_countries, dict) and self.holiday_countries_used)
 
         # remove past impacts to find "organic"
         if self.past_impacts_intervention == "remove":
@@ -702,6 +706,7 @@ class Cassandra(ModelObject):
                     self.components.append(np.add.reduceat(np.asarray(temp), sorted(new_indx), axis=1))
             if return_components:
                 self.components = np.moveaxis(np.array(self.components), 0, 2)
+                self.last_used = col
                 self.component_indx = new_indx  # hopefully no mismatching for diff series
             return pd.concat(predicts, axis=1)
         else:
@@ -722,9 +727,9 @@ class Cassandra(ModelObject):
         if self.components is None:
             raise ValueError("Model has not yet had a prediction generated.")
 
-        comp_list = []
         t_indx = next(iter(self.predict_x_array.values())).index if isinstance(self.predict_x_array, dict) else self.predict_x_array.index
-        col_group = next(iter(self.col_groupings.values())) if isinstance(self.col_groupings, dict) else self.col_groupings
+        comp_list = []
+        col_group = self.col_groupings[self.last_used] if isinstance(self.col_groupings, dict) else self.col_groupings
         # unfortunately, no choice but to loop that I see to apply inverse trans
         for comp in range(self.components.shape[1]):
             if to_origin_space:
@@ -773,7 +778,10 @@ class Cassandra(ModelObject):
             regressor_per_series=None, flag_regressors=None, future_impacts=None, new_df=None,
             regressor_forecast_model=None, regressor_forecast_model_params=None, regressor_forecast_transformations=None,
     ):
-        """Generate a forecast."""
+        """Generate a forecast.
+
+        future_regressor and regressor_per_series should only include new future values, history is already stored
+        """
         self.forecast_length = forecast_length
         predictStartTime = self.time()
         if self.trend_train is None:
@@ -802,10 +810,20 @@ class Cassandra(ModelObject):
                 n_jobs=self.n_jobs,
             ).forecast
             full_regr = pd.concat([self.future_regressor_train, future_regressor])
+        if forecast_length is None:
+            expected_fore_len = len(self.df)
+        else:
+            expected_fore_len = forecast_length + len(self.df) if include_history else forecast_length
         if future_regressor is not None and self.regressors_used:
-            full_regr = pd.concat([self.future_regressor_train, self.regressor_transformer.fit_transform(clean_regressor(future_regressor))])
+            if len(future_regressor) == expected_fore_len:
+                full_regr = clean_regressor(future_regressor)
+            else:
+                full_regr = pd.concat([self.future_regressor_train, self.regressor_transformer.fit_transform(clean_regressor(future_regressor))])
         if flag_regressors is not None and forecast_length is not None and self.regressors_used:
-            all_flags = pd.concat([self.flag_regressor_train, clean_regressor(flag_regressors, prefix="regrflags_")])
+            if len(flag_regressors) == expected_fore_len:
+                all_flags = clean_regressor(flag_regressors, prefix="regrflags_")
+            else:
+                all_flags = pd.concat([self.flag_regressor_train, clean_regressor(flag_regressors, prefix="regrflags_")])
         else:
             if self.flag_regressor_train is not None and forecast_length is not None and self.regressors_used:
                 raise ValueError("flag_regressors supplied in training but not predict")
@@ -1408,7 +1426,6 @@ def linear_model(x, y, params):
     # reweight so loop is not required so often
     # test and bug fix everything
     # PLOT IMPACTS
-    # add points to legends of plots
     # l1_norm isn't working
     # return components
     # unittests
@@ -1437,34 +1454,39 @@ def linear_model(x, y, params):
     # FINALLY covariate lags (feature selection definitely needed)
 
 
-categorical_groups = {
-    "wiki_United_States": 'country',
-    "wiki_Germany": 'country',
-    "wiki_Jesus": 'holiday',
-    "wiki_Michael_Jackson": 'person',
-    "wiki_Easter": 'holiday',
-    "wiki_Christmas": 'holiday',
-    "wiki_Chinese_New_Year": 'holiday',
-    "wiki_Thanksgiving": 'holiday',
-    "wiki_Elizabeth_II": 'person',
-    "wiki_William_Shakespeare": 'person',
-    "wiki_George_Washington": 'person',
-    "wiki_Cleopatra": 'person',
-}
-holiday_countries = {
-    'wiki_Elizabeth_II': 'uk',
-    'wiki_United_States': 'us',
-    'wiki_Germany': 'de',
-}
-
 if False:
     # test holiday countries, regressors, impacts
     from autots import load_daily
     import matplotlib.pyplot as plt
+
+    categorical_groups = {
+        "wiki_United_States": 'country',
+        "wiki_Germany": 'country',
+        "wiki_Jesus": 'holiday',
+        "wiki_Michael_Jackson": 'person',
+        "wiki_Easter": 'holiday',
+        "wiki_Christmas": 'holiday',
+        "wiki_Chinese_New_Year": 'holiday',
+        "wiki_Thanksgiving": 'holiday',
+        "wiki_Elizabeth_II": 'person',
+        "wiki_William_Shakespeare": 'person',
+        "wiki_George_Washington": 'person',
+        "wiki_Cleopatra": 'person',
+    }
+    holiday_countries = {
+        'wiki_Elizabeth_II': 'uk',
+        'wiki_United_States': 'us',
+        'wiki_Germany': 'de',
+    }
     df_daily = load_daily(long=False)
     forecast_length = 180
-    df_train = df_daily[:-forecast_length]
-    df_test = df_daily[-forecast_length:]
+    include_history = True
+    df_train = df_daily[:-forecast_length].iloc[:, 1:]
+    df_test = df_daily[-forecast_length:].iloc[:, 1:]
+    fake_regr = df_daily[:-forecast_length].iloc[:, 0:1]
+    fake_regr_fcst = df_daily.iloc[:, 0:1] if include_history else df_daily[-forecast_length:].iloc[:, 0:1]
+    regr_per_series = {str(df_train.columns[0]): pd.DataFrame(np.random.normal(size=(len(df_train), 1)), index=df_train.index)}
+    regr_per_series_fcst = {str(df_train.columns[0]): pd.DataFrame(np.random.normal(size=(forecast_length, 1)), index=df_test.index)}
     constraint = {
         'constraint_method': 'quantile',
         'lower_constraint': 0,
@@ -1475,13 +1497,18 @@ if False:
     c_params = Cassandra.get_new_params()
     c_params
 
-    mod = Cassandra(n_jobs=1, **c_params, constraint=constraint)
-    mod.fit(df_train, categorical_groups=categorical_groups)
-    include_history = True
-    pred = mod.predict(forecast_length=forecast_length, include_history=include_history)
+    mod = Cassandra(n_jobs=1, **c_params, constraint=constraint, holiday_countries=holiday_countries)
+    mod.fit(df_train, categorical_groups=categorical_groups, future_regressor=fake_regr, regressor_per_series=regr_per_series)
+    pred = mod.predict(
+        forecast_length=forecast_length, include_history=include_history,
+        future_regressor=fake_regr_fcst, regressor_per_series=regr_per_series_fcst
+    )
     result = pred.forecast
     series = random.choice(mod.column_names)
     # series = "wiki_Periodic_table"
+    series = 'wiki_Germany'
+    mod.regressors_used
+    mod.holiday_countries_used
     with plt.style.context("seaborn-white"):
         start_date = "2019-07-01"
         mod.plot_forecast(pred, actuals=df_daily if include_history else df_test, series=series, start_date=start_date)
@@ -1495,9 +1522,11 @@ if False:
         plt.show()
         mod.plot_trend(series=series, vline=df_test.index[0], start_date=start_date)
         # plt.savefig("trend.png", dpi=300)
-    pred.evaluate(df_daily.reindex(result.index) if include_history else df_test)
+    pred.evaluate(df_daily.reindex(result.index)[df_train.columns] if include_history else df_test[df_train.columns])
     print(pred.avg_metrics.round(1))
     print(c_params['trend_model'])
+    # mod.process_components()
+    # mod.predicted_trend
 
 # MULTIPLICATIVE SEASONALITY AND HOLIDAYS
 
