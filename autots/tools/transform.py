@@ -1135,7 +1135,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
         else:
             y = df.to_numpy()
         if y.shape[1] == 1:
-            y = y.ravel()
+            y = np.asarray(y).ravel()
         X = date_part(
             df.index,
             method=self.datepart_method,

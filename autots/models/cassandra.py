@@ -38,6 +38,18 @@ class Cassandra(ModelObject):
     ille dies, festa velamus fronde per urbem.
     -Aeneid 2.246-2.249
 
+    In general, all time series data inputs (df, regressors, impacts) should be wide style data in a pd.DataFrame
+        an index that is a pd.DatetimeIndex
+        one column per time series, with a uniquely identifiable column name
+
+    Impacts get confusing.
+    A past impact of 0.05 would mean an outside, unforecastable force caused/added 5% of the value at this time.
+    Accordingly, that 5% will be removed before forecasting, then added back on after.
+    Impacts can also be negative values.
+    A future impact of 5% would mean an outside force adds 5% above the original forecast.
+    Future impacts can be used to model product goals or temporary anomalies which can't or should't be modeled by forecasting and whose relative effect is known
+    Compare this with regressors, which are essentially the model estimating the relative impact given the raw size or presence of an outside effect
+
     Warn about remove_excess_anomalies from holiday detector if relying on anomaly prediction
     Linear components are always model elements, but trend is actuals (history) and model (future)
     Running predict updates some internal attributes used in plotting and other figures, generally expect to use functions to latest predict
@@ -51,6 +63,7 @@ class Cassandra(ModelObject):
 
     Methods:
          holiday_detector.dates_to_holidays
+         create_forecast_index: after .fit, can be used to create index of prediction
 
     Attributes:
         .anomaly_detector.anomalies
@@ -92,7 +105,7 @@ class Cassandra(ModelObject):
         trend_phi: float = None,
         constraint: dict = None,
         max_colinearity: float = 0.998,
-        max_multicolinearity: float = 0.0025,
+        max_multicolinearity: float = 0.001,
         # not modeling related:
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
@@ -155,6 +168,7 @@ class Cassandra(ModelObject):
         self.components = None
         self.anomaly_detector = None
         self.holiday_detector = None
+        self.impacts = None
         if self.trend_anomaly_detector_params is not None:
             self.trend_anomaly_detector = AnomalyRemoval(**self.trend_anomaly_detector_params)
         else:
@@ -383,14 +397,17 @@ class Cassandra(ModelObject):
         corr = np.corrcoef(x_array, rowvar=0)  # second one
         w, vec = np.linalg.eig(corr)
         np.fill_diagonal(corr, 0)
-        corel = x_array.columns[np.min(corr * np.tri(corr.shape[0]), axis=0) > self.max_colinearity]
-        colin = x_array.columns[w < self.max_multicolinearity]
-        if len(corel) > 0:
-            print(f"Dropping colinear feature columns {corel}")
-            x_array = x_array.drop(columns=corel)
-        if len(colin) > 0:
-            print(f"Dropping multi-colinear feature columns {colin}")
-            x_array = x_array.drop(columns=colin)
+        if self.max_colinearity is not None:
+            corel = x_array.columns[np.min(corr * np.tri(corr.shape[0]), axis=0) > self.max_colinearity]
+            if len(corel) > 0:
+                print(f"Dropping colinear feature columns {corel}")
+                x_array = x_array.drop(columns=corel)
+        if self.max_multicolinearity is not None:
+            colin = x_array.columns[w < self.max_multicolinearity]
+            if len(colin) > 0:
+                print(f"Dropping multi-colinear feature columns {colin}")
+                x_array = x_array.drop(columns=colin)
+
         # things we want modeled but want to discard from evaluation (standins)
         remove_patterns = ["randnorm_", "rolling_trend_", "randomwalk_"]  # "intercept" added after, so not included
 
@@ -811,9 +828,9 @@ class Cassandra(ModelObject):
             ).forecast
             full_regr = pd.concat([self.future_regressor_train, future_regressor])
         if forecast_length is None:
-            expected_fore_len = len(self.df)
+            expected_fore_len = len(df)
         else:
-            expected_fore_len = forecast_length + len(self.df) if include_history else forecast_length
+            expected_fore_len = forecast_length + len(df) if include_history else forecast_length
         if future_regressor is not None and self.regressors_used:
             if len(future_regressor) == expected_fore_len:
                 full_regr = clean_regressor(future_regressor)
@@ -829,7 +846,10 @@ class Cassandra(ModelObject):
                 raise ValueError("flag_regressors supplied in training but not predict")
             all_flags = self.flag_regressor_train
         if future_impacts is not None and forecast_length is not None:
-            impacts = pd.concat([self.past_impacts, future_impacts])
+            if len(future_regressor) == expected_fore_len:
+                impacts = future_impacts
+            else:
+                impacts = pd.concat([self.past_impacts, future_impacts])
         else:
             impacts = self.past_impacts
         # I don't think there is a more efficient way to combine these dicts of dataframes
@@ -866,8 +886,9 @@ class Cassandra(ModelObject):
                     future_regressor=full_regr, flag_regressors=all_flags,
                     impacts=impacts, regressor_per_series=regr_ps_fore,
                 )
-                if self.rolling_window is not None:
-                    resid = self.rolling_trend(resid, np.array(self.create_t(df.index)))
+                if self.trend_window is not None:
+                    resid, slope, intercept = self.rolling_trend(resid, np.array(self.create_t(df.index)))
+                    resid = pd.DataFrame(resid, index=df.index, columns=df.columns)
             trend_forecast = model_forecast(
                 model_name=self.trend_model['Model'],
                 model_param_dict=self.trend_model['ModelParameters'],
@@ -980,25 +1001,27 @@ class Cassandra(ModelObject):
             self.zero_crossings, self.changepoints, self.slope_sign, self.accel = self.analyze_trend(self.slope, index=self.predicted_trend.index)
 
         # don't forget to add in past_impacts (use future impacts again?) AFTER unscaling
-        if future_impacts is not None and self.past_impacts is None:
-            past_impacts = pd.DataFrame(0, index=self.df.index, columns=self.df.columns)
-        else:
-            past_impacts = self.past_impacts
-        # roll forward tail of past impacts, assuming it continues
-        if self.past_impacts is not None and forecast_length is not None:
-            future_impts = pd.DataFrame(
-                np.repeat(self.past_impacts.iloc[-1:].to_numpy(), forecast_length, axis=0),
-                index=forecast_index, columns=self.df.columns
-            )
-            if future_impacts is not None:
-                future_impts = future_impts + future_impacts
-        else:
-            future_impts = pd.DataFrame()
-        if self.past_impacts is not None or future_impacts is not None:
-            impts = 1 + pd.concat([past_impacts, future_impts], axis=1)
-            df_forecast.forecast = df_forecast.forecast * impts
-            df_forecast.lower_forecast = df_forecast.lower_forecast * impts
-            df_forecast.upper_forecast = df_forecast.upper_forecast * impts
+        if self.past_impacts_intervention != "regressor":
+            if future_impacts is not None and self.past_impacts is None:
+                past_impacts = pd.DataFrame(0, index=self.df.index, columns=self.df.columns)
+            else:
+                past_impacts = self.past_impacts
+            # roll forward tail of past impacts, assuming it continues
+            if self.past_impacts is not None and forecast_length is not None and future_impacts is not None:
+                future_impts = pd.DataFrame(
+                    np.repeat(self.past_impacts.iloc[-1:].to_numpy(), forecast_length, axis=0),
+                    index=future_impacts.index, columns=future_impacts.columns
+                )
+                if future_impacts is not None:
+                    future_impts = future_impts + future_impacts
+            else:
+                future_impts = pd.DataFrame()
+            if self.past_impacts is not None or future_impacts is not None:
+                impts = 1 + pd.concat([past_impacts, future_impts], axis=0).reindex(df_forecast.forecast.index)  # minus or plus
+                self.impacts = impts
+                df_forecast.forecast = df_forecast.forecast * impts
+                df_forecast.lower_forecast = df_forecast.lower_forecast * impts
+                df_forecast.upper_forecast = df_forecast.upper_forecast * impts
 
         if self.constraint is not None:
             if isinstance(self.constraint, dict):
@@ -1190,7 +1213,7 @@ class Cassandra(ModelObject):
         return {
             "preprocessing_transformation": self.preprocessing_transformation,
             "scaling": self.scaling,
-            "past_impacts_intervention": self.past_impacts_intervention,
+            "past_impacts_intervention": self.past_impacts_intervention,  # not in new
             "seasonalities": self.seasonalities,
             "ar_lags": self.ar_lags,
             "ar_interaction_seasonality": self.ar_interaction_seasonality,
@@ -1216,7 +1239,7 @@ class Cassandra(ModelObject):
             # "constraint": self.constraint,
         }
 
-    def plot_components(self, prediction=None, series=None, figsize=(16, 9), to_origin_space=True, title=None):
+    def plot_components(self, prediction=None, series=None, figsize=(16, 9), to_origin_space=True, title=None, start_date=None):
         if series is None:
             series = random.choice(self.column_names)
         if title is None:
@@ -1225,8 +1248,12 @@ class Cassandra(ModelObject):
         if prediction is not None:
             plot_list.append(prediction.forecast[series].rename("forecast"))
             plot_list.append(self.predicted_trend[series].rename("trend"))
+            plot_list.append((self.impacts[series].rename("impact %") - 1.0) * 100)
         plot_list.append(self.process_components(to_origin_space=to_origin_space)[series].loc[prediction.forecast.index])
-        return pd.concat(plot_list, axis=1).plot(subplots=True, figsize=figsize, title=title)
+        plot_df = pd.concat(plot_list, axis=1)
+        if start_date is not None:
+            plot_df = plot_df[plot_df.index >= start_date]
+        return plot_df.plot(subplots=True, figsize=figsize, title=title)
 
     def plot_trend(
             self, series=None, vline=None,
@@ -1280,7 +1307,7 @@ class Cassandra(ModelObject):
         if series is None:
             series = random.choice(self.column_names)
         vline = None if self.forecast_length is None else prediction.forecast.index[-self.forecast_length]
-        ax = prediction.plot(actuals.loc[prediction.forecast.index], series=series, vline=vline, start_date=start_date)
+        ax = prediction.plot(actuals.loc[prediction.forecast.index] if actuals is not None else None, series=series, vline=vline, start_date=start_date)
         handles, labels = ax.get_legend_handles_labels()
         if self.anomaly_detector:
             if self.anomaly_detector.output == "univariate":
@@ -1485,6 +1512,8 @@ if False:
     df_test = df_daily[-forecast_length:].iloc[:, 1:]
     fake_regr = df_daily[:-forecast_length].iloc[:, 0:1]
     fake_regr_fcst = df_daily.iloc[:, 0:1] if include_history else df_daily[-forecast_length:].iloc[:, 0:1]
+    flag_regressor = pd.DataFrame(1, index=fake_regr.index, columns=["flag_test"])
+    flag_regressor_fcst = pd.DataFrame(1, index=fake_regr_fcst.index, columns=["flag_test"])
     regr_per_series = {str(df_train.columns[0]): pd.DataFrame(np.random.normal(size=(len(df_train), 1)), index=df_train.index)}
     regr_per_series_fcst = {str(df_train.columns[0]): pd.DataFrame(np.random.normal(size=(forecast_length, 1)), index=df_test.index)}
     constraint = {
@@ -1493,15 +1522,29 @@ if False:
         'upper_constraint': None,
         "bounds": True
     }
+    past_impacts = pd.DataFrame(0, index=df_train.index, columns=df_train.columns)
+    past_impacts.iloc[-10:, 0] = np.geomspace(1, 10)[0:10] / 100
+    past_impacts.iloc[-30:, -1] = np.linspace(1, 10)[0:30] / -100
+    future_impacts = pd.DataFrame(0, index=df_test.index, columns=df_test.columns)
+    future_impacts.iloc[0:10, 0] = (np.linspace(1, 10)[0:10] + 10) / 100
 
     c_params = Cassandra.get_new_params()
     c_params
 
-    mod = Cassandra(n_jobs=1, **c_params, constraint=constraint, holiday_countries=holiday_countries)
-    mod.fit(df_train, categorical_groups=categorical_groups, future_regressor=fake_regr, regressor_per_series=regr_per_series)
+    mod = Cassandra(
+        n_jobs=1, **c_params, constraint=constraint, holiday_countries=holiday_countries,
+        max_multicolinearity=0.0001,
+    )
+    mod.fit(
+        df_train, categorical_groups=categorical_groups, future_regressor=fake_regr,
+        regressor_per_series=regr_per_series, past_impacts=past_impacts,
+        flag_regressors=flag_regressor,
+    )
     pred = mod.predict(
         forecast_length=forecast_length, include_history=include_history,
-        future_regressor=fake_regr_fcst, regressor_per_series=regr_per_series_fcst
+        future_regressor=fake_regr_fcst, regressor_per_series=regr_per_series_fcst,
+        future_impacts=future_impacts,
+        flag_regressors=flag_regressor_fcst,
     )
     result = pred.forecast
     series = random.choice(mod.column_names)
@@ -1517,12 +1560,18 @@ if False:
         # plt.savefig("forecast.png", dpi=300)
         # mod.plot_components(pred, series=series, to_origin_space=False)
         # plt.show()
-        mod.plot_components(pred, series=series, to_origin_space=True)
+        mod.plot_components(pred, series=series, to_origin_space=True, start_date=start_date)
         # plt.savefig("components.png", dpi=300)
         plt.show()
         mod.plot_trend(series=series, vline=df_test.index[0], start_date=start_date)
         # plt.savefig("trend.png", dpi=300)
     pred.evaluate(df_daily.reindex(result.index)[df_train.columns] if include_history else df_test[df_train.columns])
+    if not mod.regressors_used:
+        pred2 = mod.predict(
+            forecast_length=forecast_length, include_history=False,
+            new_df=df_daily[df_train.columns]
+        )
+        mod.plot_forecast(pred2, actuals=None, series=series, start_date=start_date)
     print(pred.avg_metrics.round(1))
     print(c_params['trend_model'])
     # mod.process_components()
@@ -1583,67 +1632,47 @@ if mod.trend_anomaly_detector is not None:
         labels += ["trend anomalies"]
 ax.legend(handles, labels)
 
-# best yet 12.4 SMAPE
+# best yet 12.0 SMAPE
 {'preprocessing_transformation': {'fillna': 'ffill',
-  'transformations': {0: 'bkfilter'},
+  'transformations': {0: 'KalmanSmoothing'},
+  'transformation_params': {0: {'state_transition': [[1]],
+    'process_noise': [[0.307]],
+    'observation_model': [[1]],
+    'observation_noise': 1.0}}},
+ 'scaling': {'fillna': None,
+  'transformations': {0: 'MinMaxScaler'},
   'transformation_params': {0: {}}},
- 'scaling': 'BaseScaler',
  'seasonalities': [7, 365.25],
- 'ar_lags': [1],
+ 'ar_lags': [7],
  'ar_interaction_seasonality': None,
  'anomaly_detector_params': None,
  'anomaly_intervention': None,
- 'holiday_detector_params': {'threshold': 0.9,
-  'splash_threshold': None,
-  'use_dayofmonth_holidays': True,
-  'use_wkdom_holidays': True,
-  'use_wkdeom_holidays': False,
-  'use_lunar_holidays': False,
-  'use_lunar_weekday': False,
-  'use_islamic_holidays': False,
-  'use_hebrew_holidays': False,
-  'anomaly_detector_params': {'method': 'IQR',
-   'transform_dict': None,
-   'method_params': {'iqr_threshold': 2.0, 'iqr_quantiles': [0.25, 0.75]},
-   'fillna': 'rolling_mean_24'},
-  'remove_excess_anomalies': False,
-  'impact': None,
-  'regression_params': None,
-  'output': 'multivariate'},
- 'holiday_countries_used': True,
+ 'holiday_detector_params': None,
+ 'holiday_countries_used': False,
  'multivariate_feature': None,
- 'multivariate_transformation': {'fillna': 'ffill',
-  'transformations': {0: 'bkfilter', 1: 'Log', 2: 'CumSumTransformer'},
-  'transformation_params': {0: {}, 1: {}, 2: {}}},
- 'regressor_transformation': {'fillna': 'zero',
-  'transformations': {0: 'ClipOutliers'},
-  'transformation_params': {0: {'method': 'clip',
-    'std_threshold': 5,
-    'fillna': None}}},
+ 'multivariate_transformation': {'fillna': 'pchip',
+  'transformations': {0: 'Round', 1: 'bkfilter'},
+  'transformation_params': {0: {'decimals': 0,
+    'on_transform': True,
+    'on_inverse': False},
+   1: {}}},
+ 'regressor_transformation': {'fillna': 'rolling_mean_24',
+  'transformations': {0: 'PowerTransformer'},
+  'transformation_params': {0: {}}},
  'regressors_used': False,
- 'linear_model': {'model': 'lstsq', 'lambda': None, 'recency_weighting': None},
+ 'linear_model': {'model': 'lstsq', 'lambda': 10, 'recency_weighting': None},
  'randomwalk_n': 10,
  'trend_window': 3,
  'trend_standin': None,
  'trend_anomaly_detector_params': None,
- 'trend_transformation': {'fillna': 'zero',
-  'transformations': {0: 'ClipOutliers', 1: 'bkfilter', 2: 'AnomalyRemoval'},
-  'transformation_params': {0: {'method': 'clip',
-    'std_threshold': 4,
-    'fillna': None},
-   1: {},
-   2: {'method': 'IQR',
-    'transform_dict': {'transformations': {0: 'DatepartRegression'},
-     'transformation_params': {0: {'datepart_method': 'simple_3',
-       'regression_model': {'model': 'DecisionTree',
-        'model_params': {'max_depth': None, 'min_samples_split': 0.1}}}}},
-    'method_params': {'iqr_threshold': 2.0, 'iqr_quantiles': [0.25, 0.75]},
-    'fillna': 'rolling_mean_24'}}},
+ 'trend_transformation': {'fillna': 'akima',
+  'transformations': {0: 'DifferencedTransformer'},
+  'transformation_params': {0: {}}},
  'trend_model': {'Model': 'SeasonalityMotif',
-  'ModelParameters': {'window': 10,
-   'point_method': 'mean',
+  'ModelParameters': {'window': 15,
+   'point_method': 'midhinge',
    'distance_metric': 'mse',
    'k': 10,
-   'datepart_method': 'simple_2'}},
+   'datepart_method': 'recurring'}},
  'trend_phi': None}
 """
