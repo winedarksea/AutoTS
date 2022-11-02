@@ -1248,6 +1248,7 @@ class Cassandra(ModelObject):
         if prediction is not None:
             plot_list.append(prediction.forecast[series].rename("forecast"))
             plot_list.append(self.predicted_trend[series].rename("trend"))
+        if self.impacts is not None:
             plot_list.append((self.impacts[series].rename("impact %") - 1.0) * 100)
         plot_list.append(self.process_components(to_origin_space=to_origin_space)[series].loc[prediction.forecast.index])
         plot_df = pd.concat(plot_list, axis=1)
@@ -1483,97 +1484,7 @@ def linear_model(x, y, params):
 
 if False:
     # test holiday countries, regressors, impacts
-    from autots import load_daily
-    import matplotlib.pyplot as plt
-
-    categorical_groups = {
-        "wiki_United_States": 'country',
-        "wiki_Germany": 'country',
-        "wiki_Jesus": 'holiday',
-        "wiki_Michael_Jackson": 'person',
-        "wiki_Easter": 'holiday',
-        "wiki_Christmas": 'holiday',
-        "wiki_Chinese_New_Year": 'holiday',
-        "wiki_Thanksgiving": 'holiday',
-        "wiki_Elizabeth_II": 'person',
-        "wiki_William_Shakespeare": 'person',
-        "wiki_George_Washington": 'person',
-        "wiki_Cleopatra": 'person',
-    }
-    holiday_countries = {
-        'wiki_Elizabeth_II': 'uk',
-        'wiki_United_States': 'us',
-        'wiki_Germany': 'de',
-    }
-    df_daily = load_daily(long=False)
-    forecast_length = 180
-    include_history = True
-    df_train = df_daily[:-forecast_length].iloc[:, 1:]
-    df_test = df_daily[-forecast_length:].iloc[:, 1:]
-    fake_regr = df_daily[:-forecast_length].iloc[:, 0:1]
-    fake_regr_fcst = df_daily.iloc[:, 0:1] if include_history else df_daily[-forecast_length:].iloc[:, 0:1]
-    flag_regressor = pd.DataFrame(1, index=fake_regr.index, columns=["flag_test"])
-    flag_regressor_fcst = pd.DataFrame(1, index=fake_regr_fcst.index, columns=["flag_test"])
-    regr_per_series = {str(df_train.columns[0]): pd.DataFrame(np.random.normal(size=(len(df_train), 1)), index=df_train.index)}
-    regr_per_series_fcst = {str(df_train.columns[0]): pd.DataFrame(np.random.normal(size=(forecast_length, 1)), index=df_test.index)}
-    constraint = {
-        'constraint_method': 'quantile',
-        'lower_constraint': 0,
-        'upper_constraint': None,
-        "bounds": True
-    }
-    past_impacts = pd.DataFrame(0, index=df_train.index, columns=df_train.columns)
-    past_impacts.iloc[-10:, 0] = np.geomspace(1, 10)[0:10] / 100
-    past_impacts.iloc[-30:, -1] = np.linspace(1, 10)[0:30] / -100
-    future_impacts = pd.DataFrame(0, index=df_test.index, columns=df_test.columns)
-    future_impacts.iloc[0:10, 0] = (np.linspace(1, 10)[0:10] + 10) / 100
-
-    c_params = Cassandra.get_new_params()
-    c_params
-
-    mod = Cassandra(
-        n_jobs=1, **c_params, constraint=constraint, holiday_countries=holiday_countries,
-        max_multicolinearity=0.0001,
-    )
-    mod.fit(
-        df_train, categorical_groups=categorical_groups, future_regressor=fake_regr,
-        regressor_per_series=regr_per_series, past_impacts=past_impacts,
-        flag_regressors=flag_regressor,
-    )
-    pred = mod.predict(
-        forecast_length=forecast_length, include_history=include_history,
-        future_regressor=fake_regr_fcst, regressor_per_series=regr_per_series_fcst,
-        future_impacts=future_impacts,
-        flag_regressors=flag_regressor_fcst,
-    )
-    result = pred.forecast
-    series = random.choice(mod.column_names)
-    # series = "wiki_Periodic_table"
-    series = 'wiki_Germany'
-    mod.regressors_used
-    mod.holiday_countries_used
-    with plt.style.context("seaborn-white"):
-        start_date = "2019-07-01"
-        mod.plot_forecast(pred, actuals=df_daily if include_history else df_test, series=series, start_date=start_date)
-
-        plt.show()
-        # plt.savefig("forecast.png", dpi=300)
-        # mod.plot_components(pred, series=series, to_origin_space=False)
-        # plt.show()
-        mod.plot_components(pred, series=series, to_origin_space=True, start_date=start_date)
-        # plt.savefig("components.png", dpi=300)
-        plt.show()
-        mod.plot_trend(series=series, vline=df_test.index[0], start_date=start_date)
-        # plt.savefig("trend.png", dpi=300)
-    pred.evaluate(df_daily.reindex(result.index)[df_train.columns] if include_history else df_test[df_train.columns])
-    if not mod.regressors_used:
-        pred2 = mod.predict(
-            forecast_length=forecast_length, include_history=False,
-            new_df=df_daily[df_train.columns]
-        )
-        mod.plot_forecast(pred2, actuals=None, series=series, start_date=start_date)
-    print(pred.avg_metrics.round(1))
-    print(c_params['trend_model'])
+3 
     # mod.process_components()
     # mod.predicted_trend
 
