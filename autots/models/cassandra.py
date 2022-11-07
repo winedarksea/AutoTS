@@ -3,6 +3,7 @@
 Created on Tue Sep 13 19:45:57 2022
 
 @author: Colin
+with assistance from @crgillespie22
 """
 from operator import itemgetter
 from itertools import groupby
@@ -187,7 +188,10 @@ class Cassandra(ModelObject):
                 df = self.base_scaler(df)
             else:
                 df = self.scaler.transform(df)
-        return df
+        if not isinstance(df, pd.DataFrame):
+            return pd.DataFrame(df, columns=df.columns, index=df.index)
+        else:
+            return df
 
     def to_origin_space(self, df, trans_method='forecast', components=False, bounds=False):
         """Take transformed outputs back to original feature space."""
@@ -776,6 +780,7 @@ class Cassandra(ModelObject):
 
         upper = trend_component.upper_forecast.reindex(dates) + linear_pred + self.residual_uncertainty * self.int_std_dev
         lower = trend_component.lower_forecast.reindex(dates) + linear_pred - self.residual_uncertainty * self.int_std_dev
+
         df_forecast = PredictionObject(
             model_name=self.name,
             forecast_length=len(dates),
@@ -835,12 +840,25 @@ class Cassandra(ModelObject):
             if len(future_regressor) == expected_fore_len:
                 full_regr = clean_regressor(future_regressor)
             else:
-                full_regr = pd.concat([self.future_regressor_train, self.regressor_transformer.fit_transform(clean_regressor(future_regressor))])
+                full_regr = pd.concat(
+                    [
+                        self.future_regressor_train,
+                        self.regressor_transformer.fit_transform(
+                            clean_regressor(future_regressor.loc[future_regressor.index.difference(self.future_regressor_train.index)])
+                        )
+                    ]
+                )
         if flag_regressors is not None and forecast_length is not None and self.regressors_used:
             if len(flag_regressors) == expected_fore_len:
                 all_flags = clean_regressor(flag_regressors, prefix="regrflags_")
             else:
-                all_flags = pd.concat([self.flag_regressor_train, clean_regressor(flag_regressors, prefix="regrflags_")])
+                all_flags = pd.concat([
+                    self.flag_regressor_train,
+                    clean_regressor(
+                        flag_regressors.loc[flag_regressors.index.difference(self.flag_regressor_train.index)],
+                        prefix="regrflags_"
+                    )
+                ])
         else:
             if self.flag_regressor_train is not None and forecast_length is not None and self.regressors_used:
                 raise ValueError("flag_regressors supplied in training but not predict")
@@ -858,12 +876,18 @@ class Cassandra(ModelObject):
                 raise ValueError("regressor_per_series must be dict")
             regr_ps_fore = {}
             for key, value in self.regr_per_series_tr.items():
-                regr_ps_fore[key] = pd.concat([self.regr_per_series_tr[key], regressor_per_series[key]])
+                if len(regressor_per_series[key]) == expected_fore_len:
+                    regr_ps_fore[key] = regressor_per_series[key]
+                else:
+                    regr_ps_fore[key] = pd.concat([self.regr_per_series_tr[key], regressor_per_series[key]])
+                    regr_ps_fore[key] = regr_ps_fore[key].iloc[~regr_ps_fore[key].index.duplicated()]
+                self.regr_ps = regr_ps_fore
         else:
             regr_ps_fore = self.regr_per_series_tr
 
         # generate trend
         # MAY WANT TO PASS future_regressor HERE
+        resid = None
         if forecast_length is not None:
             # combine regressor types depending on what is given
             if self.future_regressor_train is None and self.flag_regressor_train is not None:
@@ -878,7 +902,6 @@ class Cassandra(ModelObject):
             else:
                 comp_regr_train = None
                 comp_regr = None
-            resid = None
             # create new rolling residual if new data provided
             if new_df is not None:
                 resid = df - self._predict_linear(
@@ -921,13 +944,13 @@ class Cassandra(ModelObject):
                 trend_forecast.lower_forecast = trend_forecast.forecast
             if include_history:
                 trend_forecast.forecast = pd.concat([
-                    self.trend_train, trend_forecast.forecast
+                    self.trend_train if resid is None else resid, trend_forecast.forecast
                 ])
                 trend_forecast.lower_forecast = pd.concat([
-                    self.trend_train, trend_forecast.lower_forecast
+                    self.trend_train if resid is None else resid, trend_forecast.lower_forecast
                 ])
                 trend_forecast.upper_forecast = pd.concat([
-                    self.trend_train, trend_forecast.upper_forecast
+                    self.trend_train if resid is None else resid, trend_forecast.upper_forecast
                 ])
         else:
             trend_forecast = PredictionObject(
@@ -955,7 +978,7 @@ class Cassandra(ModelObject):
                 df_forecast.lower_forecast = df_forecast.lower_forecast.tail(forecast_length)
                 df_forecast.upper_forecast = df_forecast.upper_forecast.tail(forecast_length)
         else:
-            forecast_index = self.create_forecast_index(forecast_length)
+            forecast_index = self.create_forecast_index(forecast_length, last_date=df.index[-1])
             if include_history:
                 forecast_index = df.index.union(forecast_index)
             df_forecast = self._predict_step(
@@ -1017,7 +1040,7 @@ class Cassandra(ModelObject):
             else:
                 future_impts = pd.DataFrame()
             if self.past_impacts is not None or future_impacts is not None:
-                impts = 1 + pd.concat([past_impacts, future_impts], axis=0).reindex(df_forecast.forecast.index)  # minus or plus
+                impts = 1 + pd.concat([past_impacts, future_impts], axis=0).reindex(df_forecast.forecast.index).fillna(1)  # minus or plus
                 self.impacts = impts
                 df_forecast.forecast = df_forecast.forecast * impts
                 df_forecast.lower_forecast = df_forecast.lower_forecast * impts
@@ -1255,11 +1278,11 @@ class Cassandra(ModelObject):
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         return plot_df.plot(subplots=True, figsize=figsize, title=title)
-    
+
     def return_components(self):
         plot_list = []
         plot_list.append(self.predicted_trend[series].rename("trend"))
-        
+
         return pd.concat(plot_list, axis=1)
 
     def plot_trend(
@@ -1316,6 +1339,12 @@ class Cassandra(ModelObject):
         vline = None if self.forecast_length is None else prediction.forecast.index[-self.forecast_length]
         ax = prediction.plot(actuals.loc[prediction.forecast.index] if actuals is not None else None, series=series, vline=vline, start_date=start_date)
         handles, labels = ax.get_legend_handles_labels()
+        if actuals is None or not isinstance(actuals, (pd.DataFrame, np.array, pd.Series)):
+            actuals_used = prediction.forecast
+            actuals_flag = False
+        else:
+            actuals_flag = True
+            actuals_used = actuals
         if self.anomaly_detector:
             if self.anomaly_detector.output == "univariate":
                 i_anom = self.anomaly_detector.anomalies.index[self.anomaly_detector.anomalies.iloc[:, 0] == -1]
@@ -1324,17 +1353,19 @@ class Cassandra(ModelObject):
                 i_anom = series_anom[series_anom == -1].index
             if start_date is not None:
                 i_anom = i_anom[i_anom >= start_date]
-            i_anom = i_anom[i_anom >= actuals.index[0]]
-            if len(i_anom) > 0 and len(i_anom) < len(actuals) * 0.5:
-                scat1 = ax.scatter(i_anom.tolist(), actuals.loc[i_anom, :][series], c=anomaly_color, s=point_size)
+            if actuals_flag:
+                i_anom = i_anom[i_anom >= actuals.index[0]]
+            if len(i_anom) > 0 and (not actuals_flag or len(i_anom) < len(actuals) * 0.5):
+                scat1 = ax.scatter(i_anom.tolist(), actuals_used.reindex(i_anom)[series], c=anomaly_color, s=point_size)
                 handles += [scat1]
                 labels += ["anomalies"]
         if self.holiday_detector:
             i_anom = self.holiday_detector.dates_to_holidays(self.df.index, style="series_flag")[series]
             i_anom = i_anom.index[i_anom == 1]
-            i_anom = i_anom[i_anom >= actuals.index[0]]
-            if len(i_anom) > 0 and len(i_anom) < len(actuals) * 0.5:
-                scat2 = ax.scatter(i_anom.tolist(), actuals.loc[i_anom, :][series], c=holiday_color, s=point_size)
+            if actuals_flag:
+                i_anom = i_anom[i_anom >= actuals.index[0]]
+            if len(i_anom) > 0 and (not actuals_flag or len(i_anom) < len(actuals) * 0.5):
+                scat2 = ax.scatter(i_anom.tolist(), actuals_used.reindex(i_anom)[series], c=holiday_color, s=point_size)
                 handles += [scat2]
                 labels += ["detected holidays"]
         if self.trend_anomaly_detector is not None:
@@ -1345,9 +1376,10 @@ class Cassandra(ModelObject):
                 i_anom = series_anom[series_anom == -1].index
             if start_date is not None:
                 i_anom = i_anom[i_anom >= start_date]
-            i_anom = i_anom[i_anom >= actuals.index[0]]
-            if len(i_anom) > 0 and len(i_anom) < len(actuals) * 0.5:
-                scat3 = ax.scatter(i_anom.tolist(), actuals.loc[i_anom][series], c=trend_anomaly_color, s=point_size)
+            if actuals_flag:
+                i_anom = i_anom[i_anom >= actuals.index[0]]
+            if len(i_anom) > 0 and (not actuals_flag or len(i_anom) < len(actuals) * 0.5):
+                scat3 = ax.scatter(i_anom.tolist(), actuals_used.reindex(i_anom)[series], c=trend_anomaly_color, s=point_size)
                 handles += [scat3]
                 labels += ["trend anomalies"]
         ax.legend(handles, labels)
@@ -1553,7 +1585,7 @@ if False:
     result = pred.forecast
     series = random.choice(mod.column_names)
     # series = "wiki_Periodic_table"
-    series = 'wiki_Germany'
+    # series = 'wiki_Germany'
     mod.regressors_used
     mod.holiday_countries_used
     with plt.style.context("seaborn-white"):
@@ -1570,12 +1602,16 @@ if False:
         mod.plot_trend(series=series, vline=df_test.index[0], start_date=start_date)
         # plt.savefig("trend.png", dpi=300)
     pred.evaluate(df_daily.reindex(result.index)[df_train.columns] if include_history else df_test[df_train.columns])
-    if not mod.regressors_used:
-        pred2 = mod.predict(
-            forecast_length=forecast_length, include_history=False,
-            new_df=df_daily[df_train.columns]
-        )
-        mod.plot_forecast(pred2, actuals=None, series=series, start_date=start_date)
+    # if not mod.regressors_used:
+    dates = df_daily.index.union(mod.create_forecast_index(forecast_length, last_date=df_daily.index[-1]))
+    regr_ps = {'wiki_Germany': regr_per_series_fcst['wiki_Germany'].reindex(dates, fill_value=0)}
+    pred2 = mod.predict(
+        forecast_length=forecast_length, include_history=True,
+        new_df=df_daily[df_train.columns], flag_regressors=flag_regressor_fcst.reindex(dates, fill_value=0),
+        future_regressor=fake_regr_fcst.reindex(dates, fill_value=0),
+        regressor_per_series=regr_ps,
+    )
+    mod.plot_forecast(pred2, actuals=None, series=series, start_date=start_date)
     print(pred.avg_metrics.round(1))
     print(c_params['trend_model'])
     # mod.process_components()
@@ -1678,5 +1714,78 @@ ax.legend(handles, labels)
    'distance_metric': 'mse',
    'k': 10,
    'datepart_method': 'recurring'}},
+ 'trend_phi': None}
+
+# 11.7 SMAPE
+{'preprocessing_transformation': {'fillna': 'ffill',
+  'transformations': {0: 'Slice', 1: 'AlignLastValue'},
+  'transformation_params': {0: {'method': 0.5},
+   1: {'rows': 1,
+    'lag': 1,
+    'method': 'additive',
+    'strength': 1.0,
+    'first_value_only': False}}},
+ 'scaling': 'BaseScaler',
+ 'seasonalities': ['weekdayofmonth', 'common_fourier'],
+ 'ar_lags': None,
+ 'ar_interaction_seasonality': None,
+ 'anomaly_detector_params': {'method': 'rolling_zscore',
+  'transform_dict': {'fillna': None,
+   'transformations': {'0': 'ClipOutliers'},
+   'transformation_params': {'0': {'method': 'clip', 'std_threshold': 6}}},
+  'method_params': {'distribution': 'chi2',
+   'alpha': 0.05,
+   'rolling_periods': 200,
+   'center': False},
+  'fillna': 'rolling_mean_24'},
+ 'anomaly_intervention': 'remove',
+ 'holiday_detector_params': None,
+ 'holiday_countries_used': True,
+ 'multivariate_feature': None,
+ 'multivariate_transformation': {'fillna': 'ffill',
+  'transformations': {0: 'QuantileTransformer', 1: 'QuantileTransformer'},
+  'transformation_params': {0: {'output_distribution': 'uniform',
+    'n_quantiles': 1000},
+   1: {'output_distribution': 'uniform', 'n_quantiles': 1000}}},
+ 'regressor_transformation': {'fillna': 'rolling_mean_24',
+  'transformations': {0: 'QuantileTransformer'},
+  'transformation_params': {0: {'output_distribution': 'uniform',
+    'n_quantiles': 60}}},
+ 'regressors_used': True,
+ 'linear_model': {'model': 'lstsq', 'lambda': 10, 'recency_weighting': None},
+ 'randomwalk_n': 10,
+ 'trend_window': 3,
+ 'trend_standin': 'random_normal',
+ 'trend_anomaly_detector_params': {'method': 'IQR',
+  'transform_dict': {'fillna': 'rolling_mean_24',
+   'transformations': {0: 'AlignLastValue', 1: 'RobustScaler'},
+   'transformation_params': {0: {'rows': 1,
+     'lag': 1,
+     'method': 'additive',
+     'strength': 1.0,
+     'first_value_only': False},
+    1: {}}},
+  'method_params': {'iqr_threshold': 1.5, 'iqr_quantiles': [0.25, 0.75]},
+  'fillna': 'rolling_mean_24'},
+ 'trend_transformation': {'fillna': 'ffill',
+  'transformations': {0: 'SeasonalDifference'},
+  'transformation_params': {0: {'lag_1': 7, 'method': 'LastValue'}}},
+ 'trend_model': {'Model': 'MetricMotif',
+  'ModelParameters': {'window': 30,
+   'point_method': 'weighted_mean',
+   'distance_metric': 'mqae',
+   'k': 3,
+   'comparison_transformation': {'fillna': 'rolling_mean',
+    'transformations': {0: 'KalmanSmoothing'},
+    'transformation_params': {0: {'state_transition': [[1]],
+      'process_noise': [[0.064]],
+      'observation_model': [[2]],
+      'observation_noise': 10.0}}},
+   'combination_transformation': {'fillna': 'rolling_mean_24',
+    'transformations': {0: 'KalmanSmoothing'},
+    'transformation_params': {0: {'state_transition': [[1]],
+      'process_noise': [[0.246]],
+      'observation_model': [[1]],
+      'observation_noise': 0.5}}}}},
  'trend_phi': None}
 """
