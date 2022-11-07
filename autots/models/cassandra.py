@@ -1287,11 +1287,11 @@ class Cassandra(ModelObject):
         handles, labels = ax.get_legend_handles_labels()
         # ax.scatter(cur_trend.index[self.changepoints[:, p_indx]], cur_trend[self.changepoints[:, p_indx]], c='#fdcc09', s=4.0)
         # ax.scatter(cur_trend.index[self.zero_crossings[:, p_indx]], cur_trend[self.zero_crossings[:, p_indx]], c='#512f74', s=4.0)
-        if mod.trend_anomaly_detector is not None:
-            if mod.trend_anomaly_detector.output == "univariate":
-                i_anom = mod.trend_anomaly_detector.anomalies.index[mod.anomaly_detector.anomalies.iloc[:, 0] == -1]
+        if self.trend_anomaly_detector is not None:
+            if self.trend_anomaly_detector.output == "univariate":
+                i_anom = self.trend_anomaly_detector.anomalies.index[self.anomaly_detector.anomalies.iloc[:, 0] == -1]
             else:
-                series_anom = mod.trend_anomaly_detector.anomalies[series]
+                series_anom = self.trend_anomaly_detector.anomalies[series]
                 i_anom = series_anom[series_anom == -1].index
             if start_date is not None:
                 i_anom = i_anom[i_anom >= start_date]
