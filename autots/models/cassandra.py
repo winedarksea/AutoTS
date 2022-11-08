@@ -63,8 +63,15 @@ class Cassandra(ModelObject):
         pass
 
     Methods:
+         fit
+         predict
          holiday_detector.dates_to_holidays
          create_forecast_index: after .fit, can be used to create index of prediction
+         plot_forecast
+         plot_components
+         plot_trend
+         get_new_params
+         return_components
 
     Attributes:
         .anomaly_detector.anomalies
@@ -76,6 +83,7 @@ class Cassandra(ModelObject):
         .x_array
         .predict_x_array
         .trend_train
+        .predicted_trend
     """
 
     def __init__(
@@ -1279,10 +1287,22 @@ class Cassandra(ModelObject):
             plot_df = plot_df[plot_df.index >= start_date]
         return plot_df.plot(subplots=True, figsize=figsize, title=title)
 
-    def return_components(self):
-        plot_list = []
-        plot_list.append(self.predicted_trend[series].rename("trend"))
+    def return_components(self, to_origin_space=True, include_impacts=False):
+        """Return additive elements of forecast, linear and trend. If impacts included, it is a multiplicative term.
 
+        Args:
+            to_origin_space (bool) if False, will not reverse transform linear components
+            include_impacts (bool) if True, impacts are included in the returned dataframe
+        """
+        plot_list = []
+        plot_list.append(self.process_components(to_origin_space=to_origin_space))
+        trend = self.predicted_trend.copy()
+        trend.columns = pd.MultiIndex.from_arrays([trend.columns, ['trend'] * len(trend.columns)])
+        plot_list.append(trend)
+        if self.impacts is not None and include_impacts:
+            impacts = self.impacts.copy()
+            impacts.columns = pd.MultiIndex.from_arrays([impacts.columns, ['impacts'] * len(impacts.columns)])
+            plot_list.append(impacts)
         return pd.concat(plot_list, axis=1)
 
     def plot_trend(
@@ -1330,21 +1350,33 @@ class Cassandra(ModelObject):
         return ax
 
     def plot_forecast(
-            self, prediction, actuals, series=None, start_date=None,
+            self, prediction, actuals=None, series=None, start_date=None,
             anomaly_color="darkslateblue", holiday_color="darkgreen",
             trend_anomaly_color='slategray', point_size=12.0,
     ):
+        """Plot a forecast time series.
+
+        Args:
+            prediction (model prediction object, required)
+            actuals (pd.DataFrame): wide style df, of know data if available
+            series (str): name of time series column to plot
+            start_date (str or Timestamp): point at which to begin X axis
+            anomaly_color (str): name of anomaly point color
+            holiday_color (str): name of holiday point color
+            trend_anomaly_color (str): name of trend anomaly point color
+            point_size (str): point size for all anomalies
+        """
         if series is None:
             series = random.choice(self.column_names)
-        vline = None if self.forecast_length is None else prediction.forecast.index[-self.forecast_length]
-        ax = prediction.plot(actuals.loc[prediction.forecast.index] if actuals is not None else None, series=series, vline=vline, start_date=start_date)
-        handles, labels = ax.get_legend_handles_labels()
         if actuals is None or not isinstance(actuals, (pd.DataFrame, np.array, pd.Series)):
             actuals_used = prediction.forecast
             actuals_flag = False
         else:
             actuals_flag = True
-            actuals_used = actuals
+            actuals_used = actuals.reindex(prediction.forecast.index)
+        vline = None if self.forecast_length is None else prediction.forecast.index[-self.forecast_length]
+        ax = prediction.plot(actuals_used.loc[prediction.forecast.index] if actuals_flag is not None else None, series=series, vline=vline, start_date=start_date)
+        handles, labels = ax.get_legend_handles_labels()
         if self.anomaly_detector:
             if self.anomaly_detector.output == "univariate":
                 i_anom = self.anomaly_detector.anomalies.index[self.anomaly_detector.anomalies.iloc[:, 0] == -1]
@@ -1476,7 +1508,6 @@ def linear_model(x, y, params):
         raise ValueError("linear model not recognized")
 
 # Seasonalities
-    # maybe fixed 3 seasonalities
     # interaction effect only on first two seasonalities if order matches
 
 # Categorical Features
@@ -1492,7 +1523,6 @@ def linear_model(x, y, params):
     # reweight so loop is not required so often
     # test and bug fix everything
     # l1_norm isn't working
-    # return components
     # unittests
 
 # TEST
@@ -1611,11 +1641,10 @@ if False:
         future_regressor=fake_regr_fcst.reindex(dates, fill_value=0),
         regressor_per_series=regr_ps,
     )
-    mod.plot_forecast(pred2, actuals=None, series=series, start_date=start_date)
+    mod.plot_forecast(pred2, actuals=df_daily, series=series, start_date=start_date)
+    mod.return_components()
     print(pred.avg_metrics.round(1))
     print(c_params['trend_model'])
-    # mod.process_components()
-    # mod.predicted_trend
 
 # MULTIPLICATIVE SEASONALITY AND HOLIDAYS
 
