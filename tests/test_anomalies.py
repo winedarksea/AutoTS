@@ -36,10 +36,14 @@ class TestAnomalies(unittest.TestCase):
         ).fillna(0).replace(np.inf, 0)
 
     def test_anomaly_holiday_detectors(self):
+        print("Starting test_anomaly_holiday_detectors")
         """Combininng these to minimize live data download."""
         tried = []
         while not all(x in tried for x in available_methods):
             params = AnomalyDetector.get_new_params(method="deep")
+            # remove 'Slice' as it messes up assertions
+            while 'Slice' in params['transform_dict']['transformations'].values():
+                params = AnomalyDetector.get_new_params(method="deep")
             with self.subTest(i=params['method']):
                 tried.append(params['method'])
                 mod = AnomalyDetector(output='multivariate', **params)
@@ -64,6 +68,8 @@ class TestAnomalies(unittest.TestCase):
 
         while not all(x in tried for x in fast_methods):
             params = HolidayDetector.get_new_params(method="fast")
+            while 'Slice' in params['anomaly_detector_params']['transform_dict']['transformations'].values():
+                params = HolidayDetector.get_new_params(method="fast")
             tried.append(params['anomaly_detector_params']['method'])
             mod = HolidayDetector(**params)
             mod.detect(self.df)

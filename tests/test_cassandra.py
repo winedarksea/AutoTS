@@ -9,6 +9,7 @@ from autots.models.cassandra import Cassandra
 
 class CassandraTest(unittest.TestCase):
     def test_model(self):
+        print("Starting Cassandra model tests")
         from autots import load_daily
         import matplotlib.pyplot as plt
 

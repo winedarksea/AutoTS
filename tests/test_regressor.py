@@ -7,6 +7,7 @@ from autots import create_lagged_regressor, load_daily, create_regressor
 
 class test_create_lagged_regressor(unittest.TestCase):
     def test_create_regressor(self):
+        print("Starting test_create_regressor")
         df = load_daily(long=False)
         forecast_length = 5
         regr, fcst = create_lagged_regressor(

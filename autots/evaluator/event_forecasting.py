@@ -208,7 +208,7 @@ class EventRiskForecast(object):
         forecast_length=None,
         prediction_interval=None,
         models_mode="event_risk",
-        model_list=["UnivariateMotif", "MultivariateMotif", "SectionalMotif", "ARCH", 'MetricMotif'],
+        model_list=["UnivariateMotif", "MultivariateMotif", "SectionalMotif", "ARCH", 'MetricMotif', 'SeasonalityMotif'],
         ensemble=None,
         autots_kwargs=None,
         future_regressor_train=None,
@@ -316,7 +316,8 @@ class EventRiskForecast(object):
             "UnivariateMotif",
             "MultivariateMotif",
             "SectionalMotif",
-            'MetricMotif'
+            'MetricMotif',
+            "SeasonalityMotif",
             "Motif",
             "ARCH",  # simulations not motifs but similar
             "PytorchForecasting",
