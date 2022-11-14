@@ -398,6 +398,10 @@ class Cassandra(ModelObject):
         self.x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             raise ValueError("nan values in x_array")
+        if np.all(self.df == 0):
+            raise ValueError("transformed data is all zeroes")
+        if np.any((self.df.isnull().all())):
+            raise ValueError("transformed df has NaN filled series")
         # remove zero variance (corr is nan)
         corr = np.corrcoef(x_array, rowvar=0)
         nearz = x_array.columns[np.isnan(corr).all(axis=1)]
@@ -1627,11 +1631,12 @@ if False:
         # mod.plot_components(pred, series=series, to_origin_space=False)
         # plt.show()
         mod.plot_components(pred, series=series, to_origin_space=True, start_date=start_date)
-        # plt.savefig("components.png", dpi=300)
+        # plt.savefig("Cassandra_components.png", dpi=300)
         plt.show()
         mod.plot_trend(series=series, vline=df_test.index[0], start_date=start_date)
         # plt.savefig("trend.png", dpi=300)
     pred.evaluate(df_daily.reindex(result.index)[df_train.columns] if include_history else df_test[df_train.columns])
+
     # if not mod.regressors_used:
     dates = df_daily.index.union(mod.create_forecast_index(forecast_length, last_date=df_daily.index[-1]))
     regr_ps = {'wiki_Germany': regr_per_series_fcst['wiki_Germany'].reindex(dates, fill_value=0)}
@@ -1702,7 +1707,7 @@ if mod.trend_anomaly_detector is not None:
 ax.legend(handles, labels)
 
 # best yet 12.0 SMAPE
-{'preprocessing_transformation': {'fillna': 'ffill',
+c_params = {'preprocessing_transformation': {'fillna': 'ffill',
   'transformations': {0: 'KalmanSmoothing'},
   'transformation_params': {0: {'state_transition': [[1]],
     'process_noise': [[0.307]],
@@ -1746,7 +1751,7 @@ ax.legend(handles, labels)
  'trend_phi': None}
 
 # 11.7 SMAPE
-{'preprocessing_transformation': {'fillna': 'ffill',
+c_params = {'preprocessing_transformation': {'fillna': 'ffill',
   'transformations': {0: 'Slice', 1: 'AlignLastValue'},
   'transformation_params': {0: {'method': 0.5},
    1: {'rows': 1,

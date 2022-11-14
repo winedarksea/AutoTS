@@ -403,6 +403,8 @@ class StatsmodelsFilter(EmptyTransformer):
             from statsmodels.tsa.filters import cf_filter
 
             cycle, trend = cf_filter.cffilter(df)
+            if isinstance(cycle, pd.Series):
+                cycle = cycle.to_frame()
             cycle.columns = df.columns
             df = df - cycle
         elif "convolution_filter" in self.method:
