@@ -149,8 +149,9 @@ print(
 df.to_csv(f"training_data_{forecast_name}.csv")
 # df = pd.read_csv(f"training_data_{forecast_name}.csv", index_col=0, parse_dates=[0])
 
-# example regressor with some things we can glean from data and datetime index
+# example future_regressor with some things we can glean from data and datetime index
 # note this only accepts `wide` style input dataframes
+# and this is optional, not required for the modeling
 regr_train, regr_fcst = create_regressor(
     df,
     forecast_length=forecast_length,
@@ -277,6 +278,7 @@ print(
 model_parameters = json.loads(model.best_model["ModelParameters"].iloc[0])
 
 if graph:
+    model.export_template("all_results.csv", models='all')
     column_indices = [0, 1]  # change columns here
     column_indices = list(range(model.df_wide_numeric.shape[1]))
     for plt_col in column_indices:
@@ -290,13 +292,18 @@ if graph:
         # plt.savefig("model.png", dpi=300)
         plt.show()
 
-    model.plot_per_series_smape()
+    with plt.style.context("seaborn-white"):
+        ax = model.plot_per_series_smape()
+        plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+        plt.show()
+
+    model.plot_backforecast()
     plt.show()
 
     if model.best_model_ensemble == 2:
         plt.subplots_adjust(bottom=0.5)
         model.plot_horizontal_transformers()
-        # plt.savefig("transformers.png", dpi=300)
+        # plt.savefig("transformers.png", dpi=300, bbox_inches="tight")
         plt.show()
         model.plot_horizontal_model_count()
         plt.show()

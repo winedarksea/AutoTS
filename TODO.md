@@ -12,29 +12,29 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# Latest :space_invader: :space_invader: :space_invader:
-* added AnomalyDetector
-* added HolidayDetector
-* added observation_end and Wikipedia data to load_live_daily
-* added binarized versions of datepart method (should have done ages ago!)
-* addded RRVAR, MAR, TMF, LATC models
-* added AlignLastValue transformer
-* added plot_horizontal_model_count and fixed an error in horizontal generation plot
-* adjusted TotalRuntime to higher precision, and no longer + 1
-* added subsidiary transformer for cleaning in Detrend and Datepart detrend Transformers
-* sped up SinTrend transformer
-* new AnomalyRemoval transformer
-* added HolidayTransformer
-* added auto holidays to Prophet
-* added get_new_params method to AutoTS class
-* more holidays options to create_regressor
-
+# 0.5.1 :mage_man: :mage_man: :mage_man:
+* add LocalLinearTrend transformer
+* improved ScipyFilter focusing on Butter and Savitzky–Golay filters
+* update to AutoTS().back_forecast including breaking change of `column` arg renamed to `series`
+* add KalmanSmoothing transformer
+* add KalmanStateSpace model (Kalman Filter + 'any' state space models)
+* AlignLastValue no longer applied to upper/lower forecast bounds
+* modified `regression` impact in HolidayTransformer to weighted least squares, moved existing to 'datepart_regression'
+* added Cassandra model
+* bug fix for Categorical dateparts with 1 starts
+* updated load_daily to Wikimedia page views
+* added dwae metric
+* added MetricMotif model
+* added 'common_fourier' datepart method
+* added SeasonalMotif model
+* added 'seasonal' validation
+* bug fix for cffilter with univariate input
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
 	* add to appropriate model_lists: all, recombination_approved if so, no_shared if so
 	* add to model table in extended_tutorial.md (most columns here have an equivalent model_list)
-	* if model has regressors, make sure it meets Simulation Forecasting needs (method="regressor", fails on no regressor if "User")
+	* if model has regressors, make sure it meets Simulation Forecasting needs (method=="regressor", fails on no regressor if "User")
 
 ## New Transformer Checklist:
 	* Make sure that if it modifies the size (more/fewer columns or rows) it returns pd.DataFrame with proper index/columns
@@ -43,6 +43,8 @@
 	* add to shared_trans if so
 	* oddities_list for those with forecast/original transform difference
 	* add to docstring of GeneralTransformer
+	* add to dictionary by type: filter, scaler, transformer
+	* add to test_transform call
 
 ## New Metric Checklist:
 	* Create function in metrics.py

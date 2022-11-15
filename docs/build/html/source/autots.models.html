@@ -13,6 +13,7 @@
     <script src="../_static/underscore.js"></script>
     <script src="../_static/doctools.js"></script>
     <script src="../_static/language_data.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="autots.templates package" href="autots.templates.html" />
@@ -136,7 +137,7 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 
 <dl class="method">
 <dt id="autots.models.base.ModelObject.create_forecast_index">
-<code class="sig-name descname">create_forecast_index</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.ModelObject.create_forecast_index" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">create_forecast_index</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">last_date=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.ModelObject.create_forecast_index" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate a pd.DatetimeIndex appropriate for a new forecast.</p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
@@ -155,6 +156,11 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.ModelObject.get_params" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return dict of current parameters.</p>
 </dd></dl>
+
+<dl class="method">
+<dt id="autots.models.base.ModelObject.time">
+<em class="property">static </em><code class="sig-name descname">time</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.base.ModelObject.time" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
 
 </dd></dl>
 
@@ -300,7 +306,7 @@ scaler (numpy.array): precomputed scaler for efficiency, avg value of series in 
 
 <dl class="method">
 <dt>
-<code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">df_wide=None</em>, <em class="sig-param">series: str = None</em>, <em class="sig-param">ax=None</em>, <em class="sig-param">remove_zeroes: bool = False</em>, <em class="sig-param">interpolate: str = None</em>, <em class="sig-param">start_date: str = None</em>, <em class="sig-param">title=None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span></dt>
+<code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">df_wide=None</em>, <em class="sig-param">series: str = None</em>, <em class="sig-param">ax=None</em>, <em class="sig-param">remove_zeroes: bool = False</em>, <em class="sig-param">interpolate: str = None</em>, <em class="sig-param">start_date: str = None</em>, <em class="sig-param">alpha=0.25</em>, <em class="sig-param">facecolor='black'</em>, <em class="sig-param">loc='upper left'</em>, <em class="sig-param">title=None</em>, <em class="sig-param">vline=None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span></dt>
 <dd><p>Generate an example plot of one series. Does not handle non-numeric forecasts.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -311,6 +317,7 @@ scaler (numpy.array): precomputed scaler for efficiency, avg value of series in 
 <li><p><strong>remove_zeroes</strong> (<em>bool</em>) – if True, don’t plot any zeroes</p></li>
 <li><p><strong>interpolate</strong> (<em>str</em>) – if not None, a method to pass to pandas interpolate</p></li>
 <li><p><strong>start_date</strong> (<em>str</em>) – Y-m-d string or Timestamp to remove all data before</p></li>
+<li><p><strong>vline</strong> (<em>datetime</em>) – datetime of dashed vertical line to plot</p></li>
 <li><p><strong>passed to pd.DataFrame.plot</strong><strong>(</strong><strong>)</strong> (<em>**kwargs</em>) – </p></li>
 </ul>
 </dd>
@@ -363,7 +370,7 @@ where 0 means no constraint, 1 is hard threshold cutoff, and in between is penal
 <p>Naives and Others Requiring No Additional Packages Beyond Numpy and Pandas</p>
 <dl class="class">
 <dt id="autots.models.basics.AverageValueNaive">
-<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">AverageValueNaive</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'AverageValueNaive'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">method: str = 'Median'</em>, <em class="sig-param">window: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.AverageValueNaive" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">AverageValueNaive</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'AverageValueNaive'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">method: str = 'median'</em>, <em class="sig-param">window: int = None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.AverageValueNaive" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
 <p>Naive forecasting predicting a dataframe of the series’ median values</p>
 <dl class="field-list simple">
@@ -479,6 +486,64 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd></dl>
 
 <dl class="class">
+<dt id="autots.models.basics.KalmanStateSpace">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">KalmanStateSpace</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'KalmanStateSpace', frequency: str = 'infer', prediction_interval: float = 0.9, holiday_country: str = 'US', random_seed: int = 2020, verbose: int = 0, state_transition=[[1, 1], [0, 1]], process_noise=[[0.1, 0.0], [0.0, 0.01]], observation_model=[[1, 0]], observation_noise: float = 1.0, **kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.KalmanStateSpace" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>Forecast using a state space model solved by a Kalman Filter.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.basics.KalmanStateSpace.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.KalmanStateSpace.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.KalmanStateSpace.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.KalmanStateSpace.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.KalmanStateSpace.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.KalmanStateSpace.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.KalmanStateSpace.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.KalmanStateSpace.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
 <dt id="autots.models.basics.LastValueNaive">
 <em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">LastValueNaive</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'LastValueNaive'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.LastValueNaive" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
@@ -524,6 +589,73 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
 <li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor, not used</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.models.basics.MetricMotif">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">MetricMotif</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'MetricMotif'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">comparison_transformation: dict = None</em>, <em class="sig-param">combination_transformation: dict = None</em>, <em class="sig-param">window: int = 5</em>, <em class="sig-param">point_method: str = 'mean'</em>, <em class="sig-param">distance_metric: str = 'mae'</em>, <em class="sig-param">k: int = 10</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.MetricMotif" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>Forecasts using a nearest neighbors type model adapted for probabilistic time series.
+This version is fully vectorized, using basic metrics for distance comparison.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>window</strong> (<em>int</em>) – length of forecast history to match on</p></li>
+<li><p><strong>point_method</strong> (<em>int</em>) – how to summarize the nearest neighbors to generate the point forecast
+“weighted_mean”, “mean”, “median”, “midhinge”</p></li>
+<li><p><strong>distance_metric</strong> (<em>str</em>) – mae, mqae, mse</p></li>
+<li><p><strong>k</strong> (<em>int</em>) – number of closest neighbors to consider</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.basics.MetricMotif.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.MetricMotif.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.MetricMotif.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.MetricMotif.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns dict of new parameters for parameter tuning</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.MetricMotif.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.MetricMotif.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.MetricMotif.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.MetricMotif.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
 <li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
 </ul>
 </dd>
@@ -803,6 +935,73 @@ if just_point_forecast == True, a dataframe of point forecasts</p>
 </dd></dl>
 
 <dl class="class">
+<dt id="autots.models.basics.SeasonalityMotif">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">SeasonalityMotif</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'SeasonalityMotif'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">window: int = 5</em>, <em class="sig-param">point_method: str = 'mean'</em>, <em class="sig-param">distance_metric: str = 'mae'</em>, <em class="sig-param">k: int = 10</em>, <em class="sig-param">datepart_method: str = 'common_fourier'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SeasonalityMotif" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>Forecasts using a nearest neighbors type model adapted for probabilistic time series.
+This version is fully vectorized, using basic metrics for distance comparison.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – String to identify class</p></li>
+<li><p><strong>frequency</strong> (<em>str</em>) – String alias of datetime index frequency or else ‘infer’</p></li>
+<li><p><strong>prediction_interval</strong> (<em>float</em>) – Confidence interval for probabilistic forecast</p></li>
+<li><p><strong>window</strong> (<em>int</em>) – length of forecast history to match on</p></li>
+<li><p><strong>point_method</strong> (<em>int</em>) – how to summarize the nearest neighbors to generate the point forecast
+“weighted_mean”, “mean”, “median”, “midhinge”</p></li>
+<li><p><strong>distance_metric</strong> (<em>str</em>) – mae, mqae, mse</p></li>
+<li><p><strong>k</strong> (<em>int</em>) – number of closest neighbors to consider</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.basics.SeasonalityMotif.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SeasonalityMotif.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train algorithm given data supplied.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.SeasonalityMotif.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SeasonalityMotif.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns dict of new parameters for parameter tuning</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.SeasonalityMotif.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SeasonalityMotif.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.basics.SeasonalityMotif.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">just_point_forecast=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SeasonalityMotif.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates forecast data immediately following dates of index supplied to .fit()</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forecast_length</strong> (<em>int</em>) – Number of periods of data to forecast ahead</p></li>
+<li><p><strong>regressor</strong> (<em>numpy.Array</em>) – additional regressor</p></li>
+<li><p><strong>just_point_forecast</strong> (<em>bool</em>) – If True, return a pandas.DataFrame of just point forecasts</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Either a PredictionObject of forecasts and metadata, or
+if just_point_forecast == True, a dataframe of point forecasts</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
 <dt id="autots.models.basics.SectionalMotif">
 <em class="property">class </em><code class="sig-prename descclassname">autots.models.basics.</code><code class="sig-name descname">SectionalMotif</code><span class="sig-paren">(</span><em class="sig-param">name: str = 'SectionalMotif'</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">random_seed: int = 2020</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">window: int = 5</em>, <em class="sig-param">point_method: str = 'weighted_mean'</em>, <em class="sig-param">distance_metric: str = 'nan_euclidean'</em>, <em class="sig-param">include_differenced: bool = False</em>, <em class="sig-param">k: int = 10</em>, <em class="sig-param">stride_size: int = 1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.basics.SectionalMotif" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
@@ -912,6 +1111,336 @@ if &gt; 10, also increases search space of probabilistic forecast</p></li>
 </dd>
 </dl>
 </dd></dl>
+
+</section>
+<section id="module-autots.models.cassandra">
+<span id="autots-models-cassandra-module"></span><h2>autots.models.cassandra module<a class="headerlink" href="#module-autots.models.cassandra" title="Permalink to this headline">¶</a></h2>
+<p>Cassandra Model.
+Created on Tue Sep 13 19:45:57 2022</p>
+<p>&#64;author: Colin
+with assistance from &#64;crgillespie22</p>
+<dl class="class">
+<dt id="autots.models.cassandra.Cassandra">
+<em class="property">class </em><code class="sig-prename descclassname">autots.models.cassandra.</code><code class="sig-name descname">Cassandra</code><span class="sig-paren">(</span><em class="sig-param">preprocessing_transformation: dict = None</em>, <em class="sig-param">scaling: str = 'BaseScaler'</em>, <em class="sig-param">past_impacts_intervention: str = None</em>, <em class="sig-param">seasonalities: dict = None</em>, <em class="sig-param">ar_lags: list = None</em>, <em class="sig-param">ar_interaction_seasonality: dict = None</em>, <em class="sig-param">anomaly_detector_params: dict = None</em>, <em class="sig-param">anomaly_intervention: str = None</em>, <em class="sig-param">holiday_detector_params: dict = None</em>, <em class="sig-param">holiday_countries: dict = None</em>, <em class="sig-param">holiday_countries_used: bool = True</em>, <em class="sig-param">multivariate_feature: str = None</em>, <em class="sig-param">multivariate_transformation: str = None</em>, <em class="sig-param">regressor_transformation: dict = None</em>, <em class="sig-param">regressors_used: bool = True</em>, <em class="sig-param">linear_model: dict = None</em>, <em class="sig-param">randomwalk_n: int = None</em>, <em class="sig-param">trend_window: int = 30</em>, <em class="sig-param">trend_standin: str = None</em>, <em class="sig-param">trend_anomaly_detector_params: dict = None</em>, <em class="sig-param">trend_transformation: dict = {}</em>, <em class="sig-param">trend_model: dict = {'Model': 'MetricMotif'</em>, <em class="sig-param">'ModelParameters': {}}</em>, <em class="sig-param">trend_phi: float = None</em>, <em class="sig-param">constraint: dict = None</em>, <em class="sig-param">max_colinearity: float = 0.998</em>, <em class="sig-param">max_multicolinearity: float = 0.001</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">random_seed: int = 2022</em>, <em class="sig-param">verbose: int = 0</em>, <em class="sig-param">n_jobs: int = 'auto'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.models.base.ModelObject" title="autots.models.base.ModelObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.models.base.ModelObject</span></code></a></p>
+<p>Explainable decomposition-based forecasting with advanced trend modeling and preprocessing.</p>
+<p>Tunc etiam fatis aperit Cassandra futuris
+ora, dei iussu non umquam credita Teucris.
+Nos delubra deum miseri, quibus ultimus esset
+ille dies, festa velamus fronde per urbem.
+-Aeneid 2.246-2.249</p>
+<dl class="simple">
+<dt>In general, all time series data inputs (df, regressors, impacts) should be wide style data in a pd.DataFrame</dt><dd><p>an index that is a pd.DatetimeIndex
+one column per time series, with a uniquely identifiable column name</p>
+</dd>
+</dl>
+<p>Impacts get confusing.
+A past impact of 0.05 would mean an outside, unforecastable force caused/added 5% of the value at this time.
+Accordingly, that 5% will be removed before forecasting, then added back on after.
+Impacts can also be negative values.
+A future impact of 5% would mean an outside force adds 5% above the original forecast.
+Future impacts can be used to model product goals or temporary anomalies which can’t or should’t be modeled by forecasting and whose relative effect is known
+Compare this with regressors, which are essentially the model estimating the relative impact given the raw size or presence of an outside effect</p>
+<p>Warn about remove_excess_anomalies from holiday detector if relying on anomaly prediction
+Linear components are always model elements, but trend is actuals (history) and model (future)
+Running predict updates some internal attributes used in plotting and other figures, generally expect to use functions to latest predict
+Seasonalities are hard-coded to be as days so 7 will always = weekly even if data isn’t daily
+For slope analysis and zero crossings, a slope of 0 evaluates as a positive sign (=&gt;0). Exactly 0 slope is rare real world data
+Does not currently follow the regression_type=’User’ and fails if no regressor pattern of other models
+For component decomposition, scale will be inaccurate unless ‘BaseScaler’ is used, but regardless this won’t affect final forecast</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>pass</strong> – </p>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.predict" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.holiday_detector.dates_to_holidays">
+<code class="sig-prename descclassname">holiday_detector.</code><code class="sig-name descname">dates_to_holidays</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.holiday_detector.dates_to_holidays" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.create_forecast_index">
+<code class="sig-name descname">create_forecast_index</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.create_forecast_index" title="Permalink to this definition">¶</a></dt>
+<dd><p>after .fit, can be used to create index of prediction</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.plot_forecast">
+<code class="sig-name descname">plot_forecast</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.plot_forecast" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.plot_components">
+<code class="sig-name descname">plot_components</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.plot_components" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.plot_trend">
+<code class="sig-name descname">plot_trend</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.plot_trend" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.get_new_params">
+<code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.return_components">
+<code class="sig-name descname">return_components</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.return_components" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.cassandra.Cassandra..anomaly_detector.anomalies">
+<code class="sig-prename descclassname">.anomaly_detector.</code><code class="sig-name descname">anomalies</code><a class="headerlink" href="#autots.models.cassandra.Cassandra..anomaly_detector.anomalies" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.cassandra.Cassandra..anomaly_detector.scores">
+<code class="sig-prename descclassname">.anomaly_detector.</code><code class="sig-name descname">scores</code><a class="headerlink" href="#autots.models.cassandra.Cassandra..anomaly_detector.scores" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.cassandra.Cassandra..holiday_count">
+<code class="sig-prename descclassname">.</code><code class="sig-name descname">holiday_count</code><a class="headerlink" href="#autots.models.cassandra.Cassandra..holiday_count" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.cassandra.Cassandra..holidays">
+<code class="sig-prename descclassname">.</code><code class="sig-name descname">holidays</code><a class="headerlink" href="#autots.models.cassandra.Cassandra..holidays" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>series flags, holiday detector only</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.cassandra.Cassandra..params">
+<code class="sig-prename descclassname">.</code><code class="sig-name descname">params</code><a class="headerlink" href="#autots.models.cassandra.Cassandra..params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname">.keep_cols, .keep_cols_idx</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.cassandra.Cassandra..x_array">
+<code class="sig-prename descclassname">.</code><code class="sig-name descname">x_array</code><a class="headerlink" href="#autots.models.cassandra.Cassandra..x_array" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.cassandra.Cassandra..predict_x_array">
+<code class="sig-prename descclassname">.</code><code class="sig-name descname">predict_x_array</code><a class="headerlink" href="#autots.models.cassandra.Cassandra..predict_x_array" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.cassandra.Cassandra..trend_train">
+<code class="sig-prename descclassname">.</code><code class="sig-name descname">trend_train</code><a class="headerlink" href="#autots.models.cassandra.Cassandra..trend_train" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="autots.models.cassandra.Cassandra..predicted_trend">
+<code class="sig-prename descclassname">.</code><code class="sig-name descname">predicted_trend</code><a class="headerlink" href="#autots.models.cassandra.Cassandra..predicted_trend" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.analyze_trend">
+<code class="sig-name descname">analyze_trend</code><span class="sig-paren">(</span><em class="sig-param">slope</em>, <em class="sig-param">index</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.analyze_trend" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.auto_fit">
+<code class="sig-name descname">auto_fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">validation_method</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.auto_fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.base_scaler">
+<code class="sig-name descname">base_scaler</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.base_scaler" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.compare_actual_components">
+<code class="sig-name descname">compare_actual_components</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.compare_actual_components" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.create_t">
+<code class="sig-name descname">create_t</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.create_t" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.cross_validate">
+<code class="sig-name descname">cross_validate</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">validation_method</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.cross_validate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.feature_importance">
+<code class="sig-name descname">feature_importance</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.feature_importance" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">regressor_per_series=None</em>, <em class="sig-param">flag_regressors=None</em>, <em class="sig-param">categorical_groups=None</em>, <em class="sig-param">past_impacts=None</em><span class="sig-paren">)</span></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='fast'</em><span class="sig-paren">)</span></dt>
+<dd><p>Return dict of new parameters for parameter tuning.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.get_params">
+<code class="sig-name descname">get_params</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.get_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return dict of current parameters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.next_fit">
+<code class="sig-name descname">next_fit</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.next_fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">plot_components</code><span class="sig-paren">(</span><em class="sig-param">prediction=None</em>, <em class="sig-param">series=None</em>, <em class="sig-param">figsize=(16</em>, <em class="sig-param">9)</em>, <em class="sig-param">to_origin_space=True</em>, <em class="sig-param">title=None</em>, <em class="sig-param">start_date=None</em><span class="sig-paren">)</span></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">plot_forecast</code><span class="sig-paren">(</span><em class="sig-param">prediction</em>, <em class="sig-param">actuals=None</em>, <em class="sig-param">series=None</em>, <em class="sig-param">start_date=None</em>, <em class="sig-param">anomaly_color='darkslateblue'</em>, <em class="sig-param">holiday_color='darkgreen'</em>, <em class="sig-param">trend_anomaly_color='slategray'</em>, <em class="sig-param">point_size=12.0</em><span class="sig-paren">)</span></dt>
+<dd><p>Plot a forecast time series.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>prediction</strong> (<em>model prediction object</em><em>, </em><em>required</em>) – </p></li>
+<li><p><strong>actuals</strong> (<em>pd.DataFrame</em>) – wide style df, of know data if available</p></li>
+<li><p><strong>series</strong> (<em>str</em>) – name of time series column to plot</p></li>
+<li><p><strong>start_date</strong> (<em>str</em><em> or </em><em>Timestamp</em>) – point at which to begin X axis</p></li>
+<li><p><strong>anomaly_color</strong> (<em>str</em>) – name of anomaly point color</p></li>
+<li><p><strong>holiday_color</strong> (<em>str</em>) – name of holiday point color</p></li>
+<li><p><strong>trend_anomaly_color</strong> (<em>str</em>) – name of trend anomaly point color</p></li>
+<li><p><strong>point_size</strong> (<em>str</em>) – point size for all anomalies</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.plot_things">
+<code class="sig-name descname">plot_things</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.plot_things" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">plot_trend</code><span class="sig-paren">(</span><em class="sig-param">series=None, vline=None, colors=['#d4f74f', '#82ab5a', '#ff6c05', '#c12600'], title=None, start_date=None, **kwargs</em><span class="sig-paren">)</span></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length</em>, <em class="sig-param">include_history=False</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">regressor_per_series=None</em>, <em class="sig-param">flag_regressors=None</em>, <em class="sig-param">future_impacts=None</em>, <em class="sig-param">new_df=None</em>, <em class="sig-param">regressor_forecast_model=None</em>, <em class="sig-param">regressor_forecast_model_params=None</em>, <em class="sig-param">regressor_forecast_transformations=None</em><span class="sig-paren">)</span></dt>
+<dd><p>Generate a forecast.</p>
+<p>future_regressor and regressor_per_series should only include new future values, history is already stored</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.predict_new_product">
+<code class="sig-name descname">predict_new_product</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.predict_new_product" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.process_components">
+<code class="sig-name descname">process_components</code><span class="sig-paren">(</span><em class="sig-param">to_origin_space=True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.process_components" title="Permalink to this definition">¶</a></dt>
+<dd><p>Scale and standardize component outputs.</p>
+</dd></dl>
+
+<dl class="method">
+<dt>
+<code class="sig-name descname">return_components</code><span class="sig-paren">(</span><em class="sig-param">to_origin_space=True</em>, <em class="sig-param">include_impacts=False</em><span class="sig-paren">)</span></dt>
+<dd><p>Return additive elements of forecast, linear and trend. If impacts included, it is a multiplicative term.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>to_origin_space</strong> (<em>bool</em>) – </p></li>
+<li><p><strong>include_impacts</strong> (<em>bool</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.rolling_trend">
+<code class="sig-name descname">rolling_trend</code><span class="sig-paren">(</span><em class="sig-param">trend_residuals</em>, <em class="sig-param">t</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.rolling_trend" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.scale_data">
+<code class="sig-name descname">scale_data</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.scale_data" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.to_origin_space">
+<code class="sig-name descname">to_origin_space</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method='forecast'</em>, <em class="sig-param">components=False</em>, <em class="sig-param">bounds=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.to_origin_space" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take transformed outputs back to original feature space.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.models.cassandra.Cassandra.treatment_causal_impact">
+<code class="sig-name descname">treatment_causal_impact</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">intervention_dates</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.Cassandra.treatment_causal_impact" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.cassandra.clean_regressor">
+<code class="sig-prename descclassname">autots.models.cassandra.</code><code class="sig-name descname">clean_regressor</code><span class="sig-paren">(</span><em class="sig-param">in_d</em>, <em class="sig-param">prefix='regr_'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.clean_regressor" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.cassandra.cost_function_l1">
+<code class="sig-prename descclassname">autots.models.cassandra.</code><code class="sig-name descname">cost_function_l1</code><span class="sig-paren">(</span><em class="sig-param">params</em>, <em class="sig-param">X</em>, <em class="sig-param">y</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.cost_function_l1" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.cassandra.cost_function_l2">
+<code class="sig-prename descclassname">autots.models.cassandra.</code><code class="sig-name descname">cost_function_l2</code><span class="sig-paren">(</span><em class="sig-param">params</em>, <em class="sig-param">X</em>, <em class="sig-param">y</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.cost_function_l2" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.cassandra.cost_function_quantile">
+<code class="sig-prename descclassname">autots.models.cassandra.</code><code class="sig-name descname">cost_function_quantile</code><span class="sig-paren">(</span><em class="sig-param">params</em>, <em class="sig-param">X</em>, <em class="sig-param">y</em>, <em class="sig-param">q=0.9</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.cost_function_quantile" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.cassandra.create_t">
+<code class="sig-prename descclassname">autots.models.cassandra.</code><code class="sig-name descname">create_t</code><span class="sig-paren">(</span><em class="sig-param">ds</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.create_t" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.cassandra.linear_model">
+<code class="sig-prename descclassname">autots.models.cassandra.</code><code class="sig-name descname">linear_model</code><span class="sig-paren">(</span><em class="sig-param">x</em>, <em class="sig-param">y</em>, <em class="sig-param">params</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.linear_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.models.cassandra.lstsq_minimize">
+<code class="sig-prename descclassname">autots.models.cassandra.</code><code class="sig-name descname">lstsq_minimize</code><span class="sig-paren">(</span><em class="sig-param">X</em>, <em class="sig-param">y</em>, <em class="sig-param">maxiter=15000</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.lstsq_minimize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Any cost function version of lin reg.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.models.cassandra.lstsq_solve">
+<code class="sig-prename descclassname">autots.models.cassandra.</code><code class="sig-name descname">lstsq_solve</code><span class="sig-paren">(</span><em class="sig-param">X</em>, <em class="sig-param">y</em>, <em class="sig-param">lamb=1</em>, <em class="sig-param">identity_matrix=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.lstsq_solve" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
 
 </section>
 <section id="module-autots.models.dnn">

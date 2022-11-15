@@ -13,6 +13,7 @@ from autots import (
 class TestEventRisk(unittest.TestCase):
 
     def test_event_risk(self):
+        print("Starting test_event_risk")
         """This at least assures no changes in behavior go unnoticed, hopefully."""
         forecast_length = 6
         df_full = load_weekly(long=False)
@@ -29,6 +30,9 @@ class TestEventRisk(unittest.TestCase):
             forecast_length=forecast_length,
             upper_limit=upper_limit,
             lower_limit=lower_limit,
+            model_forecast_kwargs={
+                "max_generations": 6,
+            }
         )
         # .fit() is optional if model_name, model_param_dict, model_transform_dict are already defined (overwrites)
         model.fit()
@@ -51,6 +55,7 @@ class TestEventRisk(unittest.TestCase):
         self.assertTrue(eval_upper.shape == pred_upper.shape)
 
     def test_event_risk_univariate(self):
+        print("Starting test_event_risk_univariate")
         """This at least assures no changes in behavior go unnoticed, hopefully."""
         df = load_daily(long=False)
         df = df.iloc[:, 0:1]
@@ -71,7 +76,7 @@ class TestEventRisk(unittest.TestCase):
             prediction_interval=[0.9, 0.8, 0.7, 0.6, 0.5],
             model_forecast_kwargs={
                 "max_generations": 6,
-                "verbose": 0,
+                "verbose": 2,
                 "n_jobs": "auto",
                 "random_seed": 321,
             },

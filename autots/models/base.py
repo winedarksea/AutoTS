@@ -82,7 +82,7 @@ class ModelObject(object):
 
         return df
 
-    def create_forecast_index(self, forecast_length: int):
+    def create_forecast_index(self, forecast_length: int, last_date=None):
         """Generate a pd.DatetimeIndex appropriate for a new forecast.
 
         Warnings:
@@ -93,7 +93,9 @@ class ModelObject(object):
                 "create_forecast_index run without specific frequency, run basic_profile first or pass proper frequency to model init"
             )
         self.forecast_index = pd.date_range(
-            freq=self.frequency, start=self.train_last_date, periods=forecast_length + 1
+            freq=self.frequency,
+            start=self.train_last_date if last_date is None else last_date,
+            periods=forecast_length + 1,
         )[
             1:
         ]  # note the disposal of the first (already extant) date
@@ -106,6 +108,10 @@ class ModelObject(object):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         return {}
+
+    @staticmethod
+    def time():
+        return datetime.datetime.now()
 
 
 def apply_constraints(
@@ -366,7 +372,11 @@ class PredictionObject(object):
         remove_zeroes: bool = False,
         interpolate: str = None,
         start_date: str = None,
+        alpha=0.25,
+        facecolor="black",
+        loc="upper left",
         title=None,
+        vline=None,
         **kwargs,
     ):
         """Generate an example plot of one series. Does not handle non-numeric forecasts.
@@ -378,6 +388,7 @@ class PredictionObject(object):
             remove_zeroes (bool): if True, don't plot any zeroes
             interpolate (str): if not None, a method to pass to pandas interpolate
             start_date (str): Y-m-d string or Timestamp to remove all data before
+            vline (datetime): datetime of dashed vertical line to plot
             **kwargs passed to pd.DataFrame.plot()
         """
         if series is None:
@@ -428,7 +439,19 @@ class PredictionObject(object):
             plot_df = plot_df[plot_df.index >= start_date]
         if title is None:
             title = f"{series} with model {str(model_name)[0:80]}"
-        plot_df.plot(title=title, **kwargs)
+        if vline is None:
+            return plot_df.plot(title=title, **kwargs)
+        else:
+            ax = plot_df.plot(title=title, **kwargs)
+            ax.vlines(
+                x=vline,
+                ls='--',
+                lw=1,
+                colors='darkred',
+                ymin=plot_df.min().min(),
+                ymax=plot_df.max().max(),
+            )
+            return ax
 
     def evaluate(
         self,
@@ -518,6 +541,7 @@ class PredictionObject(object):
             mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
         else:
             mage = np.mean(np.abs(np.sum(full_errors, axis=1)))
+        direc_sign = np.sign(F - last_of_array) == np.sign(A - last_of_array)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
@@ -546,10 +570,20 @@ class PredictionObject(object):
                     # maximum error point
                     'maxe': np.nanmax(self.full_mae_errors, axis=0),  # TAKE MAX for AGG
                     # origin directional accuracy
-                    'oda': np.nansum(
-                        np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0
+                    'oda': np.nansum(direc_sign, axis=0) / F.shape[0],
+                    # plus one to squared errors to assure errors in 0 to 1 are still bigger than abs error
+                    "dwae": (
+                        np.nansum(
+                            np.where(
+                                direc_sign,
+                                self.full_mae_errors,
+                                self.squared_errors + 1,
+                            ),
+                            axis=0,
+                        )
+                        / F.shape[0]
                     )
-                    / F.shape[0],
+                    ** 0.5,
                     # mean of values less than 85th percentile of error
                     'mqae': mqae(self.full_mae_errors, q=0.85, nan_flag=nan_flag),
                     # 90th percentile of error

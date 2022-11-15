@@ -10,18 +10,19 @@ import pandas as pd
 def load_daily(long: bool = True):
     """2020 Covid, Air Pollution, and Economic Data.
 
-    Sources: Covid Tracking Project, EPA, and FRED
+    Sources: Wikimedia Foundation
 
     Args:
         long (bool): if True, return data in long format. Otherwise return wide
     """
     module_path = dirname(__file__)
-    data_file_name = join(module_path, 'data', 'covid_daily.zip')
+    data_file_name = join(module_path, 'data', 'holidays.zip')
 
     df_wide = pd.read_csv(data_file_name, index_col=0, parse_dates=True)
     if not long:
         return df_wide
     else:
+        df_wide.index.name = 'datetime'
         df_long = df_wide.reset_index(drop=False).melt(
             id_vars=['datetime'], var_name='series_id', value_name='value'
         )

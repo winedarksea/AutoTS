@@ -129,10 +129,6 @@ def create_regressor(
             holiday_countries = {x: None for x in holiday_countries}
 
         for holiday_country, holidays_subdiv in holiday_countries.items():
-            if holiday_country == "RU":
-                holiday_country = "UA"
-            elif holiday_country == 'CN':
-                holiday_country = 'TW'
             # create holiday flag for historic regressor
             regr_train = pd.concat(
                 [

@@ -34,6 +34,9 @@ from autots.models.basics import (
     Motif,
     SectionalMotif,
     NVAR,
+    KalmanStateSpace,
+    MetricMotif,
+    SeasonalityMotif,
 )
 from autots.models.statsmodels import (
     GLS,
@@ -559,6 +562,47 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
+    elif model == "KalmanStateSpace":
+        return KalmanStateSpace(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == "MetricMotif":
+        return MetricMotif(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == "SeasonalityMotif":
+        return SeasonalityMotif(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
+    elif model == "Cassandra":
+        from autots.models.cassandra import Cassandra  # circular import
+
+        return Cassandra(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)
@@ -668,21 +712,27 @@ def ModelPrediction(
                 )
             )
 
-    # CHECK Forecasts are proper length!
-    if df_forecast.forecast.shape[0] != forecast_length:
-        raise ValueError(f"Model {model_str} returned improper forecast_length")
-
     transformationStartTime = datetime.datetime.now()
     # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
     df_forecast.forecast = pd.DataFrame(
         transformer_object.inverse_transform(df_forecast.forecast)
     )
     df_forecast.lower_forecast = pd.DataFrame(
-        transformer_object.inverse_transform(df_forecast.lower_forecast, fillzero=True)
+        transformer_object.inverse_transform(
+            df_forecast.lower_forecast, fillzero=True, bounds=True
+        )
     )
     df_forecast.upper_forecast = pd.DataFrame(
-        transformer_object.inverse_transform(df_forecast.upper_forecast, fillzero=True)
+        transformer_object.inverse_transform(
+            df_forecast.upper_forecast, fillzero=True, bounds=True
+        )
     )
+    # CHECK Forecasts are proper length!
+    if df_forecast.forecast.shape[0] != forecast_length:
+        raise ValueError(f"Model {model_str} returned improper forecast_length")
+
+    if df_forecast.forecast.shape[1] != df_train.shape[1]:
+        raise ValueError("Model failed to return correct number of series.")
 
     df_forecast.transformation_parameters = transformation_dict
     # Remove negatives if desired
@@ -763,6 +813,7 @@ class TemplateEvalObject(object):
         per_series_maxe=pd.DataFrame(),
         per_series_oda=pd.DataFrame(),
         per_series_mqae=pd.DataFrame(),
+        per_series_dwae=pd.DataFrame(),
         model_count: int = 0,
     ):
         self.model_results = model_results
@@ -778,6 +829,7 @@ class TemplateEvalObject(object):
         self.per_series_maxe = per_series_maxe
         self.per_series_oda = per_series_oda
         self.per_series_mqae = per_series_mqae
+        self.per_series_dwae = per_series_dwae
         self.full_mae_ids = []
         self.full_mae_errors = []
         self.full_pl_errors = []
@@ -831,6 +883,9 @@ class TemplateEvalObject(object):
         )
         self.per_series_mqae = pd.concat(
             [self.per_series_mqae, another_eval.per_series_mqae], axis=0, sort=False
+        )
+        self.per_series_dwae = pd.concat(
+            [self.per_series_dwae, another_eval.per_series_dwae], axis=0, sort=False
         )
         self.full_mae_errors.extend(another_eval.full_mae_errors)
         self.full_pl_errors.extend(another_eval.full_pl_errors)
@@ -1232,6 +1287,7 @@ def TemplateWizard(
         per_series_maxe=[],
         per_series_oda=[],
         per_series_mqae=[],
+        per_series_dwae=[],
     )
     template_result.model_count = model_count
     if isinstance(template, pd.Series):
@@ -1417,7 +1473,9 @@ def TemplateWizard(
             template_result.per_series_mqae.append(
                 _ps_metric(ps_metric, 'mqae', model_id)
             )
-
+            template_result.per_series_dwae.append(
+                _ps_metric(ps_metric, 'dwae', model_id)
+            )
             if 'distance' in ensemble:
                 cur_smape = model_error.per_timestamp.loc['weighted_smape']
                 cur_smape = pd.DataFrame(cur_smape).transpose()
@@ -1541,6 +1599,9 @@ def TemplateWizard(
         template_result.per_series_mqae = pd.concat(
             template_result.per_series_mqae, axis=0
         )
+        template_result.per_series_dwae = pd.concat(
+            template_result.per_series_dwae, axis=0
+        )
     else:
         template_result.per_series_mae = pd.DataFrame()
         template_result.per_series_made = pd.DataFrame()
@@ -1552,6 +1613,7 @@ def TemplateWizard(
         template_result.per_series_maxe = pd.DataFrame()
         template_result.per_series_oda = pd.DataFrame()
         template_result.per_series_mqae = pd.DataFrame()
+        template_result.per_series_dwae = pd.DataFrame()
         if verbose > 0 and not template.empty:
             print(f"Generation {current_generation} had all new models fail")
     return template_result
@@ -2020,6 +2082,7 @@ def validation_aggregation(validation_results):
         'contour': 'mean',
         'maxe': 'max',
         'oda': 'mean',
+        'dwae': 'mean',
         'mqae': 'mean',
         'smape_weighted': 'mean',
         'mae_weighted': 'mean',
@@ -2032,6 +2095,7 @@ def validation_aggregation(validation_results):
         'spl_weighted': 'mean',
         'maxe_weighted': 'max',
         'oda_weighted': 'mean',
+        'dwae_weighted': 'mean',
         'mqae_weighted': 'mean',
         'containment_weighted': 'mean',
         'contour_weighted': 'mean',
@@ -2070,6 +2134,8 @@ def generate_score(
     MLE - smaller is better
     MAGE - smaller is better
     SPL - smaller is better
+    ODA - bigger is better
+    DWAE - smaller is better
     Contour - bigger is better (is 0 to 1)
     Containment - bigger is better (is 0 to 1)
     Runtime - smaller is better
@@ -2088,6 +2154,7 @@ def generate_score(
     maxe_weighting = metric_weighting.get('maxe_weighting', 0)
     oda_weighting = metric_weighting.get('oda_weighting', 0)
     mqae_weighting = metric_weighting.get('mqae_weighting', 0)
+    dwae_weighting = metric_weighting.get('dwae_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         model_results['TotalRuntimeSeconds'] = np.where(
@@ -2167,6 +2234,12 @@ def generate_score(
             ].min()
             mqae_score = model_results['mqae_weighted'] / mqae_scaler
             overall_score = overall_score + (mqae_score * mqae_weighting)
+        if dwae_weighting > 0:
+            dwae_scaler = model_results['dwae_weighted'][
+                model_results['dwae_weighted'] != 0
+            ].min()
+            dwae_score = model_results['dwae_weighted'] / dwae_scaler
+            overall_score = overall_score + (dwae_score * dwae_weighting)
         if spl_weighting > 0:
             spl_scaler = model_results['spl_weighted'][
                 model_results['spl_weighted'] != 0
@@ -2223,6 +2296,7 @@ def generate_score_per_series(
     maxe_weighting = metric_weighting.get('maxe_weighting', 0)
     oda_weighting = metric_weighting.get('oda_weighting', 0)
     mqae_weighting = metric_weighting.get('mqae_weighting', 0)
+    dwae_weighting = metric_weighting.get('dwae_weighting', 0)
     if sum([mae_weighting, rmse_weighting, contour_weighting, spl_weighting]) == 0:
         mae_weighting = 1
 
@@ -2283,6 +2357,14 @@ def generate_score_per_series(
         )
         mqae_score = results_object.per_series_mqae / mqae_scaler
         overall_score = overall_score + (mqae_score * mqae_weighting)
+    if dwae_weighting > 0:
+        dwae_scaler = (
+            results_object.per_series_dwae[results_object.per_series_dwae != 0]
+            .min()
+            .fillna(1)
+        )
+        dwae_score = results_object.per_series_dwae / dwae_scaler
+        overall_score = overall_score + (dwae_score * dwae_weighting)
     if spl_weighting > 0:
         spl_scaler = (
             results_object.per_series_spl[results_object.per_series_spl != 0]

@@ -16,7 +16,7 @@ from autots.tools.shaping import (
     clean_weights,
     infer_frequency,
 )
-from autots.tools.transform import GeneralTransformer
+from autots.tools.transform import GeneralTransformer, RandomTransform
 from autots.evaluator.auto_model import (
     TemplateEvalObject,
     NewGeneticTemplate,
@@ -36,9 +36,10 @@ from autots.models.ensemble import (
     HorizontalTemplateGenerator,
     generate_mosaic_template,
 )
-from autots.models.model_list import model_lists
+from autots.models.model_list import model_lists, no_shared
 from autots.tools import cpu_count
 from autots.tools.window_functions import retrieve_closest_indices
+from autots.tools.seasonal import seasonal_window_match
 
 
 class AutoTS(object):
@@ -95,6 +96,7 @@ class AutoTS(object):
         validation_method (str): 'even', 'backwards', or 'seasonal n' where n is an integer of seasonal
             'backwards' is better for recency and for shorter training sets
             'even' splits the data into equally-sized slices best for more consistent data, a poetic but less effective strategy than others here
+            'seasonal' most similar indexes
             'seasonal n' for example 'seasonal 364' would test all data on each previous year of the forecast_length that would immediately follow the training data.
             'similarity' automatically finds the data sections most similar to the most recent data that will be used for prediction
             'custom' - if used, .fit() needs validation_indexes passed - a list of pd.DatetimeIndex's, tail of each is used as test
@@ -273,7 +275,10 @@ class AutoTS(object):
                 "Sum of metric_weightings is 0, one or more values must be > 0"
             )
 
-        if 'seasonal' in self.validation_method:
+        if (
+            'seasonal' in self.validation_method
+            and self.validation_method != "seasonal"
+        ):
             val_list = [x for x in str(self.validation_method) if x.isdigit()]
             self.seasonal_val_periods = int(''.join(val_list))
 
@@ -416,6 +421,11 @@ class AutoTS(object):
             "include_differenced": True,
             "window_size": 30,
         }
+        self.seasonal_validation_params = {
+            'window_size': 10,
+            'distance_metric': 'mae',
+            'datepart_method': 'common_fourier_rw',
+        }
 
         if verbose > 2:
             msg = '"Hello. Would you like to destroy some evil today?" - Sanderson'
@@ -445,7 +455,7 @@ class AutoTS(object):
             [0.3, 0.1, 0.2, 0.2],
         )[0]
         metric_weighting = {
-            'smape_weighting': random.choices([0, 1, 5, 10], [0.1, 0.2, 0.3, 0.1])[0],
+            'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[0],
             'mae_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
             'rmse_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
             'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[0],
@@ -453,6 +463,10 @@ class AutoTS(object):
             'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
             'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
             'spl_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+            'oda_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+            'mqae_weighting': random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
+            'dwae_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+            'maxe_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
             'containment_weighting': random.choices(
                 [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
             )[0],
@@ -463,11 +477,69 @@ class AutoTS(object):
                 [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
             )[0],
         }
+        preclean_choice = random.choices(
+            [
+                None,
+                {
+                    "fillna": "ffill",
+                    "transformations": {0: "EWMAFilter"},
+                    "transformation_params": {
+                        0: {"span": 3},
+                    },
+                },
+                {
+                    "fillna": "mean",
+                    "transformations": {0: "EWMAFilter"},
+                    "transformation_params": {
+                        0: {"span": 7},
+                    },
+                },
+                {
+                    "fillna": None,
+                    "transformations": {0: "StandardScaler"},
+                    "transformation_params": {0: {}},
+                },
+                {
+                    "fillna": None,
+                    "transformations": {0: "QuantileTransformer"},
+                    "transformation_params": {0: {}},
+                },
+                {
+                    "fillna": None,
+                    "transformations": {0: "AnomalyRemoval"},
+                    "transformation_params": {
+                        0: {
+                            "method": "IQR",
+                            "transform_dict": {},
+                            "method_params": {
+                                "iqr_threshold": 2.0,
+                                "iqr_quantiles": [0.4, 0.6],
+                            },
+                            "fillna": 'ffill',
+                        }
+                    },
+                },
+                'random',
+            ],
+            [0.9, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1],
+        )[0]
+        if preclean_choice == "random":
+            preclean_choice = RandomTransform(
+                transformer_list="fast", transformer_max_depth=2
+            )
         return {
             'max_generations': random.choices([5, 10, 20, 50], [0.2, 0.5, 0.1, 0.4])[0],
             'model_list': random.choices(
-                ['fast', 'superfast', 'default', 'fast_parallel', 'all', 'motifs'],
-                [0.2, 0.2, 0.2, 0.2, 0.05, 0.05],
+                [
+                    'fast',
+                    'superfast',
+                    'default',
+                    'fast_parallel',
+                    'all',
+                    'motifs',
+                    'no_shared_fast',
+                ],
+                [0.2, 0.2, 0.2, 0.2, 0.05, 0.05, 0.1],
             )[0],
             'transformer_list': random.choices(
                 ['all', 'fast', 'superfast'],
@@ -477,10 +549,11 @@ class AutoTS(object):
                 [1, 2, 4, 6, 8, 10],
                 [0.1, 0.2, 0.3, 0.3, 0.2, 0.1],
             )[0],
-            'num_validations': random.choice([0, 1, 2, 3, 4, 5]),
-            'validation_method': random.choice(
-                ['backwards', 'even', 'similarity', 'seasonal 364']
-            ),
+            'num_validations': random.choice([0, 1, 2, 3, 4, 6]),
+            'validation_method': random.choices(
+                ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
+                [0.4, 0.1, 0.3, 0.3],
+            )[0],
             'models_to_validate': random.choices(
                 [0.15, 0.10, 0.25, 0.35, 0.45], [0.3, 0.1, 0.3, 0.3, 0.1]
             )[0],
@@ -488,9 +561,9 @@ class AutoTS(object):
             'initial_template': random.choices(
                 ['random', 'general+random'], [0.8, 0.2]
             )[0],
-            'subset': random.choices([None, 10, 100], [0.8, 0.1, 0.1])[0],
-            'models_mode': random.choices(['random', 'regressor'], [0.9, 0.1])[0],
-            'drop_most_recent': random.choices([0, 1, 2], [0.6, 0.2, 0.2])[0],
+            'subset': random.choices([None, 10, 100], [0.9, 0.05, 0.05])[0],
+            'models_mode': random.choices(['random', 'regressor'], [0.95, 0.05])[0],
+            'drop_most_recent': random.choices([0, 1, 2], [0.8, 0.1, 0.1])[0],
             'introduce_na': random.choice([None, True, False]),
             'prefill_na': None,
             'remove_leading_zeroes': False,
@@ -527,52 +600,8 @@ class AutoTS(object):
                     },
                 ],
                 [0.9, 0.1, 0.1, 0.1, 0.1],
-            ),
-            'preclean': random.choices(
-                [
-                    None,
-                    {
-                        "fillna": "ffill",
-                        "transformations": {"0": "EWMAFilter"},
-                        "transformation_params": {
-                            "0": {"span": 3},
-                        },
-                    },
-                    {
-                        "fillna": "mean",
-                        "transformations": {"0": "EWMAFilter"},
-                        "transformation_params": {
-                            "0": {"span": 7},
-                        },
-                    },
-                    {
-                        "fillna": None,
-                        "transformations": {"0": "StandardScaler"},
-                        "transformation_params": {0: {}},
-                    },
-                    {
-                        "fillna": None,
-                        "transformations": {"0": "QuantileTransformer"},
-                        "transformation_params": {0: {}},
-                    },
-                    {
-                        "fillna": None,
-                        "transformations": {"0": "AnomalyRemoval"},
-                        "transformation_params": {
-                            0: {
-                                "method": "IQR",
-                                "transform_dict": {},
-                                "method_params": {
-                                    "iqr_threshold": 2.0,
-                                    "iqr_quantiles": [0.4, 0.6],
-                                },
-                                "fillna": 'ffill',
-                            }
-                        },
-                    },
-                ],
-                [0.9, 0.1, 0.05, 0.1, 0.1, 0.1],
-            ),
+            )[0],
+            'preclean': preclean_choice,
             'metric_weighting': metric_weighting,
         }
 
@@ -685,6 +714,7 @@ class AutoTS(object):
             assert (
                 type(df_wide.index) is pd.DatetimeIndex
             ), "df index is not pd.DatetimeIndex"
+            df_wide = df_wide.sort_index(ascending=True)
         else:
             df_wide = long_to_wide(
                 df,
@@ -772,7 +802,10 @@ class AutoTS(object):
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
 
         # check how many validations are possible given the length of the data.
-        if 'seasonal' in self.validation_method:
+        if (
+            'seasonal' in self.validation_method
+            and self.validation_method != 'seasonal'
+        ):
             temp = df_wide_numeric.shape[0] + self.forecast_length
             max_possible = temp / self.seasonal_val_periods
         else:
@@ -829,6 +862,14 @@ class AutoTS(object):
                 for indx in created_idx
             ]
             del sim_df
+        elif self.validation_method == "seasonal":
+            test, _ = seasonal_window_match(
+                DTindex=df_wide_numeric.index,
+                k=num_validations + 1,
+                forecast_length=forecast_length,
+                **self.seasonal_validation_params,
+            )
+            self.validation_indexes = [df_wide_numeric.index[0 : x[-1]] for x in test.T]
 
         # record if subset or not
         if self.subset is not None:
@@ -854,7 +895,7 @@ class AutoTS(object):
         else:
             df_subset = df_wide_numeric.copy()
         # go to first index
-        if self.validation_method in ['custom', "similarity"]:
+        if self.validation_method in ['custom', "similarity", "seasonal"]:
             first_idx = self.validation_indexes[0]
             if max(first_idx) > max(df_subset.index):
                 raise ValueError(
@@ -1188,7 +1229,10 @@ class AutoTS(object):
                     current_slice = df_wide_numeric.head(
                         validation_size * (y + 1) + forecast_length
                     )
-                elif 'seasonal' in self.validation_method:
+                elif (
+                    'seasonal' in self.validation_method
+                    and self.validation_method != "seasonal"
+                ):
                     val_per = (y + 1) * self.seasonal_val_periods
                     if self.seasonal_val_periods < forecast_length:
                         pass
@@ -1196,7 +1240,7 @@ class AutoTS(object):
                         val_per = val_per - forecast_length
                     val_per = df_wide_numeric.shape[0] - val_per
                     current_slice = df_wide_numeric.head(val_per)
-                elif self.validation_method in ['custom', "similarity"]:
+                elif self.validation_method in ['custom', "similarity", "seasonal"]:
                     current_slice = df_wide_numeric.reindex(
                         self.validation_indexes[(y + 1)]
                     )
@@ -2107,9 +2151,9 @@ or otherwise increase models available."""
         )
 
     def back_forecast(
-        self, column=None, n_splits: int = 3, tail: int = None, verbose: int = 0
+        self, series=None, n_splits: int = "auto", tail: int = "auto", verbose: int = 0
     ):
-        """Create forecasts for the historical training data, ie. backcast or back forecast.
+        """Create forecasts for the historical training data, ie. backcast or back forecast. OUT OF SAMPLE
 
         This actually forecasts on historical data, these are not fit model values as are often returned by other packages.
         As such, this will be slower, but more representative of real world model performance.
@@ -2117,7 +2161,7 @@ or otherwise increase models available."""
 
         Args are same as for model_forecast except...
         n_splits(int): how many pieces to split data into. Pass 2 for fastest, or "auto" for best accuracy
-        column (str): if to run on only one column, pass column name. Faster than full.
+        series (str): if to run on only one column, pass column name. Faster than full.
         tail (int): df.tail() of the dataset, back_forecast is only run on n most recent observations.
             which points at eval_periods of lower-level back_forecast function
 
@@ -2125,13 +2169,18 @@ or otherwise increase models available."""
         """
         if self.best_model.empty:
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
-        if column is not None:
-            input_df = pd.DataFrame(self.df_wide_numeric[column])
+        if series is not None and (
+            self.best_model_name in no_shared or self.best_model_ensemble == 2
+        ):
+            input_df = pd.DataFrame(self.df_wide_numeric[series])
         else:
             input_df = self.df_wide_numeric
         eval_periods = None
         if tail is not None:
-            eval_periods = tail
+            if tail == "auto":
+                eval_periods = self.forecast_length * (self.num_validations + 1)
+            else:
+                eval_periods = tail
         result = back_forecast(
             df=input_df,
             model_name=self.best_model_name,
@@ -2276,39 +2325,83 @@ or otherwise increase models available."""
         )
 
     def plot_backforecast(
-        self, series=None, n_splits: int = 3, start_date=None, **kwargs
+        self,
+        series=None,
+        n_splits: int = "auto",
+        start_date="auto",
+        title=None,
+        alpha=0.25,
+        facecolor="black",
+        loc="upper left",
+        **kwargs,
     ):
-        """Plot the historical data and fit forecast on historic.
+        """Plot the historical data and fit forecast on historic. Out of sample in chunks = forecast_length by default.
 
         Args:
             series (str or list): column names of time series
             n_splits (int or str): "auto", number > 2, higher more accurate but slower
+            start_date (datetime.datetime): or "auto"
+            title (str)
             **kwargs passed to pd.DataFrame.plot()
         """
         if series is None:
             series = random.choice(self.df_wide_numeric.columns)
+        if title is None:
+            title = f"Out of Sample Back Forecasts for {str(series)[0:40]}"
         tail = None
         if start_date is not None:
-            tail = len(
-                self.df_wide_numeric.index[self.df_wide_numeric.index >= start_date]
-            )
-            if tail == len(self.df_wide_numeric.index):
-                tail = None
-        b_df = self.back_forecast(
-            column=series, n_splits=n_splits, verbose=0, tail=tail
-        ).forecast
-        b_df = b_df.rename(columns=lambda x: str(x) + "_forecast")
+            if start_date == "auto":
+                tail = self.forecast_length * (self.num_validations + 1)
+                start_date = self.df_wide_numeric.index[-tail]
+            else:
+                tail = len(
+                    self.df_wide_numeric.index[self.df_wide_numeric.index >= start_date]
+                )
+                if tail == len(self.df_wide_numeric.index):
+                    tail = None
+        bd = self.back_forecast(series=series, n_splits=n_splits, verbose=0, tail=tail)
+        b_df = pd.DataFrame(bd.forecast[series]).rename(
+            columns=lambda x: str(x) + "_forecast"
+        )
+        b_df_up = pd.DataFrame(bd.upper_forecast[series]).rename(
+            columns=lambda x: str(x) + "_upper_forecast"
+        )
+        b_df_low = pd.DataFrame(bd.lower_forecast[series]).rename(
+            columns=lambda x: str(x) + "_lower_forecast"
+        )
         plot_df = pd.concat(
-            [
-                pd.DataFrame(self.df_wide_numeric[series]),
-                b_df,
-            ],
+            [pd.DataFrame(self.df_wide_numeric[series]), b_df, b_df_up, b_df_low],
             axis=1,
         )
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         plot_df = remove_leading_zeros(plot_df)
-        plot_df.plot(**kwargs)
+        try:
+            import matplotlib.pyplot as plt
+
+            ax = plt.subplot()
+            ax.set_title(title)
+            ax.fill_between(
+                plot_df.index,
+                plot_df.iloc[:, 3],
+                plot_df.iloc[:, 2],
+                facecolor=facecolor,
+                alpha=alpha,
+                interpolate=True,
+                label=f"{self.prediction_interval * 100}% upper/lower forecast",
+            )
+            ax.plot(plot_df.index, plot_df.iloc[:, 1], label="forecast", **kwargs)
+            ax.plot(plot_df.index, plot_df.iloc[:, 0], label="actuals")
+            ax.legend(loc=loc)
+            for label in ax.get_xticklabels():
+                label.set_ha("right")
+                label.set_rotation(45)
+            return ax
+        except Exception:
+            plot_df.plot(title=title, **kwargs)
+
+    def plot_back_forecast(self, **kwargs):
+        return self.plot_backforecast(**kwargs)
 
     def list_failed_model_types(self):
         """Return a list of model types (ie ETS, LastValueNaive) that failed.
@@ -2323,7 +2416,7 @@ or otherwise increase models available."""
 
     def plot_per_series_smape(
         self,
-        title: str = "Top Series Contributing SMAPE Error",
+        title: str = None,
         max_series: int = 10,
         max_name_chars: int = 25,
         color: str = "#ff9912",
@@ -2344,6 +2437,8 @@ or otherwise increase models available."""
         """
         if self.best_model.empty:
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
+        if title is None:
+            title = f"Top {max_series} Series Contributing SMAPE Error"
         best_model_per_series_mae = self.initial_results.per_series_mae[
             self.initial_results.per_series_mae.index == self.best_model_id
         ].mean(axis=0)
@@ -2368,11 +2463,16 @@ or otherwise increase models available."""
             )
 
         if kind == "pie":
-            temp.set_index("Series").plot(
-                y="SMAPE", kind="pie", title=title, figsize=figsize, **kwargs
+            return temp.set_index("Series").plot(
+                y="SMAPE",
+                kind="pie",
+                title=title,
+                figsize=figsize,
+                legend=False,
+                **kwargs,
             )
         else:
-            temp.plot(
+            return temp.plot(
                 x="Series",
                 y="SMAPE",
                 kind=kind,

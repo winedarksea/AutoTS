@@ -380,3 +380,16 @@ def mlvb(A, F, last_of_array):
     a_diff = A - last_of_array
     a_diff[a_diff == 0] = np.nan
     return np.nanmean(np.abs((A - F) / a_diff), axis=0)
+
+
+def dwae(A, F, last_of_array):
+    """Direcitonal Weighted Absolute Error, the accuracy of growth or decline relative to most recent data."""
+    # plus one to assure squared errors are bigger in the case of 0 to 1
+    return np.nanmean(
+        np.where(
+            np.sign(F - last_of_array) == np.sign(A - last_of_array),
+            np.abs(A - F),
+            (np.abs(A - F) + 1) ** 2,
+        ),
+        axis=0,
+    )

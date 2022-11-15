@@ -36,6 +36,10 @@ all_models = [
     'MAR',
     'TMF',
     'LATC',
+    'KalmanStateSpace',
+    'MetricMotif',
+    'Cassandra',
+    'SeasonalityMotif',
 ]
 # downweight slower models
 default = {
@@ -63,6 +67,8 @@ default = {
     'Theta': 1,
     'ARDL': 1,
     'ARCH': 1,
+    'MetricMotif': 1,
+    'SeasonalityMotif': 1,
 }
 best = [
     'LastValueNaive',
@@ -95,6 +101,8 @@ superfast = [
     'AverageValueNaive',
     'GLS',
     'SeasonalNaive',
+    # 'MetricMotif',
+    'SeasonalityMotif',
 ]
 # relatively fast
 fast = {
@@ -115,6 +123,10 @@ fast = {
     'NVAR': 1,
     'MAR': 1,
     'RRVAR': 1,
+    'KalmanStateSpace': 1,
+    'MetricMotif': 1,
+    'Cassandra': 1,
+    'SeasonalityMotif': 1,
 }
 # models that can scale well if many CPU cores are available
 parallel = {
@@ -163,6 +175,10 @@ probabilistic = [
     'PytorchForecasting',
     # 'MultivariateRegression',
     'ARCH',
+    'KalmanStateSpace',
+    'MetricMotif',
+    'Cassandra',
+    'SeasonalityMotif',
 ]
 # models that use the shared information of multiple series to improve accuracy
 multivariate = [
@@ -183,6 +199,7 @@ multivariate = [
     'MAR',
     'TMF',
     'LATC',
+    'Cassandra',  # depends
 ]
 univariate = list((set(all_models) - set(multivariate)) - set(experimental))
 # USED IN AUTO_MODEL, models with no parameters
@@ -221,6 +238,10 @@ recombination_approved = [
     'MAR',
     'TMF',
     'LATC',
+    'KalmanStateSpace',
+    'MetricMotif',
+    'Cassandra',
+    'SeasonalityMotif',
 ]
 # USED IN AUTO_MODEL for models that don't share information among series
 no_shared = [
@@ -242,6 +263,9 @@ no_shared = [
     'ARDL',
     'NeuralProphet',
     'ARCH',
+    'KalmanStateSpace',
+    'MetricMotif',
+    'SeasonalityMotif',
 ]
 # allow the use of a regressor, need to accept "User" (fail if not given), have 'regressor' param method
 regressor = [
@@ -262,12 +286,15 @@ regressor = [
     'ARDL',
     'NeuralProphet',
     'ARCH',
+    'Cassandra',
 ]
 motifs = [
     'UnivariateMotif',
     "MultivariateMotif",
     'SectionalMotif',
     'MotifSimulation',
+    'MetricMotif',
+    'SeasonalityMotif',
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 model_lists = {

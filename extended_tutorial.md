@@ -409,6 +409,9 @@ You can check if your system is using mkl, OpenBLAS, or none with `numpy.show_co
 	statsmodels
 		>= 0.13 ARDL and UECM
 	scipy.uniform_filter1d (for mosaic-window ensemble only)
+	scipy.stats (anomaly detection, Kalman)
+	scipy.signal (ScipyFilter)
+	scipy.spatial.cdist (Motifs)
 
 Of these, numpy and pandas are critical. 
 Limited functionality should exist without scikit-learn. 
@@ -431,6 +434,9 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 	tensorflow-probability
 	fredapi
 	greykite
+	matplotlib
+	pytorch-forecasting
+	scipy
 	
 Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs. 
 
@@ -711,6 +717,8 @@ lower_limit = {
 Anomaly Detection
 
 Multiple methods are available, including use of `forecast_params` which can be used to analyze the historic deviations of an AutoTS forecasting model.
+
+Holiday detection may also pick up events or 'anti-holidays' ie days of low demand. It won't pick up holidays that don't usually have a significant impact.
 ```python
 from autots.evaluator.anomaly_detector import AnomalyDetector
 from autots.datasets import load_live_daily
@@ -841,16 +849,19 @@ Currently `MultivariateRegression` has the option to utilize a stock GradientBoo
 |  UnivariateRegression   | sklearn      | lightgbm, tensorflow    |               |     sklearn     | some  |              |              | True          |
 | Univariate/MultivariateMotif | scipy.distance.cdist |            |    True       |     joblib      |       | *            |              |               |
 |  SectionalMotif         | scipy.distance.cdist |  sklearn        |    True       |                 |       | True         |              | True          |
+|  MetricMotif, SeasonalityMotif |       |                         |    True       |                 |       |              |              |               |
 |  NVAR                   |              |                         |    True       |   blas/lapack   |       | True         |              |               |
 |  RRVAR, MAR, TMF        |              |                         |               |                 |       | True         |              |               |
 |  LATC                   |              |                         |               |                 |       | True         |              |               |
 |  NeuralProphet          | neuralprophet |                        |    nyi        |     pytorch     | yes   |              |              | True          |
 |  PytorchForecasting     | pytorch-forecasting |                  |    True       |     pytorch     | yes   | True         |              |               |
 |  ARCH                   | arch         |                         |    True       |     joblib      |       |              |              | True          |
+|  Cassandra              | scipy        |                         |    True       |                 |       | True         |              | True          |
+|  KalmanStateSpace       |              |                         |    True       |                 |       |              | True         |               |
 |  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         | nyi           |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  TensorflowSTS          | tensorflow_probability |               |    True       |                 | yes   | True         | True         |               |
-|  TFPRegression          | (deprecated) |               |    True       |                 | yes   | True         | True         | True          |
+|  TFPRegression          | (deprecated) |                         |    True       |                 | yes   | True         | True         | True          |
 |  ComponentAnalysis      | (deprecated) |                         |               |                 |       | True         | True         | _             |
 
 *nyi = not yet implemented*

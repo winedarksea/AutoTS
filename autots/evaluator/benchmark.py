@@ -46,6 +46,7 @@ class Benchmark(object):
         times: int = 3,
         random_seed: int = 123,
         base_models_only=False,
+        verbose: int = 0,
     ):
         """Run benchmark.
 
@@ -81,7 +82,7 @@ class Benchmark(object):
                 frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
-                verbose=0,
+                verbose=verbose,
                 n_jobs=n_jobs,
             )
             self.avg_naive_runtime = (
@@ -114,7 +115,7 @@ class Benchmark(object):
                 frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
-                verbose=0,
+                verbose=verbose,
                 n_jobs=n_jobs,
             )
             self.sect_motif_runtime = (
@@ -154,7 +155,7 @@ class Benchmark(object):
                 frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
-                verbose=0,
+                verbose=verbose,
                 n_jobs=n_jobs,
             )
             self.nvar_runtime = self.nvar_runtime + timeit.default_timer() - start_time
@@ -185,7 +186,7 @@ class Benchmark(object):
                 frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
-                verbose=0,
+                verbose=verbose,
                 n_jobs=n_jobs,
             )
             self.datepart_trees_runtime = (
@@ -211,7 +212,7 @@ class Benchmark(object):
                 frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
-                verbose=0,
+                verbose=verbose,
                 n_jobs=n_jobs,
             )
             self.datepart_svm_runtime = (
@@ -249,7 +250,7 @@ class Benchmark(object):
                 frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
-                verbose=0,
+                verbose=verbose,
                 n_jobs=n_jobs,
             )
             self.theta_runtime = (
@@ -275,7 +276,7 @@ class Benchmark(object):
                 frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
-                verbose=0,
+                verbose=verbose,
                 n_jobs=n_jobs,
             )
             self.arima_runtime = (
@@ -320,7 +321,7 @@ class Benchmark(object):
                 frequency="D",
                 prediction_interval=0.9,
                 random_seed=random_seed,
-                verbose=0,
+                verbose=verbose,
                 n_jobs=n_jobs,
             )
             self.multivariate_knn_runtime = (
@@ -362,7 +363,7 @@ class Benchmark(object):
                     frequency="D",
                     prediction_interval=0.9,
                     random_seed=random_seed,
-                    verbose=0,
+                    verbose=verbose,
                     n_jobs=n_jobs,
                 )
                 self.sklearn_mlp_runtime = (
@@ -411,7 +412,7 @@ class Benchmark(object):
                         frequency="D",
                         prediction_interval=0.9,
                         random_seed=random_seed,
-                        verbose=0,
+                        verbose=verbose,
                         n_jobs=n_jobs,
                     )
                     self.tensorflow_rnn_runtime = (
@@ -460,7 +461,7 @@ class Benchmark(object):
                         frequency="D",
                         prediction_interval=0.9,
                         random_seed=random_seed,
-                        verbose=0,
+                        verbose=verbose,
                         n_jobs=n_jobs,
                     )
                     self.tensorflow_cnn_runtime = (
@@ -498,7 +499,7 @@ class Benchmark(object):
                         frequency="D",
                         prediction_interval=0.9,
                         random_seed=random_seed,
-                        verbose=0,
+                        verbose=verbose,
                         n_jobs=n_jobs,
                     )
                     self.gluonts_runtime = (
@@ -528,7 +529,7 @@ class Benchmark(object):
                         frequency="D",
                         prediction_interval=0.9,
                         random_seed=random_seed,
-                        verbose=0,
+                        verbose=verbose,
                         n_jobs=n_jobs,
                     )
                     self.prophet_runtime = (

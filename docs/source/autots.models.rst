@@ -28,6 +28,14 @@ autots.models.basics module
    :undoc-members:
    :show-inheritance:
 
+autots.models.cassandra module
+------------------------------
+
+.. automodule:: autots.models.cassandra
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.models.dnn module
 ------------------------
 

@@ -8,14 +8,20 @@ import datetime
 import numpy as np
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
-from autots.tools import seasonal_int
+from autots.tools.seasonal import seasonal_int, seasonal_window_match
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 from autots.tools.window_functions import window_id_maker, sliding_window_view
 from autots.tools.percentile import nan_quantile
+from autots.tools.fast_kalman import KalmanFilter, random_state_space
+from autots.tools.transform import GeneralTransformer, RandomTransform, filters
+
 
 # these are all optional packages
 try:
     from scipy.spatial.distance import cdist
+    from scipy.stats import norm
+
+    # from scipy.stats import t as studentt
 except Exception:
     pass
 try:
@@ -49,7 +55,7 @@ class ConstantNaive(ModelObject):
         random_seed: int = 2020,
         verbose: int = 0,
         constant: float = 0,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -146,7 +152,7 @@ class LastValueNaive(ModelObject):
         prediction_interval: float = 0.9,
         holiday_country: str = 'US',
         random_seed: int = 2020,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -240,9 +246,9 @@ class AverageValueNaive(ModelObject):
         holiday_country: str = 'US',
         random_seed: int = 2020,
         verbose: int = 0,
-        method: str = 'Median',
+        method: str = 'median',
         window: int = None,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -390,7 +396,7 @@ class SeasonalNaive(ModelObject):
         lag_1: int = 7,
         lag_2: int = None,
         method: str = 'lastvalue',
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -578,7 +584,7 @@ class MotifSimulation(ModelObject):
         point_method: str = 'median',
         n_jobs: int = -1,
         verbose: int = 1,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1163,7 +1169,7 @@ class Motif(ModelObject):
         max_windows: int = 5000,
         multivariate: bool = False,
         return_result_windows: bool = False,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1565,7 +1571,7 @@ class NVAR(ModelObject):
         seed_weighted: str = None,
         batch_size: int = 5,
         batch_method: str = "input_order",
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1753,7 +1759,7 @@ class SectionalMotif(ModelObject):
         include_differenced: bool = False,
         k: int = 10,
         stride_size: int = 1,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -2004,4 +2010,614 @@ class SectionalMotif(ModelObject):
             "k": self.k,
             "stride_size": self.stride_size,
             'regression_type': self.regression_type,
+        }
+
+
+class KalmanStateSpace(ModelObject):
+    """Forecast using a state space model solved by a Kalman Filter.
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+
+    """
+
+    def __init__(
+        self,
+        name: str = "KalmanStateSpace",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        holiday_country: str = 'US',
+        random_seed: int = 2020,
+        verbose: int = 0,
+        state_transition=[[1, 1], [0, 1]],
+        process_noise=[[0.1, 0.0], [0.0, 0.01]],
+        observation_model=[[1, 0]],
+        observation_noise: float = 1.0,
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+        )
+        self.state_transition = state_transition
+        self.process_noise = process_noise
+        self.observation_model = observation_model
+        self.observation_noise = observation_noise
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+        """
+        df = self.basic_profile(df)
+
+        self.kf = KalmanFilter(
+            state_transition=self.state_transition,  # matrix A
+            process_noise=self.process_noise,  # Q
+            observation_model=self.observation_model,  # H
+            observation_noise=self.observation_noise,  # R
+        )
+        self.df_train = df
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor, not used
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        result = self.kf.predict(self.df_train.to_numpy().T, forecast_length)
+        df = pd.DataFrame(
+            result.observations.mean.T,
+            index=self.create_forecast_index(forecast_length),
+            columns=self.df_train.columns,
+        )
+
+        if just_point_forecast:
+            return df
+        else:
+            df_stdev = np.sqrt(result.observations.cov).T
+            bound = df_stdev * norm.ppf(self.prediction_interval)
+            upper_forecast = df + bound
+            lower_forecast = df - bound
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=df.index,
+                forecast_columns=df.columns,
+                lower_forecast=lower_forecast,
+                forecast=df,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+            return prediction
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        # predefined, or random
+        params = random.choices(
+            [
+                # floats are phi
+                (
+                    [[1, 1], [0, 1]],
+                    [[0.1, 0.0], [0.0, 0.01]],
+                    [[1, 0]],
+                    1.0,
+                ),  # local linear trend
+                ([[0, 1], [0, 0]], [[1.2, 0.0], [0.0, 0.2]], [[1, 0]], 1.0),  # MA(1)
+                ([[0.1, 1], [0.1, 0]], [[1, 0]], [[1, 0]], 1.0),  # second order AR
+                (
+                    [[1, 1, 0], [0, 1, 0], [0, 0, 1]],
+                    [[0.1, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0, 0.0, 0.1]],
+                    [[1, 1, 1]],
+                    1.0,
+                ),
+                "random",
+            ],
+            [0.1, 0.1, 0.1, 0.1, 0.5],
+        )[0]
+        if params == "random":
+            st, procnois, obsmod, obsnois = random_state_space()
+            st = st.tolist()
+            procnois = procnois.tolist()
+            obsmod = obsmod.tolist()
+        else:
+            st, procnois, obsmod, obsnois = params
+        return {
+            "state_transition": st,
+            "process_noise": procnois,
+            "observation_model": obsmod,
+            "observation_noise": obsnois,
+        }
+
+    def get_params(self):
+        """Return dict of current parameters."""
+        return {
+            "state_transition": self.state_transition,
+            "process_noise": self.process_noise,
+            "observation_model": self.observation_model,
+            "observation_noise": self.observation_noise,
+        }
+
+
+class MetricMotif(ModelObject):
+    """Forecasts using a nearest neighbors type model adapted for probabilistic time series.
+    This version is fully vectorized, using basic metrics for distance comparison.
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        window (int): length of forecast history to match on
+        point_method (int): how to summarize the nearest neighbors to generate the point forecast
+            "weighted_mean", "mean", "median", "midhinge"
+        distance_metric (str): mae, mqae, mse
+        k (int): number of closest neighbors to consider
+    """
+
+    def __init__(
+        self,
+        name: str = "MetricMotif",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        holiday_country: str = 'US',
+        random_seed: int = 2020,
+        verbose: int = 0,
+        regression_type: str = None,
+        comparison_transformation: dict = None,
+        combination_transformation: dict = None,
+        window: int = 5,
+        point_method: str = "mean",
+        distance_metric: str = "mae",
+        k: int = 10,
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            regression_type=regression_type,
+        )
+        self.comparison_transformation = comparison_transformation
+        self.combination_transformation = combination_transformation
+        assert window >= 1, f"window {window} must be >= 1"
+        self.window = int(window)
+        self.point_method = point_method
+        self.distance_metric = str(distance_metric).lower()
+        self.k = k
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+            regressor (numpy.Array): additional regressor
+        """
+        df = self.basic_profile(df)
+        self.df = df
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+        window_size = self.window
+        point_method = self.point_method
+        distance_metric = self.distance_metric
+        k = self.k
+
+        # fit transform only, no need for inverse as this is only for finding windows
+        if self.comparison_transformation is not None:
+            self.comparison_transformer = GeneralTransformer(
+                **self.comparison_transformation
+            )
+            compare_df = self.comparison_transformer.fit_transform(self.df)
+        else:
+            compare_df = self.df
+        # applied once, then inversed after windows combined as forecast
+        if self.combination_transformation is not None:
+            self.combination_transformer = GeneralTransformer(
+                **self.combination_transformation
+            )
+            wind_arr = self.combination_transformer.fit_transform(self.df).to_numpy()
+        else:
+            wind_arr = self.df.to_numpy()
+
+        array = compare_df.to_numpy()
+
+        nan_flag = np.isnan(np.min(array))
+
+        # when k is larger, can be more aggressive on allowing a longer portion into view
+        min_k = 5
+        if k > min_k:
+            n_tail = min(window_size, forecast_length)
+        else:
+            n_tail = forecast_length
+        # finding sliding windows to compare
+        temp = sliding_window_view(array[:-n_tail, :], window_size, axis=0)
+        # compare windows by metrics
+        if distance_metric == "mae":
+            if nan_flag:
+                scores = np.nanmean(np.abs(temp - array[-window_size:, :].T), axis=2)
+            else:
+                scores = np.mean(np.abs(temp - array[-window_size:, :].T), axis=2)
+        elif distance_metric == "mqae":
+            q = 0.85
+            ae = np.abs(temp - array[-window_size:, :].T)
+            if ae.shape[2] <= 1:
+                vals = ae
+            else:
+                qi = int(ae.shape[2] * q)
+                qi = qi if qi > 1 else 1
+                vals = np.partition(ae, qi, axis=2)[..., :qi]
+            if nan_flag:
+                scores = np.nanmean(vals, axis=2)
+            else:
+                scores = np.mean(vals, axis=2)
+        elif distance_metric == "mse":
+            scores = np.nanmean((temp - array[-window_size:, :].T) ** 2, axis=2)
+        else:
+            raise ValueError(f"distance_metric: {distance_metric} not recognized")
+
+        # select smallest windows
+        min_idx = np.argpartition(scores, k - 1, axis=0)[:k]
+        # take the period starting AFTER the window
+        test = (
+            np.moveaxis(
+                np.broadcast_to(
+                    np.arange(0, forecast_length)[:, None],
+                    (1, forecast_length, min_idx.shape[1]),
+                ),
+                1,
+                0,
+            )
+            + min_idx
+            + window_size
+        )
+        # for data over the end, fill last value
+        if k > min_k:
+            test = np.where(test >= array.shape[0], -1, test)
+        # if you can't tell already, keeping matching shapes is the biggest hassle
+        results = np.moveaxis(
+            np.take_along_axis(
+                wind_arr[..., None],
+                test.reshape(forecast_length, min_idx.shape[1], k),
+                axis=0,
+            ),
+            2,
+            0,
+        )
+
+        # now aggregate results into point and bound forecasts
+        if point_method == "weighted_mean":
+            weights = scores[min_idx].sum(axis=1)
+            if weights.sum() == 0:
+                weights = None
+            forecast = np.average(
+                results,
+                axis=0,
+                weights=np.repeat(weights[:, None, :], forecast_length, axis=1),
+            )
+        elif point_method == "mean":
+            forecast = np.nanmean(results, axis=0)
+        elif point_method == "median":
+            forecast = np.nanmedian(results, axis=0)
+        elif point_method == "midhinge":
+            q1 = nan_quantile(results, q=0.25, axis=0)
+            q2 = nan_quantile(results, q=0.75, axis=0)
+            forecast = (q1 + q2) / 2
+
+        del temp, scores, test, min_idx
+
+        pred_int = round((1 - self.prediction_interval) / 2, 5)
+        upper_forecast = nan_quantile(results, q=(1 - pred_int), axis=0)
+        lower_forecast = nan_quantile(results, q=pred_int, axis=0)
+
+        forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
+        lower_forecast = pd.DataFrame(
+            lower_forecast, index=test_index, columns=self.column_names
+        )
+        upper_forecast = pd.DataFrame(
+            upper_forecast, index=test_index, columns=self.column_names
+        )
+        if self.combination_transformation is not None:
+            forecast = self.combination_transformer.inverse_transform(forecast)
+            lower_forecast = self.combination_transformer.inverse_transform(
+                lower_forecast
+            )
+            upper_forecast = self.combination_transformer.inverse_transform(
+                upper_forecast
+            )
+
+        self.result_windows = results
+        if just_point_forecast:
+            return forecast
+        else:
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=forecast.index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast,
+                forecast=forecast,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Returns dict of new parameters for parameter tuning"""
+        metric_list = [
+            'mae',
+            'mqae',
+            'mse',
+        ]
+        if method == "event_risk":
+            k_choice = random.choices(
+                [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
+            )[0]
+        else:
+            k_choice = random.choices(
+                [1, 3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0]
+        return {
+            "window": random.choices(
+                [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
+            )[0],
+            "point_method": random.choices(
+                ["weighted_mean", "mean", "median", "midhinge"], [0.4, 0.2, 0.2, 0.2]
+            )[0],
+            "distance_metric": random.choice(metric_list),
+            "k": k_choice,
+            "comparison_transformation": RandomTransform(
+                transformer_list=filters, transformer_max_depth=1, allow_none=True
+            ),
+            "combination_transformation": RandomTransform(
+                transformer_list=filters, transformer_max_depth=1, allow_none=True
+            ),
+        }
+
+    def get_params(self):
+        """Return dict of current parameters"""
+        return {
+            "window": self.window,
+            "point_method": self.point_method,
+            "distance_metric": self.distance_metric,
+            "k": self.k,
+            "comparison_transformation": self.comparison_transformation,
+            "combination_transformation": self.combination_transformation,
+        }
+
+
+class SeasonalityMotif(ModelObject):
+    """Forecasts using a nearest neighbors type model adapted for probabilistic time series.
+    This version is fully vectorized, using basic metrics for distance comparison.
+
+    Args:
+        name (str): String to identify class
+        frequency (str): String alias of datetime index frequency or else 'infer'
+        prediction_interval (float): Confidence interval for probabilistic forecast
+        window (int): length of forecast history to match on
+        point_method (int): how to summarize the nearest neighbors to generate the point forecast
+            "weighted_mean", "mean", "median", "midhinge"
+        distance_metric (str): mae, mqae, mse
+        k (int): number of closest neighbors to consider
+    """
+
+    def __init__(
+        self,
+        name: str = "SeasonalityMotif",
+        frequency: str = 'infer',
+        prediction_interval: float = 0.9,
+        holiday_country: str = 'US',
+        random_seed: int = 2020,
+        verbose: int = 0,
+        regression_type: str = None,
+        window: int = 5,
+        point_method: str = "mean",
+        distance_metric: str = "mae",
+        k: int = 10,
+        datepart_method: str = "common_fourier",
+        **kwargs,
+    ):
+        ModelObject.__init__(
+            self,
+            name,
+            frequency,
+            prediction_interval,
+            holiday_country=holiday_country,
+            random_seed=random_seed,
+            verbose=verbose,
+            regression_type=regression_type,
+        )
+        assert window >= 1, f"window {window} must be >= 1"
+        self.window = int(window)
+        self.point_method = point_method
+        self.distance_metric = str(distance_metric).lower()
+        self.k = k
+        self.datepart_method = datepart_method
+
+    def fit(self, df, future_regressor=None):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed
+            regressor (numpy.Array): additional regressor
+        """
+        df = self.basic_profile(df)
+        self.df = df
+        self.fit_runtime = datetime.datetime.now() - self.startTime
+        return self
+
+    def predict(
+        self, forecast_length: int, future_regressor=None, just_point_forecast=False
+    ):
+        """Generates forecast data immediately following dates of index supplied to .fit()
+
+        Args:
+            forecast_length (int): Number of periods of data to forecast ahead
+            regressor (numpy.Array): additional regressor
+            just_point_forecast (bool): If True, return a pandas.DataFrame of just point forecasts
+
+        Returns:
+            Either a PredictionObject of forecasts and metadata, or
+            if just_point_forecast == True, a dataframe of point forecasts
+        """
+        predictStartTime = datetime.datetime.now()
+        test_index = self.create_forecast_index(forecast_length=forecast_length)
+        window_size = self.window
+        point_method = self.point_method
+        distance_metric = self.distance_metric
+        datepart_method = self.datepart_method
+        k = self.k
+
+        test, scores = seasonal_window_match(
+            DTindex=self.df.index,
+            k=k,
+            window_size=window_size,
+            forecast_length=forecast_length,
+            datepart_method=datepart_method,
+            distance_metric=distance_metric,
+        )
+        # (num_windows, forecast_length, num_series)
+        results = np.moveaxis(np.take(self.df.to_numpy(), test, axis=0), 1, 0)
+
+        # now aggregate results into point and bound forecasts
+        if point_method == "weighted_mean":
+            weights = scores[test[0] - window_size].sum(axis=1)
+            if weights.sum() == 0:
+                weights = None
+            forecast = np.average(results, axis=0, weights=weights)
+        elif point_method == "mean":
+            forecast = np.nanmean(results, axis=0)
+        elif point_method == "median":
+            forecast = np.nanmedian(results, axis=0)
+        elif point_method == "midhinge":
+            q1 = nan_quantile(results, q=0.25, axis=0)
+            q2 = nan_quantile(results, q=0.75, axis=0)
+            forecast = (q1 + q2) / 2
+
+        pred_int = round((1 - self.prediction_interval) / 2, 5)
+        upper_forecast = nan_quantile(results, q=(1 - pred_int), axis=0)
+        lower_forecast = nan_quantile(results, q=pred_int, axis=0)
+
+        forecast = pd.DataFrame(forecast, index=test_index, columns=self.column_names)
+        lower_forecast = pd.DataFrame(
+            lower_forecast, index=test_index, columns=self.column_names
+        )
+        upper_forecast = pd.DataFrame(
+            upper_forecast, index=test_index, columns=self.column_names
+        )
+        self.result_windows = results
+        if just_point_forecast:
+            return forecast
+        else:
+            predict_runtime = datetime.datetime.now() - predictStartTime
+            prediction = PredictionObject(
+                model_name=self.name,
+                forecast_length=forecast_length,
+                forecast_index=forecast.index,
+                forecast_columns=forecast.columns,
+                lower_forecast=lower_forecast,
+                forecast=forecast,
+                upper_forecast=upper_forecast,
+                prediction_interval=self.prediction_interval,
+                predict_runtime=predict_runtime,
+                fit_runtime=self.fit_runtime,
+                model_parameters=self.get_params(),
+            )
+
+            return prediction
+
+    def get_new_params(self, method: str = 'random'):
+        """Returns dict of new parameters for parameter tuning"""
+        metric_list = [
+            'mae',
+            'mqae',
+            'mse',
+        ]
+        if method == "event_risk":
+            k_choice = random.choices(
+                [10, 15, 20, 50, 100], [0.3, 0.1, 0.1, 0.05, 0.05]
+            )[0]
+        else:
+            k_choice = random.choices(
+                [1, 3, 5, 10, 15, 20, 100], [0.2, 0.2, 0.2, 0.5, 0.1, 0.1, 0.1]
+            )[0]
+        return {
+            "window": random.choices(
+                [3, 5, 7, 10, 15, 30, 50], [0.01, 0.2, 0.1, 0.5, 0.1, 0.1, 0.1]
+            )[0],
+            "point_method": random.choices(
+                ["weighted_mean", "mean", "median", "midhinge"], [0.2, 0.2, 0.2, 0.2]
+            )[0],
+            "distance_metric": random.choice(metric_list),
+            "k": k_choice,
+            "datepart_method": random.choices(
+                [
+                    "recurring",
+                    "simple",
+                    "expanded",
+                    "simple_2",
+                    "simple_binarized",
+                    "expanded_binarized",
+                    'common_fourier',
+                    'common_fourier_rw',
+                ],
+                [0.4, 0.3, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2],
+            )[0],
+        }
+
+    def get_params(self):
+        """Return dict of current parameters"""
+        return {
+            "window": self.window,
+            "point_method": self.point_method,
+            "distance_metric": self.distance_metric,
+            "k": self.k,
+            "datepart_method": self.datepart_method,
         }

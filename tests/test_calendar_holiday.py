@@ -12,6 +12,7 @@ from autots.tools.holiday import holiday_flag
 class TestCalendar(unittest.TestCase):
 
     def test_chinese(self):
+        print("Starting test_chinese")
         input_dates = [
             "2014-01-01", "2022-06-30", "2026-02-28", "2000-02-05", "2040-04-15"
         ]
@@ -28,6 +29,7 @@ class TestCalendar(unittest.TestCase):
         self.assertEqual(result5, [2040, 3, 5])
 
     def test_islamic(self):
+        print("Starting test_islamic")
         input_dates = [
             "2014-01-01", "2022-06-30", "2030-02-28", "2000-12-31", "2040-04-15"
         ]
@@ -44,11 +46,13 @@ class TestCalendar(unittest.TestCase):
         self.assertEqual(result5, [1462, 4, 3])
 
     def test_lunar(self):
+        print("Starting test_lunar")
         self.assertAlmostEqual(moon_phase(pd.Timestamp("2022-07-18")), 0.686, 3)
         self.assertAlmostEqual(moon_phase(pd.Timestamp("1995-11-07")), 0.998, 3)
         self.assertAlmostEqual(moon_phase(pd.Timestamp("2035-02-08")), 0.002, 3)
 
     def test_hebrew(self):
+        print("Starting test_hebrew")
         input_dates = [
             "2014-01-01", "2022-06-30", "2030-02-28", "2000-12-31", "2040-04-15"
         ]
@@ -68,6 +72,7 @@ class TestCalendar(unittest.TestCase):
 class TestHolidayFlag(unittest.TestCase):
 
     def test_holiday_flag(self):
+        print("Starting test_holiday_flag")
         input_dates = pd.date_range("2022-01-01", "2023-01-01", freq='D')
         flag_1 = holiday_flag(input_dates, country="US", encode_holiday_type=False, holidays_subdiv="PR")
         self.assertAlmostEqual(flag_1.loc["2022-07-04"], 1.0)

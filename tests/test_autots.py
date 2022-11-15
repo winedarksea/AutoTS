@@ -4,9 +4,10 @@ import unittest
 import json
 import time
 import timeit
+import numpy as np
 import pandas as pd
 from autots.datasets import (
-    load_daily, load_monthly, load_artificial
+    load_daily, load_monthly, load_artificial, load_sine
 )
 from autots import AutoTS, model_forecast
 from autots.evaluator.auto_ts import fake_regressor
@@ -17,6 +18,7 @@ from autots.evaluator.benchmark import Benchmark
 class AutoTSTest(unittest.TestCase):
 
     def test_autots(self):
+        print("Starting AutoTS class tests")
         forecast_length = 8
         long = False
         df = load_daily(long=long).drop(columns=['US.Total.Covid.Tests'], errors='ignore')
@@ -146,7 +148,8 @@ class AutoTSTest(unittest.TestCase):
         # test that actually the best model (or nearly) was chosen
         self.assertGreater(validation_results['Score'].quantile(0.05), best_model_result['Score'].iloc[0])
         # test back_forecast
-        self.assertTrue((back_forecast.index == model.df_wide_numeric.index).all(), msg="Back forecasting failed to have equivalent index to train.")
+        # self.assertTrue((back_forecast.index == model.df_wide_numeric.index).all(), msg="Back forecasting failed to have equivalent index to train.")
+        self.assertFalse(np.any(back_forecast.isnull()))
 
         # a
         # b
@@ -156,6 +159,7 @@ class AutoTSTest(unittest.TestCase):
         # f
         # g
     def test_all_default_models(self):
+        print("Starting test_all_default_models")
         forecast_length = 8
         long = False
         df = load_daily(long=long).drop(columns=['US.Total.Covid.Tests'], errors='ignore')
@@ -266,12 +270,20 @@ class AutoTSTest(unittest.TestCase):
         self.assertTrue(initial_results['contour'].min() <= 1)
         self.assertTrue(initial_results['containment'].min() <= 1)
 
+    def test_load_datasets(self):
+        df = load_artificial(long=True)
+        df = load_monthly(long=True)
+        df = load_sine(long=False)
+        df = load_daily(long=False)
+        df = load_daily(long=True)  # noqa
+
     def test_univariate1step(self):
+        print("Starting test_univariate1step")
         df = load_artificial(long=False)
         df.iloc[:, :1]
         forecast_length = 1
         n_jobs = 1
-        verbose = 0
+        verbose = -1
         validation_method = "backwards"
         generations = 1
         model_list = [
@@ -310,6 +322,7 @@ class AutoTSTest(unittest.TestCase):
         self.assertTrue((expected_idx == pd.DatetimeIndex(forecasts_df.index)).all())
 
     def test_all_models_load(self):
+        print("Starting test_all_models_load")
         # make sure it can at least load a template of all models
         forecast_length = 8
         n_jobs = 'auto'
@@ -340,8 +353,9 @@ class AutoTSTest(unittest.TestCase):
         self.assertFalse(model.initial_template.empty)
 
     def test_benchmark(self):
+        print("Starting test_benchmark")
         bench = Benchmark()
-        bench.run(times=1)
+        bench.run(times=1, verbose=-1)
         self.assertGreater(bench.total_runtime, 0)
         print(f"Benchmark total_runtime: {bench.total_runtime}")
         print(bench.results)
@@ -364,14 +378,15 @@ class AutoTSTest(unittest.TestCase):
 class ModelTest(unittest.TestCase):
 
     def test_models(self):
+        print("Starting test_models")
         n_jobs = 1
         random_seed = 300
         df = load_monthly(long=False)[['CSUSHPISA', 'EMVOVERALLEMV', 'EXCAUS']]
         models = [
             'SectionalMotif', 'MultivariateMotif', 'AverageValueNaive',
-            'NVAR', "LastValueNaive",  'Theta', 'FBProphet', 'SeasonalNaive',
+            'NVAR', "LastValueNaive", 'Theta', 'FBProphet', 'SeasonalNaive',
             'GLM', 'ETS', "ConstantNaive", 'WindowRegression',
-            'DatepartRegression', 'MultivariateRegression'
+            'DatepartRegression', 'MultivariateRegression',
         ]
 
         timings = {}
@@ -400,30 +415,34 @@ class ModelTest(unittest.TestCase):
         # following are not consistent with seed:
         # "MotifSimulation"
 
-        for x in models: 
+        for x in models:
             print(x)
-            start_time = timeit.default_timer()
-            df_forecast = model_forecast(
-                model_name=x,
-                model_param_dict={},  # 'return_result_windows': True
-                model_transform_dict={
-                    "fillna": "ffill",
-                    "transformations": {"0": "StandardScaler"},
-                    "transformation_params": {"0": {}},
-                },
-                df_train=df,
-                forecast_length=5,
-                frequency="M",
-                prediction_interval=0.9,
-                random_seed=random_seed,
-                verbose=0,
-                n_jobs=n_jobs,
-                return_model=True,
-            )
-            forecasts2[x] = df_forecast.forecast.round(2)
-            upper_forecasts2[x] = df_forecast.upper_forecast.round(2)
-            lower_forecasts2[x] = df_forecast.lower_forecast.round(2)
-            timings2[x] = (timeit.default_timer() - start_time)
+            try:
+                start_time = timeit.default_timer()
+                df_forecast = model_forecast(
+                    model_name=x,
+                    model_param_dict={},  # 'return_result_windows': True
+                    model_transform_dict={
+                        "fillna": "ffill",
+                        "transformations": {"0": "StandardScaler"},
+                        "transformation_params": {"0": {}},
+                    },
+                    df_train=df,
+                    forecast_length=5,
+                    frequency="M",
+                    prediction_interval=0.9,
+                    random_seed=random_seed,
+                    verbose=0,
+                    # bug in sklearn 1.1.2 for n_jobs for RandomForest
+                    n_jobs=n_jobs if x != "WindowRegression" else 2,
+                    return_model=True,
+                )
+                forecasts2[x] = df_forecast.forecast.round(2)
+                upper_forecasts2[x] = df_forecast.upper_forecast.round(2)
+                lower_forecasts2[x] = df_forecast.lower_forecast.round(2)
+                timings2[x] = (timeit.default_timer() - start_time)
+            except Exception as e:
+                raise ValueError(f"model {x} failed with {repr(e)}")
 
         print(sum(timings.values()))
 
@@ -472,6 +491,7 @@ class ModelTest(unittest.TestCase):
         """
 
     def test_transforms(self):
+        print("Starting test_transforms")
         n_jobs = 1
         random_seed = 300
         df = load_monthly(long=False)[['CSUSHPISA', 'EMVOVERALLEMV', 'EXCAUS']]
@@ -486,6 +506,9 @@ class ModelTest(unittest.TestCase):
             'DifferencedTransformer', 'PctChangeTransformer', 'PositiveShift',
             'SineTrend', 'convolution_filter', 'CumSumTransformer',
             'AlignLastValue',  # new 0.4.3
+            'AnomalyRemoval', "HolidayTransformer",  # new 0.5.0
+            'LocalLinearTrend',  # new 0.5.1
+            "KalmanSmoothing",  # new 0.5.1
         ]
 
         timings = {}
@@ -511,8 +534,6 @@ class ModelTest(unittest.TestCase):
         forecasts2 = {}
         upper_forecasts2 = {}
         lower_forecasts2 = {}
-        # following are not consistent with seed:
-        # "MotifSimulation"
 
         for x in transforms:
             print(x)
@@ -531,7 +552,7 @@ class ModelTest(unittest.TestCase):
                 frequency="M",
                 prediction_interval=0.9,
                 random_seed=random_seed,
-                verbose=0,
+                verbose=-1,
                 n_jobs=n_jobs,
                 return_model=True,
             )
@@ -540,7 +561,7 @@ class ModelTest(unittest.TestCase):
             lower_forecasts2[x] = df_forecast.lower_forecast.round(2)
             timings2[x] = (timeit.default_timer() - start_time)
 
-        print(sum(timings.values()))
+        print(sum(timings2.values()))
 
         pass_probabilistic = ['FastICA']  # not reproducible in upper/lower with seed
         for x in transforms:

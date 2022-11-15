@@ -985,6 +985,11 @@ def dates_to_holidays(
                         )
                 # reorg results depending on style
                 if style == "flag":
+                    populated_holidays['holiday_name'] = pd.Categorical(
+                        populated_holidays['holiday_name'],
+                        categories=holiday_df['holiday_name'].unique(),
+                        ordered=True,
+                    )
                     result_per_holiday = pd.get_dummies(
                         populated_holidays['holiday_name']
                     )
@@ -1033,17 +1038,20 @@ def dates_to_holidays(
                     result.append(populated_holidays)
     if isinstance(result, list):
         if not result:
-            return pd.DataFrame(
-                columns=[
-                    'ds',
-                    'date',
-                    'holiday',
-                    'holiday_name',
-                    'series',
-                    'lower_window',
-                    'upper_window',
-                ]
-            )
+            if style == "flag":
+                return pd.DataFrame(index=dates)
+            else:
+                return pd.DataFrame(
+                    columns=[
+                        'ds',
+                        'date',
+                        'holiday',
+                        'holiday_name',
+                        'series',
+                        'lower_window',
+                        'upper_window',
+                    ]
+                )
     if style in ['long', 'prophet']:
         result = pd.concat(result, axis=0)
     elif style == "flag":

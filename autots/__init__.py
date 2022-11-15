@@ -13,6 +13,7 @@ from autots.datasets import (
     load_live_daily,
     load_linear,
     load_artificial,
+    load_sine,
 )
 
 from autots.evaluator.auto_ts import AutoTS
@@ -24,7 +25,7 @@ from autots.evaluator.auto_model import model_forecast
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 
 
-__version__ = '0.5.0'
+__version__ = '0.5.1'
 
 TransformTS = GeneralTransformer
 
@@ -38,6 +39,7 @@ __all__ = [
     'load_live_daily',
     'load_linear',
     'load_artificial',
+    'load_sine',
     'AutoTS',
     'TransformTS',
     'GeneralTransformer',

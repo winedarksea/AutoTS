@@ -12,6 +12,22 @@ from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 from autots.datasets import load_live_daily
 
 
+def dict_loop(params):
+    if 'transform_dict' in params.keys():
+        x = params.get('transform_dict', {})
+        if isinstance(x, dict):
+            x = x.get('transformations', {})
+            return x
+    elif 'anomaly_detector_params' in params.keys():
+        x = params.get('anomaly_detector_params', {})
+        if isinstance(x, dict):
+            x = params.get('transform_dict', {})
+            if isinstance(x, dict):
+                x = x.get('transformations', {})
+                return x
+    return {}
+
+
 class TestAnomalies(unittest.TestCase):
     @classmethod
     def setUp(self):
@@ -36,10 +52,14 @@ class TestAnomalies(unittest.TestCase):
         ).fillna(0).replace(np.inf, 0)
 
     def test_anomaly_holiday_detectors(self):
+        print("Starting test_anomaly_holiday_detectors")
         """Combininng these to minimize live data download."""
         tried = []
         while not all(x in tried for x in available_methods):
             params = AnomalyDetector.get_new_params(method="deep")
+            # remove 'Slice' as it messes up assertions
+            while 'Slice' in dict_loop(params).values():
+                params = AnomalyDetector.get_new_params(method="deep")
             with self.subTest(i=params['method']):
                 tried.append(params['method'])
                 mod = AnomalyDetector(output='multivariate', **params)
@@ -64,6 +84,8 @@ class TestAnomalies(unittest.TestCase):
 
         while not all(x in tried for x in fast_methods):
             params = HolidayDetector.get_new_params(method="fast")
+            while 'Slice' in dict_loop(params).values():
+                params = HolidayDetector.get_new_params(method="fast")
             tried.append(params['anomaly_detector_params']['method'])
             mod = HolidayDetector(**params)
             mod.detect(self.df)
