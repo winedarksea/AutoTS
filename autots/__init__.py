@@ -25,7 +25,7 @@ from autots.evaluator.auto_model import model_forecast
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
 
 
-__version__ = '0.5.0'
+__version__ = '0.5.1'
 
 TransformTS = GeneralTransformer
 
