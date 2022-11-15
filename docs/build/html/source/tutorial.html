@@ -13,6 +13,7 @@
     <script src="../_static/underscore.js"></script>
     <script src="../_static/doctools.js"></script>
     <script src="../_static/language_data.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="autots" href="modules.html" />
@@ -415,6 +416,9 @@ sklearn
 statsmodels
     &gt;= 0.13 ARDL and UECM
 scipy.uniform_filter1d (for mosaic-window ensemble only)
+scipy.stats (anomaly detection, Kalman)
+scipy.signal (ScipyFilter)
+scipy.spatial.cdist (Motifs)
 </pre></div>
 </div>
 <p>Of these, numpy and pandas are critical.
@@ -440,6 +444,9 @@ xgboost
 tensorflow-probability
 fredapi
 greykite
+matplotlib
+pytorch-forecasting
+scipy
 </pre></div>
 </div>
 <p>Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs.</p>
@@ -722,6 +729,7 @@ Forecast_length effects how far ahead each forecast step is. Larger is faster, s
 </div>
 <p>Anomaly Detection</p>
 <p>Multiple methods are available, including use of <code class="docutils literal notranslate"><span class="pre">forecast_params</span></code> which can be used to analyze the historic deviations of an AutoTS forecasting model.</p>
+<p>Holiday detection may also pick up events or ‘anti-holidays’ ie days of low demand. It won’t pick up holidays that don’t usually have a significant impact.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">autots.evaluator.anomaly_detector</span> <span class="kn">import</span> <span class="n">AnomalyDetector</span>
 <span class="kn">from</span> <span class="nn">autots.datasets</span> <span class="kn">import</span> <span class="n">load_live_daily</span>
 
@@ -1096,7 +1104,17 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>NVAR</p></td>
+<tr class="row-odd"><td><p>MetricMotif, SeasonalityMotif</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>NVAR</p></td>
 <td></td>
 <td></td>
 <td><p>True</p></td>
@@ -1106,7 +1124,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>RRVAR, MAR, TMF</p></td>
+<tr class="row-odd"><td><p>RRVAR, MAR, TMF</p></td>
 <td></td>
 <td></td>
 <td></td>
@@ -1116,7 +1134,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>LATC</p></td>
+<tr class="row-even"><td><p>LATC</p></td>
 <td></td>
 <td></td>
 <td></td>
@@ -1126,7 +1144,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>NeuralProphet</p></td>
+<tr class="row-odd"><td><p>NeuralProphet</p></td>
 <td><p>neuralprophet</p></td>
 <td></td>
 <td><p>nyi</p></td>
@@ -1136,7 +1154,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>PytorchForecasting</p></td>
+<tr class="row-even"><td><p>PytorchForecasting</p></td>
 <td><p>pytorch-forecasting</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1146,7 +1164,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>ARCH</p></td>
+<tr class="row-odd"><td><p>ARCH</p></td>
 <td><p>arch</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1156,7 +1174,27 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>Greykite</p></td>
+<tr class="row-even"><td><p>Cassandra</p></td>
+<td><p>scipy</p></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td><p>True</p></td>
+</tr>
+<tr class="row-odd"><td><p>KalmanStateSpace</p></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+<td></td>
+<td></td>
+<td><p>True</p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>Greykite</p></td>
 <td><p>greykite</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1166,7 +1204,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td><p>nyi</p></td>
 </tr>
-<tr class="row-even"><td><p>MotifSimulation</p></td>
+<tr class="row-odd"><td><p>MotifSimulation</p></td>
 <td><p>sklearn.metrics.pairwise</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1176,7 +1214,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>TensorflowSTS</p></td>
+<tr class="row-even"><td><p>TensorflowSTS</p></td>
 <td><p>tensorflow_probability</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1186,7 +1224,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>TFPRegression</p></td>
+<tr class="row-odd"><td><p>TFPRegression</p></td>
 <td><p>(deprecated)</p></td>
 <td></td>
 <td><p>True</p></td>
@@ -1196,7 +1234,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <td><p>True</p></td>
 <td><p>True</p></td>
 </tr>
-<tr class="row-odd"><td><p>ComponentAnalysis</p></td>
+<tr class="row-even"><td><p>ComponentAnalysis</p></td>
 <td><p>(deprecated)</p></td>
 <td></td>
 <td></td>

@@ -275,7 +275,10 @@ class AutoTS(object):
                 "Sum of metric_weightings is 0, one or more values must be > 0"
             )
 
-        if 'seasonal' in self.validation_method and self.validation_method != "seasonal":
+        if (
+            'seasonal' in self.validation_method
+            and self.validation_method != "seasonal"
+        ):
             val_list = [x for x in str(self.validation_method) if x.isdigit()]
             self.seasonal_val_periods = int(''.join(val_list))
 
@@ -527,7 +530,15 @@ class AutoTS(object):
         return {
             'max_generations': random.choices([5, 10, 20, 50], [0.2, 0.5, 0.1, 0.4])[0],
             'model_list': random.choices(
-                ['fast', 'superfast', 'default', 'fast_parallel', 'all', 'motifs', 'no_shared_fast'],
+                [
+                    'fast',
+                    'superfast',
+                    'default',
+                    'fast_parallel',
+                    'all',
+                    'motifs',
+                    'no_shared_fast',
+                ],
                 [0.2, 0.2, 0.2, 0.2, 0.05, 0.05, 0.1],
             )[0],
             'transformer_list': random.choices(
@@ -541,7 +552,7 @@ class AutoTS(object):
             'num_validations': random.choice([0, 1, 2, 3, 4, 6]),
             'validation_method': random.choices(
                 ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
-                [0.4, 0.1, 0.3, 0.3]
+                [0.4, 0.1, 0.3, 0.3],
             )[0],
             'models_to_validate': random.choices(
                 [0.15, 0.10, 0.25, 0.35, 0.45], [0.3, 0.1, 0.3, 0.3, 0.1]
@@ -791,7 +802,10 @@ class AutoTS(object):
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
 
         # check how many validations are possible given the length of the data.
-        if 'seasonal' in self.validation_method and self.validation_method != 'seasonal':
+        if (
+            'seasonal' in self.validation_method
+            and self.validation_method != 'seasonal'
+        ):
             temp = df_wide_numeric.shape[0] + self.forecast_length
             max_possible = temp / self.seasonal_val_periods
         else:
@@ -850,11 +864,12 @@ class AutoTS(object):
             del sim_df
         elif self.validation_method == "seasonal":
             test, _ = seasonal_window_match(
-                DTindex=df_wide_numeric.index, k=num_validations + 1,
+                DTindex=df_wide_numeric.index,
+                k=num_validations + 1,
                 forecast_length=forecast_length,
-                **self.seasonal_validation_params
+                **self.seasonal_validation_params,
             )
-            self.validation_indexes = [df_wide_numeric.index[0: x[-1]] for x in test.T]
+            self.validation_indexes = [df_wide_numeric.index[0 : x[-1]] for x in test.T]
 
         # record if subset or not
         if self.subset is not None:
@@ -1214,7 +1229,10 @@ class AutoTS(object):
                     current_slice = df_wide_numeric.head(
                         validation_size * (y + 1) + forecast_length
                     )
-                elif 'seasonal' in self.validation_method and self.validation_method != "seasonal":
+                elif (
+                    'seasonal' in self.validation_method
+                    and self.validation_method != "seasonal"
+                ):
                     val_per = (y + 1) * self.seasonal_val_periods
                     if self.seasonal_val_periods < forecast_length:
                         pass
@@ -2151,7 +2169,9 @@ or otherwise increase models available."""
         """
         if self.best_model.empty:
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
-        if series is not None and (self.best_model_name in no_shared or self.best_model_ensemble == 2):
+        if series is not None and (
+            self.best_model_name in no_shared or self.best_model_ensemble == 2
+        ):
             input_df = pd.DataFrame(self.df_wide_numeric[series])
         else:
             input_df = self.df_wide_numeric
@@ -2305,10 +2325,15 @@ or otherwise increase models available."""
         )
 
     def plot_backforecast(
-        self, series=None, n_splits: int = "auto", start_date="auto",
-        title=None, alpha=0.25,
-        facecolor="black", loc="upper left",
-        **kwargs
+        self,
+        series=None,
+        n_splits: int = "auto",
+        start_date="auto",
+        title=None,
+        alpha=0.25,
+        facecolor="black",
+        loc="upper left",
+        **kwargs,
     ):
         """Plot the historical data and fit forecast on historic. Out of sample in chunks = forecast_length by default.
 
@@ -2334,18 +2359,18 @@ or otherwise increase models available."""
                 )
                 if tail == len(self.df_wide_numeric.index):
                     tail = None
-        bd = self.back_forecast(
-            series=series, n_splits=n_splits, verbose=0, tail=tail
+        bd = self.back_forecast(series=series, n_splits=n_splits, verbose=0, tail=tail)
+        b_df = pd.DataFrame(bd.forecast[series]).rename(
+            columns=lambda x: str(x) + "_forecast"
         )
-        b_df = pd.DataFrame(bd.forecast[series]).rename(columns=lambda x: str(x) + "_forecast")
-        b_df_up = pd.DataFrame(bd.upper_forecast[series]).rename(columns=lambda x: str(x) + "_upper_forecast")
-        b_df_low = pd.DataFrame(bd.lower_forecast[series]).rename(columns=lambda x: str(x) + "_lower_forecast")
+        b_df_up = pd.DataFrame(bd.upper_forecast[series]).rename(
+            columns=lambda x: str(x) + "_upper_forecast"
+        )
+        b_df_low = pd.DataFrame(bd.lower_forecast[series]).rename(
+            columns=lambda x: str(x) + "_lower_forecast"
+        )
         plot_df = pd.concat(
-            [
-                pd.DataFrame(self.df_wide_numeric[series]),
-                b_df,
-                b_df_up, b_df_low
-            ],
+            [pd.DataFrame(self.df_wide_numeric[series]), b_df, b_df_up, b_df_low],
             axis=1,
         )
         if start_date is not None:
@@ -2353,12 +2378,17 @@ or otherwise increase models available."""
         plot_df = remove_leading_zeros(plot_df)
         try:
             import matplotlib.pyplot as plt
+
             ax = plt.subplot()
             ax.set_title(title)
             ax.fill_between(
-                plot_df.index, plot_df.iloc[:, 3], plot_df.iloc[:, 2],
-                facecolor=facecolor, alpha=alpha, interpolate=True,
-                label=f"{self.prediction_interval * 100}% upper/lower forecast"
+                plot_df.index,
+                plot_df.iloc[:, 3],
+                plot_df.iloc[:, 2],
+                facecolor=facecolor,
+                alpha=alpha,
+                interpolate=True,
+                label=f"{self.prediction_interval * 100}% upper/lower forecast",
             )
             ax.plot(plot_df.index, plot_df.iloc[:, 1], label="forecast", **kwargs)
             ax.plot(plot_df.index, plot_df.iloc[:, 0], label="actuals")
@@ -2434,7 +2464,12 @@ or otherwise increase models available."""
 
         if kind == "pie":
             return temp.set_index("Series").plot(
-                y="SMAPE", kind="pie", title=title, figsize=figsize, legend=False, **kwargs
+                y="SMAPE",
+                kind="pie",
+                title=title,
+                figsize=figsize,
+                legend=False,
+                **kwargs,
             )
         else:
             return temp.plot(

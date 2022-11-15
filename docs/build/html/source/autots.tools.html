@@ -13,6 +13,7 @@
     <script src="../_static/underscore.js"></script>
     <script src="../_static/doctools.js"></script>
     <script src="../_static/language_data.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="prev" title="autots.templates package" href="autots.templates.html" />
@@ -287,6 +288,475 @@ and order.</p>
 </dd></dl>
 
 </section>
+<section id="module-autots.tools.fast_kalman">
+<span id="autots-tools-fast-kalman-module"></span><h2>autots.tools.fast_kalman module<a class="headerlink" href="#module-autots.tools.fast_kalman" title="Permalink to this headline">¶</a></h2>
+<p>From SIMD KALMAN, (c) 2017 Otto Seiskari (MIT License)</p>
+<p>Following the notation in <a class="footnote-reference brackets" href="#footnote-1" id="footnote-reference-1" role="doc-noteref"><span class="fn-bracket">[</span>1<span class="fn-bracket">]</span></a>, the Kalman filter framework consists of
+a <em>dynamic model</em> (state transition model)</p>
+<div class="math notranslate nohighlight">
+\[x_k = A x_{k-1} + q_{k-1}, \qquad q_{k-1} \sim N(0, Q)\]</div>
+<p>and a <em>measurement model</em> (observation model)</p>
+<div class="math notranslate nohighlight">
+\[y_k = H x_k + r_k, \qquad r_k \sim N(0, R),\]</div>
+<p>where the vector <span class="math notranslate nohighlight">\(x\)</span> is the (hidden) state of the system and
+<span class="math notranslate nohighlight">\(y\)</span> is an observation. <cite>A</cite> and <cite>H</cite> are matrices of suitable shape
+and <span class="math notranslate nohighlight">\(Q\)</span>, <span class="math notranslate nohighlight">\(R\)</span> are positive-definite noise covariance matrices.</p>
+<aside class="footnote brackets" id="footnote-1" role="note">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#footnote-reference-1">1</a><span class="fn-bracket">]</span></span>
+<p>Simo Sarkkä (2013).
+Bayesian Filtering and Smoothing. Cambridge University Press.
+<a class="reference external" href="https://users.aalto.fi/~ssarkka/pub/cup_book_online_20131111.pdf">https://users.aalto.fi/~ssarkka/pub/cup_book_online_20131111.pdf</a></p>
+</aside>
+<section id="usage-example">
+<h3>Usage example<a class="headerlink" href="#usage-example" title="Permalink to this headline">¶</a></h3>
+<p>Define model</p>
+<p>Generate some fake data</p>
+<p>Smooth all data</p>
+<p>Predict new data for a single series (1d case)</p>
+<p>Low-level Kalman filter computation steps with multi-dimensional input arrays.
+Unlike with the <a class="reference external" href="index.html#simdkalman.KalmanFilter">KalmanFilter</a> class,
+all inputs must be numpy arrays. However, their dimensions can flexibly vary
+form 1 to 3 as long as they are reasonable from the point of view of matrix
+multiplication and numpy broadcasting rules. Matrix operations are applied on
+the <em>last</em> two axes of the arrays.</p>
+<dl class="class">
+<dt id="autots.tools.fast_kalman.Gaussian">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">Gaussian</code><span class="sig-paren">(</span><em class="sig-param">mean</em>, <em class="sig-param">cov</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.Gaussian" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="method">
+<dt id="autots.tools.fast_kalman.Gaussian.empty">
+<em class="property">static </em><code class="sig-name descname">empty</code><span class="sig-paren">(</span><em class="sig-param">n_states</em>, <em class="sig-param">n_vars</em>, <em class="sig-param">n_measurements</em>, <em class="sig-param">cov=True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.Gaussian.empty" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.fast_kalman.Gaussian.unvectorize_state">
+<code class="sig-name descname">unvectorize_state</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.Gaussian.unvectorize_state" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.fast_kalman.Gaussian.unvectorize_vars">
+<code class="sig-name descname">unvectorize_vars</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.Gaussian.unvectorize_vars" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.fast_kalman.KalmanFilter">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">KalmanFilter</code><span class="sig-paren">(</span><em class="sig-param">state_transition</em>, <em class="sig-param">process_noise</em>, <em class="sig-param">observation_model</em>, <em class="sig-param">observation_noise</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.KalmanFilter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>The main Kalman filter class providing convenient interfaces to
+vectorized smoothing and filtering operations on multiple independent
+time series.</p>
+<p>As long as the shapes of the given parameters match reasonably according
+to the rules of matrix multiplication, this class is flexible in their
+exact nature accepting</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>scalars: <code class="docutils literal notranslate"><span class="pre">process_noise</span> <span class="pre">=</span> <span class="pre">0.1</span></code></p></li>
+<li><p>(2d) numpy matrices: <code class="docutils literal notranslate"><span class="pre">process_noise</span> <span class="pre">=</span> <span class="pre">numpy.eye(2)</span></code></p></li>
+<li><p>2d arrays: <code class="docutils literal notranslate"><span class="pre">observation_model</span> <span class="pre">=</span> <span class="pre">[[1,2]]</span></code></p></li>
+<li><p>3d arrays and matrices for vectorized computations. Unlike the other
+options, this locks the shape of the inputs that can be processed
+by the smoothing and prediction methods.</p></li>
+</ul>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>state_transition</strong> – State transition matrix <span class="math notranslate nohighlight">\(A\)</span></p></li>
+<li><p><strong>process_noise</strong> – Process noise (state transition covariance) matrix <span class="math notranslate nohighlight">\(Q\)</span></p></li>
+<li><p><strong>observation_model</strong> – Observation model (measurement model) matrix <span class="math notranslate nohighlight">\(H\)</span></p></li>
+<li><p><strong>observation_noise</strong> – Observation noise (measurement noise covariance) matrix <span class="math notranslate nohighlight">\(R\)</span></p></li>
+</ul>
+</dd>
+</dl>
+<dl class="class">
+<dt id="autots.tools.fast_kalman.KalmanFilter.Result">
+<em class="property">class </em><code class="sig-name descname">Result</code><a class="headerlink" href="#autots.tools.fast_kalman.KalmanFilter.Result" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.fast_kalman.KalmanFilter.compute">
+<code class="sig-name descname">compute</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">n_test</em>, <em class="sig-param">initial_value=None</em>, <em class="sig-param">initial_covariance=None</em>, <em class="sig-param">smoothed=True</em>, <em class="sig-param">filtered=False</em>, <em class="sig-param">states=True</em>, <em class="sig-param">covariances=True</em>, <em class="sig-param">observations=True</em>, <em class="sig-param">likelihoods=False</em>, <em class="sig-param">gains=False</em>, <em class="sig-param">log_likelihood=False</em>, <em class="sig-param">verbose=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.KalmanFilter.compute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Smoothing, filtering and prediction at the same time. Used internally
+by other methods, but can also be used directly if, e.g., both smoothed
+and predicted data is wanted.</p>
+<p>See <strong>smooth</strong> and <strong>predict</strong> for explanation of the common parameters.
+With this method, there also exist the following flags.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>smoothed</strong> (<em>boolean</em>) – compute Kalman smoother (used by <strong>smooth</strong>)</p></li>
+<li><p><strong>filtered</strong> (<em>boolean</em>) – return (one-way) filtered data</p></li>
+<li><p><strong>likelihoods</strong> (<em>boolean</em>) – return likelihoods of each step</p></li>
+<li><p><strong>gains</strong> (<em>boolean</em>) – return Kalman gains and pairwise covariances (used by
+the EM algorithm). If true, the gains are provided as a member of
+the relevant subresult <code class="docutils literal notranslate"><span class="pre">filtered.gains</span></code> and/or <code class="docutils literal notranslate"><span class="pre">smoothed.gains</span></code>.</p></li>
+<li><p><strong>log_likelihood</strong> (<em>boolean</em>) – return the log-likelihood(s) for the entire
+series. If matrix data is given, this will be a vector where each
+element is the log-likelihood of a single row.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>result object whose fields depend on of the above parameter
+flags are True. The possible values are:
+<code class="docutils literal notranslate"><span class="pre">smoothed</span></code> (the return value of <strong>smooth</strong>, may contain <code class="docutils literal notranslate"><span class="pre">smoothed.gains</span></code>),
+<code class="docutils literal notranslate"><span class="pre">filtered</span></code> (like <code class="docutils literal notranslate"><span class="pre">smoothed</span></code>, may also contain <code class="docutils literal notranslate"><span class="pre">filtered.gains</span></code>),
+<code class="docutils literal notranslate"><span class="pre">predicted</span></code> (the return value of <strong>predict</strong> if <code class="docutils literal notranslate"><span class="pre">n_test</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>)
+<code class="docutils literal notranslate"><span class="pre">pairwise_covariances</span></code>, <code class="docutils literal notranslate"><span class="pre">likelihoods</span></code> and
+<code class="docutils literal notranslate"><span class="pre">log_likelihood</span></code>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.fast_kalman.KalmanFilter.em">
+<code class="sig-name descname">em</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">n_iter=5</em>, <em class="sig-param">initial_value=None</em>, <em class="sig-param">initial_covariance=None</em>, <em class="sig-param">verbose=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.KalmanFilter.em" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.fast_kalman.KalmanFilter.em_observation_noise">
+<code class="sig-name descname">em_observation_noise</code><span class="sig-paren">(</span><em class="sig-param">result</em>, <em class="sig-param">data</em>, <em class="sig-param">verbose=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.KalmanFilter.em_observation_noise" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.fast_kalman.KalmanFilter.em_process_noise">
+<code class="sig-name descname">em_process_noise</code><span class="sig-paren">(</span><em class="sig-param">result</em>, <em class="sig-param">verbose=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.KalmanFilter.em_process_noise" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.fast_kalman.KalmanFilter.predict">
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">n_test</em>, <em class="sig-param">initial_value=None</em>, <em class="sig-param">initial_covariance=None</em>, <em class="sig-param">states=True</em>, <em class="sig-param">observations=True</em>, <em class="sig-param">covariances=True</em>, <em class="sig-param">verbose=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.KalmanFilter.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Filter past data and predict a given number of future values.
+The data can be given as either of</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>1d array, like <code class="docutils literal notranslate"><span class="pre">[1,2,3,4]</span></code>. In this case, one Kalman filter is
+used and the return value structure will contain an 1d array of
+<code class="docutils literal notranslate"><span class="pre">observations</span></code> (both <code class="docutils literal notranslate"><span class="pre">.mean</span></code>  and <code class="docutils literal notranslate"><span class="pre">.cov</span></code> will be 1d).</p></li>
+<li><p>2d matrix, whose each row is interpreted as an independent time
+series, all of which are filtered independently. The returned
+<code class="docutils literal notranslate"><span class="pre">observations</span></code> members will be 2-dimensional in this case.</p></li>
+<li><p>3d matrix, whose the last dimension can be used for multi-dimensional
+observations, i.e, <code class="docutils literal notranslate"><span class="pre">data[1,2,:]</span></code> defines the components of the
+third observation of the second series. In the-multi-dimensional
+case the returned <code class="docutils literal notranslate"><span class="pre">observations.mean</span></code> will be 3-dimensional and
+<code class="docutils literal notranslate"><span class="pre">observations.cov</span></code> 4-dimensional.</p></li>
+</ul>
+</div></blockquote>
+<p>Initial values and covariances can be given as scalars or 2d matrices
+in which case the same initial states will be used for all rows or
+3d arrays for different initial values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – Past data</p></li>
+<li><p><strong>n_test</strong> (<em>integer</em>) – number of future steps to predict.</p></li>
+<li><p><strong>initial_value</strong> – Initial value <span class="math notranslate nohighlight">\({\mathbb E}[x_0]\)</span></p></li>
+<li><p><strong>initial_covariance</strong> – Initial uncertainty <span class="math notranslate nohighlight">\({\rm Cov}[x_0]\)</span></p></li>
+<li><p><strong>states</strong> (<em>boolean</em>) – predict states <span class="math notranslate nohighlight">\(x\)</span>?</p></li>
+<li><p><strong>observations</strong> (<em>boolean</em>) – predict observations <span class="math notranslate nohighlight">\(y\)</span>?</p></li>
+<li><p><strong>covariances</strong> (<em>boolean</em>) – include covariances in predictions?</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>Result object with fields
+<code class="docutils literal notranslate"><span class="pre">states</span></code> and <code class="docutils literal notranslate"><span class="pre">observations</span></code>, if the respective parameter flags
+are set to True. Both are <code class="docutils literal notranslate"><span class="pre">Gaussian</span></code> result objects with fields
+<code class="docutils literal notranslate"><span class="pre">mean</span></code> and <code class="docutils literal notranslate"><span class="pre">cov</span></code> (if the <em>covariances</em> flag is True)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.fast_kalman.KalmanFilter.predict_next">
+<code class="sig-name descname">predict_next</code><span class="sig-paren">(</span><em class="sig-param">m</em>, <em class="sig-param">P</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.KalmanFilter.predict_next" title="Permalink to this definition">¶</a></dt>
+<dd><p>Single prediction step</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>m</strong> – <span class="math notranslate nohighlight">\({\mathbb E}[x_{j-1}]\)</span>, the previous mean</p></li>
+<li><p><strong>P</strong> – <span class="math notranslate nohighlight">\({\rm Cov}[x_{j-1}]\)</span>, the previous covariance</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">(prior_mean,</span> <span class="pre">prior_cov)</span></code> predicted mean and covariance
+<span class="math notranslate nohighlight">\({\mathbb E}[x_j]\)</span>, <span class="math notranslate nohighlight">\({\rm Cov}[x_j]\)</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.fast_kalman.KalmanFilter.predict_observation">
+<code class="sig-name descname">predict_observation</code><span class="sig-paren">(</span><em class="sig-param">m</em>, <em class="sig-param">P</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.KalmanFilter.predict_observation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Probability distribution of observation <span class="math notranslate nohighlight">\(y\)</span> for a given
+distribution of <span class="math notranslate nohighlight">\(x\)</span></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>m</strong> – <span class="math notranslate nohighlight">\({\mathbb E}[x]\)</span></p></li>
+<li><p><strong>P</strong> – <span class="math notranslate nohighlight">\({\rm Cov}[x]\)</span></p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>mean <span class="math notranslate nohighlight">\({\mathbb E}[y]\)</span> and
+covariance <span class="math notranslate nohighlight">\({\rm Cov}[y]\)</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.fast_kalman.KalmanFilter.smooth">
+<code class="sig-name descname">smooth</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">initial_value=None</em>, <em class="sig-param">initial_covariance=None</em>, <em class="sig-param">observations=True</em>, <em class="sig-param">states=True</em>, <em class="sig-param">covariances=True</em>, <em class="sig-param">verbose=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.KalmanFilter.smooth" title="Permalink to this definition">¶</a></dt>
+<dd><p>Smooth given data, which can be either</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>1d array, like <code class="docutils literal notranslate"><span class="pre">[1,2,3,4]</span></code>. In this case, one Kalman filter is
+used and the return value structure will contain an 1d array of
+<code class="docutils literal notranslate"><span class="pre">observations</span></code> (both <code class="docutils literal notranslate"><span class="pre">.mean</span></code>  and <code class="docutils literal notranslate"><span class="pre">.cov</span></code> will be 1d).</p></li>
+<li><p>2d matrix, whose each row is interpreted as an independent time
+series, all of which are smoothed independently. The returned
+<code class="docutils literal notranslate"><span class="pre">observations</span></code> members will be 2-dimensional in this case.</p></li>
+<li><p>3d matrix, whose the last dimension can be used for multi-dimensional
+observations, i.e, <code class="docutils literal notranslate"><span class="pre">data[1,2,:]</span></code> defines the components of the
+third observation of the second series. In the-multi-dimensional
+case the returned <code class="docutils literal notranslate"><span class="pre">observations.mean</span></code> will be 3-dimensional and
+<code class="docutils literal notranslate"><span class="pre">observations.cov</span></code> 4-dimensional.</p></li>
+</ul>
+</div></blockquote>
+<p>Initial values and covariances can be given as scalars or 2d matrices
+in which case the same initial states will be used for all rows or
+3d arrays for different initial values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> – 1d or 2d data, see above</p></li>
+<li><p><strong>initial_value</strong> – Initial value <span class="math notranslate nohighlight">\({\mathbb E}[x_0]\)</span></p></li>
+<li><p><strong>initial_covariance</strong> – Initial uncertainty <span class="math notranslate nohighlight">\({\rm Cov}[x_0]\)</span></p></li>
+<li><p><strong>states</strong> (<em>boolean</em>) – return smoothed states <span class="math notranslate nohighlight">\(x\)</span>?</p></li>
+<li><p><strong>observations</strong> (<em>boolean</em>) – return smoothed observations <span class="math notranslate nohighlight">\(y\)</span>?</p></li>
+<li><p><strong>covariances</strong> (<em>boolean</em>) – include covariances results?</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>Result object with fields
+<code class="docutils literal notranslate"><span class="pre">states</span></code> and <code class="docutils literal notranslate"><span class="pre">observations</span></code>, if the respective parameter flags
+are set to True. Both are <code class="docutils literal notranslate"><span class="pre">Gaussian</span></code> result objects with fields
+<code class="docutils literal notranslate"><span class="pre">mean</span></code> and <code class="docutils literal notranslate"><span class="pre">cov</span></code> (if the <em>covariances</em> flag is True)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.fast_kalman.KalmanFilter.smooth_current">
+<code class="sig-name descname">smooth_current</code><span class="sig-paren">(</span><em class="sig-param">m</em>, <em class="sig-param">P</em>, <em class="sig-param">ms</em>, <em class="sig-param">Ps</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.KalmanFilter.smooth_current" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simgle Kalman smoother backwards step</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>m</strong> – <span class="math notranslate nohighlight">\({\mathbb E}[x_j|y_1,\ldots,y_j]\)</span>,
+the filtered mean of <span class="math notranslate nohighlight">\(x_j\)</span></p></li>
+<li><p><strong>P</strong> – <span class="math notranslate nohighlight">\({\rm Cov}[x_j|y_1,\ldots,y_j]\)</span>,
+the filtered covariance of <span class="math notranslate nohighlight">\(x_j\)</span></p></li>
+<li><p><strong>ms</strong> – <span class="math notranslate nohighlight">\({\mathbb E}[x_{j+1}|y_1,\ldots,y_T]\)</span></p></li>
+<li><p><strong>Ps</strong> – <span class="math notranslate nohighlight">\({\rm Cov}[x_{j+1}|y_1,\ldots,y_T]\)</span></p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">(smooth_mean,</span> <span class="pre">smooth_covariance,</span> <span class="pre">smoothing_gain)</span></code>
+smoothed mean <span class="math notranslate nohighlight">\({\mathbb E}[x_j|y_1,\ldots,y_T]\)</span>,
+and covariance <span class="math notranslate nohighlight">\({\rm Cov}[x_j|y_1,\ldots,y_T]\)</span>
+&amp; smoothing gain <span class="math notranslate nohighlight">\(C\)</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.fast_kalman.KalmanFilter.update">
+<code class="sig-name descname">update</code><span class="sig-paren">(</span><em class="sig-param">m</em>, <em class="sig-param">P</em>, <em class="sig-param">y</em>, <em class="sig-param">log_likelihood=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.KalmanFilter.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Single update step with NaN check.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>m</strong> – <span class="math notranslate nohighlight">\({\mathbb E}[x_j|y_1,\ldots,y_{j-1}]\)</span>,
+the prior mean of <span class="math notranslate nohighlight">\(x_j\)</span></p></li>
+<li><p><strong>P</strong> – <span class="math notranslate nohighlight">\({\rm Cov}[x_j|y_1,\ldots,y_{j-1}]\)</span>,
+the prior covariance of <span class="math notranslate nohighlight">\(x_j\)</span></p></li>
+<li><p><strong>y</strong> – observation <span class="math notranslate nohighlight">\(y_j\)</span></p></li>
+<li><p><strong>log_likelihood</strong> – compute log-likelihood?</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">(posterior_mean,</span> <span class="pre">posterior_covariance,</span> <span class="pre">log_likelihood)</span></code>
+posterior mean <span class="math notranslate nohighlight">\({\mathbb E}[x_j|y_1,\ldots,y_j]\)</span>
+&amp; covariance <span class="math notranslate nohighlight">\({\rm Cov}[x_j|y_1,\ldots,y_j]\)</span>
+and, if requested, log-likelihood. If <span class="math notranslate nohighlight">\(y_j\)</span> is NaN, returns
+the prior mean and covariance instead</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.autoshape">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">autoshape</code><span class="sig-paren">(</span><em class="sig-param">func</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.autoshape" title="Permalink to this definition">¶</a></dt>
+<dd><p>Automatically shape arguments and return values</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.ddot">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">ddot</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">B</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.ddot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Matrix multiplication over last two axes</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.ddot_t_right">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">ddot_t_right</code><span class="sig-paren">(</span><em class="sig-param">A</em>, <em class="sig-param">B</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.ddot_t_right" title="Permalink to this definition">¶</a></dt>
+<dd><p>Matrix multiplication over last 2 axes with right operand transposed</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.dinv">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">dinv</code><span class="sig-paren">(</span><em class="sig-param">A</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.dinv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Matrix inverse applied to last two axes</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.douter">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">douter</code><span class="sig-paren">(</span><em class="sig-param">a</em>, <em class="sig-param">b</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.douter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Outer product, last two axes</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.em_initial_state">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">em_initial_state</code><span class="sig-paren">(</span><em class="sig-param">result</em>, <em class="sig-param">initial_means</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.em_initial_state" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.ensure_matrix">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">ensure_matrix</code><span class="sig-paren">(</span><em class="sig-param">x</em>, <em class="sig-param">dim=1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.ensure_matrix" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.predict">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">mean</em>, <em class="sig-param">covariance</em>, <em class="sig-param">state_transition</em>, <em class="sig-param">process_noise</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Kalman filter prediction step</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mean</strong> – <span class="math notranslate nohighlight">\({\mathbb E}[x_{j-1}]\)</span>,
+the filtered mean form the previous step</p></li>
+<li><p><strong>covariance</strong> – <span class="math notranslate nohighlight">\({\rm Cov}[x_{j-1}]\)</span>,
+the filtered covariance form the previous step</p></li>
+<li><p><strong>state_transition</strong> – matrix <span class="math notranslate nohighlight">\(A\)</span></p></li>
+<li><p><strong>process_noise</strong> – matrix <span class="math notranslate nohighlight">\(Q\)</span></p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">(prior_mean,</span> <span class="pre">prior_cov)</span></code> predicted mean and covariance
+<span class="math notranslate nohighlight">\({\mathbb E}[x_j]\)</span>, <span class="math notranslate nohighlight">\({\rm Cov}[x_j]\)</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.predict_observation">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">predict_observation</code><span class="sig-paren">(</span><em class="sig-param">mean</em>, <em class="sig-param">covariance</em>, <em class="sig-param">observation_model</em>, <em class="sig-param">observation_noise</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.predict_observation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute probability distribution of the observation <span class="math notranslate nohighlight">\(y\)</span>, given
+the distribution of <span class="math notranslate nohighlight">\(x\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mean</strong> – <span class="math notranslate nohighlight">\({\mathbb E}[x]\)</span></p></li>
+<li><p><strong>covariance</strong> – <span class="math notranslate nohighlight">\({\rm Cov}[x]\)</span></p></li>
+<li><p><strong>observation_model</strong> – matrix <span class="math notranslate nohighlight">\(H\)</span></p></li>
+<li><p><strong>observation_noise</strong> – matrix <span class="math notranslate nohighlight">\(R\)</span></p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>mean <span class="math notranslate nohighlight">\({\mathbb E}[y]\)</span> and covariance <span class="math notranslate nohighlight">\({\rm Cov}[y]\)</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.priv_smooth">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">priv_smooth</code><span class="sig-paren">(</span><em class="sig-param">posterior_mean</em>, <em class="sig-param">posterior_covariance</em>, <em class="sig-param">state_transition</em>, <em class="sig-param">process_noise</em>, <em class="sig-param">next_smooth_mean</em>, <em class="sig-param">next_smooth_covariance</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.priv_smooth" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.priv_update_with_nan_check">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">priv_update_with_nan_check</code><span class="sig-paren">(</span><em class="sig-param">prior_mean</em>, <em class="sig-param">prior_covariance</em>, <em class="sig-param">observation_model</em>, <em class="sig-param">observation_noise</em>, <em class="sig-param">measurement</em>, <em class="sig-param">log_likelihood=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.priv_update_with_nan_check" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.random_state_space">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">random_state_space</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.random_state_space" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return randomly generated statespace models.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.smooth">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">smooth</code><span class="sig-paren">(</span><em class="sig-param">posterior_mean</em>, <em class="sig-param">posterior_covariance</em>, <em class="sig-param">state_transition</em>, <em class="sig-param">process_noise</em>, <em class="sig-param">next_smooth_mean</em>, <em class="sig-param">next_smooth_covariance</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.smooth" title="Permalink to this definition">¶</a></dt>
+<dd><p>Kalman smoother backwards step</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>posterior_mean</strong> – <span class="math notranslate nohighlight">\({\mathbb E}[x_j|y_1,\ldots,y_j]\)</span>,
+the filtered mean of <span class="math notranslate nohighlight">\(x_j\)</span></p></li>
+<li><p><strong>posterior_covariance</strong> – <span class="math notranslate nohighlight">\({\rm Cov}[x_j|y_1,\ldots,y_j]\)</span>,
+the filtered covariance of <span class="math notranslate nohighlight">\(x_j\)</span></p></li>
+<li><p><strong>state_transition</strong> – matrix <span class="math notranslate nohighlight">\(A\)</span></p></li>
+<li><p><strong>process_noise</strong> – matrix <span class="math notranslate nohighlight">\(Q\)</span></p></li>
+<li><p><strong>next_smooth_mean</strong> – <span class="math notranslate nohighlight">\({\mathbb E}[x_{j+1}|y_1,\ldots,y_T]\)</span></p></li>
+<li><p><strong>next_smooth_covariance</strong> – <span class="math notranslate nohighlight">\({\rm Cov}[x_{j+1}|y_1,\ldots,y_T]\)</span></p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">(smooth_mean,</span> <span class="pre">smooth_covariance,</span> <span class="pre">smoothing_gain)</span></code>
+smoothed mean <span class="math notranslate nohighlight">\({\mathbb E}[x_j|y_1,\ldots,y_T]\)</span>,
+and covariance <span class="math notranslate nohighlight">\({\rm Cov}[x_j|y_1,\ldots,y_T]\)</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.update">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">update</code><span class="sig-paren">(</span><em class="sig-param">prior_mean</em>, <em class="sig-param">prior_covariance</em>, <em class="sig-param">observation_model</em>, <em class="sig-param">observation_noise</em>, <em class="sig-param">measurement</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Kalman filter update step</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>prior_mean</strong> – <span class="math notranslate nohighlight">\({\mathbb E}[x_j|y_1,\ldots,y_{j-1}]\)</span>,
+the prior mean of <span class="math notranslate nohighlight">\(x_j\)</span></p></li>
+<li><p><strong>prior_covariance</strong> – <span class="math notranslate nohighlight">\({\rm Cov}[x_j|y_1,\ldots,y_{j-1}]\)</span>,
+the prior covariance of <span class="math notranslate nohighlight">\(x_j\)</span></p></li>
+<li><p><strong>observation_model</strong> – matrix <span class="math notranslate nohighlight">\(H\)</span></p></li>
+<li><p><strong>observation_noise</strong> – matrix <span class="math notranslate nohighlight">\(R\)</span></p></li>
+<li><p><strong>measurement</strong> – observation <span class="math notranslate nohighlight">\(y_j\)</span></p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">(posterior_mean,</span> <span class="pre">posterior_covariance)</span></code>
+posterior mean and covariance
+<span class="math notranslate nohighlight">\({\mathbb E}[x_j|y_1,\ldots,y_j]\)</span>,
+<span class="math notranslate nohighlight">\({\rm Cov}[x_j|y_1,\ldots,y_j]\)</span>
+after observing <span class="math notranslate nohighlight">\(y_j\)</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.fast_kalman.update_with_nan_check">
+<code class="sig-prename descclassname">autots.tools.fast_kalman.</code><code class="sig-name descname">update_with_nan_check</code><span class="sig-paren">(</span><em class="sig-param">prior_mean</em>, <em class="sig-param">prior_covariance</em>, <em class="sig-param">observation_model</em>, <em class="sig-param">observation_noise</em>, <em class="sig-param">measurement</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.fast_kalman.update_with_nan_check" title="Permalink to this definition">¶</a></dt>
+<dd><p>Kalman filter update with a check for NaN observations. Like <code class="docutils literal notranslate"><span class="pre">update</span></code> but
+returns <code class="docutils literal notranslate"><span class="pre">(prior_mean,</span> <span class="pre">prior_covariance)</span></code> if <code class="docutils literal notranslate"><span class="pre">measurement</span></code> is NaN</p>
+</dd></dl>
+
+</section>
+</section>
 <section id="module-autots.tools.hierarchial">
 <span id="autots-tools-hierarchial-module"></span><h2>autots.tools.hierarchial module<a class="headerlink" href="#module-autots.tools.hierarchial" title="Permalink to this headline">¶</a></h2>
 <dl class="class">
@@ -488,121 +958,6 @@ Return a dataframe where na values are removed and values shifted forward.</p>
 <p>Phases of the moon.
 Modified from <a class="reference external" href="https://stackoverflow.com/a/2531541/9492254">https://stackoverflow.com/a/2531541/9492254</a>
 by keturn and earlier from John Walker</p>
-<dl class="class">
-<dt id="autots.tools.lunar.AstronomicalConstants">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">AstronomicalConstants</code><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.earth_radius">
-<code class="sig-name descname">earth_radius</code><em class="property"> = 6378.16</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.earth_radius" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.eccentricity">
-<code class="sig-name descname">eccentricity</code><em class="property"> = 0.016718</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.eccentricity" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.ecliptic_longitude_epoch">
-<code class="sig-name descname">ecliptic_longitude_epoch</code><em class="property"> = 278.83354</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.ecliptic_longitude_epoch" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.ecliptic_longitude_perigee">
-<code class="sig-name descname">ecliptic_longitude_perigee</code><em class="property"> = 282.596403</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.ecliptic_longitude_perigee" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.epoch">
-<code class="sig-name descname">epoch</code><em class="property"> = 2444238.5</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.epoch" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.lunations_base">
-<code class="sig-name descname">lunations_base</code><em class="property"> = 2423436.0</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.lunations_base" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.moon_angular_size">
-<code class="sig-name descname">moon_angular_size</code><em class="property"> = 0.5181</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_angular_size" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.moon_eccentricity">
-<code class="sig-name descname">moon_eccentricity</code><em class="property"> = 0.0549</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_eccentricity" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.moon_inclination">
-<code class="sig-name descname">moon_inclination</code><em class="property"> = 5.145396</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_inclination" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.moon_mean_longitude_epoch">
-<code class="sig-name descname">moon_mean_longitude_epoch</code><em class="property"> = 64.975464</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_mean_longitude_epoch" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.moon_mean_perigee_epoch">
-<code class="sig-name descname">moon_mean_perigee_epoch</code><em class="property"> = 349.383063</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_mean_perigee_epoch" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.moon_parallax">
-<code class="sig-name descname">moon_parallax</code><em class="property"> = 0.9507</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_parallax" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.moon_smaxis">
-<code class="sig-name descname">moon_smaxis</code><em class="property"> = 384401.0</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.moon_smaxis" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.node_mean_longitude_epoch">
-<code class="sig-name descname">node_mean_longitude_epoch</code><em class="property"> = 151.950429</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.node_mean_longitude_epoch" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.sun_angular_size_smaxis">
-<code class="sig-name descname">sun_angular_size_smaxis</code><em class="property"> = 0.533128</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.sun_angular_size_smaxis" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.sun_smaxis">
-<code class="sig-name descname">sun_smaxis</code><em class="property"> = 149585000.0</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.sun_smaxis" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="attribute">
-<dt id="autots.tools.lunar.AstronomicalConstants.synodic_month">
-<code class="sig-name descname">synodic_month</code><em class="property"> = 29.53058868</em><a class="headerlink" href="#autots.tools.lunar.AstronomicalConstants.synodic_month" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-</dd></dl>
-
-<dl class="class">
-<dt id="autots.tools.lunar.MoonPhase">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">MoonPhase</code><span class="sig-paren">(</span><em class="sig-param">date=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.MoonPhase" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>Describe the phase of the moon.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>- a DateTime instance</strong> (<em>date</em>) – </p></li>
-<li><p><strong>- my phase</strong><strong>, </strong><strong>in the range 0.0 .. 1.0</strong> (<em>phase</em>) – </p></li>
-<li><p><strong>- a string describing my phase</strong> (<em>phase_text</em>) – </p></li>
-<li><p><strong>- the percentage of the face of the moon illuminated</strong> (<em>illuminated</em>) – </p></li>
-<li><p><strong>- as seen from Earth</strong><strong>, </strong><strong>in degrees.</strong> (<em>sun_angular_diameter</em>) – </p></li>
-<li><p><strong>- as seen from Earth</strong><strong>, </strong><strong>in degrees.</strong> – </p></li>
-<li><p><strong>- the date of the most recent new moon</strong> (<em>new_date</em>) – </p></li>
-<li><p><strong>- the date the moon reaches 1st quarter in this cycle</strong> (<em>q1_date</em>) – </p></li>
-<li><p><strong>- the date of the full moon in this cycle</strong> (<em>full_date</em>) – </p></li>
-<li><p><strong>- the date the moon reaches 3rd quarter in this cycle</strong> (<em>q3_date</em>) – </p></li>
-<li><p><strong>- the date of the next new moon</strong> (<em>nextnew_date</em>) – </p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
 <dl class="function">
 <dt id="autots.tools.lunar.dcos">
 <code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">dcos</code><span class="sig-paren">(</span><em class="sig-param">d</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.dcos" title="Permalink to this definition">¶</a></dt>
@@ -625,18 +980,6 @@ by keturn and earlier from John Walker</p>
 </dd></dl>
 
 <dl class="function">
-<dt id="autots.tools.lunar.meanphase">
-<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">meanphase</code><span class="sig-paren">(</span><em class="sig-param">sdate</em>, <em class="sig-param">k</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.meanphase" title="Permalink to this definition">¶</a></dt>
-<dd><p>Calculates time of the mean new Moon for a given base date.</p>
-<p>This argument K to this function is the precomputed synodic month
-index, given by:</p>
-<blockquote>
-<div><p>K = (year - 1900) * 12.3685</p>
-</div></blockquote>
-<p>where year is expressed as a year and fractional year.</p>
-</dd></dl>
-
-<dl class="function">
 <dt id="autots.tools.lunar.moon_phase">
 <code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">moon_phase</code><span class="sig-paren">(</span><em class="sig-param">datetime_index</em>, <em class="sig-param">epsilon=1e-06</em>, <em class="sig-param">epoch=2444237.905</em>, <em class="sig-param">ecliptic_longitude_epoch=278.83354</em>, <em class="sig-param">ecliptic_longitude_perigee=282.596403</em>, <em class="sig-param">eccentricity=0.016718</em>, <em class="sig-param">moon_mean_longitude_epoch=64.975464</em>, <em class="sig-param">moon_mean_perigee_epoch=349.383063</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.moon_phase" title="Permalink to this definition">¶</a></dt>
 <dd><p>Numpy version. Takes a pd.DatetimeIndex and returns moon phase (%illuminated).
@@ -649,28 +992,6 @@ Epoch can be adjust slightly (0.5 = half day) to adjust for time zones. This is 
 <dd><p>Convert pandas DatetimeIndex to moon phases. Note timezone and hour can matter slightly.
 Epoch can be adjust slightly (0.5 = half day) to adjust for time zones.
 2444237.905 is for US Central. epoch=2444238.5 for Asia generally.</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.tools.lunar.phase">
-<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">phase</code><span class="sig-paren">(</span><em class="sig-param">phase_date=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.phase" title="Permalink to this definition">¶</a></dt>
-<dd><p>Calculate phase of moon as a fraction:</p>
-<p>The argument is the time for which the phase is requested,
-expressed in either a datetime or by Julian Day Number.</p>
-<p>Returns a dictionary containing the terminator phase angle as a
-percentage of a full circle (i.e., 0 to 1), the illuminated
-fraction of the Moon’s disc, the Moon’s age in days and fraction,
-the distance of the Moon from the centre of the Earth, and the
-angular diameter subtended by the Moon as seen by an observer at
-the centre of the Earth.</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.tools.lunar.phase_hunt">
-<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">phase_hunt</code><span class="sig-paren">(</span><em class="sig-param">sdate</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.phase_hunt" title="Permalink to this definition">¶</a></dt>
-<dd><p>Find time of phases of the moon which surround the current date.</p>
-<p>Five phases are found, starting and ending with the new moons
-which bound the current lunation.</p>
 </dd></dl>
 
 <dl class="function">
@@ -687,14 +1008,6 @@ which bound the current lunation.</p>
 <dt id="autots.tools.lunar.torad">
 <code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">torad</code><span class="sig-paren">(</span><em class="sig-param">d</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.torad" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
-
-<dl class="function">
-<dt id="autots.tools.lunar.truephase">
-<code class="sig-prename descclassname">autots.tools.lunar.</code><code class="sig-name descname">truephase</code><span class="sig-paren">(</span><em class="sig-param">k</em>, <em class="sig-param">tphase</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.lunar.truephase" title="Permalink to this definition">¶</a></dt>
-<dd><p>Given a K value used to determine the mean phase of the new
-moon, and a phase selector (0.0, 0.25, 0.5, 0.75), obtain the
-true, corrected phase time.</p>
-</dd></dl>
 
 </section>
 <section id="module-autots.tools.percentile">
@@ -896,6 +1209,11 @@ also can be a dict of {‘country’: “subdiv”} to include subdivision (stat
 <p>seasonal</p>
 <p>&#64;author: Colin</p>
 <dl class="function">
+<dt id="autots.tools.seasonal.create_seasonality_feature">
+<code class="sig-prename descclassname">autots.tools.seasonal.</code><code class="sig-name descname">create_seasonality_feature</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em>, <em class="sig-param">t</em>, <em class="sig-param">seasonality</em>, <em class="sig-param">history_days=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.seasonal.create_seasonality_feature" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="autots.tools.seasonal.date_part">
 <code class="sig-prename descclassname">autots.tools.seasonal.</code><code class="sig-name descname">date_part</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em>, <em class="sig-param">method: str = 'simple'</em>, <em class="sig-param">set_index: bool = True</em>, <em class="sig-param">polynomial_degree: int = None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.seasonal.date_part" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create date part columns from pd.DatetimeIndex.</p>
@@ -910,7 +1228,8 @@ recurring - all features that should commonly repeat without aging
 simple_2
 simple_3
 simple_binarized
-expanded_binarized</p></li>
+expanded_binarized
+common_fourier</p></li>
 <li><p><strong>set_index</strong> (<em>bool</em>) – if True, return DTindex as index of df</p></li>
 <li><p><strong>polynomial_degree</strong> (<em>int</em>) – add this degree of sklearn polynomial features if not None</p></li>
 </ul>
@@ -920,6 +1239,11 @@ expanded_binarized</p></li>
 </dd>
 </dl>
 </dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.seasonal.fourier_series">
+<code class="sig-prename descclassname">autots.tools.seasonal.</code><code class="sig-name descname">fourier_series</code><span class="sig-paren">(</span><em class="sig-param">t</em>, <em class="sig-param">p=365.25</em>, <em class="sig-param">n=10</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.seasonal.fourier_series" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
 
 <dl class="function">
 <dt id="autots.tools.seasonal.seasonal_int">
@@ -935,6 +1259,11 @@ expanded_binarized</p></li>
 </dd>
 </dl>
 </dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.seasonal.seasonal_window_match">
+<code class="sig-prename descclassname">autots.tools.seasonal.</code><code class="sig-name descname">seasonal_window_match</code><span class="sig-paren">(</span><em class="sig-param">DTindex</em>, <em class="sig-param">k</em>, <em class="sig-param">window_size</em>, <em class="sig-param">forecast_length</em>, <em class="sig-param">datepart_method</em>, <em class="sig-param">distance_metric</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.seasonal.seasonal_window_match" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
 
 </section>
 <section id="module-autots.tools.shaping">
@@ -1141,113 +1470,6 @@ sgt: (series, groups/seasonality, time steps)</p></li>
 <p>Created on Thu Jul  7 10:27:46 2022</p>
 <p>&#64;author: Colin</p>
 <dl class="class">
-<dt id="autots.tools.thresholding.ErrorWindow">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.thresholding.</code><code class="sig-name descname">ErrorWindow</code><span class="sig-paren">(</span><em class="sig-param">y_test</em>, <em class="sig-param">config</em>, <em class="sig-param">start_idx</em>, <em class="sig-param">end_idx</em>, <em class="sig-param">e_s</em>, <em class="sig-param">window_num</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.ErrorWindow" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<dl class="method">
-<dt id="autots.tools.thresholding.ErrorWindow.compare_to_epsilon">
-<code class="sig-name descname">compare_to_epsilon</code><span class="sig-paren">(</span><em class="sig-param">errors_all</em>, <em class="sig-param">inverse=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.ErrorWindow.compare_to_epsilon" title="Permalink to this definition">¶</a></dt>
-<dd><p>Compare smoothed error values to epsilon (error threshold) and group
-consecutive errors together into sequences.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>errors_all</strong> (<em>obj</em>) – Errors class object containing list of all</p></li>
-<li><p><strong>identified anomalies in test set</strong> (<em>previously</em>) – </p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="method">
-<dt id="autots.tools.thresholding.ErrorWindow.find_epsilon">
-<code class="sig-name descname">find_epsilon</code><span class="sig-paren">(</span><em class="sig-param">inverse=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.ErrorWindow.find_epsilon" title="Permalink to this definition">¶</a></dt>
-<dd><p>Find the anomaly threshold that maximizes function representing
-tradeoff between:</p>
-<blockquote>
-<div><ol class="loweralpha simple">
-<li><p>number of anomalies and anomalous ranges</p></li>
-</ol>
-<p>b) the reduction in mean and st dev if anomalous points are removed
-from errors</p>
-</div></blockquote>
-<p>(see <a class="reference external" href="https://arxiv.org/pdf/1802.04431.pdf">https://arxiv.org/pdf/1802.04431.pdf</a>)</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>inverse</strong> (<em>bool</em>) – If true, epsilon is calculated for inverted errors</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="method">
-<dt id="autots.tools.thresholding.ErrorWindow.prune_anoms">
-<code class="sig-name descname">prune_anoms</code><span class="sig-paren">(</span><em class="sig-param">inverse=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.ErrorWindow.prune_anoms" title="Permalink to this definition">¶</a></dt>
-<dd><p>Remove anomalies that don’t meet minimum separation from the next
-closest anomaly or error value</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>inverse</strong> (<em>bool</em>) – If true, epsilon is calculated for inverted errors</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="method">
-<dt id="autots.tools.thresholding.ErrorWindow.score_anomalies">
-<code class="sig-name descname">score_anomalies</code><span class="sig-paren">(</span><em class="sig-param">prior_idx</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.ErrorWindow.score_anomalies" title="Permalink to this definition">¶</a></dt>
-<dd><p>Calculate anomaly scores based on max distance from epsilon
-for each anomalous sequence.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>prior_idx</strong> (<em>int</em>) – starting index of window within full set of test
-values for channel</p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="class">
-<dt id="autots.tools.thresholding.Errors">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.thresholding.</code><code class="sig-name descname">Errors</code><span class="sig-paren">(</span><em class="sig-param">y_test</em>, <em class="sig-param">y_hat</em>, <em class="sig-param">config</em>, <em class="sig-param">run_id=None</em>, <em class="sig-param">c_id='C-1'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.Errors" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<dl class="method">
-<dt id="autots.tools.thresholding.Errors.adjust_window_size">
-<code class="sig-name descname">adjust_window_size</code><span class="sig-paren">(</span><em class="sig-param">y_test</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.Errors.adjust_window_size" title="Permalink to this definition">¶</a></dt>
-<dd><p>Decrease the historical error window size (h) if number of test
-values is limited.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>channel</strong> (<em>obj</em>) – Channel class object containing train/test data
-for X,y for a single channel</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="method">
-<dt id="autots.tools.thresholding.Errors.merge_scores">
-<code class="sig-name descname">merge_scores</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.Errors.merge_scores" title="Permalink to this definition">¶</a></dt>
-<dd><p>If anomalous sequences from subsequent batches are adjacent they
-will automatically be combined. This combines the scores for these
-initial adjacent sequences (scores are calculated as each batch is
-processed) where applicable.</p>
-</dd></dl>
-
-<dl class="method">
-<dt id="autots.tools.thresholding.Errors.process_batches">
-<code class="sig-name descname">process_batches</code><span class="sig-paren">(</span><em class="sig-param">y_test</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.Errors.process_batches" title="Permalink to this definition">¶</a></dt>
-<dd><p>Top-level function for the Error class that loops through batches
-of values for y_test</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>channel</strong> (<em>obj</em>) – Channel class object containing train/test data
-for X,y for a single channel</p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="class">
 <dt id="autots.tools.thresholding.NonparametricThreshold">
 <em class="property">class </em><code class="sig-prename descclassname">autots.tools.thresholding.</code><code class="sig-name descname">NonparametricThreshold</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">warmup_pts: int = 1</em>, <em class="sig-param">p=0.1</em>, <em class="sig-param">error_buffer=1</em>, <em class="sig-param">z_init=2.5</em>, <em class="sig-param">z_limit=12.0</em>, <em class="sig-param">z_step=0.5</em>, <em class="sig-param">max_contamination=0.25</em>, <em class="sig-param">mean_weight: float = 10</em>, <em class="sig-param">sd_weight: float = 10</em>, <em class="sig-param">anomaly_count_weight: float = 1</em>, <em class="sig-param">inverse: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.thresholding.NonparametricThreshold" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
@@ -1325,7 +1547,7 @@ for each anomalous sequence.</p>
 <p>Preprocessing data methods.</p>
 <dl class="class">
 <dt id="autots.tools.transform.AlignLastValue">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">AlignLastValue</code><span class="sig-paren">(</span><em class="sig-param">rows: int = 1</em>, <em class="sig-param">lag: int = 1</em>, <em class="sig-param">method: str = 'additive'</em>, <em class="sig-param">strength: float = 1.0</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AlignLastValue" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">AlignLastValue</code><span class="sig-paren">(</span><em class="sig-param">rows: int = 1</em>, <em class="sig-param">lag: int = 1</em>, <em class="sig-param">method: str = 'additive'</em>, <em class="sig-param">strength: float = 1.0</em>, <em class="sig-param">first_value_only: bool = False</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AlignLastValue" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
 <p>Shift all data relative to the last value(s) of the series.</p>
 <dl class="field-list simple">
@@ -1373,7 +1595,7 @@ for each anomalous sequence.</p>
 
 <dl class="method">
 <dt id="autots.tools.transform.AlignLastValue.inverse_transform">
-<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AlignLastValue.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em>, <em class="sig-param">bounds=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AlignLastValue.inverse_transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return data to original <em>or</em> forecast form.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -1414,6 +1636,12 @@ for each anomalous sequence.</p>
 </dd></dl>
 
 <dl class="method">
+<dt id="autots.tools.transform.AnomalyRemoval.fit_anomaly_classifier">
+<code class="sig-name descname">fit_anomaly_classifier</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AnomalyRemoval.fit_anomaly_classifier" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit a model to predict if a score is an anomaly.</p>
+</dd></dl>
+
+<dl class="method">
 <dt id="autots.tools.transform.AnomalyRemoval.fit_transform">
 <code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AnomalyRemoval.fit_transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fits and Returns <em>Magical</em> DataFrame.</p>
@@ -1428,6 +1656,12 @@ for each anomalous sequence.</p>
 <dt id="autots.tools.transform.AnomalyRemoval.get_new_params">
 <em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AnomalyRemoval.get_new_params" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate new random parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.AnomalyRemoval.score_to_anomaly">
+<code class="sig-name descname">score_to_anomaly</code><span class="sig-paren">(</span><em class="sig-param">scores</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.AnomalyRemoval.score_to_anomaly" title="Permalink to this definition">¶</a></dt>
+<dd><p>A DecisionTree model, used as models are nonstandard (and nonparametric).</p>
 </dd></dl>
 
 <dl class="method">
@@ -2232,7 +2466,9 @@ most of the interpolate methods from pandas.interpolate</p>
 “BTCD” - Box Tiao decomposition
 ‘AlignLastValue’: align forecast start to end of training data
 ‘AnomalyRemoval’: more tailored anomaly removal options
-‘HolidayTransformer’: detects holidays and wishes good cheer to all</p>
+‘HolidayTransformer’: detects holidays and wishes good cheer to all
+‘LocalLinearTrend’: rolling local trend, using tails for future and past trend
+‘KalmanSmoothing’: smooth using a state space model</p>
 </p></li>
 <li><p><strong>transformation_params</strong> (<em>dict</em>) – params of transformers {0: {}, 1: {‘model’: ‘Poisson’}, …}
 pass through dictionary of empty dictionaries to utilize defaults</p></li>
@@ -2280,7 +2516,7 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 
 <dl class="method">
 <dt id="autots.tools.transform.GeneralTransformer.inverse_transform">
-<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em>, <em class="sig-param">fillzero: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em>, <em class="sig-param">fillzero: bool = False</em>, <em class="sig-param">bounds: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.GeneralTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Undo the madness.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -2288,6 +2524,7 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 <li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
 <li><p><strong>trans_method</strong> (<em>str</em>) – ‘forecast’ or ‘original’ passed through</p></li>
 <li><p><strong>fillzero</strong> (<em>bool</em>) – if inverse returns NaN, fill with zero</p></li>
+<li><p><strong>bounds</strong> (<em>bool</em>) – currently ignores AlignLastValue transform if True (also used in process_components of Cassandra)</p></li>
 </ul>
 </dd>
 </dl>
@@ -2361,12 +2598,21 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 
 <dl class="class">
 <dt id="autots.tools.transform.HolidayTransformer">
-<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">HolidayTransformer</code><span class="sig-paren">(</span><em class="sig-param">anomaly_detector_params={}</em>, <em class="sig-param">threshold=0.8</em>, <em class="sig-param">min_occurrences=2</em>, <em class="sig-param">splash_threshold=0.65</em>, <em class="sig-param">use_dayofmonth_holidays=True</em>, <em class="sig-param">use_wkdom_holidays=True</em>, <em class="sig-param">use_wkdeom_holidays=True</em>, <em class="sig-param">use_lunar_holidays=True</em>, <em class="sig-param">use_lunar_weekday=False</em>, <em class="sig-param">use_islamic_holidays=True</em>, <em class="sig-param">use_hebrew_holidays=True</em>, <em class="sig-param">remove_excess_anomalies=True</em>, <em class="sig-param">impact=None</em>, <em class="sig-param">regression_params={}</em>, <em class="sig-param">n_jobs: int = 1</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.HolidayTransformer" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">HolidayTransformer</code><span class="sig-paren">(</span><em class="sig-param">anomaly_detector_params={}</em>, <em class="sig-param">threshold=0.8</em>, <em class="sig-param">min_occurrences=2</em>, <em class="sig-param">splash_threshold=0.65</em>, <em class="sig-param">use_dayofmonth_holidays=True</em>, <em class="sig-param">use_wkdom_holidays=True</em>, <em class="sig-param">use_wkdeom_holidays=True</em>, <em class="sig-param">use_lunar_holidays=True</em>, <em class="sig-param">use_lunar_weekday=False</em>, <em class="sig-param">use_islamic_holidays=True</em>, <em class="sig-param">use_hebrew_holidays=True</em>, <em class="sig-param">remove_excess_anomalies=True</em>, <em class="sig-param">impact=None</em>, <em class="sig-param">regression_params=None</em>, <em class="sig-param">n_jobs: int = 1</em>, <em class="sig-param">output='multivariate'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.HolidayTransformer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
 <dl class="method">
 <dt id="autots.tools.transform.HolidayTransformer.dates_to_holidays">
 <code class="sig-name descname">dates_to_holidays</code><span class="sig-paren">(</span><em class="sig-param">dates</em>, <em class="sig-param">style='flag'</em>, <em class="sig-param">holiday_impacts=False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.HolidayTransformer.dates_to_holidays" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>dates (pd.DatetimeIndex): list of dates
+style (str): option for how to return information</p>
+<blockquote>
+<div><p>“long” - return date, name, series for all holidays in a long style dataframe
+“impact” - returns dates, series with values of sum of impacts (if given) or joined string of holiday names
+‘flag’ - return dates, holidays flag, (is not 0-1 but rather sum of input series impacted for that holiday and day)
+‘prophet’ - return format required for prophet. Will need to be filtered on <cite>series</cite> for multivariate case
+‘series_flag’ - dates, series 0/1 for if holiday occurred in any calendar</p>
+</div></blockquote>
+</dd></dl>
 
 <dl class="method">
 <dt id="autots.tools.transform.HolidayTransformer.fit">
@@ -2469,6 +2715,139 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 <dt id="autots.tools.transform.IntermittentOccurrence.transform">
 <code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.IntermittentOccurrence.transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>0 if Median. 1 if &gt; Median, -1 if less.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.KalmanSmoothing">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">KalmanSmoothing</code><span class="sig-paren">(</span><em class="sig-param">state_transition=[[1, 1], [0, 1]], process_noise=[[0.1, 0.0], [0.0, 0.01]], observation_model=[[1, 0]], observation_noise: float = 1.0, **kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.KalmanSmoothing" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
+<p>Apply a Kalman Filter to smooth data given a transition matrix.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rows</strong> (<em>int</em>) – number of rows to average as last record</p></li>
+<li><p><strong>lag</strong> (<em>int</em>) – use last value as this lag back, 1 is no shift, 2 is lag one from end, ie second to last</p></li>
+<li><p><strong>method</strong> (<em>str</em>) – ‘additive’, ‘multiplicative’</p></li>
+<li><p><strong>strength</strong> (<em>float</em>) – softening parameter [0, 1], 1.0 for full difference</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.tools.transform.KalmanSmoothing.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.KalmanSmoothing.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Learn behavior of data to change.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.KalmanSmoothing.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.KalmanSmoothing.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns <em>Magical</em> DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.KalmanSmoothing.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.KalmanSmoothing.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate new random parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.KalmanSmoothing.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.KalmanSmoothing.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data to original <em>or</em> forecast form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.KalmanSmoothing.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.KalmanSmoothing.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return changed data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="autots.tools.transform.LocalLinearTrend">
+<em class="property">class </em><code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">LocalLinearTrend</code><span class="sig-paren">(</span><em class="sig-param">rolling_window: float = 0.1</em>, <em class="sig-param">n_future: float = 0.2</em>, <em class="sig-param">method: str = 'mean'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.LocalLinearTrend" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#autots.tools.transform.EmptyTransformer" title="autots.tools.transform.EmptyTransformer"><code class="xref py py-class docutils literal notranslate"><span class="pre">autots.tools.transform.EmptyTransformer</span></code></a></p>
+<p>Remove a rolling linear trend.
+Note this will probably perform poorly with long forecast horizons as forecast trend is simply the tail (n_future) of data’s trend.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rolling_window</strong> (<em>int</em>) – width of window to take trend on</p></li>
+<li><p><strong>n_future</strong> (<em>int</em>) – amount of data for the trend to be used extending beyond the edges of history.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="autots.tools.transform.LocalLinearTrend.fit">
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.LocalLinearTrend.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Learn behavior of data to change.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.LocalLinearTrend.fit_transform">
+<code class="sig-name descname">fit_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.LocalLinearTrend.fit_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits and Returns <em>Magical</em> DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.LocalLinearTrend.get_new_params">
+<em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method: str = 'random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.LocalLinearTrend.get_new_params" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate new random parameters</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.LocalLinearTrend.inverse_transform">
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.LocalLinearTrend.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return data to original <em>or</em> forecast form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="autots.tools.transform.LocalLinearTrend.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param">df</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.LocalLinearTrend.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return changed data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>df</strong> (<em>pandas.DataFrame</em>) – input dataframe</p>
@@ -2714,7 +3093,7 @@ inverse_transform can only be applied to the original series, or an immediately 
 
 <dl class="function">
 <dt id="autots.tools.transform.RandomTransform">
-<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.07</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.01</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.03</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01</em>, <em class="sig-param">'EWMAFilter': 0.02</em>, <em class="sig-param">'MeanDifference': 0.002</em>, <em class="sig-param">'BTCD': 0.01</em>, <em class="sig-param">'Cointegration': 0.01</em>, <em class="sig-param">'AlignLastValue': 0.1</em>, <em class="sig-param">'AnomalyRemoval': 0.03</em>, <em class="sig-param">'HolidayTransformer': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.4</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.1</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.05</em>, <em class="sig-param">'mean': 0.06</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.03</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.4</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">superfast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.tools.transform.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.07</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.01</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.01</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01</em>, <em class="sig-param">'EWMAFilter': 0.02</em>, <em class="sig-param">'MeanDifference': 0.002</em>, <em class="sig-param">'BTCD': 0.01</em>, <em class="sig-param">'Cointegration': 0.01</em>, <em class="sig-param">'AlignLastValue': 0.1</em>, <em class="sig-param">'AnomalyRemoval': 0.03</em>, <em class="sig-param">'HolidayTransformer': 0.01</em>, <em class="sig-param">'LocalLinearTrend': 0.01</em>, <em class="sig-param">'KalmanSmoothing': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.4</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.1</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.05</em>, <em class="sig-param">'mean': 0.06</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.03</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.4</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">superfast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em>, <em class="sig-param">transformer_min_depth: int = 1</em>, <em class="sig-param">allow_none: bool = True</em>, <em class="sig-param">no_nan_fill: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.transform.RandomTransform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a dict of randomly choosen transformation selections.</p>
 <p>BTCD is used as a signal that slow parameters are allowed.</p>
 </dd></dl>
@@ -3330,6 +3709,18 @@ window.</p>
 </dd></dl>
 
 <dl class="function">
+<dt id="autots.tools.window_functions.window_lin_reg">
+<code class="sig-prename descclassname">autots.tools.window_functions.</code><code class="sig-name descname">window_lin_reg</code><span class="sig-paren">(</span><em class="sig-param">x</em>, <em class="sig-param">y</em>, <em class="sig-param">w</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.window_functions.window_lin_reg" title="Permalink to this definition">¶</a></dt>
+<dd><p>From <a class="reference external" href="https://stackoverflow.com/questions/70296498/efficient-computation-of-moving-linear-regression-with-numpy-numba/70304475#70304475">https://stackoverflow.com/questions/70296498/efficient-computation-of-moving-linear-regression-with-numpy-numba/70304475#70304475</a></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.window_functions.window_lin_reg_mean">
+<code class="sig-prename descclassname">autots.tools.window_functions.</code><code class="sig-name descname">window_lin_reg_mean</code><span class="sig-paren">(</span><em class="sig-param">x</em>, <em class="sig-param">y</em>, <em class="sig-param">w</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.window_functions.window_lin_reg_mean" title="Permalink to this definition">¶</a></dt>
+<dd><p>From <a class="reference external" href="https://stackoverflow.com/questions/70296498/efficient-computation-of-moving-linear-regression-with-numpy-numba/70304475#70304475">https://stackoverflow.com/questions/70296498/efficient-computation-of-moving-linear-regression-with-numpy-numba/70304475#70304475</a></p>
+</dd></dl>
+
+<dl class="function">
 <dt id="autots.tools.window_functions.window_maker">
 <code class="sig-prename descclassname">autots.tools.window_functions.</code><code class="sig-name descname">window_maker</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">window_size: int = 10</em>, <em class="sig-param">input_dim: str = 'univariate'</em>, <em class="sig-param">normalize_window: bool = False</em>, <em class="sig-param">shuffle: bool = False</em>, <em class="sig-param">output_dim: str = 'forecast_length'</em>, <em class="sig-param">forecast_length: int = 1</em>, <em class="sig-param">max_windows: int = 5000</em>, <em class="sig-param">regression_type: str = None</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">random_seed: int = 1234</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.window_functions.window_maker" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convert a dataset into slices with history and y forecast.</p>
@@ -3394,6 +3785,11 @@ Note that this returns a different orientation than window_maker_2</p>
 </dd>
 </dl>
 </dd></dl>
+
+<dl class="function">
+<dt id="autots.tools.window_functions.window_sum_nan_mean">
+<code class="sig-prename descclassname">autots.tools.window_functions.</code><code class="sig-name descname">window_sum_nan_mean</code><span class="sig-paren">(</span><em class="sig-param">x</em>, <em class="sig-param">w</em>, <em class="sig-param">axis=0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.tools.window_functions.window_sum_nan_mean" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
 
 </section>
 <section id="module-autots.tools">

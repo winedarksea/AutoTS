@@ -13,6 +13,7 @@ from autots.datasets import (
     load_live_daily,
     load_linear,
     load_artificial,
+    load_sine,
 )
 
 from autots.evaluator.auto_ts import AutoTS
@@ -38,6 +39,7 @@ __all__ = [
     'load_live_daily',
     'load_linear',
     'load_artificial',
+    'load_sine',
     'AutoTS',
     'TransformTS',
     'GeneralTransformer',

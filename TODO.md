@@ -28,6 +28,7 @@
 * added 'common_fourier' datepart method
 * added SeasonalMotif model
 * added 'seasonal' validation
+* bug fix for cffilter with univariate input
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

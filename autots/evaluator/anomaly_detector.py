@@ -156,13 +156,18 @@ class AnomalyDetector(object):
         """Fit a model to predict if a score is an anomaly."""
         # Using DecisionTree as it should almost handle nonparametric anomalies
         from sklearn.tree import DecisionTreeClassifier
+
         scores_flat = self.scores.melt(var_name='series', value_name="value")
         categor = pd.Categorical(scores_flat['series'])
         self.score_categories = categor.categories
         scores_flat['series'] = categor
-        scores_flat = pd.concat([pd.get_dummies(scores_flat['series']), scores_flat['value']], axis=1)
+        scores_flat = pd.concat(
+            [pd.get_dummies(scores_flat['series']), scores_flat['value']], axis=1
+        )
         anomalies_flat = self.anomalies.melt(var_name='series', value_name="value")
-        self.anomaly_classifier = DecisionTreeClassifier(max_depth=None).fit(scores_flat, anomalies_flat['value'])
+        self.anomaly_classifier = DecisionTreeClassifier(max_depth=None).fit(
+            scores_flat, anomalies_flat['value']
+        )
         # anomaly_classifier.score(scores_flat, anomalies_flat['value'])
 
     def score_to_anomaly(self, scores):
@@ -170,10 +175,20 @@ class AnomalyDetector(object):
         if self.anomaly_classifier is None:
             self.fit_anomaly_classifier()
         scores.index.name = 'date'
-        scores_flat = scores.reset_index(drop=False).melt(id_vars="date", var_name='series', value_name="value")
-        scores_flat['series'] = pd.Categorical(scores_flat['series'], categories=self.score_categories)
-        res = self.anomaly_classifier.predict(pd.concat([pd.get_dummies(scores_flat['series']), scores_flat['value']], axis=1))
-        res = pd.concat([scores_flat[['date', "series"]], pd.Series(res, name='value')], axis=1).pivot_table(index='date', columns='series', values="value")
+        scores_flat = scores.reset_index(drop=False).melt(
+            id_vars="date", var_name='series', value_name="value"
+        )
+        scores_flat['series'] = pd.Categorical(
+            scores_flat['series'], categories=self.score_categories
+        )
+        res = self.anomaly_classifier.predict(
+            pd.concat(
+                [pd.get_dummies(scores_flat['series']), scores_flat['value']], axis=1
+            )
+        )
+        res = pd.concat(
+            [scores_flat[['date', "series"]], pd.Series(res, name='value')], axis=1
+        ).pivot_table(index='date', columns='series', values="value")
         return res[scores.columns]
 
     @staticmethod

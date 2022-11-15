@@ -476,5 +476,5 @@ def window_lin_reg_mean(x, y, w):
     sx2 = window_sum_nan_mean(x**2, w)
     sxy = window_sum_nan_mean(x * y, w)
     slope = (sxy - sx * sy) / (sx2 - sx**2)
-    intercept = (sy - slope * sx)
+    intercept = sy - slope * sx
     return slope, intercept

@@ -120,10 +120,14 @@ def random_state_space():
         st = np.random.choice([0, 1], p=[0.4, 0.6], size=(n_dims, n_dims))
         obsmod = np.random.choice([0, 1, 2], p=[0.35, 0.6, 0.05], size=(1, n_dims))
     procnois = np.diag(np.random.exponential(0.25, size=(n_dims)).round(3))
-    obsnois = random.choices(
-        [1.0, 10.0, 2.0, 0.5, 0.2], [0.8, 0.05, 0.05, 0.05, 0.05]
-    )[0]
-    while (obsmod.size > 1 and np.all(obsmod == obsmod[0])) or (st.size > 1 and np.all(st == st[0])) or (st.size > 5 and np.isin(st.sum(axis=1), [0, 3]).any()):
+    obsnois = random.choices([1.0, 10.0, 2.0, 0.5, 0.2], [0.8, 0.05, 0.05, 0.05, 0.05])[
+        0
+    ]
+    while (
+        (obsmod.size > 1 and np.all(obsmod == obsmod[0]))
+        or (st.size > 1 and np.all(st == st[0]))
+        or (st.size > 5 and np.isin(st.sum(axis=1), [0, 3]).any())
+    ):
         st, procnois, obsmod, obsnois = random_state_space()
     return st, procnois, obsmod, obsnois
 
@@ -714,9 +718,13 @@ class KalmanFilter(object):
                 err = ms1 - ddot(self.state_transition, ms0)
                 Vt1tA = ddot_t_right(V1, self.state_transition)
                 res += (
-                    douter(err, err) + ddot(
+                    douter(err, err)
+                    + ddot(
                         self.state_transition, ddot_t_right(Ps0, self.state_transition)
-                    ) + Ps1 - Vt1tA - Vt1tA.transpose((0, 2, 1))
+                    )
+                    + Ps1
+                    - Vt1tA
+                    - Vt1tA.transpose((0, 2, 1))
                 )
 
             ms0 = ms1
@@ -819,7 +827,10 @@ def em_initial_state(result, initial_means):
 
     m = x0
     P = (
-        x0_x0 - douter(initial_means, x0) - douter(x0, initial_means) + douter(initial_means, initial_means)
+        x0_x0
+        - douter(initial_means, x0)
+        - douter(x0, initial_means)
+        + douter(initial_means, initial_means)
     )
 
     return m, P
@@ -894,7 +905,8 @@ def predict(mean, covariance, state_transition, process_noise):
     prior_mean = ddot(state_transition, mean)
     # Pp = A * P * A.t + Q
     prior_cov = (
-        ddot(state_transition, ddot_t_right(covariance, state_transition)) + process_noise
+        ddot(state_transition, ddot_t_right(covariance, state_transition))
+        + process_noise
     )
 
     return prior_mean, prior_cov
@@ -923,7 +935,8 @@ def _update(
 
     # H * Pp * H.t + R
     S = (
-        ddot(observation_model, ddot_t_right(prior_covariance, observation_model)) + observation_noise
+        ddot(observation_model, ddot_t_right(prior_covariance, observation_model))
+        + observation_noise
     )
     invS = dinv(S)
 
@@ -998,7 +1011,8 @@ def priv_smooth(
     mp = ddot(state_transition, posterior_mean)
     # A * P * A.t + Q
     Pp = (
-        ddot(state_transition, ddot_t_right(posterior_covariance, state_transition)) + process_noise
+        ddot(state_transition, ddot_t_right(posterior_covariance, state_transition))
+        + process_noise
     )
 
     # Kalman smoothing gain: P * A.t * inv(Pp)
@@ -1075,7 +1089,8 @@ def predict_observation(mean, covariance, observation_model, observation_noise):
 
     # H * P * H^T + R
     obs_cov = (
-        ddot(observation_model, ddot_t_right(covariance, observation_model)) + observation_noise
+        ddot(observation_model, ddot_t_right(covariance, observation_model))
+        + observation_noise
     )
 
     return obs_mean, obs_cov

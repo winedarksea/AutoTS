@@ -123,7 +123,8 @@ def date_part(
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'epoch': pd.to_numeric(
                     DTindex, errors='coerce', downcast='integer'
-                ).values / 100000000000,
+                ).values
+                / 100000000000,
             }
         )
     elif method in ["simple_3", "lunar_phase"]:
@@ -174,7 +175,8 @@ def date_part(
                 ),
                 'weekdayofmonth': pd.Categorical(
                     (DTindex.day - 1) // 7 + 1,
-                    categories=list(range(1, 6)), ordered=True,
+                    categories=list(range(1, 6)),
+                    ordered=True,
                 ),
                 'weekend': (DTindex.weekday > 4).astype(int),
                 'quarter': DTindex.quarter,
@@ -192,15 +194,19 @@ def date_part(
         seasonal_ratio = (DTmax.year - DTmin.year + 1) / len(DTindex)
         # hourly
         if seasonal_ratio < 0.001:  # 0.00011 to 0.00023
-            t = (DTindex - pd.Timestamp("2030-01-01"))
+            t = DTindex - pd.Timestamp("2030-01-01")
             t = (t.days * 24) + (t.components['minutes'] / 60)
             # add hourly, weekly, yearly
             seasonal_list.append(fourier_series(t, p=8766, n=10))
             seasonal_list.append(fourier_series(t, p=24, n=3))
             seasonal_list.append(fourier_series(t, p=168, n=5))
             # interactions
-            seasonal_list.append(fourier_series(t, p=168, n=5) * fourier_series(t, p=24, n=5))
-            seasonal_list.append(fourier_series(t, p=168, n=3) * fourier_series(t, p=8766, n=3))
+            seasonal_list.append(
+                fourier_series(t, p=168, n=5) * fourier_series(t, p=24, n=5)
+            )
+            seasonal_list.append(
+                fourier_series(t, p=168, n=3) * fourier_series(t, p=8766, n=3)
+            )
         # daily (+ business day)
         elif seasonal_ratio < 0.012:  # 0.0027 to 0.0055
             t = (DTindex - pd.Timestamp("2030-01-01")).days
@@ -208,7 +214,9 @@ def date_part(
             seasonal_list.append(fourier_series(t, p=365.25, n=10))
             seasonal_list.append(fourier_series(t, p=7, n=3))
             # interaction
-            seasonal_list.append(fourier_series(t, p=7, n=5) * fourier_series(t, p=7, n=5))
+            seasonal_list.append(
+                fourier_series(t, p=7, n=5) * fourier_series(t, p=7, n=5)
+            )
         # weekly
         elif seasonal_ratio < 0.05:  # 0.019 to 0.038
             t = (DTindex - pd.Timestamp("2030-01-01")).days
@@ -223,9 +231,9 @@ def date_part(
         else:
             t = (DTindex - pd.Timestamp("2030-01-01")).days
             seasonal_list.append(fourier_series(t, p=1461, n=10))
-        date_part_df = pd.DataFrame(
-            np.concatenate(seasonal_list, axis=1)
-        ).rename(columns=lambda x: "seasonalitycommonfourier_" + str(x))
+        date_part_df = pd.DataFrame(np.concatenate(seasonal_list, axis=1)).rename(
+            columns=lambda x: "seasonalitycommonfourier_" + str(x)
+        )
         if method == "common_fourier_rw":
             date_part_df['epoch'] = (DTindex.to_julian_date() ** 0.65).astype(int)
     else:
@@ -263,7 +271,8 @@ def date_part(
                     'daysinmonth': DTindex.daysinmonth,
                     'epoch': pd.to_numeric(
                         DTindex, errors='coerce', downcast='integer'
-                    ).values - 946684800000000000,
+                    ).values
+                    - 946684800000000000,
                     'us_election_year': (DTindex.year % 4 == 0).astype(int),
                 }
             )
@@ -297,40 +306,47 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
     if isinstance(seasonality, (int, float)):
         if history_days is None:
             history_days = (DTindex.max() - DTindex.min()).days
-        return pd.DataFrame(fourier_series(np.asarray(t), seasonality / history_days, n=10)).rename(columns=lambda x: f"seasonality{seasonality}_" + str(x))
+        return pd.DataFrame(
+            fourier_series(np.asarray(t), seasonality / history_days, n=10)
+        ).rename(columns=lambda x: f"seasonality{seasonality}_" + str(x))
     # dateparts
     elif seasonality == "dayofweek":
-        return pd.get_dummies(pd.Categorical(
-            DTindex.weekday, categories=list(range(7)), ordered=True
-        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
+        return pd.get_dummies(
+            pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True)
+        ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "month":
-        return pd.get_dummies(pd.Categorical(
-            DTindex.month, categories=list(range(1, 13)), ordered=True
-        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
+        return pd.get_dummies(
+            pd.Categorical(DTindex.month, categories=list(range(1, 13)), ordered=True)
+        ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "weekend":
         return pd.DataFrame((DTindex.weekday > 4).astype(int), columns=["weekend"])
     elif seasonality == "weekdayofmonth":
-        return pd.get_dummies(pd.Categorical(
-            (DTindex.day - 1) // 7 + 1,
-            categories=list(range(1, 6)), ordered=True,
-        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
+        return pd.get_dummies(
+            pd.Categorical(
+                (DTindex.day - 1) // 7 + 1,
+                categories=list(range(1, 6)),
+                ordered=True,
+            )
+        ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "hour":
-        return pd.get_dummies(pd.Categorical(
-            DTindex.hour, categories=list(range(1, 25)), ordered=True
-        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
+        return pd.get_dummies(
+            pd.Categorical(DTindex.hour, categories=list(range(1, 25)), ordered=True)
+        ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "daysinmonth":
         return pd.DataFrame({'daysinmonth': DTindex.daysinmonth})
     elif seasonality == "quarter":
-        return pd.get_dummies(pd.Categorical(
-            DTindex.quarter, categories=list(range(1, 5)), ordered=True
-        )).rename(columns=lambda x: f"{seasonality}_" + str(x))
+        return pd.get_dummies(
+            pd.Categorical(DTindex.quarter, categories=list(range(1, 5)), ordered=True)
+        ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality in date_part_methods:
         return date_part(DTindex, method=seasonality, set_index=False)
     else:
         return ValueError(f"Seasonality `{seasonality}` not recognized")
 
 
-def seasonal_window_match(DTindex, k, window_size, forecast_length, datepart_method, distance_metric):
+def seasonal_window_match(
+    DTindex, k, window_size, forecast_length, datepart_method, distance_metric
+):
     array = date_part(DTindex, method=datepart_method).to_numpy()
 
     # when k is larger, can be more aggressive on allowing a longer portion into view
@@ -362,10 +378,14 @@ def seasonal_window_match(DTindex, k, window_size, forecast_length, datepart_met
     # select smallest windows
     min_idx = np.argpartition(scores.mean(axis=1), k - 1, axis=0)[:k]
     # take the period starting AFTER the window
-    test = np.broadcast_to(
-        np.arange(0, forecast_length)[..., None],
-        (forecast_length, min_idx.shape[0])
-    ) + min_idx + window_size
+    test = (
+        np.broadcast_to(
+            np.arange(0, forecast_length)[..., None],
+            (forecast_length, min_idx.shape[0]),
+        )
+        + min_idx
+        + window_size
+    )
     # for data over the end, fill last value
     if k > min_k:
         test = np.where(test >= len(DTindex), -1, test)

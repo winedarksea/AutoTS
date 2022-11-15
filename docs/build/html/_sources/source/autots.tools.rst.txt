@@ -36,6 +36,14 @@ autots.tools.cpu\_count module
    :undoc-members:
    :show-inheritance:
 
+autots.tools.fast\_kalman module
+--------------------------------
+
+.. automodule:: autots.tools.fast_kalman
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.tools.hierarchial module
 -------------------------------
 

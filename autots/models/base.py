@@ -93,8 +93,9 @@ class ModelObject(object):
                 "create_forecast_index run without specific frequency, run basic_profile first or pass proper frequency to model init"
             )
         self.forecast_index = pd.date_range(
-            freq=self.frequency, start=self.train_last_date if last_date is None else last_date,
-            periods=forecast_length + 1
+            freq=self.frequency,
+            start=self.train_last_date if last_date is None else last_date,
+            periods=forecast_length + 1,
         )[
             1:
         ]  # note the disposal of the first (already extant) date
@@ -111,6 +112,7 @@ class ModelObject(object):
     @staticmethod
     def time():
         return datetime.datetime.now()
+
 
 def apply_constraints(
     forecast,
@@ -441,7 +443,14 @@ class PredictionObject(object):
             return plot_df.plot(title=title, **kwargs)
         else:
             ax = plot_df.plot(title=title, **kwargs)
-            ax.vlines(x=vline, ls='--', lw=1, colors='darkred', ymin=plot_df.min().min(), ymax=plot_df.max().max())
+            ax.vlines(
+                x=vline,
+                ls='--',
+                lw=1,
+                colors='darkred',
+                ymin=plot_df.min().min(),
+                ymax=plot_df.max().max(),
+            )
             return ax
 
     def evaluate(
@@ -563,9 +572,18 @@ class PredictionObject(object):
                     # origin directional accuracy
                     'oda': np.nansum(direc_sign, axis=0) / F.shape[0],
                     # plus one to squared errors to assure errors in 0 to 1 are still bigger than abs error
-                    "dwae": (np.nansum(np.where(
-                        direc_sign, self.full_mae_errors, self.squared_errors + 1
-                    ), axis=0) / F.shape[0]) ** 0.5,
+                    "dwae": (
+                        np.nansum(
+                            np.where(
+                                direc_sign,
+                                self.full_mae_errors,
+                                self.squared_errors + 1,
+                            ),
+                            axis=0,
+                        )
+                        / F.shape[0]
+                    )
+                    ** 0.5,
                     # mean of values less than 85th percentile of error
                     'mqae': mqae(self.full_mae_errors, q=0.85, nan_flag=nan_flag),
                     # 90th percentile of error

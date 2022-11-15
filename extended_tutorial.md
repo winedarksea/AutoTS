@@ -857,10 +857,11 @@ Currently `MultivariateRegression` has the option to utilize a stock GradientBoo
 |  PytorchForecasting     | pytorch-forecasting |                  |    True       |     pytorch     | yes   | True         |              |               |
 |  ARCH                   | arch         |                         |    True       |     joblib      |       |              |              | True          |
 |  Cassandra              | scipy        |                         |    True       |                 |       | True         |              | True          |
+|  KalmanStateSpace       |              |                         |    True       |                 |       |              | True         |               |
 |  Greykite               | greykite     |                         |    True       |     joblib      |       |              | True         | nyi           |
 |  MotifSimulation        | sklearn.metrics.pairwise |             |    True       |     joblib      |       | True         | True         |               |
 |  TensorflowSTS          | tensorflow_probability |               |    True       |                 | yes   | True         | True         |               |
-|  TFPRegression          | (deprecated) |               |    True       |                 | yes   | True         | True         | True          |
+|  TFPRegression          | (deprecated) |                         |    True       |                 | yes   | True         | True         | True          |
 |  ComponentAnalysis      | (deprecated) |                         |               |                 |       | True         | True         | _             |
 
 *nyi = not yet implemented*

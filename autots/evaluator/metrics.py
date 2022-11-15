@@ -337,7 +337,8 @@ def msle(full_errors, ae, le, nan_flag=True):
 def oda(A, F, last_of_array):
     """Origin Directional Accuracy, the accuracy of growth or decline relative to most recent data."""
     return (
-        np.nansum(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0) / F.shape[0]
+        np.nansum(np.sign(F - last_of_array) == np.sign(A - last_of_array), axis=0)
+        / F.shape[0]
     )
 
 
@@ -385,6 +386,10 @@ def dwae(A, F, last_of_array):
     """Direcitonal Weighted Absolute Error, the accuracy of growth or decline relative to most recent data."""
     # plus one to assure squared errors are bigger in the case of 0 to 1
     return np.nanmean(
-        np.where(np.sign(F - last_of_array) == np.sign(A - last_of_array), np.abs(A - F), (np.abs(A - F) + 1) ** 2),
-        axis=0
+        np.where(
+            np.sign(F - last_of_array) == np.sign(A - last_of_array),
+            np.abs(A - F),
+            (np.abs(A - F) + 1) ** 2,
+        ),
+        axis=0,
     )

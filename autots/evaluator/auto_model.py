@@ -594,6 +594,7 @@ def ModelMonster(
         )
     elif model == "Cassandra":
         from autots.models.cassandra import Cassandra  # circular import
+
         return Cassandra(
             frequency=frequency,
             prediction_interval=prediction_interval,
@@ -711,21 +712,27 @@ def ModelPrediction(
                 )
             )
 
-    # CHECK Forecasts are proper length!
-    if df_forecast.forecast.shape[0] != forecast_length:
-        raise ValueError(f"Model {model_str} returned improper forecast_length")
-
     transformationStartTime = datetime.datetime.now()
     # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
     df_forecast.forecast = pd.DataFrame(
         transformer_object.inverse_transform(df_forecast.forecast)
     )
     df_forecast.lower_forecast = pd.DataFrame(
-        transformer_object.inverse_transform(df_forecast.lower_forecast, fillzero=True, bounds=True)
+        transformer_object.inverse_transform(
+            df_forecast.lower_forecast, fillzero=True, bounds=True
+        )
     )
     df_forecast.upper_forecast = pd.DataFrame(
-        transformer_object.inverse_transform(df_forecast.upper_forecast, fillzero=True, bounds=True)
+        transformer_object.inverse_transform(
+            df_forecast.upper_forecast, fillzero=True, bounds=True
+        )
     )
+    # CHECK Forecasts are proper length!
+    if df_forecast.forecast.shape[0] != forecast_length:
+        raise ValueError(f"Model {model_str} returned improper forecast_length")
+
+    if df_forecast.forecast.shape[1] != df_train.shape[1]:
+        raise ValueError("Model failed to return correct number of series.")
 
     df_forecast.transformation_parameters = transformation_dict
     # Remove negatives if desired

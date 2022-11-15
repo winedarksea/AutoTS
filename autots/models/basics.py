@@ -20,6 +20,7 @@ from autots.tools.transform import GeneralTransformer, RandomTransform, filters
 try:
     from scipy.spatial.distance import cdist
     from scipy.stats import norm
+
     # from scipy.stats import t as studentt
 except Exception:
     pass
@@ -54,7 +55,7 @@ class ConstantNaive(ModelObject):
         random_seed: int = 2020,
         verbose: int = 0,
         constant: float = 0,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -151,7 +152,7 @@ class LastValueNaive(ModelObject):
         prediction_interval: float = 0.9,
         holiday_country: str = 'US',
         random_seed: int = 2020,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -247,7 +248,7 @@ class AverageValueNaive(ModelObject):
         verbose: int = 0,
         method: str = 'median',
         window: int = None,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -395,7 +396,7 @@ class SeasonalNaive(ModelObject):
         lag_1: int = 7,
         lag_2: int = None,
         method: str = 'lastvalue',
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -583,7 +584,7 @@ class MotifSimulation(ModelObject):
         point_method: str = 'median',
         n_jobs: int = -1,
         verbose: int = 1,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1168,7 +1169,7 @@ class Motif(ModelObject):
         max_windows: int = 5000,
         multivariate: bool = False,
         return_result_windows: bool = False,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1570,7 +1571,7 @@ class NVAR(ModelObject):
         seed_weighted: str = None,
         batch_size: int = 5,
         batch_method: str = "input_order",
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -1758,7 +1759,7 @@ class SectionalMotif(ModelObject):
         include_differenced: bool = False,
         k: int = 10,
         stride_size: int = 1,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -2034,7 +2035,7 @@ class KalmanStateSpace(ModelObject):
         process_noise=[[0.1, 0.0], [0.0, 0.01]],
         observation_model=[[1, 0]],
         observation_noise: float = 1.0,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -2086,7 +2087,8 @@ class KalmanStateSpace(ModelObject):
         result = self.kf.predict(self.df_train.to_numpy().T, forecast_length)
         df = pd.DataFrame(
             result.observations.mean.T,
-            index=self.create_forecast_index(forecast_length), columns=self.df_train.columns
+            index=self.create_forecast_index(forecast_length),
+            columns=self.df_train.columns,
         )
 
         if just_point_forecast:
@@ -2118,13 +2120,23 @@ class KalmanStateSpace(ModelObject):
         params = random.choices(
             [
                 # floats are phi
-                ([[1, 1], [0, 1]], [[0.1, 0.0], [0.0, 0.01]], [[1, 0]], 1.0),  # local linear trend
+                (
+                    [[1, 1], [0, 1]],
+                    [[0.1, 0.0], [0.0, 0.01]],
+                    [[1, 0]],
+                    1.0,
+                ),  # local linear trend
                 ([[0, 1], [0, 0]], [[1.2, 0.0], [0.0, 0.2]], [[1, 0]], 1.0),  # MA(1)
                 ([[0.1, 1], [0.1, 0]], [[1, 0]], [[1, 0]], 1.0),  # second order AR
-                ([[1, 1, 0], [0, 1, 0], [0, 0, 1]], [[0.1, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0, 0.0, 0.1]], [[1, 1, 1]], 1.0),
+                (
+                    [[1, 1, 0], [0, 1, 0], [0, 0, 1]],
+                    [[0.1, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0, 0.0, 0.1]],
+                    [[1, 1, 1]],
+                    1.0,
+                ),
                 "random",
             ],
-            [0.1, 0.1, 0.1, 0.1, 0.5]
+            [0.1, 0.1, 0.1, 0.1, 0.5],
         )[0]
         if params == "random":
             st, procnois, obsmod, obsnois = random_state_space()
@@ -2180,7 +2192,7 @@ class MetricMotif(ModelObject):
         point_method: str = "mean",
         distance_metric: str = "mae",
         k: int = 10,
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -2235,13 +2247,17 @@ class MetricMotif(ModelObject):
 
         # fit transform only, no need for inverse as this is only for finding windows
         if self.comparison_transformation is not None:
-            self.comparison_transformer = GeneralTransformer(**self.comparison_transformation)
+            self.comparison_transformer = GeneralTransformer(
+                **self.comparison_transformation
+            )
             compare_df = self.comparison_transformer.fit_transform(self.df)
         else:
             compare_df = self.df
         # applied once, then inversed after windows combined as forecast
         if self.combination_transformation is not None:
-            self.combination_transformer = GeneralTransformer(**self.combination_transformation)
+            self.combination_transformer = GeneralTransformer(
+                **self.combination_transformation
+            )
             wind_arr = self.combination_transformer.fit_transform(self.df).to_numpy()
         else:
             wind_arr = self.df.to_numpy()
@@ -2285,24 +2301,42 @@ class MetricMotif(ModelObject):
         # select smallest windows
         min_idx = np.argpartition(scores, k - 1, axis=0)[:k]
         # take the period starting AFTER the window
-        test = np.moveaxis(np.broadcast_to(
-            np.arange(0, forecast_length)[:, None], (1, forecast_length, min_idx.shape[1])
-        ), 1, 0) + min_idx + window_size
+        test = (
+            np.moveaxis(
+                np.broadcast_to(
+                    np.arange(0, forecast_length)[:, None],
+                    (1, forecast_length, min_idx.shape[1]),
+                ),
+                1,
+                0,
+            )
+            + min_idx
+            + window_size
+        )
         # for data over the end, fill last value
         if k > min_k:
             test = np.where(test >= array.shape[0], -1, test)
         # if you can't tell already, keeping matching shapes is the biggest hassle
-        results = np.moveaxis(np.take_along_axis(
-            wind_arr[..., None],
-            test.reshape(forecast_length, min_idx.shape[1], k), axis=0
-        ), 2, 0)
+        results = np.moveaxis(
+            np.take_along_axis(
+                wind_arr[..., None],
+                test.reshape(forecast_length, min_idx.shape[1], k),
+                axis=0,
+            ),
+            2,
+            0,
+        )
 
         # now aggregate results into point and bound forecasts
         if point_method == "weighted_mean":
             weights = scores[min_idx].sum(axis=1)
             if weights.sum() == 0:
                 weights = None
-            forecast = np.average(results, axis=0, weights=np.repeat(weights[:, None, :], forecast_length, axis=1))
+            forecast = np.average(
+                results,
+                axis=0,
+                weights=np.repeat(weights[:, None, :], forecast_length, axis=1),
+            )
         elif point_method == "mean":
             forecast = np.nanmean(results, axis=0)
         elif point_method == "median":
@@ -2327,8 +2361,12 @@ class MetricMotif(ModelObject):
         )
         if self.combination_transformation is not None:
             forecast = self.combination_transformer.inverse_transform(forecast)
-            lower_forecast = self.combination_transformer.inverse_transform(lower_forecast)
-            upper_forecast = self.combination_transformer.inverse_transform(upper_forecast)
+            lower_forecast = self.combination_transformer.inverse_transform(
+                lower_forecast
+            )
+            upper_forecast = self.combination_transformer.inverse_transform(
+                upper_forecast
+            )
 
         self.result_windows = results
         if just_point_forecast:
@@ -2424,7 +2462,7 @@ class SeasonalityMotif(ModelObject):
         distance_metric: str = "mae",
         k: int = 10,
         datepart_method: str = "common_fourier",
-        **kwargs
+        **kwargs,
     ):
         ModelObject.__init__(
             self,
@@ -2478,8 +2516,11 @@ class SeasonalityMotif(ModelObject):
         k = self.k
 
         test, scores = seasonal_window_match(
-            DTindex=self.df.index, k=k, window_size=window_size,
-            forecast_length=forecast_length, datepart_method=datepart_method,
+            DTindex=self.df.index,
+            k=k,
+            window_size=window_size,
+            forecast_length=forecast_length,
+            datepart_method=datepart_method,
             distance_metric=distance_metric,
         )
         # (num_windows, forecast_length, num_series)
@@ -2578,5 +2619,5 @@ class SeasonalityMotif(ModelObject):
             "point_method": self.point_method,
             "distance_metric": self.distance_metric,
             "k": self.k,
-            "datepart_method": self.datepart_method
+            "datepart_method": self.datepart_method,
         }

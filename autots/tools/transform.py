@@ -941,7 +941,7 @@ class RollingMeanTransformer(EmptyTransformer):
                 staged = self.last_values
                 # these are all rolling values at first (forecast rolling and historic)
                 df = pd.concat([self.last_rolling, df], axis=0).astype(float)
-                diffed = ((df - df.shift(1)) * window)
+                diffed = (df - df.shift(1)) * window
                 diffed = diffed.tail(len(diffed.index) - 1)
                 temp_cols = diffed.columns
                 for n in range(len(diffed.index)):
@@ -1935,7 +1935,7 @@ class ScipyFilter(EmptyTransformer):
                 'window_length': random.choices([7, 31, 91], [0.4, 0.3, 0.3])[0],
                 'polyorder': random.choice([1, 2, 3, 4]),
                 'deriv': random.choices([0, 1], [0.8, 0.2])[0],
-                'mode': random.choice(['mirror', 'nearest', 'interp'])
+                'mode': random.choice(['mirror', 'nearest', 'interp']),
             }
         elif method in ["butter"]:
             if btype in ["bandpass", "bandstop"]:
@@ -2522,7 +2522,7 @@ class AlignLastValue(EmptyTransformer):
                 center = df.iloc[-1, :]
         else:
             if lag > 1:
-                center = df.iloc[-(lag + rows - 1): - (lag - 1), :].mean()
+                center = df.iloc[-(lag + rows - 1) : -(lag - 1), :].mean()
             else:
                 center = df.tail(rows).mean()
         return center
@@ -2546,15 +2546,22 @@ class AlignLastValue(EmptyTransformer):
         else:
             if self.first_value_only:
                 if self.method == "multiplicative":
-                    return pd.concat([
-                        df.iloc[0:1] * (1 + ((self.center / df.iloc[0]) - 1) * self.strength),
-                        df.iloc[1:]
-                    ], axis=0)
+                    return pd.concat(
+                        [
+                            df.iloc[0:1]
+                            * (1 + ((self.center / df.iloc[0]) - 1) * self.strength),
+                            df.iloc[1:],
+                        ],
+                        axis=0,
+                    )
                 else:
-                    return pd.concat([
-                        df.iloc[0:1] + self.strength * (self.center - df.iloc[0]),
-                        df.iloc[1:]
-                    ], axis=0)
+                    return pd.concat(
+                        [
+                            df.iloc[0:1] + self.strength * (self.center - df.iloc[0]),
+                            df.iloc[1:],
+                        ],
+                        axis=0,
+                    )
             else:
                 if self.method == "multiplicative":
                     return df * (1 + ((self.center / df.iloc[0]) - 1) * self.strength)
@@ -2648,13 +2655,18 @@ class AnomalyRemoval(EmptyTransformer):
         """Fit a model to predict if a score is an anomaly."""
         # Using DecisionTree as it should almost handle nonparametric anomalies
         from sklearn.tree import DecisionTreeClassifier
+
         scores_flat = self.scores.melt(var_name='series', value_name="value")
         categor = pd.Categorical(scores_flat['series'])
         self.score_categories = categor.categories
         scores_flat['series'] = categor
-        scores_flat = pd.concat([pd.get_dummies(scores_flat['series']), scores_flat['value']], axis=1)
+        scores_flat = pd.concat(
+            [pd.get_dummies(scores_flat['series']), scores_flat['value']], axis=1
+        )
         anomalies_flat = self.anomalies.melt(var_name='series', value_name="value")
-        self.anomaly_classifier = DecisionTreeClassifier(max_depth=None).fit(scores_flat, anomalies_flat['value'])
+        self.anomaly_classifier = DecisionTreeClassifier(max_depth=None).fit(
+            scores_flat, anomalies_flat['value']
+        )
         # anomaly_classifier.score(scores_flat, anomalies_flat['value'])
 
     def score_to_anomaly(self, scores):
@@ -2662,10 +2674,20 @@ class AnomalyRemoval(EmptyTransformer):
         if self.anomaly_classifier is None:
             self.fit_anomaly_classifier()
         scores.index.name = 'date'
-        scores_flat = scores.reset_index(drop=False).melt(id_vars="date", var_name='series', value_name="value")
-        scores_flat['series'] = pd.Categorical(scores_flat['series'], categories=self.score_categories)
-        res = self.anomaly_classifier.predict(pd.concat([pd.get_dummies(scores_flat['series']), scores_flat['value']], axis=1))
-        res = pd.concat([scores_flat[['date', "series"]], pd.Series(res, name='value')], axis=1).pivot_table(index='date', columns='series', values="value")
+        scores_flat = scores.reset_index(drop=False).melt(
+            id_vars="date", var_name='series', value_name="value"
+        )
+        scores_flat['series'] = pd.Categorical(
+            scores_flat['series'], categories=self.score_categories
+        )
+        res = self.anomaly_classifier.predict(
+            pd.concat(
+                [pd.get_dummies(scores_flat['series']), scores_flat['value']], axis=1
+            )
+        )
+        res = pd.concat(
+            [scores_flat[['date', "series"]], pd.Series(res, name='value')], axis=1
+        ).pivot_table(index='date', columns='series', values="value")
         return res[scores.columns]
 
     @staticmethod
@@ -2819,8 +2841,10 @@ class HolidayTransformer(EmptyTransformer):
             self.holidays = self.dates_to_holidays(df.index, style='flag').clip(upper=1)
             self.holidays['intercept'] = 1
             weights = (np.arange(df2.shape[0]) ** 0.6)[..., None]
-            self.model_coef = np.linalg.lstsq(self.holidays.to_numpy() * weights, df2.to_numpy() * weights, rcond=None)[0]
-            return df2 - np.dot(self.holidays.iloc[:, 0: -1], self.model_coef[0:-1])
+            self.model_coef = np.linalg.lstsq(
+                self.holidays.to_numpy() * weights, df2.to_numpy() * weights, rcond=None
+            )[0]
+            return df2 - np.dot(self.holidays.iloc[:, 0:-1], self.model_coef[0:-1])
         elif self.impact == "median_value":
             holidays = self.dates_to_holidays(
                 df.index, style='impact', holiday_impacts="value"
@@ -2852,7 +2876,7 @@ class HolidayTransformer(EmptyTransformer):
         elif self.impact == "regression":
             holidays = self.dates_to_holidays(df.index, style='flag').clip(upper=1)
             holidays['intercept'] = 1
-            return df + np.dot(holidays.iloc[:, 0: -1], self.model_coef[0:-1])
+            return df + np.dot(holidays.iloc[:, 0:-1], self.model_coef[0:-1])
         elif self.impact == "median_value":
             holidays = self.dates_to_holidays(
                 df.index, style='impact', holiday_impacts="value"
@@ -2876,7 +2900,13 @@ class HolidayTransformer(EmptyTransformer):
             [True, False], [0.9, 0.1]
         )[0]
         holiday_params['impact'] = random.choices(
-            [None, 'median_value', 'anomaly_score', 'datepart_regression', 'regression'],
+            [
+                None,
+                'median_value',
+                'anomaly_score',
+                'datepart_regression',
+                'regression',
+            ],
             [0.1, 0.3, 0.3, 0.2, 0.2],
         )[0]
         if holiday_params['impact'] == 'datepart_regression':
@@ -2935,10 +2965,7 @@ class LocalLinearTrend(EmptyTransformer):
         elif self.n_future < 1:
             self.n_future = int(self.n_future * len(self.dates))
 
-        self.dates_2d = np.repeat(
-            self.dates.to_numpy()[..., None],
-            df.shape[1], axis=1
-        )
+        self.dates_2d = np.repeat(self.dates.to_numpy()[..., None], df.shape[1], axis=1)
         w_1 = self.rolling_window - 1
         """
         slope, intercept = window_lin_reg(
@@ -2962,7 +2989,7 @@ class LocalLinearTrend(EmptyTransformer):
         # rolling trend
         steps_ahd = int(w_1 / 2)
         y0 = np.repeat(np.array(df[0:1]), steps_ahd, axis=0)
-        d0 = -1 * self.dates_2d[1:y0.shape[0] + 1][::-1]
+        d0 = -1 * self.dates_2d[1 : y0.shape[0] + 1][::-1]
         shape2 = (w_1 - steps_ahd, y0.shape[1])
         y2 = np.concatenate(
             [
@@ -2981,40 +3008,54 @@ class LocalLinearTrend(EmptyTransformer):
         self.slope, self.intercept = window_lin_reg_mean(d, y2, w=self.rolling_window)
 
         if self.method == "mean":
-            futslp = np.array([np.mean(self.slope[-self.n_future:], axis=0)])
-            self.full_slope = np.concatenate([
-                [np.mean(self.slope[0:self.n_future], axis=0)],
-                self.slope,
-                futslp, futslp  # twice to have an N+1 size
-            ])
-            futinc = np.array([np.mean(self.intercept[-self.n_future:], axis=0)])
-            self.full_intercept = np.concatenate([
-                [np.mean(self.intercept[0:self.n_future], axis=0)],
-                self.intercept,
-                futinc, futinc
-            ])
+            futslp = np.array([np.mean(self.slope[-self.n_future :], axis=0)])
+            self.full_slope = np.concatenate(
+                [
+                    [np.mean(self.slope[0 : self.n_future], axis=0)],
+                    self.slope,
+                    futslp,
+                    futslp,  # twice to have an N+1 size
+                ]
+            )
+            futinc = np.array([np.mean(self.intercept[-self.n_future :], axis=0)])
+            self.full_intercept = np.concatenate(
+                [
+                    [np.mean(self.intercept[0 : self.n_future], axis=0)],
+                    self.intercept,
+                    futinc,
+                    futinc,
+                ]
+            )
             # self.greater_slope = self.slope[-self.n_future:].mean()
             # self.greater_intercept = self.intercept[-self.n_future:].mean()
             # self.lesser_slope = self.slope[0:self.n_future].mean()
             # self.lesser_intercept = self.intercept[0:self.n_future].mean()
         elif self.method == "median":
-            futslp = np.array([np.median(self.slope[-self.n_future:], axis=0)])
-            self.full_slope = np.concatenate([
-                [np.median(self.slope[0:self.n_future], axis=0)],
-                self.slope,
-                futslp, futslp  # twice to have an N+1 size
-            ])
-            futinc = np.array([np.median(self.intercept[-self.n_future:], axis=0)])
-            self.full_intercept = np.concatenate([
-                [np.median(self.intercept[0:self.n_future], axis=0)],
-                self.intercept,
-                futinc, futinc
-            ])
-        self.full_dates = np.concatenate([
-            [self.dates.min() - 0.01],
-            self.dates,
-            [self.dates.max() + 0.01],
-        ])
+            futslp = np.array([np.median(self.slope[-self.n_future :], axis=0)])
+            self.full_slope = np.concatenate(
+                [
+                    [np.median(self.slope[0 : self.n_future], axis=0)],
+                    self.slope,
+                    futslp,
+                    futslp,  # twice to have an N+1 size
+                ]
+            )
+            futinc = np.array([np.median(self.intercept[-self.n_future :], axis=0)])
+            self.full_intercept = np.concatenate(
+                [
+                    [np.median(self.intercept[0 : self.n_future], axis=0)],
+                    self.intercept,
+                    futinc,
+                    futinc,
+                ]
+            )
+        self.full_dates = np.concatenate(
+            [
+                [self.dates.min() - 0.01],
+                self.dates,
+                [self.dates.max() + 0.01],
+            ]
+        )
         return df - (self.slope * self.dates_2d + self.intercept)
 
     def fit(self, df):
@@ -3033,10 +3074,7 @@ class LocalLinearTrend(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         dates = df.index.to_julian_date()
-        dates_2d = np.repeat(
-            dates.to_numpy()[..., None],
-            df.shape[1], axis=1
-        )
+        dates_2d = np.repeat(dates.to_numpy()[..., None], df.shape[1], axis=1)
         idx = self.full_dates.searchsorted(dates)
         return df - (self.full_slope[idx] * dates_2d + self.full_intercept[idx])
 
@@ -3047,10 +3085,7 @@ class LocalLinearTrend(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         dates = df.index.to_julian_date()
-        dates_2d = np.repeat(
-            dates.to_numpy()[..., None],
-            df.shape[1], axis=1
-        )
+        dates_2d = np.repeat(dates.to_numpy()[..., None], df.shape[1], axis=1)
         idx = self.full_dates.searchsorted(dates)
         return df + (self.full_slope[idx] * dates_2d + self.full_intercept[idx])
 
@@ -3066,9 +3101,15 @@ class LocalLinearTrend(EmptyTransformer):
     def get_new_params(method: str = "random"):
         """Generate new random parameters"""
         return {
-            "rolling_window": random.choices([0.1, 90, 30, 180, 360, 0.05], [0.5, 0.1, 0.1, 0.1, 0.1, 0.2])[0],
-            "n_tails": random.choices([0.1, 90, 30, 180, 360, 0.05], [0.5, 0.1, 0.1, 0.1, 0.1, 0.2])[0],
-            "n_future": random.choices([0.2, 90, 360, 0.1, 0.05], [0.5, 0.1, 0.1, 0.1, 0.2])[0],
+            "rolling_window": random.choices(
+                [0.1, 90, 30, 180, 360, 0.05], [0.5, 0.1, 0.1, 0.1, 0.1, 0.2]
+            )[0],
+            "n_tails": random.choices(
+                [0.1, 90, 30, 180, 360, 0.05], [0.5, 0.1, 0.1, 0.1, 0.1, 0.2]
+            )[0],
+            "n_future": random.choices(
+                [0.2, 90, 360, 0.1, 0.05], [0.5, 0.1, 0.1, 0.1, 0.2]
+            )[0],
             "method": random.choice(["mean", "median"]),
         }
 
@@ -3103,8 +3144,13 @@ class KalmanSmoothing(EmptyTransformer):
         params = random.choices(
             [
                 ([[1, 1], [0, 1]], [[0.1, 0.0], [0.0, 0.01]], [[1, 0]], 1.0),
-                ([[1, 1, 0], [0, 1, 0], [0, 0, 1]], [[0.1, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0, 0.0, 0.1]], [[1, 1, 1]], 1.0),
-                "random"
+                (
+                    [[1, 1, 0], [0, 1, 0], [0, 0, 1]],
+                    [[0.1, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0, 0.0, 0.1]],
+                    [[1, 1, 1]],
+                    1.0,
+                ),
+                "random",
             ],
             [0.25, 0.25, 0.5],
         )[0]
@@ -3145,8 +3191,7 @@ class KalmanSmoothing(EmptyTransformer):
 
         result = self.kf.smooth(df.to_numpy().T)
         return pd.DataFrame(
-            result.observations.mean.T,
-            index=df.index, columns=df.columns
+            result.observations.mean.T, index=df.index, columns=df.columns
         )
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
@@ -3361,9 +3406,7 @@ class GeneralTransformer(object):
         self.n_jobs = n_jobs
         self.transformers = {}
         # upper/lower forecast inverses are different
-        self.bounded_oddities = [
-            "AlignLastValue"
-        ]
+        self.bounded_oddities = ["AlignLastValue"]
         # trans methods are different
         self.oddities_list = [
             "DifferencedTransformer",
@@ -3613,7 +3656,11 @@ class GeneralTransformer(object):
         return df
 
     def inverse_transform(
-        self, df, trans_method: str = "forecast", fillzero: bool = False, bounds: bool = False
+        self,
+        df,
+        trans_method: str = "forecast",
+        fillzero: bool = False,
+        bounds: bool = False,
     ):
         """Undo the madness.
 
@@ -3646,9 +3693,7 @@ class GeneralTransformer(object):
                     self.df_colnames = df.columns
                 # df = df.replace([np.inf, -np.inf], 0)
         except Exception as e:
-            raise Exception(
-                f"Transformer {c_trans_n} failed on inverse"
-            ) from e
+            raise Exception(f"Transformer {c_trans_n} failed on inverse") from e
 
         if fillzero:
             df = df.fillna(0)
@@ -3941,9 +3986,12 @@ def random_cleaners():
                 "transformation_params": {
                     "0": {
                         'method': 'savgol_filter',
-                        'method_args': {'window_length': 31,
-                                        'polyorder': 3, 'deriv': 0,
-                                        'mode': 'interp'}
+                        'method_args': {
+                            'window_length': 31,
+                            'polyorder': 3,
+                            'deriv': 0,
+                            'mode': 'interp',
+                        },
                     },
                 },
             },

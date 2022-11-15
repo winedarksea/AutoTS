@@ -22,6 +22,7 @@ def load_daily(long: bool = True):
     if not long:
         return df_wide
     else:
+        df_wide.index.name = 'datetime'
         df_long = df_wide.reset_index(drop=False).melt(
             id_vars=['datetime'], var_name='series_id', value_name='value'
         )

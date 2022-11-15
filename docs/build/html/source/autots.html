@@ -13,6 +13,7 @@
     <script src="../_static/underscore.js"></script>
     <script src="../_static/doctools.js"></script>
     <script src="../_static/language_data.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="autots.datasets package" href="autots.datasets.html" />
@@ -61,6 +62,7 @@
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.arch">autots.models.arch module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.base">autots.models.base module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.basics">autots.models.basics module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.cassandra">autots.models.cassandra module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.dnn">autots.models.dnn module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.ensemble">autots.models.ensemble module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.models.html#module-autots.models.gluonts">autots.models.gluonts module</a></li>
@@ -87,6 +89,10 @@
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.calendar">autots.tools.calendar module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.cointegration">autots.tools.cointegration module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.cpu_count">autots.tools.cpu_count module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.fast_kalman">autots.tools.fast_kalman module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="autots.tools.html#usage-example">Usage example</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.hierarchial">autots.tools.hierarchial module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.holiday">autots.tools.holiday module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="autots.tools.html#module-autots.tools.impute">autots.tools.impute module</a></li>
@@ -114,7 +120,7 @@
 <dt id="autots.load_daily">
 <code class="sig-prename descclassname">autots.</code><code class="sig-name descname">load_daily</code><span class="sig-paren">(</span><em class="sig-param">long: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.load_daily" title="Permalink to this definition">¶</a></dt>
 <dd><p>2020 Covid, Air Pollution, and Economic Data.</p>
-<p>Sources: Covid Tracking Project, EPA, and FRED</p>
+<p>Sources: Wikimedia Foundation</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>long</strong> (<em>bool</em>) – if True, return data in long format. Otherwise return wide</p>
@@ -231,6 +237,12 @@ some examples: [‘usps.com’, ‘ncbi.nlm.nih.gov’, ‘cdc.gov’, ‘weathe
 </dl>
 </dd></dl>
 
+<dl class="function">
+<dt id="autots.load_sine">
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">load_sine</code><span class="sig-paren">(</span><em class="sig-param">long=False</em>, <em class="sig-param">shape=None</em>, <em class="sig-param">start_date: str = '2021-01-01'</em>, <em class="sig-param">introduce_random: float = None</em>, <em class="sig-param">random_seed: int = 123</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.load_sine" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a dataset of just zeroes for testing edge case.</p>
+</dd></dl>
+
 <dl class="class">
 <dt id="autots.AutoTS">
 <em class="property">class </em><code class="sig-prename descclassname">autots.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 10</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2022</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 1</em>, <em class="sig-param">'imle_weighting': 0</em>, <em class="sig-param">'made_weighting': 0.5</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'mage_weighting': 0</em>, <em class="sig-param">'mle_weighting': 0</em>, <em class="sig-param">'oda_weighting': 0.001</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0.05</em>, <em class="sig-param">'smape_weighting': 5</em>, <em class="sig-param">'spl_weighting': 3}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'auto'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">models_mode: str = 'random'</em>, <em class="sig-param">num_validations: int = 'auto'</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'backwards'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">prefill_na: str = None</em>, <em class="sig-param">introduce_na: bool = None</em>, <em class="sig-param">preclean: dict = None</em>, <em class="sig-param">model_interrupt: bool = True</em>, <em class="sig-param">current_model_file: str = None</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = -2</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS" title="Permalink to this definition">¶</a></dt>
@@ -294,6 +306,7 @@ If horizontal or mosaic ensemble, then additional min per_series models above th
 <li><p><strong>validation_method</strong> (<em>str</em>) – ‘even’, ‘backwards’, or ‘seasonal n’ where n is an integer of seasonal
 ‘backwards’ is better for recency and for shorter training sets
 ‘even’ splits the data into equally-sized slices best for more consistent data, a poetic but less effective strategy than others here
+‘seasonal’ most similar indexes
 ‘seasonal n’ for example ‘seasonal 364’ would test all data on each previous year of the forecast_length that would immediately follow the training data.
 ‘similarity’ automatically finds the data sections most similar to the most recent data that will be used for prediction
 ‘custom’ - if used, .fit() needs validation_indexes passed - a list of pd.DatetimeIndex’s, tail of each is used as test</p></li>
@@ -445,14 +458,14 @@ if “end_generation”, as True and also ends entire generation of run. Note sk
 
 <dl class="method">
 <dt id="autots.AutoTS.back_forecast">
-<code class="sig-name descname">back_forecast</code><span class="sig-paren">(</span><em class="sig-param">column=None</em>, <em class="sig-param">n_splits: int = 3</em>, <em class="sig-param">tail: int = None</em>, <em class="sig-param">verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.back_forecast" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create forecasts for the historical training data, ie. backcast or back forecast.</p>
+<code class="sig-name descname">back_forecast</code><span class="sig-paren">(</span><em class="sig-param">series=None</em>, <em class="sig-param">n_splits: int = 'auto'</em>, <em class="sig-param">tail: int = 'auto'</em>, <em class="sig-param">verbose: int = 0</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.back_forecast" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create forecasts for the historical training data, ie. backcast or back forecast. OUT OF SAMPLE</p>
 <p>This actually forecasts on historical data, these are not fit model values as are often returned by other packages.
 As such, this will be slower, but more representative of real world model performance.
 There may be jumps in data between chunks.</p>
 <p>Args are same as for model_forecast except…
 n_splits(int): how many pieces to split data into. Pass 2 for fastest, or “auto” for best accuracy
-column (str): if to run on only one column, pass column name. Faster than full.
+series (str): if to run on only one column, pass column name. Faster than full.
 tail (int): df.tail() of the dataset, back_forecast is only run on n most recent observations.</p>
 <blockquote>
 <div><p>which points at eval_periods of lower-level back_forecast function</p>
@@ -573,14 +586,21 @@ If all had at least one success, then return an empty list.</p>
 </dd></dl>
 
 <dl class="method">
+<dt id="autots.AutoTS.plot_back_forecast">
+<code class="sig-name descname">plot_back_forecast</code><span class="sig-paren">(</span><em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.plot_back_forecast" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
 <dt id="autots.AutoTS.plot_backforecast">
-<code class="sig-name descname">plot_backforecast</code><span class="sig-paren">(</span><em class="sig-param">series=None</em>, <em class="sig-param">n_splits: int = 3</em>, <em class="sig-param">start_date=None</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.plot_backforecast" title="Permalink to this definition">¶</a></dt>
-<dd><p>Plot the historical data and fit forecast on historic.</p>
+<code class="sig-name descname">plot_backforecast</code><span class="sig-paren">(</span><em class="sig-param">series=None</em>, <em class="sig-param">n_splits: int = 'auto'</em>, <em class="sig-param">start_date='auto'</em>, <em class="sig-param">title=None</em>, <em class="sig-param">alpha=0.25</em>, <em class="sig-param">facecolor='black'</em>, <em class="sig-param">loc='upper left'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.plot_backforecast" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plot the historical data and fit forecast on historic. Out of sample in chunks = forecast_length by default.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>series</strong> (<em>str</em><em> or </em><em>list</em>) – column names of time series</p></li>
 <li><p><strong>n_splits</strong> (<em>int</em><em> or </em><em>str</em>) – “auto”, number &gt; 2, higher more accurate but slower</p></li>
+<li><p><strong>start_date</strong> (<em>datetime.datetime</em>) – or “auto”</p></li>
+<li><p><strong>title</strong> (<em>str</em>) – </p></li>
 <li><p><strong>passed to pd.DataFrame.plot</strong><strong>(</strong><strong>)</strong> (<em>**kwargs</em>) – </p></li>
 </ul>
 </dd>
@@ -664,7 +684,7 @@ Note this doesn’t capture transformers nested in simple ensembles.</p>
 
 <dl class="method">
 <dt id="autots.AutoTS.plot_per_series_smape">
-<code class="sig-name descname">plot_per_series_smape</code><span class="sig-paren">(</span><em class="sig-param">title: str = 'Top Series Contributing SMAPE Error'</em>, <em class="sig-param">max_series: int = 10</em>, <em class="sig-param">max_name_chars: int = 25</em>, <em class="sig-param">color: str = '#ff9912'</em>, <em class="sig-param">figsize=(12</em>, <em class="sig-param">4)</em>, <em class="sig-param">kind: str = 'bar'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.plot_per_series_smape" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">plot_per_series_smape</code><span class="sig-paren">(</span><em class="sig-param">title: str = None</em>, <em class="sig-param">max_series: int = 10</em>, <em class="sig-param">max_name_chars: int = 25</em>, <em class="sig-param">color: str = '#ff9912'</em>, <em class="sig-param">figsize=(12</em>, <em class="sig-param">4)</em>, <em class="sig-param">kind: str = 'bar'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.plot_per_series_smape" title="Permalink to this definition">¶</a></dt>
 <dd><p>Plot which series are contributing most to SMAPE of final model. Avg of validations for best_model</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -813,7 +833,9 @@ most of the interpolate methods from pandas.interpolate</p>
 “BTCD” - Box Tiao decomposition
 ‘AlignLastValue’: align forecast start to end of training data
 ‘AnomalyRemoval’: more tailored anomaly removal options
-‘HolidayTransformer’: detects holidays and wishes good cheer to all</p>
+‘HolidayTransformer’: detects holidays and wishes good cheer to all
+‘LocalLinearTrend’: rolling local trend, using tails for future and past trend
+‘KalmanSmoothing’: smooth using a state space model</p>
 </p></li>
 <li><p><strong>transformation_params</strong> (<em>dict</em>) – params of transformers {0: {}, 1: {‘model’: ‘Poisson’}, …}
 pass through dictionary of empty dictionaries to utilize defaults</p></li>
@@ -861,7 +883,7 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 
 <dl class="method">
 <dt id="autots.GeneralTransformer.inverse_transform">
-<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em>, <em class="sig-param">fillzero: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">inverse_transform</code><span class="sig-paren">(</span><em class="sig-param">df</em>, <em class="sig-param">trans_method: str = 'forecast'</em>, <em class="sig-param">fillzero: bool = False</em>, <em class="sig-param">bounds: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.GeneralTransformer.inverse_transform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Undo the madness.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -869,6 +891,7 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 <li><p><strong>df</strong> (<em>pandas.DataFrame</em>) – Datetime Indexed</p></li>
 <li><p><strong>trans_method</strong> (<em>str</em>) – ‘forecast’ or ‘original’ passed through</p></li>
 <li><p><strong>fillzero</strong> (<em>bool</em>) – if inverse returns NaN, fill with zero</p></li>
+<li><p><strong>bounds</strong> (<em>bool</em>) – currently ignores AlignLastValue transform if True (also used in process_components of Cassandra)</p></li>
 </ul>
 </dd>
 </dl>
@@ -902,7 +925,7 @@ pass through dictionary of empty dictionaries to utilize defaults</p></li>
 
 <dl class="function">
 <dt id="autots.RandomTransform">
-<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.07</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.01</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.03</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01</em>, <em class="sig-param">'EWMAFilter': 0.02</em>, <em class="sig-param">'MeanDifference': 0.002</em>, <em class="sig-param">'BTCD': 0.01</em>, <em class="sig-param">'Cointegration': 0.01</em>, <em class="sig-param">'AlignLastValue': 0.1</em>, <em class="sig-param">'AnomalyRemoval': 0.03</em>, <em class="sig-param">'HolidayTransformer': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.4</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.1</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.05</em>, <em class="sig-param">'mean': 0.06</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.03</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.4</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">superfast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.RandomTransform" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.</code><code class="sig-name descname">RandomTransform</code><span class="sig-paren">(</span><em class="sig-param">transformer_list: dict = {None: 0.0</em>, <em class="sig-param">'MinMaxScaler': 0.05</em>, <em class="sig-param">'PowerTransformer': 0.02</em>, <em class="sig-param">'QuantileTransformer': 0.05</em>, <em class="sig-param">'MaxAbsScaler': 0.05</em>, <em class="sig-param">'StandardScaler': 0.04</em>, <em class="sig-param">'RobustScaler': 0.05</em>, <em class="sig-param">'PCA': 0.01</em>, <em class="sig-param">'FastICA': 0.01</em>, <em class="sig-param">'Detrend': 0.1</em>, <em class="sig-param">'RollingMeanTransformer': 0.02</em>, <em class="sig-param">'RollingMean100thN': 0.01</em>, <em class="sig-param">'DifferencedTransformer': 0.07</em>, <em class="sig-param">'SinTrend': 0.01</em>, <em class="sig-param">'PctChangeTransformer': 0.01</em>, <em class="sig-param">'CumSumTransformer': 0.02</em>, <em class="sig-param">'PositiveShift': 0.02</em>, <em class="sig-param">'Log': 0.01</em>, <em class="sig-param">'IntermittentOccurrence': 0.01</em>, <em class="sig-param">'SeasonalDifference': 0.1</em>, <em class="sig-param">'cffilter': 0.01</em>, <em class="sig-param">'bkfilter': 0.05</em>, <em class="sig-param">'convolution_filter': 0.001</em>, <em class="sig-param">'HPFilter': 0.01</em>, <em class="sig-param">'DatepartRegression': 0.01</em>, <em class="sig-param">'ClipOutliers': 0.05</em>, <em class="sig-param">'Discretize': 0.01</em>, <em class="sig-param">'CenterLastValue': 0.01</em>, <em class="sig-param">'Round': 0.02</em>, <em class="sig-param">'Slice': 0.02</em>, <em class="sig-param">'ScipyFilter': 0.02</em>, <em class="sig-param">'STLFilter': 0.01</em>, <em class="sig-param">'EWMAFilter': 0.02</em>, <em class="sig-param">'MeanDifference': 0.002</em>, <em class="sig-param">'BTCD': 0.01</em>, <em class="sig-param">'Cointegration': 0.01</em>, <em class="sig-param">'AlignLastValue': 0.1</em>, <em class="sig-param">'AnomalyRemoval': 0.03</em>, <em class="sig-param">'HolidayTransformer': 0.01</em>, <em class="sig-param">'LocalLinearTrend': 0.01</em>, <em class="sig-param">'KalmanSmoothing': 0.01}</em>, <em class="sig-param">transformer_max_depth: int = 4</em>, <em class="sig-param">na_prob_dict: dict = {'ffill': 0.4</em>, <em class="sig-param">'fake_date': 0.1</em>, <em class="sig-param">'rolling_mean': 0.1</em>, <em class="sig-param">'rolling_mean_24': 0.1</em>, <em class="sig-param">'IterativeImputer': 0.05</em>, <em class="sig-param">'mean': 0.06</em>, <em class="sig-param">'zero': 0.05</em>, <em class="sig-param">'ffill_mean_biased': 0.1</em>, <em class="sig-param">'median': 0.03</em>, <em class="sig-param">None: 0.001</em>, <em class="sig-param">'interpolate': 0.4</em>, <em class="sig-param">'KNNImputer': 0.05</em>, <em class="sig-param">'IterativeImputerExtraTrees': 0.0001}</em>, <em class="sig-param">fast_params: bool = None</em>, <em class="sig-param">superfast_params: bool = None</em>, <em class="sig-param">traditional_order: bool = False</em>, <em class="sig-param">transformer_min_depth: int = 1</em>, <em class="sig-param">allow_none: bool = True</em>, <em class="sig-param">no_nan_fill: bool = False</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.RandomTransform" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a dict of randomly choosen transformation selections.</p>
 <p>BTCD is used as a signal that slow parameters are allowed.</p>
 </dd></dl>
@@ -1136,7 +1159,7 @@ if a list, the first item in the list is the one used for .fit default</p></li>
 
 <dl class="method">
 <dt>
-<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df_train=None, forecast_length=None, prediction_interval=None, models_mode='event_risk', model_list=['UnivariateMotif', 'MultivariateMotif', 'SectionalMotif', 'ARCH'], ensemble=None, autots_kwargs=None, future_regressor_train=None</em><span class="sig-paren">)</span></dt>
+<code class="sig-name descname">fit</code><span class="sig-paren">(</span><em class="sig-param">df_train=None, forecast_length=None, prediction_interval=None, models_mode='event_risk', model_list=['UnivariateMotif', 'MultivariateMotif', 'SectionalMotif', 'ARCH', 'MetricMotif', 'SeasonalityMotif'], ensemble=None, autots_kwargs=None, future_regressor_train=None</em><span class="sig-paren">)</span></dt>
 <dd><p>Shortcut for generating model params.</p>
 <p>args specified are those suggested for an otherwise normal AutoTS run</p>
 <dl class="field-list simple">
@@ -1283,6 +1306,12 @@ If manual numpy array limits are used, the limits will need to be appropriate sh
 <dd></dd></dl>
 
 <dl class="method">
+<dt id="autots.AnomalyDetector.fit_anomaly_classifier">
+<code class="sig-name descname">fit_anomaly_classifier</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#autots.AnomalyDetector.fit_anomaly_classifier" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit a model to predict if a score is an anomaly.</p>
+</dd></dl>
+
+<dl class="method">
 <dt id="autots.AnomalyDetector.get_new_params">
 <em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AnomalyDetector.get_new_params" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
@@ -1291,6 +1320,12 @@ If manual numpy array limits are used, the limits will need to be appropriate sh
 <dt id="autots.AnomalyDetector.plot">
 <code class="sig-name descname">plot</code><span class="sig-paren">(</span><em class="sig-param">series_name=None</em>, <em class="sig-param">title=None</em>, <em class="sig-param">plot_kwargs={}</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AnomalyDetector.plot" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
+
+<dl class="method">
+<dt id="autots.AnomalyDetector.score_to_anomaly">
+<code class="sig-name descname">score_to_anomaly</code><span class="sig-paren">(</span><em class="sig-param">scores</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AnomalyDetector.score_to_anomaly" title="Permalink to this definition">¶</a></dt>
+<dd><p>A DecisionTree model, used as models are nonstandard (and nonparametric).</p>
+</dd></dl>
 
 </dd></dl>
 
