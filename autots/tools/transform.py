@@ -3881,6 +3881,9 @@ def RandomTransform(
     BTCD is used as a signal that slow parameters are allowed.
     """
     transformer_list, transformer_prob = transformer_list_to_dict(transformer_list)
+    if transformer_max_depth <= 0:
+        transformer_max_depth = 0
+        transformer_min_depth = 0
 
     # adjust fast/slow based on Transformers allowed
     if fast_params is None:

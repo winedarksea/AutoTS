@@ -189,7 +189,7 @@ class AutoTS(object):
         n_jobs: int = -2,
     ):
         assert forecast_length > 0, "forecast_length must be greater than 0"
-        assert transformer_max_depth > 0, "transformer_max_depth must be greater than 0"
+        # assert transformer_max_depth > 0, "transformer_max_depth must be greater than 0"
         self.forecast_length = int(abs(forecast_length))
         self.frequency = frequency
         self.aggfunc = aggfunc

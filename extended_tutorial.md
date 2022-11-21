@@ -672,7 +672,7 @@ df_full = load_daily(long=False)
 df = df_full[0: (df_full.shape[0] - forecast_length)]
 df_test = df[(df.shape[0] - forecast_length):]
 
-upper_limit = 0.95
+upper_limit = 0.95  # --> 95% quantile of historic data
 # if using manual array limits, historic limit must be defined separately (if used)
 lower_limit = np.ones((forecast_length, df.shape[1]))
 historic_lower_limit = np.ones(df.shape)

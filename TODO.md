@@ -12,23 +12,8 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.5.1 :mage_man: :mage_man: :mage_man:
-* add LocalLinearTrend transformer
-* improved ScipyFilter focusing on Butter and Savitzky–Golay filters
-* update to AutoTS().back_forecast including breaking change of `column` arg renamed to `series`
-* add KalmanSmoothing transformer
-* add KalmanStateSpace model (Kalman Filter + 'any' state space models)
-* AlignLastValue no longer applied to upper/lower forecast bounds
-* modified `regression` impact in HolidayTransformer to weighted least squares, moved existing to 'datepart_regression'
-* added Cassandra model
-* bug fix for Categorical dateparts with 1 starts
-* updated load_daily to Wikimedia page views
-* added dwae metric
-* added MetricMotif model
-* added 'common_fourier' datepart method
-* added SeasonalMotif model
-* added 'seasonal' validation
-* bug fix for cffilter with univariate input
+# 0.5.2 🌎 🌎 🌎
+
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

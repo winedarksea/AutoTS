@@ -847,6 +847,7 @@ def generate_regressor_params(
                         [100, 250, 50, 500],
                         [0.6, 0.1, 0.3, 0.0010],
                     )[0],
+                    "linear_tree": random.choice([True, False]),
                 },
             }
         elif model == 'Ridge':
