@@ -461,9 +461,13 @@ class Cassandra(ModelObject):
                     )
                 )
             elif self.trend_standin == "rolling_trend":
-                # the idea being to have a rolling trend fit first and used as feature
-                # excluded as it would require a loop
-                return NotImplemented
+                resid, slope, intercept = self.rolling_trend(
+                    np.asarray(df), np.array(self.create_t(df.index))
+                )
+                resid = pd.DataFrame(slope * self.t_train[..., None] + intercept, index=df.index, columns=df.columns)
+                x_list.append(
+                    resid.rename(columns=lambda x: "rolling_trend_" + str(x))
+                )
         if future_regressor is not None and self.regressors_used:
             if self.regressor_transformation is not None:
                 self.regressor_transformer = GeneralTransformer(
@@ -1742,7 +1746,7 @@ class Cassandra(ModelObject):
             "trend_window": random.choices([3, 15, 90, 365], [0.2, 0.2, 0.2, 0.2])[0],
             "trend_standin": random.choices(
                 [None, 'random_normal', 'rolling_trend'],
-                [0.5, 0.4, 0.0],
+                [0.5, 0.4, 0.1],
             )[0],
             "trend_anomaly_detector_params": trend_anomaly_detector_params,
             # "trend_anomaly_intervention": trend_anomaly_intervention,
@@ -2271,16 +2275,16 @@ if False:
         )
 
         # plt.show()
-        plt.savefig("Cassandra_forecast.png", dpi=300)
+        # plt.savefig("Cassandra_forecast.png", dpi=300)
         # mod.plot_components(pred, series=series, to_origin_space=False)
         # plt.show()
         mod.plot_components(
             pred, series=series, to_origin_space=True, start_date=start_date
         )
-        plt.savefig("Cassandra_components.png", dpi=300)
+        # plt.savefig("Cassandra_components.png", dpi=300)
         plt.show()
         mod.plot_trend(series=series, vline=result.index[-forecast_length], start_date=start_date)
-        plt.savefig("Cassandra_trend.png", dpi=300)
+        # plt.savefig("Cassandra_trend.png", dpi=300)
     pred.evaluate(
         df_daily.reindex(result.index)[df_train.columns]
         if include_history
