@@ -2270,17 +2270,17 @@ if False:
             start_date=start_date,
         )
 
-        plt.show()
-        # plt.savefig("forecast.png", dpi=300)
+        # plt.show()
+        plt.savefig("Cassandra_forecast.png", dpi=300)
         # mod.plot_components(pred, series=series, to_origin_space=False)
         # plt.show()
         mod.plot_components(
             pred, series=series, to_origin_space=True, start_date=start_date
         )
-        # plt.savefig("Cassandra_components.png", dpi=300)
+        plt.savefig("Cassandra_components.png", dpi=300)
         plt.show()
-        mod.plot_trend(series=series, vline=df_test.index[0], start_date=start_date)
-        # plt.savefig("trend.png", dpi=300)
+        mod.plot_trend(series=series, vline=result.index[-forecast_length], start_date=start_date)
+        plt.savefig("Cassandra_trend.png", dpi=300)
     pred.evaluate(
         df_daily.reindex(result.index)[df_train.columns]
         if include_history
@@ -2480,4 +2480,8 @@ c_params = {'preprocessing_transformation': {'fillna': 'ffill',
       'observation_model': [[1]],
       'observation_noise': 0.5}}}}},
  'trend_phi': None}
+
+
+# best on validations of direction
+c_params = {'preprocessing_transformation': {'fillna': 'rolling_mean', 'transformations': {'0': None}, 'transformation_params': {'0': {}}}, 'scaling': 'BaseScaler', 'past_impacts_intervention': None, 'seasonalities': [7, 365.25], 'ar_lags': [1, 7], 'ar_interaction_seasonality': None, 'anomaly_detector_params': {'method': 'rolling_zscore', 'transform_dict': None, 'method_params': {'distribution': 'uniform', 'alpha': 0.05, 'rolling_periods': 200, 'center': False}, 'fillna': 'linear'}, 'anomaly_intervention': 'remove', 'holiday_detector_params': None, 'holiday_countries': None, 'holiday_countries_used': True, 'multivariate_feature': None, 'multivariate_transformation': {'fillna': 'KNNImputer', 'transformations': {'0': 'SeasonalDifference', '1': 'MinMaxScaler', '2': 'cffilter'}, 'transformation_params': {'0': {'lag_1': 12, 'method': 'Median'}, '1': {}, '2': {}}}, 'regressor_transformation': {'fillna': 'ffill', 'transformations': {'0': 'DifferencedTransformer'}, 'transformation_params': {'0': {}}}, 'regressors_used': False, 'linear_model': {'model': 'lstsq', 'lambda': None, 'recency_weighting': None}, 'randomwalk_n': None, 'trend_window': 365, 'trend_standin': 'random_normal', 'trend_anomaly_detector_params': None, 'trend_transformation': {'fillna': 'zero', 'transformations': {'0': 'EWMAFilter', '1': 'StandardScaler', '2': 'PowerTransformer'}, 'transformation_params': {'0': {'span': 10}, '1': {}, '2': {}}}, 'trend_model': {'Model': 'SeasonalityMotif', 'ModelParameters': {'window': 5, 'point_method': 'weighted_mean', 'distance_metric': 'mse', 'k': 5, 'datepart_method': 'simple_binarized'}}, 'trend_phi': None}
 """

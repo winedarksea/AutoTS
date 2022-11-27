@@ -68,12 +68,19 @@ def query_holidays(
     import holidays
 
     years = list(range(DTindex[0].year, DTindex[-1].year + 1))
-    country_holidays_base = holidays.CountryHoliday(
-        country, years=years, subdiv=holidays_subdiv
-    )
+    try:
+        country_holidays_base = holidays.CountryHoliday(
+            country, years=years, subdiv=holidays_subdiv
+        )
+    except Exception:
+        print(f'country {country} not recognized. Filter holiday_countries by holidays.utils.list_supported_countries() to remove this warning')
+        country_holidays_base = {}
     if encode_holiday_type:
         # sorting to hopefully get consistent encoding across runs (requires long period...)
-        country_holidays = pd.Series(country_holidays_base).sort_values()
+        if not country_holidays_base:
+            country_holidays = pd.Series('HolidayFlag', index=DTindex)
+        else:
+            country_holidays = pd.Series(country_holidays_base).sort_values()
         """
         from sklearn.preprocessing import OrdinalEncoder
         encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=999)
@@ -88,11 +95,15 @@ def query_holidays(
         holi_days = pd.get_dummies(country_holidays)
     else:
         country_holidays = country_holidays_base.keys()
-        holi_days = pd.Series(
-            np.repeat(1, len(country_holidays)),
-            index=pd.DatetimeIndex(country_holidays),
-            name="HolidayFlag",
-        )
+        if not country_holidays:
+            holi_days = pd.Series(0, name='HolidayFlag', dtype=int)
+        else:
+            holi_days = pd.Series(
+                np.repeat(1, len(country_holidays)),
+                index=pd.DatetimeIndex(country_holidays),
+                name="HolidayFlag",
+                dtype=int,
+            )
     # do some messy stuff to make sub daily data (hourly) align with daily holidays
     try:
         holi_days.index = pd.DatetimeIndex(holi_days.index).normalize()
