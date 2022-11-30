@@ -782,6 +782,8 @@ class AutoTS(object):
                 weights = df_wide_numeric.min(axis=0).to_dict()
             elif weights == 'max':
                 weights = df_wide_numeric.max(axis=0).to_dict()
+            elif weights == "inverse_mean":
+                weights = (1 / df_wide_numeric.mean(axis=0)).to_dict()
         # clean up series weighting input
         weights = clean_weights(weights, df_wide_numeric.columns, self.verbose)
         self.weights = weights
