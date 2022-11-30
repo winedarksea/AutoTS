@@ -3758,7 +3758,7 @@ transformer_dict = {
     "MeanDifference": 0.002,
     "BTCD": 0.01,
     "Cointegration": 0.01,
-    "AlignLastValue": 0.1,
+    "AlignLastValue": 0.2,
     "AnomalyRemoval": 0.03,
     'HolidayTransformer': 0.01,
     'LocalLinearTrend': 0.01,
