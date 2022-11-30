@@ -13,6 +13,9 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # 0.5.2 🌎 🌎 🌎
+* allow transformer_max_depth == 0
+* linear_tree option to LightGBM models
+* additional linear model options to Cassandra
 
 
 ### New Model Checklist:

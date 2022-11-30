@@ -1666,7 +1666,7 @@ class Cassandra(ModelObject):
         else:
             trend_anomaly_detector_params = None
         linear_model = random.choices(
-            ['lstsq', 'linalg_solve', 'l1_norm'], [0.6, 0.2, 0.1]
+            ['lstsq', 'linalg_solve', 'l1_norm', 'dwae_norm', 'quantile_norm'], [0.6, 0.2, 0.1, 0.05, 0.02]
         )[0]
         recency_weighting = random.choices(
             [None, 0.05, 0.1, 0.25], [0.7, 0.1, 0.1, 0.1]
@@ -1685,7 +1685,7 @@ class Cassandra(ModelObject):
                 'lambda': random.choices([0, 0.1, 1, 10], [0.4, 0.2, 0.2, 0.2])[0],
                 'recency_weighting': recency_weighting,
             }
-        elif linear_model == 'l1_norm':
+        elif linear_model in ['l1_norm', 'dwae_norm', 'quantile_norm']:
             linear_model = {
                 'model': linear_model,
                 'recency_weighting': recency_weighting,
@@ -2080,6 +2080,23 @@ def cost_function_l1(params, X, y):
     return np.sum(np.abs(y - np.dot(X, params.reshape(X.shape[1], y.shape[1]))))
 
 
+# actually this is more like MADE
+def cost_function_dwae(params, X, y):
+    A = y
+    F = np.dot(X, params.reshape(X.shape[1], y.shape[1]))
+    last_of_array = y[[0] + list(range(len(y) - 1))]
+    return np.sum(
+        np.nanmean(
+            np.where(
+                np.sign(F - last_of_array) == np.sign(A - last_of_array),
+                np.abs(A - F),
+                (np.abs(A - F) + 1) ** 2,
+            ),
+            axis=0,
+        )
+    )
+
+
 def cost_function_quantile(params, X, y, q=0.9):
     cut = int(y.shape[0] * q)
     return np.sum(
@@ -2094,14 +2111,20 @@ def cost_function_l2(params, X, y):
 
 
 # could do partial pooling by minimizing a function that mixes shared and unshared coefficients (multiplicative)
-def lstsq_minimize(X, y, maxiter=15000):
+def lstsq_minimize(X, y, maxiter=15000, cost_function="l1"):
     """Any cost function version of lin reg."""
     # start with lstsq fit as estimated point
     x0 = lstsq_solve(X, y).flatten()
     # assuming scaled, these should be reasonable bounds
     bounds = [(-10, 10) for x in x0]
+    if cost_function == "dwae":
+        cost_func = cost_function_dwae
+    elif cost_function == "quantile":
+        cost_func = cost_function_quantile
+    else:
+        cost_func = cost_function_l1
     return minimize(
-        cost_function_l1, x0, args=(X, y), bounds=bounds, options={'maxiter': maxiter}
+        cost_func, x0, args=(X, y), bounds=bounds, options={'maxiter': maxiter}
     ).x.reshape(X.shape[1], y.shape[1])
 
 
@@ -2127,7 +2150,11 @@ def linear_model(x, y, params):
     elif model_type == "linalg_solve":
         return lstsq_solve(x, y, lamb=lambd, identity_matrix=id_mat)
     elif model_type == "l1_norm":
-        return lstsq_minimize(x, y, maxiter=params.get("maxiter", 15000))
+        return lstsq_minimize(np.asarray(x), np.asarray(y), maxiter=params.get("maxiter", 15000), cost_function="l1")
+    elif model_type == "quantile_norm":
+        return lstsq_minimize(np.asarray(x), np.asarray(y), maxiter=params.get("maxiter", 15000), cost_function="quantile")
+    elif model_type == "dwae_norm":
+        return lstsq_minimize(np.asarray(x), np.asarray(y), maxiter=params.get("maxiter", 15000), cost_function="dwae")
     else:
         raise ValueError("linear model not recognized")
 
@@ -2234,7 +2261,7 @@ if False:
     future_impacts.iloc[0:10, 0] = (np.linspace(1, 10)[0:10] + 10) / 100
 
     c_params = Cassandra.get_new_params()
-    c_params
+    c_params["linear_model"]['model'] = 'l1_norm'
 
     mod = Cassandra(
         n_jobs=1,
@@ -2290,6 +2317,7 @@ if False:
         if include_history
         else df_test[df_train.columns]
     )
+    print(pred.avg_metrics.round(1))
 
     # if not mod.regressors_used:
     dates = df_daily.index.union(
@@ -2310,7 +2338,6 @@ if False:
     )
     mod.plot_forecast(pred2, actuals=df_daily, series=series, start_date=start_date)
     mod.return_components()
-    print(pred.avg_metrics.round(1))
     print(c_params['trend_model'])
 
 # MULTIPLICATIVE SEASONALITY AND HOLIDAYS
