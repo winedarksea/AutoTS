@@ -583,7 +583,7 @@ class PredictionObject(object):
                         )
                         / F.shape[0]
                     )
-                    / scaler) ** 0.5,
+                    / scaler + 1) ** 0.5,
                     # mean of values less than 85th percentile of error
                     'mqae': mqae(self.full_mae_errors, q=0.85, nan_flag=nan_flag),
                     # 90th percentile of error
