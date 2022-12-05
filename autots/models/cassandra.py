@@ -1765,7 +1765,7 @@ class Cassandra(ModelObject):
             "past_impacts_intervention": self.past_impacts_intervention,  # not in new
             "seasonalities": self.seasonalities,
             "ar_lags": self.ar_lags,
-            "ar_interaction_seasonality": self.ar_interaction_seasonality,
+            "ar_interaction_seasonality": self.ar_interaction_seasonality if self.ar_lags is not None else None,
             "anomaly_detector_params": self.anomaly_detector_params,
             "anomaly_intervention": self.anomaly_intervention,
             "holiday_detector_params": self.holiday_detector_params,
