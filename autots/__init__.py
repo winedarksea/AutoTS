@@ -23,6 +23,7 @@ from autots.tools.shaping import long_to_wide
 from autots.tools.regressor import create_lagged_regressor, create_regressor
 from autots.evaluator.auto_model import model_forecast
 from autots.evaluator.anomaly_detector import AnomalyDetector, HolidayDetector
+from autots.models.cassandra import Cassandra
 
 
 __version__ = '0.5.1'
@@ -51,4 +52,5 @@ __all__ = [
     'EventRiskForecast',
     'AnomalyDetector',
     'HolidayDetector',
+    'Cassandra',
 ]

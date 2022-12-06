@@ -1138,6 +1138,7 @@ class Cassandra(ModelObject):
         regressor_forecast_model=None,
         regressor_forecast_model_params=None,
         regressor_forecast_transformations=None,
+        include_organic=False,
     ):
         """Generate a forecast.
 
@@ -1535,6 +1536,8 @@ class Cassandra(ModelObject):
                     1
                 )  # minus or plus
                 self.impacts = impts
+                if include_organic:
+                    df_forecast.organic_forecast = df_forecast.forecast.copy()
                 df_forecast.forecast = df_forecast.forecast * impts
                 df_forecast.lower_forecast = df_forecast.lower_forecast * impts
                 df_forecast.upper_forecast = df_forecast.upper_forecast * impts
