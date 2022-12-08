@@ -662,8 +662,8 @@ class AutoTS(object):
 
         # convert class variables to local variables (makes testing easier)
         forecast_length = self.forecast_length
-        self.validation_indexes = validation_indexes
         if self.validation_method == "custom":
+            self.validation_indexes = validation_indexes
             assert (
                 validation_indexes is not None
             ), "validation_indexes needs to be filled with 'custom' validation"
@@ -674,6 +674,8 @@ class AutoTS(object):
                 assert len(validation_indexes) >= (
                     self.num_validations + 1
                 ), "validation_indexes needs to be >= num_validations + 1 with 'custom' validation"
+        else:
+            self.validation_indexes = []
         # flag if weights are given
         if bool(weights):
             weighted = True
@@ -904,6 +906,8 @@ class AutoTS(object):
                     "provided validation index exceeds historical data period"
                 )
             df_subset = df_subset.reindex(first_idx)
+        else:
+            self.validation_indexes.append(df_subset.index)
 
         # subset the weighting information as well
         if not weighted:
@@ -1223,6 +1227,7 @@ class AutoTS(object):
                     current_slice = df_wide_numeric.head(
                         df_wide_numeric.shape[0] - (y + 1) * forecast_length
                     )
+                    self.validation_indexes.append(current_slice.index)
                 elif self.validation_method == 'even':
                     # /num_validations biases it towards the last segment
                     validation_size = len(df_wide_numeric.index) - forecast_length

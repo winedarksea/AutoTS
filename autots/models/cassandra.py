@@ -316,7 +316,7 @@ class Cassandra(ModelObject):
 
         # remove past impacts to find "organic"
         if self.past_impacts_intervention == "remove":
-            self.df = self.df / (1 + past_impacts)  # MINUS OR PLUS HERE???
+            self.df = self.df / (1 + past_impacts)  # would MINUS be better?
         # holiday detection first, don't want any anomalies removed yet, and has own preprocessing
         if self.holiday_detector_params is not None:
             self.holiday_detector = HolidayTransformer(**self.holiday_detector_params)
