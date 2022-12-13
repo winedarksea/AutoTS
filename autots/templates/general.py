@@ -424,7 +424,7 @@ general_template_dict = {
             "trend_model": {"Model": "MetricMotif", "ModelParameters": {"window": 7, "point_method": "mean", "distance_metric": "mae", "k": 10, "comparison_transformation": {"fillna": "quadratic", "transformations": {"0": null}, "transformation_params": {"0": {}}}, "combination_transformation": {"fillna": "ffill", "transformations": {"0": "AlignLastValue"}, "transformation_params": {"0": {"rows": 1, "lag": 1, "method": "additive", "strength": 1.0, "first_value_only": false}}}}},
             "trend_phi": null
         }''',
-        'TransformationParameters': '{}',
+        'TransformationParameters': '{"fillna": null, "transformations": {}, "transformation_params": {}}',
         'Ensemble': 0,
     },
 }

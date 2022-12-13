@@ -355,14 +355,18 @@ class AutoTS(object):
         if self.transformer_max_depth < 6 or self.transformer_list not in [
             "all",
             "fast",
+            "superfast",
         ]:
             from autots.tools.transform import transformer_list_to_dict
 
             transformer_lst, prb = transformer_list_to_dict(self.transformer_list)
             for index, row in self.initial_template.iterrows():
                 full_params = json.loads(row['TransformationParameters'])
-                transformations = full_params['transformations']
-                transformation_params = full_params['transformation_params']
+                try:
+                    transformations = full_params['transformations']
+                    transformation_params = full_params['transformation_params']
+                except KeyError:
+                    raise ValueError("initial_template is missing transformation parameters for one or more models")
                 # remove those not in transformer_list
                 bad_keys = [
                     i
