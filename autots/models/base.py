@@ -572,18 +572,24 @@ class PredictionObject(object):
                     # origin directional accuracy
                     'oda': np.nansum(direc_sign, axis=0) / F.shape[0],
                     # plus one to squared errors to assure errors in 0 to 1 are still bigger than abs error
-                    "dwae": (((
-                        np.nansum(
-                            np.where(
-                                direc_sign,
-                                self.full_mae_errors,
-                                self.squared_errors + 1,
-                            ),
-                            axis=0,
+                    "dwae": (
+                        (
+                            (
+                                np.nansum(
+                                    np.where(
+                                        direc_sign,
+                                        self.full_mae_errors,
+                                        self.squared_errors + 1,
+                                    ),
+                                    axis=0,
+                                )
+                                / F.shape[0]
+                            )
+                            / scaler
                         )
-                        / F.shape[0]
+                        + 1
                     )
-                    / scaler) + 1) ** 0.5,
+                    ** 0.5,
                     # mean of values less than 85th percentile of error
                     'mqae': mqae(self.full_mae_errors, q=0.85, nan_flag=nan_flag),
                     # 90th percentile of error

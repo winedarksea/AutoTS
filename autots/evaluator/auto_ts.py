@@ -366,7 +366,9 @@ class AutoTS(object):
                     transformations = full_params['transformations']
                     transformation_params = full_params['transformation_params']
                 except KeyError:
-                    raise ValueError("initial_template is missing transformation parameters for one or more models")
+                    raise ValueError(
+                        "initial_template is missing transformation parameters for one or more models"
+                    )
                 # remove those not in transformer_list
                 bad_keys = [
                     i

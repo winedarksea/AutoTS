@@ -464,10 +464,12 @@ class Cassandra(ModelObject):
                 resid, slope, intercept = self.rolling_trend(
                     np.asarray(df), np.array(self.create_t(df.index))
                 )
-                resid = pd.DataFrame(slope * self.t_train[..., None] + intercept, index=df.index, columns=df.columns)
-                x_list.append(
-                    resid.rename(columns=lambda x: "rolling_trend_" + str(x))
+                resid = pd.DataFrame(
+                    slope * self.t_train[..., None] + intercept,
+                    index=df.index,
+                    columns=df.columns,
                 )
+                x_list.append(resid.rename(columns=lambda x: "rolling_trend_" + str(x)))
         if future_regressor is not None and self.regressors_used:
             if self.regressor_transformation is not None:
                 self.regressor_transformer = GeneralTransformer(
@@ -1669,7 +1671,8 @@ class Cassandra(ModelObject):
         else:
             trend_anomaly_detector_params = None
         linear_model = random.choices(
-            ['lstsq', 'linalg_solve', 'l1_norm', 'dwae_norm', 'quantile_norm'], [0.6, 0.2, 0.1, 0.05, 0.02]
+            ['lstsq', 'linalg_solve', 'l1_norm', 'dwae_norm', 'quantile_norm'],
+            [0.6, 0.2, 0.1, 0.05, 0.02],
         )[0]
         recency_weighting = random.choices(
             [None, 0.05, 0.1, 0.25], [0.7, 0.1, 0.1, 0.1]
@@ -1768,7 +1771,9 @@ class Cassandra(ModelObject):
             "past_impacts_intervention": self.past_impacts_intervention,  # not in new
             "seasonalities": self.seasonalities,
             "ar_lags": self.ar_lags,
-            "ar_interaction_seasonality": self.ar_interaction_seasonality if self.ar_lags is not None else None,
+            "ar_interaction_seasonality": self.ar_interaction_seasonality
+            if self.ar_lags is not None
+            else None,
             "anomaly_detector_params": self.anomaly_detector_params,
             "anomaly_intervention": self.anomaly_intervention,
             "holiday_detector_params": self.holiday_detector_params,
@@ -1776,8 +1781,12 @@ class Cassandra(ModelObject):
             # "holiday_countries": self.holiday_countries,
             "holiday_countries_used": self.holiday_countries_used,
             "multivariate_feature": self.multivariate_feature,
-            "multivariate_transformation": self.multivariate_transformation if self.multivariate_feature is not None else None,
-            "regressor_transformation": self.regressor_transformation if self.regressors_used else None,
+            "multivariate_transformation": self.multivariate_transformation
+            if self.multivariate_feature is not None
+            else None,
+            "regressor_transformation": self.regressor_transformation
+            if self.regressors_used
+            else None,
             "regressors_used": self.regressors_used,
             "linear_model": self.linear_model,
             "randomwalk_n": self.randomwalk_n,
@@ -2153,11 +2162,26 @@ def linear_model(x, y, params):
     elif model_type == "linalg_solve":
         return lstsq_solve(x, y, lamb=lambd, identity_matrix=id_mat)
     elif model_type == "l1_norm":
-        return lstsq_minimize(np.asarray(x), np.asarray(y), maxiter=params.get("maxiter", 15000), cost_function="l1")
+        return lstsq_minimize(
+            np.asarray(x),
+            np.asarray(y),
+            maxiter=params.get("maxiter", 15000),
+            cost_function="l1",
+        )
     elif model_type == "quantile_norm":
-        return lstsq_minimize(np.asarray(x), np.asarray(y), maxiter=params.get("maxiter", 15000), cost_function="quantile")
+        return lstsq_minimize(
+            np.asarray(x),
+            np.asarray(y),
+            maxiter=params.get("maxiter", 15000),
+            cost_function="quantile",
+        )
     elif model_type == "dwae_norm":
-        return lstsq_minimize(np.asarray(x), np.asarray(y), maxiter=params.get("maxiter", 15000), cost_function="dwae")
+        return lstsq_minimize(
+            np.asarray(x),
+            np.asarray(y),
+            maxiter=params.get("maxiter", 15000),
+            cost_function="dwae",
+        )
     else:
         raise ValueError("linear model not recognized")
 
@@ -2313,7 +2337,9 @@ if False:
         )
         # plt.savefig("Cassandra_components.png", dpi=300)
         plt.show()
-        mod.plot_trend(series=series, vline=result.index[-forecast_length], start_date=start_date)
+        mod.plot_trend(
+            series=series, vline=result.index[-forecast_length], start_date=start_date
+        )
         # plt.savefig("Cassandra_trend.png", dpi=300)
     pred.evaluate(
         df_daily.reindex(result.index)[df_train.columns]

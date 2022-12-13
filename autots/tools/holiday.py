@@ -73,7 +73,9 @@ def query_holidays(
             country, years=years, subdiv=holidays_subdiv
         )
     except Exception:
-        print(f'country {country} not recognized. Filter holiday_countries by holidays.utils.list_supported_countries() to remove this warning')
+        print(
+            f'country {country} not recognized. Filter holiday_countries by holidays.utils.list_supported_countries() to remove this warning'
+        )
         country_holidays_base = {}
     if encode_holiday_type:
         # sorting to hopefully get consistent encoding across runs (requires long period...)
