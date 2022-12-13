@@ -3758,7 +3758,7 @@ transformer_dict = {
     "MeanDifference": 0.002,
     "BTCD": 0.01,
     "Cointegration": 0.01,
-    "AlignLastValue": 0.1,
+    "AlignLastValue": 0.2,
     "AnomalyRemoval": 0.03,
     'HolidayTransformer': 0.01,
     'LocalLinearTrend': 0.01,
@@ -3881,6 +3881,9 @@ def RandomTransform(
     BTCD is used as a signal that slow parameters are allowed.
     """
     transformer_list, transformer_prob = transformer_list_to_dict(transformer_list)
+    if transformer_max_depth <= 0:
+        transformer_max_depth = 0
+        transformer_min_depth = 0
 
     # adjust fast/slow based on Transformers allowed
     if fast_params is None:

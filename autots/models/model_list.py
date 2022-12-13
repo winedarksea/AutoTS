@@ -68,8 +68,9 @@ default = {
     'ARDL': 1,
     'ARCH': 1,
     'MetricMotif': 1,
-    'SeasonalityMotif': 1,
+    # 'SeasonalityMotif': 1,
 }
+# so this opiniated and not fully updated always
 best = [
     'LastValueNaive',
     'AverageValueNaive',
@@ -93,6 +94,7 @@ best = [
     'Theta',
     'ARDL',
     'ARCH',
+    'SeasonalityMotif',
 ]
 # fastest models at any scale
 superfast = [
@@ -102,7 +104,7 @@ superfast = [
     'GLS',
     'SeasonalNaive',
     # 'MetricMotif',
-    'SeasonalityMotif',
+    # 'SeasonalityMotif',
 ]
 # relatively fast
 fast = {

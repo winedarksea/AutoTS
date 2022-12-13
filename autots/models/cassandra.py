@@ -316,7 +316,7 @@ class Cassandra(ModelObject):
 
         # remove past impacts to find "organic"
         if self.past_impacts_intervention == "remove":
-            self.df = self.df / (1 + past_impacts)  # MINUS OR PLUS HERE???
+            self.df = self.df / (1 + past_impacts)  # would MINUS be better?
         # holiday detection first, don't want any anomalies removed yet, and has own preprocessing
         if self.holiday_detector_params is not None:
             self.holiday_detector = HolidayTransformer(**self.holiday_detector_params)
@@ -461,9 +461,15 @@ class Cassandra(ModelObject):
                     )
                 )
             elif self.trend_standin == "rolling_trend":
-                # the idea being to have a rolling trend fit first and used as feature
-                # excluded as it would require a loop
-                return NotImplemented
+                resid, slope, intercept = self.rolling_trend(
+                    np.asarray(df), np.array(self.create_t(df.index))
+                )
+                resid = pd.DataFrame(
+                    slope * self.t_train[..., None] + intercept,
+                    index=df.index,
+                    columns=df.columns,
+                )
+                x_list.append(resid.rename(columns=lambda x: "rolling_trend_" + str(x)))
         if future_regressor is not None and self.regressors_used:
             if self.regressor_transformation is not None:
                 self.regressor_transformer = GeneralTransformer(
@@ -1134,6 +1140,7 @@ class Cassandra(ModelObject):
         regressor_forecast_model=None,
         regressor_forecast_model_params=None,
         regressor_forecast_transformations=None,
+        include_organic=False,
     ):
         """Generate a forecast.
 
@@ -1531,6 +1538,8 @@ class Cassandra(ModelObject):
                     1
                 )  # minus or plus
                 self.impacts = impts
+                if include_organic:
+                    df_forecast.organic_forecast = df_forecast.forecast.copy()
                 df_forecast.forecast = df_forecast.forecast * impts
                 df_forecast.lower_forecast = df_forecast.lower_forecast * impts
                 df_forecast.upper_forecast = df_forecast.upper_forecast * impts
@@ -1662,7 +1671,8 @@ class Cassandra(ModelObject):
         else:
             trend_anomaly_detector_params = None
         linear_model = random.choices(
-            ['lstsq', 'linalg_solve', 'l1_norm'], [0.6, 0.2, 0.1]
+            ['lstsq', 'linalg_solve', 'l1_norm', 'dwae_norm', 'quantile_norm'],
+            [0.6, 0.2, 0.1, 0.05, 0.02],
         )[0]
         recency_weighting = random.choices(
             [None, 0.05, 0.1, 0.25], [0.7, 0.1, 0.1, 0.1]
@@ -1681,7 +1691,7 @@ class Cassandra(ModelObject):
                 'lambda': random.choices([0, 0.1, 1, 10], [0.4, 0.2, 0.2, 0.2])[0],
                 'recency_weighting': recency_weighting,
             }
-        elif linear_model == 'l1_norm':
+        elif linear_model in ['l1_norm', 'dwae_norm', 'quantile_norm']:
             linear_model = {
                 'model': linear_model,
                 'recency_weighting': recency_weighting,
@@ -1742,7 +1752,7 @@ class Cassandra(ModelObject):
             "trend_window": random.choices([3, 15, 90, 365], [0.2, 0.2, 0.2, 0.2])[0],
             "trend_standin": random.choices(
                 [None, 'random_normal', 'rolling_trend'],
-                [0.5, 0.4, 0.0],
+                [0.5, 0.4, 0.1],
             )[0],
             "trend_anomaly_detector_params": trend_anomaly_detector_params,
             # "trend_anomaly_intervention": trend_anomaly_intervention,
@@ -1761,16 +1771,22 @@ class Cassandra(ModelObject):
             "past_impacts_intervention": self.past_impacts_intervention,  # not in new
             "seasonalities": self.seasonalities,
             "ar_lags": self.ar_lags,
-            "ar_interaction_seasonality": self.ar_interaction_seasonality,
+            "ar_interaction_seasonality": self.ar_interaction_seasonality
+            if self.ar_lags is not None
+            else None,
             "anomaly_detector_params": self.anomaly_detector_params,
             "anomaly_intervention": self.anomaly_intervention,
             "holiday_detector_params": self.holiday_detector_params,
             # "holiday_intervention": self.holiday_intervention,
-            "holiday_countries": self.holiday_countries,
+            # "holiday_countries": self.holiday_countries,
             "holiday_countries_used": self.holiday_countries_used,
             "multivariate_feature": self.multivariate_feature,
-            "multivariate_transformation": self.multivariate_transformation,
-            "regressor_transformation": self.regressor_transformation,
+            "multivariate_transformation": self.multivariate_transformation
+            if self.multivariate_feature is not None
+            else None,
+            "regressor_transformation": self.regressor_transformation
+            if self.regressors_used
+            else None,
             "regressors_used": self.regressors_used,
             "linear_model": self.linear_model,
             "randomwalk_n": self.randomwalk_n,
@@ -2076,6 +2092,23 @@ def cost_function_l1(params, X, y):
     return np.sum(np.abs(y - np.dot(X, params.reshape(X.shape[1], y.shape[1]))))
 
 
+# actually this is more like MADE
+def cost_function_dwae(params, X, y):
+    A = y
+    F = np.dot(X, params.reshape(X.shape[1], y.shape[1]))
+    last_of_array = y[[0] + list(range(len(y) - 1))]
+    return np.sum(
+        np.nanmean(
+            np.where(
+                np.sign(F - last_of_array) == np.sign(A - last_of_array),
+                np.abs(A - F),
+                (np.abs(A - F) + 1) ** 2,
+            ),
+            axis=0,
+        )
+    )
+
+
 def cost_function_quantile(params, X, y, q=0.9):
     cut = int(y.shape[0] * q)
     return np.sum(
@@ -2090,14 +2123,20 @@ def cost_function_l2(params, X, y):
 
 
 # could do partial pooling by minimizing a function that mixes shared and unshared coefficients (multiplicative)
-def lstsq_minimize(X, y, maxiter=15000):
+def lstsq_minimize(X, y, maxiter=15000, cost_function="l1"):
     """Any cost function version of lin reg."""
     # start with lstsq fit as estimated point
     x0 = lstsq_solve(X, y).flatten()
     # assuming scaled, these should be reasonable bounds
     bounds = [(-10, 10) for x in x0]
+    if cost_function == "dwae":
+        cost_func = cost_function_dwae
+    elif cost_function == "quantile":
+        cost_func = cost_function_quantile
+    else:
+        cost_func = cost_function_l1
     return minimize(
-        cost_function_l1, x0, args=(X, y), bounds=bounds, options={'maxiter': maxiter}
+        cost_func, x0, args=(X, y), bounds=bounds, options={'maxiter': maxiter}
     ).x.reshape(X.shape[1], y.shape[1])
 
 
@@ -2123,7 +2162,26 @@ def linear_model(x, y, params):
     elif model_type == "linalg_solve":
         return lstsq_solve(x, y, lamb=lambd, identity_matrix=id_mat)
     elif model_type == "l1_norm":
-        return lstsq_minimize(x, y, maxiter=params.get("maxiter", 15000))
+        return lstsq_minimize(
+            np.asarray(x),
+            np.asarray(y),
+            maxiter=params.get("maxiter", 15000),
+            cost_function="l1",
+        )
+    elif model_type == "quantile_norm":
+        return lstsq_minimize(
+            np.asarray(x),
+            np.asarray(y),
+            maxiter=params.get("maxiter", 15000),
+            cost_function="quantile",
+        )
+    elif model_type == "dwae_norm":
+        return lstsq_minimize(
+            np.asarray(x),
+            np.asarray(y),
+            maxiter=params.get("maxiter", 15000),
+            cost_function="dwae",
+        )
     else:
         raise ValueError("linear model not recognized")
 
@@ -2230,7 +2288,7 @@ if False:
     future_impacts.iloc[0:10, 0] = (np.linspace(1, 10)[0:10] + 10) / 100
 
     c_params = Cassandra.get_new_params()
-    c_params
+    c_params["linear_model"]['model'] = 'l1_norm'
 
     mod = Cassandra(
         n_jobs=1,
@@ -2270,8 +2328,8 @@ if False:
             start_date=start_date,
         )
 
-        plt.show()
-        # plt.savefig("forecast.png", dpi=300)
+        # plt.show()
+        # plt.savefig("Cassandra_forecast.png", dpi=300)
         # mod.plot_components(pred, series=series, to_origin_space=False)
         # plt.show()
         mod.plot_components(
@@ -2279,13 +2337,16 @@ if False:
         )
         # plt.savefig("Cassandra_components.png", dpi=300)
         plt.show()
-        mod.plot_trend(series=series, vline=df_test.index[0], start_date=start_date)
-        # plt.savefig("trend.png", dpi=300)
+        mod.plot_trend(
+            series=series, vline=result.index[-forecast_length], start_date=start_date
+        )
+        # plt.savefig("Cassandra_trend.png", dpi=300)
     pred.evaluate(
         df_daily.reindex(result.index)[df_train.columns]
         if include_history
         else df_test[df_train.columns]
     )
+    print(pred.avg_metrics.round(1))
 
     # if not mod.regressors_used:
     dates = df_daily.index.union(
@@ -2306,7 +2367,6 @@ if False:
     )
     mod.plot_forecast(pred2, actuals=df_daily, series=series, start_date=start_date)
     mod.return_components()
-    print(pred.avg_metrics.round(1))
     print(c_params['trend_model'])
 
 # MULTIPLICATIVE SEASONALITY AND HOLIDAYS
@@ -2480,4 +2540,8 @@ c_params = {'preprocessing_transformation': {'fillna': 'ffill',
       'observation_model': [[1]],
       'observation_noise': 0.5}}}}},
  'trend_phi': None}
+
+
+# best on validations of direction
+c_params = {'preprocessing_transformation': {'fillna': 'rolling_mean', 'transformations': {'0': None}, 'transformation_params': {'0': {}}}, 'scaling': 'BaseScaler', 'past_impacts_intervention': None, 'seasonalities': [7, 365.25], 'ar_lags': [1, 7], 'ar_interaction_seasonality': None, 'anomaly_detector_params': {'method': 'rolling_zscore', 'transform_dict': None, 'method_params': {'distribution': 'uniform', 'alpha': 0.05, 'rolling_periods': 200, 'center': False}, 'fillna': 'linear'}, 'anomaly_intervention': 'remove', 'holiday_detector_params': None, 'holiday_countries': None, 'holiday_countries_used': True, 'multivariate_feature': None, 'multivariate_transformation': {'fillna': 'KNNImputer', 'transformations': {'0': 'SeasonalDifference', '1': 'MinMaxScaler', '2': 'cffilter'}, 'transformation_params': {'0': {'lag_1': 12, 'method': 'Median'}, '1': {}, '2': {}}}, 'regressor_transformation': {'fillna': 'ffill', 'transformations': {'0': 'DifferencedTransformer'}, 'transformation_params': {'0': {}}}, 'regressors_used': False, 'linear_model': {'model': 'lstsq', 'lambda': None, 'recency_weighting': None}, 'randomwalk_n': None, 'trend_window': 365, 'trend_standin': 'random_normal', 'trend_anomaly_detector_params': None, 'trend_transformation': {'fillna': 'zero', 'transformations': {'0': 'EWMAFilter', '1': 'StandardScaler', '2': 'PowerTransformer'}, 'transformation_params': {'0': {'span': 10}, '1': {}, '2': {}}}, 'trend_model': {'Model': 'SeasonalityMotif', 'ModelParameters': {'window': 5, 'point_method': 'weighted_mean', 'distance_metric': 'mse', 'k': 5, 'datepart_method': 'simple_binarized'}}, 'trend_phi': None}
 """

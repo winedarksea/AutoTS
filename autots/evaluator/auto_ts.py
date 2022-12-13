@@ -189,7 +189,7 @@ class AutoTS(object):
         n_jobs: int = -2,
     ):
         assert forecast_length > 0, "forecast_length must be greater than 0"
-        assert transformer_max_depth > 0, "transformer_max_depth must be greater than 0"
+        # assert transformer_max_depth > 0, "transformer_max_depth must be greater than 0"
         self.forecast_length = int(abs(forecast_length))
         self.frequency = frequency
         self.aggfunc = aggfunc
@@ -355,14 +355,20 @@ class AutoTS(object):
         if self.transformer_max_depth < 6 or self.transformer_list not in [
             "all",
             "fast",
+            "superfast",
         ]:
             from autots.tools.transform import transformer_list_to_dict
 
             transformer_lst, prb = transformer_list_to_dict(self.transformer_list)
             for index, row in self.initial_template.iterrows():
                 full_params = json.loads(row['TransformationParameters'])
-                transformations = full_params['transformations']
-                transformation_params = full_params['transformation_params']
+                try:
+                    transformations = full_params['transformations']
+                    transformation_params = full_params['transformation_params']
+                except KeyError:
+                    raise ValueError(
+                        "initial_template is missing transformation parameters for one or more models"
+                    )
                 # remove those not in transformer_list
                 bad_keys = [
                     i
@@ -552,7 +558,7 @@ class AutoTS(object):
             'num_validations': random.choice([0, 1, 2, 3, 4, 6]),
             'validation_method': random.choices(
                 ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
-                [0.4, 0.1, 0.3, 0.3],
+                [0.4, 0.1, 0.3, 0.3, 0.2],
             )[0],
             'models_to_validate': random.choices(
                 [0.15, 0.10, 0.25, 0.35, 0.45], [0.3, 0.1, 0.3, 0.3, 0.1]
@@ -662,8 +668,8 @@ class AutoTS(object):
 
         # convert class variables to local variables (makes testing easier)
         forecast_length = self.forecast_length
-        self.validation_indexes = validation_indexes
         if self.validation_method == "custom":
+            self.validation_indexes = validation_indexes
             assert (
                 validation_indexes is not None
             ), "validation_indexes needs to be filled with 'custom' validation"
@@ -674,6 +680,8 @@ class AutoTS(object):
                 assert len(validation_indexes) >= (
                     self.num_validations + 1
                 ), "validation_indexes needs to be >= num_validations + 1 with 'custom' validation"
+        else:
+            self.validation_indexes = []
         # flag if weights are given
         if bool(weights):
             weighted = True
@@ -782,6 +790,8 @@ class AutoTS(object):
                 weights = df_wide_numeric.min(axis=0).to_dict()
             elif weights == 'max':
                 weights = df_wide_numeric.max(axis=0).to_dict()
+            elif weights == "inverse_mean":
+                weights = (1 / df_wide_numeric.mean(axis=0)).to_dict()
         # clean up series weighting input
         weights = clean_weights(weights, df_wide_numeric.columns, self.verbose)
         self.weights = weights
@@ -902,6 +912,8 @@ class AutoTS(object):
                     "provided validation index exceeds historical data period"
                 )
             df_subset = df_subset.reindex(first_idx)
+        else:
+            self.validation_indexes.append(df_subset.index)
 
         # subset the weighting information as well
         if not weighted:
@@ -1221,6 +1233,7 @@ class AutoTS(object):
                     current_slice = df_wide_numeric.head(
                         df_wide_numeric.shape[0] - (y + 1) * forecast_length
                     )
+                    self.validation_indexes.append(current_slice.index)
                 elif self.validation_method == 'even':
                     # /num_validations biases it towards the last segment
                     validation_size = len(df_wide_numeric.index) - forecast_length

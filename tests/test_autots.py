@@ -277,6 +277,10 @@ class AutoTSTest(unittest.TestCase):
         df = load_daily(long=False)
         df = load_daily(long=True)  # noqa
 
+    def test_new_params(self):
+        params = AutoTS.get_new_params()
+        self.assertIsInstance(params, dict)
+
     def test_univariate1step(self):
         print("Starting test_univariate1step")
         df = load_artificial(long=False)
