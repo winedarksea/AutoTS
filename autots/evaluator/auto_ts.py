@@ -2156,11 +2156,11 @@ or otherwise increase models available."""
         return result
 
     def plot_horizontal_per_generation(
-        self, title="Horizontal Ensemble Model Accuracy Gain Over Generations", **kwargs
+        self, title="Horizontal Ensemble Accuracy Gain (first eval sample only)", **kwargs
     ):
         """Plot how well the horizontal ensembles would do after each new generation. Slow."""
         self.horizontal_per_generation().model_results['Score'].plot(
-            ylabel="Lowest Score", title=title, **kwargs
+            ylabel="Lowest Score", xlabel="Generation", title=title, **kwargs
         )
 
     def back_forecast(

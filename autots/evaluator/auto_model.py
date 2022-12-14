@@ -2297,13 +2297,11 @@ def generate_score_per_series(
     oda_weighting = metric_weighting.get('oda_weighting', 0)
     mqae_weighting = metric_weighting.get('mqae_weighting', 0)
     dwae_weighting = metric_weighting.get('dwae_weighting', 0)
-    if sum([mae_weighting, rmse_weighting, contour_weighting, spl_weighting]) == 0:
-        mae_weighting = 1
 
     # there are problems when very small ~e-20 type number are in play
     mae_scaler = results_object.per_series_mae[
         results_object.per_series_mae != 0
-    ].round(20)
+    ].round(0)
     mae_scaler = mae_scaler[mae_scaler != 0].min().fillna(1)
     mae_score = results_object.per_series_mae / mae_scaler
     overall_score = mae_score * mae_weighting
@@ -2407,6 +2405,11 @@ def generate_score_per_series(
             run_count['Model'] >= total_validations
         ].index.tolist()
     overall_score = overall_score[overall_score.index.isin(models_to_use)]
+    # remove duplicates for each model, as can occasionally happen
+    unique_id_name = "IDxxxx6777y9"  # want it unlikely to be a time series name
+    overall_score.index.name = unique_id_name
+    overall_score = overall_score.reset_index(drop=False).drop_duplicates().set_index(unique_id_name)
+    overall_score.index.name = "ID"
     # take the average score across validations
     overall_score = overall_score.groupby(level=0).mean()
     return overall_score.astype(float)  # need to handle complex values (!)

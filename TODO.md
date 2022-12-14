@@ -12,10 +12,8 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.5.2 🌎 🌎 🌎
-* allow transformer_max_depth == 0
-* linear_tree option to LightGBM models
-* additional linear model options to Cassandra
+# 0.5.3 🌍 🌍 🌍
+* robustness changes to generate_score_per_series for horizontal ensembles
 
 
 ### New Model Checklist:
