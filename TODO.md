@@ -14,6 +14,8 @@
 
 # 0.5.3 🌍 🌍 🌍
 * robustness changes to generate_score_per_series for horizontal ensembles
+* added generation_timeout to allow stopping based on time
+* added ability to specify anomaly model (ie 'zscore') to AnomalyDetector.get_new_params(method='zscore')
 
 
 ### New Model Checklist:

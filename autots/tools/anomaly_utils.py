@@ -447,6 +447,8 @@ def anomaly_new_params(method='random'):
         )[0]
     elif method == "fast":
         method_choice = random.choices(fast_methods, [0.4, 0.3, 0.1, 0.1, 0.4, 0.05])[0]
+    elif method in available_methods:
+        method_choice = method
     else:
         method_choice = random.choices(
             [
