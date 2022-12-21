@@ -193,6 +193,11 @@ class AnomalyDetector(object):
 
     @staticmethod
     def get_new_params(method="random"):
+        """Generate random new parameter combinations.
+        
+        Args:
+            method (str): 'fast', 'deep', 'default', or any of the anomaly method names (ie 'IQR') to specify only that method
+        """
         forecast_params = None
         method_choice, method_params, transform_dict = anomaly_new_params(method=method)
         if transform_dict == "random":

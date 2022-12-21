@@ -1238,7 +1238,7 @@ class Cassandra(ModelObject):
                 raise ValueError("flag_regressors supplied in training but not predict")
             all_flags = self.flag_regressor_train
         if future_impacts is not None and forecast_length is not None:
-            if len(future_regressor) == expected_fore_len:
+            if len(future_impacts) == expected_fore_len:
                 impacts = future_impacts
             else:
                 impacts = pd.concat([self.past_impacts, future_impacts])
@@ -2312,6 +2312,7 @@ if False:
         regressor_per_series=regr_per_series_fcst,
         future_impacts=future_impacts,
         flag_regressors=flag_regressor_fcst,
+        include_organic=True,
     )
     result = pred.forecast
     series = random.choice(mod.column_names)
