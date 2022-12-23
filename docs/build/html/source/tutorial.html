@@ -3,9 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 
-    <title>Tutorial &#8212; AutoTS 0.5.0 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.5.3 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -250,9 +250,9 @@ This will run Ensembles, and as such is generally recommended over loading the m
 </pre></div>
 </div>
 <p>The <code class="docutils literal notranslate"><span class="pre">model.predict()</span></code> of AutoTS class runs the model given by three stored attributes:</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>model.best_model_name,
-model.best_model_params,
-model.best_model_transformation_params
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">model</span><span class="o">.</span><span class="n">best_model_name</span><span class="p">,</span>
+<span class="n">model</span><span class="o">.</span><span class="n">best_model_params</span><span class="p">,</span>
+<span class="n">model</span><span class="o">.</span><span class="n">best_model_transformation_params</span>
 </pre></div>
 </div>
 <p>If you overwrite these, it will accordingly change the forecast output.</p>
@@ -402,7 +402,7 @@ Linux may also require <code class="docutils literal notranslate"><span class="p
 <p>You can check if your system is using mkl, OpenBLAS, or none with <code class="docutils literal notranslate"><span class="pre">numpy.show_config()</span></code>. Generally recommended that you double-check this after installing new packages to make sure you haven’t broken the LINPACK connection.</p>
 <section id="requirements">
 <h3>Requirements:<a class="headerlink" href="#requirements" title="Permalink to this headline">¶</a></h3>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>Python &gt;= 3.6
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Python &gt;= 3.6
 numpy
     &gt;= 1.20 (Sliding Window in Motif and WindowRegression)
 pandas
@@ -423,7 +423,7 @@ scipy.spatial.cdist (Motifs)
 </div>
 <p>Of these, numpy and pandas are critical.
 Limited functionality should exist without scikit-learn.</p>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>* Sklearn needed for categorical to numeric, some detrends/transformers, horizontal generalization, numerous models, nan_euclidean distance
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">*</span> <span class="n">Sklearn</span> <span class="n">needed</span> <span class="k">for</span> <span class="n">categorical</span> <span class="n">to</span> <span class="n">numeric</span><span class="p">,</span> <span class="n">some</span> <span class="n">detrends</span><span class="o">/</span><span class="n">transformers</span><span class="p">,</span> <span class="n">horizontal</span> <span class="n">generalization</span><span class="p">,</span> <span class="n">numerous</span> <span class="n">models</span><span class="p">,</span> <span class="n">nan_euclidean</span> <span class="n">distance</span>
 </pre></div>
 </div>
 <p>Full functionality should be maintained without statsmodels, albeit with fewer available models.</p>
@@ -432,21 +432,21 @@ Limited functionality should exist without scikit-learn.</p>
 </section>
 <section id="optional-packages">
 <h3>Optional Packages<a class="headerlink" href="#optional-packages" title="Permalink to this headline">¶</a></h3>
-<div class="highlight-guess notranslate"><div class="highlight"><pre><span></span>requests
-psutil
-holidays
-prophet
-gluonts (requires mxnet)
-mxnet (mxnet-mkl, mxnet-cu91, mxnet-cu101mkl, etc.)
-tensorflow &gt;= 2.0.0
-lightgbm
-xgboost
-tensorflow-probability
-fredapi
-greykite
-matplotlib
-pytorch-forecasting
-scipy
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">requests</span>
+<span class="n">psutil</span>
+<span class="n">holidays</span>
+<span class="n">prophet</span>
+<span class="n">gluonts</span> <span class="p">(</span><span class="n">requires</span> <span class="n">mxnet</span><span class="p">)</span>
+<span class="n">mxnet</span> <span class="p">(</span><span class="n">mxnet</span><span class="o">-</span><span class="n">mkl</span><span class="p">,</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu91</span><span class="p">,</span> <span class="n">mxnet</span><span class="o">-</span><span class="n">cu101mkl</span><span class="p">,</span> <span class="n">etc</span><span class="o">.</span><span class="p">)</span>
+<span class="n">tensorflow</span> <span class="o">&gt;=</span> <span class="mf">2.0.0</span>
+<span class="n">lightgbm</span>
+<span class="n">xgboost</span>
+<span class="n">tensorflow</span><span class="o">-</span><span class="n">probability</span>
+<span class="n">fredapi</span>
+<span class="n">greykite</span>
+<span class="n">matplotlib</span>
+<span class="n">pytorch</span><span class="o">-</span><span class="n">forecasting</span>
+<span class="n">scipy</span>
 </pre></div>
 </div>
 <p>Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs.</p>
@@ -686,7 +686,7 @@ Generate a risk score (0 to 1, but usually close to 0) for a future event exceed
 <span class="n">df</span> <span class="o">=</span> <span class="n">df_full</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span> <span class="p">(</span><span class="n">df_full</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">forecast_length</span><span class="p">)]</span>
 <span class="n">df_test</span> <span class="o">=</span> <span class="n">df</span><span class="p">[(</span><span class="n">df</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">forecast_length</span><span class="p">):]</span>
 
-<span class="n">upper_limit</span> <span class="o">=</span> <span class="mf">0.95</span>
+<span class="n">upper_limit</span> <span class="o">=</span> <span class="mf">0.95</span>  <span class="c1"># --&gt; 95% quantile of historic data</span>
 <span class="c1"># if using manual array limits, historic limit must be defined separately (if used)</span>
 <span class="n">lower_limit</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">forecast_length</span><span class="p">,</span> <span class="n">df</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
 <span class="n">historic_lower_limit</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>

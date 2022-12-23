@@ -12,10 +12,11 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.5.2 🌎 🌎 🌎
-* allow transformer_max_depth == 0
-* linear_tree option to LightGBM models
-* additional linear model options to Cassandra
+# 0.5.3 🌍 🌍 🌍
+* robustness changes to generate_score_per_series for horizontal ensembles
+* added generation_timeout to allow stopping based on time
+* added ability to specify anomaly model (ie 'zscore') to AnomalyDetector.get_new_params(method='zscore')
+* fixed a bug in Cassandra with future_impacts and future_regressor
 
 
 ### New Model Checklist:

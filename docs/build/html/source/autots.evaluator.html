@@ -3,9 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 
-    <title>autots.evaluator package &#8212; AutoTS 0.5.0 documentation</title>
+    <title>autots.evaluator package &#8212; AutoTS 0.5.3 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -76,7 +76,13 @@ Created on Mon Jul 18 14:19:55 2022</p>
 <dl class="method">
 <dt id="autots.evaluator.anomaly_detector.AnomalyDetector.get_new_params">
 <em class="property">static </em><code class="sig-name descname">get_new_params</code><span class="sig-paren">(</span><em class="sig-param">method='random'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.anomaly_detector.AnomalyDetector.get_new_params" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Generate random new parameter combinations.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>method</strong> (<em>str</em>) – ‘fast’, ‘deep’, ‘default’, or any of the anomaly method names (ie ‘IQR’) to specify only that method</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="method">
 <dt id="autots.evaluator.anomaly_detector.AnomalyDetector.plot">
@@ -467,7 +473,7 @@ Some confusion may exist as Ensembles require both ‘Ensemble’ column &gt; 0 
 <p>Higher-level functions of automated time series modeling.</p>
 <dl class="class">
 <dt id="autots.evaluator.auto_ts.AutoTS">
-<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 10</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2022</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 1</em>, <em class="sig-param">'imle_weighting': 0</em>, <em class="sig-param">'made_weighting': 0.5</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'mage_weighting': 0</em>, <em class="sig-param">'mle_weighting': 0</em>, <em class="sig-param">'oda_weighting': 0.001</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0.05</em>, <em class="sig-param">'smape_weighting': 5</em>, <em class="sig-param">'spl_weighting': 3}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'auto'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">models_mode: str = 'random'</em>, <em class="sig-param">num_validations: int = 'auto'</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'backwards'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">prefill_na: str = None</em>, <em class="sig-param">introduce_na: bool = None</em>, <em class="sig-param">preclean: dict = None</em>, <em class="sig-param">model_interrupt: bool = True</em>, <em class="sig-param">current_model_file: str = None</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = -2</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">autots.evaluator.auto_ts.</code><code class="sig-name descname">AutoTS</code><span class="sig-paren">(</span><em class="sig-param">forecast_length: int = 14</em>, <em class="sig-param">frequency: str = 'infer'</em>, <em class="sig-param">prediction_interval: float = 0.9</em>, <em class="sig-param">max_generations: int = 10</em>, <em class="sig-param">no_negatives: bool = False</em>, <em class="sig-param">constraint: float = None</em>, <em class="sig-param">ensemble: str = 'auto'</em>, <em class="sig-param">initial_template: str = 'General+Random'</em>, <em class="sig-param">random_seed: int = 2022</em>, <em class="sig-param">holiday_country: str = 'US'</em>, <em class="sig-param">subset: int = None</em>, <em class="sig-param">aggfunc: str = 'first'</em>, <em class="sig-param">na_tolerance: float = 1</em>, <em class="sig-param">metric_weighting: dict = {'containment_weighting': 0</em>, <em class="sig-param">'contour_weighting': 1</em>, <em class="sig-param">'imle_weighting': 0</em>, <em class="sig-param">'made_weighting': 0.5</em>, <em class="sig-param">'mae_weighting': 2</em>, <em class="sig-param">'mage_weighting': 0</em>, <em class="sig-param">'mle_weighting': 0</em>, <em class="sig-param">'oda_weighting': 0.001</em>, <em class="sig-param">'rmse_weighting': 2</em>, <em class="sig-param">'runtime_weighting': 0.05</em>, <em class="sig-param">'smape_weighting': 5</em>, <em class="sig-param">'spl_weighting': 3}</em>, <em class="sig-param">drop_most_recent: int = 0</em>, <em class="sig-param">drop_data_older_than_periods: int = 100000</em>, <em class="sig-param">model_list: str = 'default'</em>, <em class="sig-param">transformer_list: dict = 'auto'</em>, <em class="sig-param">transformer_max_depth: int = 6</em>, <em class="sig-param">models_mode: str = 'random'</em>, <em class="sig-param">num_validations: int = 'auto'</em>, <em class="sig-param">models_to_validate: float = 0.15</em>, <em class="sig-param">max_per_model_class: int = None</em>, <em class="sig-param">validation_method: str = 'backwards'</em>, <em class="sig-param">min_allowed_train_percent: float = 0.5</em>, <em class="sig-param">remove_leading_zeroes: bool = False</em>, <em class="sig-param">prefill_na: str = None</em>, <em class="sig-param">introduce_na: bool = None</em>, <em class="sig-param">preclean: dict = None</em>, <em class="sig-param">model_interrupt: bool = True</em>, <em class="sig-param">generation_timeout: int = None</em>, <em class="sig-param">current_model_file: str = None</em>, <em class="sig-param">verbose: int = 1</em>, <em class="sig-param">n_jobs: int = -2</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Automate time series modeling using a genetic algorithm.</p>
 <dl class="field-list simple">
@@ -548,6 +554,8 @@ This will change data used in model inputs for fit and predict, and for accuracy
 if True, KeyboardInterrupts attempt to only quit current model.
 if True, recommend use in conjunction with <cite>verbose</cite> &gt; 0 and <cite>result_file</cite> in the event of accidental complete termination.
 if “end_generation”, as True and also ends entire generation of run. Note skipped models will not be tried again.</p></li>
+<li><p><strong>generation_timeout</strong> (<em>int</em>) – if not None, this is the number of minutes from start at which the generational search ends, then proceeding to validation
+This is only checked after the end of each generation, so only offers an ‘approximate’ timeout for searching</p></li>
 <li><p><strong>current_model_file</strong> (<em>str</em>) – file path to write to disk of current model params (for debugging if computer crashes). .json is appended</p></li>
 <li><p><strong>verbose</strong> (<em>int</em>) – setting to 0 or lower should reduce most output. Higher numbers give more output.</p></li>
 <li><p><strong>n_jobs</strong> (<em>int</em>) – Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also ‘auto’.</p></li>
@@ -865,7 +873,7 @@ doesn’t account for the benefits seen for ensembling.</p>
 
 <dl class="method">
 <dt id="autots.evaluator.auto_ts.AutoTS.plot_horizontal_per_generation">
-<code class="sig-name descname">plot_horizontal_per_generation</code><span class="sig-paren">(</span><em class="sig-param">title='Horizontal Ensemble Model Accuracy Gain Over Generations'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.plot_horizontal_per_generation" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">plot_horizontal_per_generation</code><span class="sig-paren">(</span><em class="sig-param">title='Horizontal Ensemble Accuracy Gain (first eval sample only)'</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.evaluator.auto_ts.AutoTS.plot_horizontal_per_generation" title="Permalink to this definition">¶</a></dt>
 <dd><p>Plot how well the horizontal ensembles would do after each new generation. Slow.</p>
 </dd></dl>
 

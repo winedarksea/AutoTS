@@ -447,6 +447,8 @@ def anomaly_new_params(method='random'):
         )[0]
     elif method == "fast":
         method_choice = random.choices(fast_methods, [0.4, 0.3, 0.1, 0.1, 0.4, 0.05])[0]
+    elif method in available_methods:
+        method_choice = method
     else:
         method_choice = random.choices(
             [
@@ -670,7 +672,11 @@ def anomaly_df_to_holidays(
         agg_dict['avg_anomaly_score'] = 'mean'
 
     dates = stacked.index.get_level_values('date').unique()
-    year_range = dates.year.max() - dates.year.min() + 1
+    try:
+        year_range = dates.year.max() - dates.year.min() + 1
+    except Exception as e:
+        raise Exception(f"unrecognized dates: {dates}") from e
+
     if year_range <= 1:
         raise ValueError("more than 1 year of data is required for holiday detection.")
 

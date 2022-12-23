@@ -116,6 +116,8 @@ class AutoTS(object):
             if True, KeyboardInterrupts attempt to only quit current model.
             if True, recommend use in conjunction with `verbose` > 0 and `result_file` in the event of accidental complete termination.
             if "end_generation", as True and also ends entire generation of run. Note skipped models will not be tried again.
+        generation_timeout (int): if not None, this is the number of minutes from start at which the generational search ends, then proceeding to validation
+            This is only checked after the end of each generation, so only offers an 'approximate' timeout for searching
         current_model_file (str): file path to write to disk of current model params (for debugging if computer crashes). .json is appended
         verbose (int): setting to 0 or lower should reduce most output. Higher numbers give more output.
         n_jobs (int): Number of cores available to pass to parallel processing. A joblib context manager can be used instead (pass None in this case). Also 'auto'.
@@ -184,6 +186,7 @@ class AutoTS(object):
         introduce_na: bool = None,
         preclean: dict = None,
         model_interrupt: bool = True,
+        generation_timeout: int = None,
         current_model_file: str = None,
         verbose: int = 1,
         n_jobs: int = -2,
@@ -212,6 +215,7 @@ class AutoTS(object):
         self.validation_method = str(validation_method).lower()
         self.min_allowed_train_percent = min_allowed_train_percent
         self.max_generations = max_generations
+        self.generation_timeout = generation_timeout
         self.remove_leading_zeroes = remove_leading_zeroes
         self.prefill_na = prefill_na
         self.introduce_na = introduce_na
@@ -222,6 +226,10 @@ class AutoTS(object):
         self.models_mode = models_mode
         self.current_model_file = current_model_file
         random.seed(self.random_seed)
+        if self.max_generations is None and self.generation_timeout is not None:
+            self.max_generations = 99999
+        if self.generation_timeout is None:
+            self.generation_timeout = 9e6  # 20 years
         if holiday_country == "RU":
             self.holiday_country = "UA"
         elif holiday_country == 'CN':
@@ -954,6 +962,7 @@ class AutoTS(object):
                 time.sleep(2)
 
         model_count = 0
+        self.start_time = pd.Timestamp.now()
 
         # unpack ensemble models so sub models appear at highest level
         self.initial_template = unpack_ensemble_models(
@@ -1011,7 +1020,12 @@ class AutoTS(object):
         current_generation = 0
         num_mod_types = len(self.model_list)
         max_per_model_class_g = 5
-        while current_generation < self.max_generations:
+        passedTime = (pd.Timestamp.now() - self.start_time).total_seconds() / 60
+
+        while (
+            current_generation < self.max_generations
+            and passedTime < self.generation_timeout
+        ):
             current_generation += 1
             if verbose > 0:
                 print(
@@ -1097,6 +1111,7 @@ class AutoTS(object):
             )
             if result_file is not None:
                 self.initial_results.save(result_file)
+            passedTime = (pd.Timestamp.now() - self.start_time).total_seconds() / 60
 
         # try ensembling
         if self.ensemble:
@@ -2092,6 +2107,7 @@ or otherwise increase models available."""
                 .unique()
                 .tolist()
             )
+            # note this is using validation results, but filtered by models from that gen
             score_per_series = generate_score_per_series(
                 self.initial_results,
                 metric_weighting=self.metric_weighting,
@@ -2156,11 +2172,13 @@ or otherwise increase models available."""
         return result
 
     def plot_horizontal_per_generation(
-        self, title="Horizontal Ensemble Model Accuracy Gain Over Generations", **kwargs
+        self,
+        title="Horizontal Ensemble Accuracy Gain (first eval sample only)",
+        **kwargs,
     ):
         """Plot how well the horizontal ensembles would do after each new generation. Slow."""
         self.horizontal_per_generation().model_results['Score'].plot(
-            ylabel="Lowest Score", title=title, **kwargs
+            ylabel="Lowest Score", xlabel="Generation", title=title, **kwargs
         )
 
     def back_forecast(

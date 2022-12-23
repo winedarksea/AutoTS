@@ -3,9 +3,9 @@
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 
-    <title>autots.models package &#8212; AutoTS 0.5.0 documentation</title>
+    <title>autots.models package &#8212; AutoTS 0.5.3 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
@@ -1348,7 +1348,7 @@ For component decomposition, scale will be inaccurate unless ‘BaseScaler’ is
 
 <dl class="method">
 <dt>
-<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length</em>, <em class="sig-param">include_history=False</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">regressor_per_series=None</em>, <em class="sig-param">flag_regressors=None</em>, <em class="sig-param">future_impacts=None</em>, <em class="sig-param">new_df=None</em>, <em class="sig-param">regressor_forecast_model=None</em>, <em class="sig-param">regressor_forecast_model_params=None</em>, <em class="sig-param">regressor_forecast_transformations=None</em><span class="sig-paren">)</span></dt>
+<code class="sig-name descname">predict</code><span class="sig-paren">(</span><em class="sig-param">forecast_length</em>, <em class="sig-param">include_history=False</em>, <em class="sig-param">future_regressor=None</em>, <em class="sig-param">regressor_per_series=None</em>, <em class="sig-param">flag_regressors=None</em>, <em class="sig-param">future_impacts=None</em>, <em class="sig-param">new_df=None</em>, <em class="sig-param">regressor_forecast_model=None</em>, <em class="sig-param">regressor_forecast_model_params=None</em>, <em class="sig-param">regressor_forecast_transformations=None</em>, <em class="sig-param">include_organic=False</em><span class="sig-paren">)</span></dt>
 <dd><p>Generate a forecast.</p>
 <p>future_regressor and regressor_per_series should only include new future values, history is already stored</p>
 </dd></dl>
@@ -1407,6 +1407,11 @@ For component decomposition, scale will be inaccurate unless ‘BaseScaler’ is
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="autots.models.cassandra.cost_function_dwae">
+<code class="sig-prename descclassname">autots.models.cassandra.</code><code class="sig-name descname">cost_function_dwae</code><span class="sig-paren">(</span><em class="sig-param">params</em>, <em class="sig-param">X</em>, <em class="sig-param">y</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.cost_function_dwae" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="autots.models.cassandra.cost_function_l1">
 <code class="sig-prename descclassname">autots.models.cassandra.</code><code class="sig-name descname">cost_function_l1</code><span class="sig-paren">(</span><em class="sig-param">params</em>, <em class="sig-param">X</em>, <em class="sig-param">y</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.cost_function_l1" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
@@ -1433,7 +1438,7 @@ For component decomposition, scale will be inaccurate unless ‘BaseScaler’ is
 
 <dl class="function">
 <dt id="autots.models.cassandra.lstsq_minimize">
-<code class="sig-prename descclassname">autots.models.cassandra.</code><code class="sig-name descname">lstsq_minimize</code><span class="sig-paren">(</span><em class="sig-param">X</em>, <em class="sig-param">y</em>, <em class="sig-param">maxiter=15000</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.lstsq_minimize" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">autots.models.cassandra.</code><code class="sig-name descname">lstsq_minimize</code><span class="sig-paren">(</span><em class="sig-param">X</em>, <em class="sig-param">y</em>, <em class="sig-param">maxiter=15000</em>, <em class="sig-param">cost_function='l1'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.models.cassandra.lstsq_minimize" title="Permalink to this definition">¶</a></dt>
 <dd><p>Any cost function version of lin reg.</p>
 </dd></dl>
 

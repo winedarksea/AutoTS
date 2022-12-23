@@ -52,7 +52,6 @@ autots.evaluator.metrics module
    :undoc-members:
    :show-inheritance:
 
-
 Module contents
 ---------------
 

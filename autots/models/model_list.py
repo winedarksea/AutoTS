@@ -104,7 +104,7 @@ superfast = [
     'GLS',
     'SeasonalNaive',
     # 'MetricMotif',
-    # 'SeasonalityMotif',
+    'SeasonalityMotif',
 ]
 # relatively fast
 fast = {
