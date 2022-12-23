@@ -194,7 +194,7 @@ class AnomalyDetector(object):
     @staticmethod
     def get_new_params(method="random"):
         """Generate random new parameter combinations.
-        
+
         Args:
             method (str): 'fast', 'deep', 'default', or any of the anomaly method names (ie 'IQR') to specify only that method
         """

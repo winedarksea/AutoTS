@@ -391,9 +391,14 @@ class Cassandra(ModelObject):
             lag_1_indx = np.concatenate([[0], np.arange(len(self.df))])[
                 0 : len(self.df)
             ]
-            trs_df = self.multivariate_transformer.fit_transform(self.df)
-            if trs_df.shape != self.df.shape:
-                raise ValueError("Multivariate Transformer not usable for this role.")
+            if self.multivariate_transformation is not None:
+                trs_df = self.multivariate_transformer.fit_transform(self.df)
+                if trs_df.shape != self.df.shape:
+                    raise ValueError(
+                        "Multivariate Transformer not usable for this role."
+                    )
+            else:
+                trs_df = self.df.copy()
             if self.multivariate_feature == "feature_agglomeration":
                 from sklearn.cluster import FeatureAgglomeration
 
@@ -823,7 +828,10 @@ class Cassandra(ModelObject):
                 )
             )
             lag_1_indx = np.concatenate([[0], np.arange(len(history_df))])
-            trs_df = self.multivariate_transformer.transform(history_df)
+            if self.multivariate_transformation is not None:
+                trs_df = self.multivariate_transformer.transform(history_df)
+            else:
+                trs_df = history_df.copy()
             if self.multivariate_feature == "feature_agglomeration":
 
                 x_list.append(
@@ -1515,10 +1523,7 @@ class Cassandra(ModelObject):
             else:
                 past_impacts = self.past_impacts
             # roll forward tail of past impacts, assuming it continues
-            if (
-                self.past_impacts is not None
-                and forecast_length is not None
-            ):
+            if self.past_impacts is not None and forecast_length is not None:
                 future_impts = pd.DataFrame(
                     np.repeat(
                         self.past_impacts.iloc[-1:].to_numpy(), forecast_length, axis=0
@@ -1535,7 +1540,7 @@ class Cassandra(ModelObject):
                     index=df_forecast.forecast.index,
                     columns=df_forecast.forecast.columns,
                     fill_value=1,
-                ) # minus or plus
+                )  # minus or plus
                 self.impacts = impts
                 if include_organic:
                     df_forecast.organic_forecast = df_forecast.forecast.copy()
@@ -2287,7 +2292,6 @@ if False:
     future_impacts.iloc[0:10, 0] = (np.linspace(1, 10)[0:10] + 10) / 100
 
     c_params = Cassandra.get_new_params()
-    c_params["linear_model"]['model'] = 'l1_norm'
 
     mod = Cassandra(
         n_jobs=1,

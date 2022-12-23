@@ -2408,7 +2408,11 @@ def generate_score_per_series(
     # remove duplicates for each model, as can occasionally happen
     unique_id_name = "IDxxxx6777y9"  # want it unlikely to be a time series name
     overall_score.index.name = unique_id_name
-    overall_score = overall_score.reset_index(drop=False).drop_duplicates().set_index(unique_id_name)
+    overall_score = (
+        overall_score.reset_index(drop=False)
+        .drop_duplicates()
+        .set_index(unique_id_name)
+    )
     overall_score.index.name = "ID"
     # take the average score across validations
     overall_score = overall_score.groupby(level=0).mean()

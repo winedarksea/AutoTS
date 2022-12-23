@@ -1022,7 +1022,10 @@ class AutoTS(object):
         max_per_model_class_g = 5
         passedTime = (pd.Timestamp.now() - self.start_time).total_seconds() / 60
 
-        while current_generation < self.max_generations and passedTime < self.generation_timeout:
+        while (
+            current_generation < self.max_generations
+            and passedTime < self.generation_timeout
+        ):
             current_generation += 1
             if verbose > 0:
                 print(
@@ -2169,7 +2172,9 @@ or otherwise increase models available."""
         return result
 
     def plot_horizontal_per_generation(
-        self, title="Horizontal Ensemble Accuracy Gain (first eval sample only)", **kwargs
+        self,
+        title="Horizontal Ensemble Accuracy Gain (first eval sample only)",
+        **kwargs,
     ):
         """Plot how well the horizontal ensembles would do after each new generation. Slow."""
         self.horizontal_per_generation().model_results['Score'].plot(
