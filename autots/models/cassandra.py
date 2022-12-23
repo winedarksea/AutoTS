@@ -1518,14 +1518,13 @@ class Cassandra(ModelObject):
             if (
                 self.past_impacts is not None
                 and forecast_length is not None
-                and future_impacts is not None
             ):
                 future_impts = pd.DataFrame(
                     np.repeat(
                         self.past_impacts.iloc[-1:].to_numpy(), forecast_length, axis=0
                     ),
-                    index=future_impacts.index,
-                    columns=future_impacts.columns,
+                    index=df_forecast.forecast.index[-forecast_length:],
+                    columns=self.past_impacts.columns,
                 )
                 if future_impacts is not None:
                     future_impts = future_impts + future_impacts
@@ -1533,10 +1532,10 @@ class Cassandra(ModelObject):
                 future_impts = pd.DataFrame()
             if self.past_impacts is not None or future_impacts is not None:
                 impts = 1 + pd.concat([past_impacts, future_impts], axis=0).reindex(
-                    df_forecast.forecast.index
-                ).fillna(
-                    1
-                )  # minus or plus
+                    index=df_forecast.forecast.index,
+                    columns=df_forecast.forecast.columns,
+                    fill_value=1,
+                ) # minus or plus
                 self.impacts = impts
                 if include_organic:
                     df_forecast.organic_forecast = df_forecast.forecast.copy()

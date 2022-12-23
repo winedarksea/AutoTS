@@ -672,7 +672,11 @@ def anomaly_df_to_holidays(
         agg_dict['avg_anomaly_score'] = 'mean'
 
     dates = stacked.index.get_level_values('date').unique()
-    year_range = dates.year.max() - dates.year.min() + 1
+    try:
+        year_range = dates.year.max() - dates.year.min() + 1
+    except Exception as e:
+        raise Exception(f"unrecognized dates: {dates}") from e
+
     if year_range <= 1:
         raise ValueError("more than 1 year of data is required for holiday detection.")
 
