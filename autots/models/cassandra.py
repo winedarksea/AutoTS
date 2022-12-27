@@ -322,7 +322,7 @@ class Cassandra(ModelObject):
             self.holiday_detector = HolidayTransformer(**self.holiday_detector_params)
             self.holiday_detector.fit(self.df)
             self.holidays = self.holiday_detector.dates_to_holidays(
-                df.index, style='series_flag'
+                self.df.index, style='series_flag'
             )
             self.holiday_count = np.count_nonzero(self.holidays)
             if self.holiday_detector_params["remove_excess_anomalies"]:
@@ -430,18 +430,21 @@ class Cassandra(ModelObject):
                 np.count_nonzero((df - df.shift(1)).clip(upper=0))[:-1]
         if self.seasonalities is not None:
             s_list = []
-            for seasonality in self.seasonalities:
-                s_list.append(
-                    create_seasonality_feature(
-                        self.df.index,
-                        self.t_train,
-                        seasonality,
-                        history_days=self.history_days,
+            try:
+                for seasonality in self.seasonalities:
+                    s_list.append(
+                        create_seasonality_feature(
+                            self.df.index,
+                            self.t_train,
+                            seasonality,
+                            history_days=self.history_days,
+                        )
                     )
-                )
-                # INTERACTIONS NOT IMPLEMENTED
-                # ORDER SPECIFICATION NOT IMPLEMENTED
-            s_df = pd.concat(s_list, axis=1)
+                    # INTERACTIONS NOT IMPLEMENTED
+                    # ORDER SPECIFICATION NOT IMPLEMENTED
+                s_df = pd.concat(s_list, axis=1)
+            except Exception as e:
+                raise ValueError(f"seasonality {seasonality} creation error") from e
             s_df.index = self.df.index
             x_list.append(s_df)
         # These features are to prevent overfitting and standin for unobserved components here

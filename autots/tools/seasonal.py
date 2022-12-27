@@ -341,7 +341,7 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
     elif seasonality in date_part_methods:
         return date_part(DTindex, method=seasonality, set_index=False)
     else:
-        return ValueError(f"Seasonality `{seasonality}` not recognized")
+        return ValueError(f"Seasonality `{seasonality}` not recognized. Must be int, float, or a select type string such as 'dayofweek'")
 
 
 def seasonal_window_match(
