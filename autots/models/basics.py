@@ -2138,7 +2138,7 @@ class KalmanStateSpace(ModelObject):
                     'state_transition': [[1, 1], [0, 1]],
                     'process_noise': [[0.1, 0.0], [0.0, 0.01]],
                     'observation_model': [[1, 0]],
-                    'observation_noise': 0.25,
+                    'observation_noise': random.choice([0.25, 0.5, 1.0, 0.05]),
                 },
                 {
                     'model_name': 'local linear stochastic seasonal dummy',
@@ -2204,7 +2204,7 @@ class KalmanStateSpace(ModelObject):
                          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                          [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],
                     'observation_model': [[1, 1, 0, 0, 0, 0, 0, 0]],
-                    'observation_noise': 0.04,
+                    'observation_noise': random.choice([0.25, 0.5, 1.0, 0.04, 0.02]),
                 },
                 {
                     'model_name': "factor",
@@ -2227,8 +2227,15 @@ class KalmanStateSpace(ModelObject):
                 },
                 "random",
                 364, 12,
+                {
+                    'model_name': 'spline',
+                    'state_transition': [[2, -1], [1, 0]],
+                    'process_noise': [[1, 0], [0, 0]],
+                    'observation_model': [[1, 0]],
+                    'observation_noise': 0.1,
+                },
             ],
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1],
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1],
         )[0]
         if params in [364] and method not in ['deep']:
             params = 7

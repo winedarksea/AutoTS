@@ -132,7 +132,7 @@ def random_state_space():
         else:
             obsmod = np.array([[1, 1] + [0] * (n_dims - 2)])
         procnois = (np.diag([0.2 / random.choice([1, 5, 10]), 0.001] + [0]*(n_dims-2))**2).round(3)
-    obsnois = random.choices([1.0, 10.0, 2.0, 0.5, 0.2], [0.8, 0.05, 0.05, 0.05, 0.05])[
+    obsnois = random.choices([1.0, 10.0, 2.0, 0.5, 0.2, 0.05, 0.001], [0.8, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05])[
         0
     ]
     while (
