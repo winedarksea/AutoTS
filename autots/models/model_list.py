@@ -240,7 +240,7 @@ recombination_approved = [
     'MAR',
     'TMF',
     'LATC',
-    'KalmanStateSpace',
+    # 'KalmanStateSpace', # matrix sizes must match
     'MetricMotif',
     'Cassandra',
     'SeasonalityMotif',

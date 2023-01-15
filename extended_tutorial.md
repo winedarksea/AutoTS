@@ -436,7 +436,9 @@ Prophet, Greykite, and mxnet/GluonTS are packages which tend to be finicky about
 	greykite
 	matplotlib
 	pytorch-forecasting
+	neuralprophet
 	scipy
+	arch
 	
 Tensorflow, LightGBM, and XGBoost bring powerful models, but are also among the slowest. If speed is a concern, not installing them will speed up ~Regression style model runs. 
 

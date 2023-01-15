@@ -12,11 +12,9 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.5.3 🌍 🌍 🌍
-* robustness changes to generate_score_per_series for horizontal ensembles
-* added generation_timeout to allow stopping based on time
-* added ability to specify anomaly model (ie 'zscore') to AnomalyDetector.get_new_params(method='zscore')
-* fixed a bug in Cassandra with future_impacts and future_regressor
+# 0.5.4 🌏 🌏 🌏
+* Cassandra seasonality and holiday detection bug fixes
+* attempted to improve the KalmanStateSpace and KalmanSmoothing methods
 
 
 ### New Model Checklist:

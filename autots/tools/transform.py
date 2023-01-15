@@ -3130,6 +3130,7 @@ class KalmanSmoothing(EmptyTransformer):
         process_noise=[[0.1, 0.0], [0.0, 0.01]],
         observation_model=[[1, 0]],
         observation_noise: float = 1.0,
+        em_iter: int = None,
         **kwargs,
     ):
         super().__init__(name="KalmanSmoothing")
@@ -3137,36 +3138,126 @@ class KalmanSmoothing(EmptyTransformer):
         self.process_noise = process_noise
         self.observation_model = observation_model
         self.observation_noise = observation_noise
+        self.em_iter = em_iter
 
     @staticmethod
     def get_new_params(method: str = "random"):
-        # predefined, or random
+        if method in ['fast', 'superfast']:
+            em_iter = None
+        elif method == "deep":
+            em_iter = random.choices([None, 10, 20, 50, 100], [0.9, 0.2, 0.1, 0.1, 0.1])[0]
+        else:
+            em_iter = random.choices([None, 10, 30], [0.9, 0.4, 0.1])[0]
         params = random.choices(
+            # the same model can sometimes be defined in various matrix forms
             [
-                ([[1, 1], [0, 1]], [[0.1, 0.0], [0.0, 0.01]], [[1, 0]], 1.0),
-                (
-                    [[1, 1, 0], [0, 1, 0], [0, 0, 1]],
-                    [[0.1, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0, 0.0, 0.1]],
-                    [[1, 1, 1]],
-                    1.0,
-                ),
-                "random",
+                # floats are phi
+                {
+                    'model_name': 'local linear trend',
+                    'state_transition': [[1, 1], [0, 1]],
+                    'process_noise': [[0.1, 0.0], [0.0, 0.01]],
+                    'observation_model': [[1, 0]],
+                    'observation_noise': 0.25,
+                },
+                {
+                    'model_name': 'local linear stochastic seasonal dummy',
+                    'state_transition': [[1, 0, 0, 0], [0, -1, -1, -1], [0, 1, 0, 0], [0, 0, 1, 0]],
+                    'process_noise': [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
+                    'observation_model': [[1, 1, 0, 0]],
+                    'observation_noise': 0.25,
+                },
+                {
+                    'model_name': 'local linear stochastic seasonal 7',
+                    'state_transition':
+                        [[1, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                         [0, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0],
+                        [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]] ,
+                    'process_noise': [[1, 0, 0, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0, 0, 0], [0, 0, 0, 1, 0, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 1, 0, 0], [0,0,0,0,0,0, 0, 0], [0, 0,0,0,0,0, 0, 0]],
+                    'observation_model': [[1, 0, 1, 0, 0, 0, 0, 0]],
+                    'observation_noise': 0.25,
+                },
+                {
+                    'model_name': 'MA',
+                    'state_transition': [[1, 0], [1, 0]],
+                    'process_noise': [[0.2, 0.0], [0.0, 0]],
+                    'observation_model': [[1, 0.1]],
+                    'observation_noise': 1.0,
+                },
+                {
+                    'model_name': 'AR(2)',
+                    'state_transition': [[1, 1], [0.1, 0]],
+                    'process_noise': [[1, 0], [0, 0]],
+                    'observation_model': [[1, 0]],
+                    'observation_noise': 1.0,
+                },
+                {
+                    'model_name': 'X1',
+                    'state_transition': [[1, 1, 0], [0, 1, 0], [0, 0, 1]],
+                    'process_noise': [[0.1, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0, 0.0, 0.1]],
+                    'observation_model': [[1, 1, 1]],
+                    'observation_noise': 1.0,
+                },
+                {
+                    'model_name': "local linear hidden state with seasonal 7",
+                    'state_transition': 
+                        [[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                         [0.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0],
+                         [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                         [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]],
+                    'process_noise':
+                        [[0.0016, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                         [0.0, 1e-06, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],
+                    'observation_model': [[1, 1, 0, 0, 0, 0, 0, 0]],
+                    'observation_noise': 0.04,
+                },
+                12,
             ],
-            [0.25, 0.25, 0.5],
+            [0.1, 0.1, 0.1, 0.05, 0.05, 0.1, 0.1, 0.1],
         )[0]
+        if params in [364] and method not in ['deep']:
+            params = 7
         if params == "random":
             st, procnois, obsmod, obsnois = random_state_space()
-            st = st.tolist()
-            procnois = procnois.tolist()
-            obsmod = obsmod.tolist()
-        else:
-            st, procnois, obsmod, obsnois = params
-        return {
-            "state_transition": st,
-            "process_noise": procnois,
-            "observation_model": obsmod,
-            "observation_noise": obsnois,
-        }
+            params = {
+                'model_name': 'randomly generated',
+                'state_transition': st.tolist(),
+                'process_noise': procnois.tolist(),
+                'observation_model': obsmod.tolist(),
+                'observation_noise': obsnois,
+            }
+        elif isinstance(params, int):
+            state_transition = np.zeros((params+1, params+1))
+            state_transition[0,0] = 1
+            state_transition[1,1:-1] = [-1.0] * (params-1)
+            state_transition[2:,1:-1] = np.eye(params-1)
+            observation_model = [[1,1] + [0]*(params-1)]
+            level_noise = 0.2 / random.choice([1, 5, 10])
+            season_noise = 1e-3
+            process_noise_cov = np.diag([level_noise, season_noise] + [0]*(params-1))**2
+            params = {
+                'model_name': f'local linear hidden state with seasonal {params}',
+                'state_transition': state_transition.tolist(),
+                'process_noise': process_noise_cov.tolist(),
+                'observation_model': observation_model,
+                'observation_noise': 0.04,
+            }
+        params['em_iter'] = em_iter
+        return params
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -3180,6 +3271,8 @@ class KalmanSmoothing(EmptyTransformer):
             observation_model=self.observation_model,  # H
             observation_noise=self.observation_noise,  # R
         )
+        if self.em_iter is not None:
+            self.kf = self.kf.em(df.to_numpy().T, n_iter=self.em_iter)
         return self
 
     def transform(self, df):
