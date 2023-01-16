@@ -15,6 +15,7 @@
 # 0.5.4 🌏 🌏 🌏
 * Cassandra seasonality and holiday detection bug fixes
 * attempted to improve the KalmanStateSpace and KalmanSmoothing methods
+* validation indexes now generated in a standalone function
 
 
 ### New Model Checklist:

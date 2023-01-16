@@ -299,6 +299,24 @@ motifs = [
     'SeasonalityMotif',
 ]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
+# this should be implementable with some models in gluonts
+all_result_path = [
+    "UnivariateMotif",
+    "MultivariateMotif",
+    "SectionalMotif",
+    'MetricMotif',
+    "SeasonalityMotif",
+    "Motif",
+    "ARCH",  # simulations not motifs but similar
+    "PytorchForecasting",
+]
+# these are those that require a parameter, and return a dict
+diff_window_motif_list = [
+    "UnivariateMotif",
+    "MultivariateMotif",
+    "Motif",
+    "ARCH",
+]
 model_lists = {
     "all": all_models,
     "default": default,
@@ -319,6 +337,7 @@ model_lists = {
     "regressor": regressor,
     "best": best,
     "motifs": motifs,
+    "all_result_path": all_result_path,
 }
 
 

@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 # using transformer version of Anomaly/Holiday to use a lower level import than evaluator
-from autots.tools.seasonal import create_seasonality_feature
+from autots.tools.seasonal import create_seasonality_feature, seasonal_int
 from autots.tools.transform import (
     GeneralTransformer,
     RandomTransform,
@@ -528,7 +528,8 @@ class Cassandra(ModelObject):
         corr = np.corrcoef(x_array, rowvar=0)
         nearz = x_array.columns[np.isnan(corr).all(axis=1)]
         if len(nearz) > 0:
-            print(f"Dropping zero variance feature columns {nearz}")
+            if self.verbose > 1:
+                print(f"Dropping zero variance feature columns {nearz}")
             x_array = x_array.drop(columns=nearz)
         # remove colinear features
         # NOTE THESE REMOVALS REMOVE THE FIRST OF PAIR COLUMN FIRST
@@ -540,12 +541,14 @@ class Cassandra(ModelObject):
                 np.min(corr * np.tri(corr.shape[0]), axis=0) > self.max_colinearity
             ]
             if len(corel) > 0:
-                print(f"Dropping colinear feature columns {corel}")
+                if self.verbose > 1:
+                    print(f"Dropping colinear feature columns {corel}")
                 x_array = x_array.drop(columns=corel)
         if self.max_multicolinearity is not None:
             colin = x_array.columns[w < self.max_multicolinearity]
             if len(colin) > 0:
-                print(f"Dropping multi-colinear feature columns {colin}")
+                if self.verbose > 1:
+                    print(f"Dropping multi-colinear feature columns {colin}")
                 x_array = x_array.drop(columns=colin)
 
         # things we want modeled but want to discard from evaluation (standins)
@@ -1174,7 +1177,8 @@ class Cassandra(ModelObject):
             and self.future_regressor_train is not None
             and forecast_length is not None
         ):
-            print("future_regressor not provided, using forecasts of historical")
+            if self.verbose >= 0:
+                print("future_regressor not provided to Cassandra, using forecasts of historical")
             future_regressor = model_forecast(
                 model_name=self.trend_model['Model']
                 if regressor_forecast_model is None
@@ -1709,8 +1713,8 @@ class Cassandra(ModelObject):
         else:
             regressors_used = random.choices([True, False], [0.5, 0.5])[0]
         ar_lags = random.choices(
-            [None, [1], [1, 7], [7]],
-            [0.9, 0.025, 0.025, 0.05],
+            [None, [1], [1, 7], [7], [seasonal_int(small=True)]],
+            [0.9, 0.025, 0.025, 0.05, 0.05],
         )[0]
         ar_interaction_seasonality = None
         if ar_lags is not None:

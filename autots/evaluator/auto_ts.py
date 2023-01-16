@@ -38,8 +38,7 @@ from autots.models.ensemble import (
 )
 from autots.models.model_list import model_lists, no_shared
 from autots.tools import cpu_count
-from autots.tools.window_functions import retrieve_closest_indices
-from autots.tools.seasonal import seasonal_window_match
+from autots.evaluator.validation import validate_num_validations, generate_validation_indices
 
 
 class AutoTS(object):
@@ -820,74 +819,19 @@ class AutoTS(object):
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
 
         # check how many validations are possible given the length of the data.
-        if (
-            'seasonal' in self.validation_method
-            and self.validation_method != 'seasonal'
-        ):
-            temp = df_wide_numeric.shape[0] + self.forecast_length
-            max_possible = temp / self.seasonal_val_periods
-        else:
-            max_possible = (df_wide_numeric.shape[0]) / forecast_length
-        # now adjusted for minimum % amount of training data required
-        if (max_possible - np.floor(max_possible)) > self.min_allowed_train_percent:
-            max_possible = int(max_possible)
-        else:
-            max_possible = int(max_possible) - 1
-        # set auto and max validations
-        if num_validations == "auto":
-            num_validations = 3 if max_possible >= 4 else max_possible
-        elif num_validations == "max":
-            num_validations = 50 if max_possible > 51 else max_possible - 1
-        # this still has the initial test segment as a validation segment, so -1
-        elif max_possible < (num_validations + 1):
-            num_validations = max_possible - 1
-            if verbose >= 0:
-                print(
-                    "Too many training validations for length of data provided, decreasing num_validations to {}".format(
-                        num_validations
-                    )
-                )
-        else:
-            num_validations = abs(int(num_validations))
-        if num_validations < 0:
-            num_validations = 0
-        self.num_validations = num_validations
+        self.num_validations = validate_num_validations(
+            self.validation_method, self.num_validations,
+            df_wide_numeric, forecast_length,
+            self.min_allowed_train_percent, self.verbose
+        )
 
-        # generate similarity matching indices (so it can fail now, not after all the generations)
-        if self.validation_method == "similarity":
-            sim_df = df_wide_numeric.copy()
-            if self.preclean is None:
-                params = {
-                    "fillna": "median",  # mean or median one of few consistent things
-                    "transformations": {"0": "MaxAbsScaler"},
-                    "transformation_params": {
-                        "0": {},
-                    },
-                }
-                trans = GeneralTransformer(**params)
-                sim_df = trans.fit_transform(sim_df)
-
-            created_idx = retrieve_closest_indices(
-                sim_df,
-                num_indices=num_validations + 1,
-                forecast_length=self.forecast_length,
-                include_last=True,
-                verbose=self.verbose,
-                **self.similarity_validation_params,
-            )
-            self.validation_indexes = [
-                df_wide_numeric.index[df_wide_numeric.index <= indx[-1]]
-                for indx in created_idx
-            ]
-            del sim_df
-        elif self.validation_method == "seasonal":
-            test, _ = seasonal_window_match(
-                DTindex=df_wide_numeric.index,
-                k=num_validations + 1,
-                forecast_length=forecast_length,
-                **self.seasonal_validation_params,
-            )
-            self.validation_indexes = [df_wide_numeric.index[0 : x[-1]] for x in test.T]
+        # generate validation indices (so it can fail now, not after all the generations)
+        self.validation_indexes = generate_validation_indices(
+            self.validation_method, forecast_length,
+            num_validations, df_wide_numeric,
+            validation_params=self.similarity_validation_params if self.validation_method == "similarity" else self.seasonal_validation_params,
+            preclean=None, verbose=0
+        )
 
         # record if subset or not
         if self.subset is not None:
@@ -913,15 +857,12 @@ class AutoTS(object):
         else:
             df_subset = df_wide_numeric.copy()
         # go to first index
-        if self.validation_method in ['custom', "similarity", "seasonal"]:
-            first_idx = self.validation_indexes[0]
-            if max(first_idx) > max(df_subset.index):
-                raise ValueError(
-                    "provided validation index exceeds historical data period"
-                )
-            df_subset = df_subset.reindex(first_idx)
-        else:
-            self.validation_indexes.append(df_subset.index)
+        first_idx = self.validation_indexes[0]
+        if max(first_idx) > max(df_subset.index):
+            raise ValueError(
+                "provided validation index exceeds historical data period"
+            )
+        df_subset = df_subset.reindex(first_idx)
 
         # subset the weighting information as well
         if not weighted:
@@ -1241,41 +1182,10 @@ class AutoTS(object):
             for y in range(num_validations):
                 if verbose > 0:
                     print("Validation Round: {}".format(str(y + 1)))
-                # slice the validation data into current slice
-                val_list = ['backwards', 'back', 'backward']
-                if self.validation_method in val_list:
-                    # gradually remove the end
-                    current_slice = df_wide_numeric.head(
-                        df_wide_numeric.shape[0] - (y + 1) * forecast_length
-                    )
-                    self.validation_indexes.append(current_slice.index)
-                elif self.validation_method == 'even':
-                    # /num_validations biases it towards the last segment
-                    validation_size = len(df_wide_numeric.index) - forecast_length
-                    validation_size = validation_size / (num_validations + 1)
-                    validation_size = int(np.floor(validation_size))
-                    current_slice = df_wide_numeric.head(
-                        validation_size * (y + 1) + forecast_length
-                    )
-                elif (
-                    'seasonal' in self.validation_method
-                    and self.validation_method != "seasonal"
-                ):
-                    val_per = (y + 1) * self.seasonal_val_periods
-                    if self.seasonal_val_periods < forecast_length:
-                        pass
-                    else:
-                        val_per = val_per - forecast_length
-                    val_per = df_wide_numeric.shape[0] - val_per
-                    current_slice = df_wide_numeric.head(val_per)
-                elif self.validation_method in ['custom', "similarity", "seasonal"]:
-                    current_slice = df_wide_numeric.reindex(
-                        self.validation_indexes[(y + 1)]
-                    )
-                else:
-                    raise ValueError(
-                        "Validation Method not recognized try 'even', 'backwards'"
-                    )
+                # slice the validation data into current validation slice
+                current_slice = df_wide_numeric.reindex(
+                    self.validation_indexes[(y + 1)]
+                )
 
                 # subset series (if used) and take a new train/test split
                 if self.subset_flag:
@@ -1309,7 +1219,7 @@ class AutoTS(object):
                 self.validation_train_indexes.append(val_df_train.index)
                 self.validation_test_indexes.append(val_df_test.index)
                 if self.verbose >= 2:
-                    print(f'Validation index is {val_df_train.index}')
+                    print(f'Validation train index is {val_df_train.index}')
 
                 # slice regressor into current validation slices
                 if future_regressor is not None:
