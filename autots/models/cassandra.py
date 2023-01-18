@@ -5,6 +5,7 @@ Created on Tue Sep 13 19:45:57 2022
 @author: Colin
 with assistance from @crgillespie22
 """
+import json
 from operator import itemgetter
 from itertools import groupby
 import random
@@ -488,6 +489,7 @@ class Cassandra(ModelObject):
                 )
             else:
                 self.regressor_transformer = GeneralTransformer(**{})
+                self.future_regressor_train = future_regressor.fillna(method='ffill').fillna(0)
             x_list.append(self.future_regressor_train.reindex(self.df.index))
         if flag_regressors is not None and self.regressors_used:
             self.flag_regressor_train = clean_regressor(
@@ -804,9 +806,14 @@ class Cassandra(ModelObject):
             # forecast anomaly scores as time series
             len_inter = len(dates.intersection(self.anomaly_detector.scores.index))
             if len_inter < len(dates):
+                amodel_params = self.anomaly_intervention['ModelParameters']
+                # no regressors passed here
+                if "regression_type" in amodel_params:
+                    amodel_params = json.loads(amodel_params)
+                    amodel_params['regression_type'] = None
                 new_scores = model_forecast(
                     model_name=self.anomaly_intervention['Model'],
-                    model_param_dict=self.anomaly_intervention['ModelParameters'],
+                    model_param_dict=amodel_params,
                     model_transform_dict=self.anomaly_intervention[
                         'TransformationParameters'
                     ],
@@ -910,6 +917,7 @@ class Cassandra(ModelObject):
         x_array = pd.concat(x_list, axis=1)
         self.predict_x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
+            print(x_array)
             raise ValueError("nan values in predict_x_array")
 
         # RUN LINEAR MODEL
@@ -1285,19 +1293,19 @@ class Cassandra(ModelObject):
             # combine regressor types depending on what is given
             if (
                 self.future_regressor_train is None
-                and self.flag_regressor_train is not None
+                and self.flag_regressor_train is not None and self.regressors_used
             ):
                 comp_regr_train = self.flag_regressor_train
                 comp_regr = flag_regressors
             elif (
                 self.future_regressor_train is not None
-                and self.flag_regressor_train is None
+                and self.flag_regressor_train is None and self.regressors_used
             ):
                 comp_regr_train = self.future_regressor_train
                 comp_regr = future_regressor
             elif (
                 self.future_regressor_train is not None
-                and self.flag_regressor_train is not None
+                and self.flag_regressor_train is not None and self.regressors_used
             ):
                 comp_regr_train = pd.concat(
                     [self.future_regressor_train, self.flag_regressor_train], axis=1
@@ -1665,8 +1673,8 @@ class Cassandra(ModelObject):
         else:
             anomaly_detector_params = None
         model_str = random.choices(
-            ['AverageValueNaive', 'MetricMotif', "LastValueNaive", 'SeasonalityMotif'],
-            [0.2, 0.5, 0.1, 0.2],
+            ['AverageValueNaive', 'MetricMotif', "LastValueNaive", 'SeasonalityMotif', 'KalmanStateSpace'],
+            [0.2, 0.5, 0.1, 0.2, 0.05],
             k=1,
         )[0]
         trend_model = {'Model': model_str}

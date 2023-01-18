@@ -822,7 +822,7 @@ class AutoTS(object):
         self.num_validations = validate_num_validations(
             self.validation_method, self.num_validations,
             df_wide_numeric, forecast_length,
-            self.min_allowed_train_percent, self.verbose
+            self.min_allowed_train_percent, self.verbose,
         )
 
         # generate validation indices (so it can fail now, not after all the generations)
@@ -883,8 +883,9 @@ class AutoTS(object):
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
             if future_regressor.empty:
-                raise ValueError("regressor empty")
+                raise ValueError("future_regressor empty, pass None if intending not to use")
             if not isinstance(future_regressor.index, pd.DatetimeIndex):
+                # should be same length as history as this is not yet the predict step
                 future_regressor.index = df_subset.index
             # handle any non-numeric data, crudely
             self.regr_num_trans = NumericTransformer(verbose=self.verbose)

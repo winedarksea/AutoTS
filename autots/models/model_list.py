@@ -298,6 +298,13 @@ motifs = [
     'MetricMotif',
     'SeasonalityMotif',
 ]
+regressions = [
+    'RollingRegression',
+    'WindowRegression',
+    'DatepartRegression',
+    'UnivariateRegression',
+    'MultivariateRegression',
+]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
 # this should be implementable with some models in gluonts
 all_result_path = [
@@ -338,6 +345,7 @@ model_lists = {
     "best": best,
     "motifs": motifs,
     "all_result_path": all_result_path,
+    "regressions": regressions,
 }
 
 

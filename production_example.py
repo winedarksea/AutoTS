@@ -41,9 +41,9 @@ frequency = (
 forecast_length = 60  # number of periods to forecast ahead
 drop_most_recent = 1  # whether to discard the n most recent records (as incomplete)
 num_validations = (
-    4  # number of cross validation runs. More is better but slower, usually
+    2  # number of cross validation runs. More is better but slower, usually
 )
-validation_method = "similarity"  # "similarity", "backwards", "seasonal 364"
+validation_method = "backwards"  # "similarity", "backwards", "seasonal 364"
 n_jobs = "auto"  # or set to number of CPU cores
 prediction_interval = (
     0.9  # sets the upper and lower forecast range by probability range. Bigger = wider
@@ -84,11 +84,11 @@ if initial_training == "auto":
 # if include_ensemble is specified in import_templates, ensembles can progressively nest over generations
 if initial_training:
     gens = 100
-    models_to_validate = 0.35
-    ensemble = ["horizontal-max", "dist", "simple"]  # , "mosaic", "mosaic-window"
+    models_to_validate = 0.15
+    ensemble = ["dist", "simple", "horizontal-max", ]  # , "mosaic", "mosaic-window"
 elif evolve:
     gens = 10
-    models_to_validate = 0.3
+    models_to_validate = 0.15
     ensemble = ["horizontal-max", "dist", "simple"]  # "mosaic", "mosaic-window", "subsample"
 else:
     gens = 0
@@ -97,7 +97,7 @@ else:
 
 # only save the very best model if not evolve
 if evolve:
-    n_export = 30
+    n_export = 50
 else:
     n_export = 1  # wouldn't be a bad idea to do > 1, allowing some future adaptability
 
@@ -122,6 +122,7 @@ df = load_live_daily(
     earthquake_min_magnitude=5,
     weather_years=3,
     london_air_days=700,
+    wikipedia_pages=['all', 'Microsoft', "Procter & Gamble"],
     gsa_key=gsa_key,
     gov_domain_list=None,  # ['usajobs.gov', 'usps.com', 'weather.gov'],
     gov_domain_limit=700,
@@ -176,14 +177,15 @@ Begin modeling
 """
 
 metric_weighting = {
-    'smape_weighting': 1,
-    'mae_weighting': 3,
+    'smape_weighting': 3,
+    'mae_weighting': 2,
     'rmse_weighting': 1,
     'made_weighting': 1,
     'mage_weighting': 0,
     'mle_weighting': 0,
     'imle_weighting': 0,
-    'spl_weighting': 2,
+    'spl_weighting': 1,
+    'dwae_weighting': 3,
     'containment_weighting': 0,
     'contour_weighting': 0,
     'runtime_weighting': 0.05,
