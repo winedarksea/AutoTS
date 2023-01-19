@@ -348,7 +348,7 @@ def retrieve_regressor(
             return MultiOutputRegressor(regr, n_jobs=n_jobs)
         else:
             return regr
-    elif model_class == 'xgboost':
+    elif model_class in ['xgboost', 'XGBRegressor']:
         import xgboost as xgb
 
         if multioutput:

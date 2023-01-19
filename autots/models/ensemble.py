@@ -744,6 +744,19 @@ def _generate_bestn_dict(
     }
 
 
+def mlens_helper(models):
+    from autots.models.mlensemble import MLEnsemble
+
+    mlens = MLEnsemble.get_new_params()
+    mlens['models'] = models.to_dict(orient='records')
+    return pd.DataFrame({
+        'Model': 'MLEnsemble',
+        'ModelParameters': json.dumps(mlens),
+        'TransformationParameters': '{}',
+        'Ensemble': 0,
+    }, index=[0])
+
+
 def EnsembleTemplateGenerator(
     initial_results,
     forecast_length: int = 14,
@@ -755,7 +768,7 @@ def EnsembleTemplateGenerator(
     ens_temp = initial_results.model_results.drop_duplicates(subset='ID')
     # filter out horizontal ensembles
     ens_temp = ens_temp[ens_temp['Ensemble'] <= 1]
-    if 'simple' in ensemble:
+    if 'simple' in ensemble or "mlensemble" in ensemble:
         # best 3, all can be of same model type
         best3nonunique = ens_temp.nsmallest(3, columns=['Score']).set_index("ID")[
             ['Model', 'ModelParameters', 'TransformationParameters']
@@ -769,6 +782,10 @@ def EnsembleTemplateGenerator(
                 index=[0],
             )
             ensemble_templates = pd.concat([ensemble_templates, best3nu_params], axis=0)
+        if "mlensemble" in ensemble:
+            ensemble_templates = pd.concat(
+                [ensemble_templates, mlens_helper(best3nonunique)], axis=0, ignore_index=True
+            )
         # Best 5 and Median
         best5nonunique = ens_temp.nsmallest(5, columns=['Score']).set_index("ID")[
             ['Model', 'ModelParameters', 'TransformationParameters']
@@ -806,6 +823,10 @@ def EnsembleTemplateGenerator(
                 index=[0],
             )
             ensemble_templates = pd.concat([ensemble_templates, best3m_params], axis=0)
+        if "mlensemble" in ensemble:
+            ensemble_templates = pd.concat(
+                [ensemble_templates, mlens_helper(best3metric)], axis=0, ignore_index=True
+            )
         best5m_params = pd.DataFrame(
             _generate_bestn_dict(
                 best5metric,
@@ -898,6 +919,10 @@ def EnsembleTemplateGenerator(
             )
             ensemble_templates = pd.concat(
                 [ensemble_templates, best3u_params], axis=0, ignore_index=True
+            )
+        if "mlensemble" in ensemble:
+            ensemble_templates = pd.concat(
+                [ensemble_templates, mlens_helper(bestn)], axis=0, ignore_index=True
             )
         # cluster and then make best model per cluster
         if per_series.shape[1] > 4:

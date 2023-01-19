@@ -1607,7 +1607,7 @@ or otherwise increase models available."""
             if str(reg_param).lower() == 'user':
                 return True
         # now check if it's an Ensemble
-        if "models" in current_keys:
+        if "models" in current_keys and 'regression_model' not in current_keys:
             for key in cur_dict['models'].keys():
                 # stop as soon as any finds a regressor
                 if self._regr_param_check(cur_dict['models'][key]):
@@ -1687,6 +1687,7 @@ or otherwise increase models available."""
                     n_jobs=self.n_jobs,
                     template_cols=self.template_cols,
                     current_model_file=self.current_model_file,
+                    return_model=True,
                 )
                 # convert categorical back to numeric
                 trans = self.categorical_transformer
@@ -1736,6 +1737,7 @@ or otherwise increase models available."""
                 n_jobs=self.n_jobs,
                 template_cols=self.template_cols,
                 current_model_file=self.current_model_file,
+                return_model=True,
             )
             # convert categorical back to numeric
             trans = self.categorical_transformer

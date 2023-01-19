@@ -603,6 +603,18 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
+    elif model == "MLEnsemble":
+        from autots.models.mlensemble import MLEnsemble  # circular import
+
+        return MLEnsemble(
+            frequency=frequency,
+            forecast_length=forecast_length,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **parameters,
+        )
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)

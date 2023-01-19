@@ -13,9 +13,11 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # 0.5.4 🌏 🌏 🌏
-* Cassandra seasonality and holiday detection bug fixes
+* Cassandra seasonality, holiday detection, and other bug fixes
 * attempted to improve the KalmanStateSpace and KalmanSmoothing methods
 * validation indexes now generated in a standalone function
+* create_regressor bug fix
+* added MLEnsemble
 
 
 ### New Model Checklist:

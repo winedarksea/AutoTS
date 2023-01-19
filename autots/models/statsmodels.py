@@ -1745,19 +1745,19 @@ class VAR(ModelObject):
             transformer = EmptyTransformer()
 
         if self.regression_type in ["User", "Holiday"]:
-            maModel = VAR(
+            self.model = VAR(
                 self.df_train, freq=self.frequency, exog=self.regressor_train
             ).fit(maxlags=self.maxlags, ic=self.ic, trend='n')
-            forecast, lower_forecast, upper_forecast = maModel.forecast_interval(
+            forecast, lower_forecast, upper_forecast = self.model.forecast_interval(
                 steps=len(test_index),
                 exog_future=future_regressor,
                 y=self.df_train.values,
             )
         else:
-            maModel = VAR(self.df_train, freq=self.frequency).fit(
+            self.model = VAR(self.df_train, freq=self.frequency).fit(
                 ic=self.ic, maxlags=self.maxlags
             )
-            forecast, lower_forecast, upper_forecast = maModel.forecast_interval(
+            forecast, lower_forecast, upper_forecast = self.model.forecast_interval(
                 steps=len(test_index),
                 y=self.df_train.values,
                 alpha=1 - self.prediction_interval,

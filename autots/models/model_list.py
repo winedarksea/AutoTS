@@ -40,6 +40,7 @@ all_models = [
     'MetricMotif',
     'Cassandra',
     'SeasonalityMotif',
+    'MLEnsemble',
 ]
 # downweight slower models
 default = {
