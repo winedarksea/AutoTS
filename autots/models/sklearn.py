@@ -1012,9 +1012,9 @@ class RollingRegression(ModelObject):
         self.sktraindata = self.sktraindata.fillna(method='ffill').fillna(
             method='bfill'
         )
-        Y = self.sktraindata.drop(self.sktraindata.head(2).index)
-        Y.columns = [x for x in range(len(Y.columns))]
-        X = rolling_x_regressor(
+        self.Y = self.sktraindata.drop(self.sktraindata.head(2).index)
+        self.Y.columns = [x for x in range(len(self.Y.columns))]
+        self.X = rolling_x_regressor(
             self.sktraindata,
             mean_rolling_periods=self.mean_rolling_periods,
             macd_periods=self.macd_periods,
@@ -1035,26 +1035,26 @@ class RollingRegression(ModelObject):
             window=self.window,
         )
         if self.regression_type == 'User':
-            X = pd.concat([X, self.regressor_train], axis=1)
+            self.X = pd.concat([self.X, self.regressor_train], axis=1)
 
         if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
             self.x_transformer = self._x_transformer()
-            self.x_transformer = self.x_transformer.fit(X)
-            X = pd.DataFrame(self.x_transformer.transform(X))
-            X = X.replace([np.inf, -np.inf], 0).fillna(0)
+            self.x_transformer = self.x_transformer.fit(self.X)
+            self.X = pd.DataFrame(self.x_transformer.transform(self.X))
+            self.X = self.X.replace([np.inf, -np.inf], 0).fillna(0)
         """
         Tail(1) is dropped to shift data to become forecast 1 ahead
         and the first one is dropped because it will least accurately represent
         rolling values
         """
-        X = X.drop(X.tail(1).index).drop(X.head(1).index)
-        if isinstance(X, pd.DataFrame):
-            X.columns = [str(xc) for xc in X.columns]
+        self.X = self.X.drop(self.X.tail(1).index).drop(self.X.head(1).index)
+        if isinstance(self.X, pd.DataFrame):
+            self.X.columns = [str(xc) for xc in self.X.columns]
 
         multioutput = True
-        if Y.ndim < 2:
+        if self.Y.ndim < 2:
             multioutput = False
-        elif Y.shape[1] < 2:
+        elif self.Y.shape[1] < 2:
             multioutput = False
         # retrieve model object to train
         self.regr = retrieve_regressor(
@@ -1082,7 +1082,7 @@ class RollingRegression(ModelObject):
             x_device = X
             y_device = Y
         """
-        self.regr = self.regr.fit(X, Y)
+        self.regr = self.regr.fit(self.X, self.Y)
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -2550,7 +2550,7 @@ class MultivariateRegression(ModelObject):
                 else:
                     self.regressor_train = future_regressor
             # define X and Y
-            Y = df[1:].to_numpy().ravel(order="F")
+            self.Y = df[1:].to_numpy().ravel(order="F")
             # drop look ahead data
             base = df[:-1]
             if self.regression_type is not None:
@@ -2559,7 +2559,7 @@ class MultivariateRegression(ModelObject):
             else:
                 cut_regr = None
             # open to suggestions on making this faster
-            X = pd.concat(
+            self.X = pd.concat(
                 [
                     rolling_x_regressor_regressor(
                         base[x_col].to_frame(),
@@ -2606,9 +2606,9 @@ class MultivariateRegression(ModelObject):
                 )
 
             multioutput = True
-            if Y.ndim < 2:
+            if self.Y.ndim < 2:
                 multioutput = False
-            elif Y.shape[1] < 2:
+            elif self.Y.shape[1] < 2:
                 multioutput = False
             self.model = retrieve_regressor(
                 regression_model=self.regression_model,
@@ -2618,11 +2618,11 @@ class MultivariateRegression(ModelObject):
                 n_jobs=self.n_jobs,
                 multioutput=multioutput,
             )
-            self.model.fit(X, Y)
+            self.model.fit(self.X, self.Y)
 
             if self.probabilistic:
-                self.model_upper.fit(X, Y)
-                self.model_lower.fit(X, Y)
+                self.model_upper.fit(self.X, self.Y)
+                self.model_lower.fit(self.X, self.Y)
             # we only need the N most recent points for predict
             self.sktraindata = df.tail(self.min_threshold)
 

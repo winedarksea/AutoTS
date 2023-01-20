@@ -373,8 +373,7 @@ class MLEnsemble(ModelObject):
             )
             return prediction
 
-    @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(self, method: str = 'random'):
         """Returns dict of new parameters for parameter tuning"""
         if "regressor" in method:
             regression_type_choice = "User"

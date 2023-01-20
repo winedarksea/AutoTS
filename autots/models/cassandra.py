@@ -1637,8 +1637,7 @@ class Cassandra(ModelObject):
     def compare_actual_components(self):
         return NotImplemented
 
-    @staticmethod
-    def get_new_params(method='fast'):
+    def get_new_params(self, method='fast'):
         # have fast option that avoids any of the loop approaches
         scaling = random.choices(['BaseScaler', 'other'], [0.8, 0.2])[0]
         if scaling == "other":
@@ -1673,8 +1672,8 @@ class Cassandra(ModelObject):
         else:
             anomaly_detector_params = None
         model_str = random.choices(
-            ['AverageValueNaive', 'MetricMotif', "LastValueNaive", 'SeasonalityMotif', 'KalmanStateSpace'],
-            [0.2, 0.5, 0.1, 0.2, 0.05],
+            ['AverageValueNaive', 'MetricMotif', "LastValueNaive", 'SeasonalityMotif', 'WindowRegression', 'ARDL', 'VAR', 'UnivariateMotif', 'UnobservedComponents'],
+            [0.2, 0.2, 0.1, 0.2, 0.05, 0.05, 0.05, 0.05, 0.05],
             k=1,
         )[0]
         trend_model = {'Model': model_str}
