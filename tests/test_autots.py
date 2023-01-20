@@ -11,7 +11,9 @@ from autots.datasets import (
 )
 from autots import AutoTS, model_forecast
 from autots.evaluator.auto_ts import fake_regressor
+from autots.evaluator.auto_model import ModelMonster
 from autots.models.model_list import default as default_model_list
+from autots.models.model_list import all_models
 from autots.evaluator.benchmark import Benchmark
 
 
@@ -380,17 +382,26 @@ class AutoTSTest(unittest.TestCase):
 
 
 class ModelTest(unittest.TestCase):
+    
+    def test_models_get_params(self):
+        default_methods = ['deep', 'fast', 'random', 'default', 'superfast', 'regressor', 'event_risk']
+        for method in default_methods:
+            for model_str in all_models:
+                ModelMonster(model_str).get_new_params(method=method)
+        
 
     def test_models(self):
         print("Starting test_models")
         n_jobs = 1
         random_seed = 300
-        df = load_monthly(long=False)[['CSUSHPISA', 'EMVOVERALLEMV', 'EXCAUS']]
+        df = load_daily(long=False).iloc[:, 0:5]
         models = [
             'SectionalMotif', 'MultivariateMotif', 'AverageValueNaive',
             'NVAR', "LastValueNaive", 'Theta', 'FBProphet', 'SeasonalNaive',
             'GLM', 'ETS', "ConstantNaive", 'WindowRegression',
             'DatepartRegression', 'MultivariateRegression',
+            'Cassandra', 'MetricMotif', 'SeasonalityMotif', 'KalmanStateSpace',
+            'ARDL', 'UnivariateMotif', 'VAR',
         ]
 
         timings = {}
@@ -433,7 +444,7 @@ class ModelTest(unittest.TestCase):
                     },
                     df_train=df,
                     forecast_length=5,
-                    frequency="M",
+                    frequency="D",
                     prediction_interval=0.9,
                     random_seed=random_seed,
                     verbose=0,

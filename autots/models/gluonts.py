@@ -552,7 +552,7 @@ class GluonTS(ModelObject):
                 k=1,
             )[0]
             epochs_choice = random.choices(
-                [20, 40, 80, 150, 300, 500], [0.58, 0.35, 0.05, 0.05, 0.02]
+                [20, 40, 80, 150, 300, 500], [0.58, 0.35, 0.05, 0.05, 0.05, 0.02]
             )[0]
         else:
             gluon_model_choice = random.choices(

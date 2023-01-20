@@ -2124,7 +2124,7 @@ class KalmanStateSpace(ModelObject):
     def get_new_params(method: str = "random"):
         # predefined, or random
         if method in ['fast', 'superfast']:
-            em_iter = random.choices([None, 10], [0.4, 0.6, 0.1])[0]
+            em_iter = random.choices([None, 10], [0.4, 0.6])[0]
         elif method == "deep":
             em_iter = random.choices([None, 10, 20, 50, 100], [0.3, 0.6, 0.1, 0.1, 0.1])[0]
         else:

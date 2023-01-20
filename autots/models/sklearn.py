@@ -1353,7 +1353,7 @@ class WindowRegression(ModelObject):
                     "regression_type='User' but no future_regressor passed"
                 )
         self.df_train = df
-        X, Y = window_maker(
+        self.X, self.Y = window_maker(
             df,
             window_size=self.window_size,
             input_dim=self.input_dim,
@@ -1367,12 +1367,12 @@ class WindowRegression(ModelObject):
             random_seed=self.random_seed,
         )
         multioutput = True
-        if Y.ndim < 2:
+        if self.Y.ndim < 2:
             multioutput = False
-        elif Y.shape[1] < 2:
+        elif self.Y.shape[1] < 2:
             multioutput = False
-        if isinstance(X, pd.DataFrame):
-            X = X.to_numpy()
+        if isinstance(self.X, pd.DataFrame):
+            self.X = self.X.to_numpy()
         self.regr = retrieve_regressor(
             regression_model=self.regression_model,
             verbose=self.verbose,
@@ -1381,7 +1381,7 @@ class WindowRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
-        self.regr = self.regr.fit(X.astype(float), Y.astype(float))
+        self.regr = self.regr.fit(self.X.astype(float), self.Y.astype(float))
         self.last_window = df.tail(self.window_size)
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self

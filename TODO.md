@@ -18,6 +18,8 @@
 * validation indexes now generated in a standalone function
 * create_regressor bug fix
 * added MLEnsemble
+* fix a bug where common_fourier failed on short length forecasts
+* added some additional options to ARDL
 
 
 ### New Model Checklist:

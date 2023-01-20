@@ -2488,7 +2488,7 @@ or otherwise increase models available."""
                 **kwargs,
             )
 
-    def plot_horizontal_model_count(self, color_list=None, top_n: int = 20, **kwargs):
+    def plot_horizontal_model_count(self, color_list=None, top_n: int = 20, title="Most Frequently Chosen Models", **kwargs):
         """Plots most common models. Does not factor in nested in non-horizontal Ensembles."""
         if self.best_model.empty:
             raise ValueError("AutoTS not yet fit.")
@@ -2502,7 +2502,6 @@ or otherwise increase models available."""
             series = self.horizontal_to_df()
             transformers = series['Model'].value_counts().iloc[0:top_n]
 
-        title = "Most Frequently Chosen Models"
         if color_list is None:
             color_list = colors_list
         colors = random.sample(color_list, transformers.shape[0])

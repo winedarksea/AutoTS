@@ -104,7 +104,7 @@ class Cassandra(ModelObject):
         preprocessing_transformation: dict = None,  # filters by default only
         scaling: str = "BaseScaler",  # pulled out from transformation as a scaler is not optional, maybe allow a list
         past_impacts_intervention: str = None,  # 'remove', 'plot_only', 'regressor'
-        seasonalities: dict = None,  # interactions added if fourier and order matches
+        seasonalities: dict = ['common_fourier'],  # interactions added if fourier and order matches
         ar_lags: list = None,
         ar_interaction_seasonality: dict = None,  # equal or less than number of ar lags
         anomaly_detector_params: dict = None,  # apply before any preprocessing (as has own)
@@ -1672,8 +1672,8 @@ class Cassandra(ModelObject):
         else:
             anomaly_detector_params = None
         model_str = random.choices(
-            ['AverageValueNaive', 'MetricMotif', "LastValueNaive", 'SeasonalityMotif', 'WindowRegression', 'ARDL', 'VAR', 'UnivariateMotif', 'UnobservedComponents'],
-            [0.2, 0.2, 0.1, 0.2, 0.05, 0.05, 0.05, 0.05, 0.05],
+            ['AverageValueNaive', 'MetricMotif', "LastValueNaive", 'SeasonalityMotif', 'WindowRegression', 'ARDL', 'VAR', 'UnivariateMotif', 'UnobservedComponents', "KalmanStateSpace"],
+            [0.05, 0.05, 0.1, 0.05, 0.05, 0.15, 0.05, 0.05, 0.05, 0.05],
             k=1,
         )[0]
         trend_model = {'Model': model_str}
