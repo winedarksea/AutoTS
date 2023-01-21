@@ -556,6 +556,39 @@ datepart_model_dict: dict = {
     'RadiusNeighbors': 0.05,
 }
 
+xgparam3 = {
+    "base_score": 0.5, "booster": 'gbtree',
+    "colsample_bylevel": 0.5414261078985501, "colsample_bynode": 1,
+    "colsample_bytree": 1.0, "early_stopping_rounds": None,
+    "enable_categorical": False, "eval_metric": None, "feature_types": None,
+    "gamma": 0, "grow_policy": 'depthwise', "importance_type": None,
+    "interaction_constraints": '', "learning_rate": 0.01254314365790581,
+    "max_bin": 256, "max_cat_threshold": 64, "max_cat_to_onehot": 4,
+    "max_delta_step": 0, "max_depth": 11, "max_leaves": 0,
+    "min_child_weight": 0.012720317739594067,
+    "monotone_constraints": '()', "n_estimators": 319,
+    "num_parallel_tree": 1, "predictor": 'auto',
+}
+xgparam2 = {
+    "base_score": 0.5, "booster": 'gbtree',
+    "colsample_bylevel": 0.6919152651628077, "colsample_bynode": 1,
+    "colsample_bytree": 1.0, "early_stopping_rounds": None,
+    "enable_categorical": False, "eval_metric": None, "feature_types": None,
+    "gamma": 0, "grow_policy": 'depthwise', "importance_type": None,
+    "interaction_constraints": '', "learning_rate": 0.02199010928560311,
+    "max_bin": 256, "max_cat_threshold": 64, "max_cat_to_onehot": 4,
+    "max_delta_step": 0, "max_depth": 14, "max_leaves": 0,
+    "min_child_weight": 0.024213122477924242,
+    "monotone_constraints": '()', "n_estimators": 162,
+    "num_parallel_tree": 1, "predictor": 'auto',
+}
+lightgbmp1 = {
+    "colsample_bytree": 0.16453205691540249,
+    "learning_rate": 0.020272595166470075, "max_bin": 1023,
+    "min_child_samples": 16, "n_estimators": 1794, "num_leaves": 15,
+    "reg_alpha": 0.0009765625, "reg_lambda": 0.6861914511499754,
+}
+
 
 def generate_regressor_params(
     model_dict=None,
@@ -572,7 +605,8 @@ def generate_regressor_params(
         }
         method = "deep"
     """Generate new parameters for input to regressor."""
-    model = random.choices(list(model_dict.keys()), list(model_dict.values()), k=1)[0]
+    model_list= list(model_dict.keys())
+    model = random.choices(model_list, list(model_dict.values()), k=1)[0]
     if model in [
         'xgboost',
         'Adaboost',
@@ -604,26 +638,32 @@ def generate_regressor_params(
                 },
             }
         elif model == 'xgboost':
-            param_dict = {
-                "model": 'xgboost',
-                "model_params": {
-                    "objective": np.random.choice(
-                        ['count:poisson', 'reg:squarederror', 'reg:gamma'],
-                        p=[0.4, 0.5, 0.1],
-                        size=1,
-                    ).item(),
-                    "eta": np.random.choice([0.3], p=[1.0], size=1).item(),
-                    "min_child_weight": np.random.choice(
-                        [1, 2, 5], p=[0.8, 0.1, 0.1], size=1
-                    ).item(),
-                    "max_depth": np.random.choice(
-                        [3, 6, 9], p=[0.1, 0.8, 0.1], size=1
-                    ).item(),
-                    "subsample": np.random.choice(
-                        [1, 0.7, 0.5], p=[0.9, 0.05, 0.05], size=1
-                    ).item(),
-                },
-            }
+            branch = random.choices(['p1', 'p2', 'random'], [0.1, 0.4, 0.5])[0]
+            if branch == 'p1':
+                param_dict = xgparam2
+            elif branch == 'p2':
+                param_dict = xgparam3
+            else:
+                param_dict = {
+                    "model": 'xgboost',
+                    "model_params": {
+                        "objective": np.random.choice(
+                            ['count:poisson', 'reg:squarederror', 'reg:gamma'],
+                            p=[0.4, 0.5, 0.1],
+                            size=1,
+                        ).item(),
+                        "eta": np.random.choice([0.3], p=[1.0], size=1).item(),
+                        "min_child_weight": np.random.choice(
+                            [1, 2, 5], p=[0.8, 0.1, 0.1], size=1
+                        ).item(),
+                        "max_depth": np.random.choice(
+                            [3, 6, 9], p=[0.1, 0.8, 0.1], size=1
+                        ).item(),
+                        "subsample": np.random.choice(
+                            [1, 0.7, 0.5], p=[0.9, 0.05, 0.05], size=1
+                        ).item(),
+                    },
+                }
         elif model == 'MLP':
             solver = np.random.choice(
                 ['lbfgs', 'sgd', 'adam'], p=[0.5, 0.1, 0.4], size=1
@@ -812,44 +852,48 @@ def generate_regressor_params(
                 },
             }
         elif model in ['LightGBM', "LightGBMRegressorChain"]:
-            param_dict = {
-                "model": 'LightGBM',
-                "model_params": {
-                    "objective": random.choices(
-                        [
-                            'regression',
-                            'gamma',
-                            'huber',
-                            'regression_l1',
-                            'tweedie',
-                            'poisson',
-                            'quantile',
-                        ],
-                        [0.4, 0.2, 0.2, 0.2, 0.2, 0.05, 0.01],
-                    )[0],
-                    "learning_rate": random.choices(
-                        [0.001, 0.1, 0.01],
-                        [0.1, 0.6, 0.3],
-                    )[0],
-                    "num_leaves": random.choices(
-                        [31, 127, 70],
-                        [0.6, 0.1, 0.3],
-                    )[0],
-                    "max_depth": random.choices(
-                        [-1, 5, 10],
-                        [0.6, 0.1, 0.3],
-                    )[0],
-                    "boosting_type": random.choices(
-                        ['gbdt', 'rf', 'dart', 'goss'],
-                        [0.6, 0, 0.2, 0.2],
-                    )[0],
-                    "n_estimators": random.choices(
-                        [100, 250, 50, 500],
-                        [0.6, 0.1, 0.3, 0.0010],
-                    )[0],
-                    "linear_tree": random.choice([True, False]),
-                },
-            }
+            branch = random.choices(['p2', 'random'], [0.4, 0.5])[0]
+            if branch == 'p2':
+                param_dict = lightgbmp1
+            else:
+                param_dict = {
+                    "model": 'LightGBM',
+                    "model_params": {
+                        "objective": random.choices(
+                            [
+                                'regression',
+                                'gamma',
+                                'huber',
+                                'regression_l1',
+                                'tweedie',
+                                'poisson',
+                                'quantile',
+                            ],
+                            [0.4, 0.2, 0.2, 0.2, 0.2, 0.05, 0.01],
+                        )[0],
+                        "learning_rate": random.choices(
+                            [0.001, 0.1, 0.01],
+                            [0.1, 0.6, 0.3],
+                        )[0],
+                        "num_leaves": random.choices(
+                            [31, 127, 70],
+                            [0.6, 0.1, 0.3],
+                        )[0],
+                        "max_depth": random.choices(
+                            [-1, 5, 10],
+                            [0.6, 0.1, 0.3],
+                        )[0],
+                        "boosting_type": random.choices(
+                            ['gbdt', 'rf', 'dart', 'goss'],
+                            [0.6, 0, 0.2, 0.2],
+                        )[0],
+                        "n_estimators": random.choices(
+                            [100, 250, 50, 500],
+                            [0.6, 0.1, 0.3, 0.0010],
+                        )[0],
+                        "linear_tree": random.choice([True, False]),
+                    },
+                }
         elif model == 'Ridge':
             param_dict = {
                 "model": 'Ridge',
@@ -1933,8 +1977,7 @@ class DatepartRegression(ModelObject):
             )
             return prediction
 
-    @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         model_choice = generate_regressor_params(model_dict=datepart_model_dict)
         datepart_choice = random.choices(
@@ -2287,8 +2330,7 @@ class UnivariateRegression(ModelObject):
             )
             return prediction
 
-    @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         if method == "deep":
             x_transform_choice = random.choices(
@@ -2747,8 +2789,7 @@ class MultivariateRegression(ModelObject):
             )
             return prediction
 
-    @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         if method == "deep":
             model_choice = generate_regressor_params(

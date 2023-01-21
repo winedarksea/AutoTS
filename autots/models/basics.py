@@ -2120,8 +2120,7 @@ class KalmanStateSpace(ModelObject):
             )
             return prediction
 
-    @staticmethod
-    def get_new_params(method: str = "random"):
+    def get_new_params(self, method: str = "random"):
         # predefined, or random
         if method in ['fast', 'superfast']:
             em_iter = random.choices([None, 10], [0.4, 0.6])[0]

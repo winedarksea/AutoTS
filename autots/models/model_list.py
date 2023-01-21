@@ -135,10 +135,10 @@ fast = {
 parallel = {
     'ETS': 1,
     'FBProphet': 0.8,
-    'ARIMA': 1,
+    'ARIMA': 0.2,  # slow
     'GLM': 1,
     'UnobservedComponents': 1,
-    "Greykite": 0.3,
+    # "Greykite": 0.3,
     'UnivariateMotif': 1,
     'MultivariateMotif': 1,
     'Theta': 1,

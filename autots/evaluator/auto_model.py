@@ -826,6 +826,7 @@ class TemplateEvalObject(object):
         per_series_oda=pd.DataFrame(),
         per_series_mqae=pd.DataFrame(),
         per_series_dwae=pd.DataFrame(),
+        per_series_ewmae=pd.DataFrame(),
         model_count: int = 0,
     ):
         self.model_results = model_results
@@ -842,6 +843,7 @@ class TemplateEvalObject(object):
         self.per_series_oda = per_series_oda
         self.per_series_mqae = per_series_mqae
         self.per_series_dwae = per_series_dwae
+        self.per_series_ewmae = per_series_dwae
         self.full_mae_ids = []
         self.full_mae_errors = []
         self.full_pl_errors = []
@@ -898,6 +900,9 @@ class TemplateEvalObject(object):
         )
         self.per_series_dwae = pd.concat(
             [self.per_series_dwae, another_eval.per_series_dwae], axis=0, sort=False
+        )
+        self.per_series_ewmae = pd.concat(
+            [self.per_series_ewmae, another_eval.per_series_ewmae], axis=0, sort=False
         )
         self.full_mae_errors.extend(another_eval.full_mae_errors)
         self.full_pl_errors.extend(another_eval.full_pl_errors)
@@ -1300,6 +1305,7 @@ def TemplateWizard(
         per_series_oda=[],
         per_series_mqae=[],
         per_series_dwae=[],
+        per_series_ewmae=[],
     )
     template_result.model_count = model_count
     if isinstance(template, pd.Series):
@@ -1326,6 +1332,9 @@ def TemplateWizard(
     scaler[np.isnan(scaler)] = fill_val
 
     template_dict = template.to_dict('records')
+    # minor speedup with one less copy per eval by assuring arrays at this level
+    actuals = np.asarray(df_test)
+    df_trn_arr = np.asarray(df_train)
     for row in template_dict:
         template_start_time = datetime.datetime.now()
         try:
@@ -1387,15 +1396,11 @@ def TemplateWizard(
                 post_memory_percent = virtual_memory().percent
 
             per_ts = True if 'distance' in ensemble else False
-            full_mae = (
-                True if "mosaic" in ensemble or "mosaic-window" in ensemble else False
-            )
             model_error = df_forecast.evaluate(
-                df_test,
+                actuals,
                 series_weights=weights,
-                df_train=df_train,
+                df_train=df_trn_arr,
                 per_timestamp_errors=per_ts,
-                full_mae_error=full_mae,
                 scaler=scaler,
             )
             if validation_round >= 1 and verbose > 0:
@@ -1487,6 +1492,9 @@ def TemplateWizard(
             )
             template_result.per_series_dwae.append(
                 _ps_metric(ps_metric, 'dwae', model_id)
+            )
+            template_result.per_series_ewmae.append(
+                _ps_metric(ps_metric, 'ewmae', model_id)
             )
             if 'distance' in ensemble:
                 cur_smape = model_error.per_timestamp.loc['weighted_smape']
@@ -1614,6 +1622,9 @@ def TemplateWizard(
         template_result.per_series_dwae = pd.concat(
             template_result.per_series_dwae, axis=0
         )
+        template_result.per_series_ewmae= pd.concat(
+            template_result.per_series_ewmae, axis=0
+        )
     else:
         template_result.per_series_mae = pd.DataFrame()
         template_result.per_series_made = pd.DataFrame()
@@ -1626,6 +1637,7 @@ def TemplateWizard(
         template_result.per_series_oda = pd.DataFrame()
         template_result.per_series_mqae = pd.DataFrame()
         template_result.per_series_dwae = pd.DataFrame()
+        template_result.per_series_ewmae = pd.DataFrame()
         if verbose > 0 and not template.empty:
             print(f"Generation {current_generation} had all new models fail")
     return template_result
@@ -2096,6 +2108,7 @@ def validation_aggregation(validation_results):
         'oda': 'mean',
         'dwae': 'mean',
         'mqae': 'mean',
+        'ewmae': 'mean',
         'smape_weighted': 'mean',
         'mae_weighted': 'mean',
         'rmse_weighted': 'mean',
@@ -2109,6 +2122,7 @@ def validation_aggregation(validation_results):
         'oda_weighted': 'mean',
         'dwae_weighted': 'mean',
         'mqae_weighted': 'mean',
+        'ewmae_weighted': 'mean',
         'containment_weighted': 'mean',
         'contour_weighted': 'mean',
         'TotalRuntimeSeconds': 'mean',
@@ -2167,6 +2181,7 @@ def generate_score(
     oda_weighting = metric_weighting.get('oda_weighting', 0)
     mqae_weighting = metric_weighting.get('mqae_weighting', 0)
     dwae_weighting = metric_weighting.get('dwae_weighting', 0)
+    ewmae_weighting = metric_weighting.get('ewmae_weighting', 0)
     # handle various runtime information records
     if 'TotalRuntimeSeconds' in model_results.columns:
         model_results['TotalRuntimeSeconds'] = np.where(
@@ -2252,6 +2267,12 @@ def generate_score(
             ].min()
             dwae_score = model_results['dwae_weighted'] / dwae_scaler
             overall_score = overall_score + (dwae_score * dwae_weighting)
+        if ewmae_weighting > 0:
+            ewmae_scaler = model_results['ewmae_weighted'][
+                model_results['ewmae_weighted'] != 0
+            ].min()
+            ewmae_score = model_results['ewmae_weighted'] / ewmae_scaler
+            overall_score = overall_score + (ewmae_score * ewmae_weighting)
         if spl_weighting > 0:
             spl_scaler = model_results['spl_weighted'][
                 model_results['spl_weighted'] != 0
@@ -2309,6 +2330,7 @@ def generate_score_per_series(
     oda_weighting = metric_weighting.get('oda_weighting', 0)
     mqae_weighting = metric_weighting.get('mqae_weighting', 0)
     dwae_weighting = metric_weighting.get('dwae_weighting', 0)
+    ewmae_weighting = metric_weighting.get('ewmae_weighting', 0)
 
     # there are problems when very small ~e-20 type number are in play
     mae_scaler = results_object.per_series_mae[
@@ -2375,6 +2397,14 @@ def generate_score_per_series(
         )
         dwae_score = results_object.per_series_dwae / dwae_scaler
         overall_score = overall_score + (dwae_score * dwae_weighting)
+    if ewmae_weighting > 0:
+        ewmae_scaler = (
+            results_object.per_series_ewmae[results_object.per_series_ewmae != 0]
+            .min()
+            .fillna(1)
+        )
+        ewmae_score = results_object.per_series_ewmae / ewmae_scaler
+        overall_score = overall_score + (ewmae_score * ewmae_weighting)
     if spl_weighting > 0:
         spl_scaler = (
             results_object.per_series_spl[results_object.per_series_spl != 0]

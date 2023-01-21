@@ -20,6 +20,8 @@
 * added MLEnsemble
 * fix a bug where common_fourier failed on short length forecasts
 * added some additional options to ARDL
+* refactored metric df eval
+* added ewmae metric
 
 
 ### New Model Checklist:

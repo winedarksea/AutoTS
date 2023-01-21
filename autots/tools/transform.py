@@ -148,7 +148,7 @@ def simple_context_slicer(df, method: str = "None", forecast_length: int = 30):
         else:
             return df.tail(int(df.shape[0] + method))
     else:
-        print("Context Slicer Method not recognized")
+        raise ValueError(f"context_slicer method `{method}` not recognized")
         return df
 
 
@@ -2791,7 +2791,7 @@ class HolidayTransformer(EmptyTransformer):
         """Run holiday detection. Input wide-style pandas time series."""
         self.anomaly_model.fit(df)
         if np.min(self.anomaly_model.anomalies.values) != -1:
-            print("No anomalies detected.")
+            print("HolidayTransformer: no anomalies detected.")
         (
             self.day_holidays,
             self.wkdom_holidays,

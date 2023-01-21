@@ -124,7 +124,7 @@ class Cassandra(ModelObject):
         # trend_anomaly_intervention: str = None,
         trend_transformation: dict = {},
         trend_model: dict = {
-            'Model': 'MetricMotif',
+            'Model': 'LastValueNaive',
             'ModelParameters': {},
         },  # have one or two in built, then redirect to any AutoTS model for other choices
         trend_phi: float = None,
@@ -1834,14 +1834,20 @@ class Cassandra(ModelObject):
         plot_list = []
         if prediction is not None:
             plot_list.append(prediction.forecast[series].rename("forecast"))
-            plot_list.append(self.predicted_trend[series].rename("trend"))
+            plt_idx = prediction.forecast.index
+        else:
+            plt_idx = None
+        plot_list.append(self.predicted_trend[series].rename("trend"))
         if self.impacts is not None:
             plot_list.append((self.impacts[series].rename("impact %") - 1.0) * 100)
-        plot_list.append(
-            self.process_components(to_origin_space=to_origin_space)[series].loc[
-                prediction.forecast.index
-            ]
-        )
+        if plt_idx is None:
+            plot_list.append(self.process_components(to_origin_space=to_origin_space)[series])
+        else:
+            plot_list.append(
+                self.process_components(to_origin_space=to_origin_space)[series].loc[
+                    plt_idx
+                ]
+            )
         plot_df = pd.concat(plot_list, axis=1)
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
@@ -2305,7 +2311,7 @@ if False:
     future_impacts = pd.DataFrame(0, index=df_test.index, columns=df_test.columns)
     future_impacts.iloc[0:10, 0] = (np.linspace(1, 10)[0:10] + 10) / 100
 
-    c_params = Cassandra.get_new_params()
+    c_params = Cassandra().get_new_params()
 
     mod = Cassandra(
         n_jobs=1,

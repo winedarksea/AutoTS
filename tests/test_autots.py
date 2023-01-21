@@ -384,6 +384,7 @@ class AutoTSTest(unittest.TestCase):
 class ModelTest(unittest.TestCase):
     
     def test_models_get_params(self):
+        """See if new random params can be generated without error."""
         default_methods = ['deep', 'fast', 'random', 'default', 'superfast', 'regressor', 'event_risk']
         for method in default_methods:
             for model_str in all_models:
@@ -391,6 +392,7 @@ class ModelTest(unittest.TestCase):
         
 
     def test_models(self):
+        """Test if models are the same as saved comparisons."""
         print("Starting test_models")
         n_jobs = 1
         random_seed = 300
@@ -506,6 +508,7 @@ class ModelTest(unittest.TestCase):
         """
 
     def test_transforms(self):
+        """Test if transformers meet saved comparison outputs."""
         print("Starting test_transforms")
         n_jobs = 1
         random_seed = 300
