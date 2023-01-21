@@ -254,6 +254,7 @@ class AutoTS(object):
                 "mosaic",
                 'mosaic-window',
                 "subsample",
+                'mlensemble',
             ]
         elif ensemble == 'auto':
             if model_list in ['superfast']:
@@ -439,6 +440,7 @@ class AutoTS(object):
             'distance_metric': 'mae',
             'datepart_method': 'common_fourier_rw',
         }
+        self.model_count = 0
 
         if verbose > 2:
             msg = '"Hello. Would you like to destroy some evil today?" - Sanderson'
@@ -695,11 +697,8 @@ class AutoTS(object):
         else:
             weighted = False
         self.weighted = weighted
-        frequency = self.frequency
         prediction_interval = self.prediction_interval
-        no_negatives = self.no_negatives
         random_seed = self.random_seed
-        holiday_country = self.holiday_country
         metric_weighting = self.metric_weighting
         num_validations = self.num_validations
         verbose = self.verbose
@@ -784,11 +783,11 @@ class AutoTS(object):
             self.ensemble = [ens_piece1, ens_piece2, ens_piece3]
         ensemble = self.ensemble
         # because horizontal cannot handle non-string columns/series_ids
-        if any(x in ensemble for x in self.h_ens_list):
+        if any(x in self.ensemble for x in self.h_ens_list):
             df_wide_numeric.columns = [str(xc) for xc in df_wide_numeric.columns]
 
         # use "mean" to assign weight as mean
-        if weighted:
+        if self.weighted:
             if weights == 'mean':
                 weights = df_wide_numeric.mean(axis=0).to_dict()
             elif weights == 'median':
@@ -848,7 +847,7 @@ class AutoTS(object):
         if self.subset_flag:
             df_subset = subset_series(
                 df_wide_numeric,
-                list((weights.get(i)) for i in df_wide_numeric.columns),
+                list((self.weights.get(i)) for i in df_wide_numeric.columns),
                 n=self.subset,
                 random_state=random_seed,
             )
@@ -865,10 +864,10 @@ class AutoTS(object):
         df_subset = df_subset.reindex(first_idx)
 
         # subset the weighting information as well
-        if not weighted:
+        if not self.weighted:
             current_weights = {x: 1 for x in df_subset.columns}
         else:
-            current_weights = {x: weights[x] for x in df_subset.columns}
+            current_weights = {x: self.weights[x] for x in df_subset.columns}
 
         # split train and test portions, and split regressor if present
         df_train, df_test = simple_train_test_split(
@@ -903,7 +902,6 @@ class AutoTS(object):
                 )
                 time.sleep(2)
 
-        model_count = 0
         self.start_time = pd.Timestamp.now()
 
         # unpack ensemble models so sub models appear at highest level
@@ -920,43 +918,15 @@ class AutoTS(object):
             ]
         # run the initial template
         submitted_parameters = self.initial_template.copy()
-        template_result = TemplateWizard(
-            self.initial_template,
-            df_train,
-            df_test,
-            weights=current_weights,
-            model_count=model_count,
-            ensemble=ensemble,
-            forecast_length=forecast_length,
-            frequency=frequency,
-            prediction_interval=prediction_interval,
-            no_negatives=no_negatives,
-            constraint=self.constraint,
-            future_regressor_train=future_regressor_train,
-            future_regressor_forecast=future_regressor_test,
-            holiday_country=holiday_country,
-            startTimeStamps=self.startTimeStamps,
-            template_cols=template_cols,
-            random_seed=random_seed,
-            model_interrupt=self.model_interrupt,
-            grouping_ids=self.grouping_ids,
-            verbose=verbose,
-            n_jobs=self.n_jobs,
-            max_generations=self.max_generations,
-            traceback=self.traceback,
-            current_model_file=self.current_model_file,
+        self._run_template(
+                self.initial_template, df_train, df_test,
+                future_regressor_train=future_regressor_train,
+                future_regressor_test=future_regressor_test,
+                current_weights=current_weights,
+                validation_round=0, max_generations=self.max_generations,
+                current_generation=0,
+                result_file=result_file,
         )
-        model_count = template_result.model_count
-
-        # capture the data from the lower level results
-        self.initial_results = self.initial_results.concat(template_result)
-        self.initial_results.model_results['Score'] = generate_score(
-            self.initial_results.model_results,
-            metric_weighting=metric_weighting,
-            prediction_interval=prediction_interval,
-        )
-        if result_file is not None:
-            self.initial_results.save(result_file)
 
         # now run new generations, trying more models based on past successes.
         current_generation = 0
@@ -1015,44 +985,16 @@ class AutoTS(object):
                 sort=False,
             ).reset_index(drop=True)
 
-            template_result = TemplateWizard(
-                new_template,
-                df_train,
-                df_test,
-                weights=current_weights,
-                model_count=model_count,
-                ensemble=ensemble,
-                forecast_length=forecast_length,
-                frequency=frequency,
-                prediction_interval=prediction_interval,
-                no_negatives=no_negatives,
-                constraint=self.constraint,
-                future_regressor_train=future_regressor_train,
-                future_regressor_forecast=future_regressor_test,
-                holiday_country=holiday_country,
-                startTimeStamps=self.startTimeStamps,
-                template_cols=template_cols,
-                model_interrupt=self.model_interrupt,
-                grouping_ids=self.grouping_ids,
-                random_seed=random_seed,
-                verbose=verbose,
-                n_jobs=self.n_jobs,
-                current_generation=current_generation,
-                max_generations=self.max_generations,
-                traceback=self.traceback,
-                current_model_file=self.current_model_file,
+            self._run_template(
+                    new_template, df_train, df_test,
+                    future_regressor_train=future_regressor_train,
+                    future_regressor_test=future_regressor_test,
+                    current_weights=current_weights,
+                    validation_round=0, max_generations=self.max_generations,
+                    current_generation=current_generation,
+                    result_file=result_file,
             )
-            model_count = template_result.model_count
 
-            # capture results from lower-level template run
-            self.initial_results = self.initial_results.concat(template_result)
-            self.initial_results.model_results['Score'] = generate_score(
-                self.initial_results.model_results,
-                metric_weighting=metric_weighting,
-                prediction_interval=prediction_interval,
-            )
-            if result_file is not None:
-                self.initial_results.save(result_file)
             passedTime = (pd.Timestamp.now() - self.start_time).total_seconds() / 60
 
         # try ensembling
@@ -1067,45 +1009,17 @@ class AutoTS(object):
                     ensemble=ensemble,
                     score_per_series=self.score_per_series,
                 )
-                template_result = TemplateWizard(
-                    ensemble_templates,
-                    df_train,
-                    df_test,
-                    weights=current_weights,
-                    model_count=model_count,
-                    forecast_length=forecast_length,
-                    frequency=frequency,
-                    prediction_interval=prediction_interval,
-                    no_negatives=no_negatives,
-                    constraint=self.constraint,
-                    ensemble=ensemble,
-                    future_regressor_train=future_regressor_train,
-                    future_regressor_forecast=future_regressor_test,
-                    holiday_country=holiday_country,
-                    startTimeStamps=self.startTimeStamps,
-                    template_cols=template_cols,
-                    model_interrupt=self.model_interrupt,
-                    grouping_ids=self.grouping_ids,
-                    random_seed=random_seed,
-                    current_generation=(current_generation + 1),
-                    max_generations="Ensembles",
-                    verbose=verbose,
-                    n_jobs=self.n_jobs,
-                    traceback=self.traceback,
-                    current_model_file=self.current_model_file,
+                self._run_template(
+                        ensemble_templates, df_train, df_test,
+                        future_regressor_train=future_regressor_train,
+                        future_regressor_test=future_regressor_test,
+                        current_weights=current_weights,
+                        validation_round=0, max_generations="Ensembles",
+                        current_generation=(current_generation + 1),
+                        result_file=result_file,
                 )
-                model_count = template_result.model_count
-                # capture results from lower-level template run
-                self.initial_results = self.initial_results.concat(template_result)
-                self.initial_results.model_results['Score'] = generate_score(
-                    self.initial_results.model_results,
-                    metric_weighting=metric_weighting,
-                    prediction_interval=prediction_interval,
-                )
-                if result_file is not None:
-                    self.initial_results.save(result_file)
             except Exception as e:
-                print(f"Ensembling Error: {e}")
+                print(f"Ensembling Error: {repr(e)}")
 
         # drop any duplicates in results
         self.initial_results.model_results = (
@@ -1179,112 +1093,53 @@ class AutoTS(object):
 
         # run validations
         if num_validations > 0:
-            model_count = 0
-            for y in range(num_validations):
-                if verbose > 0:
-                    print("Validation Round: {}".format(str(y + 1)))
-                # slice the validation data into current validation slice
-                current_slice = df_wide_numeric.reindex(
-                    self.validation_indexes[(y + 1)]
-                )
-
-                # subset series (if used) and take a new train/test split
-                if self.subset_flag:
-                    # mosaic can't handle different cols in each validation
-                    if "mosaic" in self.ensemble or "mosaic-window" in self.ensemble:
-                        rand_st = random_seed
-                    else:
-                        rand_st = random_seed + y + 1
-                    df_subset = subset_series(
-                        current_slice,
-                        list((weights.get(i)) for i in current_slice.columns),
-                        n=self.subset,
-                        random_state=rand_st,
+            self._run_validations(
+                    df_wide_numeric=df_wide_numeric,
+                    num_validations=num_validations,
+                    validation_template=validation_template,
+                    future_regressor=future_regressor,
+            )
+            # ensembles built on validation results
+            if self.ensemble:
+                try:
+                    ens_copy = copy.copy(self.validation_results)
+                    run_count = self.initial_results.model_results[self.initial_results.model_results.Exceptions.isna()][['Model', 'ID']].groupby("ID").count()
+                    models_to_use = run_count[
+                        run_count['Model'] >= (num_validations + 1)
+                    ].index.tolist()
+                    ens_copy.model_results = ens_copy.model_results[ens_copy.model_results.ID.isin(models_to_use)]
+                    self.ens_copy = ens_copy
+                    self.score_per_series = generate_score_per_series(
+                        self.initial_results, self.metric_weighting,
+                        total_validations=(num_validations + 1),
                     )
-                    if self.verbose > 1:
-                        print(f'{y + 1} subset is of: {df_subset.columns}')
-                else:
-                    df_subset = current_slice
-                # subset weighting info
-                if not weighted:
-                    current_weights = {x: 1 for x in df_subset.columns}
-                else:
-                    current_weights = {x: weights[x] for x in df_subset.columns}
-
-                val_df_train, val_df_test = simple_train_test_split(
-                    df_subset,
-                    forecast_length=forecast_length,
-                    min_allowed_train_percent=self.min_allowed_train_percent,
-                    verbose=self.verbose,
-                )
-                self.validation_train_indexes.append(val_df_train.index)
-                self.validation_test_indexes.append(val_df_test.index)
-                if self.verbose >= 2:
-                    print(f'Validation train index is {val_df_train.index}')
-
-                # slice regressor into current validation slices
-                if future_regressor is not None:
-                    val_future_regressor_train = future_regressor.reindex(
-                        index=val_df_train.index
+                    ensemble_templates = EnsembleTemplateGenerator(
+                        ens_copy,
+                        forecast_length=forecast_length,
+                        ensemble=ensemble,
+                        score_per_series=self.score_per_series,
                     )
-                    val_future_regressor_test = future_regressor.reindex(
-                        index=val_df_test.index
+                    self.ensemble_templates2 = ensemble_templates
+                    self._run_template(
+                            ensemble_templates, df_train, df_test,
+                            future_regressor_train=future_regressor_train,
+                            future_regressor_test=future_regressor_test,
+                            current_weights=current_weights,
+                            validation_round=0, max_generations="Ensembles",
+                            current_generation=(current_generation + 2),
+                            result_file=result_file,
                     )
-                else:
-                    val_future_regressor_train = None
-                    val_future_regressor_test = None
+                    self._run_validations(
+                            df_wide_numeric=df_wide_numeric,
+                            num_validations=num_validations,
+                            validation_template=ensemble_templates,
+                            future_regressor=future_regressor,
+                            first_validation=False,
+                    )
+                except Exception as e:
+                    print(f"Ensembling Error: {repr(e)}")
+                    time.sleep(5)
 
-                # force NaN for robustness
-                if self.introduce_na or (self.introduce_na is None and self._nan_tail):
-                    if self.introduce_na:
-                        idx = val_df_train.index
-                        # make 20% of rows NaN at random
-                        val_df_train = val_df_train.sample(
-                            frac=0.8, random_state=self.random_seed
-                        ).reindex(idx)
-                    nan_frac = val_df_train.shape[1] / num_validations
-                    val_df_train.iloc[
-                        -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
-                    ] = np.nan
-
-                # run validation template on current slice
-                template_result = TemplateWizard(
-                    validation_template,
-                    df_train=val_df_train,
-                    df_test=val_df_test,
-                    weights=current_weights,
-                    forecast_length=forecast_length,
-                    frequency=frequency,
-                    prediction_interval=prediction_interval,
-                    no_negatives=no_negatives,
-                    constraint=self.constraint,
-                    ensemble=ensemble,
-                    future_regressor_train=val_future_regressor_train,
-                    future_regressor_forecast=val_future_regressor_test,
-                    holiday_country=holiday_country,
-                    startTimeStamps=self.startTimeStamps,
-                    template_cols=self.template_cols,
-                    model_interrupt=self.model_interrupt,
-                    grouping_ids=self.grouping_ids,
-                    random_seed=random_seed,
-                    verbose=verbose,
-                    n_jobs=self.n_jobs,
-                    validation_round=(y + 1),
-                    traceback=self.traceback,
-                    current_model_file=self.current_model_file,
-                )
-                model_count = template_result.model_count
-                # gather results of template run
-                self.initial_results = self.initial_results.concat(template_result)
-                self.initial_results.model_results['Score'] = generate_score(
-                    self.initial_results.model_results,
-                    metric_weighting=metric_weighting,
-                    prediction_interval=prediction_interval,
-                )
-
-        self.validation_results = copy.copy(self.initial_results)
-        # aggregate validation results
-        self.validation_results = validation_aggregation(self.validation_results)
         error_msg_template = """No models available from validation.
 Try increasing models_to_validate, max_per_model_class
 or otherwise increase models available."""
@@ -1466,75 +1321,41 @@ or otherwise increase models available."""
                         )
             except Exception as e:
                 if self.verbose >= 0:
-                    print(f"Mosaic Ensemble Generation Error: {e}")
+                    print(f"Mosaic Ensemble Generation Error: {repr(e)}")
             try:
                 # test on initial test split to make sure they work
-                template_result = TemplateWizard(
-                    ensemble_templates,
-                    df_train,
-                    df_test,
-                    weights=current_weights,
-                    model_count=0,
-                    forecast_length=forecast_length,
-                    frequency=frequency,
-                    prediction_interval=prediction_interval,
-                    ensemble=ensemble,
-                    no_negatives=no_negatives,
-                    constraint=self.constraint,
-                    future_regressor_train=future_regressor_train,
-                    future_regressor_forecast=future_regressor_test,
-                    holiday_country=holiday_country,
-                    startTimeStamps=self.startTimeStamps,
-                    template_cols=template_cols,
-                    model_interrupt=self.model_interrupt,
-                    grouping_ids=self.grouping_ids,
-                    max_generations="Horizontal Ensembles",
-                    random_seed=random_seed,
-                    verbose=verbose,
-                    n_jobs=self.n_jobs,
-                    traceback=self.traceback,
-                    current_model_file=self.current_model_file,
+                self._run_template(
+                        ensemble_templates, df_train, df_test,
+                        future_regressor_train=future_regressor_train,
+                        future_regressor_test=future_regressor_test,
+                        current_weights=current_weights,
+                        validation_round=0, max_generations="Horizontal Ensembles",
+                        model_count=0,
+                        current_generation=0,
+                        result_file=result_file,
                 )
-                # capture results from lower-level template run
-                template_result.model_results['TotalRuntime'].fillna(
-                    pd.Timedelta(seconds=60), inplace=True
-                )
-                self.initial_results = self.initial_results.concat(template_result)
-                """
-                self.initial_results.model_results = pd.concat(
-                    [self.initial_results.model_results, template_result.model_results],
-                    axis=0,
-                    ignore_index=True,
-                    sort=False,
-                ).reset_index(drop=True)
-                """
-                self.initial_results.model_results['Score'] = generate_score(
-                    self.initial_results.model_results,
-                    metric_weighting=metric_weighting,
-                    prediction_interval=prediction_interval,
-                )
-                if result_file is not None:
-                    self.initial_results.save(result_file)
+                hens_model_results = self.initial_results.model_results[self.initial_results.model_results['Ensemble'] == 2].copy()
             except Exception as e:
                 if self.verbose >= 0:
-                    print(f"Ensembling Error: {e}")
-                template_result = TemplateEvalObject()
+                    print(f"Ensembling Error: {repr(e)}")
+                hens_model_results = TemplateEvalObject().model_results.copy()
+
             # rerun validation_results aggregation with new models added
             self.validation_results = copy.copy(self.initial_results)
             self.validation_results = validation_aggregation(self.validation_results)
 
             # use the best of these ensembles if any ran successfully
             try:
-                horz_flag = template_result.model_results['Exceptions'].isna().any()
+                horz_flag = hens_model_results['Exceptions'].isna().any()
             except Exception:
                 horz_flag = False
-            if not template_result.model_results.empty and horz_flag:
-                template_result.model_results['Score'] = generate_score(
-                    template_result.model_results,
+            if not hens_model_results.empty and horz_flag:
+                hens_model_results['Score'] = generate_score(
+                    hens_model_results,
                     metric_weighting=metric_weighting,
                     prediction_interval=prediction_interval,
                 )
-                self.best_model = template_result.model_results.sort_values(
+                self.best_model = hens_model_results.sort_values(
                     by="Score", ascending=True, na_position='last'
                 ).head(1)[self.template_cols_id]
                 self.ensemble_check = 1
@@ -1613,6 +1434,153 @@ or otherwise increase models available."""
                 if self._regr_param_check(cur_dict['models'][key]):
                     return True
         return out
+
+    def _run_template(
+            self, template, df_train, df_test,
+            future_regressor_train, future_regressor_test,
+            current_weights,
+            validation_round=0, max_generations="0",
+            model_count=None,
+            current_generation=0,
+            result_file=None,
+    ):
+        """Get results for one batch of models."""
+        model_count = self.model_count if model_count is None else model_count
+        template_result = TemplateWizard(
+            template,
+            df_train=df_train,
+            df_test=df_test,
+            weights=current_weights,
+            model_count=model_count,
+            forecast_length=self.forecast_length,
+            frequency=self.frequency,
+            prediction_interval=self.prediction_interval,
+            no_negatives=self.no_negatives,
+            constraint=self.constraint,
+            ensemble=self.ensemble,
+            future_regressor_train=future_regressor_train,
+            future_regressor_forecast=future_regressor_test,
+            holiday_country=self.holiday_country,
+            startTimeStamps=self.startTimeStamps,
+            template_cols=self.template_cols,
+            model_interrupt=self.model_interrupt,
+            grouping_ids=self.grouping_ids,
+            random_seed=self.random_seed,
+            verbose=self.verbose,
+            max_generations=max_generations,
+            n_jobs=self.n_jobs,
+            validation_round=validation_round,
+            traceback=self.traceback,
+            current_model_file=self.current_model_file,
+            current_generation=current_generation,
+        )
+        if model_count == 0:
+            self.model_count += template_result.model_count
+        else:
+            self.model_count = template_result.model_count
+        # capture results from lower-level template run
+        template_result.model_results['TotalRuntime'].fillna(
+            pd.Timedelta(seconds=60), inplace=True
+        )
+        # gather results of template run
+        self.initial_results = self.initial_results.concat(template_result)
+        self.initial_results.model_results['Score'] = generate_score(
+            self.initial_results.model_results,
+            metric_weighting=self.metric_weighting,
+            prediction_interval=self.prediction_interval,
+        )
+        if result_file is not None:
+            self.initial_results.save(result_file)
+
+    def _run_validations(
+            self, df_wide_numeric, num_validations,
+            validation_template, future_regressor,
+            first_validation=True,
+    ):
+        """Loop through a template for n validation segments."""
+        for y in range(num_validations):
+            if self.verbose > 0:
+                print("Validation Round: {}".format(str(y + 1)))
+            # slice the validation data into current validation slice
+            current_slice = df_wide_numeric.reindex(
+                self.validation_indexes[(y + 1)]
+            )
+
+            # subset series (if used) and take a new train/test split
+            if self.subset_flag:
+                # mosaic can't handle different cols in each validation
+                if "mosaic" in self.ensemble or "mosaic-window" in self.ensemble:
+                    rand_st = self.random_seed
+                else:
+                    rand_st = self.random_seed + y + 1
+                df_subset = subset_series(
+                    current_slice,
+                    list((self.weights.get(i)) for i in current_slice.columns),
+                    n=self.subset,
+                    random_state=rand_st,
+                )
+                if self.verbose > 1:
+                    print(f'{y + 1} subset is of: {df_subset.columns}')
+            else:
+                df_subset = current_slice
+            # subset weighting info
+            if not self.weighted:
+                current_weights = {x: 1 for x in df_subset.columns}
+            else:
+                current_weights = {x: self.weights[x] for x in df_subset.columns}
+
+            val_df_train, val_df_test = simple_train_test_split(
+                df_subset,
+                forecast_length=self.forecast_length,
+                min_allowed_train_percent=self.min_allowed_train_percent,
+                verbose=self.verbose,
+            )
+            if first_validation:
+                self.validation_train_indexes.append(val_df_train.index)
+                self.validation_test_indexes.append(val_df_test.index)
+            if self.verbose >= 2:
+                print(f'Validation train index is {val_df_train.index}')
+
+            # slice regressor into current validation slices
+            if future_regressor is not None:
+                val_future_regressor_train = future_regressor.reindex(
+                    index=val_df_train.index
+                )
+                val_future_regressor_test = future_regressor.reindex(
+                    index=val_df_test.index
+                )
+            else:
+                val_future_regressor_train = None
+                val_future_regressor_test = None
+
+            # force NaN for robustness
+            if self.introduce_na or (self.introduce_na is None and self._nan_tail):
+                if self.introduce_na:
+                    idx = val_df_train.index
+                    # make 20% of rows NaN at random
+                    val_df_train = val_df_train.sample(
+                        frac=0.8, random_state=self.random_seed
+                    ).reindex(idx)
+                nan_frac = val_df_train.shape[1] / num_validations
+                val_df_train.iloc[
+                    -2:, int(nan_frac * y) : int(nan_frac * (y + 1))
+                ] = np.nan
+
+            # run validation template on current slice
+            self._run_template(
+                    validation_template, val_df_train, val_df_test,
+                    future_regressor_train=val_future_regressor_train,
+                    future_regressor_test=val_future_regressor_test,
+                    current_weights=current_weights,
+                    validation_round=(y + 1),
+                    max_generations="0",
+                    model_count=0,
+                    result_file=None,
+            )
+
+        self.validation_results = copy.copy(self.initial_results)
+        # aggregate validation results
+        self.validation_results = validation_aggregation(self.validation_results)
 
     def predict(
         self,

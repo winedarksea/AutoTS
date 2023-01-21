@@ -21,7 +21,9 @@
 * fix a bug where common_fourier failed on short length forecasts
 * added some additional options to ARDL
 * refactored metric df eval
+* refactored parts of AutoTS for templates and validations
 * added ewmae metric
+* non Horizontal ensembles are now also constructed after validations and vals are rerun
 
 
 ### New Model Checklist:

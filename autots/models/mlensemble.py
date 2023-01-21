@@ -180,6 +180,7 @@ class MLEnsemble(ModelObject):
         num_validations = 2,
         validation_method = "backwards",
         min_allowed_train_percent = 0.5,
+        models_source: str = 'random',
         **kwargs,
     ):
         ModelObject.__init__(
@@ -207,7 +208,7 @@ class MLEnsemble(ModelObject):
                         "colsample_bylevel":0.5050297936099943, "colsample_bynode":1,
                         "colsample_bytree":0.616466808436318, "early_stopping_rounds":None,
                         "enable_categorical":False, "eval_metric":None, "feature_types":None,
-                        "gamma":0, "gpu_id":-1, "grow_policy":'depthwise', "importance_type":None,
+                        "gamma":0, "grow_policy":'depthwise', "importance_type":None,
                         "interaction_constraints":'', "learning_rate":0.0026632745639476375,
                         "max_bin":256, "max_cat_threshold":64, "max_cat_to_onehot":4,
                         "max_delta_step":0, "max_depth":10, "max_leaves":0,
@@ -226,6 +227,7 @@ class MLEnsemble(ModelObject):
                 }}
         self.regression_model = regression_model
         self.models = models
+        self.models_source = models_source
 
         stride_size = round(self.forecast_length / 2)
         stride_size = stride_size if stride_size > 0 else 1
@@ -397,6 +399,7 @@ class MLEnsemble(ModelObject):
             "regression_model": None,
             "models": models,
             "regression_type": regression_type_choice,
+            "models_source": 'random',
         }
 
     def get_params(self):
@@ -405,6 +408,7 @@ class MLEnsemble(ModelObject):
             "num_validations": self.num_validations,
             "validation_method": self.validation_method,
             "regression_type": self.regression_type,
+            "models_source": self.models_source,
             "models": self.models,
             "regression_model": self.regression_model,
         }
