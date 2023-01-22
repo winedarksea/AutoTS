@@ -84,14 +84,18 @@ if initial_training == "auto":
 # if include_ensemble is specified in import_templates, ensembles can progressively nest over generations
 if initial_training:
     gens = 100
+    generation_timeout = 10000  # minutes
     models_to_validate = 0.15
     ensemble = ["dist", "simple", "horizontal-max", ]  # , "mosaic", "mosaic-window"
+    ensemble = ["horizontal-max", "dist", "simple"]  # , "mosaic", "mosaic-window", 'mlensemble'
 elif evolve:
     gens = 10
+    generation_timeout = 1440  # minutes
     models_to_validate = 0.15
     ensemble = ["horizontal-max", "dist", "simple"]  # "mosaic", "mosaic-window", "subsample"
 else:
     gens = 0
+    generation_timeout = 60  # minutes
     models_to_validate = 0.99
     ensemble = ["horizontal-max", "dist", "simple"]  # "mosaic", "mosaic-window",
 
@@ -104,34 +108,64 @@ else:
 """
 Begin dataset retrieval
 """
-
+fred_series = [
+    "DGS10",
+    "T5YIE",
+    "SP500",
+    "DCOILWTICO",
+    "DEXUSEU",
+    "BAMLH0A0HYM2",
+    "WPU0911",
+    "DEXUSUK",
+    "T10Y2Y",
+]
+tickers = ["MSFT", "PG"]
+trend_list = ["forecasting", "msft", "p&g"]
+weather_event_types = ["%28Z%29+Winter+Weather", "%28Z%29+Winter+Storm"]
 df = load_live_daily(
     long=False,
     fred_key=fred_key,
-    fred_series=[
-        "DGS10",
-        "T5YIE",
-        "SP500",
-        "DCOILWTICO",
-        "DEXUSEU",
-        "WPU0911",
-        "DEXUSUK",
-    ],
-    tickers=["MSFT", "PG"],
-    trends_list=["forecasting", "msft", "p&g"],
+    fred_series=fred_series,
+    tickers=tickers,
+    trends_list=trend_list,
     earthquake_min_magnitude=5,
     weather_years=3,
     london_air_days=700,
-    wikipedia_pages=['all', 'Microsoft', "Procter & Gamble"],
+    wikipedia_pages=['all', 'Microsoft', "Procter_%26_Gamble", "YouTube", "United_States"],
     gsa_key=gsa_key,
     gov_domain_list=None,  # ['usajobs.gov', 'usps.com', 'weather.gov'],
     gov_domain_limit=700,
+    weather_event_types=weather_event_types,
 )
-# remove "volume" data as it skews MAE (another solution is to adjust metric_weighting)
+# be careful of very noisy, large value series mixed into more well-behaved data as they can skew some metrics such that they get most of the attention
+# remove "volume" data as it skews MAE (other solutions are to adjust metric_weighting towards SMAPE, use series `weights`, or pre-scale data)
 df = df[[x for x in df.columns if "_volume" not in x]]
-# remove dividends and stock splits as it skews metrics (too intermittent)
+# remove dividends and stock splits as it skews metrics
 df = df[[x for x in df.columns if "_dividends" not in x]]
 df = df[[x for x in df.columns if "stock_splits" not in x]]
+# scale 'wiki_all' to millions to prevent too much skew of MAE
+if 'wiki_all' in df.columns:
+    df['wiki_all_millions'] = df['wiki_all'] / 1000000
+    df = df.drop(columns=['wiki_all'])
+
+# manual NaN cleaning where real values are easily approximated, this is the way
+# although if you have 'no good idea' why it is random, auto is best
+# note manual pre-cleaning affects VALIDATION significantly (for better or worse)
+# as NaN times in history are skipped by metrics, but filled values, as added here, are evaluated
+if trend_list is not None:
+    for tx in trend_list:
+        if tx in df.columns:
+            df[tx] = df[tx].interpolate('akima').fillna(method='ffill', limit=30).fillna(method='bfill', limit=30)
+if tickers is not None:
+    for fx in tickers:
+        if fx in df.columns:
+            df[fx] = df[fx].interpolate('akima')
+if weather_event_types is not None:
+    wevnt = [x for x in df.columns if "_Events" in x]
+    df[wevnt] = df[wevnt].mask(df[wevnt].notnull().cummax(), df[wevnt].fillna(0))
+# most of the NaN here are just weekends, when financial series aren't collected, ffill of a few steps is fine
+# partial forward fill, no back fill
+df = df.fillna(method='ffill', limit=3)
 
 df = df[df.index.year > 1999]
 start_time = datetime.datetime.now()
@@ -185,7 +219,8 @@ metric_weighting = {
     'mle_weighting': 0,
     'imle_weighting': 0,
     'spl_weighting': 1,
-    'dwae_weighting': 3,
+    'dwae_weighting': 0,
+    'ewmae_weighting': 0,
     'containment_weighting': 0,
     'contour_weighting': 0,
     'runtime_weighting': 0.05,
@@ -216,6 +251,7 @@ model = AutoTS(
     # prefill_na=0,
     # remove_leading_zeroes=True,
     current_model_file=f"current_model_{forecast_name}",
+    generation_timeout=generation_timeout,
     n_jobs=n_jobs,
     verbose=1,
 )

@@ -273,7 +273,7 @@ def load_live_daily(
     if observation_start is None:
         # should take from observation_end but that's expected as a string
         observation_start = datetime.datetime.utcnow() - datetime.timedelta(
-            days=365 * 5
+            days=365 * 6
         )
         observation_start = observation_start.strftime("%Y-%m-%d")
     try:
