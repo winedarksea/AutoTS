@@ -1671,15 +1671,48 @@ class Cassandra(ModelObject):
                 ]  # placeholder, probably
         else:
             anomaly_detector_params = None
-        model_str = random.choices(
-            ['AverageValueNaive', 'MetricMotif', "LastValueNaive", 'SeasonalityMotif', 'WindowRegression', 'ARDL', 'VAR', 'UnivariateMotif', 'UnobservedComponents', "KalmanStateSpace"],
-            [0.05, 0.05, 0.1, 0.05, 0.05, 0.15, 0.05, 0.05, 0.05, 0.05],
-            k=1,
-        )[0]
-        trend_model = {'Model': model_str}
-        trend_model['ModelParameters'] = ModelMonster(model_str).get_new_params(
-            method=method
-        )
+
+        # random or pretested defaults
+        trend_base = random.choices(['pb1', 'pb2', 'pb3', 'random'], [0.1, 0.1, 0.0, 0.8])[0]
+        if trend_base == "random":
+            model_str = random.choices(
+                ['AverageValueNaive', 'MetricMotif', "LastValueNaive", 'SeasonalityMotif', 'WindowRegression', 'ARDL', 'VAR', 'UnivariateMotif', 'UnobservedComponents', "KalmanStateSpace"],
+                [0.05, 0.05, 0.1, 0.05, 0.05, 0.15, 0.05, 0.05, 0.05, 0.05],
+                k=1,
+            )[0]
+            trend_model = {'Model': model_str}
+            trend_model['ModelParameters'] = ModelMonster(model_str).get_new_params(
+                method=method
+            )
+            trend_transformation = RandomTransform(
+                transformer_list="fast",
+                transformer_max_depth=3,  # probably want some more usable defaults first as many random are senseless
+            )
+        elif trend_base == 'pb1':
+            trend_model = {'Model': 'ARDL'}
+            trend_model['ModelParameters'] = {"lags": 1, "trend": "n", "order": 0, "causal": False, "regression_type": "simple"}
+            trend_transformation = {
+                "fillna": "nearest",
+                "transformations": {"0": "StandardScaler", "1": "AnomalyRemoval"},
+                "transformation_params": {
+                    "0": {},
+                    "1": {
+                        "method": "IQR", "transform_dict": {
+                            "fillna": None, "transformations": {"0": "ClipOutliers"},
+                            "transformation_params": {"0": {"method": "clip", "std_threshold": 6}}}, "method_params": {"iqr_threshold": 2.5, "iqr_quantiles": [0.25, 0.75]}, "fillna": "ffill"}
+                }
+            }
+        elif trend_base == 'pb2':
+            trend_model = {'Model': 'WindowRegression'}
+            trend_model['ModelParameters'] = {"window_size": 12, "input_dim": "univariate", "output_dim": "1step", "normalize_window": False, "max_windows": 8000, "regression_type": None, "regression_model": {"model": "ExtraTrees", "model_params": {"n_estimators": 100, "min_samples_leaf": 1, "max_depth": 20}}}
+            trend_transformation = {
+                "fillna": "ffill",
+                "transformations": {"0": "AnomalyRemoval", "1": "RobustScaler"},
+                "transformation_params": {
+                    "0": {"method": "IQR", "transform_dict": {"fillna": None, "transformations": {"0": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 6}}}, "method_params": {"iqr_threshold": 2.5, "iqr_quantiles": [0.25, 0.75]}, "fillna": "ffill"},
+                    "1": {},
+                }
+            }
 
         trend_anomaly_intervention = random.choices([None, 'detect_only'], [0.5, 0.5])[
             0
@@ -1774,10 +1807,7 @@ class Cassandra(ModelObject):
             )[0],
             "trend_anomaly_detector_params": trend_anomaly_detector_params,
             # "trend_anomaly_intervention": trend_anomaly_intervention,
-            "trend_transformation": RandomTransform(
-                transformer_list="fast",
-                transformer_max_depth=3,  # probably want some more usable defaults first as many random are senseless
-            ),
+            "trend_transformation": trend_transformation,
             "trend_model": trend_model,
             "trend_phi": random.choices([None, 0.98], [0.9, 0.1])[0],
         }

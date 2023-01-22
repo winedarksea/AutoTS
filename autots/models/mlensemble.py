@@ -205,26 +205,27 @@ class MLEnsemble(ModelObject):
                     "model": 'XGBRegressor',
                     "model_params": {
                         "base_score":0.5, "booster":'gbtree',
-                        "colsample_bylevel":0.5050297936099943, "colsample_bynode":1,
-                        "colsample_bytree":0.616466808436318, "early_stopping_rounds":None,
+                        "colsample_bylevel":0.50502979, "colsample_bynode":1,
+                        "colsample_bytree":0.6164668, "early_stopping_rounds":None,
                         "enable_categorical":False, "eval_metric":None, "feature_types":None,
-                        "gamma":0, "grow_policy":'depthwise', "importance_type":None,
-                        "interaction_constraints":'', "learning_rate":0.0026632745639476375,
-                        "max_bin":256, "max_cat_threshold":64, "max_cat_to_onehot":4,
-                        "max_delta_step":0, "max_depth":10, "max_leaves":0,
-                        "min_child_weight":0.010458618463525058,
-                        "monotone_constraints":'()', "n_estimators":1356,
-                        "num_parallel_tree":1,
+                        "gamma": 0, "grow_policy": 'depthwise', "importance_type": None,
+                        "interaction_constraints": '', "learning_rate": 0.00266327,
+                        "max_bin": 256, "max_cat_threshold": 64, "max_cat_to_onehot": 4,
+                        "max_delta_step": 0, "max_depth": 10, "max_leaves": 0,
+                        "min_child_weight": 0.0104586,
+                        "monotone_constraints": '()', "n_estimators": 1356,
+                        "num_parallel_tree": 1,
                     },
                 }
             except Exception:
                 regression_model = {
                     "model": 'RandomForest',
                     "model_params": {
-                        "max_features": 0.1632192769045957,
+                        "max_features": 0.16322,
                         "max_leaf_nodes": 10,
                         "n_estimators": 5,
-                }}
+                    }
+                }
         self.regression_model = regression_model
         self.models = models
         self.models_source = models_source

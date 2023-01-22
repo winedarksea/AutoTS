@@ -2700,12 +2700,12 @@ class AnomalyRemoval(EmptyTransformer):
 
         return {
             "method": method_choice,
-            "transform_dict": transform_dict,
             "method_params": method_params,
             "fillna": random.choices(
                 [None, "ffill", "mean", "rolling_mean_24", "linear", "fake_date"],
                 [0.01, 0.39, 0.1, 0.3, 0.15, 0.05],
             )[0],
+            "transform_dict": transform_dict,
         }
 
 
