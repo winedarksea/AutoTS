@@ -469,7 +469,7 @@ sklearn_model_dict = {
     'KerasRNN': 0.02,
     'Transformer': 0.02,
     'HistGradientBoost': 0.03,
-    'LightGBM': 0.03,
+    'LightGBM': 0.1,
     'LightGBMRegressorChain': 0.03,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.02,
@@ -587,6 +587,12 @@ lightgbmp1 = {
     "learning_rate": 0.0202726, "max_bin": 1023,
     "min_child_samples": 16, "n_estimators": 1794, "num_leaves": 15,
     "reg_alpha": 0.00097656, "reg_lambda": 0.6861,
+}
+lightgbmp2 = {
+    "colsample_bytree": 0.94716,
+    "learning_rate": 0.7024, "max_bin": 255,
+    "min_child_samples": 15, "n_estimators": 5, "num_leaves": 35,
+    "reg_alpha": 0.00308, "reg_lambda": 5.1817,
 }
 
 
@@ -852,9 +858,11 @@ def generate_regressor_params(
                 },
             }
         elif model in ['LightGBM', "LightGBMRegressorChain"]:
-            branch = random.choices(['p2', 'random'], [0.4, 0.5])[0]
-            if branch == 'p2':
+            branch = random.choices(['p1', 'p2', 'random'], [0.2, 0.3, 0.5])[0]
+            if branch == 'p1':
                 param_dict = lightgbmp1
+            elif branch == 'p2':
+                param_dict = lightgbmp2
             else:
                 param_dict = {
                     "model": 'LightGBM',
