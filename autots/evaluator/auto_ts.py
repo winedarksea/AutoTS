@@ -827,7 +827,7 @@ class AutoTS(object):
         # generate validation indices (so it can fail now, not after all the generations)
         self.validation_indexes = generate_validation_indices(
             self.validation_method, forecast_length,
-            num_validations, df_wide_numeric,
+            self.num_validations, df_wide_numeric,
             validation_params=self.similarity_validation_params if self.validation_method == "similarity" else self.seasonal_validation_params,
             preclean=None, verbose=0
         )
@@ -1089,14 +1089,14 @@ class AutoTS(object):
             validation_template = validation_template.drop_duplicates(
                 subset=['Model', 'ModelParameters', 'TransformationParameters']
             )
-        validation_template = validation_template[self.template_cols]
+        self.validation_template = validation_template[self.template_cols]
 
         # run validations
         if num_validations > 0:
             self._run_validations(
                     df_wide_numeric=df_wide_numeric,
                     num_validations=num_validations,
-                    validation_template=validation_template,
+                    validation_template=self.validation_template,
                     future_regressor=future_regressor,
             )
             # ensembles built on validation results

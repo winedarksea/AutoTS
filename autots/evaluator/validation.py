@@ -68,6 +68,7 @@ def generate_validation_indices(validation_method, forecast_length, num_validati
     """
     bval_list = ['backwards', 'back', 'backward']
     base_val_list = bval_list + ['even', 'Even']
+    num_validations = int(num_validations)
 
     # generate similarity matching indices (so it can fail now, not after all the generations)
     if validation_method == "similarity":
