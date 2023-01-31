@@ -700,7 +700,6 @@ class AutoTS(object):
         prediction_interval = self.prediction_interval
         random_seed = self.random_seed
         metric_weighting = self.metric_weighting
-        num_validations = self.num_validations
         verbose = self.verbose
         template_cols = self.template_cols
 
@@ -1092,10 +1091,10 @@ class AutoTS(object):
         self.validation_template = validation_template[self.template_cols]
 
         # run validations
-        if num_validations > 0:
+        if self.num_validations > 0:
             self._run_validations(
                     df_wide_numeric=df_wide_numeric,
-                    num_validations=num_validations,
+                    num_validations=self.num_validations,
                     validation_template=self.validation_template,
                     future_regressor=future_regressor,
             )
@@ -1105,13 +1104,13 @@ class AutoTS(object):
                     ens_copy = copy.copy(self.validation_results)
                     run_count = self.initial_results.model_results[self.initial_results.model_results.Exceptions.isna()][['Model', 'ID']].groupby("ID").count()
                     models_to_use = run_count[
-                        run_count['Model'] >= (num_validations + 1)
+                        run_count['Model'] >= (self.num_validations + 1)
                     ].index.tolist()
                     ens_copy.model_results = ens_copy.model_results[ens_copy.model_results.ID.isin(models_to_use)]
                     self.ens_copy = ens_copy
                     self.score_per_series = generate_score_per_series(
                         self.initial_results, self.metric_weighting,
-                        total_validations=(num_validations + 1),
+                        total_validations=(self.num_validations + 1),
                     )
                     ensemble_templates = EnsembleTemplateGenerator(
                         ens_copy,
@@ -1131,7 +1130,7 @@ class AutoTS(object):
                     )
                     self._run_validations(
                             df_wide_numeric=df_wide_numeric,
-                            num_validations=num_validations,
+                            num_validations=self.num_validations,
                             validation_template=ensemble_templates,
                             future_regressor=future_regressor,
                             first_validation=False,
@@ -1152,7 +1151,7 @@ or otherwise increase models available."""
                 self.score_per_series = generate_score_per_series(
                     self.initial_results,
                     metric_weighting=metric_weighting,
-                    total_validations=(num_validations + 1),
+                    total_validations=(self.num_validations + 1),
                 )
                 ens_templates = HorizontalTemplateGenerator(
                     self.score_per_series,
@@ -1184,7 +1183,7 @@ or otherwise increase models available."""
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
+                        num_validations=self.num_validations,
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
                         smoothing_window=14,
@@ -1196,7 +1195,7 @@ or otherwise increase models available."""
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
+                        num_validations=self.num_validations,
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_pl_errors,
                         smoothing_window=10,
@@ -1208,7 +1207,7 @@ or otherwise increase models available."""
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
+                        num_validations=self.num_validations,
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
                         smoothing_window=7,
@@ -1220,7 +1219,7 @@ or otherwise increase models available."""
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
+                        num_validations=self.num_validations,
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
                         models_to_use=models_to_use,
@@ -1236,7 +1235,7 @@ or otherwise increase models available."""
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
+                        num_validations=self.num_validations,
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
                         smoothing_window=3,
@@ -1248,7 +1247,7 @@ or otherwise increase models available."""
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
+                        num_validations=self.num_validations,
                         col_names=df_subset.columns,
                         full_mae_errors=weight_per_value,
                         smoothing_window=3,
@@ -1260,7 +1259,7 @@ or otherwise increase models available."""
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
+                        num_validations=self.num_validations,
                         col_names=df_subset.columns,
                         full_mae_errors=weight_per_value,
                         smoothing_window=10,
@@ -1272,7 +1271,7 @@ or otherwise increase models available."""
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
+                        num_validations=self.num_validations,
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.squared_errors,
                         smoothing_window=None,
@@ -1285,7 +1284,7 @@ or otherwise increase models available."""
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
+                        num_validations=self.num_validations,
                         col_names=df_subset.columns,
                         full_mae_errors=self.initial_results.full_mae_errors,
                         smoothing_window=None,
@@ -1296,7 +1295,7 @@ or otherwise increase models available."""
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
-                        num_validations=num_validations,
+                        num_validations=self.num_validations,
                         col_names=df_subset.columns,
                         full_mae_errors=weight_per_value,
                         smoothing_window=None,
@@ -1309,7 +1308,7 @@ or otherwise increase models available."""
                         ens_templates = generate_mosaic_template(
                             initial_results=self.initial_results.model_results,
                             full_mae_ids=self.initial_results.full_mae_ids,
-                            num_validations=num_validations,
+                            num_validations=self.num_validations,
                             col_names=df_subset.columns,
                             full_mae_errors=weight_per_value,
                             smoothing_window=None,
@@ -1366,7 +1365,7 @@ or otherwise increase models available."""
                     time.sleep(3)
                 eligible_models = self.validation_results.model_results[
                     self.validation_results.model_results['Runs']
-                    >= (num_validations + 1)
+                    >= (self.num_validations + 1)
                 ]
                 try:
                     self.best_model = (
@@ -1381,7 +1380,7 @@ or otherwise increase models available."""
         else:
             # choose best model
             eligible_models = self.validation_results.model_results[
-                self.validation_results.model_results['Runs'] >= (num_validations + 1)
+                self.validation_results.model_results['Runs'] >= (self.num_validations + 1)
             ]
             try:
                 self.best_model = (

@@ -52,7 +52,7 @@ def validate_num_validations(validation_method, num_validations, df_wide_numeric
             num_validations = abs(int(num_validations))
         if num_validations <= 0:
             num_validations = 0
-        return num_validations
+        return int(num_validations)
 
 
 def generate_validation_indices(validation_method, forecast_length, num_validations, df_wide_numeric, validation_params={}, preclean=None, verbose=0):
@@ -68,7 +68,7 @@ def generate_validation_indices(validation_method, forecast_length, num_validati
     """
     bval_list = ['backwards', 'back', 'backward']
     base_val_list = bval_list + ['even', 'Even']
-    num_validations = int(num_validations)
+    # num_validations = int(num_validations)
 
     # generate similarity matching indices (so it can fail now, not after all the generations)
     if validation_method == "similarity":

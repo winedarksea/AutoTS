@@ -1,8 +1,10 @@
 """
 GluonTS
 
-Excellent models, released by Amazon, scale well.
+Best neuralnet models currently available, released by Amazon, scale well.
 Except it is really the only thing I use that runs mxnet, and it takes a while to train these guys...
+
+Note that there are routinely package version issues with this and its dependencies
 """
 import logging
 import random

@@ -117,8 +117,8 @@ class AutoTSTest(unittest.TestCase):
         self.assertGreater(initial_results['Exceptions'].isnull().mean(), 0.95, "Too many 'superfast' models failed. This can occur by random chance, try running again.")
         # check general model setup
         # self.assertEqual(validated_count, model.models_to_validate)
-        self.assertGreater(model.models_to_validate, (initial_results['ValidationRound'] == 0).sum() * models_to_validate - 2)
-        self.assertEqual(set(initial_results['Model'].unique().tolist()) - {'Ensemble'}, set(model.model_list))
+        self.assertGreater(model.validation_template.size, (initial_results['ValidationRound'] == 0).sum() * models_to_validate - 2)
+        self.assertEqual(set(initial_results['Model'].unique().tolist()) - {'Ensemble', 'MLEnsemble'}, set(model.model_list))
         self.assertFalse(model.best_model.empty)
         # check the generated forecasts look right
         self.assertEqual(forecasts_df.shape[0], forecast_length)
@@ -143,7 +143,9 @@ class AutoTSTest(unittest.TestCase):
         self.assertTrue((model.validation_test_indexes[1] == expected_val1).all())
         self.assertTrue((model.validation_test_indexes[2] == expected_val2).all())
         # assess Horizontal Ensembling
-        self.assertTrue('horizontal' in template_dict['model_name'].lower())
+        test1 = 'horizontal' in template_dict['model_name'].lower()
+        test2 = 'mosaic' in template_dict['model_name'].lower()
+        self.assertTrue(test1 or test2)
         self.assertEqual(len(template_dict['series'].keys()), df.shape[1])
         self.assertEqual(len(set(template_dict['series'].values())), template_dict['model_count'])
         self.assertEqual(len(template_dict['models'].keys()), template_dict['model_count'])
