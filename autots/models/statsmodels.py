@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
 from autots.tools.probabilistic import Point_to_Probability
-from autots.tools.seasonal import date_part, seasonal_int
+from autots.tools.seasonal import date_part, seasonal_int, date_part_methods
 from autots.tools.holiday import holiday_flag
 
 # these are optional packages
@@ -723,7 +723,6 @@ class ARIMA(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         alpha = 1 - self.prediction_interval
         if self.regression_type == 'Holiday':
-
             future_regressor = holiday_flag(test_index, country=self.holiday_country)
         if self.regression_type is not None:
             assert (
@@ -1745,19 +1744,19 @@ class VAR(ModelObject):
             transformer = EmptyTransformer()
 
         if self.regression_type in ["User", "Holiday"]:
-            maModel = VAR(
+            self.model = VAR(
                 self.df_train, freq=self.frequency, exog=self.regressor_train
             ).fit(maxlags=self.maxlags, ic=self.ic, trend='n')
-            forecast, lower_forecast, upper_forecast = maModel.forecast_interval(
+            forecast, lower_forecast, upper_forecast = self.model.forecast_interval(
                 steps=len(test_index),
                 exog_future=future_regressor,
                 y=self.df_train.values,
             )
         else:
-            maModel = VAR(self.df_train, freq=self.frequency).fit(
+            self.model = VAR(self.df_train, freq=self.frequency).fit(
                 ic=self.ic, maxlags=self.maxlags
             )
-            forecast, lower_forecast, upper_forecast = maModel.forecast_interval(
+            forecast, lower_forecast, upper_forecast = self.model.forecast_interval(
                 steps=len(test_index),
                 y=self.df_train.values,
                 alpha=1 - self.prediction_interval,
@@ -2044,9 +2043,10 @@ class ARDL(ModelObject):
         name: str = "ARDL",
         frequency: str = 'infer',
         prediction_interval: float = 0.9,
-        lags: int = 2,
+        lags: int = 1,
         trend: str = "c",
         order: int = 0,
+        causal: bool = False,
         regression_type: str = "holiday",
         holiday_country: str = 'US',
         random_seed: int = 2020,
@@ -2068,6 +2068,7 @@ class ARDL(ModelObject):
         self.lags = lags
         self.trend = trend
         self.order = order
+        self.causal = causal
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied .
@@ -2081,6 +2082,8 @@ class ARDL(ModelObject):
             self.regressor_train = pd.DataFrame(
                 holiday_flag(df.index, country=self.holiday_country)
             )
+        elif self.regression_type in date_part_methods:
+            self.regressor_train = date_part(df.index, method=self.regression_type)
         elif self.regression_type in ["User", "user"]:
             if future_regressor is None:
                 raise ValueError(
@@ -2088,6 +2091,12 @@ class ARDL(ModelObject):
                 )
             else:
                 self.regressor_train = future_regressor.reindex(df.index)
+        elif self.regression_type in [None, 'None']:
+            pass
+        else:
+            raise ValueError(
+                f"ARDL regression_type `{self.regression_type}` not recognized"
+            )
         self.df_train = df
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -2112,39 +2121,47 @@ class ARDL(ModelObject):
 
         def ardl_per_column(current_series, args):
             with warnings.catch_warnings():
-                if args['verbose'] < 2:
-                    warnings.simplefilter("ignore", category=UserWarning)
-                    # warnings.simplefilter("ignore", category='ConvergenceWarning')
-                if args['regression_type'] in ["User", "user", "holiday"]:
-                    maModel = ARDL(
-                        current_series,
-                        lags=args['lags'],
-                        trend=args['trend'],
-                        order=args['order'],
-                        exog=args['regressor_train'],
-                    ).fit()
-                else:
-                    maModel = ARDL(
-                        current_series,
-                        lags=args['lags'],
-                        trend=args['trend'],
-                        order=args['order'],
-                    ).fit()
-                series_len = current_series.shape[0]
-                if args['regression_type'] in ["User", "user", "holiday"]:
-                    outer_forecasts = maModel.get_prediction(
-                        start=series_len,
-                        end=series_len + args['forecast_length'] - 1,
-                        exog_oos=args['exog'],
-                    )
-                else:
-                    outer_forecasts = maModel.get_prediction(
-                        start=series_len, end=series_len + args['forecast_length'] - 1
-                    )
-                outer_forecasts_df = outer_forecasts.conf_int(alpha=args['alpha'])
-                cforecast = outer_forecasts.summary_frame()['mean']
-                clower_forecast = outer_forecasts_df.iloc[:, 0]
-                cupper_forecast = outer_forecasts_df.iloc[:, 1]
+                try:
+                    if args['verbose'] < 2:
+                        warnings.simplefilter("ignore", category=UserWarning)
+                        # warnings.simplefilter("ignore", category='ConvergenceWarning')
+                    if args['regression_type'] not in [None, 'None']:
+                        maModel = ARDL(
+                            current_series,
+                            lags=args['lags'],
+                            trend=args['trend'],
+                            order=args['order'],
+                            exog=args['regressor_train'],
+                            causal=args['causal'],
+                        ).fit()
+                    else:
+                        maModel = ARDL(
+                            current_series,
+                            lags=args['lags'],
+                            trend=args['trend'],
+                            order=args['order'],
+                            causal=args['causal'],
+                        ).fit()
+                    series_len = current_series.shape[0]
+                    if args['regression_type'] not in [None, 'None']:
+                        outer_forecasts = maModel.get_prediction(
+                            start=series_len,
+                            end=series_len + args['forecast_length'] - 1,
+                            exog_oos=args['exog'],
+                        )
+                    else:
+                        outer_forecasts = maModel.get_prediction(
+                            start=series_len,
+                            end=series_len + args['forecast_length'] - 1,
+                        )
+                    outer_forecasts_df = outer_forecasts.conf_int(alpha=args['alpha'])
+                    cforecast = outer_forecasts.summary_frame()['mean']
+                    clower_forecast = outer_forecasts_df.iloc[:, 0]
+                    cupper_forecast = outer_forecasts_df.iloc[:, 1]
+                except Exception as e:
+                    raise ValueError(
+                        f"ARDL series {current_series.name} failed with error {repr(e)} exog train {args['regressor_train']} and predict {args['exog']}"
+                    ) from e
             cforecast.name = current_series.name
             clower_forecast.name = current_series.name
             cupper_forecast.name = current_series.name
@@ -2156,6 +2173,8 @@ class ARDL(ModelObject):
             future_regressor = pd.DataFrame(
                 holiday_flag(test_index, country=self.holiday_country)
             )
+        elif self.regression_type in date_part_methods:
+            future_regressor = date_part(test_index, method=self.regression_type)
         if self.regression_type is not None:
             assert (
                 future_regressor.shape[0] == forecast_length
@@ -2164,6 +2183,7 @@ class ARDL(ModelObject):
         args = {
             'lags': self.lags,
             'order': self.order,
+            'causal': self.causal,
             'regression_type': self.regression_type,
             'regressor_train': self.regressor_train,
             'exog': future_regressor,
@@ -2223,20 +2243,23 @@ class ARDL(ModelObject):
         if "regressor" in method:
             regression_choice = "User"
         else:
-            regression_list = [None, 'User', 'holiday']
-            regression_probability = [0.3, 0.5, 0.5]
+            regression_list = [None, 'User', 'holiday', 'datepart']
+            regression_probability = [0.1, 0.4, 0.3, 0.3]
             regression_choice = random.choices(regression_list, regression_probability)[
                 0
             ]
+            if regression_choice == "datepart":
+                regression_choice = random.choice(date_part_methods)
         if regression_choice is None:
             order_choice = 0
         else:
-            order_choice = random.choices([0, 1, 2, 3], [0.4, 0.3, 0.2, 0.1])[0]
+            order_choice = random.choices([0, 1, 2, 3], [0.2, 0.5, 0.2, 0.1])[0]
 
         return {
-            'lags': random.choices([1, 2, 3, 4], [0.4, 0.3, 0.2, 0.1])[0],
-            'trend': random.choice(['n', 'c', 't', 'ct']),
+            'lags': random.choices([1, 2, 3, 4, 7], [0.4, 0.3, 0.2, 0.1, 0.01])[0],
+            'trend': random.choices(['n', 'c', 't', 'ct'], [0.1, 0.4, 0.1, 0.1])[0],
             'order': order_choice,
+            'causal': random.choices([False, True], [0.9, 0.1])[0],
             'regression_type': regression_choice,
         }
 
@@ -2246,6 +2269,7 @@ class ARDL(ModelObject):
             'lags': self.lags,
             'trend': self.trend,
             'order': self.order,
+            'causal': self.causal,
             'regression_type': self.regression_type,
         }
 

@@ -11,7 +11,9 @@ from autots.datasets import (
 )
 from autots import AutoTS, model_forecast
 from autots.evaluator.auto_ts import fake_regressor
+from autots.evaluator.auto_model import ModelMonster
 from autots.models.model_list import default as default_model_list
+from autots.models.model_list import all_models
 from autots.evaluator.benchmark import Benchmark
 
 
@@ -53,7 +55,7 @@ class AutoTSTest(unittest.TestCase):
             forecast_length=forecast_length,
             frequency='infer',
             prediction_interval=0.9,
-            ensemble=["horizontal-max", "horizontal-min"],
+            ensemble='all',
             constraint=None,
             max_generations=generations,
             num_validations=num_validations,
@@ -115,8 +117,8 @@ class AutoTSTest(unittest.TestCase):
         self.assertGreater(initial_results['Exceptions'].isnull().mean(), 0.95, "Too many 'superfast' models failed. This can occur by random chance, try running again.")
         # check general model setup
         # self.assertEqual(validated_count, model.models_to_validate)
-        self.assertGreater(model.models_to_validate, (initial_results['ValidationRound'] == 0).sum() * models_to_validate - 2)
-        self.assertEqual(set(initial_results['Model'].unique().tolist()) - {'Ensemble'}, set(model.model_list))
+        self.assertGreater(model.validation_template.size, (initial_results['ValidationRound'] == 0).sum() * models_to_validate - 2)
+        self.assertEqual(set(initial_results['Model'].unique().tolist()) - {'Ensemble', 'MLEnsemble'}, set(model.model_list))
         self.assertFalse(model.best_model.empty)
         # check the generated forecasts look right
         self.assertEqual(forecasts_df.shape[0], forecast_length)
@@ -141,9 +143,13 @@ class AutoTSTest(unittest.TestCase):
         self.assertTrue((model.validation_test_indexes[1] == expected_val1).all())
         self.assertTrue((model.validation_test_indexes[2] == expected_val2).all())
         # assess Horizontal Ensembling
-        self.assertTrue('horizontal' in template_dict['model_name'].lower())
+        tested_horizontal = 'horizontal' in template_dict['model_name'].lower()
+        tested_mosaic = 'mosaic' in template_dict['model_name'].lower()
+        print(f"chosen model was mosaic: {tested_mosaic} or was horizontal: {tested_horizontal}")
+        self.assertTrue(tested_horizontal or tested_mosaic)
         self.assertEqual(len(template_dict['series'].keys()), df.shape[1])
-        self.assertEqual(len(set(template_dict['series'].values())), template_dict['model_count'])
+        if tested_horizontal:
+            self.assertEqual(len(set(template_dict['series'].values())), template_dict['model_count'])
         self.assertEqual(len(template_dict['models'].keys()), template_dict['model_count'])
         # test that actually the best model (or nearly) was chosen
         self.assertGreater(validation_results['Score'].quantile(0.05), best_model_result['Score'].iloc[0])
@@ -380,17 +386,28 @@ class AutoTSTest(unittest.TestCase):
 
 
 class ModelTest(unittest.TestCase):
+    
+    def test_models_get_params(self):
+        """See if new random params can be generated without error."""
+        default_methods = ['deep', 'fast', 'random', 'default', 'superfast', 'regressor', 'event_risk']
+        for method in default_methods:
+            for model_str in all_models:
+                ModelMonster(model_str).get_new_params(method=method)
+        
 
     def test_models(self):
+        """Test if models are the same as saved comparisons."""
         print("Starting test_models")
         n_jobs = 1
         random_seed = 300
-        df = load_monthly(long=False)[['CSUSHPISA', 'EMVOVERALLEMV', 'EXCAUS']]
+        df = load_daily(long=False).iloc[:, 0:5]
         models = [
             'SectionalMotif', 'MultivariateMotif', 'AverageValueNaive',
             'NVAR', "LastValueNaive", 'Theta', 'FBProphet', 'SeasonalNaive',
             'GLM', 'ETS', "ConstantNaive", 'WindowRegression',
             'DatepartRegression', 'MultivariateRegression',
+            'Cassandra', 'MetricMotif', 'SeasonalityMotif', 'KalmanStateSpace',
+            'ARDL', 'UnivariateMotif', 'VAR',
         ]
 
         timings = {}
@@ -433,7 +450,7 @@ class ModelTest(unittest.TestCase):
                     },
                     df_train=df,
                     forecast_length=5,
-                    frequency="M",
+                    frequency="D",
                     prediction_interval=0.9,
                     random_seed=random_seed,
                     verbose=0,
@@ -495,6 +512,7 @@ class ModelTest(unittest.TestCase):
         """
 
     def test_transforms(self):
+        """Test if transformers meet saved comparison outputs."""
         print("Starting test_transforms")
         n_jobs = 1
         random_seed = 300

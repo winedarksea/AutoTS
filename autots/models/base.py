@@ -9,22 +9,7 @@ import datetime
 import numpy as np
 import pandas as pd
 from autots.tools.shaping import infer_frequency, clean_weights
-from autots.evaluator.metrics import (  # noqa
-    smape,
-    mae,
-    rmse,
-    containment,
-    contour,
-    spl,
-    medae,
-    mean_absolute_differential_error,
-    msle,
-    qae,
-    mqae,
-    mlvb,
-)
-
-# from sklearn.metrics import r2_score
+from autots.evaluator.metrics import full_metric_evaluation
 
 
 class ModelObject(object):
@@ -483,39 +468,19 @@ class PredictionObject(object):
             full_mae_errors (numpy.array): abs(actual - forecast)
             scaler (numpy.array): precomputed scaler for efficiency, avg value of series in order of columns
         """
-        A = np.array(actual)
-        F = np.array(self.forecast)
-        lower_forecast = np.array(self.lower_forecast)
-        upper_forecast = np.array(self.upper_forecast)
+        # arrays are faster for math than pandas dataframes
+        A = np.asarray(actual)
+        F = np.asarray(self.forecast)
+        lower_forecast = np.asarray(self.lower_forecast)
+        upper_forecast = np.asarray(self.upper_forecast)
         if df_train is None:
             df_train = A
-        df_train = np.array(df_train)
-
-        # check series_weights information
-        if series_weights is None:
-            series_weights = clean_weights(weights=False, series=self.forecast.columns)
-        # make sure the series_weights are passed correctly to metrics
-        if len(series_weights) != F.shape[1]:
-            series_weights = {col: series_weights[col] for col in self.forecast.columns}
+        df_train = np.asarray(df_train)
 
         # reuse this in several metrics so precalculate
         full_errors = F - A
         self.full_mae_errors = np.abs(full_errors)
         self.squared_errors = full_errors**2
-        log_errors = np.log1p(self.full_mae_errors)
-
-        # calculate scaler once
-        if scaler is None:
-            scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
-            fill_val = np.nanmax(scaler)
-            fill_val = fill_val if fill_val > 0 else 1
-            scaler[scaler == 0] = fill_val
-            scaler[np.isnan(scaler)] = fill_val
-
-        # concat most recent history to enable full-size diffs
-        last_of_array = np.nan_to_num(df_train[-1:, :])
-        lA = np.concatenate([last_of_array, A])
-        lF = np.concatenate([last_of_array, F])
 
         # np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A))
         inv_prediction_interval = 1 - self.prediction_interval
@@ -533,81 +498,23 @@ class PredictionObject(object):
             self.prediction_interval * -1 * low_diff,
         )
 
-        # test for NaN, this allows faster calculations if no nan
-        nan_flag = np.isnan(np.min(full_errors))
-
-        # mage = np.nansum(full_errors, axis=None) / A.shape[1]
-        if nan_flag:
-            mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
-        else:
-            mage = np.mean(np.abs(np.sum(full_errors, axis=1)))
-        direc_sign = np.sign(F - last_of_array) == np.sign(A - last_of_array)
-
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            self.per_series_metrics = pd.DataFrame(
-                {
-                    'smape': smape(A, F, self.full_mae_errors, nan_flag=nan_flag),
-                    'mae': mae(self.full_mae_errors),
-                    'rmse': rmse(self.squared_errors),
-                    'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
-                    'mage': mage,
-                    'mle': msle(
-                        full_errors, self.full_mae_errors, log_errors, nan_flag=nan_flag
-                    ),
-                    'imle': msle(
-                        -full_errors,
-                        self.full_mae_errors,
-                        log_errors,
-                        nan_flag=nan_flag,
-                    ),
-                    'spl': spl(
-                        self.upper_pl + self.lower_pl,
-                        scaler=scaler,
-                    ),
-                    'containment': containment(lower_forecast, upper_forecast, A),
-                    'contour': contour(lA, lF),
-                    # maximum error point
-                    'maxe': np.nanmax(self.full_mae_errors, axis=0),  # TAKE MAX for AGG
-                    # origin directional accuracy
-                    'oda': np.nansum(direc_sign, axis=0) / F.shape[0],
-                    # plus one to squared errors to assure errors in 0 to 1 are still bigger than abs error
-                    "dwae": (
-                        (
-                            (
-                                np.nansum(
-                                    np.where(
-                                        direc_sign,
-                                        self.full_mae_errors,
-                                        self.squared_errors + 1,
-                                    ),
-                                    axis=0,
-                                )
-                                / F.shape[0]
-                            )
-                            / scaler
-                        )
-                        + 1
-                    )
-                    ** 0.5,
-                    # mean of values less than 85th percentile of error
-                    'mqae': mqae(self.full_mae_errors, q=0.85, nan_flag=nan_flag),
-                    # 90th percentile of error
-                    # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
-                    # 'qae': qae(self.full_mae_errors, q=0.9, nan_flag=nan_flag),
-                    # mean % last value naive baseline, smaller is better
-                    # 'mlvb': mlvb(A=A, F=F, last_of_array=last_of_array),
-                    # median absolute error
-                    # 'medae': medae(self.full_mae_errors, nan_flag=nan_flag),  # median
-                    # variations on the mean absolute differential error
-                    # 'made_unscaled': mean_absolute_differential_error(lA, lF, 1),
-                    # 'mad2e': mean_absolute_differential_error(lA, lF, 2),
-                    # r2 can't handle NaN in history, also uncomment import above
-                    # 'r2': r2_score(A, F, multioutput="raw_values").flatten(),
-                    # 'correlation': pd.DataFrame(A).corrwith(pd.DataFrame(F), drop=True).to_numpy(),
-                },
-                index=actual.columns,
-            ).transpose()
+            self.per_series_metrics = full_metric_evaluation(
+                A=A,
+                F=F,
+                upper_forecast=upper_forecast,
+                lower_forecast=lower_forecast,
+                df_train=df_train,
+                full_errors=full_errors,
+                full_mae_errors=self.full_mae_errors,
+                squared_errors=self.squared_errors,
+                prediction_interval=self.prediction_interval,
+                upper_pl=self.upper_pl,
+                lower_pl=self.lower_pl,
+                columns=self.forecast.columns,
+                scaler=scaler,
+            )
 
         if per_timestamp_errors:
             smape_df = abs(self.forecast - actual) / (abs(self.forecast) + abs(actual))
@@ -618,6 +525,13 @@ class PredictionObject(object):
             )
             per_timestamp = pd.DataFrame({'weighted_smape': smape_cons}).transpose()
             self.per_timestamp = per_timestamp
+
+        # check series_weights information
+        if series_weights is None:
+            series_weights = clean_weights(weights=False, series=self.forecast.columns)
+        # make sure the series_weights are passed correctly to metrics
+        if len(series_weights) != F.shape[1]:
+            series_weights = {col: series_weights[col] for col in self.forecast.columns}
 
         # this weighting won't work well if entire metrics are NaN
         # but results should still be comparable

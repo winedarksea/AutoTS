@@ -348,7 +348,7 @@ def retrieve_regressor(
             return MultiOutputRegressor(regr, n_jobs=n_jobs)
         else:
             return regr
-    elif model_class == 'xgboost':
+    elif model_class in ['xgboost', 'XGBRegressor']:
         import xgboost as xgb
 
         if multioutput:
@@ -465,11 +465,11 @@ sklearn_model_dict = {
     'Adaboost': 0.03,
     'SVM': 0.05,  # was slow, LinearSVR seems much faster
     'BayesianRidge': 0.05,
-    'xgboost': 0.01,
+    'xgboost': 0.03,
     'KerasRNN': 0.02,
     'Transformer': 0.02,
     'HistGradientBoost': 0.03,
-    'LightGBM': 0.03,
+    'LightGBM': 0.1,
     'LightGBMRegressorChain': 0.03,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.02,
@@ -487,10 +487,10 @@ multivariate_model_dict = {
     'Adaboost': 0.03,
     'SVM': 0.05,
     # 'BayesianRidge': 0.05,
-    'xgboost': 0.01,
+    'xgboost': 0.09,
     'KerasRNN': 0.01,
     'HistGradientBoost': 0.03,
-    'LightGBM': 0.03,
+    'LightGBM': 0.09,
     'LightGBMRegressorChain': 0.03,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.02,
@@ -508,7 +508,7 @@ univariate_model_dict = {
     'SVM': 0.05,
     'BayesianRidge': 0.03,
     'HistGradientBoost': 0.02,
-    'LightGBM': 0.01,
+    'LightGBM': 0.03,
     'LightGBMRegressorChain': 0.01,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.05,
@@ -524,7 +524,7 @@ rolling_regression_dict = {
     'Adaboost': 0.03,
     'SVM': 0.05,
     'KerasRNN': 0.02,
-    'LightGBM': 0.03,
+    'LightGBM': 0.09,
     'LightGBMRegressorChain': 0.03,
     'ExtraTrees': 0.05,
     'RadiusNeighbors': 0.01,
@@ -555,6 +555,81 @@ datepart_model_dict: dict = {
     'ExtraTrees': 0.07,
     'RadiusNeighbors': 0.05,
 }
+# pre-optimized model templates
+xgparam3 = {
+    "base_score": 0.5,
+    "booster": 'gbtree',
+    "colsample_bylevel": 0.541426,
+    "colsample_bynode": 1,
+    "colsample_bytree": 1.0,
+    "early_stopping_rounds": None,
+    "enable_categorical": False,
+    "eval_metric": None,
+    "feature_types": None,
+    "gamma": 0,
+    "grow_policy": 'depthwise',
+    "importance_type": None,
+    "interaction_constraints": '',
+    "learning_rate": 0.012543,
+    "max_bin": 256,
+    "max_cat_threshold": 64,
+    "max_cat_to_onehot": 4,
+    "max_delta_step": 0,
+    "max_depth": 11,
+    "max_leaves": 0,
+    "min_child_weight": 0.0127203,
+    "monotone_constraints": '()',
+    "n_estimators": 319,
+    "num_parallel_tree": 1,
+    "predictor": 'auto',
+}
+xgparam2 = {
+    "base_score": 0.5,
+    "booster": 'gbtree',
+    "colsample_bylevel": 0.691915,
+    "colsample_bynode": 1,
+    "colsample_bytree": 1.0,
+    "early_stopping_rounds": None,
+    "enable_categorical": False,
+    "eval_metric": None,
+    "feature_types": None,
+    "gamma": 0,
+    "grow_policy": 'depthwise',
+    "importance_type": None,
+    "interaction_constraints": '',
+    "learning_rate": 0.02199,
+    "max_bin": 256,
+    "max_cat_threshold": 64,
+    "max_cat_to_onehot": 4,
+    "max_delta_step": 0,
+    "max_depth": 14,
+    "max_leaves": 0,
+    "min_child_weight": 0.024213,
+    "monotone_constraints": '()',
+    "n_estimators": 162,
+    "num_parallel_tree": 1,
+    "predictor": 'auto',
+}
+lightgbmp1 = {
+    "colsample_bytree": 0.164532,
+    "learning_rate": 0.0202726,
+    "max_bin": 1023,
+    "min_child_samples": 16,
+    "n_estimators": 1794,
+    "num_leaves": 15,
+    "reg_alpha": 0.00097656,
+    "reg_lambda": 0.6861,
+}
+lightgbmp2 = {
+    "colsample_bytree": 0.94716,
+    "learning_rate": 0.7024,
+    "max_bin": 255,
+    "min_child_samples": 15,
+    "n_estimators": 5,
+    "num_leaves": 35,
+    "reg_alpha": 0.00308,
+    "reg_lambda": 5.1817,
+}
 
 
 def generate_regressor_params(
@@ -572,7 +647,8 @@ def generate_regressor_params(
         }
         method = "deep"
     """Generate new parameters for input to regressor."""
-    model = random.choices(list(model_dict.keys()), list(model_dict.values()), k=1)[0]
+    model_list = list(model_dict.keys())
+    model = random.choices(model_list, list(model_dict.values()), k=1)[0]
     if model in [
         'xgboost',
         'Adaboost',
@@ -604,26 +680,32 @@ def generate_regressor_params(
                 },
             }
         elif model == 'xgboost':
-            param_dict = {
-                "model": 'xgboost',
-                "model_params": {
-                    "objective": np.random.choice(
-                        ['count:poisson', 'reg:squarederror', 'reg:gamma'],
-                        p=[0.4, 0.5, 0.1],
-                        size=1,
-                    ).item(),
-                    "eta": np.random.choice([0.3], p=[1.0], size=1).item(),
-                    "min_child_weight": np.random.choice(
-                        [1, 2, 5], p=[0.8, 0.1, 0.1], size=1
-                    ).item(),
-                    "max_depth": np.random.choice(
-                        [3, 6, 9], p=[0.1, 0.8, 0.1], size=1
-                    ).item(),
-                    "subsample": np.random.choice(
-                        [1, 0.7, 0.5], p=[0.9, 0.05, 0.05], size=1
-                    ).item(),
-                },
-            }
+            branch = random.choices(['p1', 'p2', 'random'], [0.1, 0.4, 0.5])[0]
+            if branch == 'p1':
+                param_dict = xgparam2
+            elif branch == 'p2':
+                param_dict = xgparam3
+            else:
+                param_dict = {
+                    "model": 'xgboost',
+                    "model_params": {
+                        "objective": np.random.choice(
+                            ['count:poisson', 'reg:squarederror', 'reg:gamma'],
+                            p=[0.4, 0.5, 0.1],
+                            size=1,
+                        ).item(),
+                        "eta": np.random.choice([0.3], p=[1.0], size=1).item(),
+                        "min_child_weight": np.random.choice(
+                            [1, 2, 5], p=[0.8, 0.1, 0.1], size=1
+                        ).item(),
+                        "max_depth": np.random.choice(
+                            [3, 6, 9], p=[0.1, 0.8, 0.1], size=1
+                        ).item(),
+                        "subsample": np.random.choice(
+                            [1, 0.7, 0.5], p=[0.9, 0.05, 0.05], size=1
+                        ).item(),
+                    },
+                }
         elif model == 'MLP':
             solver = np.random.choice(
                 ['lbfgs', 'sgd', 'adam'], p=[0.5, 0.1, 0.4], size=1
@@ -691,9 +773,9 @@ def generate_regressor_params(
                 },
             }
         elif model == 'ExtraTrees':
-            max_depth_choice = random.choices([None, 5, 10, 20], [0.2, 0.1, 0.5, 0.3])[
-                0
-            ]
+            max_depth_choice = random.choices(
+                [None, 5, 10, 20, 30], [0.2, 0.1, 0.3, 0.4, 0.1]
+            )[0]
             estimators_choice = random.choices([50, 100, 500], [0.05, 0.9, 0.05])[0]
             param_dict = {
                 "model": 'ExtraTrees',
@@ -812,44 +894,50 @@ def generate_regressor_params(
                 },
             }
         elif model in ['LightGBM', "LightGBMRegressorChain"]:
-            param_dict = {
-                "model": 'LightGBM',
-                "model_params": {
-                    "objective": random.choices(
-                        [
-                            'regression',
-                            'gamma',
-                            'huber',
-                            'regression_l1',
-                            'tweedie',
-                            'poisson',
-                            'quantile',
-                        ],
-                        [0.4, 0.2, 0.2, 0.2, 0.2, 0.05, 0.01],
-                    )[0],
-                    "learning_rate": random.choices(
-                        [0.001, 0.1, 0.01],
-                        [0.1, 0.6, 0.3],
-                    )[0],
-                    "num_leaves": random.choices(
-                        [31, 127, 70],
-                        [0.6, 0.1, 0.3],
-                    )[0],
-                    "max_depth": random.choices(
-                        [-1, 5, 10],
-                        [0.6, 0.1, 0.3],
-                    )[0],
-                    "boosting_type": random.choices(
-                        ['gbdt', 'rf', 'dart', 'goss'],
-                        [0.6, 0, 0.2, 0.2],
-                    )[0],
-                    "n_estimators": random.choices(
-                        [100, 250, 50, 500],
-                        [0.6, 0.1, 0.3, 0.0010],
-                    )[0],
-                    "linear_tree": random.choice([True, False]),
-                },
-            }
+            branch = random.choices(['p1', 'p2', 'random'], [0.2, 0.3, 0.5])[0]
+            if branch == 'p1':
+                param_dict = lightgbmp1
+            elif branch == 'p2':
+                param_dict = lightgbmp2
+            else:
+                param_dict = {
+                    "model": 'LightGBM',
+                    "model_params": {
+                        "objective": random.choices(
+                            [
+                                'regression',
+                                'gamma',
+                                'huber',
+                                'regression_l1',
+                                'tweedie',
+                                'poisson',
+                                'quantile',
+                            ],
+                            [0.4, 0.2, 0.2, 0.2, 0.2, 0.05, 0.01],
+                        )[0],
+                        "learning_rate": random.choices(
+                            [0.001, 0.1, 0.01],
+                            [0.1, 0.6, 0.3],
+                        )[0],
+                        "num_leaves": random.choices(
+                            [31, 127, 70],
+                            [0.6, 0.1, 0.3],
+                        )[0],
+                        "max_depth": random.choices(
+                            [-1, 5, 10],
+                            [0.6, 0.1, 0.3],
+                        )[0],
+                        "boosting_type": random.choices(
+                            ['gbdt', 'rf', 'dart', 'goss'],
+                            [0.6, 0, 0.2, 0.2],
+                        )[0],
+                        "n_estimators": random.choices(
+                            [100, 250, 50, 500],
+                            [0.6, 0.1, 0.3, 0.0010],
+                        )[0],
+                        "linear_tree": random.choice([True, False]),
+                    },
+                }
         elif model == 'Ridge':
             param_dict = {
                 "model": 'Ridge',
@@ -1012,9 +1100,9 @@ class RollingRegression(ModelObject):
         self.sktraindata = self.sktraindata.fillna(method='ffill').fillna(
             method='bfill'
         )
-        Y = self.sktraindata.drop(self.sktraindata.head(2).index)
-        Y.columns = [x for x in range(len(Y.columns))]
-        X = rolling_x_regressor(
+        self.Y = self.sktraindata.drop(self.sktraindata.head(2).index)
+        self.Y.columns = [x for x in range(len(self.Y.columns))]
+        self.X = rolling_x_regressor(
             self.sktraindata,
             mean_rolling_periods=self.mean_rolling_periods,
             macd_periods=self.macd_periods,
@@ -1035,26 +1123,26 @@ class RollingRegression(ModelObject):
             window=self.window,
         )
         if self.regression_type == 'User':
-            X = pd.concat([X, self.regressor_train], axis=1)
+            self.X = pd.concat([self.X, self.regressor_train], axis=1)
 
         if self.x_transform in ['FastICA', 'Nystroem', 'RmZeroVariance']:
             self.x_transformer = self._x_transformer()
-            self.x_transformer = self.x_transformer.fit(X)
-            X = pd.DataFrame(self.x_transformer.transform(X))
-            X = X.replace([np.inf, -np.inf], 0).fillna(0)
+            self.x_transformer = self.x_transformer.fit(self.X)
+            self.X = pd.DataFrame(self.x_transformer.transform(self.X))
+            self.X = self.X.replace([np.inf, -np.inf], 0).fillna(0)
         """
         Tail(1) is dropped to shift data to become forecast 1 ahead
         and the first one is dropped because it will least accurately represent
         rolling values
         """
-        X = X.drop(X.tail(1).index).drop(X.head(1).index)
-        if isinstance(X, pd.DataFrame):
-            X.columns = [str(xc) for xc in X.columns]
+        self.X = self.X.drop(self.X.tail(1).index).drop(self.X.head(1).index)
+        if isinstance(self.X, pd.DataFrame):
+            self.X.columns = [str(xc) for xc in self.X.columns]
 
         multioutput = True
-        if Y.ndim < 2:
+        if self.Y.ndim < 2:
             multioutput = False
-        elif Y.shape[1] < 2:
+        elif self.Y.shape[1] < 2:
             multioutput = False
         # retrieve model object to train
         self.regr = retrieve_regressor(
@@ -1082,7 +1170,7 @@ class RollingRegression(ModelObject):
             x_device = X
             y_device = Y
         """
-        self.regr = self.regr.fit(X, Y)
+        self.regr = self.regr.fit(self.X, self.Y)
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -1353,7 +1441,7 @@ class WindowRegression(ModelObject):
                     "regression_type='User' but no future_regressor passed"
                 )
         self.df_train = df
-        X, Y = window_maker(
+        self.X, self.Y = window_maker(
             df,
             window_size=self.window_size,
             input_dim=self.input_dim,
@@ -1367,12 +1455,12 @@ class WindowRegression(ModelObject):
             random_seed=self.random_seed,
         )
         multioutput = True
-        if Y.ndim < 2:
+        if self.Y.ndim < 2:
             multioutput = False
-        elif Y.shape[1] < 2:
+        elif self.Y.shape[1] < 2:
             multioutput = False
-        if isinstance(X, pd.DataFrame):
-            X = X.to_numpy()
+        if isinstance(self.X, pd.DataFrame):
+            self.X = self.X.to_numpy()
         self.regr = retrieve_regressor(
             regression_model=self.regression_model,
             verbose=self.verbose,
@@ -1381,7 +1469,7 @@ class WindowRegression(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=multioutput,
         )
-        self.regr = self.regr.fit(X.astype(float), Y.astype(float))
+        self.regr = self.regr.fit(self.X.astype(float), self.Y.astype(float))
         self.last_window = df.tail(self.window_size)
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -1933,8 +2021,7 @@ class DatepartRegression(ModelObject):
             )
             return prediction
 
-    @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         model_choice = generate_regressor_params(model_dict=datepart_model_dict)
         datepart_choice = random.choices(
@@ -2287,8 +2374,7 @@ class UnivariateRegression(ModelObject):
             )
             return prediction
 
-    @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         if method == "deep":
             x_transform_choice = random.choices(
@@ -2550,7 +2636,7 @@ class MultivariateRegression(ModelObject):
                 else:
                     self.regressor_train = future_regressor
             # define X and Y
-            Y = df[1:].to_numpy().ravel(order="F")
+            self.Y = df[1:].to_numpy().ravel(order="F")
             # drop look ahead data
             base = df[:-1]
             if self.regression_type is not None:
@@ -2559,7 +2645,7 @@ class MultivariateRegression(ModelObject):
             else:
                 cut_regr = None
             # open to suggestions on making this faster
-            X = pd.concat(
+            self.X = pd.concat(
                 [
                     rolling_x_regressor_regressor(
                         base[x_col].to_frame(),
@@ -2606,9 +2692,9 @@ class MultivariateRegression(ModelObject):
                 )
 
             multioutput = True
-            if Y.ndim < 2:
+            if self.Y.ndim < 2:
                 multioutput = False
-            elif Y.shape[1] < 2:
+            elif self.Y.shape[1] < 2:
                 multioutput = False
             self.model = retrieve_regressor(
                 regression_model=self.regression_model,
@@ -2618,11 +2704,11 @@ class MultivariateRegression(ModelObject):
                 n_jobs=self.n_jobs,
                 multioutput=multioutput,
             )
-            self.model.fit(X, Y)
+            self.model.fit(self.X, self.Y)
 
             if self.probabilistic:
-                self.model_upper.fit(X, Y)
-                self.model_lower.fit(X, Y)
+                self.model_upper.fit(self.X, self.Y)
+                self.model_lower.fit(self.X, self.Y)
             # we only need the N most recent points for predict
             self.sktraindata = df.tail(self.min_threshold)
 
@@ -2747,8 +2833,7 @@ class MultivariateRegression(ModelObject):
             )
             return prediction
 
-    @staticmethod
-    def get_new_params(method: str = 'random'):
+    def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         if method == "deep":
             model_choice = generate_regressor_params(

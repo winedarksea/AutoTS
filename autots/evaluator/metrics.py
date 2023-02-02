@@ -7,6 +7,9 @@ Some common args:
 """
 import warnings
 import numpy as np
+import pandas as pd
+
+# from sklearn.metrics import r2_score
 
 
 def symmetric_mean_absolute_percentage_error(actual, forecast):
@@ -84,9 +87,7 @@ def mean_absolute_differential_error(A, F, order: int = 1, df_train=None, scaler
     # scaler = np.mean(A, axis=0)  # debate over whether to make this scaled
     if df_train is not None:
         last_of_array = np.nan_to_num(
-            df_train[
-                df_train.shape[0] - 1 : df_train.shape[0],
-            ]
+            df_train[df_train.shape[0] - 1 : df_train.shape[0],]
         )
         # last_of_array = df_train.tail(1).fillna(0).to_numpy()
         # assigning to new because I'm paranoid about overwrite existing objects
@@ -195,6 +196,8 @@ def contour(A, F):
     """A measure of how well the actual and forecast follow the same pattern of change.
     *Note:* If actual values are unchanging, will match positive changing forecasts.
     This is faster, and because if actuals are a flat line, contour probably isn't a concern regardless.
+
+    # bluff tops follow the shape of the river below, at different elevation
 
     Expects two, 2-D numpy arrays of forecast_length * n series
     Returns a 1-D array of results in len n series
@@ -393,3 +396,137 @@ def dwae(A, F, last_of_array):
         ),
         axis=0,
     )
+
+
+def full_metric_evaluation(
+    A,
+    F,
+    upper_forecast,
+    lower_forecast,
+    df_train,
+    full_errors,
+    full_mae_errors,
+    squared_errors,
+    prediction_interval,
+    upper_pl=None,
+    lower_pl=None,
+    columns=None,
+    scaler=None,
+):
+    """Create a pd.DataFrame of metrics per series given actuals, forecast, and precalculated errors."""
+    # calculate scaler once
+    if scaler is None:
+        scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
+        fill_val = np.nanmax(scaler)
+        fill_val = fill_val if fill_val > 0 else 1
+        scaler[scaler == 0] = fill_val
+        scaler[np.isnan(scaler)] = fill_val
+
+    if upper_pl is None:
+        inv_prediction_interval = 1 - prediction_interval
+        upper_diff = A - upper_forecast
+        upper_pl = np.where(
+            A >= upper_forecast,
+            prediction_interval * upper_diff,
+            inv_prediction_interval * -1 * upper_diff,
+        )
+    if lower_pl is None:
+        # note that the quantile here is the lower quantile
+        low_diff = A - lower_forecast
+        lower_pl = np.where(
+            A >= lower_forecast,
+            inv_prediction_interval * low_diff,
+            prediction_interval * -1 * low_diff,
+        )
+
+    # fill with zero where applicable
+    filled_full_mae_errors = full_mae_errors.copy()
+    filled_full_mae_errors[np.isnan(filled_full_mae_errors)] = 0
+
+    log_errors = np.log1p(full_mae_errors)
+
+    # concat most recent history to enable full-size diffs
+    last_of_array = np.nan_to_num(df_train[-1:, :])
+    lA = np.concatenate([last_of_array, A])
+    lF = np.concatenate([last_of_array, F])
+
+    # test for NaN, this allows faster calculations if no nan
+    nan_flag = np.isnan(np.min(full_errors))
+
+    # mage = np.nansum(full_errors, axis=None) / A.shape[1]
+    if nan_flag:
+        mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
+    else:
+        mage = np.mean(np.abs(np.sum(full_errors, axis=1)))
+    direc_sign = np.sign(F - last_of_array) == np.sign(A - last_of_array)
+    weights = np.geomspace(1, 10, full_mae_errors.shape[0])[:, np.newaxis]
+
+    # note a number of these are created from my own imagination (winedarksea)
+    # those are also subject to change as they are tested and refined
+    return pd.DataFrame(
+        {
+            'smape': smape(A, F, full_mae_errors, nan_flag=nan_flag),
+            'mae': np.nanmean(full_mae_errors, axis=0),
+            'rmse': rmse(squared_errors),
+            # directional error
+            'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
+            # aggregate error
+            'mage': mage,  # Gandalf approved
+            'mle': msle(full_errors, full_mae_errors, log_errors, nan_flag=nan_flag),
+            'imle': msle(
+                -full_errors,
+                full_mae_errors,
+                log_errors,
+                nan_flag=nan_flag,
+            ),
+            'spl': spl(
+                upper_pl + lower_pl,
+                scaler=scaler,
+            ),
+            'containment': containment(lower_forecast, upper_forecast, A),
+            'contour': contour(lA, lF),
+            # maximum error point
+            'maxe': np.max(filled_full_mae_errors, axis=0),  # TAKE MAX for AGG
+            # origin directional accuracy
+            'oda': np.nansum(direc_sign, axis=0) / F.shape[0],
+            # plus one to squared errors to assure errors in 0 to 1 are still bigger than abs error
+            "dwae": (
+                (
+                    (
+                        np.nansum(
+                            np.where(
+                                direc_sign,
+                                filled_full_mae_errors,
+                                squared_errors + 1,
+                            ),
+                            axis=0,
+                        )
+                        / F.shape[0]
+                    )
+                    / scaler
+                )
+                + 1
+            )
+            ** 0.5,
+            # mean of values less than 85th percentile of error
+            'mqae': mqae(full_mae_errors, q=0.85, nan_flag=nan_flag),
+            # endpoint weighted mean absolute error
+            'ewmae': np.mean(
+                filled_full_mae_errors * weights, axis=0
+            )  # pronunciation guide: "eeeewwwwwwhh, ma!"
+            # 90th percentile of error
+            # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
+            # 'qae': qae(full_mae_errors, q=0.9, nan_flag=nan_flag),
+            # mean % last value naive baseline, smaller is better
+            # 'mlvb': mlvb(A=A, F=F, last_of_array=last_of_array),
+            # median absolute error
+            # 'medae': medae(full_mae_errors, nan_flag=nan_flag),  # median
+            # variations on the mean absolute differential error
+            # 'made_unscaled': mean_absolute_differential_error(lA, lF, 1),
+            # 'mad2e': mean_absolute_differential_error(lA, lF, 2),
+            # r2 can't handle NaN in history, also uncomment import above
+            # 'r2': r2_score(A, F, multioutput="raw_values").flatten(),
+            # 'correlation': pd.DataFrame(A).corrwith(pd.DataFrame(F), drop=True).to_numpy(),
+        },
+        index=columns,
+    ).transpose()

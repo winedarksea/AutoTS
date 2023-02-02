@@ -190,10 +190,17 @@ def date_part(
         seasonal_list = []
         DTmin = DTindex.min()
         DTmax = DTindex.max()
-        # less than one year of data is always going to be an issue
-        seasonal_ratio = (DTmax.year - DTmin.year + 1) / len(DTindex)
+        # 1 time step will always not work with this
+        # for new seasonal_ratio, worse case scenario is 2 steps ahead so one season / 2
+        # in order to assure error on wrong seasonality choice in train vs test, we must have different sum orders for each seasonality
+        if len(DTindex) <= 1:
+            seasonal_ratio = 1  # assume daily, but weekly or monthly seems more likely for 1 step forecasts
+        else:
+            seasonal_ratio = ((DTmax - DTmin).days + 1) / len(DTindex)
+        # seasonal_ratio = (DTmax.year - DTmin.year + 1) / len(DTindex)  # old ratio
         # hourly
-        if seasonal_ratio < 0.001:  # 0.00011 to 0.00023
+        # if seasonal_ratio < 0.001:  # 0.00011 to 0.00023
+        if seasonal_ratio < 0.75:  # 0.00011 to 0.00023
             t = DTindex - pd.Timestamp("2030-01-01")
             t = (t.days * 24) + (t.components['minutes'] / 60)
             # add hourly, weekly, yearly
@@ -208,7 +215,8 @@ def date_part(
                 fourier_series(t, p=168, n=3) * fourier_series(t, p=8766, n=3)
             )
         # daily (+ business day)
-        elif seasonal_ratio < 0.012:  # 0.0027 to 0.0055
+        # elif seasonal_ratio < 0.012:  # 0.0027 to 0.0055
+        elif seasonal_ratio < 3.5:  # 0.0027 to 0.0055
             t = (DTindex - pd.Timestamp("2030-01-01")).days
             # add yearly and weekly seasonality
             seasonal_list.append(fourier_series(t, p=365.25, n=10))
@@ -218,12 +226,14 @@ def date_part(
                 fourier_series(t, p=7, n=5) * fourier_series(t, p=7, n=5)
             )
         # weekly
-        elif seasonal_ratio < 0.05:  # 0.019 to 0.038
+        # elif seasonal_ratio < 0.05:  # 0.019 to 0.038
+        elif seasonal_ratio < 12:  # 0.019 to 0.038
             t = (DTindex - pd.Timestamp("2030-01-01")).days
             seasonal_list.append(fourier_series(t, p=365.25, n=10))
-            seasonal_list.append(fourier_series(t, p=28, n=3))
+            seasonal_list.append(fourier_series(t, p=28, n=4))
         # monthly
-        elif seasonal_ratio < 0.5:  # 0.083 to 0.154
+        # elif seasonal_ratio < 0.5:  # 0.083 to 0.154
+        elif seasonal_ratio < 182:  # 0.083 to 0.154
             t = (DTindex - pd.Timestamp("2030-01-01")).days
             seasonal_list.append(fourier_series(t, p=365.25, n=3))
             seasonal_list.append(fourier_series(t, p=1461, n=10))
@@ -231,8 +241,10 @@ def date_part(
         else:
             t = (DTindex - pd.Timestamp("2030-01-01")).days
             seasonal_list.append(fourier_series(t, p=1461, n=10))
-        date_part_df = pd.DataFrame(np.concatenate(seasonal_list, axis=1)).rename(
-            columns=lambda x: "seasonalitycommonfourier_" + str(x)
+        date_part_df = (
+            pd.DataFrame(np.concatenate(seasonal_list, axis=1))
+            .rename(columns=lambda x: "seasonalitycommonfourier_" + str(x))
+            .round(6)
         )
         if method == "common_fourier_rw":
             date_part_df['epoch'] = (DTindex.to_julian_date() ** 0.65).astype(int)
@@ -341,7 +353,9 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
     elif seasonality in date_part_methods:
         return date_part(DTindex, method=seasonality, set_index=False)
     else:
-        return ValueError(f"Seasonality `{seasonality}` not recognized")
+        return ValueError(
+            f"Seasonality `{seasonality}` not recognized. Must be int, float, or a select type string such as 'dayofweek'"
+        )
 
 
 def seasonal_window_match(

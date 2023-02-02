@@ -69,7 +69,7 @@ class CassandraTest(unittest.TestCase):
         future_impacts = pd.DataFrame(0, index=df_test.index, columns=df_test.columns)
         future_impacts.iloc[0:10, 0] = (np.linspace(1, 10)[0:10] + 10) / 100
 
-        c_params = Cassandra.get_new_params()
+        c_params = Cassandra().get_new_params()
         c_params = {
             "preprocessing_transformation": {
                 "fillna": "ffill",

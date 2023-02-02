@@ -25,7 +25,7 @@ author = 'Colin Catlin'
 # import AutoTS
 # from  AutoTS import __version__
 # release = __version__
-release = "0.5.3"
+release = "0.5.4"
 
 # -- General configuration ---------------------------------------------------
 
@@ -34,7 +34,7 @@ release = "0.5.3"
 # ones.
 # Add napoleon to the extensions list
 # 'recommonmark',
-extensions = ['sphinx.ext.napoleon', 'sphinx.ext.autodoc', 'm2r', 'sphinx.ext.githubpages',]
+extensions = ['sphinx.ext.napoleon', 'sphinx.ext.autodoc', 'm2r2', 'sphinx.ext.githubpages',]
 
 source_suffix = ['.rst', '.md']
 

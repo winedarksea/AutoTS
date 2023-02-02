@@ -12,11 +12,18 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.5.3 🌍 🌍 🌍
-* robustness changes to generate_score_per_series for horizontal ensembles
-* added generation_timeout to allow stopping based on time
-* added ability to specify anomaly model (ie 'zscore') to AnomalyDetector.get_new_params(method='zscore')
-* fixed a bug in Cassandra with future_impacts and future_regressor
+# 0.5.4 🌏 🌏 🌏
+* Cassandra seasonality, holiday detection, and other bug fixes
+* attempted to improve the KalmanStateSpace and KalmanSmoothing methods
+* validation indexes now generated in a standalone function
+* create_regressor bug fix
+* added MLEnsemble
+* fix a bug where common_fourier failed on short length forecasts
+* added some additional options to ARDL
+* refactored metric df eval
+* refactored parts of AutoTS for templates and validations
+* added ewmae metric
+* non Horizontal ensembles are now also constructed after validations and vals are rerun
 
 
 ### New Model Checklist:

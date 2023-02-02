@@ -76,6 +76,14 @@ autots.models.matrix\_var module
    :undoc-members:
    :show-inheritance:
 
+autots.models.mlensemble module
+-------------------------------
+
+.. automodule:: autots.models.mlensemble
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 autots.models.model\_list module
 --------------------------------
 

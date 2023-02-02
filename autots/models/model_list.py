@@ -40,6 +40,7 @@ all_models = [
     'MetricMotif',
     'Cassandra',
     'SeasonalityMotif',
+    'MLEnsemble',
 ]
 # downweight slower models
 default = {
@@ -134,10 +135,10 @@ fast = {
 parallel = {
     'ETS': 1,
     'FBProphet': 0.8,
-    'ARIMA': 1,
+    'ARIMA': 0.2,  # slow
     'GLM': 1,
     'UnobservedComponents': 1,
-    "Greykite": 0.3,
+    # "Greykite": 0.3,
     'UnivariateMotif': 1,
     'MultivariateMotif': 1,
     'Theta': 1,
@@ -240,7 +241,7 @@ recombination_approved = [
     'MAR',
     'TMF',
     'LATC',
-    'KalmanStateSpace',
+    # 'KalmanStateSpace', # matrix sizes must match
     'MetricMotif',
     'Cassandra',
     'SeasonalityMotif',
@@ -298,7 +299,32 @@ motifs = [
     'MetricMotif',
     'SeasonalityMotif',
 ]
+regressions = [
+    'RollingRegression',
+    'WindowRegression',
+    'DatepartRegression',
+    'UnivariateRegression',
+    'MultivariateRegression',
+]
 no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
+# this should be implementable with some models in gluonts
+all_result_path = [
+    "UnivariateMotif",
+    "MultivariateMotif",
+    "SectionalMotif",
+    'MetricMotif',
+    "SeasonalityMotif",
+    "Motif",
+    "ARCH",  # simulations not motifs but similar
+    "PytorchForecasting",
+]
+# these are those that require a parameter, and return a dict
+diff_window_motif_list = [
+    "UnivariateMotif",
+    "MultivariateMotif",
+    "Motif",
+    "ARCH",
+]
 model_lists = {
     "all": all_models,
     "default": default,
@@ -319,6 +345,8 @@ model_lists = {
     "regressor": regressor,
     "best": best,
     "motifs": motifs,
+    "all_result_path": all_result_path,
+    "regressions": regressions,
 }
 
 

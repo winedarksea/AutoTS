@@ -691,9 +691,7 @@ class MotifSimulation(ModelObject):
         motif_vecs_list = []
         # takes random slices of the time series and rearranges as phrase_n length vectors
         for z in numbers:
-            rand_slice = df.iloc[
-                z : (z + phrase_n),
-            ]
+            rand_slice = df.iloc[z : (z + phrase_n),]
             rand_slice = (
                 rand_slice.reset_index(drop=True)
                 .transpose()
@@ -1486,7 +1484,6 @@ def predict_reservoir(
         n_samples = 10 if seed_pts <= 10 else seed_pts
         interval_list = []
         for ns in range(n_samples):
-
             out_test = np.ones(dtot)  # full feature vector
             x_int = np.zeros((dlin, testtime_pts + n_samples))  # linear part
             # copy over initial linear feature vector
@@ -2035,6 +2032,8 @@ class KalmanStateSpace(ModelObject):
         process_noise=[[0.1, 0.0], [0.0, 0.01]],
         observation_model=[[1, 0]],
         observation_noise: float = 1.0,
+        em_iter: int = 10,
+        model_name: str = "undefined",
         **kwargs,
     ):
         ModelObject.__init__(
@@ -2050,6 +2049,8 @@ class KalmanStateSpace(ModelObject):
         self.process_noise = process_noise
         self.observation_model = observation_model
         self.observation_noise = observation_noise
+        self.em_iter = em_iter
+        self.model_name = model_name
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -2065,7 +2066,9 @@ class KalmanStateSpace(ModelObject):
             observation_model=self.observation_model,  # H
             observation_noise=self.observation_noise,  # R
         )
-        self.df_train = df
+        self.df_train = df.to_numpy().T
+        if self.em_iter is not None:
+            self.kf = self.kf.em(self.df_train, n_iter=self.em_iter)
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -2084,11 +2087,11 @@ class KalmanStateSpace(ModelObject):
             if just_point_forecast == True, a dataframe of point forecasts
         """
         predictStartTime = datetime.datetime.now()
-        result = self.kf.predict(self.df_train.to_numpy().T, forecast_length)
+        result = self.kf.predict(self.df_train, forecast_length)
         df = pd.DataFrame(
             result.observations.mean.T,
             index=self.create_forecast_index(forecast_length),
-            columns=self.df_train.columns,
+            columns=self.column_names,
         )
 
         if just_point_forecast:
@@ -2114,43 +2117,184 @@ class KalmanStateSpace(ModelObject):
             )
             return prediction
 
-    @staticmethod
-    def get_new_params(method: str = "random"):
+    def get_new_params(self, method: str = "random"):
         # predefined, or random
+        if method in ['fast', 'superfast']:
+            em_iter = random.choices([None, 10], [0.4, 0.6])[0]
+        elif method == "deep":
+            em_iter = random.choices(
+                [None, 10, 20, 50, 100], [0.3, 0.6, 0.1, 0.1, 0.1]
+            )[0]
+        else:
+            em_iter = random.choices([None, 10, 30], [0.3, 0.7, 0.1])[0]
         params = random.choices(
+            # the same model can sometimes be defined in various matrix forms
             [
                 # floats are phi
-                (
-                    [[1, 1], [0, 1]],
-                    [[0.1, 0.0], [0.0, 0.01]],
-                    [[1, 0]],
-                    1.0,
-                ),  # local linear trend
-                ([[0, 1], [0, 0]], [[1.2, 0.0], [0.0, 0.2]], [[1, 0]], 1.0),  # MA(1)
-                ([[0.1, 1], [0.1, 0]], [[1, 0]], [[1, 0]], 1.0),  # second order AR
-                (
-                    [[1, 1, 0], [0, 1, 0], [0, 0, 1]],
-                    [[0.1, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0, 0.0, 0.1]],
-                    [[1, 1, 1]],
-                    1.0,
-                ),
+                {
+                    'model_name': 'local linear trend',
+                    'state_transition': [[1, 1], [0, 1]],
+                    'process_noise': [[0.1, 0.0], [0.0, 0.01]],
+                    'observation_model': [[1, 0]],
+                    'observation_noise': random.choice([0.25, 0.5, 1.0, 0.05]),
+                },
+                {
+                    'model_name': 'local linear stochastic seasonal dummy',
+                    'state_transition': [
+                        [1, 0, 0, 0],
+                        [0, -1, -1, -1],
+                        [0, 1, 0, 0],
+                        [0, 0, 1, 0],
+                    ],
+                    'process_noise': [
+                        [1, 0, 0, 0],
+                        [0, 1, 0, 0],
+                        [0, 0, 0, 0],
+                        [0, 0, 0, 0],
+                    ],
+                    'observation_model': [[1, 1, 0, 0]],
+                    'observation_noise': 0.25,
+                },
+                {
+                    'model_name': 'local linear stochastic seasonal 7',
+                    'state_transition': [
+                        [1, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0],
+                        [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                    ],
+                    'process_noise': [
+                        [1, 0, 0, 0, 0, 0, 0, 0],
+                        [0, 1, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 1, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 1, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 1, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 1, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0],
+                    ],
+                    'observation_model': [[1, 0, 1, 0, 0, 0, 0, 0]],
+                    'observation_noise': 0.25,
+                },
+                {
+                    'model_name': 'MA',
+                    'state_transition': [[1, 0], [1, 0]],
+                    'process_noise': [[0.2, 0.0], [0.0, 0]],
+                    'observation_model': [[1, 0.1]],
+                    'observation_noise': 1.0,
+                },
+                {
+                    'model_name': 'AR(2)',
+                    'state_transition': [[1, 1], [0.1, 0]],
+                    'process_noise': [[1, 0], [0, 0]],
+                    'observation_model': [[1, 0]],
+                    'observation_noise': 1.0,
+                },
+                {
+                    'model_name': 'X1',
+                    'state_transition': [[1, 1, 0], [0, 1, 0], [0, 0, 1]],
+                    'process_noise': [
+                        [0.1, 0.0, 0.0],
+                        [0.0, 0.01, 0.0],
+                        [0.0, 0.0, 0.1],
+                    ],
+                    'observation_model': [[1, 1, 1]],
+                    'observation_noise': 1.0,
+                },
+                {
+                    'model_name': "local linear hidden state with seasonal 7",
+                    'state_transition': [
+                        [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0],
+                        [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                    ],
+                    'process_noise': [
+                        [0.0016, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 1e-06, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                    ],
+                    'observation_model': [[1, 1, 0, 0, 0, 0, 0, 0]],
+                    'observation_noise': random.choice([0.25, 0.5, 1.0, 0.04, 0.02]),
+                },
+                {
+                    'model_name': "factor",
+                    'state_transition': [
+                        [1, 1, 0, 0, 0, 0],
+                        [0, 1, 0, 0, 0, 0],
+                        [0, 0, 1, 0, 0, 0],
+                        [0, 0, 0, 1, 1, 0],
+                        [0, 0, 0, 0, 1, 0],
+                        [0, 0, 0, 0, 0, 1],
+                    ],
+                    'process_noise': [
+                        [1, 0, 0, 0, 0, 0],
+                        [0, 1, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0],
+                        [0, 0, 1, 0, 0, 0],
+                        [0, 0, 0, 1, 0, 0],
+                        [0, 0, 0, 0, 0, 0],
+                    ],
+                    'observation_model': [[1, 0, 0, 0, 0, 0]],
+                    'observation_noise': 0.04,
+                },
                 "random",
+                364,
+                12,
+                {
+                    'model_name': 'spline',
+                    'state_transition': [[2, -1], [1, 0]],
+                    'process_noise': [[1, 0], [0, 0]],
+                    'observation_model': [[1, 0]],
+                    'observation_noise': 0.1,
+                },
             ],
-            [0.1, 0.1, 0.1, 0.1, 0.5],
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1],
         )[0]
+        if params in [364] and method not in ['deep']:
+            params = 7
         if params == "random":
             st, procnois, obsmod, obsnois = random_state_space()
-            st = st.tolist()
-            procnois = procnois.tolist()
-            obsmod = obsmod.tolist()
-        else:
-            st, procnois, obsmod, obsnois = params
-        return {
-            "state_transition": st,
-            "process_noise": procnois,
-            "observation_model": obsmod,
-            "observation_noise": obsnois,
-        }
+            params = {
+                'model_name': 'randomly generated',
+                'state_transition': st.tolist(),
+                'process_noise': procnois.tolist(),
+                'observation_model': obsmod.tolist(),
+                'observation_noise': obsnois,
+            }
+        elif isinstance(params, int):
+            state_transition = np.zeros((params + 1, params + 1))
+            state_transition[0, 0] = 1
+            state_transition[1, 1:-1] = [-1.0] * (params - 1)
+            state_transition[2:, 1:-1] = np.eye(params - 1)
+            observation_model = [[1, 1] + [0] * (params - 1)]
+            level_noise = 0.2 / random.choice([1, 5, 10])
+            season_noise = 1e-3
+            process_noise_cov = (
+                np.diag([level_noise, season_noise] + [0] * (params - 1)) ** 2
+            )
+            params = {
+                'model_name': f'local linear hidden state with seasonal {params}',
+                'state_transition': state_transition.tolist(),
+                'process_noise': process_noise_cov.tolist(),
+                'observation_model': observation_model,
+                'observation_noise': 0.04,
+            }
+        params['em_iter'] = em_iter
+        return params
 
     def get_params(self):
         """Return dict of current parameters."""

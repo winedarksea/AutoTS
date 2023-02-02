@@ -5,6 +5,7 @@ Created on Tue Sep 13 19:45:57 2022
 @author: Colin
 with assistance from @crgillespie22
 """
+import json
 from operator import itemgetter
 from itertools import groupby
 import random
@@ -12,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 # using transformer version of Anomaly/Holiday to use a lower level import than evaluator
-from autots.tools.seasonal import create_seasonality_feature
+from autots.tools.seasonal import create_seasonality_feature, seasonal_int
 from autots.tools.transform import (
     GeneralTransformer,
     RandomTransform,
@@ -103,7 +104,9 @@ class Cassandra(ModelObject):
         preprocessing_transformation: dict = None,  # filters by default only
         scaling: str = "BaseScaler",  # pulled out from transformation as a scaler is not optional, maybe allow a list
         past_impacts_intervention: str = None,  # 'remove', 'plot_only', 'regressor'
-        seasonalities: dict = None,  # interactions added if fourier and order matches
+        seasonalities: dict = [
+            'common_fourier'
+        ],  # interactions added if fourier and order matches
         ar_lags: list = None,
         ar_interaction_seasonality: dict = None,  # equal or less than number of ar lags
         anomaly_detector_params: dict = None,  # apply before any preprocessing (as has own)
@@ -123,7 +126,7 @@ class Cassandra(ModelObject):
         # trend_anomaly_intervention: str = None,
         trend_transformation: dict = {},
         trend_model: dict = {
-            'Model': 'MetricMotif',
+            'Model': 'LastValueNaive',
             'ModelParameters': {},
         },  # have one or two in built, then redirect to any AutoTS model for other choices
         trend_phi: float = None,
@@ -322,7 +325,7 @@ class Cassandra(ModelObject):
             self.holiday_detector = HolidayTransformer(**self.holiday_detector_params)
             self.holiday_detector.fit(self.df)
             self.holidays = self.holiday_detector.dates_to_holidays(
-                df.index, style='series_flag'
+                self.df.index, style='series_flag'
             )
             self.holiday_count = np.count_nonzero(self.holidays)
             if self.holiday_detector_params["remove_excess_anomalies"]:
@@ -430,18 +433,21 @@ class Cassandra(ModelObject):
                 np.count_nonzero((df - df.shift(1)).clip(upper=0))[:-1]
         if self.seasonalities is not None:
             s_list = []
-            for seasonality in self.seasonalities:
-                s_list.append(
-                    create_seasonality_feature(
-                        self.df.index,
-                        self.t_train,
-                        seasonality,
-                        history_days=self.history_days,
+            try:
+                for seasonality in self.seasonalities:
+                    s_list.append(
+                        create_seasonality_feature(
+                            self.df.index,
+                            self.t_train,
+                            seasonality,
+                            history_days=self.history_days,
+                        )
                     )
-                )
-                # INTERACTIONS NOT IMPLEMENTED
-                # ORDER SPECIFICATION NOT IMPLEMENTED
-            s_df = pd.concat(s_list, axis=1)
+                    # INTERACTIONS NOT IMPLEMENTED
+                    # ORDER SPECIFICATION NOT IMPLEMENTED
+                s_df = pd.concat(s_list, axis=1)
+            except Exception as e:
+                raise ValueError(f"seasonality {seasonality} creation error") from e
             s_df.index = self.df.index
             x_list.append(s_df)
         # These features are to prevent overfitting and standin for unobserved components here
@@ -485,6 +491,9 @@ class Cassandra(ModelObject):
                 )
             else:
                 self.regressor_transformer = GeneralTransformer(**{})
+                self.future_regressor_train = future_regressor.fillna(
+                    method='ffill'
+                ).fillna(0)
             x_list.append(self.future_regressor_train.reindex(self.df.index))
         if flag_regressors is not None and self.regressors_used:
             self.flag_regressor_train = clean_regressor(
@@ -525,7 +534,8 @@ class Cassandra(ModelObject):
         corr = np.corrcoef(x_array, rowvar=0)
         nearz = x_array.columns[np.isnan(corr).all(axis=1)]
         if len(nearz) > 0:
-            print(f"Dropping zero variance feature columns {nearz}")
+            if self.verbose > 1:
+                print(f"Dropping zero variance feature columns {nearz}")
             x_array = x_array.drop(columns=nearz)
         # remove colinear features
         # NOTE THESE REMOVALS REMOVE THE FIRST OF PAIR COLUMN FIRST
@@ -537,12 +547,14 @@ class Cassandra(ModelObject):
                 np.min(corr * np.tri(corr.shape[0]), axis=0) > self.max_colinearity
             ]
             if len(corel) > 0:
-                print(f"Dropping colinear feature columns {corel}")
+                if self.verbose > 1:
+                    print(f"Dropping colinear feature columns {corel}")
                 x_array = x_array.drop(columns=corel)
         if self.max_multicolinearity is not None:
             colin = x_array.columns[w < self.max_multicolinearity]
             if len(colin) > 0:
-                print(f"Dropping multi-colinear feature columns {colin}")
+                if self.verbose > 1:
+                    print(f"Dropping multi-colinear feature columns {colin}")
                 x_array = x_array.drop(columns=colin)
 
         # things we want modeled but want to discard from evaluation (standins)
@@ -798,9 +810,14 @@ class Cassandra(ModelObject):
             # forecast anomaly scores as time series
             len_inter = len(dates.intersection(self.anomaly_detector.scores.index))
             if len_inter < len(dates):
+                amodel_params = self.anomaly_intervention['ModelParameters']
+                # no regressors passed here
+                if "regression_type" in amodel_params:
+                    amodel_params = json.loads(amodel_params)
+                    amodel_params['regression_type'] = None
                 new_scores = model_forecast(
                     model_name=self.anomaly_intervention['Model'],
-                    model_param_dict=self.anomaly_intervention['ModelParameters'],
+                    model_param_dict=amodel_params,
                     model_transform_dict=self.anomaly_intervention[
                         'TransformationParameters'
                     ],
@@ -833,7 +850,6 @@ class Cassandra(ModelObject):
             else:
                 trs_df = history_df.copy()
             if self.multivariate_feature == "feature_agglomeration":
-
                 x_list.append(
                     pd.DataFrame(
                         self.agglomerator.transform(trs_df)[lag_1_indx],
@@ -904,6 +920,7 @@ class Cassandra(ModelObject):
         x_array = pd.concat(x_list, axis=1)
         self.predict_x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
+            print(x_array)
             raise ValueError("nan values in predict_x_array")
 
         # RUN LINEAR MODEL
@@ -1171,7 +1188,10 @@ class Cassandra(ModelObject):
             and self.future_regressor_train is not None
             and forecast_length is not None
         ):
-            print("future_regressor not provided, using forecasts of historical")
+            if self.verbose >= 0:
+                print(
+                    "future_regressor not provided to Cassandra, using forecasts of historical"
+                )
             future_regressor = model_forecast(
                 model_name=self.trend_model['Model']
                 if regressor_forecast_model is None
@@ -1279,18 +1299,21 @@ class Cassandra(ModelObject):
             if (
                 self.future_regressor_train is None
                 and self.flag_regressor_train is not None
+                and self.regressors_used
             ):
                 comp_regr_train = self.flag_regressor_train
                 comp_regr = flag_regressors
             elif (
                 self.future_regressor_train is not None
                 and self.flag_regressor_train is None
+                and self.regressors_used
             ):
                 comp_regr_train = self.future_regressor_train
                 comp_regr = future_regressor
             elif (
                 self.future_regressor_train is not None
                 and self.flag_regressor_train is not None
+                and self.regressors_used
             ):
                 comp_regr_train = pd.concat(
                     [self.future_regressor_train, self.flag_regressor_train], axis=1
@@ -1622,8 +1645,7 @@ class Cassandra(ModelObject):
     def compare_actual_components(self):
         return NotImplemented
 
-    @staticmethod
-    def get_new_params(method='fast'):
+    def get_new_params(self, method='fast'):
         # have fast option that avoids any of the loop approaches
         scaling = random.choices(['BaseScaler', 'other'], [0.8, 0.2])[0]
         if scaling == "other":
@@ -1657,15 +1679,107 @@ class Cassandra(ModelObject):
                 ]  # placeholder, probably
         else:
             anomaly_detector_params = None
-        model_str = random.choices(
-            ['AverageValueNaive', 'MetricMotif', "LastValueNaive", 'SeasonalityMotif'],
-            [0.2, 0.5, 0.1, 0.2],
-            k=1,
+
+        # random or pretested defaults
+        trend_base = random.choices(
+            ['pb1', 'pb2', 'pb3', 'random'], [0.1, 0.1, 0.0, 0.8]
         )[0]
-        trend_model = {'Model': model_str}
-        trend_model['ModelParameters'] = ModelMonster(model_str).get_new_params(
-            method=method
-        )
+        if trend_base == "random":
+            model_str = random.choices(
+                [
+                    'AverageValueNaive',
+                    'MetricMotif',
+                    "LastValueNaive",
+                    'SeasonalityMotif',
+                    'WindowRegression',
+                    'ARDL',
+                    'VAR',
+                    'UnivariateMotif',
+                    'UnobservedComponents',
+                    "KalmanStateSpace",
+                ],
+                [0.05, 0.05, 0.1, 0.05, 0.05, 0.15, 0.05, 0.05, 0.05, 0.05],
+                k=1,
+            )[0]
+            trend_model = {'Model': model_str}
+            trend_model['ModelParameters'] = ModelMonster(model_str).get_new_params(
+                method=method
+            )
+            trend_transformation = RandomTransform(
+                transformer_list="fast",
+                transformer_max_depth=3,  # probably want some more usable defaults first as many random are senseless
+            )
+        elif trend_base == 'pb1':
+            trend_model = {'Model': 'ARDL'}
+            trend_model['ModelParameters'] = {
+                "lags": 1,
+                "trend": "n",
+                "order": 0,
+                "causal": False,
+                "regression_type": "simple",
+            }
+            trend_transformation = {
+                "fillna": "nearest",
+                "transformations": {"0": "StandardScaler", "1": "AnomalyRemoval"},
+                "transformation_params": {
+                    "0": {},
+                    "1": {
+                        "method": "IQR",
+                        "transform_dict": {
+                            "fillna": None,
+                            "transformations": {"0": "ClipOutliers"},
+                            "transformation_params": {
+                                "0": {"method": "clip", "std_threshold": 6}
+                            },
+                        },
+                        "method_params": {
+                            "iqr_threshold": 2.5,
+                            "iqr_quantiles": [0.25, 0.75],
+                        },
+                        "fillna": "ffill",
+                    },
+                },
+            }
+        elif trend_base == 'pb2':
+            trend_model = {'Model': 'WindowRegression'}
+            trend_model['ModelParameters'] = {
+                "window_size": 12,
+                "input_dim": "univariate",
+                "output_dim": "1step",
+                "normalize_window": False,
+                "max_windows": 8000,
+                "regression_type": None,
+                "regression_model": {
+                    "model": "ExtraTrees",
+                    "model_params": {
+                        "n_estimators": 100,
+                        "min_samples_leaf": 1,
+                        "max_depth": 20,
+                    },
+                },
+            }
+            trend_transformation = {
+                "fillna": "ffill",
+                "transformations": {"0": "AnomalyRemoval", "1": "RobustScaler"},
+                "transformation_params": {
+                    "0": {
+                        "method": "IQR",
+                        "transform_dict": {
+                            "fillna": None,
+                            "transformations": {"0": "ClipOutliers"},
+                            "transformation_params": {
+                                "0": {"method": "clip", "std_threshold": 6}
+                            },
+                        },
+                        "method_params": {
+                            "iqr_threshold": 2.5,
+                            "iqr_quantiles": [0.25, 0.75],
+                        },
+                        "fillna": "ffill",
+                    },
+                    "1": {},
+                },
+            }
 
         trend_anomaly_intervention = random.choices([None, 'detect_only'], [0.5, 0.5])[
             0
@@ -1706,8 +1820,8 @@ class Cassandra(ModelObject):
         else:
             regressors_used = random.choices([True, False], [0.5, 0.5])[0]
         ar_lags = random.choices(
-            [None, [1], [1, 7], [7]],
-            [0.9, 0.025, 0.025, 0.05],
+            [None, [1], [1, 7], [7], [seasonal_int(small=True)]],
+            [0.9, 0.025, 0.025, 0.05, 0.05],
         )[0]
         ar_interaction_seasonality = None
         if ar_lags is not None:
@@ -1760,10 +1874,7 @@ class Cassandra(ModelObject):
             )[0],
             "trend_anomaly_detector_params": trend_anomaly_detector_params,
             # "trend_anomaly_intervention": trend_anomaly_intervention,
-            "trend_transformation": RandomTransform(
-                transformer_list="fast",
-                transformer_max_depth=3,  # probably want some more usable defaults first as many random are senseless
-            ),
+            "trend_transformation": trend_transformation,
             "trend_model": trend_model,
             "trend_phi": random.choices([None, 0.98], [0.9, 0.1])[0],
         }
@@ -1820,14 +1931,22 @@ class Cassandra(ModelObject):
         plot_list = []
         if prediction is not None:
             plot_list.append(prediction.forecast[series].rename("forecast"))
-            plot_list.append(self.predicted_trend[series].rename("trend"))
+            plt_idx = prediction.forecast.index
+        else:
+            plt_idx = None
+        plot_list.append(self.predicted_trend[series].rename("trend"))
         if self.impacts is not None:
             plot_list.append((self.impacts[series].rename("impact %") - 1.0) * 100)
-        plot_list.append(
-            self.process_components(to_origin_space=to_origin_space)[series].loc[
-                prediction.forecast.index
-            ]
-        )
+        if plt_idx is None:
+            plot_list.append(
+                self.process_components(to_origin_space=to_origin_space)[series]
+            )
+        else:
+            plot_list.append(
+                self.process_components(to_origin_space=to_origin_space)[series].loc[
+                    plt_idx
+                ]
+            )
         plot_df = pd.concat(plot_list, axis=1)
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
@@ -2291,7 +2410,7 @@ if False:
     future_impacts = pd.DataFrame(0, index=df_test.index, columns=df_test.columns)
     future_impacts.iloc[0:10, 0] = (np.linspace(1, 10)[0:10] + 10) / 100
 
-    c_params = Cassandra.get_new_params()
+    c_params = Cassandra().get_new_params()
 
     mod = Cassandra(
         n_jobs=1,

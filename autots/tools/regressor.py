@@ -200,6 +200,10 @@ def create_regressor(
     # columns all as strings
     regr_train.columns = [str(xc) for xc in regr_train.columns]
     regr_fcst.columns = [str(xc) for xc in regr_fcst.columns]
+    # drop duplicate columns (which come from holidays)
+    regr_train = regr_train.loc[:, ~regr_train.columns.duplicated()]
+    regr_fcst = regr_fcst.loc[:, ~regr_fcst.columns.duplicated()]
+    regr_fcst = regr_fcst.reindex(columns=regr_train.columns, fill_value=0)
     return regr_train, regr_fcst
 
 

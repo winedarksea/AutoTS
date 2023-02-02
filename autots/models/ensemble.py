@@ -744,18 +744,36 @@ def _generate_bestn_dict(
     }
 
 
+def mlens_helper(models, models_source="bestn"):
+    from autots.models.mlensemble import MLEnsemble
+
+    mlens = MLEnsemble().get_new_params()
+    mlens['models'] = models.to_dict(orient='records')
+    mlens['models_source'] = models_source
+    return pd.DataFrame(
+        {
+            'Model': 'MLEnsemble',
+            'ModelParameters': json.dumps(mlens),
+            'TransformationParameters': '{}',
+            'Ensemble': 0,
+        },
+        index=[0],
+    )
+
+
 def EnsembleTemplateGenerator(
     initial_results,
     forecast_length: int = 14,
     ensemble: str = "simple",
     score_per_series=None,
+    use_validation=False,
 ):
     """Generate class 1 (non-horizontal) ensemble templates given a table of results."""
     ensemble_templates = pd.DataFrame()
     ens_temp = initial_results.model_results.drop_duplicates(subset='ID')
     # filter out horizontal ensembles
     ens_temp = ens_temp[ens_temp['Ensemble'] <= 1]
-    if 'simple' in ensemble:
+    if 'simple' in ensemble or "mlensemble" in ensemble:
         # best 3, all can be of same model type
         best3nonunique = ens_temp.nsmallest(3, columns=['Score']).set_index("ID")[
             ['Model', 'ModelParameters', 'TransformationParameters']
@@ -769,6 +787,15 @@ def EnsembleTemplateGenerator(
                 index=[0],
             )
             ensemble_templates = pd.concat([ensemble_templates, best3nu_params], axis=0)
+        if "mlensemble" in ensemble:
+            ensemble_templates = pd.concat(
+                [
+                    ensemble_templates,
+                    mlens_helper(best3nonunique, models_source='best_score'),
+                ],
+                axis=0,
+                ignore_index=True,
+            )
         # Best 5 and Median
         best5nonunique = ens_temp.nsmallest(5, columns=['Score']).set_index("ID")[
             ['Model', 'ModelParameters', 'TransformationParameters']
@@ -782,9 +809,10 @@ def EnsembleTemplateGenerator(
             ),
             index=[0],
         )
-        ensemble_templates = pd.concat(
-            [ensemble_templates, best5_params], axis=0, ignore_index=True
-        )
+        if 'simple' in ensemble:
+            ensemble_templates = pd.concat(
+                [ensemble_templates, best5_params], axis=0, ignore_index=True
+            )
 
         # best 3 and 5, by SMAPE, RMSE, SPL, SMADE
         bestsmape = ens_temp.nsmallest(1, columns=['smape_weighted'])
@@ -806,6 +834,15 @@ def EnsembleTemplateGenerator(
                 index=[0],
             )
             ensemble_templates = pd.concat([ensemble_templates, best3m_params], axis=0)
+        if "mlensemble" in ensemble:
+            ensemble_templates = pd.concat(
+                [
+                    ensemble_templates,
+                    mlens_helper(best3metric, models_source='mixed_metric'),
+                ],
+                axis=0,
+                ignore_index=True,
+            )
         best5m_params = pd.DataFrame(
             _generate_bestn_dict(
                 best5metric,
@@ -839,7 +876,7 @@ def EnsembleTemplateGenerator(
             ensemble_templates = pd.concat(
                 [ensemble_templates, best3u_params], axis=0, ignore_index=True
             )
-        if best5unique.shape[0] == 5:
+        if best5unique.shape[0] == 5 and 'simple' in ensemble:
             best5u_params = pd.DataFrame(
                 _generate_bestn_dict(
                     best5unique,
@@ -871,7 +908,7 @@ def EnsembleTemplateGenerator(
             [ensemble_templates, distance_params2], axis=0, ignore_index=True
         )
     # in previous versions per_series metrics were only captured if 'horizontal' was passed
-    if 'simple' in ensemble:
+    if 'simple' in ensemble or "mlensemble" in ensemble:
         if score_per_series is None:
             per_series = initial_results.per_series_mae
         else:
@@ -899,6 +936,15 @@ def EnsembleTemplateGenerator(
             ensemble_templates = pd.concat(
                 [ensemble_templates, best3u_params], axis=0, ignore_index=True
             )
+        if "mlensemble" in ensemble:
+            ensemble_templates = pd.concat(
+                [
+                    ensemble_templates,
+                    mlens_helper(bestn, models_source='bestn_horizontal'),
+                ],
+                axis=0,
+                ignore_index=True,
+            )
         # cluster and then make best model per cluster
         if per_series.shape[1] > 4:
             try:
@@ -923,20 +969,32 @@ def EnsembleTemplateGenerator(
                     ]
                     n_models = bestn.shape[0]
                     if n_models == n:
-                        best3u_params = pd.DataFrame(
-                            _generate_bestn_dict(
-                                bestn,
-                                model_name='BestN',
-                                model_metric=f"cluster_{cluster}",
-                                model_weights=chosen_ones.to_dict(),
-                            ),
-                            index=[0],
-                        )
-                        ensemble_templates = pd.concat(
-                            [ensemble_templates, best3u_params],
-                            axis=0,
-                            ignore_index=True,
-                        )
+                        if "mlensemble" in ensemble:
+                            ensemble_templates = pd.concat(
+                                [
+                                    ensemble_templates,
+                                    mlens_helper(
+                                        bestn, models_source=f"cluster_{cluster}"
+                                    ),
+                                ],
+                                axis=0,
+                                ignore_index=True,
+                            )
+                        if 'simple' in ensemble:
+                            best3u_params = pd.DataFrame(
+                                _generate_bestn_dict(
+                                    bestn,
+                                    model_name='BestN',
+                                    model_metric=f"cluster_{cluster}",
+                                    model_weights=chosen_ones.to_dict(),
+                                ),
+                                index=[0],
+                            )
+                            ensemble_templates = pd.concat(
+                                [ensemble_templates, best3u_params],
+                                axis=0,
+                                ignore_index=True,
+                            )
             except Exception as e:
                 print(f"cluster-based simple ensemble failed with {repr(e)}")
 
@@ -975,6 +1033,12 @@ def EnsembleTemplateGenerator(
             )
             .set_index("ID")[['Model', 'ModelParameters', 'TransformationParameters']]
         )
+        if "mlensemble" in ensemble:
+            ensemble_templates = pd.concat(
+                [ensemble_templates, mlens_helper(best3, models_source='horizontal')],
+                axis=0,
+                ignore_index=True,
+            )
         best3_params = pd.DataFrame(
             _generate_bestn_dict(best3, model_name='BestN', model_metric="horizontal"),
             index=[0],

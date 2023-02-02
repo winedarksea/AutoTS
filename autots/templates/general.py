@@ -2,22 +2,10 @@
 import pandas as pd
 
 general_template_dict = {
-    "0": {
-        "Model": "ARIMA",
-        "ModelParameters": "{\"p\": 7, \"d\": 1, \"q\": 4, \"regression_type\": null}",
-        "TransformationParameters": "{\"fillna\": \"rolling_mean_24\", \"transformations\": {\"0\": \"ClipOutliers\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3.5, \"fillna\": null}}}",
-        "Ensemble": 0,
-    },
     "1": {
         "Model": "ARIMA",
-        "ModelParameters": '{"p": 7, "d": 0, "q": 1, "regression_type": null}',
-        "TransformationParameters": '{"fillna": "ffill_mean_biased", "transformations": {"0": "bkfilter"}, "transformation_params": {"0": {}}}',
-        "Ensemble": 0,
-    },
-    "2": {
-        "Model": "ARIMA",
-        "ModelParameters": "{\"p\": 12, \"d\": 1, \"q\": 7, \"regression_type\": \"Holiday\"}",
-        "TransformationParameters": "{\"fillna\": \"mean\", \"transformations\": {\"0\": \"ClipOutliers\"}, \"transformation_params\": {\"0\": {\"method\": \"clip\", \"std_threshold\": 3, \"fillna\": null}}}",
+        "ModelParameters": '{"p": 4, "d": 0, "q": 12, "regression_type": null}',
+        "TransformationParameters": '{"fillna": "cubic", "transformations": {"0": "bkfilter"}, "transformation_params": {"0": {}}}',
         "Ensemble": 0,
     },
     "3": {

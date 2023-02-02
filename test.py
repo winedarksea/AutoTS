@@ -58,6 +58,7 @@ frequency = "infer"
 drop_most_recent = 0
 generations = 1
 num_validations = 0  # "auto"
+generation_timeout = 30
 initial_template = "Random"  # "General+Random"
 if use_template:
     initial_training = not os.path.exists(template_filename)
@@ -121,6 +122,7 @@ model = AutoTS(
     ensemble=ensemble,
     constraint=constraint,
     max_generations=generations,
+    generation_timeout=generation_timeout,
     num_validations=num_validations,
     validation_method=validation_method,
     model_list=model_list,
@@ -240,6 +242,9 @@ if graph:
     plt.show()
 
     if model.best_model_ensemble == 2:
+        model.plot_horizontal_model_count()
+        plt.show()
+
         model.plot_horizontal_per_generation()
         plt.show()
 

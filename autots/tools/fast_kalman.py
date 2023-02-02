@@ -1,6 +1,12 @@
 # encoding: utf-8
 """From SIMD KALMAN, (c) 2017 Otto Seiskari (MIT License)
 
+Some other resources that I have found useful:
+    https://kevinkotze.github.io/ts-4-state-space/
+    https://www.statsmodels.org/dev/examples/notebooks/generated/statespace_dfm_coincident.html
+    an Introduction to State Space Time Series Analysis, Commandeur and Koopman, chp 8
+    Forecasting, structural time series models, and the Kalman Filter, Andrew Harvey
+
 Following the notation in [1]_, the Kalman filter framework consists of
 a *dynamic model* (state transition model)
 
@@ -112,21 +118,30 @@ from functools import wraps
 
 def random_state_space():
     """Return randomly generated statespace models."""
-    n_dims = random.choices([1, 2, 3, 4, 5], [0.1, 0.2, 0.3, 0.4, 0.2])[0]
+    n_dims = random.choices([1, 2, 3, 4, 8], [0.1, 0.2, 0.3, 0.4, 0.3])[0]
     if n_dims == 1:
         st = np.array([[1]])
         obsmod = np.random.randint(1, 3, (1, n_dims))
+        procnois = np.diag(np.random.exponential(0.01, size=(n_dims)).round(3))
     else:
-        st = np.random.choice([0, 1], p=[0.4, 0.6], size=(n_dims, n_dims))
-        obsmod = np.random.choice([0, 1, 2], p=[0.35, 0.6, 0.05], size=(1, n_dims))
-    procnois = np.diag(np.random.exponential(0.25, size=(n_dims)).round(3))
-    obsnois = random.choices([1.0, 10.0, 2.0, 0.5, 0.2], [0.8, 0.05, 0.05, 0.05, 0.05])[
-        0
-    ]
+        st = np.random.choice([0, 1, -1], p=[0.75, 0.2, 0.05], size=(n_dims, n_dims))
+        st[0, 0] = 1
+        st[0, -1] = 0
+        if n_dims == 2:
+            obsmod = np.array([[1, 0]])
+        else:
+            obsmod = np.array([[1, 1] + [0] * (n_dims - 2)])
+        procnois = (
+            np.diag([0.2 / random.choice([1, 5, 10]), 0.001] + [0] * (n_dims - 2)) ** 2
+        ).round(3)
+    obsnois = random.choices(
+        [1.0, 10.0, 2.0, 0.5, 0.2, 0.05, 0.001],
+        [0.8, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05],
+    )[0]
     while (
-        (obsmod.size > 1 and np.all(obsmod == obsmod[0]))
-        or (st.size > 1 and np.all(st == st[0]))
-        or (st.size > 5 and np.isin(st.sum(axis=1), [0, 3]).any())
+        st.size > 1
+        and np.all(st == 1)
+        # or (st.size > 3 and np.isin(st.sum(axis=1), [0]).any())
     ):
         st, procnois, obsmod, obsnois = random_state_space()
     return st, procnois, obsmod, obsnois
@@ -224,7 +239,6 @@ class KalmanFilter(object):
     def __init__(
         self, state_transition, process_noise, observation_model, observation_noise
     ):
-
         state_transition = ensure_matrix(state_transition)
         n_states = state_transition.shape[-2]  # Allow different transitions
 
@@ -766,7 +780,6 @@ class KalmanFilter(object):
     def em(
         self, data, n_iter=5, initial_value=None, initial_covariance=None, verbose=False
     ):
-
         if n_iter <= 0:
             return self
 
@@ -820,7 +833,6 @@ class KalmanFilter(object):
 
 
 def em_initial_state(result, initial_means):
-
     x0 = result.smoothed.states.mean[:, 0, :][..., np.newaxis]
     P0 = result.smoothed.states.cov[:, 0, ...]
     x0_x0 = P0 + douter(x0, x0)
@@ -921,7 +933,6 @@ def _update(
     measurement,
     log_likelihood=False,
 ):
-
     n = prior_mean.shape[1]
     m = observation_model.shape[1]
 
@@ -996,7 +1007,6 @@ def priv_smooth(
     next_smooth_mean,
     next_smooth_covariance,
 ):
-
     n = posterior_mean.shape[1]
 
     assert posterior_covariance.shape[-2:] == (n, n)
@@ -1105,7 +1115,6 @@ def priv_update_with_nan_check(
     measurement,
     log_likelihood=False,
 ):
-
     tup = _update(
         prior_mean,
         prior_covariance,
@@ -1153,3 +1162,32 @@ def ensure_matrix(x, dim=1):
     except Exception:
         x = np.eye(dim) * x
     return x
+
+
+"""
+n_seasons = 7
+state_transition = np.zeros((n_seasons+1, n_seasons+1))
+state_transition[0,0] = 1
+state_transition[1,1:-1] = [-1.0] * (n_seasons-1)
+state_transition[2:,1:-1] = np.eye(n_seasons-1)
+level_noise = 0.05
+observation_noise = 0.2
+season_noise = 1e-3
+
+process_noise_cov = np.diag([level_noise, season_noise] + [0]*(n_seasons-1))**2
+observation_noise_cov = observation_noise**2
+
+kf = KalmanFilter(
+    state_transition,
+    process_noise_cov,
+    [[1, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0,0,0,0,0]],
+    observation_noise_cov)
+data = np.concatenate((
+    np.expand_dims(temp, axis=2), 
+    np.expand_dims(np.repeat(temp[-1:, :], temp.shape[0], axis=0), axis=2)
+), axis=2)
+
+result = kf.predict(data, 12)
+res = pd.DataFrame(result.observations.mean.T[0])
+res.iloc[:, -1].plot()
+"""
