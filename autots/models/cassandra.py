@@ -104,7 +104,9 @@ class Cassandra(ModelObject):
         preprocessing_transformation: dict = None,  # filters by default only
         scaling: str = "BaseScaler",  # pulled out from transformation as a scaler is not optional, maybe allow a list
         past_impacts_intervention: str = None,  # 'remove', 'plot_only', 'regressor'
-        seasonalities: dict = ['common_fourier'],  # interactions added if fourier and order matches
+        seasonalities: dict = [
+            'common_fourier'
+        ],  # interactions added if fourier and order matches
         ar_lags: list = None,
         ar_interaction_seasonality: dict = None,  # equal or less than number of ar lags
         anomaly_detector_params: dict = None,  # apply before any preprocessing (as has own)
@@ -489,7 +491,9 @@ class Cassandra(ModelObject):
                 )
             else:
                 self.regressor_transformer = GeneralTransformer(**{})
-                self.future_regressor_train = future_regressor.fillna(method='ffill').fillna(0)
+                self.future_regressor_train = future_regressor.fillna(
+                    method='ffill'
+                ).fillna(0)
             x_list.append(self.future_regressor_train.reindex(self.df.index))
         if flag_regressors is not None and self.regressors_used:
             self.flag_regressor_train = clean_regressor(
@@ -846,7 +850,6 @@ class Cassandra(ModelObject):
             else:
                 trs_df = history_df.copy()
             if self.multivariate_feature == "feature_agglomeration":
-
                 x_list.append(
                     pd.DataFrame(
                         self.agglomerator.transform(trs_df)[lag_1_indx],
@@ -1186,7 +1189,9 @@ class Cassandra(ModelObject):
             and forecast_length is not None
         ):
             if self.verbose >= 0:
-                print("future_regressor not provided to Cassandra, using forecasts of historical")
+                print(
+                    "future_regressor not provided to Cassandra, using forecasts of historical"
+                )
             future_regressor = model_forecast(
                 model_name=self.trend_model['Model']
                 if regressor_forecast_model is None
@@ -1293,19 +1298,22 @@ class Cassandra(ModelObject):
             # combine regressor types depending on what is given
             if (
                 self.future_regressor_train is None
-                and self.flag_regressor_train is not None and self.regressors_used
+                and self.flag_regressor_train is not None
+                and self.regressors_used
             ):
                 comp_regr_train = self.flag_regressor_train
                 comp_regr = flag_regressors
             elif (
                 self.future_regressor_train is not None
-                and self.flag_regressor_train is None and self.regressors_used
+                and self.flag_regressor_train is None
+                and self.regressors_used
             ):
                 comp_regr_train = self.future_regressor_train
                 comp_regr = future_regressor
             elif (
                 self.future_regressor_train is not None
-                and self.flag_regressor_train is not None and self.regressors_used
+                and self.flag_regressor_train is not None
+                and self.regressors_used
             ):
                 comp_regr_train = pd.concat(
                     [self.future_regressor_train, self.flag_regressor_train], axis=1
@@ -1673,10 +1681,23 @@ class Cassandra(ModelObject):
             anomaly_detector_params = None
 
         # random or pretested defaults
-        trend_base = random.choices(['pb1', 'pb2', 'pb3', 'random'], [0.1, 0.1, 0.0, 0.8])[0]
+        trend_base = random.choices(
+            ['pb1', 'pb2', 'pb3', 'random'], [0.1, 0.1, 0.0, 0.8]
+        )[0]
         if trend_base == "random":
             model_str = random.choices(
-                ['AverageValueNaive', 'MetricMotif', "LastValueNaive", 'SeasonalityMotif', 'WindowRegression', 'ARDL', 'VAR', 'UnivariateMotif', 'UnobservedComponents', "KalmanStateSpace"],
+                [
+                    'AverageValueNaive',
+                    'MetricMotif',
+                    "LastValueNaive",
+                    'SeasonalityMotif',
+                    'WindowRegression',
+                    'ARDL',
+                    'VAR',
+                    'UnivariateMotif',
+                    'UnobservedComponents',
+                    "KalmanStateSpace",
+                ],
                 [0.05, 0.05, 0.1, 0.05, 0.05, 0.15, 0.05, 0.05, 0.05, 0.05],
                 k=1,
             )[0]
@@ -1690,28 +1711,74 @@ class Cassandra(ModelObject):
             )
         elif trend_base == 'pb1':
             trend_model = {'Model': 'ARDL'}
-            trend_model['ModelParameters'] = {"lags": 1, "trend": "n", "order": 0, "causal": False, "regression_type": "simple"}
+            trend_model['ModelParameters'] = {
+                "lags": 1,
+                "trend": "n",
+                "order": 0,
+                "causal": False,
+                "regression_type": "simple",
+            }
             trend_transformation = {
                 "fillna": "nearest",
                 "transformations": {"0": "StandardScaler", "1": "AnomalyRemoval"},
                 "transformation_params": {
                     "0": {},
                     "1": {
-                        "method": "IQR", "transform_dict": {
-                            "fillna": None, "transformations": {"0": "ClipOutliers"},
-                            "transformation_params": {"0": {"method": "clip", "std_threshold": 6}}}, "method_params": {"iqr_threshold": 2.5, "iqr_quantiles": [0.25, 0.75]}, "fillna": "ffill"}
-                }
+                        "method": "IQR",
+                        "transform_dict": {
+                            "fillna": None,
+                            "transformations": {"0": "ClipOutliers"},
+                            "transformation_params": {
+                                "0": {"method": "clip", "std_threshold": 6}
+                            },
+                        },
+                        "method_params": {
+                            "iqr_threshold": 2.5,
+                            "iqr_quantiles": [0.25, 0.75],
+                        },
+                        "fillna": "ffill",
+                    },
+                },
             }
         elif trend_base == 'pb2':
             trend_model = {'Model': 'WindowRegression'}
-            trend_model['ModelParameters'] = {"window_size": 12, "input_dim": "univariate", "output_dim": "1step", "normalize_window": False, "max_windows": 8000, "regression_type": None, "regression_model": {"model": "ExtraTrees", "model_params": {"n_estimators": 100, "min_samples_leaf": 1, "max_depth": 20}}}
+            trend_model['ModelParameters'] = {
+                "window_size": 12,
+                "input_dim": "univariate",
+                "output_dim": "1step",
+                "normalize_window": False,
+                "max_windows": 8000,
+                "regression_type": None,
+                "regression_model": {
+                    "model": "ExtraTrees",
+                    "model_params": {
+                        "n_estimators": 100,
+                        "min_samples_leaf": 1,
+                        "max_depth": 20,
+                    },
+                },
+            }
             trend_transformation = {
                 "fillna": "ffill",
                 "transformations": {"0": "AnomalyRemoval", "1": "RobustScaler"},
                 "transformation_params": {
-                    "0": {"method": "IQR", "transform_dict": {"fillna": None, "transformations": {"0": "ClipOutliers"}, "transformation_params": {"0": {"method": "clip", "std_threshold": 6}}}, "method_params": {"iqr_threshold": 2.5, "iqr_quantiles": [0.25, 0.75]}, "fillna": "ffill"},
+                    "0": {
+                        "method": "IQR",
+                        "transform_dict": {
+                            "fillna": None,
+                            "transformations": {"0": "ClipOutliers"},
+                            "transformation_params": {
+                                "0": {"method": "clip", "std_threshold": 6}
+                            },
+                        },
+                        "method_params": {
+                            "iqr_threshold": 2.5,
+                            "iqr_quantiles": [0.25, 0.75],
+                        },
+                        "fillna": "ffill",
+                    },
                     "1": {},
-                }
+                },
             }
 
         trend_anomaly_intervention = random.choices([None, 'detect_only'], [0.5, 0.5])[
@@ -1871,7 +1938,9 @@ class Cassandra(ModelObject):
         if self.impacts is not None:
             plot_list.append((self.impacts[series].rename("impact %") - 1.0) * 100)
         if plt_idx is None:
-            plot_list.append(self.process_components(to_origin_space=to_origin_space)[series])
+            plot_list.append(
+                self.process_components(to_origin_space=to_origin_space)[series]
+            )
         else:
             plot_list.append(
                 self.process_components(to_origin_space=to_origin_space)[series].loc[

@@ -241,9 +241,11 @@ def date_part(
         else:
             t = (DTindex - pd.Timestamp("2030-01-01")).days
             seasonal_list.append(fourier_series(t, p=1461, n=10))
-        date_part_df = pd.DataFrame(np.concatenate(seasonal_list, axis=1)).rename(
-            columns=lambda x: "seasonalitycommonfourier_" + str(x)
-        ).round(6)
+        date_part_df = (
+            pd.DataFrame(np.concatenate(seasonal_list, axis=1))
+            .rename(columns=lambda x: "seasonalitycommonfourier_" + str(x))
+            .round(6)
+        )
         if method == "common_fourier_rw":
             date_part_df['epoch'] = (DTindex.to_julian_date() ** 0.65).astype(int)
     else:
@@ -351,7 +353,9 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
     elif seasonality in date_part_methods:
         return date_part(DTindex, method=seasonality, set_index=False)
     else:
-        return ValueError(f"Seasonality `{seasonality}` not recognized. Must be int, float, or a select type string such as 'dayofweek'")
+        return ValueError(
+            f"Seasonality `{seasonality}` not recognized. Must be int, float, or a select type string such as 'dayofweek'"
+        )
 
 
 def seasonal_window_match(

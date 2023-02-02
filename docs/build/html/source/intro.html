@@ -1,19 +1,17 @@
 
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html lang="en">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 
-    <title>Intro &#8212; AutoTS 0.5.3 documentation</title>
-    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
-    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
-    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-    <script src="../_static/jquery.js"></script>
-    <script src="../_static/underscore.js"></script>
+    <title>Intro &#8212; AutoTS 0.5.4 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
     <script src="../_static/doctools.js"></script>
-    <script src="../_static/language_data.js"></script>
-    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <script src="../_static/sphinx_highlight.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Tutorial" href="tutorial.html" />
@@ -35,10 +33,10 @@
           <div class="body" role="main">
             
   <section id="intro">
-<h1>Intro<a class="headerlink" href="#intro" title="Permalink to this headline">¶</a></h1>
+<h1>Intro<a class="headerlink" href="#intro" title="Permalink to this heading">¶</a></h1>
 </section>
 <section id="autots">
-<h1>AutoTS<a class="headerlink" href="#autots" title="Permalink to this headline">¶</a></h1>
+<h1>AutoTS<a class="headerlink" href="#autots" title="Permalink to this heading">¶</a></h1>
 <p><span class="raw-html-m2r"><img src="/img/autots_1280.png" width="400" height="184" title="AutoTS Logo"></span></p>
 <p>AutoTS is a time series package for Python designed for rapidly deploying high-accuracy forecasts at scale.</p>
 <p>There are dozens of forecasting models usable in the <code class="docutils literal notranslate"><span class="pre">sklearn</span></code> style of <code class="docutils literal notranslate"><span class="pre">.fit()</span></code> and <code class="docutils literal notranslate"><span class="pre">.predict()</span></code>.
@@ -52,7 +50,7 @@ Many models also support passing in user-defined exogenous regressors.</p>
 <p>Horizontal and mosaic style ensembles are the flagship ensembling types, allowing each series to receive the most accurate possible models while still maintaining scalability.</p>
 <p>A combination of metrics and cross-validation options, the ability to apply subsets and weighting, regressor generation tools, simulation forecasting mode, event risk forecasting, live datasets, template import and export, plotting, and a collection of data shaping parameters round out the available feature set.</p>
 <section id="table-of-contents">
-<h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Permalink to this headline">¶</a></h2>
+<h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#installation">Installation</a></p></li>
 <li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS#basic-use">Basic Use</a></p></li>
@@ -61,15 +59,15 @@ Many models also support passing in user-defined exogenous regressors.</p>
 <li><p><a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/production_example.py">Production Example</a></p></li>
 </ul>
 </section>
-<section id="installation-1">
-<h2>Installation<a class="headerlink" href="#installation-1" title="Permalink to this headline">¶</a></h2>
+<section id="id1">
+<h2>Installation<a class="headerlink" href="#id1" title="Permalink to this heading">¶</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">autots</span>
 </pre></div>
 </div>
 <p>This includes dependencies for basic models, but <a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/extended_tutorial.md#installation-and-dependency-versioning">additonal packages</a> are required for some models and methods.</p>
 </section>
-<section id="basic-use-1">
-<h2>Basic Use<a class="headerlink" href="#basic-use-1" title="Permalink to this headline">¶</a></h2>
+<section id="id2">
+<h2>Basic Use<a class="headerlink" href="#id2" title="Permalink to this heading">¶</a></h2>
 <p>Input data for AutoTS is expected to come in either a <em>long</em> or a <em>wide</em> format:</p>
 <ul class="simple">
 <li><p>The <em>wide</em> format is a <code class="docutils literal notranslate"><span class="pre">pandas.DataFrame</span></code> with a <code class="docutils literal notranslate"><span class="pre">pandas.DatetimeIndex</span></code> and each column a distinct series.</p></li>
@@ -132,8 +130,8 @@ Many models also support passing in user-defined exogenous regressors.</p>
 <p>Check out <a class="reference external" href="https://winedarksea.github.io/AutoTS/build/html/source/tutorial.html">extended_tutorial.md</a> for a more detailed guide to features.</p>
 <p>Also take a look at the <a class="reference external" href="https://github.com/winedarksea/AutoTS/blob/master/production_example.py">production_example.py</a></p>
 </section>
-<section id="tips-for-speed-and-large-data-1">
-<h2>Tips for Speed and Large Data:<a class="headerlink" href="#tips-for-speed-and-large-data-1" title="Permalink to this headline">¶</a></h2>
+<section id="id3">
+<h2>Tips for Speed and Large Data:<a class="headerlink" href="#id3" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Use appropriate model lists, especially the predefined lists:</p>
 <ul>
@@ -172,7 +170,7 @@ Many models also support passing in user-defined exogenous regressors.</p>
 </ul>
 </section>
 <section id="how-to-contribute">
-<h2>How to Contribute:<a class="headerlink" href="#how-to-contribute" title="Permalink to this headline">¶</a></h2>
+<h2>How to Contribute:<a class="headerlink" href="#how-to-contribute" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
 <li><p>Give feedback on where you find the documentation confusing</p></li>
 <li><p>Use AutoTS and…</p>
@@ -223,9 +221,9 @@ Many models also support passing in user-defined exogenous regressors.</p>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Intro</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#autots">AutoTS</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#table-of-contents">Table of Contents</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#installation-1">Installation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#basic-use-1">Basic Use</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#tips-for-speed-and-large-data-1">Tips for Speed and Large Data:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id1">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id2">Basic Use</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id3">Tips for Speed and Large Data:</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#how-to-contribute">How to Contribute:</a></li>
 </ul>
 </li>
@@ -248,12 +246,12 @@ Many models also support passing in user-defined exogenous regressors.</p>
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="../search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
       <input type="submit" value="Go" />
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script>document.getElementById('searchbox').style.display = "block"</script>
 
 
 
@@ -267,7 +265,7 @@ Many models also support passing in user-defined exogenous regressors.</p>
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2022, Colin Catlin.
+      &copy;2023, Colin Catlin.
       
       |
       <a href="../_sources/source/intro.rst.txt"

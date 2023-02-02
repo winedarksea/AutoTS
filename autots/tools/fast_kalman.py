@@ -131,13 +131,16 @@ def random_state_space():
             obsmod = np.array([[1, 0]])
         else:
             obsmod = np.array([[1, 1] + [0] * (n_dims - 2)])
-        procnois = (np.diag([0.2 / random.choice([1, 5, 10]), 0.001] + [0]*(n_dims-2))**2).round(3)
-    obsnois = random.choices([1.0, 10.0, 2.0, 0.5, 0.2, 0.05, 0.001], [0.8, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05])[
-        0
-    ]
+        procnois = (
+            np.diag([0.2 / random.choice([1, 5, 10]), 0.001] + [0] * (n_dims - 2)) ** 2
+        ).round(3)
+    obsnois = random.choices(
+        [1.0, 10.0, 2.0, 0.5, 0.2, 0.05, 0.001],
+        [0.8, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05],
+    )[0]
     while (
-        # (obsmod.size > 1 and np.all(obsmod == obsmod[0]))
-        (st.size > 1 and np.all(st == 1))
+        st.size > 1
+        and np.all(st == 1)
         # or (st.size > 3 and np.isin(st.sum(axis=1), [0]).any())
     ):
         st, procnois, obsmod, obsnois = random_state_space()
@@ -236,7 +239,6 @@ class KalmanFilter(object):
     def __init__(
         self, state_transition, process_noise, observation_model, observation_noise
     ):
-
         state_transition = ensure_matrix(state_transition)
         n_states = state_transition.shape[-2]  # Allow different transitions
 
@@ -778,7 +780,6 @@ class KalmanFilter(object):
     def em(
         self, data, n_iter=5, initial_value=None, initial_covariance=None, verbose=False
     ):
-
         if n_iter <= 0:
             return self
 
@@ -832,7 +833,6 @@ class KalmanFilter(object):
 
 
 def em_initial_state(result, initial_means):
-
     x0 = result.smoothed.states.mean[:, 0, :][..., np.newaxis]
     P0 = result.smoothed.states.cov[:, 0, ...]
     x0_x0 = P0 + douter(x0, x0)
@@ -933,7 +933,6 @@ def _update(
     measurement,
     log_likelihood=False,
 ):
-
     n = prior_mean.shape[1]
     m = observation_model.shape[1]
 
@@ -1008,7 +1007,6 @@ def priv_smooth(
     next_smooth_mean,
     next_smooth_covariance,
 ):
-
     n = posterior_mean.shape[1]
 
     assert posterior_covariance.shape[-2:] == (n, n)
@@ -1117,7 +1115,6 @@ def priv_update_with_nan_check(
     measurement,
     log_likelihood=False,
 ):
-
     tup = _update(
         prior_mean,
         prior_covariance,
@@ -1165,6 +1162,7 @@ def ensure_matrix(x, dim=1):
     except Exception:
         x = np.eye(dim) * x
     return x
+
 
 """
 n_seasons = 7

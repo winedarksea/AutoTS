@@ -8,6 +8,7 @@ Some common args:
 import warnings
 import numpy as np
 import pandas as pd
+
 # from sklearn.metrics import r2_score
 
 
@@ -86,9 +87,7 @@ def mean_absolute_differential_error(A, F, order: int = 1, df_train=None, scaler
     # scaler = np.mean(A, axis=0)  # debate over whether to make this scaled
     if df_train is not None:
         last_of_array = np.nan_to_num(
-            df_train[
-                df_train.shape[0] - 1 : df_train.shape[0],
-            ]
+            df_train[df_train.shape[0] - 1 : df_train.shape[0],]
         )
         # last_of_array = df_train.tail(1).fillna(0).to_numpy()
         # assigning to new because I'm paranoid about overwrite existing objects
@@ -398,10 +397,21 @@ def dwae(A, F, last_of_array):
         axis=0,
     )
 
+
 def full_metric_evaluation(
-        A, F, upper_forecast, lower_forecast, df_train,
-        full_errors, full_mae_errors, squared_errors, prediction_interval,
-        upper_pl=None, lower_pl=None, columns=None, scaler=None,
+    A,
+    F,
+    upper_forecast,
+    lower_forecast,
+    df_train,
+    full_errors,
+    full_mae_errors,
+    squared_errors,
+    prediction_interval,
+    upper_pl=None,
+    lower_pl=None,
+    columns=None,
+    scaler=None,
 ):
     """Create a pd.DataFrame of metrics per series given actuals, forecast, and precalculated errors."""
     # calculate scaler once
@@ -440,7 +450,6 @@ def full_metric_evaluation(
     lA = np.concatenate([last_of_array, A])
     lF = np.concatenate([last_of_array, F])
 
-
     # test for NaN, this allows faster calculations if no nan
     nan_flag = np.isnan(np.min(full_errors))
 
@@ -463,9 +472,7 @@ def full_metric_evaluation(
             'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
             # aggregate error
             'mage': mage,  # Gandalf approved
-            'mle': msle(
-                full_errors, full_mae_errors, log_errors, nan_flag=nan_flag
-            ),
+            'mle': msle(full_errors, full_mae_errors, log_errors, nan_flag=nan_flag),
             'imle': msle(
                 -full_errors,
                 full_mae_errors,
@@ -504,7 +511,9 @@ def full_metric_evaluation(
             # mean of values less than 85th percentile of error
             'mqae': mqae(full_mae_errors, q=0.85, nan_flag=nan_flag),
             # endpoint weighted mean absolute error
-            'ewmae': np.mean(filled_full_mae_errors * weights, axis=0)  # pronunciation guide: "eeeewwwwwwhh, ma!"
+            'ewmae': np.mean(
+                filled_full_mae_errors * weights, axis=0
+            )  # pronunciation guide: "eeeewwwwwwhh, ma!"
             # 90th percentile of error
             # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
             # 'qae': qae(full_mae_errors, q=0.9, nan_flag=nan_flag),

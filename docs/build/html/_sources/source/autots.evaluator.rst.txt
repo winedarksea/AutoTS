@@ -52,6 +52,14 @@ autots.evaluator.metrics module
    :undoc-members:
    :show-inheritance:
 
+autots.evaluator.validation module
+----------------------------------
+
+.. automodule:: autots.evaluator.validation
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 

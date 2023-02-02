@@ -691,9 +691,7 @@ class MotifSimulation(ModelObject):
         motif_vecs_list = []
         # takes random slices of the time series and rearranges as phrase_n length vectors
         for z in numbers:
-            rand_slice = df.iloc[
-                z : (z + phrase_n),
-            ]
+            rand_slice = df.iloc[z : (z + phrase_n),]
             rand_slice = (
                 rand_slice.reset_index(drop=True)
                 .transpose()
@@ -1486,7 +1484,6 @@ def predict_reservoir(
         n_samples = 10 if seed_pts <= 10 else seed_pts
         interval_list = []
         for ns in range(n_samples):
-
             out_test = np.ones(dtot)  # full feature vector
             x_int = np.zeros((dlin, testtime_pts + n_samples))  # linear part
             # copy over initial linear feature vector
@@ -2125,7 +2122,9 @@ class KalmanStateSpace(ModelObject):
         if method in ['fast', 'superfast']:
             em_iter = random.choices([None, 10], [0.4, 0.6])[0]
         elif method == "deep":
-            em_iter = random.choices([None, 10, 20, 50, 100], [0.3, 0.6, 0.1, 0.1, 0.1])[0]
+            em_iter = random.choices(
+                [None, 10, 20, 50, 100], [0.3, 0.6, 0.1, 0.1, 0.1]
+            )[0]
         else:
             em_iter = random.choices([None, 10, 30], [0.3, 0.7, 0.1])[0]
         params = random.choices(
@@ -2141,23 +2140,43 @@ class KalmanStateSpace(ModelObject):
                 },
                 {
                     'model_name': 'local linear stochastic seasonal dummy',
-                    'state_transition': [[1, 0, 0, 0], [0, -1, -1, -1], [0, 1, 0, 0], [0, 0, 1, 0]],
-                    'process_noise': [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
+                    'state_transition': [
+                        [1, 0, 0, 0],
+                        [0, -1, -1, -1],
+                        [0, 1, 0, 0],
+                        [0, 0, 1, 0],
+                    ],
+                    'process_noise': [
+                        [1, 0, 0, 0],
+                        [0, 1, 0, 0],
+                        [0, 0, 0, 0],
+                        [0, 0, 0, 0],
+                    ],
                     'observation_model': [[1, 1, 0, 0]],
                     'observation_noise': 0.25,
                 },
                 {
                     'model_name': 'local linear stochastic seasonal 7',
-                    'state_transition':
-                        [[1, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                         [0, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                    'state_transition': [
+                        [1, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                         [0.0, 0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0],
                         [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                         [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
                         [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
                         [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]] ,
-                    'process_noise': [[1, 0, 0, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0, 0, 0], [0, 0, 0, 1, 0, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 1, 0, 0], [0,0,0,0,0,0, 0, 0], [0, 0,0,0,0,0, 0, 0]],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                    ],
+                    'process_noise': [
+                        [1, 0, 0, 0, 0, 0, 0, 0],
+                        [0, 1, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 1, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 1, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 1, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 1, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0],
+                    ],
                     'observation_model': [[1, 0, 1, 0, 0, 0, 0, 0]],
                     'observation_noise': 0.25,
                 },
@@ -2178,54 +2197,63 @@ class KalmanStateSpace(ModelObject):
                 {
                     'model_name': 'X1',
                     'state_transition': [[1, 1, 0], [0, 1, 0], [0, 0, 1]],
-                    'process_noise': [[0.1, 0.0, 0.0], [0.0, 0.01, 0.0], [0.0, 0.0, 0.1]],
+                    'process_noise': [
+                        [0.1, 0.0, 0.0],
+                        [0.0, 0.01, 0.0],
+                        [0.0, 0.0, 0.1],
+                    ],
                     'observation_model': [[1, 1, 1]],
                     'observation_noise': 1.0,
                 },
                 {
                     'model_name': "local linear hidden state with seasonal 7",
-                    'state_transition': 
-                        [[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                         [0.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0],
-                         [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                         [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]],
-                    'process_noise':
-                        [[0.0016, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                         [0.0, 1e-06, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                         [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],
+                    'state_transition': [
+                        [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0],
+                        [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                    ],
+                    'process_noise': [
+                        [0.0016, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 1e-06, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                    ],
                     'observation_model': [[1, 1, 0, 0, 0, 0, 0, 0]],
                     'observation_noise': random.choice([0.25, 0.5, 1.0, 0.04, 0.02]),
                 },
                 {
                     'model_name': "factor",
-                    'state_transition': 
-                        [[1, 1, 0, 0, 0, 0],
-                         [0, 1, 0, 0, 0, 0],
-                         [0, 0, 1, 0, 0, 0],
-                         [0, 0, 0, 1, 1, 0],
-                         [0, 0, 0, 0, 1, 0],
-                         [0, 0, 0, 0, 0, 1]],
-                    'process_noise':
-                        [[1, 0, 0, 0, 0, 0],
-                         [0, 1, 0, 0, 0, 0],
-                         [0, 0, 0, 0, 0, 0],
-                         [0, 0, 1, 0, 0, 0],
-                         [0, 0, 0, 1, 0, 0],
-                         [0, 0, 0, 0, 0, 0]],
+                    'state_transition': [
+                        [1, 1, 0, 0, 0, 0],
+                        [0, 1, 0, 0, 0, 0],
+                        [0, 0, 1, 0, 0, 0],
+                        [0, 0, 0, 1, 1, 0],
+                        [0, 0, 0, 0, 1, 0],
+                        [0, 0, 0, 0, 0, 1],
+                    ],
+                    'process_noise': [
+                        [1, 0, 0, 0, 0, 0],
+                        [0, 1, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0],
+                        [0, 0, 1, 0, 0, 0],
+                        [0, 0, 0, 1, 0, 0],
+                        [0, 0, 0, 0, 0, 0],
+                    ],
                     'observation_model': [[1, 0, 0, 0, 0, 0]],
                     'observation_noise': 0.04,
                 },
                 "random",
-                364, 12,
+                364,
+                12,
                 {
                     'model_name': 'spline',
                     'state_transition': [[2, -1], [1, 0]],
@@ -2248,14 +2276,16 @@ class KalmanStateSpace(ModelObject):
                 'observation_noise': obsnois,
             }
         elif isinstance(params, int):
-            state_transition = np.zeros((params+1, params+1))
-            state_transition[0,0] = 1
-            state_transition[1,1:-1] = [-1.0] * (params-1)
-            state_transition[2:,1:-1] = np.eye(params-1)
-            observation_model = [[1,1] + [0]*(params-1)]
+            state_transition = np.zeros((params + 1, params + 1))
+            state_transition[0, 0] = 1
+            state_transition[1, 1:-1] = [-1.0] * (params - 1)
+            state_transition[2:, 1:-1] = np.eye(params - 1)
+            observation_model = [[1, 1] + [0] * (params - 1)]
             level_noise = 0.2 / random.choice([1, 5, 10])
             season_noise = 1e-3
-            process_noise_cov = np.diag([level_noise, season_noise] + [0]*(params-1))**2
+            process_noise_cov = (
+                np.diag([level_noise, season_noise] + [0] * (params - 1)) ** 2
+            )
             params = {
                 'model_name': f'local linear hidden state with seasonal {params}',
                 'state_transition': state_transition.tolist(),

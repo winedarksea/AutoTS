@@ -143,11 +143,13 @@ class AutoTSTest(unittest.TestCase):
         self.assertTrue((model.validation_test_indexes[1] == expected_val1).all())
         self.assertTrue((model.validation_test_indexes[2] == expected_val2).all())
         # assess Horizontal Ensembling
-        test1 = 'horizontal' in template_dict['model_name'].lower()
-        test2 = 'mosaic' in template_dict['model_name'].lower()
-        self.assertTrue(test1 or test2)
+        tested_horizontal = 'horizontal' in template_dict['model_name'].lower()
+        tested_mosaic = 'mosaic' in template_dict['model_name'].lower()
+        print(f"chosen model was mosaic: {tested_mosaic} or was horizontal: {tested_horizontal}")
+        self.assertTrue(tested_horizontal or tested_mosaic)
         self.assertEqual(len(template_dict['series'].keys()), df.shape[1])
-        self.assertEqual(len(set(template_dict['series'].values())), template_dict['model_count'])
+        if tested_horizontal:
+            self.assertEqual(len(set(template_dict['series'].values())), template_dict['model_count'])
         self.assertEqual(len(template_dict['models'].keys()), template_dict['model_count'])
         # test that actually the best model (or nearly) was chosen
         self.assertGreater(validation_results['Score'].quantile(0.05), best_model_result['Score'].iloc[0])

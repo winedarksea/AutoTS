@@ -723,7 +723,6 @@ class ARIMA(ModelObject):
         test_index = self.create_forecast_index(forecast_length=forecast_length)
         alpha = 1 - self.prediction_interval
         if self.regression_type == 'Holiday':
-
             future_regressor = holiday_flag(test_index, country=self.holiday_country)
         if self.regression_type is not None:
             assert (
@@ -2095,7 +2094,9 @@ class ARDL(ModelObject):
         elif self.regression_type in [None, 'None']:
             pass
         else:
-            raise ValueError(f"ARDL regression_type `{self.regression_type}` not recognized")
+            raise ValueError(
+                f"ARDL regression_type `{self.regression_type}` not recognized"
+            )
         self.df_train = df
 
         self.fit_runtime = datetime.datetime.now() - self.startTime
@@ -2150,14 +2151,17 @@ class ARDL(ModelObject):
                         )
                     else:
                         outer_forecasts = maModel.get_prediction(
-                            start=series_len, end=series_len + args['forecast_length'] - 1
+                            start=series_len,
+                            end=series_len + args['forecast_length'] - 1,
                         )
                     outer_forecasts_df = outer_forecasts.conf_int(alpha=args['alpha'])
                     cforecast = outer_forecasts.summary_frame()['mean']
                     clower_forecast = outer_forecasts_df.iloc[:, 0]
                     cupper_forecast = outer_forecasts_df.iloc[:, 1]
                 except Exception as e:
-                    raise ValueError(f"ARDL series {current_series.name} failed with error {repr(e)} exog train {args['regressor_train']} and predict {args['exog']}") from e
+                    raise ValueError(
+                        f"ARDL series {current_series.name} failed with error {repr(e)} exog train {args['regressor_train']} and predict {args['exog']}"
+                    ) from e
             cforecast.name = current_series.name
             clower_forecast.name = current_series.name
             cupper_forecast.name = current_series.name
@@ -2410,5 +2414,3 @@ class DynamicFactorMQ(ModelObject):
             'idiosyncratic_ar1': self.idiosyncratic_ar1,
         }
         return parameter_dict
-
-

@@ -1622,7 +1622,7 @@ def TemplateWizard(
         template_result.per_series_dwae = pd.concat(
             template_result.per_series_dwae, axis=0
         )
-        template_result.per_series_ewmae= pd.concat(
+        template_result.per_series_ewmae = pd.concat(
             template_result.per_series_ewmae, axis=0
         )
     else:

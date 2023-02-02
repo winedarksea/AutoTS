@@ -1,19 +1,17 @@
 
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html lang="en">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 
-    <title>autots.datasets package &#8212; AutoTS 0.5.3 documentation</title>
-    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
-    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
-    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-    <script src="../_static/jquery.js"></script>
-    <script src="../_static/underscore.js"></script>
+    <title>autots.datasets package &#8212; AutoTS 0.5.4 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
     <script src="../_static/doctools.js"></script>
-    <script src="../_static/language_data.js"></script>
-    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <script src="../_static/sphinx_highlight.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="autots.evaluator package" href="autots.evaluator.html" />
@@ -35,18 +33,18 @@
           <div class="body" role="main">
             
   <section id="autots-datasets-package">
-<h1>autots.datasets package<a class="headerlink" href="#autots-datasets-package" title="Permalink to this headline">¶</a></h1>
+<h1>autots.datasets package<a class="headerlink" href="#autots-datasets-package" title="Permalink to this heading">¶</a></h1>
 <section id="submodules">
-<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this heading">¶</a></h2>
 </section>
 <section id="module-autots.datasets.fred">
-<span id="autots-datasets-fred-module"></span><h2>autots.datasets.fred module<a class="headerlink" href="#module-autots.datasets.fred" title="Permalink to this headline">¶</a></h2>
+<span id="autots-datasets-fred-module"></span><h2>autots.datasets.fred module<a class="headerlink" href="#module-autots.datasets.fred" title="Permalink to this heading">¶</a></h2>
 <p>FRED (Federal Reserve Economic Data) Data Import</p>
 <p>requires API key from FRED
 and pip install fredapi</p>
-<dl class="function">
-<dt id="autots.datasets.fred.get_fred_data">
-<code class="sig-prename descclassname">autots.datasets.fred.</code><code class="sig-name descname">get_fred_data</code><span class="sig-paren">(</span><em class="sig-param">fredkey: str</em>, <em class="sig-param">SeriesNameDict: dict = None</em>, <em class="sig-param">long=True</em>, <em class="sig-param">observation_start=None</em>, <em class="sig-param">sleep_seconds: int = 1</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.fred.get_fred_data" title="Permalink to this definition">¶</a></dt>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.datasets.fred.get_fred_data">
+<span class="sig-prename descclassname"><span class="pre">autots.datasets.fred.</span></span><span class="sig-name descname"><span class="pre">get_fred_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fredkey</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">SeriesNameDict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">observation_start</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sleep_seconds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.fred.get_fred_data" title="Permalink to this definition">¶</a></dt>
 <dd><p>Imports Data from Federal Reserve.
 For simplest results, make sure requested series are all of the same frequency.</p>
 <dl class="field-list simple">
@@ -66,11 +64,26 @@ if None, several default series are returned</p></li>
 
 </section>
 <section id="module-autots.datasets">
-<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots.datasets" title="Permalink to this headline">¶</a></h2>
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-autots.datasets" title="Permalink to this heading">¶</a></h2>
 <p>Tools for Importing Sample Data</p>
-<dl class="function">
-<dt id="autots.datasets.load_daily">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_daily</code><span class="sig-paren">(</span><em class="sig-param">long: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_daily" title="Permalink to this definition">¶</a></dt>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.datasets.load_artificial">
+<span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">load_artificial</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">date_start</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">date_end</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_artificial" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load artifically generated series from random distributions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>long</strong> (<em>bool</em>) – if True long style data, if False, wide style data</p></li>
+<li><p><strong>date_start</strong> – str or datetime.datetime of start date</p></li>
+<li><p><strong>date_end</strong> – str or datetime.datetime of end date</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.datasets.load_daily">
+<span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">load_daily</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_daily" title="Permalink to this definition">¶</a></dt>
 <dd><p>2020 Covid, Air Pollution, and Economic Data.</p>
 <p>Sources: Wikimedia Foundation</p>
 <dl class="field-list simple">
@@ -80,49 +93,33 @@ if None, several default series are returned</p></li>
 </dl>
 </dd></dl>
 
-<dl class="function">
-<dt id="autots.datasets.load_monthly">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_monthly</code><span class="sig-paren">(</span><em class="sig-param">long: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_monthly" title="Permalink to this definition">¶</a></dt>
-<dd><p>Federal Reserve of St. Louis monthly economic indicators.</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.datasets.load_yearly">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_yearly</code><span class="sig-paren">(</span><em class="sig-param">long: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_yearly" title="Permalink to this definition">¶</a></dt>
-<dd><p>Federal Reserve of St. Louis annual economic indicators.</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.datasets.load_hourly">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_hourly</code><span class="sig-paren">(</span><em class="sig-param">long: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_hourly" title="Permalink to this definition">¶</a></dt>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.datasets.load_hourly">
+<span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">load_hourly</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_hourly" title="Permalink to this definition">¶</a></dt>
 <dd><p>Traffic data from the MN DOT via the UCI data repository.</p>
 </dd></dl>
 
-<dl class="function">
-<dt id="autots.datasets.load_weekly">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_weekly</code><span class="sig-paren">(</span><em class="sig-param">long: bool = True</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_weekly" title="Permalink to this definition">¶</a></dt>
-<dd><p>Weekly petroleum industry data from the EIA.</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="autots.datasets.load_weekdays">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_weekdays</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False</em>, <em class="sig-param">categorical: bool = True</em>, <em class="sig-param">periods: int = 180</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_weekdays" title="Permalink to this definition">¶</a></dt>
-<dd><p>Test edge cases by creating a Series with values as day of week.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.datasets.load_linear">
+<span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">load_linear</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'2021-01-01'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">introduce_nan</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">introduce_random</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">123</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_linear" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a dataset of just zeroes for testing edge case.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>long</strong> (<em>bool</em>) – if True, return a df with columns “value” and “datetime”
-if False, return a Series with dt index</p></li>
-<li><p><strong>categorical</strong> (<em>bool</em>) – if True, return str/object, else return int</p></li>
-<li><p><strong>periods</strong> (<em>int</em>) – number of periods, ie length of data to generate</p></li>
+<li><p><strong>long</strong> (<em>bool</em>) – whether to make long or wide</p></li>
+<li><p><strong>shape</strong> (<em>tuple</em>) – shape of output dataframe</p></li>
+<li><p><strong>start_date</strong> (<em>str</em>) – first date of index</p></li>
+<li><p><strong>introduce_nan</strong> (<em>float</em>) – percent of rows to make null. 0.2 = 20%</p></li>
+<li><p><strong>introduce_random</strong> (<em>float</em>) – shape of gamma distribution</p></li>
+<li><p><strong>random_seed</strong> (<em>int</em>) – seed for random</p></li>
 </ul>
 </dd>
 </dl>
 </dd></dl>
 
-<dl class="function">
-<dt id="autots.datasets.load_live_daily">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_live_daily</code><span class="sig-paren">(</span><em class="sig-param">long: bool = False, observation_start: str = None, observation_end: str = None, fred_key: str = None, fred_series=['DGS10', 'T5YIE', 'SP500', 'DCOILWTICO', 'DEXUSEU', 'WPU0911'], tickers: list = ['MSFT'], trends_list: list = ['forecasting', 'cycling', 'microsoft'], trends_geo: str = 'US', weather_data_types: list = ['AWND', 'WSF2', 'TAVG'], weather_stations: list = ['USW00094846', 'USW00014925'], weather_years: int = 10, london_air_stations: list = ['CT3', 'SK8'], london_air_species: str = 'PM25', london_air_days: int = 180, earthquake_days: int = 180, earthquake_min_magnitude: int = 5, gsa_key: str = None, gov_domain_list=['nasa.gov'], gov_domain_limit: int = 600, wikipedia_pages: list = ['Microsoft_Office', 'List_of_highest-grossing_films'], wiki_language: str = 'en', weather_event_types=['%28Z%29+Winter+Weather', '%28Z%29+Winter+Storm'], timeout: float = 300.05, sleep_seconds: int = 2</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_live_daily" title="Permalink to this definition">¶</a></dt>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.datasets.load_live_daily">
+<span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">load_live_daily</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">observation_start</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">observation_end</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fred_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fred_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['DGS10',</span> <span class="pre">'T5YIE',</span> <span class="pre">'SP500',</span> <span class="pre">'DCOILWTICO',</span> <span class="pre">'DEXUSEU',</span> <span class="pre">'WPU0911']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tickers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">['MSFT']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trends_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">['forecasting',</span> <span class="pre">'cycling',</span> <span class="pre">'microsoft']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trends_geo</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'US'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weather_data_types</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">['AWND',</span> <span class="pre">'WSF2',</span> <span class="pre">'TAVG']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weather_stations</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">['USW00094846',</span> <span class="pre">'USW00014925']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weather_years</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">london_air_stations</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">['CT3',</span> <span class="pre">'SK8']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">london_air_species</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'PM25'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">london_air_days</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">180</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">earthquake_days</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">180</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">earthquake_min_magnitude</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gsa_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gov_domain_list</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['nasa.gov']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gov_domain_limit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">600</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wikipedia_pages</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">['Microsoft_Office',</span> <span class="pre">'List_of_highest-grossing_films']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wiki_language</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'en'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weather_event_types</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['%28Z%29+Winter+Weather',</span> <span class="pre">'%28Z%29+Winter+Storm']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">300.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sleep_seconds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_live_daily" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generates a dataframe of data up to the present day. Requires active internet connection.
 Try to be respectful of these free data sources by not calling too much too heavily.
 Pass None instead of specification lists to exclude a data source.</p>
@@ -156,49 +153,50 @@ some examples: [‘usps.com’, ‘ncbi.nlm.nih.gov’, ‘cdc.gov’, ‘weathe
 </dl>
 </dd></dl>
 
-<dl class="function">
-<dt id="autots.datasets.load_zeroes">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_zeroes</code><span class="sig-paren">(</span><em class="sig-param">long=False</em>, <em class="sig-param">shape=None</em>, <em class="sig-param">start_date: str = '2021-01-01'</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_zeroes" title="Permalink to this definition">¶</a></dt>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.datasets.load_monthly">
+<span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">load_monthly</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_monthly" title="Permalink to this definition">¶</a></dt>
+<dd><p>Federal Reserve of St. Louis monthly economic indicators.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.datasets.load_sine">
+<span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">load_sine</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'2021-01-01'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">introduce_random</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">123</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_sine" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a dataset of just zeroes for testing edge case.</p>
 </dd></dl>
 
-<dl class="function">
-<dt id="autots.datasets.load_linear">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_linear</code><span class="sig-paren">(</span><em class="sig-param">long=False</em>, <em class="sig-param">shape=None</em>, <em class="sig-param">start_date: str = '2021-01-01'</em>, <em class="sig-param">introduce_nan: float = None</em>, <em class="sig-param">introduce_random: float = None</em>, <em class="sig-param">random_seed: int = 123</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_linear" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create a dataset of just zeroes for testing edge case.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.datasets.load_weekdays">
+<span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">load_weekdays</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">categorical</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">periods</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">180</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_weekdays" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test edge cases by creating a Series with values as day of week.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>long</strong> (<em>bool</em>) – whether to make long or wide</p></li>
-<li><p><strong>shape</strong> (<em>tuple</em>) – shape of output dataframe</p></li>
-<li><p><strong>start_date</strong> (<em>str</em>) – first date of index</p></li>
-<li><p><strong>introduce_nan</strong> (<em>float</em>) – percent of rows to make null. 0.2 = 20%</p></li>
-<li><p><strong>introduce_random</strong> (<em>float</em>) – shape of gamma distribution</p></li>
-<li><p><strong>random_seed</strong> (<em>int</em>) – seed for random</p></li>
+<li><p><strong>long</strong> (<em>bool</em>) – if True, return a df with columns “value” and “datetime”
+if False, return a Series with dt index</p></li>
+<li><p><strong>categorical</strong> (<em>bool</em>) – if True, return str/object, else return int</p></li>
+<li><p><strong>periods</strong> (<em>int</em>) – number of periods, ie length of data to generate</p></li>
 </ul>
 </dd>
 </dl>
 </dd></dl>
 
-<dl class="function">
-<dt id="autots.datasets.load_sine">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_sine</code><span class="sig-paren">(</span><em class="sig-param">long=False</em>, <em class="sig-param">shape=None</em>, <em class="sig-param">start_date: str = '2021-01-01'</em>, <em class="sig-param">introduce_random: float = None</em>, <em class="sig-param">random_seed: int = 123</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_sine" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create a dataset of just zeroes for testing edge case.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.datasets.load_weekly">
+<span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">load_weekly</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_weekly" title="Permalink to this definition">¶</a></dt>
+<dd><p>Weekly petroleum industry data from the EIA.</p>
 </dd></dl>
 
-<dl class="function">
-<dt id="autots.datasets.load_artificial">
-<code class="sig-prename descclassname">autots.datasets.</code><code class="sig-name descname">load_artificial</code><span class="sig-paren">(</span><em class="sig-param">long=False</em>, <em class="sig-param">date_start=None</em>, <em class="sig-param">date_end=None</em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_artificial" title="Permalink to this definition">¶</a></dt>
-<dd><p>Load artifically generated series from random distributions.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>long</strong> (<em>bool</em>) – if True long style data, if False, wide style data</p></li>
-<li><p><strong>date_start</strong> – str or datetime.datetime of start date</p></li>
-<li><p><strong>date_end</strong> – str or datetime.datetime of end date</p></li>
-</ul>
-</dd>
-</dl>
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.datasets.load_yearly">
+<span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">load_yearly</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_yearly" title="Permalink to this definition">¶</a></dt>
+<dd><p>Federal Reserve of St. Louis annual economic indicators.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="autots.datasets.load_zeroes">
+<span class="sig-prename descclassname"><span class="pre">autots.datasets.</span></span><span class="sig-name descname"><span class="pre">load_zeroes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_date</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'2021-01-01'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.datasets.load_zeroes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a dataset of just zeroes for testing edge case.</p>
 </dd></dl>
 
 </section>
@@ -264,12 +262,12 @@ some examples: [‘usps.com’, ‘ncbi.nlm.nih.gov’, ‘cdc.gov’, ‘weathe
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="../search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
       <input type="submit" value="Go" />
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script>document.getElementById('searchbox').style.display = "block"</script>
 
 
 
@@ -283,7 +281,7 @@ some examples: [‘usps.com’, ‘ncbi.nlm.nih.gov’, ‘cdc.gov’, ‘weathe
       <div class="clearer"></div>
     </div>
     <div class="footer">
-      &copy;2022, Colin Catlin.
+      &copy;2023, Colin Catlin.
       
       |
       <a href="../_sources/source/autots.datasets.rst.txt"

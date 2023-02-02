@@ -557,42 +557,78 @@ datepart_model_dict: dict = {
 }
 # pre-optimized model templates
 xgparam3 = {
-    "base_score": 0.5, "booster": 'gbtree',
-    "colsample_bylevel": 0.541426, "colsample_bynode": 1,
-    "colsample_bytree": 1.0, "early_stopping_rounds": None,
-    "enable_categorical": False, "eval_metric": None, "feature_types": None,
-    "gamma": 0, "grow_policy": 'depthwise', "importance_type": None,
-    "interaction_constraints": '', "learning_rate": 0.012543,
-    "max_bin": 256, "max_cat_threshold": 64, "max_cat_to_onehot": 4,
-    "max_delta_step": 0, "max_depth": 11, "max_leaves": 0,
+    "base_score": 0.5,
+    "booster": 'gbtree',
+    "colsample_bylevel": 0.541426,
+    "colsample_bynode": 1,
+    "colsample_bytree": 1.0,
+    "early_stopping_rounds": None,
+    "enable_categorical": False,
+    "eval_metric": None,
+    "feature_types": None,
+    "gamma": 0,
+    "grow_policy": 'depthwise',
+    "importance_type": None,
+    "interaction_constraints": '',
+    "learning_rate": 0.012543,
+    "max_bin": 256,
+    "max_cat_threshold": 64,
+    "max_cat_to_onehot": 4,
+    "max_delta_step": 0,
+    "max_depth": 11,
+    "max_leaves": 0,
     "min_child_weight": 0.0127203,
-    "monotone_constraints": '()', "n_estimators": 319,
-    "num_parallel_tree": 1, "predictor": 'auto',
+    "monotone_constraints": '()',
+    "n_estimators": 319,
+    "num_parallel_tree": 1,
+    "predictor": 'auto',
 }
 xgparam2 = {
-    "base_score": 0.5, "booster": 'gbtree',
-    "colsample_bylevel": 0.691915, "colsample_bynode": 1,
-    "colsample_bytree": 1.0, "early_stopping_rounds": None,
-    "enable_categorical": False, "eval_metric": None, "feature_types": None,
-    "gamma": 0, "grow_policy": 'depthwise', "importance_type": None,
-    "interaction_constraints": '', "learning_rate": 0.02199,
-    "max_bin": 256, "max_cat_threshold": 64, "max_cat_to_onehot": 4,
-    "max_delta_step": 0, "max_depth": 14, "max_leaves": 0,
+    "base_score": 0.5,
+    "booster": 'gbtree',
+    "colsample_bylevel": 0.691915,
+    "colsample_bynode": 1,
+    "colsample_bytree": 1.0,
+    "early_stopping_rounds": None,
+    "enable_categorical": False,
+    "eval_metric": None,
+    "feature_types": None,
+    "gamma": 0,
+    "grow_policy": 'depthwise',
+    "importance_type": None,
+    "interaction_constraints": '',
+    "learning_rate": 0.02199,
+    "max_bin": 256,
+    "max_cat_threshold": 64,
+    "max_cat_to_onehot": 4,
+    "max_delta_step": 0,
+    "max_depth": 14,
+    "max_leaves": 0,
     "min_child_weight": 0.024213,
-    "monotone_constraints": '()', "n_estimators": 162,
-    "num_parallel_tree": 1, "predictor": 'auto',
+    "monotone_constraints": '()',
+    "n_estimators": 162,
+    "num_parallel_tree": 1,
+    "predictor": 'auto',
 }
 lightgbmp1 = {
     "colsample_bytree": 0.164532,
-    "learning_rate": 0.0202726, "max_bin": 1023,
-    "min_child_samples": 16, "n_estimators": 1794, "num_leaves": 15,
-    "reg_alpha": 0.00097656, "reg_lambda": 0.6861,
+    "learning_rate": 0.0202726,
+    "max_bin": 1023,
+    "min_child_samples": 16,
+    "n_estimators": 1794,
+    "num_leaves": 15,
+    "reg_alpha": 0.00097656,
+    "reg_lambda": 0.6861,
 }
 lightgbmp2 = {
     "colsample_bytree": 0.94716,
-    "learning_rate": 0.7024, "max_bin": 255,
-    "min_child_samples": 15, "n_estimators": 5, "num_leaves": 35,
-    "reg_alpha": 0.00308, "reg_lambda": 5.1817,
+    "learning_rate": 0.7024,
+    "max_bin": 255,
+    "min_child_samples": 15,
+    "n_estimators": 5,
+    "num_leaves": 35,
+    "reg_alpha": 0.00308,
+    "reg_lambda": 5.1817,
 }
 
 
@@ -611,7 +647,7 @@ def generate_regressor_params(
         }
         method = "deep"
     """Generate new parameters for input to regressor."""
-    model_list= list(model_dict.keys())
+    model_list = list(model_dict.keys())
     model = random.choices(model_list, list(model_dict.values()), k=1)[0]
     if model in [
         'xgboost',
@@ -737,9 +773,9 @@ def generate_regressor_params(
                 },
             }
         elif model == 'ExtraTrees':
-            max_depth_choice = random.choices([None, 5, 10, 20, 30], [0.2, 0.1, 0.3, 0.4, 0.1])[
-                0
-            ]
+            max_depth_choice = random.choices(
+                [None, 5, 10, 20, 30], [0.2, 0.1, 0.3, 0.4, 0.1]
+            )[0]
             estimators_choice = random.choices([50, 100, 500], [0.05, 0.9, 0.05])[0]
             param_dict = {
                 "model": 'ExtraTrees',

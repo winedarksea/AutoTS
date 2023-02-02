@@ -15,21 +15,27 @@ from autots.tools.probabilistic import Point_to_Probability
 from autots.evaluator.auto_model import RandomTemplate, model_forecast
 from autots.models.model_list import diff_window_motif_list, all_result_path
 from autots.evaluator.event_forecasting import extract_result_windows
-from autots.evaluator.validation import validate_num_validations, generate_validation_indices
-from autots.models.sklearn import retrieve_regressor  # generate_regressor_params, datepart_model_dict
+from autots.evaluator.validation import (
+    validate_num_validations,
+    generate_validation_indices,
+)
+from autots.models.sklearn import (
+    retrieve_regressor,
+)  # generate_regressor_params, datepart_model_dict
 from autots.tools.shaping import simple_train_test_split
 
 
 def create_feature(
-        df_train, models, forecast_length,
-        future_regressor_train=None, future_regressor_forecast=None,
+    df_train,
+    models,
+    forecast_length,
+    future_regressor_train=None,
+    future_regressor_forecast=None,
 ):
     result_windows = None
     res = []
     # add last value as a feature
-    res.append(
-        np.repeat(df_train.iloc[-1:, ].to_numpy(), forecast_length, axis=0)
-    )
+    res.append(np.repeat(df_train.iloc[-1:,].to_numpy(), forecast_length, axis=0))
     # add averages
     res.append(
         np.repeat(df_train.mean().to_numpy()[np.newaxis, :], forecast_length, axis=0)
@@ -46,7 +52,7 @@ def create_feature(
             }
         else:
             model_param_dict = json.loads(model['ModelParameters'])
-        
+
         forecasts = model_forecast(
             model_name=model['Model'],
             model_param_dict=model_param_dict,
@@ -64,13 +70,17 @@ def create_feature(
             return_model=True,
             fail_on_forecast_nan=True,
         )
-        res.extend([forecasts.forecast, forecasts.upper_forecast, forecasts.lower_forecast])
+        res.extend(
+            [forecasts.forecast, forecasts.upper_forecast, forecasts.lower_forecast]
+        )
         if model_name == 'Cassandra':
             comps = forecasts.model.return_components()
             ncomps = comps.columns.get_level_values(1)
             for cp in set(ncomps):
                 res.append(
-                    comps.loc[:, comps.columns.get_level_values(1) == cp].droplevel(1, 1).reindex(forecasts.forecast.index)
+                    comps.loc[:, comps.columns.get_level_values(1) == cp]
+                    .droplevel(1, 1)
+                    .reindex(forecasts.forecast.index)
                 )
         elif model_name in all_result_path:
             result_windows = extract_result_windows(forecasts, model_name=model_name)
@@ -79,12 +89,36 @@ def create_feature(
         res = np.concatenate([res, result_windows], axis=0)
     # add regressor as a feature
     if future_regressor_forecast is not None:
-        r = np.repeat(future_regressor_forecast.to_numpy().T[:, :, np.newaxis], df_train.shape[1], axis=2)
+        r = np.repeat(
+            future_regressor_forecast.to_numpy().T[:, :, np.newaxis],
+            df_train.shape[1],
+            axis=2,
+        )
         res = np.concatenate([res, r], axis=0)
     # add timestep as a feature
-    res = np.concatenate((res, np.linspace([0] * df_train.shape[1], [res.shape[1] - 1] * df_train.shape[1], res.shape[1])[np.newaxis, :, :]), axis=0)
+    res = np.concatenate(
+        (
+            res,
+            np.linspace(
+                [0] * df_train.shape[1],
+                [res.shape[1] - 1] * df_train.shape[1],
+                res.shape[1],
+            )[np.newaxis, :, :],
+        ),
+        axis=0,
+    )
     # add time series ID as a feature
-    res = np.concatenate((res, np.linspace([0] * forecast_length, [res.shape[2] - 1] * forecast_length, res.shape[2]).T[np.newaxis, :, :]), axis=0)
+    res = np.concatenate(
+        (
+            res,
+            np.linspace(
+                [0] * forecast_length,
+                [res.shape[2] - 1] * forecast_length,
+                res.shape[2],
+            ).T[np.newaxis, :, :],
+        ),
+        axis=0,
+    )
 
     sys.stdout.flush()
     return res
@@ -152,6 +186,7 @@ result = pd.DataFrame(
 )
 """
 
+
 class MLEnsemble(ModelObject):
     """Combine models using an ML model across validations.
 
@@ -173,13 +208,25 @@ class MLEnsemble(ModelObject):
         regression_type: str = None,
         regression_model=None,
         models=[
-            {'Model': 'Cassandra', 'ModelParameters': {}, "TransformationParameters": {}},
-            {'Model': 'MetricMotif', 'ModelParameters': {}, "TransformationParameters": {}},
-            {'Model': 'SeasonalityMotif', 'ModelParameters': {}, "TransformationParameters": {}},
+            {
+                'Model': 'Cassandra',
+                'ModelParameters': {},
+                "TransformationParameters": {},
+            },
+            {
+                'Model': 'MetricMotif',
+                'ModelParameters': {},
+                "TransformationParameters": {},
+            },
+            {
+                'Model': 'SeasonalityMotif',
+                'ModelParameters': {},
+                "TransformationParameters": {},
+            },
         ],
-        num_validations = 2,
-        validation_method = "backwards",
-        min_allowed_train_percent = 0.5,
+        num_validations=2,
+        validation_method="backwards",
+        min_allowed_train_percent=0.5,
         models_source: str = 'random',
         **kwargs,
     ):
@@ -201,19 +248,33 @@ class MLEnsemble(ModelObject):
         if regression_model is None:
             try:
                 import xgboost  # noqa
+
                 regression_model = {
                     "model": 'XGBRegressor',
                     "model_params": {
-                        "base_score":0.5, "booster":'gbtree',
-                        "colsample_bylevel":0.50502979, "colsample_bynode":1,
-                        "colsample_bytree":0.6164668, "early_stopping_rounds":None,
-                        "enable_categorical":False, "eval_metric":None, "feature_types":None,
-                        "gamma": 0, "grow_policy": 'depthwise', "importance_type": None,
-                        "interaction_constraints": '', "learning_rate": 0.00266327,
-                        "max_bin": 256, "max_cat_threshold": 64, "max_cat_to_onehot": 4,
-                        "max_delta_step": 0, "max_depth": 10, "max_leaves": 0,
+                        "base_score": 0.5,
+                        "booster": 'gbtree',
+                        "colsample_bylevel": 0.50502979,
+                        "colsample_bynode": 1,
+                        "colsample_bytree": 0.6164668,
+                        "early_stopping_rounds": None,
+                        "enable_categorical": False,
+                        "eval_metric": None,
+                        "feature_types": None,
+                        "gamma": 0,
+                        "grow_policy": 'depthwise',
+                        "importance_type": None,
+                        "interaction_constraints": '',
+                        "learning_rate": 0.00266327,
+                        "max_bin": 256,
+                        "max_cat_threshold": 64,
+                        "max_cat_to_onehot": 4,
+                        "max_delta_step": 0,
+                        "max_depth": 10,
+                        "max_leaves": 0,
                         "min_child_weight": 0.0104586,
-                        "monotone_constraints": '()', "n_estimators": 1356,
+                        "monotone_constraints": '()',
+                        "n_estimators": 1356,
                         "num_parallel_tree": 1,
                     },
                 }
@@ -224,7 +285,7 @@ class MLEnsemble(ModelObject):
                         "max_features": 0.16322,
                         "max_leaf_nodes": 10,
                         "n_estimators": 5,
-                    }
+                    },
                 }
         self.regression_model = regression_model
         self.models = models
@@ -254,24 +315,30 @@ class MLEnsemble(ModelObject):
         df = self.basic_profile(df)
         self.regressor_train = future_regressor
         if self.regression_type in ["User", "user"] and future_regressor is None:
-            raise ValueError(
-                "regression_type='User' but no future_regressor passed"
-            )
+            raise ValueError("regression_type='User' but no future_regressor passed")
         self.df = df.copy()
 
         # check how many validations are possible given the length of the data.
         self.num_validations = validate_num_validations(
-            self.validation_method, self.num_validations,
-            df, self.forecast_length,
-            min_allowed_train_percent=self.min_allowed_train_percent, verbose=self.verbose,
+            self.validation_method,
+            self.num_validations,
+            df,
+            self.forecast_length,
+            min_allowed_train_percent=self.min_allowed_train_percent,
+            verbose=self.verbose,
         )
 
         # generate validation indices (so it can fail now, not after all the generations)
         self.validation_indexes = generate_validation_indices(
-            self.validation_method, self.forecast_length,
-            self.num_validations, df,
-            validation_params=self.similarity_validation_params if self.validation_method == "similarity" else self.seasonal_validation_params,
-            preclean=None, verbose=0,
+            self.validation_method,
+            self.forecast_length,
+            self.num_validations,
+            df,
+            validation_params=self.similarity_validation_params
+            if self.validation_method == "similarity"
+            else self.seasonal_validation_params,
+            preclean=None,
+            verbose=0,
         )
         X = []
         y = []
@@ -291,7 +358,9 @@ class MLEnsemble(ModelObject):
                 regr_subset_f = None
             try:
                 res = create_feature(
-                    df_train, self.models, self.forecast_length,
+                    df_train,
+                    self.models,
+                    self.forecast_length,
                     future_regressor_train=regr_subset_t,
                     future_regressor_forecast=regr_subset_f,
                 )
@@ -319,7 +388,10 @@ class MLEnsemble(ModelObject):
         return self
 
     def predict(
-        self, forecast_length: int = None, future_regressor=None, just_point_forecast=False
+        self,
+        forecast_length: int = None,
+        future_regressor=None,
+        just_point_forecast=False,
     ):
         """Generates forecast data immediately following dates of index supplied to .fit()
 
@@ -339,7 +411,9 @@ class MLEnsemble(ModelObject):
 
         X = []
         res = create_feature(
-            self.df, self.models, self.forecast_length,
+            self.df,
+            self.models,
+            self.forecast_length,
             future_regressor_train=self.regressor_train,
             future_regressor_forecast=future_regressor,
         )
@@ -350,7 +424,7 @@ class MLEnsemble(ModelObject):
             index=test_index,
             columns=self.df.columns,
         )
-        
+
         if just_point_forecast:
             return forecast
         else:
@@ -385,15 +459,17 @@ class MLEnsemble(ModelObject):
         # regr_params = generate_regressor_params(model_dict=datepart_model_dict)
         model3 = random.choice(['FBProphet', "SeasonalityMotif", "DatepartRegression"])
         models = RandomTemplate(
-            n=3, model_list=['Cassandra', 'MetricMotif', model3],
-            transformer_max_depth=4, transformer_list='fast'
+            n=3,
+            model_list=['Cassandra', 'MetricMotif', model3],
+            transformer_max_depth=4,
+            transformer_list='fast',
         )
-        models = models[['Model', 'ModelParameters', 'TransformationParameters']].to_dict(orient='records')
+        models = models[
+            ['Model', 'ModelParameters', 'TransformationParameters']
+        ].to_dict(orient='records')
 
         return {
-            "num_validations": random.choices(
-                [0, 1, 2], [0.5, 0.3, 0.2]
-            )[0],
+            "num_validations": random.choices([0, 1, 2], [0.5, 0.3, 0.2])[0],
             "validation_method": random.choices(
                 ["backwards", "similarity", "seasonal"], [0.5, 0.3, 0.2]
             )[0],

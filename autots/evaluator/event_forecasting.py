@@ -15,9 +15,7 @@ def extract_result_windows(forecasts, model_name=None):
     if model_name is None:
         model_name = forecasts.model.name
     if model_name in diff_window_motif_list:
-        result_windows = np.moveaxis(
-            np.array(list(result_windows.values())), 0, -1
-        )
+        result_windows = np.moveaxis(np.array(list(result_windows.values())), 0, -1)
     if result_windows.ndim == 4:
         result_windows = result_windows[0]
     transformed_array = []

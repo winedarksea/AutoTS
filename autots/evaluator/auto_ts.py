@@ -38,7 +38,10 @@ from autots.models.ensemble import (
 )
 from autots.models.model_list import model_lists, no_shared
 from autots.tools import cpu_count
-from autots.evaluator.validation import validate_num_validations, generate_validation_indices
+from autots.evaluator.validation import (
+    validate_num_validations,
+    generate_validation_indices,
+)
 
 
 class AutoTS(object):
@@ -818,17 +821,25 @@ class AutoTS(object):
 
         # check how many validations are possible given the length of the data.
         self.num_validations = validate_num_validations(
-            self.validation_method, self.num_validations,
-            df_wide_numeric, forecast_length,
-            self.min_allowed_train_percent, self.verbose,
+            self.validation_method,
+            self.num_validations,
+            df_wide_numeric,
+            forecast_length,
+            self.min_allowed_train_percent,
+            self.verbose,
         )
 
         # generate validation indices (so it can fail now, not after all the generations)
         self.validation_indexes = generate_validation_indices(
-            self.validation_method, forecast_length,
-            self.num_validations, df_wide_numeric,
-            validation_params=self.similarity_validation_params if self.validation_method == "similarity" else self.seasonal_validation_params,
-            preclean=None, verbose=0
+            self.validation_method,
+            forecast_length,
+            self.num_validations,
+            df_wide_numeric,
+            validation_params=self.similarity_validation_params
+            if self.validation_method == "similarity"
+            else self.seasonal_validation_params,
+            preclean=None,
+            verbose=0,
         )
 
         # record if subset or not
@@ -857,9 +868,7 @@ class AutoTS(object):
         # go to first index
         first_idx = self.validation_indexes[0]
         if max(first_idx) > max(df_subset.index):
-            raise ValueError(
-                "provided validation index exceeds historical data period"
-            )
+            raise ValueError("provided validation index exceeds historical data period")
         df_subset = df_subset.reindex(first_idx)
 
         # subset the weighting information as well
@@ -881,7 +890,9 @@ class AutoTS(object):
             if not isinstance(future_regressor, pd.DataFrame):
                 future_regressor = pd.DataFrame(future_regressor)
             if future_regressor.empty:
-                raise ValueError("future_regressor empty, pass None if intending not to use")
+                raise ValueError(
+                    "future_regressor empty, pass None if intending not to use"
+                )
             if not isinstance(future_regressor.index, pd.DatetimeIndex):
                 # should be same length as history as this is not yet the predict step
                 future_regressor.index = df_subset.index
@@ -918,13 +929,16 @@ class AutoTS(object):
         # run the initial template
         submitted_parameters = self.initial_template.copy()
         self._run_template(
-                self.initial_template, df_train, df_test,
-                future_regressor_train=future_regressor_train,
-                future_regressor_test=future_regressor_test,
-                current_weights=current_weights,
-                validation_round=0, max_generations=self.max_generations,
-                current_generation=0,
-                result_file=result_file,
+            self.initial_template,
+            df_train,
+            df_test,
+            future_regressor_train=future_regressor_train,
+            future_regressor_test=future_regressor_test,
+            current_weights=current_weights,
+            validation_round=0,
+            max_generations=self.max_generations,
+            current_generation=0,
+            result_file=result_file,
         )
 
         # now run new generations, trying more models based on past successes.
@@ -985,13 +999,16 @@ class AutoTS(object):
             ).reset_index(drop=True)
 
             self._run_template(
-                    new_template, df_train, df_test,
-                    future_regressor_train=future_regressor_train,
-                    future_regressor_test=future_regressor_test,
-                    current_weights=current_weights,
-                    validation_round=0, max_generations=self.max_generations,
-                    current_generation=current_generation,
-                    result_file=result_file,
+                new_template,
+                df_train,
+                df_test,
+                future_regressor_train=future_regressor_train,
+                future_regressor_test=future_regressor_test,
+                current_weights=current_weights,
+                validation_round=0,
+                max_generations=self.max_generations,
+                current_generation=current_generation,
+                result_file=result_file,
             )
 
             passedTime = (pd.Timestamp.now() - self.start_time).total_seconds() / 60
@@ -1009,13 +1026,16 @@ class AutoTS(object):
                     score_per_series=self.score_per_series,
                 )
                 self._run_template(
-                        ensemble_templates, df_train, df_test,
-                        future_regressor_train=future_regressor_train,
-                        future_regressor_test=future_regressor_test,
-                        current_weights=current_weights,
-                        validation_round=0, max_generations="Ensembles",
-                        current_generation=(current_generation + 1),
-                        result_file=result_file,
+                    ensemble_templates,
+                    df_train,
+                    df_test,
+                    future_regressor_train=future_regressor_train,
+                    future_regressor_test=future_regressor_test,
+                    current_weights=current_weights,
+                    validation_round=0,
+                    max_generations="Ensembles",
+                    current_generation=(current_generation + 1),
+                    result_file=result_file,
                 )
             except Exception as e:
                 print(f"Ensembling Error: {repr(e)}")
@@ -1093,23 +1113,32 @@ class AutoTS(object):
         # run validations
         if self.num_validations > 0:
             self._run_validations(
-                    df_wide_numeric=df_wide_numeric,
-                    num_validations=self.num_validations,
-                    validation_template=self.validation_template,
-                    future_regressor=future_regressor,
+                df_wide_numeric=df_wide_numeric,
+                num_validations=self.num_validations,
+                validation_template=self.validation_template,
+                future_regressor=future_regressor,
             )
             # ensembles built on validation results
             if self.ensemble:
                 try:
                     ens_copy = copy.copy(self.validation_results)
-                    run_count = self.initial_results.model_results[self.initial_results.model_results.Exceptions.isna()][['Model', 'ID']].groupby("ID").count()
+                    run_count = (
+                        self.initial_results.model_results[
+                            self.initial_results.model_results.Exceptions.isna()
+                        ][['Model', 'ID']]
+                        .groupby("ID")
+                        .count()
+                    )
                     models_to_use = run_count[
                         run_count['Model'] >= (self.num_validations + 1)
                     ].index.tolist()
-                    ens_copy.model_results = ens_copy.model_results[ens_copy.model_results.ID.isin(models_to_use)]
+                    ens_copy.model_results = ens_copy.model_results[
+                        ens_copy.model_results.ID.isin(models_to_use)
+                    ]
                     self.ens_copy = ens_copy
                     self.score_per_series = generate_score_per_series(
-                        self.initial_results, self.metric_weighting,
+                        self.initial_results,
+                        self.metric_weighting,
                         total_validations=(self.num_validations + 1),
                     )
                     ensemble_templates = EnsembleTemplateGenerator(
@@ -1120,20 +1149,23 @@ class AutoTS(object):
                     )
                     self.ensemble_templates2 = ensemble_templates
                     self._run_template(
-                            ensemble_templates, df_train, df_test,
-                            future_regressor_train=future_regressor_train,
-                            future_regressor_test=future_regressor_test,
-                            current_weights=current_weights,
-                            validation_round=0, max_generations="Ensembles",
-                            current_generation=(current_generation + 2),
-                            result_file=result_file,
+                        ensemble_templates,
+                        df_train,
+                        df_test,
+                        future_regressor_train=future_regressor_train,
+                        future_regressor_test=future_regressor_test,
+                        current_weights=current_weights,
+                        validation_round=0,
+                        max_generations="Ensembles",
+                        current_generation=(current_generation + 2),
+                        result_file=result_file,
                     )
                     self._run_validations(
-                            df_wide_numeric=df_wide_numeric,
-                            num_validations=self.num_validations,
-                            validation_template=ensemble_templates,
-                            future_regressor=future_regressor,
-                            first_validation=False,
+                        df_wide_numeric=df_wide_numeric,
+                        num_validations=self.num_validations,
+                        validation_template=ensemble_templates,
+                        future_regressor=future_regressor,
+                        first_validation=False,
                     )
                 except Exception as e:
                     print(f"Ensembling Error: {repr(e)}")
@@ -1324,16 +1356,21 @@ or otherwise increase models available."""
             try:
                 # test on initial test split to make sure they work
                 self._run_template(
-                        ensemble_templates, df_train, df_test,
-                        future_regressor_train=future_regressor_train,
-                        future_regressor_test=future_regressor_test,
-                        current_weights=current_weights,
-                        validation_round=0, max_generations="Horizontal Ensembles",
-                        model_count=0,
-                        current_generation=0,
-                        result_file=result_file,
+                    ensemble_templates,
+                    df_train,
+                    df_test,
+                    future_regressor_train=future_regressor_train,
+                    future_regressor_test=future_regressor_test,
+                    current_weights=current_weights,
+                    validation_round=0,
+                    max_generations="Horizontal Ensembles",
+                    model_count=0,
+                    current_generation=0,
+                    result_file=result_file,
                 )
-                hens_model_results = self.initial_results.model_results[self.initial_results.model_results['Ensemble'] == 2].copy()
+                hens_model_results = self.initial_results.model_results[
+                    self.initial_results.model_results['Ensemble'] == 2
+                ].copy()
             except Exception as e:
                 if self.verbose >= 0:
                     print(f"Ensembling Error: {repr(e)}")
@@ -1380,7 +1417,8 @@ or otherwise increase models available."""
         else:
             # choose best model
             eligible_models = self.validation_results.model_results[
-                self.validation_results.model_results['Runs'] >= (self.num_validations + 1)
+                self.validation_results.model_results['Runs']
+                >= (self.num_validations + 1)
             ]
             try:
                 self.best_model = (
@@ -1435,13 +1473,18 @@ or otherwise increase models available."""
         return out
 
     def _run_template(
-            self, template, df_train, df_test,
-            future_regressor_train, future_regressor_test,
-            current_weights,
-            validation_round=0, max_generations="0",
-            model_count=None,
-            current_generation=0,
-            result_file=None,
+        self,
+        template,
+        df_train,
+        df_test,
+        future_regressor_train,
+        future_regressor_test,
+        current_weights,
+        validation_round=0,
+        max_generations="0",
+        model_count=None,
+        current_generation=0,
+        result_file=None,
     ):
         """Get results for one batch of models."""
         model_count = self.model_count if model_count is None else model_count
@@ -1492,18 +1535,19 @@ or otherwise increase models available."""
             self.initial_results.save(result_file)
 
     def _run_validations(
-            self, df_wide_numeric, num_validations,
-            validation_template, future_regressor,
-            first_validation=True,
+        self,
+        df_wide_numeric,
+        num_validations,
+        validation_template,
+        future_regressor,
+        first_validation=True,
     ):
         """Loop through a template for n validation segments."""
         for y in range(num_validations):
             if self.verbose > 0:
                 print("Validation Round: {}".format(str(y + 1)))
             # slice the validation data into current validation slice
-            current_slice = df_wide_numeric.reindex(
-                self.validation_indexes[(y + 1)]
-            )
+            current_slice = df_wide_numeric.reindex(self.validation_indexes[(y + 1)])
 
             # subset series (if used) and take a new train/test split
             if self.subset_flag:
@@ -1567,14 +1611,16 @@ or otherwise increase models available."""
 
             # run validation template on current slice
             self._run_template(
-                    validation_template, val_df_train, val_df_test,
-                    future_regressor_train=val_future_regressor_train,
-                    future_regressor_test=val_future_regressor_test,
-                    current_weights=current_weights,
-                    validation_round=(y + 1),
-                    max_generations="0",
-                    model_count=0,
-                    result_file=None,
+                validation_template,
+                val_df_train,
+                val_df_test,
+                future_regressor_train=val_future_regressor_train,
+                future_regressor_test=val_future_regressor_test,
+                current_weights=current_weights,
+                validation_round=(y + 1),
+                max_generations="0",
+                model_count=0,
+                result_file=None,
             )
 
         self.validation_results = copy.copy(self.initial_results)
@@ -2455,7 +2501,13 @@ or otherwise increase models available."""
                 **kwargs,
             )
 
-    def plot_horizontal_model_count(self, color_list=None, top_n: int = 20, title="Most Frequently Chosen Models", **kwargs):
+    def plot_horizontal_model_count(
+        self,
+        color_list=None,
+        top_n: int = 20,
+        title="Most Frequently Chosen Models",
+        **kwargs,
+    ):
         """Plots most common models. Does not factor in nested in non-horizontal Ensembles."""
         if self.best_model.empty:
             raise ValueError("AutoTS not yet fit.")

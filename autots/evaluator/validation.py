@@ -18,46 +18,58 @@ def extract_seasonal_val_periods(validation_method):
     return seasonal_val_periods
 
 
-def validate_num_validations(validation_method, num_validations, df_wide_numeric, forecast_length, min_allowed_train_percent=0.5, verbose=0):
-        """Check how many validations are possible given the length of the data. Beyond initial eval split which is always assumed."""
-        if (
-            'seasonal' in validation_method
-            and validation_method != "seasonal"
-        ):
-            seasonal_val_periods = extract_seasonal_val_periods(validation_method)
-            temp = df_wide_numeric.shape[0] + forecast_length
-            max_possible = temp / seasonal_val_periods
-        else:
-            max_possible = (df_wide_numeric.shape[0]) / forecast_length
-        # now adjusted for minimum % amount of training data required
-        if (max_possible - np.floor(max_possible)) > min_allowed_train_percent:
-            max_possible = int(max_possible)
-        else:
-            max_possible = int(max_possible) - 1
-        # set auto and max validations
-        if num_validations == "auto":
-            num_validations = 3 if max_possible >= 4 else max_possible
-        elif num_validations == "max":
-            num_validations = 50 if max_possible > 51 else max_possible - 1
-        # this still has the initial test segment as a validation segment, so -1
-        elif max_possible < (num_validations + 1):
-            num_validations = max_possible - 1
-            if verbose >= 0:
-                print(
-                    "Too many training validations for length of data provided, decreasing num_validations to {}".format(
-                        num_validations
-                    )
+def validate_num_validations(
+    validation_method,
+    num_validations,
+    df_wide_numeric,
+    forecast_length,
+    min_allowed_train_percent=0.5,
+    verbose=0,
+):
+    """Check how many validations are possible given the length of the data. Beyond initial eval split which is always assumed."""
+    if 'seasonal' in validation_method and validation_method != "seasonal":
+        seasonal_val_periods = extract_seasonal_val_periods(validation_method)
+        temp = df_wide_numeric.shape[0] + forecast_length
+        max_possible = temp / seasonal_val_periods
+    else:
+        max_possible = (df_wide_numeric.shape[0]) / forecast_length
+    # now adjusted for minimum % amount of training data required
+    if (max_possible - np.floor(max_possible)) > min_allowed_train_percent:
+        max_possible = int(max_possible)
+    else:
+        max_possible = int(max_possible) - 1
+    # set auto and max validations
+    if num_validations == "auto":
+        num_validations = 3 if max_possible >= 4 else max_possible
+    elif num_validations == "max":
+        num_validations = 50 if max_possible > 51 else max_possible - 1
+    # this still has the initial test segment as a validation segment, so -1
+    elif max_possible < (num_validations + 1):
+        num_validations = max_possible - 1
+        if verbose >= 0:
+            print(
+                "Too many training validations for length of data provided, decreasing num_validations to {}".format(
+                    num_validations
                 )
-        else:
-            num_validations = abs(int(num_validations))
-        if num_validations <= 0:
-            num_validations = 0
-        return int(num_validations)
+            )
+    else:
+        num_validations = abs(int(num_validations))
+    if num_validations <= 0:
+        num_validations = 0
+    return int(num_validations)
 
 
-def generate_validation_indices(validation_method, forecast_length, num_validations, df_wide_numeric, validation_params={}, preclean=None, verbose=0):
+def generate_validation_indices(
+    validation_method,
+    forecast_length,
+    num_validations,
+    df_wide_numeric,
+    validation_params={},
+    preclean=None,
+    verbose=0,
+):
     """generate validation indices (equals num_validations + 1 as includes initial eval).
-    
+
     Args:
         validation_method (str): 'backwards', 'even', 'similarity', 'seasonal', 'seasonal 364', etc.
         forecast_length (int): number of steps ahead for forecast
@@ -83,7 +95,7 @@ def generate_validation_indices(validation_method, forecast_length, num_validati
             }
             trans = GeneralTransformer(**params)
             sim_df = trans.fit_transform(sim_df)
-    
+
         created_idx = retrieve_closest_indices(
             sim_df,
             num_indices=num_validations + 1,
@@ -108,8 +120,7 @@ def generate_validation_indices(validation_method, forecast_length, num_validati
         )
         validation_indexes = [df_wide_numeric.index[0 : x[-1]] for x in test.T]
     elif validation_method in base_val_list or (
-        'seasonal' in validation_method
-        and validation_method != "seasonal"
+        'seasonal' in validation_method and validation_method != "seasonal"
     ):
         validation_indexes = [df_wide_numeric.index]
     else:
@@ -122,7 +133,7 @@ def generate_validation_indices(validation_method, forecast_length, num_validati
         shp0 = df_wide_numeric.shape[0]
         for y in range(num_validations):
             # gradually remove the end
-            current_slice = idx[0: shp0 - (y + 1) * forecast_length]
+            current_slice = idx[0 : shp0 - (y + 1) * forecast_length]
             validation_indexes.append(current_slice)
     elif validation_method in ['even', 'Even']:
         idx = df_wide_numeric.index
@@ -131,12 +142,9 @@ def generate_validation_indices(validation_method, forecast_length, num_validati
             validation_size = len(idx) - forecast_length
             validation_size = validation_size / (num_validations + 1)
             validation_size = int(np.floor(validation_size))
-            current_slice = idx[0: validation_size * (y + 1) + forecast_length]
+            current_slice = idx[0 : validation_size * (y + 1) + forecast_length]
             validation_indexes.append(current_slice)
-    elif (
-        'seasonal' in validation_method
-        and validation_method != "seasonal"
-    ):
+    elif 'seasonal' in validation_method and validation_method != "seasonal":
         idx = df_wide_numeric.index
         shp0 = df_wide_numeric.shape[0]
         seasonal_val_periods = extract_seasonal_val_periods(validation_method)
@@ -147,6 +155,6 @@ def generate_validation_indices(validation_method, forecast_length, num_validati
             else:
                 val_per = val_per - forecast_length
             val_per = shp0 - val_per
-            current_slice = idx[0: val_per]
+            current_slice = idx[0:val_per]
             validation_indexes.append(current_slice)
     return validation_indexes

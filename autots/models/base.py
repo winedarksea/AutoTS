@@ -501,14 +501,19 @@ class PredictionObject(object):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
             self.per_series_metrics = full_metric_evaluation(
-                    A=A, F=F, upper_forecast=upper_forecast,
-                    lower_forecast=lower_forecast, df_train=df_train,
-                    full_errors=full_errors,
-                    full_mae_errors=self.full_mae_errors,
-                    squared_errors=self.squared_errors,
-                    prediction_interval=self.prediction_interval,
-                    upper_pl=self.upper_pl, lower_pl=self.lower_pl,
-                    columns=self.forecast.columns, scaler=scaler,
+                A=A,
+                F=F,
+                upper_forecast=upper_forecast,
+                lower_forecast=lower_forecast,
+                df_train=df_train,
+                full_errors=full_errors,
+                full_mae_errors=self.full_mae_errors,
+                squared_errors=self.squared_errors,
+                prediction_interval=self.prediction_interval,
+                upper_pl=self.upper_pl,
+                lower_pl=self.lower_pl,
+                columns=self.forecast.columns,
+                scaler=scaler,
             )
 
         if per_timestamp_errors:
@@ -520,7 +525,7 @@ class PredictionObject(object):
             )
             per_timestamp = pd.DataFrame({'weighted_smape': smape_cons}).transpose()
             self.per_timestamp = per_timestamp
-        
+
         # check series_weights information
         if series_weights is None:
             series_weights = clean_weights(weights=False, series=self.forecast.columns)
