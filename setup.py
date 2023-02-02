@@ -2,15 +2,15 @@ import setuptools
 
 required = [
     "numpy>=1.14.6",
-    "pandas>=0.25.*",
-    "statsmodels>=0.10.*",
-    "scikit-learn>=0.20.*",
+    "pandas>=0.25.0",
+    "statsmodels>=0.10.0",
+    "scikit-learn>=0.20.0",
 ]
 
 extras = {
     'additional': [
         "holidays>=0.9",
-        'prophet>=0.4.*',
+        'prophet>=0.4.0',
         'fredapi',
         'tensorflow',
         'xgboost',
