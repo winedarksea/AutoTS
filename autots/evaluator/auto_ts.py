@@ -635,7 +635,9 @@ class AutoTS(object):
                 res = ", ".join(base_res['smape'].astype(str).tolist())
                 res2 = ", ".join(base_res['mae'].astype(str).tolist())
                 res3 = ", ".join(base_res['spl'].astype(str).tolist())
-                return f"Initiated AutoTS object with best model: \n{self.best_model_name}\n{self.best_model_transformation_params}\n{self.best_model_params}\nSMAPE: {res}\nMAE: {res2}\nSPL: {res3}"
+                len_list = list(range(base_res.shape[0]))
+                res_len = ", ".join([str(x) for x in len_list])
+                return f"Initiated AutoTS object with best model: \n{self.best_model_name}\n{self.best_model_transformation_params}\n{self.best_model_params}\nValidation: {res_len}\nSMAPE: {res}\nMAE: {res2}\nSPL: {res3}"
             except Exception:
                 return "Initiated AutoTS object"
 

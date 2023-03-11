@@ -398,22 +398,70 @@ def dwae(A, F, last_of_array):
     )
 
 
+def linearity(arr):
+    """Score perecentage of a np.array with linear progression, along the index (0) axis."""
+    ar_len = arr.shape[0]
+    # can't tell on data less than 3 data points
+    if ar_len < 3:
+        return np.ones((arr.shape[1]))
+    else:
+        return 1 - np.count_nonzero(np.diff(arr, n=2, axis=0), axis=0) / (arr.shape[0] - 2)
+
+
+def smoothness(arr):
+    """A gradient measure of linearity, where 0 is linear and larger values are more volatile."""
+    return np.mean(np.abs(np.diff(arr, n=2, axis=0)), axis=0)
+
+
 def full_metric_evaluation(
     A,
     F,
     upper_forecast,
     lower_forecast,
     df_train,
-    full_errors,
-    full_mae_errors,
-    squared_errors,
     prediction_interval,
-    upper_pl=None,
-    lower_pl=None,
     columns=None,
     scaler=None,
+    return_components=False,
+    **kwargs
 ):
-    """Create a pd.DataFrame of metrics per series given actuals, forecast, and precalculated errors."""
+    """Create a pd.DataFrame of metrics per series given actuals, forecast, and precalculated errors.
+    
+    Args:
+        A (np.array): array or df of actuals
+        F (np.array): array or df of forecasts
+        return_components (bool): if True, return tuple of detailed errors
+    """
+    # THIS IS USED IN AMFM so try to modify without changing inputs and outputs
+    # arrays are faster for math than pandas dataframes
+    A = np.asarray(A)
+    F = np.asarray(F)
+    lower_forecast = np.asarray(lower_forecast)
+    upper_forecast = np.asarray(upper_forecast)
+    if df_train is None:
+        df_train = A
+    df_train = np.asarray(df_train)
+
+    # reuse this in several metrics so precalculate
+    full_errors = F - A
+    full_mae_errors = np.abs(full_errors)
+    squared_errors = full_errors**2
+
+    # np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A))
+    inv_prediction_interval = 1 - prediction_interval
+    upper_diff = A - upper_forecast
+    upper_pl = np.where(
+        A >= upper_forecast,
+        prediction_interval * upper_diff,
+        inv_prediction_interval * -1 * upper_diff,
+    )
+    # note that the quantile here is the lower quantile
+    low_diff = A - lower_forecast
+    lower_pl = np.where(
+        A >= lower_forecast,
+        inv_prediction_interval * low_diff,
+        prediction_interval * -1 * low_diff,
+    )
     # calculate scaler once
     if scaler is None:
         scaler = np.nanmean(np.abs(np.diff(df_train[-100:], axis=0)), axis=0)
@@ -421,23 +469,6 @@ def full_metric_evaluation(
         fill_val = fill_val if fill_val > 0 else 1
         scaler[scaler == 0] = fill_val
         scaler[np.isnan(scaler)] = fill_val
-
-    if upper_pl is None:
-        inv_prediction_interval = 1 - prediction_interval
-        upper_diff = A - upper_forecast
-        upper_pl = np.where(
-            A >= upper_forecast,
-            prediction_interval * upper_diff,
-            inv_prediction_interval * -1 * upper_diff,
-        )
-    if lower_pl is None:
-        # note that the quantile here is the lower quantile
-        low_diff = A - lower_forecast
-        lower_pl = np.where(
-            A >= lower_forecast,
-            inv_prediction_interval * low_diff,
-            prediction_interval * -1 * low_diff,
-        )
 
     # fill with zero where applicable
     filled_full_mae_errors = full_mae_errors.copy()
@@ -458,12 +489,19 @@ def full_metric_evaluation(
         mage = np.nanmean(np.abs(np.nansum(full_errors, axis=1)))
     else:
         mage = np.mean(np.abs(np.sum(full_errors, axis=1)))
+
     direc_sign = np.sign(F - last_of_array) == np.sign(A - last_of_array)
     weights = np.geomspace(1, 10, full_mae_errors.shape[0])[:, np.newaxis]
+    # calculate 'u' shaped weighting for uwmae
+    u_weights = np.ones_like(weights)
+    frac_shape = F.shape[0] * 0.1
+    first_weight = 5 if frac_shape  < 5 else frac_shape
+    u_weights[0, :] = first_weight
+    u_weights[-1, :] = first_weight * 0.5
 
     # note a number of these are created from my own imagination (winedarksea)
     # those are also subject to change as they are tested and refined
-    return pd.DataFrame(
+    result_df = pd.DataFrame(
         {
             'smape': smape(A, F, full_mae_errors, nan_flag=nan_flag),
             'mae': np.nanmean(full_mae_errors, axis=0),
@@ -513,7 +551,12 @@ def full_metric_evaluation(
             # endpoint weighted mean absolute error
             'ewmae': np.mean(
                 filled_full_mae_errors * weights, axis=0
-            )  # pronunciation guide: "eeeewwwwwwhh, ma!"
+            ),  # pronunciation guide: "eeeewwwwwwhh, ma!"
+            # 'u' weighted (start and end highest priority) rmse
+            'uwmse': np.mean(
+                (filled_full_mae_errors * u_weights) ** 2, axis=0
+            ) / scaler,
+            'smoothness': smoothness(F),
             # 90th percentile of error
             # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
             # 'qae': qae(full_mae_errors, q=0.9, nan_flag=nan_flag),
@@ -530,3 +573,8 @@ def full_metric_evaluation(
         },
         index=columns,
     ).transpose()
+    
+    if return_components:
+        return result_df, full_mae_errors, squared_errors, upper_pl, lower_pl
+    else:
+        return result_df
