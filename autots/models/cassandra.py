@@ -317,6 +317,11 @@ class Cassandra(ModelObject):
         # check if component processing must loop
         # self.component_loop_req = (isinstance(regressor_per_series, dict) and self.regressors_used) or (isinstance(self.holiday_countries, dict) and self.holiday_countries_used)
 
+        # REMOVE NaN but only this so far, for holiday and anomaly detection
+        if self.preprocessing_transformation is not None:
+            self.preprocesser = GeneralTransformer(**{'fillna': self.preprocessing_transformation['fillna']})
+            self.df = self.preprocesser.fit_transform(self.df)
+
         # remove past impacts to find "organic"
         if self.past_impacts_intervention == "remove":
             self.df = self.df / (1 + past_impacts)  # would MINUS be better?
@@ -486,15 +491,12 @@ class Cassandra(ModelObject):
                 self.regressor_transformer = GeneralTransformer(
                     **self.regressor_transformation
                 )
-                self.future_regressor_train = self.regressor_transformer.fit_transform(
-                    clean_regressor(future_regressor)
-                )
             else:
-                self.regressor_transformer = GeneralTransformer(**{})
-                self.future_regressor_train = future_regressor.fillna(
-                    method='ffill'
-                ).fillna(0)
-            x_list.append(self.future_regressor_train.reindex(self.df.index))
+                self.regressor_transformer = GeneralTransformer(**{'fillna': 'ffill'})
+            self.future_regressor_train = self.regressor_transformer.fit_transform(
+                clean_regressor(future_regressor)
+            ).fillna(0)
+            x_list.append(self.future_regressor_train.reindex(self.df.index, fill_value=0))
         if flag_regressors is not None and self.regressors_used:
             self.flag_regressor_train = clean_regressor(
                 flag_regressors, prefix="regrflags_"
@@ -525,6 +527,8 @@ class Cassandra(ModelObject):
         x_array = pd.concat(x_list, axis=1)
         self.x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
+            nulz = x_array.isnull().sum()
+            print(f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}")
             raise ValueError("nan values in x_array")
         if np.all(self.df == 0):
             raise ValueError("transformed data is all zeroes")
@@ -920,7 +924,8 @@ class Cassandra(ModelObject):
         x_array = pd.concat(x_list, axis=1)
         self.predict_x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
-            print(x_array)
+            nulz = x_array.isnull().sum()
+            print(f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}")
             raise ValueError("nan values in predict_x_array")
 
         # RUN LINEAR MODEL
@@ -1188,7 +1193,7 @@ class Cassandra(ModelObject):
             and self.future_regressor_train is not None
             and forecast_length is not None
         ):
-            if self.verbose >= 0:
+            if self.verbose > 0:
                 print(
                     "future_regressor not provided to Cassandra, using forecasts of historical"
                 )
@@ -1220,12 +1225,12 @@ class Cassandra(ModelObject):
             )
         if future_regressor is not None and self.regressors_used:
             if len(future_regressor) == expected_fore_len:
-                full_regr = clean_regressor(future_regressor)
+                full_regr = self.regressor_transformer.transform(clean_regressor(future_regressor))
             else:
                 full_regr = pd.concat(
                     [
                         self.future_regressor_train,
-                        self.regressor_transformer.fit_transform(
+                        self.regressor_transformer.transform(
                             clean_regressor(
                                 future_regressor.loc[
                                     future_regressor.index.difference(
@@ -1295,33 +1300,6 @@ class Cassandra(ModelObject):
         # MAY WANT TO PASS future_regressor HERE
         resid = None
         if forecast_length is not None:
-            # combine regressor types depending on what is given
-            if (
-                self.future_regressor_train is None
-                and self.flag_regressor_train is not None
-                and self.regressors_used
-            ):
-                comp_regr_train = self.flag_regressor_train
-                comp_regr = flag_regressors
-            elif (
-                self.future_regressor_train is not None
-                and self.flag_regressor_train is None
-                and self.regressors_used
-            ):
-                comp_regr_train = self.future_regressor_train
-                comp_regr = future_regressor
-            elif (
-                self.future_regressor_train is not None
-                and self.flag_regressor_train is not None
-                and self.regressors_used
-            ):
-                comp_regr_train = pd.concat(
-                    [self.future_regressor_train, self.flag_regressor_train], axis=1
-                )
-                comp_regr = pd.concat([future_regressor, flag_regressors], axis=1)
-            else:
-                comp_regr_train = None
-                comp_regr = None
             # create new rolling residual if new data provided
             if new_df is not None:
                 resid = df - self._predict_linear(
@@ -1337,11 +1315,40 @@ class Cassandra(ModelObject):
                         resid, np.array(self.create_t(df.index))
                     )
                     resid = pd.DataFrame(resid, index=df.index, columns=df.columns)
+            df_train = self.trend_train if resid is None else resid
+            # combine regressor types depending on what is given
+            if (
+                self.future_regressor_train is None
+                and self.flag_regressor_train is not None
+                and self.regressors_used
+            ):
+                comp_regr_train = self.flag_regressor_train.reindex(index=df_train.index)
+                comp_regr = all_flags.tail(forecast_length)
+            elif (
+                self.future_regressor_train is not None
+                and self.flag_regressor_train is None
+                and self.regressors_used
+            ):
+                comp_regr_train = self.future_regressor_train.reindex(index=df_train.index)
+                comp_regr = full_regr.tail(forecast_length)
+            elif (
+                self.future_regressor_train is not None
+                and self.flag_regressor_train is not None
+                and self.regressors_used
+            ):
+                comp_regr_train = pd.concat(
+                    [self.future_regressor_train, self.flag_regressor_train], axis=1
+                ).reindex(index=df_train.index)
+                comp_regr = pd.concat([full_regr, all_flags], axis=1).tail(forecast_length)
+            else:
+                comp_regr_train = None
+                comp_regr = None
+
             trend_forecast = model_forecast(
                 model_name=self.trend_model['Model'],
                 model_param_dict=self.trend_model['ModelParameters'],
                 model_transform_dict=self.trend_transformation,
-                df_train=self.trend_train if resid is None else resid,
+                df_train=df_train,
                 forecast_length=forecast_length,
                 frequency=self.frequency,
                 prediction_interval=self.prediction_interval,
@@ -2374,6 +2381,8 @@ if False:
         'wiki_Germany': 'de',
     }
     df_daily = load_daily(long=False)
+    # add nan
+    df_daily.iloc[100, :] = np.nan
     forecast_length = 180
     include_history = True
     df_train = df_daily[:-forecast_length].iloc[:, 1:]
@@ -2458,12 +2467,12 @@ if False:
         mod.plot_components(
             pred, series=series, to_origin_space=True, start_date=start_date
         )
-        # plt.savefig("Cassandra_components.png", dpi=300)
+        # plt.savefig("Cassandra_components3.png", dpi=300, bbox_inches="tight")
         plt.show()
         mod.plot_trend(
             series=series, vline=result.index[-forecast_length], start_date=start_date
         )
-        # plt.savefig("Cassandra_trend.png", dpi=300)
+        # plt.savefig("Cassandra_trend.png", dpi=300, bbox_inches="tight")
     pred.evaluate(
         df_daily.reindex(result.index)[df_train.columns]
         if include_history

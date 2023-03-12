@@ -14,6 +14,7 @@
 
 # 0.5.5 🌌 🌌 🌌
 * updated metrics
+* Cassandra bug fixes
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

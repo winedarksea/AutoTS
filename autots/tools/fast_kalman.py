@@ -865,7 +865,11 @@ def douter(a, b):
 
 def dinv(A):
     "Matrix inverse applied to last two axes"
-    return np.linalg.inv(A)
+    try:
+        res = np.linalg.inv(A)
+    except Exception:
+        res = np.linalg.pinv(A)  # slower but more robust
+    return res
 
 
 def autoshape(func):

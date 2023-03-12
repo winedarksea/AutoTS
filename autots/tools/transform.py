@@ -16,6 +16,7 @@ from autots.tools.anomaly_utils import (
 )
 from autots.tools.window_functions import window_lin_reg, window_lin_reg_mean
 from autots.tools.fast_kalman import KalmanFilter, random_state_space
+from autots.tools.shaping import infer_frequency
 
 try:
     from joblib import Parallel, delayed
@@ -497,6 +498,10 @@ class STLFilter(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         from statsmodels.tsa.seasonal import STL, seasonal_decompose
+        
+        if df.index.freq is None:
+            freq = infer_frequency(df)
+            df = df.asfreq(freq).fillna(method='ffill')
 
         def _stl_one_return(series, decomp_type="STL", seasonal=7, part="trend"):
             """Convert filter to apply on pd DataFrame."""
