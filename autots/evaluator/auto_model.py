@@ -1452,6 +1452,7 @@ def TemplateWizard(
                     'Runs': 1,
                     'Generation': current_generation,
                     'ValidationRound': validation_round,
+                    'ValidationStartDate': df_forecast.forecast.index[0],
                 },
                 index=[0],
             )
