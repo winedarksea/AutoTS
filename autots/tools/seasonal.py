@@ -223,7 +223,7 @@ def date_part(
             seasonal_list.append(fourier_series(t, p=7, n=3))
             # interaction
             seasonal_list.append(
-                fourier_series(t, p=7, n=5) * fourier_series(t, p=7, n=5)
+                fourier_series(t, p=7, n=5) * fourier_series(t, p=365.25, n=5)
             )
         # weekly
         # elif seasonal_ratio < 0.05:  # 0.019 to 0.038

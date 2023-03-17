@@ -717,7 +717,7 @@ def ModelPrediction(
     # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
     # can maybe remove this eventually and just keep the later one
     if fail_on_forecast_nan:
-        if df_forecast.forecast.isnull().any().astype(int).sum() > 0:
+        if not np.isfinite(np.max(df_forecast.forecast.to_numpy())):
             raise ValueError(
                 "Model {} returned NaN for one or more series. fail_on_forecast_nan=True".format(
                     model_str
@@ -792,7 +792,7 @@ def ModelPrediction(
 
     # THIS CHECKS POINT FORECAST FOR NULLS BUT NOT UPPER/LOWER FORECASTS
     if fail_on_forecast_nan:
-        if df_forecast.forecast.isnull().any().astype(int).sum() > 0:
+        if not np.isfinite(np.max(df_forecast.forecast.to_numpy())):
             raise ValueError(
                 "Model returned NaN due to a preprocessing transformer {}. fail_on_forecast_nan=True".format(
                     str(transformation_dict)

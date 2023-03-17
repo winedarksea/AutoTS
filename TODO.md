@@ -15,6 +15,7 @@
 # 0.5.5 🌌 🌌 🌌
 * updated metrics
 * Cassandra bug fixes
+* fail_on_forecast_nan now also checks for infinity, and is faster
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py
