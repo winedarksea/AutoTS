@@ -1568,16 +1568,18 @@ def TemplateWizard(
             if verbose >= 0:
                 if traceback:
                     print(
-                        'Template Eval Error: {} in model {}: {}'.format(
+                        'Template Eval Error: {} in model {} in generation {}: {}'.format(
                             ''.join(tb.format_exception(None, e, e.__traceback__)),
                             template_result.model_count,
+                            str(current_generation),
                             model_str,
                         )
                     )
                 else:
                     print(
-                        'Template Eval Error: {} in model {}: {}'.format(
-                            (repr(e)), template_result.model_count, model_str
+                        'Template Eval Error: {} in model {} in generation {}: {}'.format(
+                            (repr(e)), template_result.model_count,
+                            str(current_generation), model_str
                         )
                     )
             fit_runtime = datetime.datetime.now() - template_start_time
@@ -2126,7 +2128,9 @@ def validation_aggregation(validation_results):
         'medae': 'mean',
         'made': 'mean',
         'mage': 'mean',
+        'underestimate': 'sum',
         'mle': 'mean',
+        'overestimate': 'sum',
         'imle': 'mean',
         'spl': 'mean',
         'containment': 'mean',
