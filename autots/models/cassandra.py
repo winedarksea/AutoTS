@@ -1175,6 +1175,7 @@ class Cassandra(ModelObject):
         """Generate a forecast.
 
         future_regressor and regressor_per_series should only include new future values, history is already stored
+        they should match on forecast_length and index of forecasts
         """
         self.forecast_length = forecast_length
         predictStartTime = self.time()
@@ -1451,6 +1452,12 @@ class Cassandra(ModelObject):
                 regressor_per_series=regr_ps_fore,
             )
 
+        # save future index before include_history is added
+        if future_impacts is not None and forecast_length is not None:
+            future_impacts = future_impacts.reindex(
+                columns=df_forecast.forecast.columns,
+                index=self.forecast_index, fill_value=0,
+            )
         # undo preprocessing and scaling
         # account for some transformers requiring different methods on original data and forecast
         if forecast_length is None:
@@ -1796,8 +1803,8 @@ class Cassandra(ModelObject):
         else:
             trend_anomaly_detector_params = None
         linear_model = random.choices(
-            ['lstsq', 'linalg_solve', 'l1_norm', 'dwae_norm', 'quantile_norm'],
-            [0.6, 0.2, 0.1, 0.05, 0.02],
+            ['lstsq', 'linalg_solve', 'l1_norm', 'dwae_norm', 'quantile_norm', 'l1_positive'],
+            [0.6, 0.2, 0.1, 0.05, 0.02, 0.03],
         )[0]
         recency_weighting = random.choices(
             [None, 0.05, 0.1, 0.25], [0.7, 0.1, 0.1, 0.1]
@@ -1816,7 +1823,7 @@ class Cassandra(ModelObject):
                 'lambda': random.choices([0, 0.1, 1, 10], [0.4, 0.2, 0.2, 0.2])[0],
                 'recency_weighting': recency_weighting,
             }
-        elif linear_model in ['l1_norm', 'dwae_norm', 'quantile_norm']:
+        elif linear_model in ['l1_norm', 'dwae_norm', 'quantile_norm', 'l1_positive']:
             linear_model = {
                 'model': linear_model,
                 'recency_weighting': recency_weighting,
@@ -2222,6 +2229,10 @@ def cost_function_l1(params, X, y):
     return np.sum(np.abs(y - np.dot(X, params.reshape(X.shape[1], y.shape[1]))))
 
 
+def cost_function_l1_positive(params, X, y):
+    return np.sum(np.abs(y - np.dot(X, np.where(params < 0, 0, params).reshape(X.shape[1], y.shape[1]))))
+
+
 # actually this is more like MADE
 def cost_function_dwae(params, X, y):
     A = y
@@ -2260,9 +2271,13 @@ def lstsq_minimize(X, y, maxiter=15000, cost_function="l1"):
     # assuming scaled, these should be reasonable bounds
     bounds = [(-10, 10) for x in x0]
     if cost_function == "dwae":
+        bounds = [(-0.5, 10) for x in x0]
         cost_func = cost_function_dwae
     elif cost_function == "quantile":
         cost_func = cost_function_quantile
+    elif cost_function == "l1_positive":
+        bounds = [(0, 10) for x in x0]
+        cost_func = cost_function_l1
     else:
         cost_func = cost_function_l1
     return minimize(
@@ -2311,6 +2326,13 @@ def linear_model(x, y, params):
             np.asarray(y),
             maxiter=params.get("maxiter", 15000),
             cost_function="dwae",
+        )
+    elif model_type == "l1_positive":
+        return lstsq_minimize(
+            np.asarray(x),
+            np.asarray(y),
+            maxiter=params.get("maxiter", 15000),
+            cost_function="l1_positive",
         )
     else:
         raise ValueError("linear model not recognized")
