@@ -319,7 +319,7 @@ class Cassandra(ModelObject):
 
         # REMOVE NaN but only this so far, for holiday and anomaly detection
         if self.preprocessing_transformation is not None:
-            self.preprocesser = GeneralTransformer(**{'fillna': self.preprocessing_transformation['fillna']})
+            self.preprocesser = GeneralTransformer(**{'fillna': self.preprocessing_transformation.get('fillna', "ffill")})
             self.df = self.preprocesser.fit_transform(self.df)
 
         # remove past impacts to find "organic"
