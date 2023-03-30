@@ -455,46 +455,97 @@ class AutoTS(object):
 
     @staticmethod
     def get_new_params(method='random'):
-        ensemble_choice = random.choices(
-            [
-                None,
-                ['simple'],
-                ['simple', 'horizontal-max'],
+        """Randomly generate new parameters for the class."""
+        if method == 'full':
+            ensemble_choice = random.choices(
                 [
-                    'simple',
-                    "distance",
-                    "horizontal",
-                    "horizontal-max",
-                    "mosaic",
-                    'mosaic-window',
-                    "subsample",
+                    None,
+                    ['simple'],
+                    ['simple', 'horizontal-max'],
+                    [
+                        'simple',
+                        "distance",
+                        "horizontal",
+                        "horizontal-max",
+                    ],
                 ],
-            ],
-            [0.3, 0.1, 0.2, 0.2],
-        )[0]
-        metric_weighting = {
-            'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[0],
-            'mae_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-            'rmse_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-            'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[0],
-            'mage_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-            'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-            'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-            'spl_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-            'oda_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-            'mqae_weighting': random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
-            'dwae_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-            'maxe_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-            'containment_weighting': random.choices(
-                [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
-            )[0],
-            'contour_weighting': random.choices([0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05])[
-                0
-            ],
-            'runtime_weighting': random.choices(
-                [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
-            )[0],
-        }
+                [0.3, 0.1, 0.2, 0.2],
+            )[0]
+        else:
+            ensemble_choice = random.choices(
+                [
+                    None,
+                    ['simple'],
+                    ['simple', 'horizontal-max'],
+                    [
+                        'simple',
+                        "distance",
+                        "horizontal",
+                        "horizontal-max",
+                        "mosaic",
+                        'mosaic-window',
+                        "subsample",
+                        "mlensemble",
+                    ],
+                ],
+                [0.3, 0.1, 0.2, 0.2],
+            )[0]
+        if method == "full":
+            metric_weighting = {
+                'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[0],
+                'mae_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                'rmse_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[0],
+                'mage_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'spl_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                'oda_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'mqae_weighting': random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
+                'dwae_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'maxe_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'containment_weighting': random.choices(
+                    [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
+                )[0],
+                'contour_weighting': random.choices([0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05])[
+                    0
+                ],
+                'runtime_weighting': random.choices(
+                    [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
+                )[0],
+                'uwmse_weighting': random.choices(
+                    [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
+                )[0],
+                'smoothness_weighting': random.choices(
+                    [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
+                )[0],
+                'ewmae_weighting': random.choices(
+                    [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
+                )[0],
+            }
+        else:
+            metric_weighting = {
+                'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[0],
+                'mae_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                'rmse_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[0],
+                'mage_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'spl_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                'oda_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'mqae_weighting': random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
+                'maxe_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'containment_weighting': random.choices(
+                    [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
+                )[0],
+                'contour_weighting': random.choices([0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05])[
+                    0
+                ],
+                'runtime_weighting': random.choices(
+                    [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
+                )[0],
+            }
         preclean_choice = random.choices(
             [
                 None,
@@ -545,9 +596,8 @@ class AutoTS(object):
             preclean_choice = RandomTransform(
                 transformer_list="fast", transformer_max_depth=2
             )
-        return {
-            'max_generations': random.choices([5, 10, 20, 50], [0.2, 0.5, 0.1, 0.4])[0],
-            'model_list': random.choices(
+        if method == 'full':
+            model_list = random.choices(
                 [
                     'fast',
                     'superfast',
@@ -556,9 +606,42 @@ class AutoTS(object):
                     'all',
                     'motifs',
                     'no_shared_fast',
+                    'multivariate',
+                    'univariate',
+                    'all_result_path',
+                    'regressions',
+                    'best',
+                    'regressor',
+                    'probabilistic',
+                    'no_shared',
                 ],
-                [0.2, 0.2, 0.2, 0.2, 0.05, 0.05, 0.1],
-            )[0],
+                [0.2, 0.2, 0.2, 0.2, 0.05, 0.05, 0.1, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05],
+            )[0]
+        else:
+            model_list = random.choices(
+                [
+                    'fast',
+                    'superfast',
+                    'default',
+                    'fast_parallel',
+                    'motifs',
+                    'no_shared_fast',
+                ],
+                [0.2, 0.2, 0.2, 0.2, 0.05, 0.1],
+            )[0]
+        if method == 'full':
+            validation_method = random.choices(
+                ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
+                [0.4, 0.1, 0.3, 0.3, 0.2],
+            )[0]
+        else:
+            random.choices(
+                ['backwards', 'even', 'similarity', 'seasonal 364'],
+                [0.4, 0.1, 0.3, 0.3, 0.2],
+            )[0]
+        return {
+            'max_generations': random.choices([5, 15, 25, 50], [0.2, 0.5, 0.1, 0.4])[0],
+            'model_list': model_list,
             'transformer_list': random.choices(
                 ['all', 'fast', 'superfast'],
                 [0.2, 0.5, 0.3],
@@ -568,10 +651,7 @@ class AutoTS(object):
                 [0.1, 0.2, 0.3, 0.3, 0.2, 0.1],
             )[0],
             'num_validations': random.choice([0, 1, 2, 3, 4, 6]),
-            'validation_method': random.choices(
-                ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
-                [0.4, 0.1, 0.3, 0.3, 0.2],
-            )[0],
+            'validation_method': validation_method,
             'models_to_validate': random.choices(
                 [0.15, 0.10, 0.25, 0.35, 0.45], [0.3, 0.1, 0.3, 0.3, 0.1]
             )[0],
