@@ -635,9 +635,9 @@ class AutoTS(object):
                 [0.4, 0.1, 0.3, 0.3, 0.2],
             )[0]
         else:
-            random.choices(
+            validation_method = random.choices(
                 ['backwards', 'even', 'similarity', 'seasonal 364'],
-                [0.4, 0.1, 0.3, 0.3, 0.2],
+                [0.4, 0.1, 0.3, 0.3],
             )[0]
         return {
             'max_generations': random.choices([5, 15, 25, 50], [0.2, 0.5, 0.1, 0.4])[0],
@@ -650,7 +650,7 @@ class AutoTS(object):
                 [1, 2, 4, 6, 8, 10],
                 [0.1, 0.2, 0.3, 0.3, 0.2, 0.1],
             )[0],
-            'num_validations': random.choice([0, 1, 2, 3, 4, 6]),
+            'num_validations': random.choices([0, 1, 2, 3, 4, 6], [0.1, 0.2, 0.3, 0.2, 0.1, 0.05])[0],
             'validation_method': validation_method,
             'models_to_validate': random.choices(
                 [0.15, 0.10, 0.25, 0.35, 0.45], [0.3, 0.1, 0.3, 0.3, 0.1]
@@ -661,7 +661,7 @@ class AutoTS(object):
             )[0],
             'subset': random.choices([None, 10, 100], [0.9, 0.05, 0.05])[0],
             'models_mode': random.choices(['random', 'regressor'], [0.95, 0.05])[0],
-            'drop_most_recent': random.choices([0, 1, 2], [0.8, 0.1, 0.1])[0],
+            # 'drop_most_recent': random.choices([0, 1, 2], [0.8, 0.1, 0.1])[0],
             'introduce_na': random.choice([None, True, False]),
             'prefill_na': None,
             'remove_leading_zeroes': False,
@@ -1257,6 +1257,10 @@ class AutoTS(object):
 Try increasing models_to_validate, max_per_model_class
 or otherwise increase models available."""
 
+        # run validation_results aggregation
+        self.validation_results = copy.copy(self.initial_results)
+        self.validation_results = validation_aggregation(self.validation_results, df_train=self.df_wide_numeric)
+
         # Construct horizontal style ensembles
         models_to_use = None
         if any(x in ensemble for x in self.h_ens_list):
@@ -1460,7 +1464,7 @@ or otherwise increase models available."""
 
             # rerun validation_results aggregation with new models added
             self.validation_results = copy.copy(self.initial_results)
-            self.validation_results = validation_aggregation(self.validation_results)
+            self.validation_results = validation_aggregation(self.validation_results, df_train=self.df_wide_numeric)
 
             # use the best of these ensembles if any ran successfully
             try:
@@ -1707,7 +1711,7 @@ or otherwise increase models available."""
 
         self.validation_results = copy.copy(self.initial_results)
         # aggregate validation results
-        self.validation_results = validation_aggregation(self.validation_results)
+        self.validation_results = validation_aggregation(self.validation_results, df_train=self.df_wide_numeric)
 
     def predict(
         self,

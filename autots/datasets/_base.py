@@ -8,7 +8,17 @@ import pandas as pd
 
 
 def load_daily(long: bool = True):
-    """2020 Covid, Air Pollution, and Economic Data.
+    """Daily sample data.
+
+    wiki = [
+            "Germany", "Thanksgiving", 'all', 'Microsoft',
+            "Procter_%26_Gamble", "YouTube", "United_States", "Elizabeth_II",
+            "William_Shakespeare", "Cleopatra", "George_Washington",
+            "Chinese_New_Year", "Standard_deviation", "Christmas",
+            "List_of_highest-grossing_films",
+            "List_of_countries_that_have_gained_independence_from_the_United_Kingdom",
+            "Periodic_table"
+    ]
 
     Sources: Wikimedia Foundation
 

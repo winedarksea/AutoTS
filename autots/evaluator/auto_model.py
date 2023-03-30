@@ -2111,7 +2111,7 @@ def NewGeneticTemplate(
             )
 
 
-def validation_aggregation(validation_results):
+def validation_aggregation(validation_results, df_train=None):
     """Aggregate a TemplateEvalObject."""
     groupby_cols = [
         'ID',
@@ -2180,6 +2180,19 @@ def validation_aggregation(validation_results):
     validation_results.model_results = validation_results.model_results.reset_index(
         drop=False
     )
+    if df_train is not None:
+        scaler = df_train.mean(axis=0)
+        scaler[scaler == 0] == np.nan
+        scaler = scaler.fillna(df_train.max(axis=0))
+        scaler[scaler == 0] == 1
+        per_series = (validation_results.per_series_mae.groupby(level=0).max()) / scaler * 100
+        per_series_agg = pd.concat([
+            per_series.min(axis=1).rename("lowest_series_mape"),
+            per_series.idxmin(axis=1).rename("lowest_series_mape_name"),
+            per_series.max(axis=1).rename("highest_series_mape"),
+            per_series.idxmax(axis=1).rename("highest_series_mape_name"),
+        ], axis=1)
+        validation_results.model_results = validation_results.model_results.merge(per_series_agg, left_on='ID', right_index=True, how='left')
     return validation_results
 
 

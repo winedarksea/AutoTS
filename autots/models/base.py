@@ -348,34 +348,15 @@ class PredictionObject(object):
     def total_runtime(self):
         """Combine runtimes."""
         return self.fit_runtime + self.predict_runtime + self.transformation_runtime
-
-    def plot(
-        self,
-        df_wide=None,
-        series: str = None,
-        ax=None,
-        remove_zeroes: bool = False,
-        interpolate: str = None,
-        start_date: str = None,
-        alpha=0.25,
-        facecolor="black",
-        loc="upper left",
-        title=None,
-        vline=None,
-        **kwargs,
-    ):
-        """Generate an example plot of one series. Does not handle non-numeric forecasts.
-
-        Args:
-            df_wide (str): historic data for plotting actuals
-            series (str): column name of series to plot. Random if None.
-            ax: matplotlib axes to pass through to pd.plot()
-            remove_zeroes (bool): if True, don't plot any zeroes
-            interpolate (str): if not None, a method to pass to pandas interpolate
-            start_date (str): Y-m-d string or Timestamp to remove all data before
-            vline (datetime): datetime of dashed vertical line to plot
-            **kwargs passed to pd.DataFrame.plot()
-        """
+    
+    def plot_df(
+            self,
+            df_wide=None,
+            series: str = None,
+            remove_zeroes: bool = False,
+            interpolate: str = None,
+            start_date: str = None,
+        ):
         if series is None:
             import random
 
@@ -422,8 +403,43 @@ class PredictionObject(object):
             ):
                 raise ValueError("start_date is more recent than all data provided")
             plot_df = plot_df[plot_df.index >= start_date]
+        return plot_df
+
+    def plot(
+        self,
+        df_wide=None,
+        series: str = None,
+        remove_zeroes: bool = False,
+        interpolate: str = None,
+        start_date: str = None,
+        alpha=0.25,
+        facecolor="black",
+        loc="upper left",
+        title=None,
+        vline=None,
+        **kwargs,
+    ):
+        """Generate an example plot of one series. Does not handle non-numeric forecasts.
+
+        Args:
+            df_wide (str): historic data for plotting actuals
+            series (str): column name of series to plot. Random if None.
+            ax: matplotlib axes to pass through to pd.plot()
+            remove_zeroes (bool): if True, don't plot any zeroes
+            interpolate (str): if not None, a method to pass to pandas interpolate
+            start_date (str): Y-m-d string or Timestamp to remove all data before
+            vline (datetime): datetime of dashed vertical line to plot
+            **kwargs passed to pd.DataFrame.plot()
+        """
+        plot_df = self.plot_df(
+            df_wide=df_wide,
+            series=series,
+            remove_zeroes=remove_zeroes,
+            interpolate=interpolate,
+            start_date=start_date,
+        )
         if title is None:
-            title = f"{series} with model {str(model_name)[0:80]}"
+            title = f"{series} with model {str(self.model_name)[0:80]}"
         if vline is None:
             return plot_df.plot(title=title, **kwargs)
         else:
