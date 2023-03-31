@@ -164,7 +164,7 @@ probabilistic = [
     'GluonTS',
     'FBProphet',
     'AverageValueNaive',
-    'VARMAX',
+    # 'VARMAX',  # yes but so slow
     'DynamicFactor',
     'VAR',
     'UnivariateMotif',
@@ -188,7 +188,7 @@ multivariate = [
     'VECM',
     'DynamicFactor',
     'GluonTS',
-    'VARMAX',
+    # 'VARMAX',  # yes but so slow
     'RollingRegression',
     'WindowRegression',
     'VAR',

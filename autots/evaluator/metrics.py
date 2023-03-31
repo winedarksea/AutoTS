@@ -410,7 +410,9 @@ def linearity(arr):
 
 def smoothness(arr):
     """A gradient measure of linearity, where 0 is linear and larger values are more volatile."""
-    return np.mean(np.abs(np.diff(arr, n=2, axis=0)), axis=0)
+    # return np.mean(np.abs(np.diff(arr, n=2, axis=0)), axis=0) # linear smallest, massive jumps biggest
+    # return np.abs(np.mean(np.diff(arr, n=2, axis=0), axis=0))  # favors linear and also sine wave types, suspectible to large but self-canceling
+    return np.log1p(np.mean(np.abs(np.diff(arr, n=2, axis=0)), axis=0).round(12))
 
 
 def full_metric_evaluation(

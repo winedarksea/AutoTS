@@ -277,15 +277,10 @@ class AutoTS(object):
 
         # check metric weights are valid
         metric_weighting_values = self.metric_weighting.values()
-        if min(metric_weighting_values) < 0:
+        if sum(metric_weighting_values) < -10:
             raise ValueError(
-                f"Metric weightings must be numbers >= 0. Current weightings: {self.metric_weighting}"
+                f"Metric weightings should generally be >= 0. Current weightings: {self.metric_weighting}"
             )
-        elif sum(metric_weighting_values) == 0:
-            raise ValueError(
-                "Sum of metric_weightings is 0, one or more values must be > 0"
-            )
-
         if (
             'seasonal' in self.validation_method
             and self.validation_method != "seasonal"
@@ -517,7 +512,7 @@ class AutoTS(object):
                     [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
                 )[0],
                 'smoothness_weighting': random.choices(
-                    [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
+                    [0, 0.05, 3, 1, -0.5, -3], [0.4, 0.1, 0.1, 0.1, 0.2, 0.1]
                 )[0],
                 'ewmae_weighting': random.choices(
                     [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
@@ -615,7 +610,7 @@ class AutoTS(object):
                     'probabilistic',
                     'no_shared',
                 ],
-                [0.2, 0.2, 0.2, 0.2, 0.05, 0.05, 0.1, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05],
+                [0.2, 0.2, 0.2, 0.2, 0.01, 0.1, 0.1, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05],
             )[0]
         else:
             model_list = random.choices(

@@ -2332,7 +2332,7 @@ def generate_score(
         if smoothness_weighting != 0:
             smoothness_scaler = model_results['smoothness_weighted'][
                 model_results['smoothness_weighted'] != 0
-            ].min()
+            ].mean()
             smoothness_score = model_results['smoothness_weighted'] / smoothness_scaler
             overall_score = overall_score + (smoothness_score * smoothness_weighting)
         if spl_weighting != 0:
@@ -2480,7 +2480,7 @@ def generate_score_per_series(
     if smoothness_weighting != 0:
         smoothness_scaler = (
             results_object.per_series_smoothness[results_object.per_series_smoothness != 0]
-            .min()
+            .mean()
             .fillna(1)
         )
         smoothness_score = results_object.per_series_smoothness / smoothness_scaler
