@@ -481,7 +481,7 @@ class Cassandra(ModelObject):
                     np.asarray(df), np.array(self.create_t(df.index))
                 )
                 resid = pd.DataFrame(
-                    slope * self.t_train[..., None] + intercept,
+                    slope * np.asarray(self.t_train)[..., None] + intercept,
                     index=df.index,
                     columns=df.columns,
                 )
@@ -699,9 +699,18 @@ class Cassandra(ModelObject):
             trend_posterior = pd.DataFrame(
                 trend_posterior, index=self.df.index, columns=self.df.columns
             )
-            self.residual_uncertainty = (trend_residuals - trend_posterior).std()
+            res_dif = (trend_residuals - trend_posterior)
+            res_upper = res_dif[res_dif >= 0]
+            res_lower = res_dif[res_dif <= 0]
+            self.residual_uncertainty_upper = res_upper.mean()
+            self.residual_uncertainty_lower = res_lower.mean().abs()
+            self.residual_uncertainty_upper_std = res_upper.std()
+            self.residual_uncertainty_lower_std = res_lower.std()
         else:
-            self.residual_uncertainty = pd.Series(0, index=self.df.columns)
+            self.residual_uncertainty_upper = pd.Series(0, index=self.df.columns)
+            self.residual_uncertainty_lower = pd.Series(0, index=self.df.columns)
+            self.residual_uncertainty_upper_std = pd.Series(0, index=self.df.columns)
+            self.residual_uncertainty_lower_std = pd.Series(0, index=self.df.columns)
         if self.trend_window is not None:
             self.trend_train = trend_posterior
         else:
@@ -1132,16 +1141,25 @@ class Cassandra(ModelObject):
             return_components=True,
         )
         # ADD PREPROCESSING BEFORE TREND (FIT X, REVERSE on PREDICT, THEN TREND)
-
+        zeros_df = pd.DataFrame(0, index=trend_component.forecast.index, columns=trend_component.forecast.columns)
+        upper_adjust = (zeros_df + self.residual_uncertainty_upper) + (self.residual_uncertainty_upper_std * self.int_std_dev)
+        lower_adjust = (zeros_df + self.residual_uncertainty_lower) + (self.residual_uncertainty_lower_std * self.int_std_dev)
+        # add a gradual increase to full uncertainty
+        if linear_pred.shape[0] > 4:
+            first_adjust = zeros_df + 1
+            first_adjust.iloc[0] = 0.5
+            first_adjust.iloc[1] = 0.7
+            upper_adjust = upper_adjust * first_adjust
+            lower_adjust = lower_adjust * first_adjust
         upper = (
             trend_component.upper_forecast.reindex(dates)
             + linear_pred
-            + self.residual_uncertainty * self.int_std_dev
+            + upper_adjust
         )
         lower = (
             trend_component.lower_forecast.reindex(dates)
             + linear_pred
-            - self.residual_uncertainty * self.int_std_dev
+            - lower_adjust
         )
 
         df_forecast = PredictionObject(
@@ -2470,7 +2488,7 @@ if False:
     result = pred.forecast
     series = random.choice(mod.column_names)
     # series = "wiki_Periodic_table"
-    # series = 'wiki_Germany'
+    series = 'wiki_all'
     mod.regressors_used
     mod.holiday_countries_used
     with plt.style.context("seaborn-white"):
@@ -2577,125 +2595,4 @@ if mod.trend_anomaly_detector is not None:
         handles += [scat3]
         labels += ["trend anomalies"]
 ax.legend(handles, labels)
-
-# best yet 12.0 SMAPE
-c_params = {'preprocessing_transformation': {'fillna': 'ffill',
-  'transformations': {0: 'KalmanSmoothing'},
-  'transformation_params': {0: {'state_transition': [[1]],
-    'process_noise': [[0.307]],
-    'observation_model': [[1]],
-    'observation_noise': 1.0}}},
- 'scaling': {'fillna': None,
-  'transformations': {0: 'MinMaxScaler'},
-  'transformation_params': {0: {}}},
- 'seasonalities': [7, 365.25],
- 'ar_lags': [7],
- 'ar_interaction_seasonality': None,
- 'anomaly_detector_params': None,
- 'anomaly_intervention': None,
- 'holiday_detector_params': None,
- 'holiday_countries_used': False,
- 'multivariate_feature': None,
- 'multivariate_transformation': {'fillna': 'pchip',
-  'transformations': {0: 'Round', 1: 'bkfilter'},
-  'transformation_params': {0: {'decimals': 0,
-    'on_transform': True,
-    'on_inverse': False},
-   1: {}}},
- 'regressor_transformation': {'fillna': 'rolling_mean_24',
-  'transformations': {0: 'PowerTransformer'},
-  'transformation_params': {0: {}}},
- 'regressors_used': False,
- 'linear_model': {'model': 'lstsq', 'lambda': 10, 'recency_weighting': None},
- 'randomwalk_n': 10,
- 'trend_window': 3,
- 'trend_standin': None,
- 'trend_anomaly_detector_params': None,
- 'trend_transformation': {'fillna': 'akima',
-  'transformations': {0: 'DifferencedTransformer'},
-  'transformation_params': {0: {}}},
- 'trend_model': {'Model': 'SeasonalityMotif',
-  'ModelParameters': {'window': 15,
-   'point_method': 'midhinge',
-   'distance_metric': 'mse',
-   'k': 10,
-   'datepart_method': 'recurring'}},
- 'trend_phi': None}
-
-# 11.7 SMAPE
-c_params = {'preprocessing_transformation': {'fillna': 'ffill',
-  'transformations': {0: 'Slice', 1: 'AlignLastValue'},
-  'transformation_params': {0: {'method': 0.5},
-   1: {'rows': 1,
-    'lag': 1,
-    'method': 'additive',
-    'strength': 1.0,
-    'first_value_only': False}}},
- 'scaling': 'BaseScaler',
- 'seasonalities': ['weekdayofmonth', 'common_fourier'],
- 'ar_lags': None,
- 'ar_interaction_seasonality': None,
- 'anomaly_detector_params': {'method': 'rolling_zscore',
-  'transform_dict': {'fillna': None,
-   'transformations': {'0': 'ClipOutliers'},
-   'transformation_params': {'0': {'method': 'clip', 'std_threshold': 6}}},
-  'method_params': {'distribution': 'chi2',
-   'alpha': 0.05,
-   'rolling_periods': 200,
-   'center': False},
-  'fillna': 'rolling_mean_24'},
- 'anomaly_intervention': 'remove',
- 'holiday_detector_params': None,
- 'holiday_countries_used': True,
- 'multivariate_feature': None,
- 'multivariate_transformation': {'fillna': 'ffill',
-  'transformations': {0: 'QuantileTransformer', 1: 'QuantileTransformer'},
-  'transformation_params': {0: {'output_distribution': 'uniform',
-    'n_quantiles': 1000},
-   1: {'output_distribution': 'uniform', 'n_quantiles': 1000}}},
- 'regressor_transformation': {'fillna': 'rolling_mean_24',
-  'transformations': {0: 'QuantileTransformer'},
-  'transformation_params': {0: {'output_distribution': 'uniform',
-    'n_quantiles': 60}}},
- 'regressors_used': True,
- 'linear_model': {'model': 'lstsq', 'lambda': 10, 'recency_weighting': None},
- 'randomwalk_n': 10,
- 'trend_window': 3,
- 'trend_standin': 'random_normal',
- 'trend_anomaly_detector_params': {'method': 'IQR',
-  'transform_dict': {'fillna': 'rolling_mean_24',
-   'transformations': {0: 'AlignLastValue', 1: 'RobustScaler'},
-   'transformation_params': {0: {'rows': 1,
-     'lag': 1,
-     'method': 'additive',
-     'strength': 1.0,
-     'first_value_only': False},
-    1: {}}},
-  'method_params': {'iqr_threshold': 1.5, 'iqr_quantiles': [0.25, 0.75]},
-  'fillna': 'rolling_mean_24'},
- 'trend_transformation': {'fillna': 'ffill',
-  'transformations': {0: 'SeasonalDifference'},
-  'transformation_params': {0: {'lag_1': 7, 'method': 'LastValue'}}},
- 'trend_model': {'Model': 'MetricMotif',
-  'ModelParameters': {'window': 30,
-   'point_method': 'weighted_mean',
-   'distance_metric': 'mqae',
-   'k': 3,
-   'comparison_transformation': {'fillna': 'rolling_mean',
-    'transformations': {0: 'KalmanSmoothing'},
-    'transformation_params': {0: {'state_transition': [[1]],
-      'process_noise': [[0.064]],
-      'observation_model': [[2]],
-      'observation_noise': 10.0}}},
-   'combination_transformation': {'fillna': 'rolling_mean_24',
-    'transformations': {0: 'KalmanSmoothing'},
-    'transformation_params': {0: {'state_transition': [[1]],
-      'process_noise': [[0.246]],
-      'observation_model': [[1]],
-      'observation_noise': 0.5}}}}},
- 'trend_phi': None}
-
-
-# best on validations of direction
-c_params = {'preprocessing_transformation': {'fillna': 'rolling_mean', 'transformations': {'0': None}, 'transformation_params': {'0': {}}}, 'scaling': 'BaseScaler', 'past_impacts_intervention': None, 'seasonalities': [7, 365.25], 'ar_lags': [1, 7], 'ar_interaction_seasonality': None, 'anomaly_detector_params': {'method': 'rolling_zscore', 'transform_dict': None, 'method_params': {'distribution': 'uniform', 'alpha': 0.05, 'rolling_periods': 200, 'center': False}, 'fillna': 'linear'}, 'anomaly_intervention': 'remove', 'holiday_detector_params': None, 'holiday_countries': None, 'holiday_countries_used': True, 'multivariate_feature': None, 'multivariate_transformation': {'fillna': 'KNNImputer', 'transformations': {'0': 'SeasonalDifference', '1': 'MinMaxScaler', '2': 'cffilter'}, 'transformation_params': {'0': {'lag_1': 12, 'method': 'Median'}, '1': {}, '2': {}}}, 'regressor_transformation': {'fillna': 'ffill', 'transformations': {'0': 'DifferencedTransformer'}, 'transformation_params': {'0': {}}}, 'regressors_used': False, 'linear_model': {'model': 'lstsq', 'lambda': None, 'recency_weighting': None}, 'randomwalk_n': None, 'trend_window': 365, 'trend_standin': 'random_normal', 'trend_anomaly_detector_params': None, 'trend_transformation': {'fillna': 'zero', 'transformations': {'0': 'EWMAFilter', '1': 'StandardScaler', '2': 'PowerTransformer'}, 'transformation_params': {'0': {'span': 10}, '1': {}, '2': {}}}, 'trend_model': {'Model': 'SeasonalityMotif', 'ModelParameters': {'window': 5, 'point_method': 'weighted_mean', 'distance_metric': 'mse', 'k': 5, 'datepart_method': 'simple_binarized'}}, 'trend_phi': None}
 """

@@ -2313,10 +2313,11 @@ or otherwise increase models available."""
         series[['log(Volatility)', 'log(Mean)']] = np.log1p(
             np.abs(series[['Volatility', 'Mean']])
         )
-        # plot
-        series.set_index(['Model', 'log(Mean)'], append=True).unstack('Model')[
+        sx = series.set_index(['Model', 'log(Mean)'], append=True).unstack('Model')[
             'log(Volatility)'
-        ].plot(style='o', title=title, **kwargs)
+        ].reset_index(drop=True)
+        # plot
+        return sx.plot(style='o', title=title, **kwargs)
 
     def plot_horizontal_transformers(
         self, method="transformers", color_list=None, **kwargs
