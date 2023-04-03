@@ -277,15 +277,10 @@ class AutoTS(object):
 
         # check metric weights are valid
         metric_weighting_values = self.metric_weighting.values()
-        if min(metric_weighting_values) < 0:
+        if sum(metric_weighting_values) < -10:
             raise ValueError(
-                f"Metric weightings must be numbers >= 0. Current weightings: {self.metric_weighting}"
+                f"Metric weightings should generally be >= 0. Current weightings: {self.metric_weighting}"
             )
-        elif sum(metric_weighting_values) == 0:
-            raise ValueError(
-                "Sum of metric_weightings is 0, one or more values must be > 0"
-            )
-
         if (
             'seasonal' in self.validation_method
             and self.validation_method != "seasonal"
@@ -455,46 +450,105 @@ class AutoTS(object):
 
     @staticmethod
     def get_new_params(method='random'):
-        ensemble_choice = random.choices(
-            [
-                None,
-                ['simple'],
-                ['simple', 'horizontal-max'],
+        """Randomly generate new parameters for the class."""
+        if method == 'full':
+            ensemble_choice = random.choices(
                 [
-                    'simple',
-                    "distance",
-                    "horizontal",
-                    "horizontal-max",
-                    "mosaic",
-                    'mosaic-window',
-                    "subsample",
+                    None,
+                    ['simple'],
+                    ['simple', 'horizontal-max'],
+                    [
+                        'simple',
+                        "distance",
+                        "horizontal",
+                        "horizontal-max",
+                    ],
                 ],
-            ],
-            [0.3, 0.1, 0.2, 0.2],
-        )[0]
-        metric_weighting = {
-            'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[0],
-            'mae_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-            'rmse_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-            'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[0],
-            'mage_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-            'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-            'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-            'spl_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-            'oda_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-            'mqae_weighting': random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
-            'dwae_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-            'maxe_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
-            'containment_weighting': random.choices(
-                [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
-            )[0],
-            'contour_weighting': random.choices([0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05])[
-                0
-            ],
-            'runtime_weighting': random.choices(
-                [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
-            )[0],
-        }
+                [0.3, 0.1, 0.2, 0.2],
+            )[0]
+        else:
+            ensemble_choice = random.choices(
+                [
+                    None,
+                    ['simple'],
+                    ['simple', 'horizontal-max'],
+                    [
+                        'simple',
+                        "distance",
+                        "horizontal",
+                        "horizontal-max",
+                        "mosaic",
+                        'mosaic-window',
+                        "subsample",
+                        "mlensemble",
+                    ],
+                ],
+                [0.3, 0.1, 0.2, 0.2],
+            )[0]
+        if method == "full":
+            metric_weighting = {
+                'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
+                    0
+                ],
+                'mae_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                'rmse_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[
+                    0
+                ],
+                'mage_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'spl_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                'oda_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'mqae_weighting': random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
+                'dwae_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'maxe_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'containment_weighting': random.choices(
+                    [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
+                )[0],
+                'contour_weighting': random.choices(
+                    [0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05]
+                )[0],
+                'runtime_weighting': random.choices(
+                    [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
+                )[0],
+                'uwmse_weighting': random.choices(
+                    [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
+                )[0],
+                'smoothness_weighting': random.choices(
+                    [0, 0.05, 3, 1, -0.5, -3], [0.4, 0.1, 0.1, 0.1, 0.2, 0.1]
+                )[0],
+                'ewmae_weighting': random.choices(
+                    [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
+                )[0],
+            }
+        else:
+            metric_weighting = {
+                'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
+                    0
+                ],
+                'mae_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                'rmse_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[
+                    0
+                ],
+                'mage_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'spl_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
+                'oda_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'mqae_weighting': random.choices([0, 1, 3, 5], [0.4, 0.2, 0.1, 0.0])[0],
+                'maxe_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
+                'containment_weighting': random.choices(
+                    [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
+                )[0],
+                'contour_weighting': random.choices(
+                    [0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05]
+                )[0],
+                'runtime_weighting': random.choices(
+                    [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
+                )[0],
+            }
         preclean_choice = random.choices(
             [
                 None,
@@ -545,9 +599,8 @@ class AutoTS(object):
             preclean_choice = RandomTransform(
                 transformer_list="fast", transformer_max_depth=2
             )
-        return {
-            'max_generations': random.choices([5, 10, 20, 50], [0.2, 0.5, 0.1, 0.4])[0],
-            'model_list': random.choices(
+        if method == 'full':
+            model_list = random.choices(
                 [
                     'fast',
                     'superfast',
@@ -556,9 +609,58 @@ class AutoTS(object):
                     'all',
                     'motifs',
                     'no_shared_fast',
+                    'multivariate',
+                    'univariate',
+                    'all_result_path',
+                    'regressions',
+                    'best',
+                    'regressor',
+                    'probabilistic',
+                    'no_shared',
                 ],
-                [0.2, 0.2, 0.2, 0.2, 0.05, 0.05, 0.1],
-            )[0],
+                [
+                    0.2,
+                    0.2,
+                    0.2,
+                    0.2,
+                    0.01,
+                    0.1,
+                    0.1,
+                    0.05,
+                    0.05,
+                    0.05,
+                    0.05,
+                    0.05,
+                    0.05,
+                    0.05,
+                    0.05,
+                ],
+            )[0]
+        else:
+            model_list = random.choices(
+                [
+                    'fast',
+                    'superfast',
+                    'default',
+                    'fast_parallel',
+                    'motifs',
+                    'no_shared_fast',
+                ],
+                [0.2, 0.2, 0.2, 0.2, 0.05, 0.1],
+            )[0]
+        if method == 'full':
+            validation_method = random.choices(
+                ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
+                [0.4, 0.1, 0.3, 0.3, 0.2],
+            )[0]
+        else:
+            validation_method = random.choices(
+                ['backwards', 'even', 'similarity', 'seasonal 364'],
+                [0.4, 0.1, 0.3, 0.3],
+            )[0]
+        return {
+            'max_generations': random.choices([5, 15, 25, 50], [0.2, 0.5, 0.1, 0.4])[0],
+            'model_list': model_list,
             'transformer_list': random.choices(
                 ['all', 'fast', 'superfast'],
                 [0.2, 0.5, 0.3],
@@ -567,11 +669,10 @@ class AutoTS(object):
                 [1, 2, 4, 6, 8, 10],
                 [0.1, 0.2, 0.3, 0.3, 0.2, 0.1],
             )[0],
-            'num_validations': random.choice([0, 1, 2, 3, 4, 6]),
-            'validation_method': random.choices(
-                ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
-                [0.4, 0.1, 0.3, 0.3, 0.2],
+            'num_validations': random.choices(
+                [0, 1, 2, 3, 4, 6], [0.1, 0.2, 0.3, 0.2, 0.1, 0.05]
             )[0],
+            'validation_method': validation_method,
             'models_to_validate': random.choices(
                 [0.15, 0.10, 0.25, 0.35, 0.45], [0.3, 0.1, 0.3, 0.3, 0.1]
             )[0],
@@ -581,7 +682,7 @@ class AutoTS(object):
             )[0],
             'subset': random.choices([None, 10, 100], [0.9, 0.05, 0.05])[0],
             'models_mode': random.choices(['random', 'regressor'], [0.95, 0.05])[0],
-            'drop_most_recent': random.choices([0, 1, 2], [0.8, 0.1, 0.1])[0],
+            # 'drop_most_recent': random.choices([0, 1, 2], [0.8, 0.1, 0.1])[0],
             'introduce_na': random.choice([None, True, False]),
             'prefill_na': None,
             'remove_leading_zeroes': False,
@@ -635,7 +736,9 @@ class AutoTS(object):
                 res = ", ".join(base_res['smape'].astype(str).tolist())
                 res2 = ", ".join(base_res['mae'].astype(str).tolist())
                 res3 = ", ".join(base_res['spl'].astype(str).tolist())
-                return f"Initiated AutoTS object with best model: \n{self.best_model_name}\n{self.best_model_transformation_params}\n{self.best_model_params}\nSMAPE: {res}\nMAE: {res2}\nSPL: {res3}"
+                len_list = list(range(base_res.shape[0]))
+                res_len = ", ".join([str(x) for x in len_list])
+                return f"Initiated AutoTS object with best model: \n{self.best_model_name}\n{self.best_model_transformation_params}\n{self.best_model_params}\nValidation: {res_len}\nSMAPE: {res}\nMAE: {res2}\nSPL: {res3}"
             except Exception:
                 return "Initiated AutoTS object"
 
@@ -1175,6 +1278,12 @@ class AutoTS(object):
 Try increasing models_to_validate, max_per_model_class
 or otherwise increase models available."""
 
+        # run validation_results aggregation
+        self.validation_results = copy.copy(self.initial_results)
+        self.validation_results = validation_aggregation(
+            self.validation_results, df_train=self.df_wide_numeric
+        )
+
         # Construct horizontal style ensembles
         models_to_use = None
         if any(x in ensemble for x in self.h_ens_list):
@@ -1378,7 +1487,9 @@ or otherwise increase models available."""
 
             # rerun validation_results aggregation with new models added
             self.validation_results = copy.copy(self.initial_results)
-            self.validation_results = validation_aggregation(self.validation_results)
+            self.validation_results = validation_aggregation(
+                self.validation_results, df_train=self.df_wide_numeric
+            )
 
             # use the best of these ensembles if any ran successfully
             try:
@@ -1625,7 +1736,9 @@ or otherwise increase models available."""
 
         self.validation_results = copy.copy(self.initial_results)
         # aggregate validation results
-        self.validation_results = validation_aggregation(self.validation_results)
+        self.validation_results = validation_aggregation(
+            self.validation_results, df_train=self.df_wide_numeric
+        )
 
     def predict(
         self,
@@ -2232,10 +2345,13 @@ or otherwise increase models available."""
         series[['log(Volatility)', 'log(Mean)']] = np.log1p(
             np.abs(series[['Volatility', 'Mean']])
         )
+        sx = (
+            series.set_index(['Model', 'log(Mean)'], append=True)
+            .unstack('Model')['log(Volatility)']
+            .reset_index(drop=True)
+        )
         # plot
-        series.set_index(['Model', 'log(Mean)'], append=True).unstack('Model')[
-            'log(Volatility)'
-        ].plot(style='o', title=title, **kwargs)
+        return sx.plot(style='o', title=title, **kwargs)
 
     def plot_horizontal_transformers(
         self, method="transformers", color_list=None, **kwargs

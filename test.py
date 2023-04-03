@@ -26,7 +26,7 @@ force_univariate = False  # long = False
 back_forecast = False
 graph = True
 template_import_method = "addon"  # "only" "addon"
-models_to_validate = 0.35  # 0.99 to validate every tried (use with template import)
+models_to_validate = 0.25  # 0.99 to validate every tried (use with template import)
 
 # this is the template file imported:
 template_filename = "template_" + str(platform.node()) + ".csv"
@@ -36,11 +36,9 @@ random_seed = 2022
 forecast_length = 28
 long = False
 # df = load_linear(long=long, shape=(400, 1000), introduce_nan=None)
-df = load_sine(
-    long=long, shape=(400, 1000), start_date="2021-01-01", introduce_random=100
-).iloc[:, 2:]
+# df = load_sine(long=long, shape=(400, 1000), start_date="2021-01-01", introduce_random=100).iloc[:, 2:]
 # df = load_artificial(long=long, date_start="2018-01-01")
-# df = load_weekly(long=long)
+df = load_daily(long=long)
 interest_series = [
     'arima220_outliers',
     'lumpy',
@@ -52,13 +50,13 @@ interest_series = [
 ]
 prediction_interval = 0.9
 n_jobs = "auto"
-verbose = 2
+verbose = 1
 validation_method = "backwards"  # "similarity"
 frequency = "infer"
 drop_most_recent = 0
-generations = 1
-num_validations = 0  # "auto"
+generations = 10
 generation_timeout = 30
+num_validations = 1  # "auto"
 initial_template = "Random"  # "General+Random"
 if use_template:
     initial_training = not os.path.exists(template_filename)
@@ -73,10 +71,11 @@ if force_univariate:
 transformer_list = "fast"  # "fast", "all", "superfast"
 # transformer_list = ["Round", "Slice", "EWMAFilter", 'Cointegration', "MeanDifference", "BTCD"]
 transformer_max_depth = 1
-models_mode = "default"  # "default", "regressor", "neuralnets"
+models_mode = "gradient_boosting"  # "default", "regressor", "neuralnets", "gradient_boosting"
 model_list = "superfast"
-# model_list = "fast"  # fast_parallel, all
-model_list = ["UnivariateRegression", "LastValueNaive"]
+# model_list = "fast_parallel"  # fast_parallel, all, fast
+# model_list = ["LastValueNaive", "GluonTS", "SeasonalityMotif", "MetricMotif", 'PytorchForecasting']
+# model_list = ['MultivariateRegression', 'WindowRegression']
 preclean = None
 {
     "fillna": None,  # mean or median one of few consistent things
@@ -85,13 +84,15 @@ preclean = None
         "0": {"span": 14},
     },
 }
-ensemble = [
+ensemble = 'all'
+[
     "simple",
-    'horizontal',
+    'mlensemble',
+    'horizontal-max',
 ]  # "dist", "subsample", "mosaic-window", "horizontal-max"
-# ensemble = None
+ensemble = None
 metric_weighting = {
-    'smape_weighting': 5,
+    'smape_weighting': 3,
     'mae_weighting': 2,
     'rmse_weighting': 2,
     'made_weighting': 1,
@@ -111,6 +112,19 @@ constraint = {
     "constraint_regularization": 0.9,
     "upper_constraint": 0.9,
     "lower_constraint": 0.1,
+    "bounds": True,
+}
+forecast_index = pd.date_range(start=df.index[-1], periods=forecast_length + 1, freq=df.index.freq)[1:]
+# sets an extremely high value for the cap, one that should never actually be reached by the data normally
+upper_constraint = pd.DataFrame(9999999999, index=forecast_index, columns=df.columns)
+# in this case also assuming negatives won't happen so setting a lower constraint of 0
+lower_constraint = pd.DataFrame(0, index=forecast_index, columns=df.columns)
+# add in your dates you want as definitely 0
+upper_constraint.loc["2022-10-31"] = 0
+constraint = {
+    "constraint_method": "absolute",
+    "upper_constraint": upper_constraint,
+    "lower_constraint": lower_constraint,
     "bounds": True,
 }
 constraint = None
@@ -170,13 +184,9 @@ start_time_for = timeit.default_timer()
 model = model.fit(
     df,
     future_regressor=regr_train,
-    # weights="mean",
+    # weights="inverse_mean",
     # result_file='test.pickle',
-    validation_indexes=[
-        pd.date_range("2021-01-01", "2022-05-02"),
-        pd.date_range("2021-01-01", "2022-02-02"),
-        pd.date_range("2021-01-01", "2022-03-03"),
-    ],
+    # validation_indexes=[pd.date_range("2001-01-01", "2022-05-02"), pd.date_range("2021-01-01", "2022-02-02"), pd.date_range("2021-01-01", "2022-03-03")],
     date_col="datetime" if long else None,
     value_col="value" if long else None,
     id_col="series_id" if long else None,
@@ -353,6 +363,7 @@ scp colin@192.168.1.122:/general_template_colin-1135.csv ./Documents/AutoTS
 PACKAGE RELEASE
 # update version in setup.py, /docs/conf.py, /autots/_init__.py
 
+conda activate env
 cd to AutoTS
 set PYTHONPATH=%PYTHONPATH%;C:/Users/Colin/Documents/AutoTS
 python -m unittest discover ./tests
@@ -368,7 +379,7 @@ mistune==0.8.4 markupsafe==2.0.1 jinja2==2.11.3
 https://github.com/sphinx-doc/sphinx/issues/3382
 # pip install sphinx==2.4.4
 # m2r does not yet work on sphinx 3.0
-# pip install m2r
+# pip install m2r2 (replaces old m2r)
 cd <project dir>
 # delete docs/source and /build (not tutorial or intro.rst)
 sphinx-apidoc -f -o docs/source autots

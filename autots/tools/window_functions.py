@@ -97,7 +97,9 @@ def window_maker(
         Y = pd.DataFrame()
         for z in numbers:
             if input_dim == 'univariate':
-                rand_slice = df.iloc[z : (z + phrase_n),]
+                rand_slice = df.iloc[
+                    z : (z + phrase_n),
+                ]
                 rand_slice = (
                     rand_slice.reset_index(drop=True)
                     .transpose()
@@ -106,9 +108,13 @@ def window_maker(
                 cX = rand_slice.iloc[:, 0:(window_size)]
                 cY = rand_slice.iloc[:, window_size:]
             else:
-                cX = df.iloc[z : (z + window_size),]
+                cX = df.iloc[
+                    z : (z + window_size),
+                ]
                 cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
-                cY = df.iloc[(z + window_size) : (z + phrase_n),]
+                cY = df.iloc[
+                    (z + window_size) : (z + phrase_n),
+                ]
                 cY = pd.DataFrame(cY.stack().reset_index(drop=True)).transpose()
             X = pd.concat([X, cX], axis=0)
             Y = pd.concat([Y, cY], axis=0)
@@ -129,14 +135,18 @@ def last_window(
     z = df.shape[0] - window_size
     shape_1 = df.shape[1] if df.ndim > 1 else 1
     if input_dim == 'univariate':
-        cX = df.iloc[z : (z + window_size),]
+        cX = df.iloc[
+            z : (z + window_size),
+        ]
         cX = (
             cX.reset_index(drop=True)
             .transpose()
             .set_index(np.repeat(z, (shape_1,)), append=True)
         )
     else:
-        cX = df.iloc[z : (z + window_size),]
+        cX = df.iloc[
+            z : (z + window_size),
+        ]
         cX = pd.DataFrame(cX.stack().reset_index(drop=True)).transpose()
     if normalize_window:
         cX = cX.div(cX.sum(axis=1), axis=0)

@@ -349,33 +349,14 @@ class PredictionObject(object):
         """Combine runtimes."""
         return self.fit_runtime + self.predict_runtime + self.transformation_runtime
 
-    def plot(
+    def plot_df(
         self,
         df_wide=None,
         series: str = None,
-        ax=None,
         remove_zeroes: bool = False,
         interpolate: str = None,
         start_date: str = None,
-        alpha=0.25,
-        facecolor="black",
-        loc="upper left",
-        title=None,
-        vline=None,
-        **kwargs,
     ):
-        """Generate an example plot of one series. Does not handle non-numeric forecasts.
-
-        Args:
-            df_wide (str): historic data for plotting actuals
-            series (str): column name of series to plot. Random if None.
-            ax: matplotlib axes to pass through to pd.plot()
-            remove_zeroes (bool): if True, don't plot any zeroes
-            interpolate (str): if not None, a method to pass to pandas interpolate
-            start_date (str): Y-m-d string or Timestamp to remove all data before
-            vline (datetime): datetime of dashed vertical line to plot
-            **kwargs passed to pd.DataFrame.plot()
-        """
         if series is None:
             import random
 
@@ -422,8 +403,43 @@ class PredictionObject(object):
             ):
                 raise ValueError("start_date is more recent than all data provided")
             plot_df = plot_df[plot_df.index >= start_date]
+        return plot_df
+
+    def plot(
+        self,
+        df_wide=None,
+        series: str = None,
+        remove_zeroes: bool = False,
+        interpolate: str = None,
+        start_date: str = None,
+        alpha=0.25,
+        facecolor="black",
+        loc="upper left",
+        title=None,
+        vline=None,
+        **kwargs,
+    ):
+        """Generate an example plot of one series. Does not handle non-numeric forecasts.
+
+        Args:
+            df_wide (str): historic data for plotting actuals
+            series (str): column name of series to plot. Random if None.
+            ax: matplotlib axes to pass through to pd.plot()
+            remove_zeroes (bool): if True, don't plot any zeroes
+            interpolate (str): if not None, a method to pass to pandas interpolate
+            start_date (str): Y-m-d string or Timestamp to remove all data before
+            vline (datetime): datetime of dashed vertical line to plot
+            **kwargs passed to pd.DataFrame.plot()
+        """
+        plot_df = self.plot_df(
+            df_wide=df_wide,
+            series=series,
+            remove_zeroes=remove_zeroes,
+            interpolate=interpolate,
+            start_date=start_date,
+        )
         if title is None:
-            title = f"{series} with model {str(model_name)[0:80]}"
+            title = f"{series} with model {str(self.model_name)[0:80]}"
         if vline is None:
             return plot_df.plot(title=title, **kwargs)
         else:
@@ -469,51 +485,24 @@ class PredictionObject(object):
             scaler (numpy.array): precomputed scaler for efficiency, avg value of series in order of columns
         """
         # arrays are faster for math than pandas dataframes
-        A = np.asarray(actual)
-        F = np.asarray(self.forecast)
-        lower_forecast = np.asarray(self.lower_forecast)
-        upper_forecast = np.asarray(self.upper_forecast)
-        if df_train is None:
-            df_train = A
-        df_train = np.asarray(df_train)
-
-        # reuse this in several metrics so precalculate
-        full_errors = F - A
-        self.full_mae_errors = np.abs(full_errors)
-        self.squared_errors = full_errors**2
-
-        # np.where(A >= F, quantile * (A - F), (1 - quantile) * (F - A))
-        inv_prediction_interval = 1 - self.prediction_interval
-        upper_diff = A - upper_forecast
-        self.upper_pl = np.where(
-            A >= upper_forecast,
-            self.prediction_interval * upper_diff,
-            inv_prediction_interval * -1 * upper_diff,
-        )
-        # note that the quantile here is the lower quantile
-        low_diff = A - lower_forecast
-        self.lower_pl = np.where(
-            A >= lower_forecast,
-            inv_prediction_interval * low_diff,
-            self.prediction_interval * -1 * low_diff,
-        )
-
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            self.per_series_metrics = full_metric_evaluation(
-                A=A,
-                F=F,
-                upper_forecast=upper_forecast,
-                lower_forecast=lower_forecast,
+            (
+                self.per_series_metrics,
+                self.full_mae_errors,
+                self.squared_errors,
+                self.upper_pl,
+                self.lower_pl,
+            ) = full_metric_evaluation(
+                A=actual,
+                F=self.forecast,
+                upper_forecast=self.upper_forecast,
+                lower_forecast=self.lower_forecast,
                 df_train=df_train,
-                full_errors=full_errors,
-                full_mae_errors=self.full_mae_errors,
-                squared_errors=self.squared_errors,
                 prediction_interval=self.prediction_interval,
-                upper_pl=self.upper_pl,
-                lower_pl=self.lower_pl,
                 columns=self.forecast.columns,
                 scaler=scaler,
+                return_components=True,
             )
 
         if per_timestamp_errors:
@@ -530,7 +519,7 @@ class PredictionObject(object):
         if series_weights is None:
             series_weights = clean_weights(weights=False, series=self.forecast.columns)
         # make sure the series_weights are passed correctly to metrics
-        if len(series_weights) != F.shape[1]:
+        if len(series_weights) != self.forecast.shape[1]:
             series_weights = {col: series_weights[col] for col in self.forecast.columns}
 
         # this weighting won't work well if entire metrics are NaN

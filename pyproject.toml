@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autots"
+version = "0.5.5"
+authors = [
+  { name="Colin Catlin", email="colin.catlin@gmail.com" },
+]
+description = "Automated Time Series Forecasting"
+readme = "README.md"
+requires-python = ">=3.6"
+license = {text = "MIT License"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy>=1.14.6",
+    "pandas>=0.25.0",
+    "statsmodels>=0.10.0",
+    "scikit-learn>=0.20.0",
+]
+[project.optional-dependencies]
+additional = [
+	"holidays>=0.9",
+	'prophet>=0.4.0',
+	'fredapi',
+	'tensorflow',
+	'xgboost',
+	'lightgbm',
+	'joblib',
+	'scipy',
+	'arch',
+	'numexpr',
+	'bottleneck',
+	'yfinance',
+	'pytrends',
+	'matplotlib',
+	'requests',
+]
+
+[project.urls]
+"Homepage" = "https://github.com/winedarksea/AutoTS"
+"Bug Tracker" = "https://github.com/winedarksea/AutoTS/issues"
+
+[tool.setuptools.packages]
+find = {}  # Scan the project directory with the default parameters
+[tool.setuptools]
+include-package-data = true

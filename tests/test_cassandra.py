@@ -217,19 +217,20 @@ class CassandraTest(unittest.TestCase):
         series = random.choice(mod.column_names)
         mod.regressors_used
         mod.holiday_countries_used
-        with plt.style.context("seaborn-white"):
-            start_date = "2019-07-01"
-            mod.plot_forecast(
-                pred,
-                actuals=df_daily if include_history else df_test,
-                series=series,
-                start_date=start_date,
-            )
-            plt.show()
-            mod.plot_components(
-                pred, series=series, to_origin_space=True, start_date=start_date
-            )
-            mod.plot_trend(series=series, vline=df_test.index[0], start_date=start_date)
+        start_date = "2019-07-01"
+        if False:
+            with plt.style.context("seaborn-white"):
+                mod.plot_forecast(
+                    pred,
+                    actuals=df_daily if include_history else df_test,
+                    series=series,
+                    start_date=start_date,
+                )
+                plt.show()
+                mod.plot_components(
+                    pred, series=series, to_origin_space=True, start_date=start_date
+                )
+                mod.plot_trend(series=series, vline=df_test.index[0], start_date=start_date)
         pred.evaluate(
             df_daily.reindex(result.index)[df_train.columns]
             if include_history

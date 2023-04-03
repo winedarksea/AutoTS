@@ -32,7 +32,7 @@ from autots import AutoTS, load_live_daily, create_regressor
 fred_key = None  # https://fred.stlouisfed.org/docs/api/api_key.html
 gsa_key = None
 
-forecast_name = "example"
+forecast_name = "cassandra"
 graph = True  # whether to plot graphs
 # https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects
 frequency = (
@@ -54,7 +54,9 @@ archive_templates = True  # save a copy of the model template used with a timest
 save_location = None  # "C:/Users/Colin/Downloads"  # directory to save templates to. Defaults to working dir
 template_filename = f"autots_forecast_template_{forecast_name}.csv"
 forecast_csv_name = None  # f"autots_forecast_{forecast_name}.csv"  # or None, point forecast only is written
-model_list = "fast_parallel"
+model_list = [
+    'Cassandra',
+]
 transformer_list = "fast"  # 'superfast'
 transformer_max_depth = 5
 models_mode = "default"  # "deep", "regressor"
@@ -83,13 +85,12 @@ if initial_training == "auto":
 # set max generations based on settings, increase for slower but greater chance of highest accuracy
 # if include_ensemble is specified in import_templates, ensembles can progressively nest over generations
 if initial_training:
-    gens = 100
+    gens = 50
     generation_timeout = 10000  # minutes
     models_to_validate = 0.15
-    ensemble = ["dist", "simple", "horizontal-max", ]  # , "mosaic", "mosaic-window"
     ensemble = ["horizontal-max", "dist", "simple"]  # , "mosaic", "mosaic-window", 'mlensemble'
 elif evolve:
-    gens = 10
+    gens = 50
     generation_timeout = 1440  # minutes
     models_to_validate = 0.15
     ensemble = ["horizontal-max", "dist", "simple"]  # "mosaic", "mosaic-window", "subsample"
@@ -98,6 +99,8 @@ else:
     generation_timeout = 60  # minutes
     models_to_validate = 0.99
     ensemble = ["horizontal-max", "dist", "simple"]  # "mosaic", "mosaic-window",
+
+ensemble = None
 
 # only save the very best model if not evolve
 if evolve:
@@ -115,7 +118,7 @@ fred_series = [
     "DCOILWTICO",
     "DEXUSEU",
     "BAMLH0A0HYM2",
-    "WPU0911",
+    "DAAA",
     "DEXUSUK",
     "T10Y2Y",
 ]
@@ -136,6 +139,7 @@ df = load_live_daily(
     gov_domain_list=None,  # ['usajobs.gov', 'usps.com', 'weather.gov'],
     gov_domain_limit=700,
     weather_event_types=weather_event_types,
+    sleep_seconds=15,
 )
 # be careful of very noisy, large value series mixed into more well-behaved data as they can skew some metrics such that they get most of the attention
 # remove "volume" data as it skews MAE (other solutions are to adjust metric_weighting towards SMAPE, use series `weights`, or pre-scale data)
@@ -156,8 +160,15 @@ if trend_list is not None:
     for tx in trend_list:
         if tx in df.columns:
             df[tx] = df[tx].interpolate('akima').fillna(method='ffill', limit=30).fillna(method='bfill', limit=30)
+# fill weekends
 if tickers is not None:
     for fx in tickers:
+        for suffix in ["_high", "_low", "_open", "_close"]:
+            fxs = (fx + suffix).lower()
+            if fxs in df.columns:
+                df[fxs] = df[fxs].interpolate('akima')
+if fred_series is not None:
+    for fx in fred_series:
         if fx in df.columns:
             df[fx] = df[fx].interpolate('akima')
 if weather_event_types is not None:
@@ -219,10 +230,7 @@ metric_weighting = {
     'mle_weighting': 0,
     'imle_weighting': 0,
     'spl_weighting': 1,
-    'dwae_weighting': 0,
-    'ewmae_weighting': 0,
-    'containment_weighting': 0,
-    'contour_weighting': 0,
+    'dwae_weighting': 1,
     'runtime_weighting': 0.05,
 }
 
@@ -314,44 +322,71 @@ print(
 )
 
 model_parameters = json.loads(model.best_model["ModelParameters"].iloc[0])
+ # model.export_template("all_results.csv", models='all')
 
 if graph:
-    model.export_template("all_results.csv", models='all')
-    column_indices = [0, 1]  # change columns here
-    column_indices = list(range(model.df_wide_numeric.shape[1]))
-    for plt_col in column_indices:
-        prediction.plot(
-            model.df_wide_numeric.clip(lower=0),
-            series=model.df_wide_numeric.columns[plt_col],
-            remove_zeroes=True,
-            interpolate="linear",
-            start_date="2021-01-01",
-        )
-        # plt.savefig("model.png", dpi=300)
-        plt.show()
-
-    with plt.style.context("seaborn-white"):
+    with plt.style.context("bmh"):
+        start_date = '2021-01-01'
+        if df.shape[1] > 5:
+            import random 
+    
+            cols = random.choices(df.columns.tolist(), k=6)
+            nrow = 2
+            ncol = 3
+            fig, axes = plt.subplots(nrow, ncol, figsize=(24, 18))
+            fig.suptitle("AutoTS Forecasts")
+            count = 0
+            for r in range(nrow):
+                for c in range(ncol):
+                        col = cols[count]
+                        prediction.plot(
+                            model.df_wide_numeric.clip(lower=0),
+                            series=col,
+                            remove_zeroes=False,
+                            interpolate="linear",
+                            start_date=start_date,
+                            ax=axes[r,c]
+                        )
+                        count += 1
+            plt.show()
+        else:
+            prediction.plot(
+                model.df_wide_numeric.clip(lower=0),
+                remove_zeroes=False,
+                interpolate="linear",
+                start_date=start_date,
+            )
+            plt.show()
+        if model.best_model_name == "Cassandra":
+            prediction.model.plot_components(
+                prediction, series=None, to_origin_space=True, start_date=start_date
+            )
+            plt.show()
+            prediction.model.plot_trend(
+                series=None, start_date=start_date
+            )
+            plt.show()
+    
         ax = model.plot_per_series_smape()
         plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
         plt.show()
-
-    model.plot_backforecast()
-    plt.show()
-
-    if model.best_model_ensemble == 2:
-        plt.subplots_adjust(bottom=0.5)
-        model.plot_horizontal_transformers()
-        # plt.savefig("transformers.png", dpi=300, bbox_inches="tight")
+    
+        model.plot_backforecast()
         plt.show()
-        model.plot_horizontal_model_count()
-        plt.show()
-
-        model.plot_horizontal()
-        plt.show()
-        # plt.savefig("horizontal.png", dpi=300, bbox_inches="tight")
-
-        if str(model_parameters["model_name"]).lower() in ["mosaic", "mosaic-window"]:
-            mosaic_df = model.mosaic_to_df()
-            print(mosaic_df[mosaic_df.columns[0:5]].head(5))
+    
+        if model.best_model_ensemble == 2:
+            plt.subplots_adjust(bottom=0.5)
+            model.plot_horizontal_transformers()
+            plt.show()
+            model.plot_horizontal_model_count()
+            plt.show()
+    
+            model.plot_horizontal()
+            plt.show()
+            # plt.savefig("horizontal.png", dpi=300, bbox_inches="tight")
+    
+            if str(model_parameters["model_name"]).lower() in ["mosaic", "mosaic-window"]:
+                mosaic_df = model.mosaic_to_df()
+                print(mosaic_df[mosaic_df.columns[0:5]].head(5))
 
 print(f"Completed at system time: {datetime.datetime.now()}")

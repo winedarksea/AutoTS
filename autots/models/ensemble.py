@@ -225,20 +225,23 @@ def DistEnsemble(
     first_bit = int(np.ceil(forecast_length * dis_frac))
     second_bit = int(np.floor(forecast_length * (1 - dis_frac)))
 
-    ens_df = (
-        forecasts[first_model_index]
-        .head(first_bit)
-        .append(forecasts[second_model_index].tail(second_bit))
+    ens_df = pd.concat(
+        [
+            forecasts[first_model_index].head(first_bit),
+            forecasts[second_model_index].tail(second_bit),
+        ]
     )
-    ens_df_lower = (
-        lower_forecasts[first_model_index]
-        .head(first_bit)
-        .append(lower_forecasts[second_model_index].tail(second_bit))
+    ens_df_lower = pd.concat(
+        [
+            lower_forecasts[first_model_index].head(first_bit),
+            lower_forecasts[second_model_index].tail(second_bit),
+        ]
     )
-    ens_df_upper = (
-        upper_forecasts[first_model_index]
-        .head(first_bit)
-        .append(upper_forecasts[second_model_index].tail(second_bit))
+    ens_df_upper = pd.concat(
+        [
+            upper_forecasts[first_model_index].head(first_bit),
+            upper_forecasts[second_model_index].tail(second_bit),
+        ]
     )
 
     id_list = list(ensemble_params['models'].keys())

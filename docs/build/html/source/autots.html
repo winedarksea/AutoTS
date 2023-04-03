@@ -194,6 +194,7 @@
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.contour"><code class="docutils literal notranslate"><span class="pre">contour()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.dwae"><code class="docutils literal notranslate"><span class="pre">dwae()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.full_metric_evaluation"><code class="docutils literal notranslate"><span class="pre">full_metric_evaluation()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.linearity"><code class="docutils literal notranslate"><span class="pre">linearity()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.mae"><code class="docutils literal notranslate"><span class="pre">mae()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.mda"><code class="docutils literal notranslate"><span class="pre">mda()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.mean_absolute_differential_error"><code class="docutils literal notranslate"><span class="pre">mean_absolute_differential_error()</span></code></a></li>
@@ -211,6 +212,7 @@
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.rps"><code class="docutils literal notranslate"><span class="pre">rps()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.scaled_pinball_loss"><code class="docutils literal notranslate"><span class="pre">scaled_pinball_loss()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.smape"><code class="docutils literal notranslate"><span class="pre">smape()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.smoothness"><code class="docutils literal notranslate"><span class="pre">smoothness()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.spl"><code class="docutils literal notranslate"><span class="pre">spl()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.symmetric_mean_absolute_percentage_error"><code class="docutils literal notranslate"><span class="pre">symmetric_mean_absolute_percentage_error()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.evaluator.html#autots.evaluator.metrics.threshold_loss"><code class="docutils literal notranslate"><span class="pre">threshold_loss()</span></code></a></li>
@@ -262,6 +264,7 @@
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#id1"><code class="docutils literal notranslate"><span class="pre">PredictionObject.evaluate()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#id2"><code class="docutils literal notranslate"><span class="pre">PredictionObject.long_form_results()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#id3"><code class="docutils literal notranslate"><span class="pre">PredictionObject.plot()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="autots.models.html#autots.models.base.PredictionObject.plot_df"><code class="docutils literal notranslate"><span class="pre">PredictionObject.plot_df()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="autots.models.html#id4"><code class="docutils literal notranslate"><span class="pre">PredictionObject.total_runtime()</span></code></a></li>
 </ul>
 </li>
@@ -399,6 +402,7 @@
 <li class="toctree-l3"><a class="reference internal" href="autots.models.html#autots.models.cassandra.clean_regressor"><code class="docutils literal notranslate"><span class="pre">clean_regressor()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.models.html#autots.models.cassandra.cost_function_dwae"><code class="docutils literal notranslate"><span class="pre">cost_function_dwae()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.models.html#autots.models.cassandra.cost_function_l1"><code class="docutils literal notranslate"><span class="pre">cost_function_l1()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="autots.models.html#autots.models.cassandra.cost_function_l1_positive"><code class="docutils literal notranslate"><span class="pre">cost_function_l1_positive()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.models.html#autots.models.cassandra.cost_function_l2"><code class="docutils literal notranslate"><span class="pre">cost_function_l2()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.models.html#autots.models.cassandra.cost_function_quantile"><code class="docutils literal notranslate"><span class="pre">cost_function_quantile()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="autots.models.html#autots.models.cassandra.create_t"><code class="docutils literal notranslate"><span class="pre">create_t()</span></code></a></li>
@@ -1535,7 +1539,8 @@ used in 0.2.x but not 0.3.x+ versions. retained for potential future use</p></li
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.AutoTS.get_new_params">
 <em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_new_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.AutoTS.get_new_params" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Randomly generate new parameters for the class.</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="autots.AutoTS.horizontal_per_generation">
@@ -1974,7 +1979,8 @@ For component decomposition, scale will be inaccurate unless ‘BaseScaler’ is
 <dt class="sig sig-object py" id="id5">
 <span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">forecast_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_history</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">future_regressor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_per_series</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flag_regressors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">future_impacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_df</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_forecast_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_forecast_model_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">regressor_forecast_transformations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_organic</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id5" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate a forecast.</p>
-<p>future_regressor and regressor_per_series should only include new future values, history is already stored</p>
+<p>future_regressor and regressor_per_series should only include new future values, history is already stored
+they should match on forecast_length and index of forecasts</p>
 </dd></dl>
 
 <dl class="py method">
@@ -2569,7 +2575,18 @@ also can be a dict of {‘country’: “subdiv”} to include subdivision (stat
 <dl class="py function">
 <dt class="sig sig-object py" id="autots.load_daily">
 <span class="sig-prename descclassname"><span class="pre">autots.</span></span><span class="sig-name descname"><span class="pre">load_daily</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">long</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#autots.load_daily" title="Permalink to this definition">¶</a></dt>
-<dd><p>2020 Covid, Air Pollution, and Economic Data.</p>
+<dd><p>Daily sample data.</p>
+<dl class="simple">
+<dt>wiki = [</dt><dd><p>“Germany”, “Thanksgiving”, ‘all’, ‘Microsoft’,
+“Procter_%26_Gamble”, “YouTube”, “United_States”, “Elizabeth_II”,
+“William_Shakespeare”, “Cleopatra”, “George_Washington”,
+“Chinese_New_Year”, “Standard_deviation”, “Christmas”,
+“List_of_highest-grossing_films”,
+“List_of_countries_that_have_gained_independence_from_the_United_Kingdom”,
+“Periodic_table”</p>
+</dd>
+</dl>
+<p>]</p>
 <p>Sources: Wikimedia Foundation</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>

@@ -317,6 +317,13 @@ class Cassandra(ModelObject):
         # check if component processing must loop
         # self.component_loop_req = (isinstance(regressor_per_series, dict) and self.regressors_used) or (isinstance(self.holiday_countries, dict) and self.holiday_countries_used)
 
+        # REMOVE NaN but only this so far, for holiday and anomaly detection
+        if self.preprocessing_transformation is not None:
+            self.preprocesser = GeneralTransformer(
+                **{'fillna': self.preprocessing_transformation.get('fillna', "ffill")}
+            )
+            self.df = self.preprocesser.fit_transform(self.df)
+
         # remove past impacts to find "organic"
         if self.past_impacts_intervention == "remove":
             self.df = self.df / (1 + past_impacts)  # would MINUS be better?
@@ -476,7 +483,7 @@ class Cassandra(ModelObject):
                     np.asarray(df), np.array(self.create_t(df.index))
                 )
                 resid = pd.DataFrame(
-                    slope * self.t_train[..., None] + intercept,
+                    slope * np.asarray(self.t_train)[..., None] + intercept,
                     index=df.index,
                     columns=df.columns,
                 )
@@ -486,15 +493,14 @@ class Cassandra(ModelObject):
                 self.regressor_transformer = GeneralTransformer(
                     **self.regressor_transformation
                 )
-                self.future_regressor_train = self.regressor_transformer.fit_transform(
-                    clean_regressor(future_regressor)
-                )
             else:
-                self.regressor_transformer = GeneralTransformer(**{})
-                self.future_regressor_train = future_regressor.fillna(
-                    method='ffill'
-                ).fillna(0)
-            x_list.append(self.future_regressor_train.reindex(self.df.index))
+                self.regressor_transformer = GeneralTransformer(**{'fillna': 'ffill'})
+            self.future_regressor_train = self.regressor_transformer.fit_transform(
+                clean_regressor(future_regressor)
+            ).fillna(0)
+            x_list.append(
+                self.future_regressor_train.reindex(self.df.index, fill_value=0)
+            )
         if flag_regressors is not None and self.regressors_used:
             self.flag_regressor_train = clean_regressor(
                 flag_regressors, prefix="regrflags_"
@@ -525,6 +531,10 @@ class Cassandra(ModelObject):
         x_array = pd.concat(x_list, axis=1)
         self.x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
+            nulz = x_array.isnull().sum()
+            print(
+                f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
+            )
             raise ValueError("nan values in x_array")
         if np.all(self.df == 0):
             raise ValueError("transformed data is all zeroes")
@@ -695,9 +705,18 @@ class Cassandra(ModelObject):
             trend_posterior = pd.DataFrame(
                 trend_posterior, index=self.df.index, columns=self.df.columns
             )
-            self.residual_uncertainty = (trend_residuals - trend_posterior).std()
+            res_dif = trend_residuals - trend_posterior
+            res_upper = res_dif[res_dif >= 0]
+            res_lower = res_dif[res_dif <= 0]
+            self.residual_uncertainty_upper = res_upper.mean()
+            self.residual_uncertainty_lower = res_lower.mean().abs()
+            self.residual_uncertainty_upper_std = res_upper.std()
+            self.residual_uncertainty_lower_std = res_lower.std()
         else:
-            self.residual_uncertainty = pd.Series(0, index=self.df.columns)
+            self.residual_uncertainty_upper = pd.Series(0, index=self.df.columns)
+            self.residual_uncertainty_lower = pd.Series(0, index=self.df.columns)
+            self.residual_uncertainty_upper_std = pd.Series(0, index=self.df.columns)
+            self.residual_uncertainty_lower_std = pd.Series(0, index=self.df.columns)
         if self.trend_window is not None:
             self.trend_train = trend_posterior
         else:
@@ -920,7 +939,10 @@ class Cassandra(ModelObject):
         x_array = pd.concat(x_list, axis=1)
         self.predict_x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
-            print(x_array)
+            nulz = x_array.isnull().sum()
+            print(
+                f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
+            )
             raise ValueError("nan values in predict_x_array")
 
         # RUN LINEAR MODEL
@@ -1127,16 +1149,29 @@ class Cassandra(ModelObject):
             return_components=True,
         )
         # ADD PREPROCESSING BEFORE TREND (FIT X, REVERSE on PREDICT, THEN TREND)
-
+        zeros_df = pd.DataFrame(
+            0,
+            index=trend_component.forecast.index,
+            columns=trend_component.forecast.columns,
+        )
+        upper_adjust = (zeros_df + self.residual_uncertainty_upper) + (
+            self.residual_uncertainty_upper_std * self.int_std_dev
+        )
+        lower_adjust = (zeros_df + self.residual_uncertainty_lower) + (
+            self.residual_uncertainty_lower_std * self.int_std_dev
+        )
+        # add a gradual increase to full uncertainty
+        if linear_pred.shape[0] > 4:
+            first_adjust = zeros_df + 1
+            first_adjust.iloc[0] = 0.5
+            first_adjust.iloc[1] = 0.7
+            upper_adjust = upper_adjust * first_adjust
+            lower_adjust = lower_adjust * first_adjust
         upper = (
-            trend_component.upper_forecast.reindex(dates)
-            + linear_pred
-            + self.residual_uncertainty * self.int_std_dev
+            trend_component.upper_forecast.reindex(dates) + linear_pred + upper_adjust
         )
         lower = (
-            trend_component.lower_forecast.reindex(dates)
-            + linear_pred
-            - self.residual_uncertainty * self.int_std_dev
+            trend_component.lower_forecast.reindex(dates) + linear_pred - lower_adjust
         )
 
         df_forecast = PredictionObject(
@@ -1170,6 +1205,7 @@ class Cassandra(ModelObject):
         """Generate a forecast.
 
         future_regressor and regressor_per_series should only include new future values, history is already stored
+        they should match on forecast_length and index of forecasts
         """
         self.forecast_length = forecast_length
         predictStartTime = self.time()
@@ -1188,7 +1224,7 @@ class Cassandra(ModelObject):
             and self.future_regressor_train is not None
             and forecast_length is not None
         ):
-            if self.verbose >= 0:
+            if self.verbose > 0:
                 print(
                     "future_regressor not provided to Cassandra, using forecasts of historical"
                 )
@@ -1220,12 +1256,14 @@ class Cassandra(ModelObject):
             )
         if future_regressor is not None and self.regressors_used:
             if len(future_regressor) == expected_fore_len:
-                full_regr = clean_regressor(future_regressor)
+                full_regr = self.regressor_transformer.transform(
+                    clean_regressor(future_regressor)
+                )
             else:
                 full_regr = pd.concat(
                     [
                         self.future_regressor_train,
-                        self.regressor_transformer.fit_transform(
+                        self.regressor_transformer.transform(
                             clean_regressor(
                                 future_regressor.loc[
                                     future_regressor.index.difference(
@@ -1295,33 +1333,6 @@ class Cassandra(ModelObject):
         # MAY WANT TO PASS future_regressor HERE
         resid = None
         if forecast_length is not None:
-            # combine regressor types depending on what is given
-            if (
-                self.future_regressor_train is None
-                and self.flag_regressor_train is not None
-                and self.regressors_used
-            ):
-                comp_regr_train = self.flag_regressor_train
-                comp_regr = flag_regressors
-            elif (
-                self.future_regressor_train is not None
-                and self.flag_regressor_train is None
-                and self.regressors_used
-            ):
-                comp_regr_train = self.future_regressor_train
-                comp_regr = future_regressor
-            elif (
-                self.future_regressor_train is not None
-                and self.flag_regressor_train is not None
-                and self.regressors_used
-            ):
-                comp_regr_train = pd.concat(
-                    [self.future_regressor_train, self.flag_regressor_train], axis=1
-                )
-                comp_regr = pd.concat([future_regressor, flag_regressors], axis=1)
-            else:
-                comp_regr_train = None
-                comp_regr = None
             # create new rolling residual if new data provided
             if new_df is not None:
                 resid = df - self._predict_linear(
@@ -1337,11 +1348,46 @@ class Cassandra(ModelObject):
                         resid, np.array(self.create_t(df.index))
                     )
                     resid = pd.DataFrame(resid, index=df.index, columns=df.columns)
+            df_train = self.trend_train if resid is None else resid
+            # combine regressor types depending on what is given
+            if (
+                self.future_regressor_train is None
+                and self.flag_regressor_train is not None
+                and self.regressors_used
+            ):
+                comp_regr_train = self.flag_regressor_train.reindex(
+                    index=df_train.index
+                )
+                comp_regr = all_flags.tail(forecast_length)
+            elif (
+                self.future_regressor_train is not None
+                and self.flag_regressor_train is None
+                and self.regressors_used
+            ):
+                comp_regr_train = self.future_regressor_train.reindex(
+                    index=df_train.index
+                )
+                comp_regr = full_regr.tail(forecast_length)
+            elif (
+                self.future_regressor_train is not None
+                and self.flag_regressor_train is not None
+                and self.regressors_used
+            ):
+                comp_regr_train = pd.concat(
+                    [self.future_regressor_train, self.flag_regressor_train], axis=1
+                ).reindex(index=df_train.index)
+                comp_regr = pd.concat([full_regr, all_flags], axis=1).tail(
+                    forecast_length
+                )
+            else:
+                comp_regr_train = None
+                comp_regr = None
+
             trend_forecast = model_forecast(
                 model_name=self.trend_model['Model'],
                 model_param_dict=self.trend_model['ModelParameters'],
                 model_transform_dict=self.trend_transformation,
-                df_train=self.trend_train if resid is None else resid,
+                df_train=df_train,
                 forecast_length=forecast_length,
                 frequency=self.frequency,
                 prediction_interval=self.prediction_interval,
@@ -1444,6 +1490,13 @@ class Cassandra(ModelObject):
                 regressor_per_series=regr_ps_fore,
             )
 
+        # save future index before include_history is added
+        if future_impacts is not None and forecast_length is not None:
+            future_impacts = future_impacts.reindex(
+                columns=df_forecast.forecast.columns,
+                index=self.forecast_index,
+                fill_value=0,
+            )
         # undo preprocessing and scaling
         # account for some transformers requiring different methods on original data and forecast
         if forecast_length is None:
@@ -1789,8 +1842,15 @@ class Cassandra(ModelObject):
         else:
             trend_anomaly_detector_params = None
         linear_model = random.choices(
-            ['lstsq', 'linalg_solve', 'l1_norm', 'dwae_norm', 'quantile_norm'],
-            [0.6, 0.2, 0.1, 0.05, 0.02],
+            [
+                'lstsq',
+                'linalg_solve',
+                'l1_norm',
+                'dwae_norm',
+                'quantile_norm',
+                'l1_positive',
+            ],
+            [0.6, 0.2, 0.1, 0.05, 0.02, 0.03],
         )[0]
         recency_weighting = random.choices(
             [None, 0.05, 0.1, 0.25], [0.7, 0.1, 0.1, 0.1]
@@ -1809,7 +1869,7 @@ class Cassandra(ModelObject):
                 'lambda': random.choices([0, 0.1, 1, 10], [0.4, 0.2, 0.2, 0.2])[0],
                 'recency_weighting': recency_weighting,
             }
-        elif linear_model in ['l1_norm', 'dwae_norm', 'quantile_norm']:
+        elif linear_model in ['l1_norm', 'dwae_norm', 'quantile_norm', 'l1_positive']:
             linear_model = {
                 'model': linear_model,
                 'recency_weighting': recency_weighting,
@@ -2215,6 +2275,15 @@ def cost_function_l1(params, X, y):
     return np.sum(np.abs(y - np.dot(X, params.reshape(X.shape[1], y.shape[1]))))
 
 
+def cost_function_l1_positive(params, X, y):
+    return np.sum(
+        np.abs(
+            y
+            - np.dot(X, np.where(params < 0, 0, params).reshape(X.shape[1], y.shape[1]))
+        )
+    )
+
+
 # actually this is more like MADE
 def cost_function_dwae(params, X, y):
     A = y
@@ -2253,9 +2322,13 @@ def lstsq_minimize(X, y, maxiter=15000, cost_function="l1"):
     # assuming scaled, these should be reasonable bounds
     bounds = [(-10, 10) for x in x0]
     if cost_function == "dwae":
+        bounds = [(-0.5, 10) for x in x0]
         cost_func = cost_function_dwae
     elif cost_function == "quantile":
         cost_func = cost_function_quantile
+    elif cost_function == "l1_positive":
+        bounds = [(0, 10) for x in x0]
+        cost_func = cost_function_l1
     else:
         cost_func = cost_function_l1
     return minimize(
@@ -2304,6 +2377,13 @@ def linear_model(x, y, params):
             np.asarray(y),
             maxiter=params.get("maxiter", 15000),
             cost_function="dwae",
+        )
+    elif model_type == "l1_positive":
+        return lstsq_minimize(
+            np.asarray(x),
+            np.asarray(y),
+            maxiter=params.get("maxiter", 15000),
+            cost_function="l1_positive",
         )
     else:
         raise ValueError("linear model not recognized")
@@ -2374,6 +2454,8 @@ if False:
         'wiki_Germany': 'de',
     }
     df_daily = load_daily(long=False)
+    # add nan
+    df_daily.iloc[100, :] = np.nan
     forecast_length = 180
     include_history = True
     df_train = df_daily[:-forecast_length].iloc[:, 1:]
@@ -2439,7 +2521,7 @@ if False:
     result = pred.forecast
     series = random.choice(mod.column_names)
     # series = "wiki_Periodic_table"
-    # series = 'wiki_Germany'
+    series = 'wiki_all'
     mod.regressors_used
     mod.holiday_countries_used
     with plt.style.context("seaborn-white"):
@@ -2458,12 +2540,12 @@ if False:
         mod.plot_components(
             pred, series=series, to_origin_space=True, start_date=start_date
         )
-        # plt.savefig("Cassandra_components.png", dpi=300)
+        # plt.savefig("Cassandra_components3.png", dpi=300, bbox_inches="tight")
         plt.show()
         mod.plot_trend(
             series=series, vline=result.index[-forecast_length], start_date=start_date
         )
-        # plt.savefig("Cassandra_trend.png", dpi=300)
+        # plt.savefig("Cassandra_trend.png", dpi=300, bbox_inches="tight")
     pred.evaluate(
         df_daily.reindex(result.index)[df_train.columns]
         if include_history
@@ -2546,125 +2628,4 @@ if mod.trend_anomaly_detector is not None:
         handles += [scat3]
         labels += ["trend anomalies"]
 ax.legend(handles, labels)
-
-# best yet 12.0 SMAPE
-c_params = {'preprocessing_transformation': {'fillna': 'ffill',
-  'transformations': {0: 'KalmanSmoothing'},
-  'transformation_params': {0: {'state_transition': [[1]],
-    'process_noise': [[0.307]],
-    'observation_model': [[1]],
-    'observation_noise': 1.0}}},
- 'scaling': {'fillna': None,
-  'transformations': {0: 'MinMaxScaler'},
-  'transformation_params': {0: {}}},
- 'seasonalities': [7, 365.25],
- 'ar_lags': [7],
- 'ar_interaction_seasonality': None,
- 'anomaly_detector_params': None,
- 'anomaly_intervention': None,
- 'holiday_detector_params': None,
- 'holiday_countries_used': False,
- 'multivariate_feature': None,
- 'multivariate_transformation': {'fillna': 'pchip',
-  'transformations': {0: 'Round', 1: 'bkfilter'},
-  'transformation_params': {0: {'decimals': 0,
-    'on_transform': True,
-    'on_inverse': False},
-   1: {}}},
- 'regressor_transformation': {'fillna': 'rolling_mean_24',
-  'transformations': {0: 'PowerTransformer'},
-  'transformation_params': {0: {}}},
- 'regressors_used': False,
- 'linear_model': {'model': 'lstsq', 'lambda': 10, 'recency_weighting': None},
- 'randomwalk_n': 10,
- 'trend_window': 3,
- 'trend_standin': None,
- 'trend_anomaly_detector_params': None,
- 'trend_transformation': {'fillna': 'akima',
-  'transformations': {0: 'DifferencedTransformer'},
-  'transformation_params': {0: {}}},
- 'trend_model': {'Model': 'SeasonalityMotif',
-  'ModelParameters': {'window': 15,
-   'point_method': 'midhinge',
-   'distance_metric': 'mse',
-   'k': 10,
-   'datepart_method': 'recurring'}},
- 'trend_phi': None}
-
-# 11.7 SMAPE
-c_params = {'preprocessing_transformation': {'fillna': 'ffill',
-  'transformations': {0: 'Slice', 1: 'AlignLastValue'},
-  'transformation_params': {0: {'method': 0.5},
-   1: {'rows': 1,
-    'lag': 1,
-    'method': 'additive',
-    'strength': 1.0,
-    'first_value_only': False}}},
- 'scaling': 'BaseScaler',
- 'seasonalities': ['weekdayofmonth', 'common_fourier'],
- 'ar_lags': None,
- 'ar_interaction_seasonality': None,
- 'anomaly_detector_params': {'method': 'rolling_zscore',
-  'transform_dict': {'fillna': None,
-   'transformations': {'0': 'ClipOutliers'},
-   'transformation_params': {'0': {'method': 'clip', 'std_threshold': 6}}},
-  'method_params': {'distribution': 'chi2',
-   'alpha': 0.05,
-   'rolling_periods': 200,
-   'center': False},
-  'fillna': 'rolling_mean_24'},
- 'anomaly_intervention': 'remove',
- 'holiday_detector_params': None,
- 'holiday_countries_used': True,
- 'multivariate_feature': None,
- 'multivariate_transformation': {'fillna': 'ffill',
-  'transformations': {0: 'QuantileTransformer', 1: 'QuantileTransformer'},
-  'transformation_params': {0: {'output_distribution': 'uniform',
-    'n_quantiles': 1000},
-   1: {'output_distribution': 'uniform', 'n_quantiles': 1000}}},
- 'regressor_transformation': {'fillna': 'rolling_mean_24',
-  'transformations': {0: 'QuantileTransformer'},
-  'transformation_params': {0: {'output_distribution': 'uniform',
-    'n_quantiles': 60}}},
- 'regressors_used': True,
- 'linear_model': {'model': 'lstsq', 'lambda': 10, 'recency_weighting': None},
- 'randomwalk_n': 10,
- 'trend_window': 3,
- 'trend_standin': 'random_normal',
- 'trend_anomaly_detector_params': {'method': 'IQR',
-  'transform_dict': {'fillna': 'rolling_mean_24',
-   'transformations': {0: 'AlignLastValue', 1: 'RobustScaler'},
-   'transformation_params': {0: {'rows': 1,
-     'lag': 1,
-     'method': 'additive',
-     'strength': 1.0,
-     'first_value_only': False},
-    1: {}}},
-  'method_params': {'iqr_threshold': 1.5, 'iqr_quantiles': [0.25, 0.75]},
-  'fillna': 'rolling_mean_24'},
- 'trend_transformation': {'fillna': 'ffill',
-  'transformations': {0: 'SeasonalDifference'},
-  'transformation_params': {0: {'lag_1': 7, 'method': 'LastValue'}}},
- 'trend_model': {'Model': 'MetricMotif',
-  'ModelParameters': {'window': 30,
-   'point_method': 'weighted_mean',
-   'distance_metric': 'mqae',
-   'k': 3,
-   'comparison_transformation': {'fillna': 'rolling_mean',
-    'transformations': {0: 'KalmanSmoothing'},
-    'transformation_params': {0: {'state_transition': [[1]],
-      'process_noise': [[0.064]],
-      'observation_model': [[2]],
-      'observation_noise': 10.0}}},
-   'combination_transformation': {'fillna': 'rolling_mean_24',
-    'transformations': {0: 'KalmanSmoothing'},
-    'transformation_params': {0: {'state_transition': [[1]],
-      'process_noise': [[0.246]],
-      'observation_model': [[1]],
-      'observation_noise': 0.5}}}}},
- 'trend_phi': None}
-
-
-# best on validations of direction
-c_params = {'preprocessing_transformation': {'fillna': 'rolling_mean', 'transformations': {'0': None}, 'transformation_params': {'0': {}}}, 'scaling': 'BaseScaler', 'past_impacts_intervention': None, 'seasonalities': [7, 365.25], 'ar_lags': [1, 7], 'ar_interaction_seasonality': None, 'anomaly_detector_params': {'method': 'rolling_zscore', 'transform_dict': None, 'method_params': {'distribution': 'uniform', 'alpha': 0.05, 'rolling_periods': 200, 'center': False}, 'fillna': 'linear'}, 'anomaly_intervention': 'remove', 'holiday_detector_params': None, 'holiday_countries': None, 'holiday_countries_used': True, 'multivariate_feature': None, 'multivariate_transformation': {'fillna': 'KNNImputer', 'transformations': {'0': 'SeasonalDifference', '1': 'MinMaxScaler', '2': 'cffilter'}, 'transformation_params': {'0': {'lag_1': 12, 'method': 'Median'}, '1': {}, '2': {}}}, 'regressor_transformation': {'fillna': 'ffill', 'transformations': {'0': 'DifferencedTransformer'}, 'transformation_params': {'0': {}}}, 'regressors_used': False, 'linear_model': {'model': 'lstsq', 'lambda': None, 'recency_weighting': None}, 'randomwalk_n': None, 'trend_window': 365, 'trend_standin': 'random_normal', 'trend_anomaly_detector_params': None, 'trend_transformation': {'fillna': 'zero', 'transformations': {'0': 'EWMAFilter', '1': 'StandardScaler', '2': 'PowerTransformer'}, 'transformation_params': {'0': {'span': 10}, '1': {}, '2': {}}}, 'trend_model': {'Model': 'SeasonalityMotif', 'ModelParameters': {'window': 5, 'point_method': 'weighted_mean', 'distance_metric': 'mse', 'k': 5, 'datepart_method': 'simple_binarized'}}, 'trend_phi': None}
 """
