@@ -584,7 +584,7 @@ xgparam3 = {
         "n_estimators": 319,
         "num_parallel_tree": 1,
         "predictor": 'auto',
-    }
+    },
 }
 xgparam2 = {
     "model": 'xgboost',
@@ -614,7 +614,7 @@ xgparam2 = {
         "n_estimators": 162,
         "num_parallel_tree": 1,
         "predictor": 'auto',
-    }
+    },
 }
 lightgbmp1 = {
     "model": 'LightGBM',
@@ -627,7 +627,7 @@ lightgbmp1 = {
         "num_leaves": 15,
         "reg_alpha": 0.00097656,
         "reg_lambda": 0.6861,
-    }
+    },
 }
 lightgbmp2 = {
     "model": 'LightGBM',
@@ -640,7 +640,7 @@ lightgbmp2 = {
         "num_leaves": 35,
         "reg_alpha": 0.00308,
         "reg_lambda": 5.1817,
-    }
+    },
 }
 
 

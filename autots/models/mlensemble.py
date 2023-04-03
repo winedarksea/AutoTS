@@ -35,7 +35,15 @@ def create_feature(
     result_windows = None
     res = []
     # add last value as a feature
-    res.append(np.repeat(df_train.iloc[-1:,].to_numpy(), forecast_length, axis=0))
+    res.append(
+        np.repeat(
+            df_train.iloc[
+                -1:,
+            ].to_numpy(),
+            forecast_length,
+            axis=0,
+        )
+    )
     # add averages
     res.append(
         np.repeat(df_train.mean().to_numpy()[np.newaxis, :], forecast_length, axis=0)

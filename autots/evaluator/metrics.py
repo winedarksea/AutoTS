@@ -87,7 +87,9 @@ def mean_absolute_differential_error(A, F, order: int = 1, df_train=None, scaler
     # scaler = np.mean(A, axis=0)  # debate over whether to make this scaled
     if df_train is not None:
         last_of_array = np.nan_to_num(
-            df_train[df_train.shape[0] - 1 : df_train.shape[0],]
+            df_train[
+                df_train.shape[0] - 1 : df_train.shape[0],
+            ]
         )
         # last_of_array = df_train.tail(1).fillna(0).to_numpy()
         # assigning to new because I'm paranoid about overwrite existing objects
@@ -405,7 +407,9 @@ def linearity(arr):
     if ar_len < 3:
         return np.ones((arr.shape[1]))
     else:
-        return 1 - np.count_nonzero(np.diff(arr, n=2, axis=0), axis=0) / (arr.shape[0] - 2)
+        return 1 - np.count_nonzero(np.diff(arr, n=2, axis=0), axis=0) / (
+            arr.shape[0] - 2
+        )
 
 
 def smoothness(arr):
@@ -428,7 +432,7 @@ def full_metric_evaluation(
     **kwargs
 ):
     """Create a pd.DataFrame of metrics per series given actuals, forecast, and precalculated errors.
-    
+
     Args:
         A (np.array): array or df of actuals
         F (np.array): array or df of forecasts
@@ -497,10 +501,10 @@ def full_metric_evaluation(
     # calculate 'u' shaped weighting for uwmae
     u_weights = np.ones_like(weights)
     frac_shape = F.shape[0] * 0.1
-    first_weight = 5 if frac_shape  < 5 else frac_shape
+    first_weight = 5 if frac_shape < 5 else frac_shape
     u_weights[0, :] = first_weight
     u_weights[-1, :] = first_weight * 0.5
-    
+
     # over/under estimate mask
     ovm = filled_full_mae_errors > 0
 
@@ -560,9 +564,8 @@ def full_metric_evaluation(
                 filled_full_mae_errors * weights, axis=0
             ),  # pronunciation guide: "eeeewwwwwwhh, ma!"
             # 'u' weighted (start and end highest priority) rmse
-            'uwmse': np.mean(
-                (filled_full_mae_errors * u_weights) ** 2, axis=0
-            ) / scaler,
+            'uwmse': np.mean((filled_full_mae_errors * u_weights) ** 2, axis=0)
+            / scaler,
             'smoothness': smoothness(F),
             # 90th percentile of error
             # here for NaN, assuming that NaN to zero only has minor effect on upper quantile
@@ -580,7 +583,7 @@ def full_metric_evaluation(
         },
         index=columns,
     ).transpose()
-    
+
     if return_components:
         return result_df, full_mae_errors, squared_errors, upper_pl, lower_pl
     else:

@@ -319,7 +319,9 @@ class Cassandra(ModelObject):
 
         # REMOVE NaN but only this so far, for holiday and anomaly detection
         if self.preprocessing_transformation is not None:
-            self.preprocesser = GeneralTransformer(**{'fillna': self.preprocessing_transformation.get('fillna', "ffill")})
+            self.preprocesser = GeneralTransformer(
+                **{'fillna': self.preprocessing_transformation.get('fillna', "ffill")}
+            )
             self.df = self.preprocesser.fit_transform(self.df)
 
         # remove past impacts to find "organic"
@@ -496,7 +498,9 @@ class Cassandra(ModelObject):
             self.future_regressor_train = self.regressor_transformer.fit_transform(
                 clean_regressor(future_regressor)
             ).fillna(0)
-            x_list.append(self.future_regressor_train.reindex(self.df.index, fill_value=0))
+            x_list.append(
+                self.future_regressor_train.reindex(self.df.index, fill_value=0)
+            )
         if flag_regressors is not None and self.regressors_used:
             self.flag_regressor_train = clean_regressor(
                 flag_regressors, prefix="regrflags_"
@@ -528,7 +532,9 @@ class Cassandra(ModelObject):
         self.x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             nulz = x_array.isnull().sum()
-            print(f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}")
+            print(
+                f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
+            )
             raise ValueError("nan values in x_array")
         if np.all(self.df == 0):
             raise ValueError("transformed data is all zeroes")
@@ -699,7 +705,7 @@ class Cassandra(ModelObject):
             trend_posterior = pd.DataFrame(
                 trend_posterior, index=self.df.index, columns=self.df.columns
             )
-            res_dif = (trend_residuals - trend_posterior)
+            res_dif = trend_residuals - trend_posterior
             res_upper = res_dif[res_dif >= 0]
             res_lower = res_dif[res_dif <= 0]
             self.residual_uncertainty_upper = res_upper.mean()
@@ -934,7 +940,9 @@ class Cassandra(ModelObject):
         self.predict_x_array = x_array  # can remove this later, it is for debugging
         if np.any(np.isnan(x_array.astype(float))):  # remove later, for debugging
             nulz = x_array.isnull().sum()
-            print(f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}")
+            print(
+                f"the following columns contain nan values: {nulz[nulz > 0].index.tolist()}"
+            )
             raise ValueError("nan values in predict_x_array")
 
         # RUN LINEAR MODEL
@@ -1141,9 +1149,17 @@ class Cassandra(ModelObject):
             return_components=True,
         )
         # ADD PREPROCESSING BEFORE TREND (FIT X, REVERSE on PREDICT, THEN TREND)
-        zeros_df = pd.DataFrame(0, index=trend_component.forecast.index, columns=trend_component.forecast.columns)
-        upper_adjust = (zeros_df + self.residual_uncertainty_upper) + (self.residual_uncertainty_upper_std * self.int_std_dev)
-        lower_adjust = (zeros_df + self.residual_uncertainty_lower) + (self.residual_uncertainty_lower_std * self.int_std_dev)
+        zeros_df = pd.DataFrame(
+            0,
+            index=trend_component.forecast.index,
+            columns=trend_component.forecast.columns,
+        )
+        upper_adjust = (zeros_df + self.residual_uncertainty_upper) + (
+            self.residual_uncertainty_upper_std * self.int_std_dev
+        )
+        lower_adjust = (zeros_df + self.residual_uncertainty_lower) + (
+            self.residual_uncertainty_lower_std * self.int_std_dev
+        )
         # add a gradual increase to full uncertainty
         if linear_pred.shape[0] > 4:
             first_adjust = zeros_df + 1
@@ -1152,14 +1168,10 @@ class Cassandra(ModelObject):
             upper_adjust = upper_adjust * first_adjust
             lower_adjust = lower_adjust * first_adjust
         upper = (
-            trend_component.upper_forecast.reindex(dates)
-            + linear_pred
-            + upper_adjust
+            trend_component.upper_forecast.reindex(dates) + linear_pred + upper_adjust
         )
         lower = (
-            trend_component.lower_forecast.reindex(dates)
-            + linear_pred
-            - lower_adjust
+            trend_component.lower_forecast.reindex(dates) + linear_pred - lower_adjust
         )
 
         df_forecast = PredictionObject(
@@ -1244,7 +1256,9 @@ class Cassandra(ModelObject):
             )
         if future_regressor is not None and self.regressors_used:
             if len(future_regressor) == expected_fore_len:
-                full_regr = self.regressor_transformer.transform(clean_regressor(future_regressor))
+                full_regr = self.regressor_transformer.transform(
+                    clean_regressor(future_regressor)
+                )
             else:
                 full_regr = pd.concat(
                     [
@@ -1341,14 +1355,18 @@ class Cassandra(ModelObject):
                 and self.flag_regressor_train is not None
                 and self.regressors_used
             ):
-                comp_regr_train = self.flag_regressor_train.reindex(index=df_train.index)
+                comp_regr_train = self.flag_regressor_train.reindex(
+                    index=df_train.index
+                )
                 comp_regr = all_flags.tail(forecast_length)
             elif (
                 self.future_regressor_train is not None
                 and self.flag_regressor_train is None
                 and self.regressors_used
             ):
-                comp_regr_train = self.future_regressor_train.reindex(index=df_train.index)
+                comp_regr_train = self.future_regressor_train.reindex(
+                    index=df_train.index
+                )
                 comp_regr = full_regr.tail(forecast_length)
             elif (
                 self.future_regressor_train is not None
@@ -1358,7 +1376,9 @@ class Cassandra(ModelObject):
                 comp_regr_train = pd.concat(
                     [self.future_regressor_train, self.flag_regressor_train], axis=1
                 ).reindex(index=df_train.index)
-                comp_regr = pd.concat([full_regr, all_flags], axis=1).tail(forecast_length)
+                comp_regr = pd.concat([full_regr, all_flags], axis=1).tail(
+                    forecast_length
+                )
             else:
                 comp_regr_train = None
                 comp_regr = None
@@ -1474,7 +1494,8 @@ class Cassandra(ModelObject):
         if future_impacts is not None and forecast_length is not None:
             future_impacts = future_impacts.reindex(
                 columns=df_forecast.forecast.columns,
-                index=self.forecast_index, fill_value=0,
+                index=self.forecast_index,
+                fill_value=0,
             )
         # undo preprocessing and scaling
         # account for some transformers requiring different methods on original data and forecast
@@ -1821,7 +1842,14 @@ class Cassandra(ModelObject):
         else:
             trend_anomaly_detector_params = None
         linear_model = random.choices(
-            ['lstsq', 'linalg_solve', 'l1_norm', 'dwae_norm', 'quantile_norm', 'l1_positive'],
+            [
+                'lstsq',
+                'linalg_solve',
+                'l1_norm',
+                'dwae_norm',
+                'quantile_norm',
+                'l1_positive',
+            ],
             [0.6, 0.2, 0.1, 0.05, 0.02, 0.03],
         )[0]
         recency_weighting = random.choices(
@@ -2248,7 +2276,12 @@ def cost_function_l1(params, X, y):
 
 
 def cost_function_l1_positive(params, X, y):
-    return np.sum(np.abs(y - np.dot(X, np.where(params < 0, 0, params).reshape(X.shape[1], y.shape[1]))))
+    return np.sum(
+        np.abs(
+            y
+            - np.dot(X, np.where(params < 0, 0, params).reshape(X.shape[1], y.shape[1]))
+        )
+    )
 
 
 # actually this is more like MADE

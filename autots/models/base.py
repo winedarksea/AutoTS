@@ -348,15 +348,15 @@ class PredictionObject(object):
     def total_runtime(self):
         """Combine runtimes."""
         return self.fit_runtime + self.predict_runtime + self.transformation_runtime
-    
+
     def plot_df(
-            self,
-            df_wide=None,
-            series: str = None,
-            remove_zeroes: bool = False,
-            interpolate: str = None,
-            start_date: str = None,
-        ):
+        self,
+        df_wide=None,
+        series: str = None,
+        remove_zeroes: bool = False,
+        interpolate: str = None,
+        start_date: str = None,
+    ):
         if series is None:
             import random
 
@@ -487,7 +487,13 @@ class PredictionObject(object):
         # arrays are faster for math than pandas dataframes
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            self.per_series_metrics, self.full_mae_errors, self.squared_errors, self.upper_pl, self.lower_pl = full_metric_evaluation(
+            (
+                self.per_series_metrics,
+                self.full_mae_errors,
+                self.squared_errors,
+                self.upper_pl,
+                self.lower_pl,
+            ) = full_metric_evaluation(
                 A=actual,
                 F=self.forecast,
                 upper_forecast=self.upper_forecast,

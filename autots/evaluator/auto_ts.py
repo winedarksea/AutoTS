@@ -487,10 +487,14 @@ class AutoTS(object):
             )[0]
         if method == "full":
             metric_weighting = {
-                'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[0],
+                'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
+                    0
+                ],
                 'mae_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
                 'rmse_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-                'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[0],
+                'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[
+                    0
+                ],
                 'mage_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
                 'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
                 'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
@@ -502,9 +506,9 @@ class AutoTS(object):
                 'containment_weighting': random.choices(
                     [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
                 )[0],
-                'contour_weighting': random.choices([0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05])[
-                    0
-                ],
+                'contour_weighting': random.choices(
+                    [0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05]
+                )[0],
                 'runtime_weighting': random.choices(
                     [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
                 )[0],
@@ -520,10 +524,14 @@ class AutoTS(object):
             }
         else:
             metric_weighting = {
-                'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[0],
+                'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
+                    0
+                ],
                 'mae_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
                 'rmse_weighting': random.choices([0, 1, 3, 5], [0.1, 0.3, 0.3, 0.3])[0],
-                'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[0],
+                'made_weighting': random.choices([0, 1, 3, 5], [0.7, 0.3, 0.1, 0.05])[
+                    0
+                ],
                 'mage_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
                 'mle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
                 'imle_weighting': random.choices([0, 1, 3, 5], [0.8, 0.1, 0.1, 0.0])[0],
@@ -534,9 +542,9 @@ class AutoTS(object):
                 'containment_weighting': random.choices(
                     [0, 1, 3, 5], [0.9, 0.1, 0.05, 0.0]
                 )[0],
-                'contour_weighting': random.choices([0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05])[
-                    0
-                ],
+                'contour_weighting': random.choices(
+                    [0, 1, 3, 5], [0.7, 0.2, 0.05, 0.05]
+                )[0],
                 'runtime_weighting': random.choices(
                     [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
                 )[0],
@@ -610,7 +618,23 @@ class AutoTS(object):
                     'probabilistic',
                     'no_shared',
                 ],
-                [0.2, 0.2, 0.2, 0.2, 0.01, 0.1, 0.1, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05],
+                [
+                    0.2,
+                    0.2,
+                    0.2,
+                    0.2,
+                    0.01,
+                    0.1,
+                    0.1,
+                    0.05,
+                    0.05,
+                    0.05,
+                    0.05,
+                    0.05,
+                    0.05,
+                    0.05,
+                    0.05,
+                ],
             )[0]
         else:
             model_list = random.choices(
@@ -645,7 +669,9 @@ class AutoTS(object):
                 [1, 2, 4, 6, 8, 10],
                 [0.1, 0.2, 0.3, 0.3, 0.2, 0.1],
             )[0],
-            'num_validations': random.choices([0, 1, 2, 3, 4, 6], [0.1, 0.2, 0.3, 0.2, 0.1, 0.05])[0],
+            'num_validations': random.choices(
+                [0, 1, 2, 3, 4, 6], [0.1, 0.2, 0.3, 0.2, 0.1, 0.05]
+            )[0],
             'validation_method': validation_method,
             'models_to_validate': random.choices(
                 [0.15, 0.10, 0.25, 0.35, 0.45], [0.3, 0.1, 0.3, 0.3, 0.1]
@@ -1254,7 +1280,9 @@ or otherwise increase models available."""
 
         # run validation_results aggregation
         self.validation_results = copy.copy(self.initial_results)
-        self.validation_results = validation_aggregation(self.validation_results, df_train=self.df_wide_numeric)
+        self.validation_results = validation_aggregation(
+            self.validation_results, df_train=self.df_wide_numeric
+        )
 
         # Construct horizontal style ensembles
         models_to_use = None
@@ -1459,7 +1487,9 @@ or otherwise increase models available."""
 
             # rerun validation_results aggregation with new models added
             self.validation_results = copy.copy(self.initial_results)
-            self.validation_results = validation_aggregation(self.validation_results, df_train=self.df_wide_numeric)
+            self.validation_results = validation_aggregation(
+                self.validation_results, df_train=self.df_wide_numeric
+            )
 
             # use the best of these ensembles if any ran successfully
             try:
@@ -1706,7 +1736,9 @@ or otherwise increase models available."""
 
         self.validation_results = copy.copy(self.initial_results)
         # aggregate validation results
-        self.validation_results = validation_aggregation(self.validation_results, df_train=self.df_wide_numeric)
+        self.validation_results = validation_aggregation(
+            self.validation_results, df_train=self.df_wide_numeric
+        )
 
     def predict(
         self,
@@ -2313,9 +2345,11 @@ or otherwise increase models available."""
         series[['log(Volatility)', 'log(Mean)']] = np.log1p(
             np.abs(series[['Volatility', 'Mean']])
         )
-        sx = series.set_index(['Model', 'log(Mean)'], append=True).unstack('Model')[
-            'log(Volatility)'
-        ].reset_index(drop=True)
+        sx = (
+            series.set_index(['Model', 'log(Mean)'], append=True)
+            .unstack('Model')['log(Volatility)']
+            .reset_index(drop=True)
+        )
         # plot
         return sx.plot(style='o', title=title, **kwargs)
 

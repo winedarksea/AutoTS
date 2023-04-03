@@ -912,7 +912,9 @@ class TemplateEvalObject(object):
             [self.per_series_uwmse, another_eval.per_series_uwmse], axis=0, sort=False
         )
         self.per_series_smoothness = pd.concat(
-            [self.per_series_smoothness, another_eval.per_series_smoothness], axis=0, sort=False
+            [self.per_series_smoothness, another_eval.per_series_smoothness],
+            axis=0,
+            sort=False,
         )
         self.full_mae_errors.extend(another_eval.full_mae_errors)
         self.full_pl_errors.extend(another_eval.full_pl_errors)
@@ -1578,8 +1580,10 @@ def TemplateWizard(
                 else:
                     print(
                         'Template Eval Error: {} in model {} in generation {}: {}'.format(
-                            (repr(e)), template_result.model_count,
-                            str(current_generation), model_str
+                            (repr(e)),
+                            template_result.model_count,
+                            str(current_generation),
+                            model_str,
                         )
                     )
             fit_runtime = datetime.datetime.now() - template_start_time
@@ -2185,14 +2189,21 @@ def validation_aggregation(validation_results, df_train=None):
         scaler[scaler == 0] == np.nan
         scaler = scaler.fillna(df_train.max(axis=0))
         scaler[scaler == 0] == 1
-        per_series = (validation_results.per_series_mae.groupby(level=0).max()) / scaler * 100
-        per_series_agg = pd.concat([
-            per_series.min(axis=1).rename("lowest_series_mape"),
-            per_series.idxmin(axis=1).rename("lowest_series_mape_name"),
-            per_series.max(axis=1).rename("highest_series_mape"),
-            per_series.idxmax(axis=1).rename("highest_series_mape_name"),
-        ], axis=1)
-        validation_results.model_results = validation_results.model_results.merge(per_series_agg, left_on='ID', right_index=True, how='left')
+        per_series = (
+            (validation_results.per_series_mae.groupby(level=0).max()) / scaler * 100
+        )
+        per_series_agg = pd.concat(
+            [
+                per_series.min(axis=1).rename("lowest_series_mape"),
+                per_series.idxmin(axis=1).rename("lowest_series_mape_name"),
+                per_series.max(axis=1).rename("highest_series_mape"),
+                per_series.idxmax(axis=1).rename("highest_series_mape_name"),
+            ],
+            axis=1,
+        )
+        validation_results.model_results = validation_results.model_results.merge(
+            per_series_agg, left_on='ID', right_index=True, how='left'
+        )
     return validation_results
 
 
@@ -2479,7 +2490,9 @@ def generate_score_per_series(
         overall_score = overall_score + (uwmse_score * uwmse_weighting)
     if smoothness_weighting != 0:
         smoothness_scaler = (
-            results_object.per_series_smoothness[results_object.per_series_smoothness != 0]
+            results_object.per_series_smoothness[
+                results_object.per_series_smoothness != 0
+            ]
             .mean()
             .fillna(1)
         )

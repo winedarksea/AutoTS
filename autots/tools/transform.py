@@ -498,7 +498,7 @@ class STLFilter(EmptyTransformer):
             df (pandas.DataFrame): input dataframe
         """
         from statsmodels.tsa.seasonal import STL, seasonal_decompose
-        
+
         if df.index.freq is None:
             freq = infer_frequency(df)
             df = df.asfreq(freq).fillna(method='ffill')
