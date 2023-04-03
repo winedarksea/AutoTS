@@ -1,3 +1,2 @@
-include autots/datasets/data/*.csv
 include autots/datasets/data/*.zip
 include README.md LICENSE
