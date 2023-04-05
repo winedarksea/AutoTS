@@ -615,6 +615,16 @@ def ModelMonster(
             n_jobs=n_jobs,
             **parameters,
         )
+    elif model == "Motif":
+        return Motif(
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            multivariate=parameters.get("multivariate", False),
+            **parameters,
+        )
     else:
         raise AttributeError(
             ("Model String '{}' not a recognized model type").format(model)
