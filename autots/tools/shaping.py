@@ -18,13 +18,14 @@ def infer_frequency(df_wide, warn=True, **kwargs):
         raise ValueError(
             "infer_frequency failed due to input not being pandas DF or DT index"
         )
-    frequency = pd.infer_freq(DTindex, warn=True)
+    # 'warn' arg removed in pandas 2.0.0
+    frequency = pd.infer_freq(DTindex)
     if frequency is None:
         # hack to get around data which has a few oddities
-        frequency = pd.infer_freq(DTindex[-10:], warn=True)
+        frequency = pd.infer_freq(DTindex[-10:])
     if frequency is None:
         # hack to get around data which has a few oddities
-        frequency = pd.infer_freq(DTindex[:10], warn=True)
+        frequency = pd.infer_freq(DTindex[:10])
     return frequency
 
 
