@@ -94,7 +94,7 @@ def query_holidays(
         holi_days = holi_days + 1
         holi_days.index = country_holidays.index
         """
-        holi_days = pd.get_dummies(country_holidays)
+        holi_days = pd.get_dummies(country_holidays, dtype=float)
     else:
         country_holidays = country_holidays_base.keys()
         if not country_holidays:

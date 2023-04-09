@@ -136,9 +136,7 @@ def long_to_wide(
 
     # Attempt to convert to datetime format if not already
     try:
-        df_long[date_col] = pd.to_datetime(
-            df_long[date_col], infer_datetime_format=True
-        )
+        df_long[date_col] = pd.to_datetime(df_long[date_col])
     except Exception:
         raise ValueError(
             "Could not convert date to datetime format. Incorrect column name or preformat with pandas to_datetime"

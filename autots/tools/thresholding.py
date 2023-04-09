@@ -384,7 +384,7 @@ def nonparametric(series, method_params):
 
 """
 df = pd.read_csv(
-    "holidays.csv", index_col=0, parse_dates=[0], infer_datetime_format=True
+    "holidays.csv", index_col=0, parse_dates=[0],
 )
 
 from autots.evaluator.auto_model import back_forecast

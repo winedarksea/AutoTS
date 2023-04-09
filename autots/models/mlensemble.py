@@ -23,6 +23,7 @@ from autots.models.sklearn import (
     retrieve_regressor,
 )  # generate_regressor_params, datepart_model_dict
 from autots.tools.shaping import simple_train_test_split
+from autots.tools.seasonal import date_part
 
 
 def create_feature(
@@ -31,6 +32,7 @@ def create_feature(
     forecast_length,
     future_regressor_train=None,
     future_regressor_forecast=None,
+    datepart_method=None,
 ):
     result_windows = None
     res = []
@@ -127,6 +129,15 @@ def create_feature(
         ),
         axis=0,
     )
+    if datepart_method not in [None, "None", "none"]:
+        date_part_df = date_part(forecasts.forecast.index, method=datepart_method)
+        res = np.concatenate(
+            (
+                res,
+                np.repeat(date_part_df.to_numpy()[np.newaxis, :, :], 21, axis=0).T,
+            ),
+            axis=0,
+        )
 
     sys.stdout.flush()
     return res
@@ -235,6 +246,7 @@ class MLEnsemble(ModelObject):
         num_validations=2,
         validation_method="backwards",
         min_allowed_train_percent=0.5,
+        datepart_method="expanded_binarized",
         models_source: str = 'random',
         **kwargs,
     ):
@@ -253,6 +265,7 @@ class MLEnsemble(ModelObject):
         self.num_validations = int(num_validations)
         self.validation_method = validation_method
         self.min_allowed_train_percent = min_allowed_train_percent
+        self.datepart_method = datepart_method
         if regression_model is None:
             try:
                 import xgboost  # noqa
@@ -365,14 +378,15 @@ class MLEnsemble(ModelObject):
                 regr_subset_t = None
                 regr_subset_f = None
             try:
-                res = create_feature(
+                self.res = create_feature(
                     df_train,
                     self.models,
                     self.forecast_length,
                     future_regressor_train=regr_subset_t,
                     future_regressor_forecast=regr_subset_f,
+                    datepart_method=self.datepart_method,
                 )
-                X.append(res.reshape(res.shape[0], -1))
+                X.append(self.res.reshape(self.res.shape[0], -1))
                 y.append(df_test.to_numpy().reshape(-1))
             except Exception as e:
                 if val < 1:
@@ -380,8 +394,8 @@ class MLEnsemble(ModelObject):
                 else:
                     print(f"validation round {y} failed with {repr(e)}")
 
-        X = np.concatenate(X, axis=1).T
-        y = np.concatenate(y, axis=0)
+        self.X = np.concatenate(X, axis=1).T
+        self.y = np.concatenate(y, axis=0)
 
         self.regr = retrieve_regressor(
             regression_model=self.regression_model,
@@ -391,7 +405,7 @@ class MLEnsemble(ModelObject):
             n_jobs=self.n_jobs,
             multioutput=False,
         )
-        self.regr.fit(X, y)
+        self.regr.fit(self.X, self.y)
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
 
@@ -424,6 +438,7 @@ class MLEnsemble(ModelObject):
             self.forecast_length,
             future_regressor_train=self.regressor_train,
             future_regressor_forecast=future_regressor,
+            datepart_method=self.datepart_method,
         )
         X.append(res.reshape(res.shape[0], -1))
         X = np.concatenate(X, axis=1).T
@@ -465,10 +480,10 @@ class MLEnsemble(ModelObject):
         else:
             regression_type_choice = None
         # regr_params = generate_regressor_params(model_dict=datepart_model_dict)
-        model3 = random.choice(['FBProphet', "SeasonalityMotif", "DatepartRegression"])
+        # model3 = random.choice(['Cassandra', 'MetricMotif', 'FBProphet', "SeasonalityMotif", "DatepartRegression"])
         models = RandomTemplate(
             n=3,
-            model_list=['Cassandra', 'MetricMotif', model3],
+            model_list='fast',
             transformer_max_depth=4,
             transformer_list='fast',
         )
@@ -483,6 +498,20 @@ class MLEnsemble(ModelObject):
             )[0],
             "regression_model": None,
             "models": models,
+            "datepart_method": random.choices(
+                [
+                    None,
+                    "recurring",
+                    "simple",
+                    "expanded",
+                    "simple_2",
+                    "simple_binarized",
+                    "expanded_binarized",
+                    'common_fourier',
+                    'common_fourier_rw',
+                ],
+                [0.2, 0.2, 0.1, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2],
+            )[0],
             "regression_type": regression_type_choice,
             "models_source": 'random',
         }
@@ -495,6 +524,7 @@ class MLEnsemble(ModelObject):
             "regression_type": self.regression_type,
             "models_source": self.models_source,
             "models": self.models,
+            "datepart_method": self.datepart_method,
             "regression_model": self.regression_model,
         }
 

@@ -452,6 +452,7 @@ def HorizontalEnsemble(
     all_series = generalize_horizontal(
         df_train, prematched_series, available_models, full_models
     )
+    ensemble_params['series'] = all_series
     # print(f"ALLSERIES {len(all_series.keys())}: {all_series}")
 
     org_idx = df_train.columns
@@ -1523,6 +1524,7 @@ def MosaicEnsemble(
     except Exception:
         ens_runtime = datetime.timedelta(0)
 
+    ensemble_params['series'] = all_series
     ens_result = PredictionObject(
         model_name="Ensemble",
         forecast_length=len(sample_idx),

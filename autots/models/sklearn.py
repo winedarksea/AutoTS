@@ -448,7 +448,7 @@ def retrieve_regressor(
 
         regr = RandomForestRegressor(
             random_state=random_seed,
-            verbose=verbose,
+            verbose=verbose_bool,
             n_jobs=n_jobs,
             **model_param_dict,
         )
@@ -2912,8 +2912,10 @@ class MultivariateRegression(ModelObject):
                 "simple_2_poly",
                 "simple_binarized",
                 "common_fourier",
+                "expanded_binarized",
+                "common_fourier_rw",
             ],
-            [0.5, 0.05, 0.1, 0.1, 0.05, 0.1, 0.05, 0.05],
+            [0.2, 0.05, 0.1, 0.1, 0.05, 0.1, 0.05, 0.05, 0.05, 0.025],
         )[0]
         holiday_choice = random.choices([True, False], [0.1, 0.9])[0]
         polynomial_degree_choice = random.choices([None, 2], [0.995, 0.005])[0]

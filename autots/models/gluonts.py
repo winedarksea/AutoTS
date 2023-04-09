@@ -4,7 +4,7 @@ GluonTS
 Best neuralnet models currently available, released by Amazon, scale well.
 Except it is really the only thing I use that runs mxnet, and it takes a while to train these guys...
 
-Note that there are routinely package version issues with this and its dependencies
+Note that there are routinely package version issues with this and its dependencies. Stability is not the strong suit of GluonTS.
 """
 import logging
 import random
@@ -18,9 +18,9 @@ try:
 
     # GluonTS looooves to move import locations...
     try:
-        from gluonts.transform import FieldName  # old way (0.3.3 and older)
-    except Exception:
         from gluonts.dataset.field_names import FieldName  # new way
+    except Exception:
+        from gluonts.transform import FieldName  # old way (0.3.3 and older)
     try:  # new way
         from gluonts.mx.trainer import Trainer
     except Exception:  # old way < 0.5.x
@@ -93,7 +93,7 @@ class GluonTS(ModelObject):
         """
         if not _has_gluonts:
             raise ImportError(
-                "GluonTS installation not found or installed version is incompatible with AutoTS."
+                "GluonTS installation is incompatible with AutoTS. The numpy version is sometimes the issue."
             )
 
         df = self.basic_profile(df)
@@ -145,6 +145,7 @@ class GluonTS(ModelObject):
             'context_length': self.gluon_context_length,
             'forecast_length': self.forecast_length,
         }
+        npts_flag = False
         if self.gluon_model in self.multivariate_mods:
             if self.regression_type == "User":
                 regr = future_regressor.to_numpy().T
@@ -195,7 +196,10 @@ class GluonTS(ModelObject):
                     freq=ts_metadata['freq'],
                 )
         if self.gluon_model == 'DeepAR':
-            from gluonts.model.deepar import DeepAREstimator
+            try:
+                from gluonts.mx import DeepAREstimator
+            except Exception:
+                from gluonts.model.deepar import DeepAREstimator
 
             estimator = DeepAREstimator(
                 freq=ts_metadata['freq'],
@@ -204,16 +208,27 @@ class GluonTS(ModelObject):
                 trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )
         elif self.gluon_model == 'NPTS':
-            from gluonts.model.npts import NPTSEstimator
-
-            estimator = NPTSEstimator(
-                freq=ts_metadata['freq'],
-                context_length=ts_metadata['context_length'],
-                prediction_length=ts_metadata['forecast_length'],
-            )
+            try:
+                from gluonts.model.npts import NPTSPredictor
+                estimator = NPTSPredictor(
+                    freq=ts_metadata['freq'],
+                    context_length=ts_metadata['context_length'],
+                    prediction_length=ts_metadata['forecast_length'],
+                )
+                npts_flag = True
+            except Exception:
+                from gluonts.model.npts import NPTSEstimator
+                estimator = NPTSEstimator(
+                    freq=ts_metadata['freq'],
+                    context_length=ts_metadata['context_length'],
+                    prediction_length=ts_metadata['forecast_length'],
+                )
 
         elif self.gluon_model == 'MQCNN':
-            from gluonts.model.seq2seq import MQCNNEstimator
+            try:
+                from gluonts.mx import MQCNNEstimator
+            except Exception:
+                from gluonts.model.seq2seq import MQCNNEstimator
 
             estimator = MQCNNEstimator(
                 freq=ts_metadata['freq'],
@@ -223,12 +238,15 @@ class GluonTS(ModelObject):
             )
 
         elif self.gluon_model == 'SFF':
-            from gluonts.model.simple_feedforward import SimpleFeedForwardEstimator
+            try:
+                from gluonts.mx import SimpleFeedForwardEstimator
+            except Exception:
+                from gluonts.model.simple_feedforward import SimpleFeedForwardEstimator
 
             estimator = SimpleFeedForwardEstimator(
                 prediction_length=ts_metadata['forecast_length'],
                 context_length=ts_metadata['context_length'],
-                freq=ts_metadata['freq'],
+                # freq=ts_metadata['freq'],
                 trainer=Trainer(
                     epochs=self.epochs,
                     learning_rate=self.learning_rate,
@@ -238,7 +256,10 @@ class GluonTS(ModelObject):
             )
 
         elif self.gluon_model == 'Transformer':
-            from gluonts.model.transformer import TransformerEstimator
+            try:
+                from gluonts.mx import TransformerEstimator
+            except Exception:
+                from gluonts.model.transformer import TransformerEstimator
 
             estimator = TransformerEstimator(
                 prediction_length=ts_metadata['forecast_length'],
@@ -248,7 +269,10 @@ class GluonTS(ModelObject):
             )
 
         elif self.gluon_model == 'DeepState':
-            from gluonts.model.deepstate import DeepStateEstimator
+            try:
+                from gluonts.mx import DeepStateEstimator
+            except Exception:
+                from gluonts.model.deepstate import DeepStateEstimator
 
             estimator = DeepStateEstimator(
                 prediction_length=ts_metadata['forecast_length'],
@@ -262,7 +286,10 @@ class GluonTS(ModelObject):
             )
 
         elif self.gluon_model == 'DeepFactor':
-            from gluonts.model.deep_factor import DeepFactorEstimator
+            try:
+                from gluonts.mx import DeepFactorEstimator
+            except Exception:
+                from gluonts.model.deep_factor import DeepFactorEstimator
 
             estimator = DeepFactorEstimator(
                 freq=ts_metadata['freq'],
@@ -273,7 +300,10 @@ class GluonTS(ModelObject):
 
         elif self.gluon_model == 'WaveNet':
             # Usually needs more epochs/training iterations than other models do
-            from gluonts.model.wavenet import WaveNetEstimator
+            try:
+                from gluonts.mx import WaveNetEstimator
+            except Exception:
+                from gluonts.model.wavenet import WaveNetEstimator
 
             estimator = WaveNetEstimator(
                 freq=ts_metadata['freq'],
@@ -281,7 +311,10 @@ class GluonTS(ModelObject):
                 trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )
         elif self.gluon_model == 'DeepVAR':
-            from gluonts.model.deepvar import DeepVAREstimator
+            try:
+                from gluonts.mx import DeepVAREstimator
+            except Exception:
+                from gluonts.model.deepvar import DeepVAREstimator
 
             estimator = DeepVAREstimator(
                 target_dim=gluon_train.shape[0],
@@ -291,7 +324,10 @@ class GluonTS(ModelObject):
                 trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )
         elif self.gluon_model == 'GPVAR':
-            from gluonts.model.gpvar import GPVAREstimator
+            try:
+                from gluonts.mx import GPVAREstimator
+            except Exception:
+                from gluonts.model.gpvar import GPVAREstimator
 
             estimator = GPVAREstimator(
                 target_dim=gluon_train.shape[0],
@@ -301,12 +337,15 @@ class GluonTS(ModelObject):
                 trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )
         elif self.gluon_model == 'LSTNet':
-            from gluonts.model.lstnet import LSTNetEstimator
+            try:
+                from gluonts.mx import LSTNetEstimator
+            except Exception:
+                from gluonts.model.lstnet import LSTNetEstimator
 
             estimator = LSTNetEstimator(
-                freq=ts_metadata['freq'],
+                # freq=ts_metadata['freq'],
                 num_series=len(self.train_index),
-                skip_size=0,
+                skip_size=1,
                 ar_window=1,
                 channels=2,
                 context_length=ts_metadata['context_length'],
@@ -314,7 +353,10 @@ class GluonTS(ModelObject):
                 trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )
         elif self.gluon_model == 'NBEATS':
-            from gluonts.model.n_beats import NBEATSEstimator
+            try:
+                from gluonts.mx import NBEATSEstimator
+            except Exception:
+                from gluonts.model.n_beats import NBEATSEstimator
 
             estimator = NBEATSEstimator(
                 freq=ts_metadata['freq'],
@@ -323,7 +365,10 @@ class GluonTS(ModelObject):
                 trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )
         elif self.gluon_model == 'Rotbaum':
-            from gluonts.model.rotbaum import TreeEstimator
+            try:
+                from gluonts.ext.rotbaum import TreeEstimator
+            except Exception:
+                from gluonts.model.rotbaum import TreeEstimator
 
             estimator = TreeEstimator(
                 freq=ts_metadata['freq'],
@@ -332,18 +377,24 @@ class GluonTS(ModelObject):
                 # trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )
         elif self.gluon_model == 'DeepRenewalProcess':
-            from gluonts.model.renewal import DeepRenewalProcessEstimator
+            try:
+                from gluonts.mx import DeepRenewalProcessEstimator
+            except Exception:
+                from gluonts.model.renewal import DeepRenewalProcessEstimator
 
             estimator = DeepRenewalProcessEstimator(
                 prediction_length=ts_metadata['forecast_length'],
                 context_length=ts_metadata['context_length'],
                 num_layers=1,  # original paper used 1 layer, 10 cells
                 num_cells=10,
-                freq=ts_metadata['freq'],
+                # freq=ts_metadata['freq'],
                 trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )
         elif self.gluon_model == 'SelfAttention':
-            from gluonts.model.san import SelfAttentionEstimator
+            try:
+                from gluonts.nursery.san import SelfAttentionEstimator
+            except Exception:
+                from gluonts.model.san import SelfAttentionEstimator
 
             estimator = SelfAttentionEstimator(
                 prediction_length=ts_metadata['forecast_length'],
@@ -352,11 +403,13 @@ class GluonTS(ModelObject):
                 trainer=Trainer(
                     epochs=self.epochs,
                     learning_rate=self.learning_rate,
-                    use_feature_dynamic_real=False,
                 ),
             )
         elif self.gluon_model == 'TemporalFusionTransformer':
-            from gluonts.model.tft import TemporalFusionTransformerEstimator
+            try:
+                from gluonts.mx import TemporalFusionTransformerEstimator
+            except Exception:
+                from gluonts.model.tft import TemporalFusionTransformerEstimator
 
             estimator = TemporalFusionTransformerEstimator(
                 prediction_length=ts_metadata['forecast_length'],
@@ -365,7 +418,10 @@ class GluonTS(ModelObject):
                 trainer=Trainer(epochs=self.epochs, learning_rate=self.learning_rate),
             )
         elif self.gluon_model == 'DeepTPP':
-            from gluonts.model.tpp.deeptpp import DeepTPPEstimator
+            try:
+                from gluonts.mx import DeepTPPEstimator
+            except Exception:
+                from gluonts.model.tpp.deeptpp import DeepTPPEstimator
 
             estimator = DeepTPPEstimator(
                 prediction_interval_length=ts_metadata['forecast_length'],
@@ -381,7 +437,10 @@ class GluonTS(ModelObject):
         else:
             raise ValueError("'gluon_model' not recognized.")
 
-        self.GluonPredictor = estimator.train(self.test_ds)
+        if self.gluon_model == 'NPTS' and npts_flag:
+            self.GluonPredictor = estimator
+        else:
+            self.GluonPredictor = estimator.train(self.test_ds)
         self.ts_metadata = ts_metadata
         self.fit_runtime = datetime.datetime.now() - self.startTime
         return self
@@ -547,9 +606,9 @@ class GluonTS(ModelObject):
                     0.1,
                     0.1,
                     0.1,
+                    0.01,
                     0.1,
-                    0.1,
-                    0.1,
+                    0.01,
                 ],
                 k=1,
             )[0]

@@ -2216,9 +2216,12 @@ or otherwise increase models available."""
         **kwargs,
     ):
         """Plot how well the horizontal ensembles would do after each new generation. Slow."""
-        self.horizontal_per_generation().model_results['Score'].plot(
-            ylabel="Lowest Score", xlabel="Generation", title=title, **kwargs
-        )
+        if self.best_model_ensemble == 2 and str(self.best_model_params.get('model_name', "Mosaic")).lower() != "mosaic":
+            self.horizontal_per_generation().model_results['Score'].plot(
+                ylabel="Lowest Score", xlabel="Generation", title=title, **kwargs
+            )
+        else:
+            print("not a valid horizontal model")
 
     def back_forecast(
         self, series=None, n_splits: int = "auto", tail: int = "auto", verbose: int = 0
