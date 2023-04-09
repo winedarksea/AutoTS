@@ -1280,6 +1280,7 @@ def TemplateWizard(
     ],
     traceback: bool = False,
     current_model_file: str = None,
+    mosaic_list = ['mosaic-window', 'mosaic', 'mosaic_crosshair', "mosaic_window", "mosaic-crosshair"],
 ):
     """
     Take Template, returns Results.
@@ -1534,7 +1535,7 @@ def TemplateWizard(
                 template_result.per_timestamp_smape = pd.concat(
                     [template_result.per_timestamp_smape, cur_smape], axis=0
                 )
-            if 'mosaic' in ensemble or 'mosaic-window' in ensemble:
+            if any([x in mosaic_list for x in ensemble]):
                 template_result.full_mae_errors.extend([model_error.full_mae_errors])
                 template_result.squared_errors.extend([model_error.squared_errors])
                 template_result.full_pl_errors.extend(
