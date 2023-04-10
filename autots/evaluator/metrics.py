@@ -87,9 +87,7 @@ def mean_absolute_differential_error(A, F, order: int = 1, df_train=None, scaler
     # scaler = np.mean(A, axis=0)  # debate over whether to make this scaled
     if df_train is not None:
         last_of_array = np.nan_to_num(
-            df_train[
-                df_train.shape[0] - 1 : df_train.shape[0],
-            ]
+            df_train[df_train.shape[0] - 1 : df_train.shape[0],]
         )
         # last_of_array = df_train.tail(1).fillna(0).to_numpy()
         # assigning to new because I'm paranoid about overwrite existing objects
@@ -429,7 +427,7 @@ def full_metric_evaluation(
     columns=None,
     scaler=None,
     return_components=False,
-    **kwargs
+    **kwargs,
 ):
     """Create a pd.DataFrame of metrics per series given actuals, forecast, and precalculated errors.
 

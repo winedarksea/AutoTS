@@ -59,9 +59,7 @@ def load_fred_monthly():
     data_file_name = join(module_path, 'data', 'fred_monthly.zip')
 
     df_long = pd.read_csv(data_file_name, compression='zip')
-    df_long['datetime'] = pd.to_datetime(
-        df_long['datetime'], infer_datetime_format=True
-    )
+    df_long['datetime'] = pd.to_datetime(df_long['datetime'])
 
     return df_long
 
@@ -107,9 +105,7 @@ def load_fred_yearly():
     data_file_name = join(module_path, 'data', 'fred_yearly.zip')
 
     df_long = pd.read_csv(data_file_name)
-    df_long['datetime'] = pd.to_datetime(
-        df_long['datetime'], infer_datetime_format=True
-    )
+    df_long['datetime'] = pd.to_datetime(df_long['datetime'])
 
     return df_long
 
@@ -163,9 +159,7 @@ def load_eia_weekly():
     data_file_name = join(module_path, 'data', 'eia_weekly.zip')
 
     df_long = pd.read_csv(data_file_name, compression='zip')
-    df_long['datetime'] = pd.to_datetime(
-        df_long['datetime'], infer_datetime_format=True
-    )
+    df_long['datetime'] = pd.to_datetime(df_long['datetime'])
     return df_long
 
 
@@ -351,7 +345,7 @@ def load_live_daily(
                 wdf = pd.read_csv(
                     io.StringIO(s.get(wbase + wargs, timeout=timeout).text)
                 )
-                wdf['DATE'] = pd.to_datetime(wdf['DATE'], infer_datetime_format=True)
+                wdf['DATE'] = pd.to_datetime(wdf['DATE'])
                 wdf = wdf.set_index('DATE').drop(columns=['STATION'])
                 wdf.rename(columns=lambda x: wstation + "_" + x, inplace=True)
                 dataset_lists.append(wdf)
@@ -391,7 +385,7 @@ def load_live_daily(
             ebase = "https://earthquake.usgs.gov/fdsnws/event/1/query?"
             eargs = f"format=csv&starttime={start_date}&endtime={str_end_time}&minmagnitude={earthquake_min_magnitude}"
             eq = pd.read_csv(ebase + eargs)
-            eq["time"] = pd.to_datetime(eq["time"], infer_datetime_format=True)
+            eq["time"] = pd.to_datetime(eq["time"])
             eq["time"] = eq["time"].dt.tz_localize(None)
             eq.set_index("time", inplace=True)
             global_earthquakes = eq.resample("1D").agg(
@@ -433,9 +427,7 @@ def load_live_daily(
             print(f"analytics.gov data failed with {repr(e)}")
 
     if wikipedia_pages is not None:
-        str_start = pd.to_datetime(
-            observation_start, infer_datetime_format=True
-        ).strftime("%Y%m%d00")
+        str_start = pd.to_datetime(observation_start).strftime("%Y%m%d00")
         str_end = current_date.strftime("%Y%m%d00")
         headers = {
             'User-Agent': 'AutoTS load_live_daily',
@@ -471,12 +463,8 @@ def load_live_daily(
                     df = pd.read_csv(csv_in, low_memory=False, on_bad_lines='skip')
                 except Exception:
                     df = pd.read_csv(csv_in, low_memory=False, error_bad_lines=False)
-                df['BEGIN_DATE'] = pd.to_datetime(
-                    df['BEGIN_DATE'], infer_datetime_format=True
-                )
-                df['END_DATE'] = pd.to_datetime(
-                    df['END_DATE'], infer_datetime_format=True
-                )
+                df['BEGIN_DATE'] = pd.to_datetime(df['BEGIN_DATE'])
+                df['END_DATE'] = pd.to_datetime(df['END_DATE'])
                 df['day'] = df.apply(
                     lambda row: pd.date_range(
                         row["BEGIN_DATE"], row['END_DATE'], freq='D'

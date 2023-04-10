@@ -21,7 +21,7 @@ def get_fred_data(
     long=True,
     observation_start=None,
     sleep_seconds: int = 1,
-    **kwargs
+    **kwargs,
 ):
     """Imports Data from Federal Reserve.
     For simplest results, make sure requested series are all of the same frequency.

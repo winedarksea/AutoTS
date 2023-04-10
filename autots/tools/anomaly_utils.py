@@ -997,7 +997,8 @@ def dates_to_holidays(
                         ordered=True,
                     )
                     result_per_holiday = pd.get_dummies(
-                        populated_holidays['holiday_name']
+                        populated_holidays['holiday_name'],
+                        dtype=float,
                     )
                     result_per_holiday.index = populated_holidays['date']
                     result.append(result_per_holiday.groupby(level=0).sum())

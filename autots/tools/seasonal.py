@@ -143,7 +143,9 @@ def date_part(
             }
         )
         # date_part_df['weekday'] = date_part_df['month'].astype(pd.CategoricalDtype(categories=list(range(6))))
-        date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday'])
+        date_part_df = pd.get_dummies(
+            date_part_df, columns=['month', 'weekday'], dtype=float
+        )
         if method == "lunar_phase":
             date_part_df['phase'] = moon_phase(DTindex)
     elif "simple_binarized" in method:
@@ -160,7 +162,9 @@ def date_part(
                 'epoch': DTindex.to_julian_date(),
             }
         )
-        date_part_df = pd.get_dummies(date_part_df, columns=['month', 'weekday'])
+        date_part_df = pd.get_dummies(
+            date_part_df, columns=['month', 'weekday'], dtype=float
+        )
     elif method in "expanded_binarized":
         date_part_df = pd.DataFrame(
             {
@@ -184,7 +188,9 @@ def date_part(
             }
         )
         date_part_df = pd.get_dummies(
-            date_part_df, columns=['month', 'weekday', 'day', 'weekdayofmonth']
+            date_part_df,
+            columns=['month', 'weekday', 'day', 'weekdayofmonth'],
+            dtype=float,
         )
     elif method in ["common_fourier", "common_fourier_rw"]:
         seasonal_list = []
@@ -324,11 +330,13 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
     # dateparts
     elif seasonality == "dayofweek":
         return pd.get_dummies(
-            pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True)
+            pd.Categorical(DTindex.weekday, categories=list(range(7)), ordered=True),
+            dtype=np.uint8,
         ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "month":
         return pd.get_dummies(
-            pd.Categorical(DTindex.month, categories=list(range(1, 13)), ordered=True)
+            pd.Categorical(DTindex.month, categories=list(range(1, 13)), ordered=True),
+            dtype=np.uint8,
         ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "weekend":
         return pd.DataFrame((DTindex.weekday > 4).astype(int), columns=["weekend"])
@@ -338,17 +346,20 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
                 (DTindex.day - 1) // 7 + 1,
                 categories=list(range(1, 6)),
                 ordered=True,
-            )
+            ),
+            dtype=float,
         ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "hour":
         return pd.get_dummies(
-            pd.Categorical(DTindex.hour, categories=list(range(1, 25)), ordered=True)
+            pd.Categorical(DTindex.hour, categories=list(range(1, 25)), ordered=True),
+            dtype=np.uint8,
         ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "daysinmonth":
         return pd.DataFrame({'daysinmonth': DTindex.daysinmonth})
     elif seasonality == "quarter":
         return pd.get_dummies(
-            pd.Categorical(DTindex.quarter, categories=list(range(1, 5)), ordered=True)
+            pd.Categorical(DTindex.quarter, categories=list(range(1, 5)), ordered=True),
+            dtype=np.uint8,
         ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality in date_part_methods:
         return date_part(DTindex, method=seasonality, set_index=False)

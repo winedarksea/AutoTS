@@ -35,6 +35,7 @@ from autots.models.ensemble import (
     EnsembleTemplateGenerator,
     HorizontalTemplateGenerator,
     generate_mosaic_template,
+    generate_crosshair_score,
 )
 from autots.models.model_list import model_lists, no_shared
 from autots.tools import cpu_count
@@ -243,8 +244,18 @@ class AutoTS(object):
             'hdist',
             "mosaic",
             'mosaic-window',
+            'mosaic_window',
+            'mosaic_crosshair',
+            'mosaic-crosshair',
             'horizontal-max',
             'horizontal-min',
+        ]
+        self.mosaic_list = [
+            'mosaic',
+            'mosaic-window',
+            "mosaic_window",
+            'mosaic_crosshair',
+            "mosaic-crosshair",
         ]
         if isinstance(ensemble, str):
             ensemble = str(ensemble).lower()
@@ -451,7 +462,7 @@ class AutoTS(object):
     @staticmethod
     def get_new_params(method='random'):
         """Randomly generate new parameters for the class."""
-        if method == 'full':
+        if method != 'full':
             ensemble_choice = random.choices(
                 [
                     None,
@@ -479,6 +490,7 @@ class AutoTS(object):
                         "horizontal-max",
                         "mosaic",
                         'mosaic-window',
+                        'mosaic-crosshair',
                         "subsample",
                         "mlensemble",
                     ],
@@ -1311,7 +1323,7 @@ or otherwise increase models available."""
                     time.sleep(5)
             try:
                 # eventually plan to allow window size to be controlled by params
-                if 'mosaic-window' in ensemble or 'mosaic' in ensemble:
+                if any([x in self.mosaic_list for x in ensemble]):
                     weight_per_value = (
                         self.initial_results.full_mae_errors
                         * metric_weighting.get('mae_weighting', 0)
@@ -1320,7 +1332,67 @@ or otherwise increase models available."""
                         + self.initial_results.squared_errors
                         * metric_weighting.get('rmse_weighting', 0)
                     )
-                if 'mosaic-window' in ensemble:
+                if "mosaic_crosshair" in ensemble or "mosaic-crosshair" in ensemble:
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=self.num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=[
+                            generate_crosshair_score(x)
+                            for x in self.initial_results.full_mae_errors
+                        ],
+                        smoothing_window=None,
+                        metric_name="mae-crosshair",
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=self.num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=[
+                            generate_crosshair_score(x)
+                            for x in self.initial_results.squared_errors
+                        ],
+                        smoothing_window=None,
+                        metric_name="se-crosshair",
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=self.num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=[
+                            generate_crosshair_score(x)
+                            for x in self.initial_results.full_pl_errors
+                        ],
+                        smoothing_window=3,
+                        metric_name="spl-crosshair",
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
+                    ens_templates = generate_mosaic_template(
+                        initial_results=self.initial_results.model_results,
+                        full_mae_ids=self.initial_results.full_mae_ids,
+                        num_validations=self.num_validations,
+                        col_names=df_subset.columns,
+                        full_mae_errors=[
+                            generate_crosshair_score(x) for x in weight_per_value
+                        ],
+                        smoothing_window=None,
+                        metric_name="weighted-crosshair",
+                    )
+                    ensemble_templates = pd.concat(
+                        [ensemble_templates, ens_templates], axis=0
+                    )
+                if "mosaic_window" in ensemble or "mosaic-window" in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
@@ -1409,6 +1481,7 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
+                if 'mosaic' in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
@@ -1421,7 +1494,6 @@ or otherwise increase models available."""
                     ensemble_templates = pd.concat(
                         [ensemble_templates, ens_templates], axis=0
                     )
-                if 'mosaic' in ensemble:
                     ens_templates = generate_mosaic_template(
                         initial_results=self.initial_results.model_results,
                         full_mae_ids=self.initial_results.full_mae_ids,
@@ -1663,7 +1735,7 @@ or otherwise increase models available."""
             # subset series (if used) and take a new train/test split
             if self.subset_flag:
                 # mosaic can't handle different cols in each validation
-                if "mosaic" in self.ensemble or "mosaic-window" in self.ensemble:
+                if any([x in self.mosaic_list for x in self.ensemble]):
                     rand_st = self.random_seed
                 else:
                     rand_st = self.random_seed + y + 1
@@ -2216,9 +2288,16 @@ or otherwise increase models available."""
         **kwargs,
     ):
         """Plot how well the horizontal ensembles would do after each new generation. Slow."""
-        self.horizontal_per_generation().model_results['Score'].plot(
-            ylabel="Lowest Score", xlabel="Generation", title=title, **kwargs
-        )
+        if (
+            self.best_model_ensemble == 2
+            and str(self.best_model_params.get('model_name', "Mosaic")).lower()
+            != "mosaic"
+        ):
+            self.horizontal_per_generation().model_results['Score'].plot(
+                ylabel="Lowest Score", xlabel="Generation", title=title, **kwargs
+            )
+        else:
+            print("not a valid horizontal model")
 
     def back_forecast(
         self, series=None, n_splits: int = "auto", tail: int = "auto", verbose: int = 0

@@ -397,10 +397,8 @@ class PredictionObject(object):
             )
 
         if start_date is not None:
-            start_date = pd.to_datetime(start_date, infer_datetime_format=True)
-            if plot_df.index.max() < pd.to_datetime(
-                start_date, infer_datetime_format=True
-            ):
+            start_date = pd.to_datetime(start_date)
+            if plot_df.index.max() < start_date:
                 raise ValueError("start_date is more recent than all data provided")
             plot_df = plot_df[plot_df.index >= start_date]
         return plot_df

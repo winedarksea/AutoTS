@@ -37,7 +37,7 @@ def seek_the_oracle(
     regressors=None,
     verbose=0,
     inner_n_jobs=1,
-    **kwargs
+    **kwargs,
 ):
     """Internal. For loop or parallel version of Greykite."""
     inner_df = pd.DataFrame(

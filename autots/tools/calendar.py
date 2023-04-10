@@ -47,9 +47,7 @@ def lunar_from_lunar_full(full_moon):
 def gregorian_to_christian_lunar(datetime_index):
     """Convert a pandas DatetimeIndex to Christian Lunar calendar. Aspiration it doesn't work exactly."""
     if isinstance(datetime_index, (str, list)):
-        datetime_input = pd.to_datetime(
-            datetime_index, infer_datetime_format=True
-        ).sort_values()
+        datetime_input = pd.to_datetime(datetime_index).sort_values()
     else:
         datetime_input = datetime_index.sort_values()
     expanded_dates = pd.date_range(
@@ -78,9 +76,7 @@ def gregorian_to_christian_lunar(datetime_index):
 def gregorian_to_chinese(datetime_index):
     """Convert a pandas DatetimeIndex to Chinese Lunar calendar. Potentially has errors."""
     if isinstance(datetime_index, (str, list)):
-        datetime_input = pd.to_datetime(
-            datetime_index, infer_datetime_format=True
-        ).sort_values()
+        datetime_input = pd.to_datetime(datetime_index).sort_values()
     else:
         datetime_input = datetime_index.sort_values()
     expanded_dates = pd.date_range(
@@ -123,7 +119,7 @@ def gregorian_to_islamic(date, epoch_adjustment=1.5):
         epoch_adjustment (float): 1.0 and that needs to be adjusted by about +/- 0.5 to account for timezone
     """
     if isinstance(date, (str, list)):
-        date = pd.to_datetime(date, infer_datetime_format=True)
+        date = pd.to_datetime(date)
     jd = date.to_julian_date()
     jd = np.floor(jd) + epoch_adjustment
     year = np.floor(((30 * (jd - 1948439.5)) + 10646) / 10631)
@@ -218,7 +214,7 @@ def gregorian_to_hebrew(dates):
     This is the slowest of the lot and needs to be improved.
     """
     if isinstance(dates, (str, list)):
-        day = pd.to_datetime(dates, infer_datetime_format=True).to_julian_date()
+        day = pd.to_datetime(dates).to_julian_date()
     else:
         day = dates.to_julian_date()
     if (day <= 347997).any():

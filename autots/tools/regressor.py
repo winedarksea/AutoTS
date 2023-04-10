@@ -49,7 +49,9 @@ def create_regressor(
     """Create a regressor from information available in the existing dataset.
     Components: are lagged data, datepart information, and holiday.
 
-    All of this info and more is already created by the ~Regression models, but this may help some other models (GLM, WindowRegression)
+    This function has been confusing people. This is NOT necessary for machine learning models, in AutoTS they internally create more elaborate feature sets separately.
+    This instead may help some other models (GLM, ARIMA) which accept regressors but won't build a regressor feature set internally.
+    And this allows post-hoc customization as needed before input to AutoTS.
 
     It is recommended that the .head(forecast_length) of both regressor_train and the df for training are dropped.
     `df = df.iloc[forecast_length:]`
