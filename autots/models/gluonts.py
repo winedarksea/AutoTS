@@ -210,6 +210,7 @@ class GluonTS(ModelObject):
         elif self.gluon_model == 'NPTS':
             try:
                 from gluonts.model.npts import NPTSPredictor
+
                 estimator = NPTSPredictor(
                     freq=ts_metadata['freq'],
                     context_length=ts_metadata['context_length'],
@@ -218,6 +219,7 @@ class GluonTS(ModelObject):
                 npts_flag = True
             except Exception:
                 from gluonts.model.npts import NPTSEstimator
+
                 estimator = NPTSEstimator(
                     freq=ts_metadata['freq'],
                     context_length=ts_metadata['context_length'],

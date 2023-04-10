@@ -39,9 +39,7 @@ def create_feature(
     # add last value as a feature
     res.append(
         np.repeat(
-            df_train.iloc[
-                -1:,
-            ].to_numpy(),
+            df_train.iloc[-1:,].to_numpy(),
             forecast_length,
             axis=0,
         )

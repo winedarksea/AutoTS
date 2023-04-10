@@ -1308,7 +1308,7 @@ def HorizontalTemplateGenerator(
 def generate_crosshair_score(error_matrix):
     arr_size = error_matrix.size
     base_weight = 0.001 / arr_size
-    sum_error = (np.sum(error_matrix) * base_weight)
+    sum_error = np.sum(error_matrix) * base_weight
 
     cross_base = error_matrix * (base_weight * 50)
     row_sums = cross_base.sum(axis=1)
@@ -1322,19 +1322,18 @@ def generate_crosshair_score_list(error_list):
     # unfinished 3d version
     arr_size = error_list[-1].size
     base_weight = 0.001 / arr_size
-    
+
     full_arr = np.array(error_list)
-    
+
     sum_error = np.sum(full_arr, axis=(-1, 1))
-    
+
     cross_base = full_arr * (base_weight * 50)
     row_sums = cross_base.sum(axis=2)
     col_sums = cross_base.sum(axis=1)
     # stops working here
     outer_sum = np.add.outer(row_sums, col_sums)  # noqa
-    
-    return list(full_arr + sum_error)  # + outer_sum
 
+    return list(full_arr + sum_error)  # + outer_sum
 
 
 def generate_mosaic_template(

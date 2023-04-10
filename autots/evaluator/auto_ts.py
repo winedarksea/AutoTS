@@ -35,7 +35,7 @@ from autots.models.ensemble import (
     EnsembleTemplateGenerator,
     HorizontalTemplateGenerator,
     generate_mosaic_template,
-    generate_crosshair_score
+    generate_crosshair_score,
 )
 from autots.models.model_list import model_lists, no_shared
 from autots.tools import cpu_count
@@ -250,7 +250,13 @@ class AutoTS(object):
             'horizontal-max',
             'horizontal-min',
         ]
-        self.mosaic_list = ['mosaic', 'mosaic-window', "mosaic_window", 'mosaic_crosshair', "mosaic-crosshair"]
+        self.mosaic_list = [
+            'mosaic',
+            'mosaic-window',
+            "mosaic_window",
+            'mosaic_crosshair',
+            "mosaic-crosshair",
+        ]
         if isinstance(ensemble, str):
             ensemble = str(ensemble).lower()
         if ensemble == 'all':
@@ -1332,7 +1338,10 @@ or otherwise increase models available."""
                         full_mae_ids=self.initial_results.full_mae_ids,
                         num_validations=self.num_validations,
                         col_names=df_subset.columns,
-                        full_mae_errors=[generate_crosshair_score(x) for x in self.initial_results.full_mae_errors],
+                        full_mae_errors=[
+                            generate_crosshair_score(x)
+                            for x in self.initial_results.full_mae_errors
+                        ],
                         smoothing_window=None,
                         metric_name="mae-crosshair",
                     )
@@ -1344,7 +1353,10 @@ or otherwise increase models available."""
                         full_mae_ids=self.initial_results.full_mae_ids,
                         num_validations=self.num_validations,
                         col_names=df_subset.columns,
-                        full_mae_errors=[generate_crosshair_score(x) for x in self.initial_results.squared_errors],
+                        full_mae_errors=[
+                            generate_crosshair_score(x)
+                            for x in self.initial_results.squared_errors
+                        ],
                         smoothing_window=None,
                         metric_name="se-crosshair",
                     )
@@ -1356,7 +1368,10 @@ or otherwise increase models available."""
                         full_mae_ids=self.initial_results.full_mae_ids,
                         num_validations=self.num_validations,
                         col_names=df_subset.columns,
-                        full_mae_errors=[generate_crosshair_score(x) for x in self.initial_results.full_pl_errors],
+                        full_mae_errors=[
+                            generate_crosshair_score(x)
+                            for x in self.initial_results.full_pl_errors
+                        ],
                         smoothing_window=3,
                         metric_name="spl-crosshair",
                     )
@@ -1368,7 +1383,9 @@ or otherwise increase models available."""
                         full_mae_ids=self.initial_results.full_mae_ids,
                         num_validations=self.num_validations,
                         col_names=df_subset.columns,
-                        full_mae_errors=[generate_crosshair_score(x) for x in weight_per_value],
+                        full_mae_errors=[
+                            generate_crosshair_score(x) for x in weight_per_value
+                        ],
                         smoothing_window=None,
                         metric_name="weighted-crosshair",
                     )
@@ -2271,7 +2288,11 @@ or otherwise increase models available."""
         **kwargs,
     ):
         """Plot how well the horizontal ensembles would do after each new generation. Slow."""
-        if self.best_model_ensemble == 2 and str(self.best_model_params.get('model_name', "Mosaic")).lower() != "mosaic":
+        if (
+            self.best_model_ensemble == 2
+            and str(self.best_model_params.get('model_name', "Mosaic")).lower()
+            != "mosaic"
+        ):
             self.horizontal_per_generation().model_results['Score'].plot(
                 ylabel="Lowest Score", xlabel="Generation", title=title, **kwargs
             )

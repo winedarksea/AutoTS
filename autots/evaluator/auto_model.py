@@ -1280,7 +1280,13 @@ def TemplateWizard(
     ],
     traceback: bool = False,
     current_model_file: str = None,
-    mosaic_list = ['mosaic-window', 'mosaic', 'mosaic_crosshair', "mosaic_window", "mosaic-crosshair"],
+    mosaic_list=[
+        'mosaic-window',
+        'mosaic',
+        'mosaic_crosshair',
+        "mosaic_window",
+        "mosaic-crosshair",
+    ],
 ):
     """
     Take Template, returns Results.

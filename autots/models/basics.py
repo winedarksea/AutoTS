@@ -691,9 +691,7 @@ class MotifSimulation(ModelObject):
         motif_vecs_list = []
         # takes random slices of the time series and rearranges as phrase_n length vectors
         for z in numbers:
-            rand_slice = df.iloc[
-                z : (z + phrase_n),
-            ]
+            rand_slice = df.iloc[z : (z + phrase_n),]
             rand_slice = (
                 rand_slice.reset_index(drop=True)
                 .transpose()

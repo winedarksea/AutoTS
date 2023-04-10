@@ -2666,7 +2666,8 @@ class AnomalyRemoval(EmptyTransformer):
         self.score_categories = categor.categories
         scores_flat['series'] = categor
         scores_flat = pd.concat(
-            [pd.get_dummies(scores_flat['series'], dtype=float), scores_flat['value']], axis=1
+            [pd.get_dummies(scores_flat['series'], dtype=float), scores_flat['value']],
+            axis=1,
         )
         anomalies_flat = self.anomalies.melt(var_name='series', value_name="value")
         self.anomaly_classifier = DecisionTreeClassifier(max_depth=None).fit(
@@ -2687,7 +2688,11 @@ class AnomalyRemoval(EmptyTransformer):
         )
         res = self.anomaly_classifier.predict(
             pd.concat(
-                [pd.get_dummies(scores_flat['series'], dtype=float), scores_flat['value']], axis=1
+                [
+                    pd.get_dummies(scores_flat['series'], dtype=float),
+                    scores_flat['value'],
+                ],
+                axis=1,
             )
         )
         res = pd.concat(
