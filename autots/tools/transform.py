@@ -3633,7 +3633,7 @@ class GeneralTransformer(object):
         elif transformation == "QuantileTransformer":
             from sklearn.preprocessing import QuantileTransformer
 
-            quants = param["n_quantiles"]
+            quants = param.get("n_quantiles", 1000)
             if quants == "quarter":
                 quants = int(df.shape[0] / 4)
             elif quants == "fifth":

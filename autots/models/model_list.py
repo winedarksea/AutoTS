@@ -12,7 +12,7 @@ all_models = [
     'GluonTS',
     'SeasonalNaive',
     'UnobservedComponents',
-    'VARMAX',
+    # 'VARMAX',
     'VECM',
     'DynamicFactor',
     'MotifSimulation',

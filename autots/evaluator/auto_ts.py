@@ -50,6 +50,7 @@ class AutoTS(object):
 
     Args:
         forecast_length (int): number of periods over which to evaluate forecast. Can be overriden later in .predict().
+            when you don't have much historical data, using a small forecast length for .fit and the full desired forecast lenght for .predict is usually the best possible approach given limitations.
         frequency (str): 'infer' or a specific pandas datetime offset. Can be used to force rollup of data (ie daily input, but frequency 'M' will rollup to monthly).
         prediction_interval (float): 0-1, uncertainty range for upper and lower forecasts. Adjust range, but rarely matches actual containment.
         max_generations (int): number of genetic algorithms generations to run.
