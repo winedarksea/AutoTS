@@ -17,6 +17,7 @@ from autots.tools.anomaly_utils import (
 from autots.tools.window_functions import window_lin_reg, window_lin_reg_mean
 from autots.tools.fast_kalman import KalmanFilter, random_state_space
 from autots.tools.shaping import infer_frequency
+from autots.tools.holiday import holiday_flag
 
 try:
     from joblib import Parallel, delayed
@@ -1066,7 +1067,10 @@ class DatepartRegressionTransformer(EmptyTransformer):
         },
         datepart_method: str = "expanded",
         polynomial_degree: int = None,
-        transform_dict=None,
+        transform_dict: dict = None,
+        holiday_country: list = None,
+        holiday_countries_used: bool = False,
+        n_jobs: int = 1,
         **kwargs,
     ):
         super().__init__(name="DatepartRegressionTransformer")
@@ -1074,6 +1078,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
         self.datepart_method = datepart_method
         self.polynomial_degree = polynomial_degree
         self.transform_dict = transform_dict
+        self.holiday_country = holiday_country
+        self.holiday_countries_used = holiday_countries_used
+        self.n_jobs = n_jobs
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -1123,6 +1130,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             "datepart_method": datepart_choice,
             "polynomial_degree": polynomial_choice,
             "transform_dict": random_cleaners(),
+            "holiday_countries_used": random.choices([True, False], [0.5, 0.5])[0],
         }
 
     def fit(self, df, regressor=None):
@@ -1148,6 +1156,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
         )
+        if self.holiday_country is not None and self.holiday_countries_used:
+            X = pd.concat([X, holiday_flag(df.index, country=self.holiday_country, encode_holiday_type=True)], axis=1)
+            self.X = X  # diagnostic
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
             self.X = X  # diagnostic
@@ -1162,6 +1173,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             verbose_bool=False,
             random_seed=2020,
             multioutput=multioutput,
+            n_jobs=self.n_jobs,
         )
         self.model = self.model.fit(X, y)
         self.shape = df.shape
@@ -1192,6 +1204,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
         )
+        if self.holiday_country is not None and self.holiday_countries_used:
+            X = pd.concat([X, holiday_flag(df.index, country=self.holiday_country, encode_holiday_type=True)], axis=1)
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
         # X.columns = [str(xc) for xc in X.columns]
@@ -1215,6 +1229,8 @@ class DatepartRegressionTransformer(EmptyTransformer):
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
         )
+        if self.holiday_country is not None and self.holiday_countries_used:
+            X = pd.concat([X, holiday_flag(df.index, country=self.holiday_country, encode_holiday_type=True)], axis=1)
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
         y = pd.DataFrame(self.model.predict(X), columns=df.columns, index=df.index)
@@ -3402,7 +3418,6 @@ have_params = {
     "CenterLastValue": CenterLastValue,
     "IntermittentOccurrence": IntermittentOccurrence,
     "ClipOutliers": ClipOutliers,
-    "DatepartRegression": DatepartRegression,
     "Round": Round,
     "Slice": Slice,
     "Detrend": Detrend,
@@ -3528,6 +3543,7 @@ class GeneralTransformer(object):
         grouping_ids=None,
         random_seed: int = 2020,
         n_jobs: int = 1,
+        holiday_country: list = None,
     ):
         self.fillna = fillna
         self.transformations = transformations
@@ -3543,6 +3559,7 @@ class GeneralTransformer(object):
 
         self.random_seed = random_seed
         self.n_jobs = n_jobs
+        self.holiday_country = holiday_country
         self.transformers = {}
         # upper/lower forecast inverses are different
         self.bounded_oddities = ["AlignLastValue"]
@@ -3596,6 +3613,7 @@ class GeneralTransformer(object):
         df=None,
         random_seed: int = 2020,
         n_jobs: int = 1,
+        holiday_country: list = None,
     ):
         """Retrieves a specific transformer object from a string.
 
@@ -3616,6 +3634,9 @@ class GeneralTransformer(object):
 
         elif transformation in list(have_params.keys()):
             return have_params[transformation](**param)
+        
+        elif transformation in ["DatepartRegression", "DatepartRegressionTransformer"]:
+            return DatepartRegression(holiday_country=holiday_country, n_jobs=n_jobs, **param)
 
         elif transformation == "MinMaxScaler":
             from sklearn.preprocessing import MinMaxScaler
@@ -3737,6 +3758,7 @@ class GeneralTransformer(object):
                     param=self.transformation_params[i],
                     random_seed=self.random_seed,
                     n_jobs=self.n_jobs,
+                    holiday_country=self.holiday_country,
                 )
                 df = self.transformers[i].fit_transform(df)
                 # convert to DataFrame only if it isn't already

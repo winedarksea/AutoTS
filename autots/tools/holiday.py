@@ -1,6 +1,7 @@
 """Manage holiday features."""
 import numpy as np
 import pandas as pd
+from autots.tools.shaping import infer_frequency
 
 
 def holiday_flag(
@@ -14,45 +15,68 @@ def holiday_flag(
     Args:
         DTindex (panda.DatetimeIndex): DatetimeIndex of dates to create flags
         country (str): to pass through to python package Holidays
+            also accepts a list of countries, but not a list of subdivisions
         encode_holiday_type (bool): if True, each holiday gets a unique integer column, if False, 0/1 for all holidays
+        holidays_subdiv (str): subdivision (ie state), if used
 
     Returns:
-        pandas.Series() with DatetimeIndex and name 'HolidayFlag'
+        pd.DataFrame with DatetimeIndex
     """
-    if country == "RU":
-        country = "UA"
-    elif country == 'CN':
-        country = 'TW'
-    country = str(country).upper()
-    if country in ['US', "USA", "UNITED STATES"]:
-        try:
+    use_index = DTindex.copy()
+    # extend the index by one year to make sure all holidays are captured in holiday flag
+    if encode_holiday_type:
+        frequency = infer_frequency(use_index)
+        new_index = pd.date_range(use_index[-1], end=use_index[-1] + pd.Timedelta(days=366), freq=frequency)
+        use_index = use_index.append(new_index[1:])
+
+    if isinstance(country, str):
+        country = [country]
+    elif isinstance(country, dict):
+        country = list(country.keys())
+
+    holiday_list = []
+    for hld in country:
+        if hld == "RU":
+            hld = "UA"
+        elif hld == 'CN':
+            hld = 'TW'
+        hld = str(hld).upper()
+        if hld in ['US', "USA", "UNITED STATES"]:
+            try:
+                holi_days = query_holidays(
+                    use_index,
+                    country="US",
+                    encode_holiday_type=encode_holiday_type,
+                    holidays_subdiv=holidays_subdiv,
+                )
+            except Exception:
+                from pandas.tseries.holiday import USFederalHolidayCalendar
+    
+                # uses pandas calendar as backup in the event holidays fails
+                holi_days = (
+                    USFederalHolidayCalendar()
+                    .holidays()
+                    .to_series()[use_index[0] : use_index[-1]]
+                )
+                holi_days = pd.Series(np.repeat(1, len(holi_days)), index=holi_days)
+                holi_days = holi_days.reindex(use_index).fillna(0)
+                holi_days = holi_days.rename("holiday_flag")
+        else:
             holi_days = query_holidays(
-                DTindex,
-                country="US",
+                use_index,
+                country=hld,
                 encode_holiday_type=encode_holiday_type,
                 holidays_subdiv=holidays_subdiv,
             )
-        except Exception:
-            from pandas.tseries.holiday import USFederalHolidayCalendar
+        if not encode_holiday_type:
+            holi_days.name = str(holi_days.name) + '_' + str(hld)
+        holiday_list.append(holi_days.reindex(DTindex))
 
-            # uses pandas calendar as backup in the event holidays fails
-            holi_days = (
-                USFederalHolidayCalendar()
-                .holidays()
-                .to_series()[DTindex[0] : DTindex[-1]]
-            )
-            holi_days = pd.Series(np.repeat(1, len(holi_days)), index=holi_days)
-            holi_days = holi_days.reindex(DTindex).fillna(0)
-            holi_days = holi_days.rename("holiday_flag")
+    return_df = pd.concat(holiday_list, axis=1, ignore_index=False)
+    if encode_holiday_type:
+        return return_df.loc[:, ~return_df.columns.duplicated()]
     else:
-        holi_days = query_holidays(
-            DTindex,
-            country=country,
-            encode_holiday_type=encode_holiday_type,
-            holidays_subdiv=holidays_subdiv,
-        )
-
-    return holi_days
+        return return_df
 
 
 def query_holidays(

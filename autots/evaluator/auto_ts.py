@@ -929,7 +929,7 @@ class AutoTS(object):
 
         # preclean data
         if self.preclean is not None:
-            self.preclean_transformer = GeneralTransformer(**self.preclean)
+            self.preclean_transformer = GeneralTransformer(**self.preclean, n_jobs=self.n_jobs, holiday_country=self.holiday_country)
             df_wide_numeric = self.preclean_transformer.fit_transform(df_wide_numeric)
 
         self.df_wide_numeric = df_wide_numeric
