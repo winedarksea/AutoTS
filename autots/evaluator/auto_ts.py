@@ -88,8 +88,9 @@ class AutoTS(object):
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
             can accept string aliases: "all", "fast", "superfast"
         transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
-        models_mode (str): option to adjust parameter options for newly generated models. Currently includes:
-            'default', 'deep' (searches more params, likely slower), and 'regressor' (forces 'User' regressor mode in regressor capable models)
+        models_mode (str): option to adjust parameter options for newly generated models. Only sporadically utilized. Currently includes:
+            'default'/'random', 'deep' (searches more params, likely slower), and 'regressor' (forces 'User' regressor mode in regressor capable models),
+            'gradient_boosting', 'neuralnets' (~Regression class models only)
         num_validations (int): number of cross validations to perform. 0 for just train/test on best split.
             Possible confusion: num_validations is the number of validations to perform *after* the first eval segment, so totally eval/validations will be this + 1.
             Also "auto" and "max" aliases available. Max maxes out at 50.

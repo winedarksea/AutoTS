@@ -139,6 +139,7 @@ class Cassandra(ModelObject):
         random_seed: int = 2022,
         verbose: int = 0,
         n_jobs: int = "auto",
+        **kwargs
     ):
         if preprocessing_transformation is None:
             preprocessing_transformation = {}

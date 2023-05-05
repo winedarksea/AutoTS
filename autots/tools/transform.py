@@ -1083,7 +1083,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
         self.n_jobs = n_jobs
 
     @staticmethod
-    def get_new_params(method: str = "random"):
+    def get_new_params(method: str = "random", holiday_countries_used=None):
         datepart_choice = random.choices(
             [
                 "simple",
@@ -1124,13 +1124,15 @@ class DatepartRegressionTransformer(EmptyTransformer):
                     "RadiusRegressor": 0.1,
                 }
             )
+        if holiday_countries_used is None:
+            holiday_countries_used = random.choices([True, False], [0.3, 0.7])[0]
 
         return {
             "regression_model": choice,
             "datepart_method": datepart_choice,
             "polynomial_degree": polynomial_choice,
             "transform_dict": random_cleaners(),
-            "holiday_countries_used": random.choices([True, False], [0.5, 0.5])[0],
+            "holiday_countries_used": holiday_countries_used,
         }
 
     def fit(self, df, regressor=None):
@@ -1158,10 +1160,9 @@ class DatepartRegressionTransformer(EmptyTransformer):
         )
         if self.holiday_country is not None and self.holiday_countries_used:
             X = pd.concat([X, holiday_flag(df.index, country=self.holiday_country, encode_holiday_type=True)], axis=1)
-            self.X = X  # diagnostic
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
-            self.X = X  # diagnostic
+        self.X = X  # diagnostic
         multioutput = True
         if y.ndim < 2:
             multioutput = False
@@ -2937,7 +2938,7 @@ class HolidayTransformer(EmptyTransformer):
         )[0]
         if holiday_params['impact'] == 'datepart_regression':
             holiday_params['regression_params'] = DatepartRegression.get_new_params(
-                method=method
+                method=method, holiday_countries_used=False,
             )
         else:
             holiday_params['regression_params'] = {}
@@ -3368,6 +3369,149 @@ class KalmanSmoothing(EmptyTransformer):
         return self.transform(df)
 
 
+class RegressionFilter(EmptyTransformer):
+    """Models seasonal and local linear trend, and clips std dvs from this fit."""
+
+    def __init__(
+            self, name: str = "RegressionFilter",
+            sigma: float = 2.0,
+            rolling_window: int = 90,
+            run_order: str = "season_first",
+            regression_params: dict = None,
+            holiday_params: dict = None,
+            holiday_country: str = "US",
+            **kwargs
+    ):
+        self.name = name
+        self.sigma = sigma
+        self.rolling_window = rolling_window
+        self.run_order = run_order
+        self.regression_params = regression_params
+        self.holiday_params = holiday_params
+        self.holiday_country = holiday_country
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.holiday_params is not None:
+            self.holiday_params["regression_params"] = self.regression_params
+            self.holiday_params["impact"] = 'datepart_regression'
+            self.seasonal = HolidayTransformer(**self.holiday_params)
+        else:
+            if self.regression_params is None:
+                self.regression_params = {
+                    "regression_model": {
+                        "model": "DecisionTree",
+                        "model_params": {"max_depth": 4, "min_samples_split": 2},
+                    },
+                    "datepart_method": "common_fourier",
+                    "holiday_countries_used": True,
+                }
+            self.seasonal = DatepartRegressionTransformer(
+                **self.regression_params, holiday_country=self.holiday_country
+            )
+        self.trend = LocalLinearTrend(rolling_window=self.rolling_window)
+
+        if self.run_order == 'season_first':
+            deseason = self.seasonal.fit_transform(df)
+            result = self.trend.fit_transform(deseason)
+        else:
+            detrend = self.trend.fit_transform(df)
+            result = self.seasonal.fit_transform(detrend)
+
+        std_dev = result.std() * self.sigma
+        clipped = result.clip(upper=std_dev, lower= -1 * std_dev, axis=1)
+
+        if self.run_order == 'season_first':
+            retrend = self.trend.inverse_transform(clipped)
+            original = self.seasonal.inverse_transform(retrend)
+        else:
+            reseason = self.seasonal.inverse_transform(clipped)
+            original = self.trend.inverse_transform(reseason)
+        return original
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.run_order == 'season_first':
+            deseason = self.seasonal.transform(df)
+            result = self.trend.transform(deseason)
+        else:
+            detrend = self.trend.transform(df)
+            result = self.seasonal.transform(detrend)
+
+        std_dev = result.std() * self.sigma
+        clipped = result.clip(upper=std_dev, lower= -1 * std_dev, axis=1)
+
+        if self.run_order == 'season_first':
+            retrend = self.trend.inverse_transform(clipped)
+            original = self.seasonal.inverse_transform(retrend)
+        else:
+            reseason = self.seasonal.inverse_transform(clipped)
+            original = self.trend.inverse_transform(reseason)
+        return original
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """No changes made.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+    def __repr__(self):
+        """Print."""
+        return "Transformer " + str(self.name) + ", uses standard .fit/.transform"
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        regression_params = DatepartRegressionTransformer.get_new_params(method=method)
+
+        if method == "fast":
+            holiday_trans_use = False
+        else:
+            holiday_trans_use = random.choices([True, False], [0.3, 0.7])[0]
+        if holiday_trans_use:
+            holiday_params = HolidayTransformer.get_new_params(method="fast")
+            holiday_params["regression_params"] = regression_params
+            holiday_params["impact"] = 'datepart_regression'
+        else:
+            holiday_params = None
+
+        return {
+            "sigma": random.choices([0.5, 1, 1.5, 2, 3], [0.1, 0.4, 0.1, 0.3, 0.1])[0],
+            "rolling_window": 90,
+            "run_order": random.choices(["season_first", "trend_first"], [0.7, 0.3])[0],
+            "regression_params": regression_params,
+            "holiday_params": holiday_params,
+        }
+
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -3444,6 +3588,7 @@ shared_trans = [
     "BTCD",
     "Cointegration",
     "HolidayTransformer",
+    "RegressionFilter",
 ]
 # transformers not defined in AutoTS
 external_transformers = [
@@ -3511,7 +3656,7 @@ class GeneralTransformer(object):
             'CenterLastValue' - center data around tail of dataset
             'Round' - round values on inverse or transform
             'Slice' - use only recent records
-            'ClipOutliers' - remove outliers
+            'ClipOutliers' - simple remove outliers
             'Discretize' - bin or round data into groups
             'DatepartRegression' - move a trend trained on datetime index
             "ScipyFilter" - filter data (lose information but smoother!) from scipy
@@ -3526,6 +3671,7 @@ class GeneralTransformer(object):
             'HolidayTransformer': detects holidays and wishes good cheer to all
             'LocalLinearTrend': rolling local trend, using tails for future and past trend
             'KalmanSmoothing': smooth using a state space model
+            'RegressionFilter': fit seasonal removal and local linear trend, clip std devs away from this fit
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -3634,9 +3780,13 @@ class GeneralTransformer(object):
 
         elif transformation in list(have_params.keys()):
             return have_params[transformation](**param)
-        
+
+        # these need holiday_country
         elif transformation in ["DatepartRegression", "DatepartRegressionTransformer"]:
             return DatepartRegression(holiday_country=holiday_country, n_jobs=n_jobs, **param)
+        
+        elif transformation in ["RegressionFilter"]:
+            return RegressionFilter(holiday_country=holiday_country, n_jobs=n_jobs, **param)
 
         elif transformation == "MinMaxScaler":
             from sklearn.preprocessing import MinMaxScaler
@@ -3646,10 +3796,9 @@ class GeneralTransformer(object):
         elif transformation == "PowerTransformer":
             from sklearn.preprocessing import PowerTransformer
 
-            transformer = PowerTransformer(
+            return PowerTransformer(
                 method="yeo-johnson", standardize=True, copy=True
             )
-            return transformer
 
         elif transformation == "QuantileTransformer":
             from sklearn.preprocessing import QuantileTransformer
@@ -3687,22 +3836,20 @@ class GeneralTransformer(object):
             # could probably may it work, but this is simpler
             if df.shape[1] > df.shape[0]:
                 raise ValueError("PCA fails when n series > n observations")
-            transformer = PCA(
+            return PCA(
                 n_components=min(df.shape), whiten=False, random_state=random_seed
             )
-            return transformer
 
         elif transformation == "FastICA":
             from sklearn.decomposition import FastICA
 
             if df.shape[1] > 500:
                 raise ValueError("FastICA fails with > 500 series")
-            transformer = FastICA(
+            return FastICA(
                 n_components=df.shape[1],
                 random_state=random_seed,
                 **param,
             )
-            return transformer
 
         elif transformation in ["RollingMean", "FixedRollingMean"]:
             param = 10 if param is None else param
@@ -3923,7 +4070,8 @@ transformer_dict = {
     "AnomalyRemoval": 0.03,
     'HolidayTransformer': 0.01,
     'LocalLinearTrend': 0.01,
-    'KalmanSmoothing': 0.01,
+    'KalmanSmoothing': 0.04,
+    'RegressionFilter': 0.03,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
@@ -3964,6 +4112,7 @@ filters = {
     "AlignLastValue": 0.15,
     "KalmanSmoothing": 0.1,
     "ClipOutliers": 0.1,
+    "RegressionFilter": 0.05,
 }
 scalers = {
     "MinMaxScaler": 0.05,

@@ -27,12 +27,15 @@ def holiday_flag(
     if encode_holiday_type:
         frequency = infer_frequency(use_index)
         new_index = pd.date_range(use_index[-1], end=use_index[-1] + pd.Timedelta(days=366), freq=frequency)
-        use_index = use_index.append(new_index[1:])
+        # just new index wasn't enough, although another option might be to add more than 1 year to new index
+        prev_index = pd.date_range(use_index[0] - pd.Timedelta(days=365), end=use_index[0], freq=frequency)
+        use_index = prev_index[:-1].append(use_index.append(new_index[1:]))
 
     if isinstance(country, str):
         country = [country]
     elif isinstance(country, dict):
         country = list(country.keys())
+        # subdivisions = list(country.values())
 
     holiday_list = []
     for hld in country:
