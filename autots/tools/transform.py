@@ -1093,8 +1093,10 @@ class DatepartRegressionTransformer(EmptyTransformer):
                 "simple_binarized",
                 "lunar_phase",
                 "common_fourier",
+                ["dayofweek", 365.25],
+                ["weekdaymonthofyear", "quarter", "dayofweek"],
             ],
-            [0.1, 0.25, 0.2, 0.1, 0.3, 0.01, 0.1],
+            [0.1, 0.25, 0.2, 0.1, 0.3, 0.001, 0.1, 0.1, 0.03],
         )[0]
         if datepart_choice in ["simple", "simple_2", "recurring"]:
             polynomial_choice = random.choices([None, 2], [0.5, 0.2])[0]
@@ -3382,7 +3384,7 @@ class RegressionFilter(EmptyTransformer):
             holiday_country: str = "US",
             **kwargs
     ):
-        self.name = name
+        super().__init__(name="DatepartRegressionTransformer")
         self.sigma = sigma
         self.rolling_window = rolling_window
         self.run_order = run_order

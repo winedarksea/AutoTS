@@ -2,11 +2,13 @@
 """Test calendars
 """
 import unittest
+import numpy as np
 import pandas as pd
 from autots import load_daily
 from autots.tools.calendar import gregorian_to_chinese, gregorian_to_islamic, gregorian_to_hebrew
 from autots.tools.lunar import moon_phase
 from autots.tools.holiday import holiday_flag
+from autots.tools.seasonal import date_part
 
 
 class TestCalendar(unittest.TestCase):
@@ -87,3 +89,75 @@ class TestHolidayFlag(unittest.TestCase):
         hflag = holiday_flag(df.index, country="US")
         test_result = hflag[(hflag.index.month == 7) & (hflag.index.day == 4)].mean()
         self.assertEqual(test_result, 1)
+
+
+class TestSeasonal(unittest.TestCase):
+
+    def test_date_part(self):
+        print("Starting test_holiday_flag")
+        input_dates = pd.date_range("2021-01-01", "2023-01-01", freq='D')
+        date_part_df = date_part(
+            input_dates, method=['simple_binarized', 365.25, 'quarter'],
+            set_index=True, holiday_country=["US"], holiday_countries_used=True
+        )
+        # assert all numeric and not NaN
+        self.assertEqual(np.sum(date_part_df.isnull().to_numpy()), 0, msg="date part generating NaN")
+        self.assertEqual(date_part_df.select_dtypes("number").shape, date_part_df.shape)
+        # assert column names match expected
+        expected_cols = [
+            'day',
+             'weekend',
+             'epoch',
+             'month_1',
+             'month_2',
+             'month_3',
+             'month_4',
+             'month_5',
+             'month_6',
+             'month_7',
+             'month_8',
+             'month_9',
+             'month_10',
+             'month_11',
+             'month_12',
+             'weekday_0',
+             'weekday_1',
+             'weekday_2',
+             'weekday_3',
+             'weekday_4',
+             'weekday_5',
+             'weekday_6',
+             'seasonality365.25_0',
+             'seasonality365.25_1',
+             'seasonality365.25_2',
+             'seasonality365.25_3',
+             'seasonality365.25_4',
+             'seasonality365.25_5',
+             'seasonality365.25_6',
+             'seasonality365.25_7',
+             'seasonality365.25_8',
+             'seasonality365.25_9',
+             'seasonality365.25_10',
+             'seasonality365.25_11',
+             'quarter_1',
+             'quarter_2',
+             'quarter_3',
+             'quarter_4',
+             'Christmas Day',
+             'Christmas Day (Observed)',
+             'Columbus Day',
+             'Independence Day',
+             'Independence Day (Observed)',
+             'Juneteenth National Independence Day',
+             'Juneteenth National Independence Day (Observed)',
+             'Labor Day',
+             'Martin Luther King Jr. Day',
+             'Memorial Day',
+             "New Year's Day",
+             "New Year's Day (Observed)",
+             'Thanksgiving',
+             'Veterans Day',
+             'Veterans Day (Observed)',
+             "Washington's Birthday",
+         ]
+        self.assertCountEqual(date_part_df.columns.tolist(), expected_cols)

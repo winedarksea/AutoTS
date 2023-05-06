@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 # using transformer version of Anomaly/Holiday to use a lower level import than evaluator
-from autots.tools.seasonal import create_seasonality_feature, seasonal_int
+from autots.tools.seasonal import create_seasonality_feature, seasonal_int, datepart_components, date_part_methods
 from autots.tools.transform import (
     GeneralTransformer,
     RandomTransform,
@@ -1889,21 +1889,30 @@ class Cassandra(ModelObject):
             ar_interaction_seasonality = random.choices(
                 [None, 7, 'dayofweek', 'common_fourier'], [0.4, 0.2, 0.2, 0.2]
             )[0]
+        seasonalities = random.choices(
+            [
+                [7, 365.25],
+                ["dayofweek", 365.25],
+                ["month", "dayofweek", "weekdayofmonth"],
+                ['weekdayofmonth', 'common_fourier'],
+                "other"
+            ],
+            [0.1, 0.1, 0.1, 0.05, 0.1],
+        )[0]
+        if seasonalities == "other":
+            predefined = random.choices([True, False], [0.5, 0.5])[0]
+            if predefined:
+                seasonalities = random.choice(date_part_methods)
+            else:
+                comp_opts = datepart_components + [7, 365.25, 12]
+                seasonalities = random.choices(comp_opts, k=2)
         return {
             "preprocessing_transformation": RandomTransform(
                 transformer_list=filters, transformer_max_depth=2, allow_none=True
             ),
             "scaling": scaling,
             # "past_impacts_intervention": self.past_impacts_intervention,
-            "seasonalities": random.choices(
-                [
-                    [7, 365.25],
-                    ["dayofweek", 365.25],
-                    ["month", "dayofweek", "weekdayofmonth"],
-                    ['weekdayofmonth', 'common_fourier'],
-                ],
-                [0.1, 0.1, 0.1, 0.05],
-            )[0],
+            "seasonalities": seasonalities,
             "ar_lags": ar_lags,
             "ar_interaction_seasonality": ar_interaction_seasonality,
             "anomaly_detector_params": anomaly_detector_params,
