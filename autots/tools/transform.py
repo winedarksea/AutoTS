@@ -3556,7 +3556,7 @@ n_jobs_trans = {
     "AnomalyRemoval": AnomalyRemoval,
     'HolidayTransformer': HolidayTransformer,
 }
-# transformers with parameter pass through (internal only)
+# transformers with parameter pass through (internal only) MUST be here
 have_params = {
     "RollingMeanTransformer": RollingMeanTransformer,
     "SeasonalDifference": SeasonalDifference,
@@ -3580,6 +3580,9 @@ have_params = {
     "HolidayTransformer": HolidayTransformer,
     "LocalLinearTrend": LocalLinearTrend,
     "KalmanSmoothing": KalmanSmoothing,
+    "RegressionFilter": RegressionFilter,
+    "DatepartRegression": DatepartRegressionTransformer,
+    "DatepartRegressionTransformer": DatepartRegressionTransformer,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -3780,12 +3783,9 @@ class GeneralTransformer(object):
         elif transformation in n_jobs_trans.keys():
             return n_jobs_trans[transformation](n_jobs=n_jobs, **param)
 
-        elif transformation in list(have_params.keys()):
-            return have_params[transformation](**param)
-
         # these need holiday_country
         elif transformation in ["DatepartRegression", "DatepartRegressionTransformer"]:
-            return DatepartRegression(holiday_country=holiday_country, n_jobs=n_jobs, **param)
+            return DatepartRegression(holiday_country=holiday_country, **param)  # n_jobs=n_jobs,
         
         elif transformation in ["RegressionFilter"]:
             return RegressionFilter(holiday_country=holiday_country, n_jobs=n_jobs, **param)
@@ -3845,8 +3845,8 @@ class GeneralTransformer(object):
         elif transformation == "FastICA":
             from sklearn.decomposition import FastICA
 
-            if df.shape[1] > 500:
-                raise ValueError("FastICA fails with > 500 series")
+            if df.shape[1] > 5000:
+                raise ValueError("FastICA fails with > 5000 series for speed reasons")
             return FastICA(
                 n_components=df.shape[1],
                 random_state=random_seed,
@@ -3885,6 +3885,10 @@ class GeneralTransformer(object):
             window = 2 if window < 2 else window
             self.window = window
             return RollingMeanTransformer(window=self.window)
+
+        # must be at bottom as it has duplicates of above inside
+        elif transformation in list(have_params.keys()):
+            return have_params[transformation](**param)
 
         else:
             print(
