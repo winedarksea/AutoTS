@@ -333,6 +333,7 @@ model_lists = {
     "superfast": superfast,
     "parallel": parallel,
     "fast_parallel": fast_parallel,
+    "fast_parallel_no_arima": fast_parallel_no_arima,
     "probabilistic": probabilistic,
     "multivariate": multivariate,
     "univariate": univariate,
