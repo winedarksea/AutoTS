@@ -147,6 +147,7 @@ parallel = {
 }
 # models that should be fast given many CPU cores
 fast_parallel = {**parallel, **fast}
+fast_parallel_no_arima = {i:fast_parallel[i] for i in fast_parallel if i != 'ARIMA'}
 # models that are explicitly not production ready
 experimental = [
     'MotifSimulation',
