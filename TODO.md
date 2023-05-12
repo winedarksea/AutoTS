@@ -16,6 +16,7 @@
 * slight changes to holiday_flag to allow list in some cases
 * DatepartRegressionTransformer now accepts holiday country input as regressor
 * added RegressionFilter
+* changed bounded behavior of AlignLastValue
 * small bug fixes
 
 ### New Model Checklist:

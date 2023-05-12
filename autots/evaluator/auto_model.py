@@ -736,6 +736,7 @@ def ModelPrediction(
 
     transformationStartTime = datetime.datetime.now()
     # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
+    # forecast inverse MUST come before upper and lower bounds inverse
     df_forecast.forecast = pd.DataFrame(
         transformer_object.inverse_transform(df_forecast.forecast)
     )

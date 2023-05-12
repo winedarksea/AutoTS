@@ -203,7 +203,7 @@ def retrieve_regressor(
         "model": 'Adaboost',
         "model_params": {
             'n_estimators': 50,
-            'base_estimator': 'DecisionTree',
+            'estimator': 'DecisionTree',
             'loss': 'linear',
             'learning_rate': 1.0,
         },
@@ -320,23 +320,23 @@ def retrieve_regressor(
     elif model_class == 'Adaboost':
         from sklearn.ensemble import AdaBoostRegressor
 
-        if regression_model["model_params"]['base_estimator'] == 'SVR':
+        if regression_model["model_params"]['estimator'] == 'SVR':
             from sklearn.svm import LinearSVR
 
             svc = LinearSVR(verbose=verbose, random_state=random_seed, max_iter=1500)
             regr = AdaBoostRegressor(
-                base_estimator=svc,
+                estimator=svc,
                 n_estimators=regression_model["model_params"]['n_estimators'],
                 loss=regression_model["model_params"]['loss'],
                 learning_rate=regression_model["model_params"]['learning_rate'],
                 random_state=random_seed,
             )
-        elif regression_model["model_params"]['base_estimator'] == 'LinReg':
+        elif regression_model["model_params"]['estimator'] == 'LinReg':
             from sklearn.linear_model import LinearRegression
 
             linreg = LinearRegression()
             regr = AdaBoostRegressor(
-                base_estimator=linreg,
+                estimator=linreg,
                 n_estimators=regression_model["model_params"]['n_estimators'],
                 loss=regression_model["model_params"]['loss'],
                 learning_rate=regression_model["model_params"]['learning_rate'],
@@ -693,7 +693,7 @@ def generate_regressor_params(
                     "loss": random.choices(
                         ['linear', 'square', 'exponential'], [0.8, 0.01, 0.1]
                     )[0],
-                    "base_estimator": random.choices(
+                    "estimator": random.choices(
                         [None, 'LinReg', 'SVR'], [0.8, 0.1, 0.1]
                     )[0],
                     "learning_rate": random.choices([1, 0.5], [0.9, 0.1])[0],

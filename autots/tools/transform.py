@@ -2559,38 +2559,47 @@ class AlignLastValue(EmptyTransformer):
         """
         return df
 
-    def inverse_transform(self, df, trans_method: str = "forecast", bounds=False):
+    def inverse_transform(self, df, trans_method: str = "forecast", adjustment=None):
         """Return data to original *or* forecast form.
 
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        if trans_method == "original" or bounds:
+        self.adjustment = adjustment
+        if trans_method == "original":
             return df
         else:
             if self.first_value_only:
                 if self.method == "multiplicative":
+                    if self.adjustment is None:
+                        self.adjustment = (1 + ((self.center / df.iloc[0]) - 1) * self.strength)
                     return pd.concat(
                         [
                             df.iloc[0:1]
-                            * (1 + ((self.center / df.iloc[0]) - 1) * self.strength),
+                            * self.adjustment,
                             df.iloc[1:],
                         ],
                         axis=0,
                     )
                 else:
+                    if self.adjustment is None:
+                        self.adjustment = self.strength * (self.center - df.iloc[0])
                     return pd.concat(
                         [
-                            df.iloc[0:1] + self.strength * (self.center - df.iloc[0]),
+                            df.iloc[0:1] + adjustment,
                             df.iloc[1:],
                         ],
                         axis=0,
                     )
             else:
                 if self.method == "multiplicative":
-                    return df * (1 + ((self.center / df.iloc[0]) - 1) * self.strength)
+                    if self.adjustment is None:
+                        self.adjustment = (1 + ((self.center / df.iloc[0]) - 1) * self.strength)
+                    return df * self.adjustment
                 else:
-                    return df + self.strength * (self.center - df.iloc[0])
+                    if self.adjustment is None:
+                        self.adjustment = self.strength * (self.center - df.iloc[0])
+                    return df + self.adjustment
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -3712,6 +3721,7 @@ class GeneralTransformer(object):
         self.n_jobs = n_jobs
         self.holiday_country = holiday_country
         self.transformers = {}
+        self.adjustments = {}
         # upper/lower forecast inverses are different
         self.bounded_oddities = ["AlignLastValue"]
         # trans methods are different
@@ -3992,9 +4002,15 @@ class GeneralTransformer(object):
                 c_trans_n = self.transformations[i]
                 if c_trans_n in self.oddities_list:
                     if c_trans_n in self.bounded_oddities:
+                        if not bounds:
+                            adjustment = None
+                        else:
+                            adjustment = self.adjustments.get(i, None)
                         df = self.transformers[i].inverse_transform(
-                            df, trans_method=trans_method, bounds=bounds
+                            df, trans_method=trans_method, adjustment=adjustment,
                         )
+                        if not bounds:
+                            self.adjustments[i] = self.transformers[i].adjustment
                     else:
                         df = self.transformers[i].inverse_transform(
                             df, trans_method=trans_method
