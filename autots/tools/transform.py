@@ -2510,6 +2510,7 @@ class AlignLastValue(EmptyTransformer):
         self.method = method
         self.strength = strength
         self.first_value_only = first_value_only
+        self.adjustment = None
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -2565,7 +2566,8 @@ class AlignLastValue(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        self.adjustment = adjustment
+        if self.adjustment is not None:
+            self.adjustment = adjustment
         if trans_method == "original":
             return df
         else:
