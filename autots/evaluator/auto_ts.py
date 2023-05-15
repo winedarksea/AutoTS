@@ -6,6 +6,7 @@ import copy
 import json
 import sys
 import time
+import traceback as tb
 
 from autots.tools.shaping import (
     long_to_wide,
@@ -1155,7 +1156,7 @@ class AutoTS(object):
                     result_file=result_file,
                 )
             except Exception as e:
-                print(f"Ensembling Error: {repr(e)}")
+                print(f"Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}")
 
         # drop any duplicates in results
         self.initial_results.model_results = (
@@ -1285,7 +1286,7 @@ class AutoTS(object):
                         first_validation=False,
                     )
                 except Exception as e:
-                    print(f"Ensembling Error: {repr(e)}")
+                    print(f"Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}")
                     time.sleep(5)
 
         error_msg_template = """No models available from validation.
@@ -1556,7 +1557,7 @@ or otherwise increase models available."""
                 ].copy()
             except Exception as e:
                 if self.verbose >= 0:
-                    print(f"Ensembling Error: {repr(e)}")
+                    print(f"Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}")
                 hens_model_results = TemplateEvalObject().model_results.copy()
 
             # rerun validation_results aggregation with new models added

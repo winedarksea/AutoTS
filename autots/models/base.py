@@ -437,7 +437,14 @@ class PredictionObject(object):
             start_date=start_date,
         )
         if title is None:
-            title = f"{series} with model {str(self.model_name)[0:80]}"
+            title_prelim = str(self.model_name)[0:80]
+            if title_prelim == "Ensemble":
+                ensemble_type = self.model_parameters.get('model_name', "unknown")
+                if ensemble_type == "Horizontal":
+                    title_prelim = self.model_parameters['series'].get(series, "Horizontal")
+                else:
+                    title_prelim = ensemble_type
+            title = f"{series} with model {title_prelim}"
         if vline is None:
             return plot_df.plot(title=title, **kwargs)
         else:
