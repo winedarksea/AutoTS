@@ -77,9 +77,9 @@ class TestHolidayFlag(unittest.TestCase):
         print("Starting test_holiday_flag")
         input_dates = pd.date_range("2022-01-01", "2023-01-01", freq='D')
         flag_1 = holiday_flag(input_dates, country="US", encode_holiday_type=False, holidays_subdiv="PR")
-        self.assertAlmostEqual(flag_1.loc["2022-07-04"], 1.0)
-        self.assertAlmostEqual(flag_1.loc["2022-12-25"], 1.0)
-        self.assertAlmostEqual(flag_1.loc["2022-12-13"], 0.0)
+        self.assertAlmostEqual(flag_1.loc["2022-07-04"].iloc[0], 1.0)
+        self.assertAlmostEqual(flag_1.loc["2022-12-25"].iloc[0], 1.0)
+        self.assertAlmostEqual(flag_1.loc["2022-12-13"].iloc[0], 0.0)
 
         flag_2 = holiday_flag(input_dates, country="US", encode_holiday_type=True, holidays_subdiv=None)
         self.assertAlmostEqual(flag_2.loc["2022-12-25", 'Christmas Day'], 1.0)
@@ -88,7 +88,7 @@ class TestHolidayFlag(unittest.TestCase):
         df = load_daily(long=False)
         hflag = holiday_flag(df.index, country="US")
         test_result = hflag[(hflag.index.month == 7) & (hflag.index.day == 4)].mean()
-        self.assertEqual(test_result, 1)
+        self.assertEqual(test_result.iloc[0], 1)
 
 
 class TestSeasonal(unittest.TestCase):

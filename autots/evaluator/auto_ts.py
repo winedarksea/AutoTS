@@ -1286,7 +1286,7 @@ class AutoTS(object):
                         first_validation=False,
                     )
                 except Exception as e:
-                    print(f"Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}")
+                    print(f"Post-Validation Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}")
                     time.sleep(5)
 
         error_msg_template = """No models available from validation.
@@ -1557,7 +1557,7 @@ or otherwise increase models available."""
                 ].copy()
             except Exception as e:
                 if self.verbose >= 0:
-                    print(f"Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}")
+                    print(f"Horizontal/Mosaic Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}")
                 hens_model_results = TemplateEvalObject().model_results.copy()
 
             # rerun validation_results aggregation with new models added

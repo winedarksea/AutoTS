@@ -3880,11 +3880,8 @@ class GeneralTransformer(object):
                 transformer = RollingMeanTransformer(window=self.window, fixed=False)
             return transformer
 
-        elif transformation in ["SeasonalDifference", "SeasonalDifferenceMean"]:
-            if transformation == "SeasonalDifference":
-                return SeasonalDifference(lag_1=param, method="LastValue")
-            else:
-                return SeasonalDifference(lag_1=param, method="Mean")
+        elif transformation in ["SeasonalDifferenceMean"]:
+            return SeasonalDifference(lag_1=param, method="Mean")
 
         elif transformation == "RollingMean100thN":
             window = int(df.shape[0] / 100)
