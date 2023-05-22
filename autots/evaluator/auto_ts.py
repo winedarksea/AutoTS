@@ -430,7 +430,7 @@ class AutoTS(object):
         )
         self.initial_results = TemplateEvalObject()
         self.best_model_name = ""
-        self.best_model_params = ""
+        self.best_model_params = {}
         self.best_model_transformation_params = ""
         self.traceback = True if verbose > 1 else False
         self.future_regressor_train = None
@@ -1627,7 +1627,7 @@ or otherwise increase models available."""
         self.ensemble_check = int(self.best_model_ensemble > 0)
 
         # set flags to check if regressors or ensemble used in final model.
-        self.used_regressor_check = self._regr_param_check(self.best_model_params)
+        self.used_regressor_check = self._regr_param_check(self.best_model_params.copy())
         self.regressor_used = self.used_regressor_check
         # clean up any remaining print statements
         sys.stdout.flush()
@@ -1869,7 +1869,7 @@ or otherwise increase models available."""
             for interval in prediction_interval:
                 df_forecast = model_forecast(
                     model_name=self.best_model_name,
-                    model_param_dict=self.best_model_params,
+                    model_param_dict=self.best_model_params.copy(),
                     model_transform_dict=self.best_model_transformation_params,
                     df_train=self.df_wide_numeric,
                     forecast_length=forecast_length,
@@ -1919,7 +1919,7 @@ or otherwise increase models available."""
         else:
             df_forecast = model_forecast(
                 model_name=self.best_model_name,
-                model_param_dict=self.best_model_params,
+                model_param_dict=self.best_model_params.copy(),
                 model_transform_dict=self.best_model_transformation_params,
                 df_train=self.df_wide_numeric,
                 forecast_length=forecast_length,
@@ -2336,7 +2336,7 @@ or otherwise increase models available."""
         result = back_forecast(
             df=input_df,
             model_name=self.best_model_name,
-            model_param_dict=self.best_model_params,
+            model_param_dict=self.best_model_params.copy(),
             model_transform_dict=self.best_model_transformation_params,
             future_regressor_train=self.future_regressor_train,
             n_splits=n_splits,
@@ -2359,7 +2359,7 @@ or otherwise increase models available."""
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
         if self.best_model['Ensemble'].iloc[0] != 2:
             raise ValueError("Only works on horizontal ensemble type models.")
-        ModelParameters = self.best_model_params
+        ModelParameters = self.best_model_params.copy()
         series = ModelParameters['series']
         series = pd.DataFrame.from_dict(series, orient="index").reset_index(drop=False)
         if series.shape[1] > 2:
@@ -2401,7 +2401,7 @@ or otherwise increase models available."""
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
         if self.best_model_ensemble != 2:
             raise ValueError("Only works on horizontal ensemble type models.")
-        ModelParameters = self.best_model_params
+        ModelParameters = self.best_model_params.copy()
         if str(ModelParameters['model_name']).lower() != 'mosaic':
             raise ValueError("Only works on mosaic ensembles.")
         series = pd.DataFrame.from_dict(ModelParameters['series'])
@@ -2712,7 +2712,7 @@ or otherwise increase models available."""
         elif self.best_model_ensemble != 2:
             raise ValueError("this plot only works on horizontal-style ensembles.")
 
-        if str(self.best_model_params['model_name']).lower() == "mosaic":
+        if str(self.best_model_params.get('model_name', None)).lower() == "mosaic":
             series = self.mosaic_to_df()
             transformers = series.stack().value_counts()
         else:
