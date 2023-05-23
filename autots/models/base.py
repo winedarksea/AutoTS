@@ -441,7 +441,9 @@ class PredictionObject(object):
             if title_prelim == "Ensemble":
                 ensemble_type = self.model_parameters.get('model_name', "unknown")
                 if ensemble_type == "Horizontal":
-                    title_prelim = self.model_parameters['series'].get(series, "Horizontal")
+                    title_prelim = self.model_parameters['series'].get(
+                        series, "Horizontal"
+                    )
                 else:
                     title_prelim = ensemble_type
             title = f"{series} with model {title_prelim}"

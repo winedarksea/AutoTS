@@ -105,7 +105,7 @@ def date_part(
         all_seas = []
         for seas in method:
             all_seas.append(date_part(DTindex, method=seas, set_index=True))
-        date_part_df =  pd.concat(all_seas, axis=1)
+        date_part_df = pd.concat(all_seas, axis=1)
     elif "_poly" in str(method):
         method = method.replace("_poly", "")
         polynomial_degree = 2
@@ -114,7 +114,7 @@ def date_part(
         date_part_df = fourier_df(DTindex, seasonality=method, order=6)
     elif isinstance(method, list):
         # remove duplicate columns if present
-        date_part_df =  date_part_df.loc[:, ~date_part_df.columns.duplicated()]
+        date_part_df = date_part_df.loc[:, ~date_part_df.columns.duplicated()]
     elif method in datepart_components:
         date_part_df = create_datepart_components(DTindex, method)
     elif method == 'recurring':
@@ -310,7 +310,9 @@ def date_part(
                         DTindex, errors='coerce', downcast='integer'
                     ).values
                     - 946684800000000000,
-                    'us_election_year': (DTindex.year % 4 == 0).astype(int),  # also Olympics
+                    'us_election_year': (DTindex.year % 4 == 0).astype(
+                        int
+                    ),  # also Olympics
                 }
             )
             date_part_df = pd.concat([date_part_df, date_part_df2], axis=1)
@@ -328,9 +330,14 @@ def date_part(
         date_part_df.index = DTindex
     if holiday_country is not None and holiday_countries_used:
         date_part_df = pd.concat(
-            [date_part_df, holiday_flag(DTindex, country=holiday_country, encode_holiday_type=True)],
+            [
+                date_part_df,
+                holiday_flag(
+                    DTindex, country=holiday_country, encode_holiday_type=True
+                ),
+            ],
             axis=1,
-            ignore_index=not set_index
+            ignore_index=not set_index,
         )
     return date_part_df
 
@@ -342,6 +349,7 @@ def fourier_series(t, p=365.25, n=10):
     x = x * np.asarray(t)[:, None]
     x = np.concatenate((np.cos(x), np.sin(x)), axis=1)
     return x
+
 
 def fourier_df(DTindex, seasonality, order=10, t=None, history_days=None):
     if history_days is None:
@@ -392,12 +400,18 @@ def create_datepart_components(DTindex, seasonality):
         ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     # recommend used in combination with some combination like dayofweek and quarter
     elif seasonality == "weekdaymonthofyear":
-        monweek = (((DTindex.day - 1) // 7 + 1).astype(str) + (DTindex.weekday).astype(str)).astype(int)
+        monweek = (
+            ((DTindex.day - 1) // 7 + 1).astype(str) + (DTindex.weekday).astype(str)
+        ).astype(int)
         # because not much data for last week (week 5) of months unless many years of data
         monweek = monweek.where(monweek <= 50, 50)
         strs = DTindex.month.astype(str) + monweek.astype(str)
-        cat_index = pd.date_range("2020-01-01", "2021-01-01", freq='D')  # must be a leap year
-        catweek = (((cat_index.day - 1) // 7 + 1).astype(str) + (cat_index.weekday).astype(str)).astype(int)
+        cat_index = pd.date_range(
+            "2020-01-01", "2021-01-01", freq='D'
+        )  # must be a leap year
+        catweek = (
+            ((cat_index.day - 1) // 7 + 1).astype(str) + (cat_index.weekday).astype(str)
+        ).astype(int)
         catweek = catweek.where(catweek <= 50, 50)
         cats = (cat_index.month.astype(str) + catweek.astype(str)).unique()
         return pd.get_dummies(
@@ -410,7 +424,9 @@ def create_datepart_components(DTindex, seasonality):
         ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "dayofmonthofyear":
         strs = DTindex.month.astype(str) + DTindex.day.astype(str)
-        cat_index = pd.date_range("2020-01-01", "2021-01-01", freq='D')  # must be a leap yaer
+        cat_index = pd.date_range(
+            "2020-01-01", "2021-01-01", freq='D'
+        )  # must be a leap yaer
         cats = (cat_index.month.astype(str) + cat_index.day.astype(str)).unique()
         return pd.get_dummies(
             pd.Categorical(
@@ -434,7 +450,9 @@ def create_datepart_components(DTindex, seasonality):
         ).rename(columns=lambda x: f"{seasonality}_" + str(x))
     elif seasonality == "dayofyear":
         return pd.get_dummies(
-            pd.Categorical(DTindex.dayofyear, categories=list(range(1, 367)), ordered=True),
+            pd.Categorical(
+                DTindex.dayofyear, categories=list(range(1, 367)), ordered=True
+            ),
             dtype=np.uint16,
         ).rename(columns=lambda x: f"{seasonality}_" + str(x))
 
@@ -444,7 +462,9 @@ def create_seasonality_feature(DTindex, t, seasonality, history_days=None):
     # for consistency, all must have a range index, not date index
     # fourier orders
     if isinstance(seasonality, (int, float)):
-        return fourier_df(DTindex, seasonality=seasonality, t=t, history_days=history_days)
+        return fourier_df(
+            DTindex, seasonality=seasonality, t=t, history_days=history_days
+        )
     # dateparts
     elif seasonality in datepart_components:
         return create_datepart_components(DTindex, seasonality)

@@ -1161,7 +1161,15 @@ class DatepartRegressionTransformer(EmptyTransformer):
             polynomial_degree=self.polynomial_degree,
         )
         if self.holiday_country is not None and self.holiday_countries_used:
-            X = pd.concat([X, holiday_flag(df.index, country=self.holiday_country, encode_holiday_type=True)], axis=1)
+            X = pd.concat(
+                [
+                    X,
+                    holiday_flag(
+                        df.index, country=self.holiday_country, encode_holiday_type=True
+                    ),
+                ],
+                axis=1,
+            )
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
         self.X = X  # diagnostic
@@ -1208,7 +1216,15 @@ class DatepartRegressionTransformer(EmptyTransformer):
             polynomial_degree=self.polynomial_degree,
         )
         if self.holiday_country is not None and self.holiday_countries_used:
-            X = pd.concat([X, holiday_flag(df.index, country=self.holiday_country, encode_holiday_type=True)], axis=1)
+            X = pd.concat(
+                [
+                    X,
+                    holiday_flag(
+                        df.index, country=self.holiday_country, encode_holiday_type=True
+                    ),
+                ],
+                axis=1,
+            )
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
         # X.columns = [str(xc) for xc in X.columns]
@@ -1233,7 +1249,15 @@ class DatepartRegressionTransformer(EmptyTransformer):
             polynomial_degree=self.polynomial_degree,
         )
         if self.holiday_country is not None and self.holiday_countries_used:
-            X = pd.concat([X, holiday_flag(df.index, country=self.holiday_country, encode_holiday_type=True)], axis=1)
+            X = pd.concat(
+                [
+                    X,
+                    holiday_flag(
+                        df.index, country=self.holiday_country, encode_holiday_type=True
+                    ),
+                ],
+                axis=1,
+            )
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
         y = pd.DataFrame(self.model.predict(X), columns=df.columns, index=df.index)
@@ -2574,11 +2598,12 @@ class AlignLastValue(EmptyTransformer):
             if self.first_value_only:
                 if self.method == "multiplicative":
                     if self.adjustment is None:
-                        self.adjustment = (1 + ((self.center / df.iloc[0]) - 1) * self.strength)
+                        self.adjustment = (
+                            1 + ((self.center / df.iloc[0]) - 1) * self.strength
+                        )
                     return pd.concat(
                         [
-                            df.iloc[0:1]
-                            * self.adjustment,
+                            df.iloc[0:1] * self.adjustment,
                             df.iloc[1:],
                         ],
                         axis=0,
@@ -2596,7 +2621,9 @@ class AlignLastValue(EmptyTransformer):
             else:
                 if self.method == "multiplicative":
                     if self.adjustment is None:
-                        self.adjustment = (1 + ((self.center / df.iloc[0]) - 1) * self.strength)
+                        self.adjustment = (
+                            1 + ((self.center / df.iloc[0]) - 1) * self.strength
+                        )
                     return df * self.adjustment
                 else:
                     if self.adjustment is None:
@@ -2951,7 +2978,8 @@ class HolidayTransformer(EmptyTransformer):
         )[0]
         if holiday_params['impact'] == 'datepart_regression':
             holiday_params['regression_params'] = DatepartRegression.get_new_params(
-                method=method, holiday_countries_used=False,
+                method=method,
+                holiday_countries_used=False,
             )
         else:
             holiday_params['regression_params'] = {}
@@ -3386,14 +3414,15 @@ class RegressionFilter(EmptyTransformer):
     """Models seasonal and local linear trend, and clips std dvs from this fit."""
 
     def __init__(
-            self, name: str = "RegressionFilter",
-            sigma: float = 2.0,
-            rolling_window: int = 90,
-            run_order: str = "season_first",
-            regression_params: dict = None,
-            holiday_params: dict = None,
-            holiday_country: str = "US",
-            **kwargs
+        self,
+        name: str = "RegressionFilter",
+        sigma: float = 2.0,
+        rolling_window: int = 90,
+        run_order: str = "season_first",
+        regression_params: dict = None,
+        holiday_params: dict = None,
+        holiday_country: str = "US",
+        **kwargs,
     ):
         super().__init__(name="DatepartRegressionTransformer")
         self.sigma = sigma
@@ -3436,7 +3465,7 @@ class RegressionFilter(EmptyTransformer):
             result = self.seasonal.fit_transform(detrend)
 
         std_dev = result.std() * self.sigma
-        clipped = result.clip(upper=std_dev, lower= -1 * std_dev, axis=1)
+        clipped = result.clip(upper=std_dev, lower=-1 * std_dev, axis=1)
 
         if self.run_order == 'season_first':
             retrend = self.trend.inverse_transform(clipped)
@@ -3469,7 +3498,7 @@ class RegressionFilter(EmptyTransformer):
             result = self.seasonal.transform(detrend)
 
         std_dev = result.std() * self.sigma
-        clipped = result.clip(upper=std_dev, lower= -1 * std_dev, axis=1)
+        clipped = result.clip(upper=std_dev, lower=-1 * std_dev, axis=1)
 
         if self.run_order == 'season_first':
             retrend = self.trend.inverse_transform(clipped)
@@ -3522,7 +3551,6 @@ class RegressionFilter(EmptyTransformer):
             "regression_params": regression_params,
             "holiday_params": holiday_params,
         }
-
 
 
 # lookup dict for all non-parameterized transformers
@@ -3797,10 +3825,14 @@ class GeneralTransformer(object):
 
         # these need holiday_country
         elif transformation in ["DatepartRegression", "DatepartRegressionTransformer"]:
-            return DatepartRegression(holiday_country=holiday_country, **param)  # n_jobs=n_jobs,
-        
+            return DatepartRegression(
+                holiday_country=holiday_country, **param
+            )  # n_jobs=n_jobs,
+
         elif transformation in ["RegressionFilter"]:
-            return RegressionFilter(holiday_country=holiday_country, n_jobs=n_jobs, **param)
+            return RegressionFilter(
+                holiday_country=holiday_country, n_jobs=n_jobs, **param
+            )
 
         elif transformation == "MinMaxScaler":
             from sklearn.preprocessing import MinMaxScaler
@@ -3810,9 +3842,7 @@ class GeneralTransformer(object):
         elif transformation == "PowerTransformer":
             from sklearn.preprocessing import PowerTransformer
 
-            return PowerTransformer(
-                method="yeo-johnson", standardize=True, copy=True
-            )
+            return PowerTransformer(method="yeo-johnson", standardize=True, copy=True)
 
         elif transformation == "QuantileTransformer":
             from sklearn.preprocessing import QuantileTransformer
@@ -4006,7 +4036,9 @@ class GeneralTransformer(object):
                         else:
                             adjustment = self.adjustments.get(i, None)
                         df = self.transformers[i].inverse_transform(
-                            df, trans_method=trans_method, adjustment=adjustment,
+                            df,
+                            trans_method=trans_method,
+                            adjustment=adjustment,
                         )
                         if not bounds:
                             self.adjustments[i] = self.transformers[i].adjustment

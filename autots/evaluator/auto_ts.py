@@ -931,7 +931,11 @@ class AutoTS(object):
 
         # preclean data
         if self.preclean is not None:
-            self.preclean_transformer = GeneralTransformer(**self.preclean, n_jobs=self.n_jobs, holiday_country=self.holiday_country)
+            self.preclean_transformer = GeneralTransformer(
+                **self.preclean,
+                n_jobs=self.n_jobs,
+                holiday_country=self.holiday_country,
+            )
             df_wide_numeric = self.preclean_transformer.fit_transform(df_wide_numeric)
 
         self.df_wide_numeric = df_wide_numeric
@@ -1156,7 +1160,9 @@ class AutoTS(object):
                     result_file=result_file,
                 )
             except Exception as e:
-                print(f"Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}")
+                print(
+                    f"Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
+                )
 
         # drop any duplicates in results
         self.initial_results.model_results = (
@@ -1286,7 +1292,9 @@ class AutoTS(object):
                         first_validation=False,
                     )
                 except Exception as e:
-                    print(f"Post-Validation Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}")
+                    print(
+                        f"Post-Validation Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
+                    )
                     time.sleep(5)
 
         error_msg_template = """No models available from validation.
@@ -1557,7 +1565,9 @@ or otherwise increase models available."""
                 ].copy()
             except Exception as e:
                 if self.verbose >= 0:
-                    print(f"Horizontal/Mosaic Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}")
+                    print(
+                        f"Horizontal/Mosaic Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
+                    )
                 hens_model_results = TemplateEvalObject().model_results.copy()
 
             # rerun validation_results aggregation with new models added
@@ -1627,7 +1637,9 @@ or otherwise increase models available."""
         self.ensemble_check = int(self.best_model_ensemble > 0)
 
         # set flags to check if regressors or ensemble used in final model.
-        self.used_regressor_check = self._regr_param_check(self.best_model_params.copy())
+        self.used_regressor_check = self._regr_param_check(
+            self.best_model_params.copy()
+        )
         self.regressor_used = self.used_regressor_check
         # clean up any remaining print statements
         sys.stdout.flush()
