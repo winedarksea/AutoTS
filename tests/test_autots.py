@@ -531,6 +531,7 @@ class ModelTest(unittest.TestCase):
             'AnomalyRemoval', "HolidayTransformer",  # new 0.5.0
             'LocalLinearTrend',  # new 0.5.1
             "KalmanSmoothing",  # new 0.5.1
+            # "RegressionFilter"   # new 0.5.7
         ]
 
         timings = {}

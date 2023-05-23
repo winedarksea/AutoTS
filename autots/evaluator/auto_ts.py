@@ -6,6 +6,7 @@ import copy
 import json
 import sys
 import time
+import traceback as tb
 
 from autots.tools.shaping import (
     long_to_wide,
@@ -50,6 +51,7 @@ class AutoTS(object):
 
     Args:
         forecast_length (int): number of periods over which to evaluate forecast. Can be overriden later in .predict().
+            when you don't have much historical data, using a small forecast length for .fit and the full desired forecast lenght for .predict is usually the best possible approach given limitations.
         frequency (str): 'infer' or a specific pandas datetime offset. Can be used to force rollup of data (ie daily input, but frequency 'M' will rollup to monthly).
         prediction_interval (float): 0-1, uncertainty range for upper and lower forecasts. Adjust range, but rarely matches actual containment.
         max_generations (int): number of genetic algorithms generations to run.
@@ -87,8 +89,9 @@ class AutoTS(object):
         transformer_list (list): list of transformers to use, or dict of transformer:probability. Note this does not apply to initial templates.
             can accept string aliases: "all", "fast", "superfast"
         transformer_max_depth (int): maximum number of sequential transformers to generate for new Random Transformers. Fewer will be faster.
-        models_mode (str): option to adjust parameter options for newly generated models. Currently includes:
-            'default', 'deep' (searches more params, likely slower), and 'regressor' (forces 'User' regressor mode in regressor capable models)
+        models_mode (str): option to adjust parameter options for newly generated models. Only sporadically utilized. Currently includes:
+            'default'/'random', 'deep' (searches more params, likely slower), and 'regressor' (forces 'User' regressor mode in regressor capable models),
+            'gradient_boosting', 'neuralnets' (~Regression class models only)
         num_validations (int): number of cross validations to perform. 0 for just train/test on best split.
             Possible confusion: num_validations is the number of validations to perform *after* the first eval segment, so totally eval/validations will be this + 1.
             Also "auto" and "max" aliases available. Max maxes out at 50.
@@ -427,7 +430,7 @@ class AutoTS(object):
         )
         self.initial_results = TemplateEvalObject()
         self.best_model_name = ""
-        self.best_model_params = ""
+        self.best_model_params = {}
         self.best_model_transformation_params = ""
         self.traceback = True if verbose > 1 else False
         self.future_regressor_train = None
@@ -928,7 +931,11 @@ class AutoTS(object):
 
         # preclean data
         if self.preclean is not None:
-            self.preclean_transformer = GeneralTransformer(**self.preclean)
+            self.preclean_transformer = GeneralTransformer(
+                **self.preclean,
+                n_jobs=self.n_jobs,
+                holiday_country=self.holiday_country,
+            )
             df_wide_numeric = self.preclean_transformer.fit_transform(df_wide_numeric)
 
         self.df_wide_numeric = df_wide_numeric
@@ -1153,7 +1160,9 @@ class AutoTS(object):
                     result_file=result_file,
                 )
             except Exception as e:
-                print(f"Ensembling Error: {repr(e)}")
+                print(
+                    f"Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
+                )
 
         # drop any duplicates in results
         self.initial_results.model_results = (
@@ -1283,7 +1292,9 @@ class AutoTS(object):
                         first_validation=False,
                     )
                 except Exception as e:
-                    print(f"Ensembling Error: {repr(e)}")
+                    print(
+                        f"Post-Validation Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
+                    )
                     time.sleep(5)
 
         error_msg_template = """No models available from validation.
@@ -1554,7 +1565,9 @@ or otherwise increase models available."""
                 ].copy()
             except Exception as e:
                 if self.verbose >= 0:
-                    print(f"Ensembling Error: {repr(e)}")
+                    print(
+                        f"Horizontal/Mosaic Ensembling Error: {repr(e)}: {''.join(tb.format_exception(None, e, e.__traceback__))}"
+                    )
                 hens_model_results = TemplateEvalObject().model_results.copy()
 
             # rerun validation_results aggregation with new models added
@@ -1624,7 +1637,9 @@ or otherwise increase models available."""
         self.ensemble_check = int(self.best_model_ensemble > 0)
 
         # set flags to check if regressors or ensemble used in final model.
-        self.used_regressor_check = self._regr_param_check(self.best_model_params)
+        self.used_regressor_check = self._regr_param_check(
+            self.best_model_params.copy()
+        )
         self.regressor_used = self.used_regressor_check
         # clean up any remaining print statements
         sys.stdout.flush()
@@ -1866,7 +1881,7 @@ or otherwise increase models available."""
             for interval in prediction_interval:
                 df_forecast = model_forecast(
                     model_name=self.best_model_name,
-                    model_param_dict=self.best_model_params,
+                    model_param_dict=self.best_model_params.copy(),
                     model_transform_dict=self.best_model_transformation_params,
                     df_train=self.df_wide_numeric,
                     forecast_length=forecast_length,
@@ -1916,7 +1931,7 @@ or otherwise increase models available."""
         else:
             df_forecast = model_forecast(
                 model_name=self.best_model_name,
-                model_param_dict=self.best_model_params,
+                model_param_dict=self.best_model_params.copy(),
                 model_transform_dict=self.best_model_transformation_params,
                 df_train=self.df_wide_numeric,
                 forecast_length=forecast_length,
@@ -2333,7 +2348,7 @@ or otherwise increase models available."""
         result = back_forecast(
             df=input_df,
             model_name=self.best_model_name,
-            model_param_dict=self.best_model_params,
+            model_param_dict=self.best_model_params.copy(),
             model_transform_dict=self.best_model_transformation_params,
             future_regressor_train=self.future_regressor_train,
             n_splits=n_splits,
@@ -2356,7 +2371,7 @@ or otherwise increase models available."""
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
         if self.best_model['Ensemble'].iloc[0] != 2:
             raise ValueError("Only works on horizontal ensemble type models.")
-        ModelParameters = self.best_model_params
+        ModelParameters = self.best_model_params.copy()
         series = ModelParameters['series']
         series = pd.DataFrame.from_dict(series, orient="index").reset_index(drop=False)
         if series.shape[1] > 2:
@@ -2398,7 +2413,7 @@ or otherwise increase models available."""
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
         if self.best_model_ensemble != 2:
             raise ValueError("Only works on horizontal ensemble type models.")
-        ModelParameters = self.best_model_params
+        ModelParameters = self.best_model_params.copy()
         if str(ModelParameters['model_name']).lower() != 'mosaic':
             raise ValueError("Only works on mosaic ensembles.")
         series = pd.DataFrame.from_dict(ModelParameters['series'])
@@ -2709,7 +2724,7 @@ or otherwise increase models available."""
         elif self.best_model_ensemble != 2:
             raise ValueError("this plot only works on horizontal-style ensembles.")
 
-        if str(self.best_model_params['model_name']).lower() == "mosaic":
+        if str(self.best_model_params.get('model_name', None)).lower() == "mosaic":
             series = self.mosaic_to_df()
             transformers = series.stack().value_counts()
         else:

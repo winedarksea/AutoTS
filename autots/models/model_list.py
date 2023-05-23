@@ -12,7 +12,7 @@ all_models = [
     'GluonTS',
     'SeasonalNaive',
     'UnobservedComponents',
-    'VARMAX',
+    # 'VARMAX',
     'VECM',
     'DynamicFactor',
     'MotifSimulation',
@@ -147,6 +147,7 @@ parallel = {
 }
 # models that should be fast given many CPU cores
 fast_parallel = {**parallel, **fast}
+fast_parallel_no_arima = {i: fast_parallel[i] for i in fast_parallel if i != 'ARIMA'}
 # models that are explicitly not production ready
 experimental = [
     'MotifSimulation',
@@ -332,6 +333,7 @@ model_lists = {
     "superfast": superfast,
     "parallel": parallel,
     "fast_parallel": fast_parallel,
+    "fast_parallel_no_arima": fast_parallel_no_arima,
     "probabilistic": probabilistic,
     "multivariate": multivariate,
     "univariate": univariate,

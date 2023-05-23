@@ -40,7 +40,7 @@ class TestMetrics(unittest.TestCase):
         )
 
         known_avg_metrics = pd.Series(
-            [40., 2., 3.162, 0.533, 4.000, 0.0, 1.240, 20.0, 1.240, 0.572, 0.467, 0.467, 3.333, 0.533, 1.509, 1.250, 4.934, 1.778, 2.614],
+            [40., 2., 3.162, 0.533, 4.000, -10.0, 1.240, 10.0, 1.240, 0.572, 0.467, 0.467, 3.333, 0.533, 1.509, 1.250, 4.934, 1.778, 2.614],
             index=[
                 'smape', 'mae', 'rmse', 'made', 'mage', 'underestimate', 'mle',
                 'overestimate', 'imle', 'spl', 'containment', 'contour', 'maxe',
@@ -48,7 +48,7 @@ class TestMetrics(unittest.TestCase):
             ]
         )
         known_avg_metrics_weighted = pd.Series(
-            [6.667, 0.333, 0.527, 0.089, 4.000, 0.0, 0.207, 20.0, 0.207, 0.623, 0.567, 0.717, 0.833, 0.883, 1.127, 0.208, 1.234, 0.444, 2.830],
+            [6.667, 0.333, 0.527, 0.089, 4.000, -10.0, 0.207, 10.0, 0.207, 0.623, 0.567, 0.717, 0.833, 0.883, 1.127, 0.208, 1.234, 0.444, 2.830],
             index=[
                 'smape', 'mae', 'rmse', 'made', 'mage', 'underestimate', 'mle',
                 'overestimate', 'imle', 'spl', 'containment', 'contour', 'maxe',
@@ -56,7 +56,7 @@ class TestMetrics(unittest.TestCase):
             ]
         )
         b_avg_metrics = pd.Series(
-            [80., 4., 6.325, 1.067, 4.000, 0.0, 2.480, 20.0, 2.480, 0.44, 0.8, 0.6, 10.0, 0.60, 2.527, 2.50, 14.803, 5.333, 2.037],
+            [80., 4., 6.325, 1.067, 4.000, -10.0, 2.480, 10.0, 2.480, 0.44, 0.8, 0.6, 10.0, 0.60, 2.527, 2.50, 14.803, 5.333, 2.037],
             index=[
                 'smape', 'mae', 'rmse', 'made', 'mage', 'underestimate',
                 'mle', 'overestimate', 'imle', 'spl', 'containment', 'contour',

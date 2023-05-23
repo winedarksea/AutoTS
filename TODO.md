@@ -12,10 +12,12 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.5.6 🌌 🌌 🌌
-* fixes for annoying things broken by pandas 2.0, without them giving deprecation warnings
-* also for gluonts who also love breaking their API
-* ensembling tuning
+# 0.5.7 🛂🛂🛂
+* slight changes to holiday_flag to allow list in some cases
+* DatepartRegressionTransformer now accepts holiday country input as regressor
+* added RegressionFilter
+* changed bounded behavior of AlignLastValue
+* small bug fixes
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

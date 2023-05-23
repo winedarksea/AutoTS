@@ -504,7 +504,7 @@ def full_metric_evaluation(
     u_weights[-1, :] = first_weight * 0.5
 
     # over/under estimate mask
-    ovm = filled_full_mae_errors > 0
+    ovm = full_errors > 0
 
     # note a number of these are created from my own imagination (winedarksea)
     # those are also subject to change as they are tested and refined
@@ -517,9 +517,9 @@ def full_metric_evaluation(
             'made': mean_absolute_differential_error(lA, lF, 1, scaler=scaler),
             # aggregate error
             'mage': mage,  # Gandalf approved
-            'underestimate': np.sum(filled_full_mae_errors[~ovm], axis=0),
+            'underestimate': np.nansum(full_errors[~ovm], axis=0),
             'mle': msle(full_errors, full_mae_errors, log_errors, nan_flag=nan_flag),
-            'overestimate': np.sum(filled_full_mae_errors[ovm], axis=0),
+            'overestimate': np.nansum(full_errors[ovm], axis=0),
             'imle': msle(
                 -full_errors,
                 full_mae_errors,

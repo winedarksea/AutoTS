@@ -25,7 +25,7 @@ author = 'Colin Catlin'
 # import AutoTS
 # from  AutoTS import __version__
 # release = __version__
-release = "0.5.6"
+release = "0.5.7"
 
 # -- General configuration ---------------------------------------------------
 
@@ -64,7 +64,7 @@ pygments_style = 'sphinx'
 
 html_theme_options = {
     "show_powered_by": False,
-	'analytics_id': 'UA-166997414-1',
+	'analytics_id': 'G-P2KLF8302E',
 	'logo': 'autots_logo.png',
 	'description': 'Automated Forecasting',
     "github_user": "winedarksea",

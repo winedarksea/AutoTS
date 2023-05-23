@@ -699,7 +699,9 @@ def ModelPrediction(
                 pass
             print(error_msg)
 
-    transformer_object = GeneralTransformer(**transformation_dict, n_jobs=n_jobs)
+    transformer_object = GeneralTransformer(
+        **transformation_dict, n_jobs=n_jobs, holiday_country=holiday_country
+    )
     df_train_transformed = transformer_object._fit(df_train)
 
     # make sure regressor has same length. This could be a problem if wrong size regressor is passed.
@@ -736,6 +738,7 @@ def ModelPrediction(
 
     transformationStartTime = datetime.datetime.now()
     # Inverse the transformations, NULL FILLED IN UPPER/LOWER ONLY
+    # forecast inverse MUST come before upper and lower bounds inverse
     df_forecast.forecast = pd.DataFrame(
         transformer_object.inverse_transform(df_forecast.forecast)
     )

@@ -4,7 +4,7 @@
 
 AutoTS is a time series package for Python designed for rapidly deploying high-accuracy forecasts at scale. 
 
-In 2023, AutoTS has won the M6 forecasting competition, delivering the highest performance investment decisions across 12 months of stock market forecasting.
+In 2023, AutoTS has won in the M6 forecasting competition, delivering the highest performance investment decisions across 12 months of stock market forecasting.
 
 There are dozens of forecasting models usable in the `sklearn` style of `.fit()` and `.predict()`. 
 These includes naive, statistical, machine learning, and deep learning models. 

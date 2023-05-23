@@ -1136,6 +1136,10 @@ def HorizontalTemplateGenerator(
         )
         nomen = 'Horizontal'
         metric = 'Score-max'
+        if len(mods_per_series) < per_series.shape[1]:
+            raise ValueError(
+                "ERROR in Horizontal Generation insufficient series created, horizontal-max"
+            )
         best5_params = {
             'Model': 'Ensemble',
             'ModelParameters': json.dumps(
@@ -1229,6 +1233,10 @@ def HorizontalTemplateGenerator(
         )
         nomen = 'Horizontal'
         metric = 'Score'
+        if len(mods_per_series) < per_series.shape[1]:
+            raise ValueError(
+                "ERROR in Horizontal Generation insufficient series created, horizontal"
+            )
         best5_params = {
             'Model': 'Ensemble',
             'ModelParameters': json.dumps(
@@ -1284,6 +1292,10 @@ def HorizontalTemplateGenerator(
         )
         nomen = 'Horizontal'
         metric = 'Score-min'
+        if len(mods_per_series) < per_series.shape[1]:
+            raise ValueError(
+                "ERROR in Horizontal Generation insufficient series created, horizontal-min"
+            )
         best5_params = {
             'Model': 'Ensemble',
             'ModelParameters': json.dumps(

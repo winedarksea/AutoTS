@@ -17,6 +17,7 @@ from autots.tools.anomaly_utils import (
 from autots.tools.window_functions import window_lin_reg, window_lin_reg_mean
 from autots.tools.fast_kalman import KalmanFilter, random_state_space
 from autots.tools.shaping import infer_frequency
+from autots.tools.holiday import holiday_flag
 
 try:
     from joblib import Parallel, delayed
@@ -1066,7 +1067,10 @@ class DatepartRegressionTransformer(EmptyTransformer):
         },
         datepart_method: str = "expanded",
         polynomial_degree: int = None,
-        transform_dict=None,
+        transform_dict: dict = None,
+        holiday_country: list = None,
+        holiday_countries_used: bool = False,
+        n_jobs: int = 1,
         **kwargs,
     ):
         super().__init__(name="DatepartRegressionTransformer")
@@ -1074,9 +1078,12 @@ class DatepartRegressionTransformer(EmptyTransformer):
         self.datepart_method = datepart_method
         self.polynomial_degree = polynomial_degree
         self.transform_dict = transform_dict
+        self.holiday_country = holiday_country
+        self.holiday_countries_used = holiday_countries_used
+        self.n_jobs = n_jobs
 
     @staticmethod
-    def get_new_params(method: str = "random"):
+    def get_new_params(method: str = "random", holiday_countries_used=None):
         datepart_choice = random.choices(
             [
                 "simple",
@@ -1086,8 +1093,10 @@ class DatepartRegressionTransformer(EmptyTransformer):
                 "simple_binarized",
                 "lunar_phase",
                 "common_fourier",
+                ["dayofweek", 365.25],
+                ["weekdaymonthofyear", "quarter", "dayofweek"],
             ],
-            [0.1, 0.25, 0.2, 0.1, 0.3, 0.01, 0.1],
+            [0.1, 0.25, 0.2, 0.1, 0.3, 0.001, 0.1, 0.1, 0.03],
         )[0]
         if datepart_choice in ["simple", "simple_2", "recurring"]:
             polynomial_choice = random.choices([None, 2], [0.5, 0.2])[0]
@@ -1117,12 +1126,15 @@ class DatepartRegressionTransformer(EmptyTransformer):
                     "RadiusRegressor": 0.1,
                 }
             )
+        if holiday_countries_used is None:
+            holiday_countries_used = random.choices([True, False], [0.3, 0.7])[0]
 
         return {
             "regression_model": choice,
             "datepart_method": datepart_choice,
             "polynomial_degree": polynomial_choice,
             "transform_dict": random_cleaners(),
+            "holiday_countries_used": holiday_countries_used,
         }
 
     def fit(self, df, regressor=None):
@@ -1148,9 +1160,19 @@ class DatepartRegressionTransformer(EmptyTransformer):
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
         )
+        if self.holiday_country is not None and self.holiday_countries_used:
+            X = pd.concat(
+                [
+                    X,
+                    holiday_flag(
+                        df.index, country=self.holiday_country, encode_holiday_type=True
+                    ),
+                ],
+                axis=1,
+            )
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
-            self.X = X  # diagnostic
+        self.X = X  # diagnostic
         multioutput = True
         if y.ndim < 2:
             multioutput = False
@@ -1162,6 +1184,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             verbose_bool=False,
             random_seed=2020,
             multioutput=multioutput,
+            n_jobs=self.n_jobs,
         )
         self.model = self.model.fit(X, y)
         self.shape = df.shape
@@ -1192,6 +1215,16 @@ class DatepartRegressionTransformer(EmptyTransformer):
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
         )
+        if self.holiday_country is not None and self.holiday_countries_used:
+            X = pd.concat(
+                [
+                    X,
+                    holiday_flag(
+                        df.index, country=self.holiday_country, encode_holiday_type=True
+                    ),
+                ],
+                axis=1,
+            )
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
         # X.columns = [str(xc) for xc in X.columns]
@@ -1215,6 +1248,16 @@ class DatepartRegressionTransformer(EmptyTransformer):
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
         )
+        if self.holiday_country is not None and self.holiday_countries_used:
+            X = pd.concat(
+                [
+                    X,
+                    holiday_flag(
+                        df.index, country=self.holiday_country, encode_holiday_type=True
+                    ),
+                ],
+                axis=1,
+            )
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
         y = pd.DataFrame(self.model.predict(X), columns=df.columns, index=df.index)
@@ -2491,6 +2534,7 @@ class AlignLastValue(EmptyTransformer):
         self.method = method
         self.strength = strength
         self.first_value_only = first_value_only
+        self.adjustment = None
 
     @staticmethod
     def get_new_params(method: str = "random"):
@@ -2540,38 +2584,51 @@ class AlignLastValue(EmptyTransformer):
         """
         return df
 
-    def inverse_transform(self, df, trans_method: str = "forecast", bounds=False):
+    def inverse_transform(self, df, trans_method: str = "forecast", adjustment=None):
         """Return data to original *or* forecast form.
 
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        if trans_method == "original" or bounds:
+        if self.adjustment is not None:
+            self.adjustment = adjustment
+        if trans_method == "original":
             return df
         else:
             if self.first_value_only:
                 if self.method == "multiplicative":
+                    if self.adjustment is None:
+                        self.adjustment = (
+                            1 + ((self.center / df.iloc[0]) - 1) * self.strength
+                        )
                     return pd.concat(
                         [
-                            df.iloc[0:1]
-                            * (1 + ((self.center / df.iloc[0]) - 1) * self.strength),
+                            df.iloc[0:1] * self.adjustment,
                             df.iloc[1:],
                         ],
                         axis=0,
                     )
                 else:
+                    if self.adjustment is None:
+                        self.adjustment = self.strength * (self.center - df.iloc[0])
                     return pd.concat(
                         [
-                            df.iloc[0:1] + self.strength * (self.center - df.iloc[0]),
+                            df.iloc[0:1] + adjustment,
                             df.iloc[1:],
                         ],
                         axis=0,
                     )
             else:
                 if self.method == "multiplicative":
-                    return df * (1 + ((self.center / df.iloc[0]) - 1) * self.strength)
+                    if self.adjustment is None:
+                        self.adjustment = (
+                            1 + ((self.center / df.iloc[0]) - 1) * self.strength
+                        )
+                    return df * self.adjustment
                 else:
-                    return df + self.strength * (self.center - df.iloc[0])
+                    if self.adjustment is None:
+                        self.adjustment = self.strength * (self.center - df.iloc[0])
+                    return df + self.adjustment
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -2921,7 +2978,8 @@ class HolidayTransformer(EmptyTransformer):
         )[0]
         if holiday_params['impact'] == 'datepart_regression':
             holiday_params['regression_params'] = DatepartRegression.get_new_params(
-                method=method
+                method=method,
+                holiday_countries_used=False,
             )
         else:
             holiday_params['regression_params'] = {}
@@ -3352,6 +3410,149 @@ class KalmanSmoothing(EmptyTransformer):
         return self.transform(df)
 
 
+class RegressionFilter(EmptyTransformer):
+    """Models seasonal and local linear trend, and clips std dvs from this fit."""
+
+    def __init__(
+        self,
+        name: str = "RegressionFilter",
+        sigma: float = 2.0,
+        rolling_window: int = 90,
+        run_order: str = "season_first",
+        regression_params: dict = None,
+        holiday_params: dict = None,
+        holiday_country: str = "US",
+        **kwargs,
+    ):
+        super().__init__(name="DatepartRegressionTransformer")
+        self.sigma = sigma
+        self.rolling_window = rolling_window
+        self.run_order = run_order
+        self.regression_params = regression_params
+        self.holiday_params = holiday_params
+        self.holiday_country = holiday_country
+
+    def _fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.holiday_params is not None:
+            self.holiday_params["regression_params"] = self.regression_params
+            self.holiday_params["impact"] = 'datepart_regression'
+            self.seasonal = HolidayTransformer(**self.holiday_params)
+        else:
+            if self.regression_params is None:
+                self.regression_params = {
+                    "regression_model": {
+                        "model": "DecisionTree",
+                        "model_params": {"max_depth": 4, "min_samples_split": 2},
+                    },
+                    "datepart_method": "common_fourier",
+                    "holiday_countries_used": True,
+                }
+            self.seasonal = DatepartRegressionTransformer(
+                **self.regression_params, holiday_country=self.holiday_country
+            )
+        self.trend = LocalLinearTrend(rolling_window=self.rolling_window)
+
+        if self.run_order == 'season_first':
+            deseason = self.seasonal.fit_transform(df)
+            result = self.trend.fit_transform(deseason)
+        else:
+            detrend = self.trend.fit_transform(df)
+            result = self.seasonal.fit_transform(detrend)
+
+        std_dev = result.std() * self.sigma
+        clipped = result.clip(upper=std_dev, lower=-1 * std_dev, axis=1)
+
+        if self.run_order == 'season_first':
+            retrend = self.trend.inverse_transform(clipped)
+            original = self.seasonal.inverse_transform(retrend)
+        else:
+            reseason = self.seasonal.inverse_transform(clipped)
+            original = self.trend.inverse_transform(reseason)
+        return original
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self._fit(df)
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        if self.run_order == 'season_first':
+            deseason = self.seasonal.transform(df)
+            result = self.trend.transform(deseason)
+        else:
+            detrend = self.trend.transform(df)
+            result = self.seasonal.transform(detrend)
+
+        std_dev = result.std() * self.sigma
+        clipped = result.clip(upper=std_dev, lower=-1 * std_dev, axis=1)
+
+        if self.run_order == 'season_first':
+            retrend = self.trend.inverse_transform(clipped)
+            original = self.seasonal.inverse_transform(retrend)
+        else:
+            reseason = self.seasonal.inverse_transform(clipped)
+            original = self.trend.inverse_transform(reseason)
+        return original
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """No changes made.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return self._fit(df)
+
+    def __repr__(self):
+        """Print."""
+        return "Transformer " + str(self.name) + ", uses standard .fit/.transform"
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        """Generate new random parameters"""
+        regression_params = DatepartRegressionTransformer.get_new_params(method=method)
+
+        if method == "fast":
+            holiday_trans_use = False
+        else:
+            holiday_trans_use = random.choices([True, False], [0.3, 0.7])[0]
+        if holiday_trans_use:
+            holiday_params = HolidayTransformer.get_new_params(method="fast")
+            holiday_params["regression_params"] = regression_params
+            holiday_params["impact"] = 'datepart_regression'
+        else:
+            holiday_params = None
+
+        return {
+            "sigma": random.choices([0.5, 1, 1.5, 2, 3], [0.1, 0.4, 0.1, 0.3, 0.1])[0],
+            "rolling_window": 90,
+            "run_order": random.choices(["season_first", "trend_first"], [0.7, 0.3])[0],
+            "regression_params": regression_params,
+            "holiday_params": holiday_params,
+        }
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -3394,7 +3595,7 @@ n_jobs_trans = {
     "AnomalyRemoval": AnomalyRemoval,
     'HolidayTransformer': HolidayTransformer,
 }
-# transformers with parameter pass through (internal only)
+# transformers with parameter pass through (internal only) MUST be here
 have_params = {
     "RollingMeanTransformer": RollingMeanTransformer,
     "SeasonalDifference": SeasonalDifference,
@@ -3402,7 +3603,6 @@ have_params = {
     "CenterLastValue": CenterLastValue,
     "IntermittentOccurrence": IntermittentOccurrence,
     "ClipOutliers": ClipOutliers,
-    "DatepartRegression": DatepartRegression,
     "Round": Round,
     "Slice": Slice,
     "Detrend": Detrend,
@@ -3419,6 +3619,9 @@ have_params = {
     "HolidayTransformer": HolidayTransformer,
     "LocalLinearTrend": LocalLinearTrend,
     "KalmanSmoothing": KalmanSmoothing,
+    "RegressionFilter": RegressionFilter,
+    "DatepartRegression": DatepartRegressionTransformer,
+    "DatepartRegressionTransformer": DatepartRegressionTransformer,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -3429,6 +3632,7 @@ shared_trans = [
     "BTCD",
     "Cointegration",
     "HolidayTransformer",
+    "RegressionFilter",
 ]
 # transformers not defined in AutoTS
 external_transformers = [
@@ -3496,7 +3700,7 @@ class GeneralTransformer(object):
             'CenterLastValue' - center data around tail of dataset
             'Round' - round values on inverse or transform
             'Slice' - use only recent records
-            'ClipOutliers' - remove outliers
+            'ClipOutliers' - simple remove outliers
             'Discretize' - bin or round data into groups
             'DatepartRegression' - move a trend trained on datetime index
             "ScipyFilter" - filter data (lose information but smoother!) from scipy
@@ -3511,6 +3715,7 @@ class GeneralTransformer(object):
             'HolidayTransformer': detects holidays and wishes good cheer to all
             'LocalLinearTrend': rolling local trend, using tails for future and past trend
             'KalmanSmoothing': smooth using a state space model
+            'RegressionFilter': fit seasonal removal and local linear trend, clip std devs away from this fit
 
         transformation_params (dict): params of transformers {0: {}, 1: {'model': 'Poisson'}, ...}
             pass through dictionary of empty dictionaries to utilize defaults
@@ -3528,6 +3733,7 @@ class GeneralTransformer(object):
         grouping_ids=None,
         random_seed: int = 2020,
         n_jobs: int = 1,
+        holiday_country: list = None,
     ):
         self.fillna = fillna
         self.transformations = transformations
@@ -3543,7 +3749,9 @@ class GeneralTransformer(object):
 
         self.random_seed = random_seed
         self.n_jobs = n_jobs
+        self.holiday_country = holiday_country
         self.transformers = {}
+        self.adjustments = {}
         # upper/lower forecast inverses are different
         self.bounded_oddities = ["AlignLastValue"]
         # trans methods are different
@@ -3596,6 +3804,7 @@ class GeneralTransformer(object):
         df=None,
         random_seed: int = 2020,
         n_jobs: int = 1,
+        holiday_country: list = None,
     ):
         """Retrieves a specific transformer object from a string.
 
@@ -3614,8 +3823,16 @@ class GeneralTransformer(object):
         elif transformation in n_jobs_trans.keys():
             return n_jobs_trans[transformation](n_jobs=n_jobs, **param)
 
-        elif transformation in list(have_params.keys()):
-            return have_params[transformation](**param)
+        # these need holiday_country
+        elif transformation in ["DatepartRegression", "DatepartRegressionTransformer"]:
+            return DatepartRegression(
+                holiday_country=holiday_country, **param
+            )  # n_jobs=n_jobs,
+
+        elif transformation in ["RegressionFilter"]:
+            return RegressionFilter(
+                holiday_country=holiday_country, n_jobs=n_jobs, **param
+            )
 
         elif transformation == "MinMaxScaler":
             from sklearn.preprocessing import MinMaxScaler
@@ -3625,15 +3842,12 @@ class GeneralTransformer(object):
         elif transformation == "PowerTransformer":
             from sklearn.preprocessing import PowerTransformer
 
-            transformer = PowerTransformer(
-                method="yeo-johnson", standardize=True, copy=True
-            )
-            return transformer
+            return PowerTransformer(method="yeo-johnson", standardize=True, copy=True)
 
         elif transformation == "QuantileTransformer":
             from sklearn.preprocessing import QuantileTransformer
 
-            quants = param["n_quantiles"]
+            quants = param.get("n_quantiles", 1000)
             if quants == "quarter":
                 quants = int(df.shape[0] / 4)
             elif quants == "fifth":
@@ -3666,22 +3880,20 @@ class GeneralTransformer(object):
             # could probably may it work, but this is simpler
             if df.shape[1] > df.shape[0]:
                 raise ValueError("PCA fails when n series > n observations")
-            transformer = PCA(
+            return PCA(
                 n_components=min(df.shape), whiten=False, random_state=random_seed
             )
-            return transformer
 
         elif transformation == "FastICA":
             from sklearn.decomposition import FastICA
 
-            if df.shape[1] > 500:
-                raise ValueError("FastICA fails with > 500 series")
-            transformer = FastICA(
+            if df.shape[1] > 5000:
+                raise ValueError("FastICA fails with > 5000 series for speed reasons")
+            return FastICA(
                 n_components=df.shape[1],
                 random_state=random_seed,
                 **param,
             )
-            return transformer
 
         elif transformation in ["RollingMean", "FixedRollingMean"]:
             param = 10 if param is None else param
@@ -3698,11 +3910,8 @@ class GeneralTransformer(object):
                 transformer = RollingMeanTransformer(window=self.window, fixed=False)
             return transformer
 
-        elif transformation in ["SeasonalDifference", "SeasonalDifferenceMean"]:
-            if transformation == "SeasonalDifference":
-                return SeasonalDifference(lag_1=param, method="LastValue")
-            else:
-                return SeasonalDifference(lag_1=param, method="Mean")
+        elif transformation in ["SeasonalDifferenceMean"]:
+            return SeasonalDifference(lag_1=param, method="Mean")
 
         elif transformation == "RollingMean100thN":
             window = int(df.shape[0] / 100)
@@ -3715,6 +3924,10 @@ class GeneralTransformer(object):
             window = 2 if window < 2 else window
             self.window = window
             return RollingMeanTransformer(window=self.window)
+
+        # must be at bottom as it has duplicates of above inside
+        elif transformation in list(have_params.keys()):
+            return have_params[transformation](**param)
 
         else:
             print(
@@ -3737,6 +3950,7 @@ class GeneralTransformer(object):
                     param=self.transformation_params[i],
                     random_seed=self.random_seed,
                     n_jobs=self.n_jobs,
+                    holiday_country=self.holiday_country,
                 )
                 df = self.transformers[i].fit_transform(df)
                 # convert to DataFrame only if it isn't already
@@ -3817,9 +4031,17 @@ class GeneralTransformer(object):
                 c_trans_n = self.transformations[i]
                 if c_trans_n in self.oddities_list:
                     if c_trans_n in self.bounded_oddities:
+                        if not bounds:
+                            adjustment = None
+                        else:
+                            adjustment = self.adjustments.get(i, None)
                         df = self.transformers[i].inverse_transform(
-                            df, trans_method=trans_method, bounds=bounds
+                            df,
+                            trans_method=trans_method,
+                            adjustment=adjustment,
                         )
+                        if not bounds:
+                            self.adjustments[i] = self.transformers[i].adjustment
                     else:
                         df = self.transformers[i].inverse_transform(
                             df, trans_method=trans_method
@@ -3901,7 +4123,8 @@ transformer_dict = {
     "AnomalyRemoval": 0.03,
     'HolidayTransformer': 0.01,
     'LocalLinearTrend': 0.01,
-    'KalmanSmoothing': 0.01,
+    'KalmanSmoothing': 0.04,
+    'RegressionFilter': 0.03,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
@@ -3942,6 +4165,7 @@ filters = {
     "AlignLastValue": 0.15,
     "KalmanSmoothing": 0.1,
     "ClipOutliers": 0.1,
+    "RegressionFilter": 0.05,
 }
 scalers = {
     "MinMaxScaler": 0.05,
