@@ -500,7 +500,7 @@ class AutoTS(object):
                 ],
                 [0.3, 0.1, 0.2, 0.2],
             )[0]
-        if method == "full":
+        if method in ["full", "fast"]:
             metric_weighting = {
                 'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
                     0
@@ -651,6 +651,21 @@ class AutoTS(object):
                     0.05,
                 ],
             )[0]
+        elif method == 'fast':
+            model_list = random.choices(
+                [
+                    'fast',
+                    'superfast',
+                    'motifs',
+                    'no_shared_fast',
+                ],
+                [
+                    0.2,
+                    0.2,
+                    0.2,
+                    0.2,
+                ],
+            )[0]
         else:
             model_list = random.choices(
                 [
@@ -663,7 +678,7 @@ class AutoTS(object):
                 ],
                 [0.2, 0.2, 0.2, 0.2, 0.05, 0.1],
             )[0]
-        if method == 'full':
+        if method in ['full', 'fast']:
             validation_method = random.choices(
                 ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
                 [0.4, 0.1, 0.3, 0.3, 0.2],
