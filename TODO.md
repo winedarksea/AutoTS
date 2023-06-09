@@ -13,7 +13,7 @@
 * Forecasts are desired for the future immediately following the most recent data.
 
 # 0.5.8 🌷🌷🌷
-
+* added plot_validations
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

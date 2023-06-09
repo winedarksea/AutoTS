@@ -31,6 +31,7 @@ from autots.evaluator.auto_model import (
     back_forecast,
     remove_leading_zeros,
     horizontal_template_to_model_list,
+    create_model_id,
 )
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
@@ -438,6 +439,9 @@ class AutoTS(object):
         self.validation_test_indexes = []
         self.preclean_transformer = None
         self.score_per_series = None
+        self.best_model_non_horizontal = None
+        self.validation_forecasts_template = None
+        self.validation_forecasts = {}
         # this is temporary until proper validation param passing is sorted out
         stride_size = round(self.forecast_length / 2)
         stride_size = stride_size if stride_size > 0 else 1
@@ -1592,6 +1596,22 @@ or otherwise increase models available."""
             )
 
             # use the best of these ensembles if any ran successfully
+            # horizontal ensembles are only run on one eval, if that eval is harder it won't compare to full validation results
+            # however they are chosen based off of validation results of all validation runs
+            eligible_models = self.validation_results.model_results[
+                self.validation_results.model_results['Runs']
+                >= (self.num_validations + 1)
+            ]
+            try:
+                self.best_model_non_horizontal = (
+                    eligible_models.sort_values(
+                        by="Score", ascending=True, na_position='last'
+                    )
+                    .drop_duplicates(subset=self.template_cols)
+                    .head(1)[self.template_cols_id]
+                )
+            except IndexError:
+                raise ValueError(error_msg_template)
             try:
                 horz_flag = hens_model_results['Exceptions'].isna().any()
             except Exception:
@@ -1611,22 +1631,10 @@ or otherwise increase models available."""
                 if self.verbose >= 0:
                     print("Horizontal ensemble failed. Using best non-horizontal.")
                     time.sleep(3)
-                eligible_models = self.validation_results.model_results[
-                    self.validation_results.model_results['Runs']
-                    >= (self.num_validations + 1)
-                ]
-                try:
-                    self.best_model = (
-                        eligible_models.sort_values(
-                            by="Score", ascending=True, na_position='last'
-                        )
-                        .drop_duplicates(subset=self.template_cols)
-                        .head(1)[self.template_cols_id]
-                    )
-                except IndexError:
-                    raise ValueError(error_msg_template)
+                self.best_model = self.best_model_non_horizontal
+                
         else:
-            # choose best model
+            # choose best model, when no horizontal ensembling is done
             eligible_models = self.validation_results.model_results[
                 self.validation_results.model_results['Runs']
                 >= (self.num_validations + 1)
@@ -1754,13 +1762,15 @@ or otherwise increase models available."""
         validation_template,
         future_regressor,
         first_validation=True,
+        skip_first_index=True,
     ):
         """Loop through a template for n validation segments."""
         for y in range(num_validations):
+            cslc = y + 1 if skip_first_index else y
             if self.verbose > 0:
-                print("Validation Round: {}".format(str(y + 1)))
+                print("Validation Round: {}".format(str(cslc)))
             # slice the validation data into current validation slice
-            current_slice = df_wide_numeric.reindex(self.validation_indexes[(y + 1)])
+            current_slice = df_wide_numeric.reindex(self.validation_indexes[cslc])
 
             # subset series (if used) and take a new train/test split
             if self.subset_flag:
@@ -1776,7 +1786,7 @@ or otherwise increase models available."""
                     random_state=rand_st,
                 )
                 if self.verbose > 1:
-                    print(f'{y + 1} subset is of: {df_subset.columns}')
+                    print(f'Val {cslc} subset is of: {df_subset.columns}')
             else:
                 df_subset = current_slice
             # subset weighting info
@@ -1842,6 +1852,69 @@ or otherwise increase models available."""
             self.validation_results, df_train=self.df_wide_numeric
         )
 
+    def _predict(
+            self,
+            forecast_length: int = "self",
+            prediction_interval: float = 'self',
+            future_regressor=None,
+            fail_on_forecast_nan: bool = True,
+            verbose: int = 'self',
+            model_name=None,
+            model_params=None,
+            model_transformation_params=None,
+            df_wide_numeric=None,
+            future_regressor_train=None,
+        ):
+        df_forecast = model_forecast(
+            model_name=self.best_model_name if model_name is None else model_name,
+            model_param_dict=self.best_model_params.copy() if model_params is None else model_params,
+            model_transform_dict=self.best_model_transformation_params if model_transformation_params is None else model_transformation_params,
+            df_train=self.df_wide_numeric if df_wide_numeric is None else df_wide_numeric,
+            forecast_length=forecast_length,
+            frequency=self.frequency,
+            prediction_interval=prediction_interval,
+            no_negatives=self.no_negatives,
+            constraint=self.constraint,
+            future_regressor_train=self.future_regressor_train if future_regressor_train is None else future_regressor_train,
+            future_regressor_forecast=future_regressor,
+            holiday_country=self.holiday_country,
+            startTimeStamps=self.startTimeStamps,
+            grouping_ids=self.grouping_ids,
+            fail_on_forecast_nan=fail_on_forecast_nan,
+            random_seed=self.random_seed,
+            verbose=verbose,
+            n_jobs=self.n_jobs,
+            template_cols=self.template_cols,
+            current_model_file=self.current_model_file,
+            return_model=True,
+        )
+        # convert categorical back to numeric
+        trans = self.categorical_transformer
+        df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
+        df_forecast.lower_forecast = trans.inverse_transform(
+            df_forecast.lower_forecast
+        )
+        df_forecast.upper_forecast = trans.inverse_transform(
+            df_forecast.upper_forecast
+        )
+        # undo preclean transformations if necessary
+        if self.preclean is not None:
+            df_forecast.forecast = self.preclean_transformer.inverse_transform(
+                df_forecast.forecast
+            )
+            df_forecast.lower_forecast = (
+                self.preclean_transformer.inverse_transform(
+                    df_forecast.lower_forecast
+                )
+            )
+            df_forecast.upper_forecast = (
+                self.preclean_transformer.inverse_transform(
+                    df_forecast.upper_forecast
+                )
+            )
+        sys.stdout.flush()
+        return df_forecast
+
     def predict(
         self,
         forecast_length: int = "self",
@@ -1894,104 +1967,23 @@ or otherwise increase models available."""
         if isinstance(prediction_interval, list):
             forecast_objects = {}
             for interval in prediction_interval:
-                df_forecast = model_forecast(
-                    model_name=self.best_model_name,
-                    model_param_dict=self.best_model_params.copy(),
-                    model_transform_dict=self.best_model_transformation_params,
-                    df_train=self.df_wide_numeric,
+                df_forecast = self._predict(
                     forecast_length=forecast_length,
-                    frequency=self.frequency,
-                    prediction_interval=interval,
-                    no_negatives=self.no_negatives,
-                    constraint=self.constraint,
-                    future_regressor_train=self.future_regressor_train,
-                    future_regressor_forecast=future_regressor,
-                    holiday_country=self.holiday_country,
-                    startTimeStamps=self.startTimeStamps,
-                    grouping_ids=self.grouping_ids,
+                    prediction_interval=prediction_interval,
+                    future_regressor=future_regressor,
                     fail_on_forecast_nan=fail_on_forecast_nan,
-                    random_seed=self.random_seed,
                     verbose=verbose,
-                    n_jobs=self.n_jobs,
-                    template_cols=self.template_cols,
-                    current_model_file=self.current_model_file,
-                    return_model=True,
                 )
-                # convert categorical back to numeric
-                trans = self.categorical_transformer
-                df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
-                df_forecast.lower_forecast = trans.inverse_transform(
-                    df_forecast.lower_forecast
-                )
-                df_forecast.upper_forecast = trans.inverse_transform(
-                    df_forecast.upper_forecast
-                )
-                # undo preclean transformations if necessary
-                if self.preclean is not None:
-                    df_forecast.forecast = self.preclean_transformer.inverse_transform(
-                        df_forecast.forecast
-                    )
-                    df_forecast.lower_forecast = (
-                        self.preclean_transformer.inverse_transform(
-                            df_forecast.lower_forecast
-                        )
-                    )
-                    df_forecast.upper_forecast = (
-                        self.preclean_transformer.inverse_transform(
-                            df_forecast.upper_forecast
-                        )
-                    )
                 forecast_objects[str(interval)] = df_forecast
             return forecast_objects
         else:
-            df_forecast = model_forecast(
-                model_name=self.best_model_name,
-                model_param_dict=self.best_model_params.copy(),
-                model_transform_dict=self.best_model_transformation_params,
-                df_train=self.df_wide_numeric,
+            df_forecast = self._predict(
                 forecast_length=forecast_length,
-                frequency=self.frequency,
                 prediction_interval=prediction_interval,
-                no_negatives=self.no_negatives,
-                constraint=self.constraint,
-                future_regressor_train=self.future_regressor_train,
-                future_regressor_forecast=future_regressor,
-                holiday_country=self.holiday_country,
-                startTimeStamps=self.startTimeStamps,
-                grouping_ids=self.grouping_ids,
+                future_regressor=future_regressor,
                 fail_on_forecast_nan=fail_on_forecast_nan,
-                random_seed=self.random_seed,
                 verbose=verbose,
-                n_jobs=self.n_jobs,
-                template_cols=self.template_cols,
-                current_model_file=self.current_model_file,
-                return_model=True,
             )
-            # convert categorical back to numeric
-            trans = self.categorical_transformer
-            df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
-            df_forecast.lower_forecast = trans.inverse_transform(
-                df_forecast.lower_forecast
-            )
-            df_forecast.upper_forecast = trans.inverse_transform(
-                df_forecast.upper_forecast
-            )
-            # undo preclean transformations if necessary
-            if self.preclean is not None:
-                df_forecast.forecast = self.preclean_transformer.inverse_transform(
-                    df_forecast.forecast
-                )
-                df_forecast.lower_forecast = (
-                    self.preclean_transformer.inverse_transform(
-                        df_forecast.lower_forecast
-                    )
-                )
-                df_forecast.upper_forecast = (
-                    self.preclean_transformer.inverse_transform(
-                        df_forecast.upper_forecast
-                    )
-                )
-            sys.stdout.flush()
             if just_point_forecast:
                 return df_forecast.forecast
             else:
@@ -2327,7 +2319,7 @@ or otherwise increase models available."""
                 ylabel="Lowest Score", xlabel="Generation", title=title, **kwargs
             )
         else:
-            print("not a valid horizontal model")
+            print("not a valid horizontal model for plot_horizontal_per_generation")
 
     def back_forecast(
         self, series=None, n_splits: int = "auto", tail: int = "auto", verbose: int = 0
@@ -2584,6 +2576,94 @@ or otherwise increase models available."""
 
     def plot_back_forecast(self, **kwargs):
         return self.plot_backforecast(**kwargs)
+
+    def plot_validations(self, models=None, series=None, title=None, start_date="auto", end_date=None, **kwargs):
+        """Similar to plot_backforecast but using the model's validation segments specifically. Must reforecast.
+        Saves results to self.validation_forecasts and caches. Set that to None to force rerun otherwise it uses stored.
+        
+        Args:
+            models (list): list, str, df or None, models to compare (IDs unless df of model params)
+            series (str): time series to graph
+            title (str): graph title
+            start_date (str): or datetime, place to begin graph, None for full
+            end_date (str): or datetime, end of graph x axis
+        """
+        if series is None:
+            series = random.choice(self.df_wide_numeric.columns)
+        if title is None:
+            title = f"Validation Forecasts for {series}"
+        if models is None:
+            if self.best_model_non_horizontal is not None:
+                validation_template = pd.concat([self.best_model, self.best_model_non_horizontal], axis=0)
+            else:
+                validation_template = self.best_model
+        elif isinstance(models, str):
+            val_results = self.results()
+            validation_template = val_results[val_results['ID'].isin([models])][self.template_cols].drop_duplicates()
+        elif isinstance(models, list):
+            validation_template = val_results[val_results['ID'].isin(models)][self.template_cols].drop_duplicates()
+        elif isinstance(models, pd.DataFrame):
+            validation_template = models
+        duplicated = False
+        if self.validation_forecasts_template is not None:
+            if self.validation_forecasts_template.equals(validation_template):
+                duplicated = True
+        if not duplicated:
+            self.validation_forecast_cuts = []
+            for val in range(len(self.validation_train_indexes)):
+                test_idx = self.validation_train_indexes[val]
+                train_reg = self.future_regressor_train.reindex(test_idx)
+                sec_idx = self.validation_test_indexes[val]
+                self.validation_forecast_cuts.append(sec_idx[0])
+                fut_reg = self.future_regressor_train.reindex(sec_idx)
+                for index, row in validation_template.iterrows():
+                    df_forecast = self._predict(
+                            forecast_length=self.forecast_length,
+                            prediction_interval=self.prediction_interval,
+                            future_regressor=fut_reg,
+                            fail_on_forecast_nan=False,
+                            verbose=self.verbose,
+                            model_name=row["Model"],
+                            model_params=row["ModelParameters"],
+                            model_transformation_params=row["TransformationParameters"],
+                            df_wide_numeric=self.df_wide_numeric.reindex(test_idx),
+                            future_regressor_train=train_reg,
+                        )
+                    idz = create_model_id(row["Model"], row["ModelParameters"], row["TransformationParameters"])
+                    if idz == self.best_model_id:
+                        idz = "chosen_model"
+                    self.validation_forecasts[str(val) + "_" + str(idz)] = df_forecast
+        else:
+            print("using stored results for plot_validations")
+        self.validation_forecasts_template = validation_template
+        df_list = []
+        for x in self.validation_forecasts.keys():
+            mname = x.split("_")[1]
+            new_df = pd.DataFrame(index=self.df_wide_numeric.index)
+            new_df[mname] = self.validation_forecasts[x].forecast[series]
+            new_df[mname + "_" + "upper"] = self.validation_forecasts[x].upper_forecast[series]
+            new_df[mname + "_" + "lower"] = self.validation_forecasts[x].lower_forecast[series]
+            df_list.append(new_df)
+        plot_df = pd.concat(df_list, sort=True, axis=0)
+        plot_df = plot_df.groupby(level=0).first()
+        plot_df = self.df_wide_numeric[series].rename("actuals").to_frame().merge(plot_df, left_index=True, right_index=True, how="left")
+        if start_date == "auto":
+            start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(how='all', axis=0).index.min()
+        if start_date is not None:
+            plot_df = plot_df[plot_df.index >= start_date]
+        if end_date is not None:
+            plot_df = plot_df[plot_df.index <= end_date]
+        ax = plot_df.plot(title=title, **kwargs)
+        ax.vlines(
+            x=self.validation_forecast_cuts,
+            ls='--',
+            lw=1,
+            colors='darkred',
+            ymin=plot_df.min().min(),
+            ymax=plot_df.max().max(),
+        )
+        return ax
+            
 
     def list_failed_model_types(self):
         """Return a list of model types (ie ETS, LastValueNaive) that failed.

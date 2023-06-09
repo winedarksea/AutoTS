@@ -60,8 +60,16 @@ def create_model_id(
     model_str: str, parameter_dict: dict = {}, transformation_dict: dict = {}
 ):
     """Create a hash ID which should be unique to the model parameters."""
+    if isinstance(parameter_dict, dict):
+        str_params = json.dumps(parameter_dict)
+    else:
+        str_params = str(parameter_dict)
+    if isinstance(transformation_dict, dict):
+        str_trans = json.dumps(transformation_dict)
+    else:
+        str_trans = str(transformation_dict)
     str_repr = (
-        str(model_str) + json.dumps(parameter_dict) + json.dumps(transformation_dict)
+        str(model_str) + str_params + str_trans
     )
     str_repr = ''.join(str_repr.split())
     hashed = md5(str_repr.encode('utf-8')).hexdigest()
