@@ -352,7 +352,7 @@ Both `simple` and `distance` style models are constructed on the first evaluatio
 Both of these can also be recursive in depth, containing ensembles of ensembles. This recursive ensembling can happen when ensembles are imported from a starting template - they work just fine, but may get rather slow, having lots of models. 
 
 `horizontal` ensembles are the type of ensembles for which this package was originally created. 
-With this, each series gets its own model. This avoids the 'one size does not fit all' problem when many time series are in a datset. 
+With this, each series gets its own model. This avoids the 'one size does not fit all' problem when many time series are in a dataset. 
 In the interest of efficiency, univariate models are only run on the series they are needed for. 
 Models not in the `no_shared` list may make horizontal ensembling very slow at scale - as they have to be run for every series, even if they are only used for one. 
 `horizontal-max` chooses the best series for every model. `horizontal` and `horizontal-min` attempt to reduce the number of slow models chosen while still maintaining as much accuracy as possble. 
