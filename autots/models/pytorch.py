@@ -14,8 +14,14 @@ from autots.tools.seasonal import date_part, seasonal_int
 
 try:
     # bewarned, pytorch-forecasting has useless error messages
-    import pytorch_lightning as pl
-    from pytorch_lightning.callbacks import EarlyStopping  # , LearningRateMonitor
+    try:
+        import lightning.pytorch as pl  # 2.0 way
+    except Exception:
+        import pytorch_lightning as pl
+    try:
+        from lightning.pytorch.callbacks.early_stopping import EarlyStopping  # 2.0
+    except Exception:
+        from pytorch_lightning.callbacks import EarlyStopping  # , LearningRateMonitor
     from pytorch_forecasting import (
         TimeSeriesDataSet,
         TemporalFusionTransformer,
@@ -229,12 +235,12 @@ class PytorchForecasting(ModelObject):
         if is_available() and "accelerator" not in self.trainer_kwargs.keys():
             self.trainer = pl.Trainer(
                 max_epochs=self.max_epochs,
-                num_processes=self.n_jobs,  # don't think this will usually be used
+                # num_processes=self.n_jobs,  # don't think this will usually be used
                 # gradient_clip_val=0.1,
                 # limit_train_batches=30,
                 callbacks=self.callbacks,  # lr_logger,
                 logger=False,
-                checkpoint_callback=False,
+                # checkpoint_callback=False,
                 accelerator='gpu',
                 devices=1,
                 **self.trainer_kwargs,
@@ -242,12 +248,12 @@ class PytorchForecasting(ModelObject):
         else:
             self.trainer = pl.Trainer(
                 max_epochs=self.max_epochs,
-                num_processes=self.n_jobs,  # don't think this will usually be used
+                # num_processes=self.n_jobs,  # don't think this will usually be used
                 # gradient_clip_val=0.1,
                 # limit_train_batches=30,
                 callbacks=self.callbacks,  # lr_logger,
                 logger=False,
-                checkpoint_callback=False,
+                # checkpoint_callback=False,
                 **self.trainer_kwargs,
             )
 
@@ -272,7 +278,7 @@ class PytorchForecasting(ModelObject):
                 learning_rate=self.learning_rate,
                 hidden_size=self.hidden_size,
                 dropout=self.dropout,
-                log_val_interval=1,
+                log_val_interval=0,
                 rnn_layers=self.n_layers,  # said to be important
                 # loss=MultivariateNormalDistributionLoss(rank=30),
                 **self.model_kwargs,
@@ -375,7 +381,7 @@ class PytorchForecasting(ModelObject):
             np.concatenate([self.encoder_tail.index, test_index], axis=None)
         )
         # combine encoder and decoder data
-        new_prediction_data = encoder_data.melt(
+        self.x_predict = encoder_data.melt(
             id_vars=self._id_vars, var_name='series_id', value_name='value'
         )
         if self.datepart_method is not None:
@@ -388,22 +394,23 @@ class PytorchForecasting(ModelObject):
             dt_merge = dt_merge.to_frame().merge(
                 date_parts, left_index=True, right_index=True
             )
-            new_prediction_data = new_prediction_data.merge(
+            self.x_predict = self.x_predict.merge(
                 dt_merge.reset_index(drop=False), on=self.range_idx_name
             )
 
-        predictions, pred_idx = self.tft.predict(
-            new_prediction_data, mode='prediction', return_index=True
+        self.predictions, pred_idx = self.tft.predict(
+            self.x_predict, mode='prediction', return_index=True
         )
         predictions_df = pd.DataFrame(
-            predictions.numpy().T, columns=pred_idx['series_id'], index=test_index
+            self.predictions.numpy().T, columns=pred_idx['series_id'], index=test_index
         )
 
         if just_point_forecast:
             return predictions_df
         self.result_windows = self.tft.predict(
-            new_prediction_data, mode="quantiles"
-        ).transpose(0, 2)
+            self.x_predict, mode="quantiles"
+        )
+        self.result_windows = self.result_windows.transpose(0, 2)
         if self.result_windows.shape[2] > 1:
             c_int = (1.0 - self.prediction_interval) / 2
             # predictions_df = result.quantile(0.5, axis=2).numpy().T
@@ -448,9 +455,10 @@ class PytorchForecasting(ModelObject):
     def get_new_params(self, method: str = 'random'):
         """Return dict of new parameters for parameter tuning."""
         parameter_dict = {
-            "model": random.choice(
-                ["TemporalFusionTransformer", "DecoderMLP", 'DeepAR', "NHiTS", "NBeats"]
-            ),
+            "model": random.choices(
+                ["TemporalFusionTransformer", "DecoderMLP", 'DeepAR', "NHiTS", "NBeats"],
+                [0.2, 0.2, 0.2, 0.2, 0.2]
+            )[0],
             "max_encoder_length": random.choice([7, 12, 24, 28, 60, 96]),
             "datepart_method": random.choices(
                 [None, "recurring", "simple", "expanded", "simple_2"],
@@ -470,7 +478,7 @@ class PytorchForecasting(ModelObject):
             ],  # {"value": [1, 7]}
             "target_normalizer": random.choices(
                 ["EncoderNormalizer", "TorchNormalizer", "GroupNormalizer"],
-                [0.5, 0.25, 0.25],
+                [0.25, 0.25, 0.25],
             )[0],
             "batch_size": random.choice([32, 64, 128]),
             "max_epochs": random.choice([30, 50, 100]),
