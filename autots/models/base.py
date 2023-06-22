@@ -12,6 +12,19 @@ from autots.tools.shaping import infer_frequency, clean_weights
 from autots.evaluator.metrics import full_metric_evaluation
 
 
+def create_forecast_index(frequency, forecast_length, train_last_date, last_date=None):
+    if frequency == 'infer':
+        raise ValueError(
+            "create_forecast_index run without specific frequency, run basic_profile first or pass proper frequency to model init"
+        )
+    return pd.date_range(
+        freq=frequency,
+        start=train_last_date if last_date is None else last_date,
+        periods=forecast_length + 1,
+    )[
+        1:
+    ]  # note the disposal of the first (already extant) date
+
 class ModelObject(object):
     """Generic class for holding forecasting models.
 
@@ -73,18 +86,8 @@ class ModelObject(object):
         Warnings:
             Requires ModelObject.basic_profile() being called as part of .fit()
         """
-        if self.frequency == 'infer':
-            raise ValueError(
-                "create_forecast_index run without specific frequency, run basic_profile first or pass proper frequency to model init"
-            )
-        self.forecast_index = pd.date_range(
-            freq=self.frequency,
-            start=self.train_last_date if last_date is None else last_date,
-            periods=forecast_length + 1,
-        )[
-            1:
-        ]  # note the disposal of the first (already extant) date
-        return self.forecast_index
+        
+        return create_forecast_index(self.frequency, forecast_length, self.train_last_date, last_date)
 
     def get_params(self):
         """Return dict of current parameters."""
