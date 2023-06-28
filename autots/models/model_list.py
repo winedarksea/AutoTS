@@ -72,32 +72,6 @@ default = {
     'MetricMotif': 1,
     # 'SeasonalityMotif': 1,
 }
-# so this opiniated and not fully updated always
-best = [
-    'LastValueNaive',
-    'AverageValueNaive',
-    'GLS',
-    'GLM',
-    'ETS',
-    'FBProphet',
-    'GluonTS',
-    'SeasonalNaive',
-    'UnobservedComponents',
-    'VECM',
-    # 'UnivariateRegression',
-    'MultivariateRegression',
-    'WindowRegression',
-    'VAR',
-    'DatepartRegression',
-    'UnivariateMotif',
-    'MultivariateMotif',
-    'NVAR',
-    'SectionalMotif',
-    'Theta',
-    'ARDL',
-    'ARCH',
-    'SeasonalityMotif',
-]
 # fastest models at any scale
 superfast = [
     'ConstantNaive',
@@ -149,6 +123,9 @@ parallel = {
 # models that should be fast given many CPU cores
 fast_parallel = {**parallel, **fast}
 fast_parallel_no_arima = {i: fast_parallel[i] for i in fast_parallel if i != 'ARIMA'}
+# so this opiniated and not fully updated always
+best = list(set(list(fast_parallel_no_arima.keys()) + ['MultivariateRegression', 'GluonTS', 'TMF']))
+
 # models that are explicitly not production ready
 experimental = [
     'MotifSimulation',
