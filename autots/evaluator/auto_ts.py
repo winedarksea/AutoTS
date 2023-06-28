@@ -2579,7 +2579,7 @@ or otherwise increase models available."""
     def plot_back_forecast(self, **kwargs):
         return self.plot_backforecast(**kwargs)
 
-    def plot_validations(self, models=None, series=None, title=None, start_date="auto", end_date=None, **kwargs):
+    def plot_validations(self, models=None, series=None, title=None, start_date="auto", end_date=None, subset=None, **kwargs):
         """Similar to plot_backforecast but using the model's validation segments specifically. Must reforecast.
         Saves results to self.validation_forecasts and caches. Set that to None to force rerun otherwise it uses stored.
         
@@ -2589,11 +2589,22 @@ or otherwise increase models available."""
             title (str): graph title
             start_date (str): or datetime, place to begin graph, None for full
             end_date (str): or datetime, end of graph x axis
+            subset (str): overrides series, shows either 'best' or 'worst'
         """
         if series is None:
-            series = random.choice(self.df_wide_numeric.columns)
+            if subset == "best":
+                series = self.best_model_per_series_score().tail(1).index.tolist()[0]
+            elif subset == "worst":
+                series = self.best_model_per_series_score().head(1).index.tolist()[0]
+            elif subset is None:
+                series = random.choice(self.df_wide_numeric.columns)
+            else:
+                raise ValueError("plot_validations arg subset must be None, 'best' or 'worst'")
         if title is None:
-            title = f"Validation Forecasts for {series}"
+            if subset is not None:
+                title = f"Validation Forecasts for {subset} score series {series}"
+            else:
+                title = f"Validation Forecasts for {series}"
         if models is None:
             if self.best_model_non_horizontal is not None:
                 validation_template = pd.concat([self.best_model, self.best_model_non_horizontal], axis=0)
@@ -2650,7 +2661,7 @@ or otherwise increase models available."""
         plot_df = plot_df.groupby(level=0).first()
         plot_df = self.df_wide_numeric[series].rename("actuals").to_frame().merge(plot_df, left_index=True, right_index=True, how="left")
         if start_date == "auto":
-            start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(how='all', axis=0).index.min()
+            start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(how='all', axis=0).index.min() - pd.Timedelta(days=7)
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         if end_date is not None:
@@ -2665,7 +2676,6 @@ or otherwise increase models available."""
             ymax=plot_df.max().max(),
         )
         return ax
-            
 
     def list_failed_model_types(self):
         """Return a list of model types (ie ETS, LastValueNaive) that failed.
@@ -2746,6 +2756,19 @@ or otherwise increase models available."""
                 **kwargs,
             )
 
+    def best_model_per_series_score(self):
+        return (
+            generate_score_per_series(
+                self.initial_results,
+                metric_weighting=self.metric_weighting,
+                total_validations=(self.num_validations + 1),
+                models_to_use=[self.best_model_id],
+            )
+            .mean(axis=0)
+            .sort_values(ascending=False)
+            .round(3)
+        )
+
     def plot_per_series_error(
         self,
         title: str = "Top Series Contributing Score Error",
@@ -2769,21 +2792,8 @@ or otherwise increase models available."""
         """
         if self.best_model.empty:
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
-        best_model_per = self.initial_results.per_series_mae[
-            self.initial_results.per_series_mae.index == self.best_model_id
-        ]
-        best_model_per = (
-            generate_score_per_series(
-                self.initial_results,
-                metric_weighting=self.metric_weighting,
-                total_validations=(self.num_validations + 1),
-                models_to_use=[self.best_model_id],
-            )
-            .mean(axis=0)
-            .sort_values(ascending=False)
-            .head(max_series)
-            .round(2)
-        )
+        # best_model_per = self.initial_results.per_series_mae[self.initial_results.per_series_mae.index == self.best_model_id]
+        best_model_per = self.best_model_per_series_score().head(max_series)
         temp = best_model_per.reset_index()
         temp.columns = ["Series", "Error"]
         if self.best_model["Ensemble"].iloc[0] == 2:

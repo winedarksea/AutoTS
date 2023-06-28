@@ -2795,6 +2795,7 @@ class HolidayTransformer(EmptyTransformer):
         regression_params=None,
         n_jobs: int = 1,
         output="multivariate",  # really can only be this for preprocessing
+        verbose: int = 1,
     ):
         """Detect anomalies, then mark as holidays (events, festivals, etc) any that reoccur to a calendar.
 
@@ -2827,6 +2828,7 @@ class HolidayTransformer(EmptyTransformer):
         self.n_jobs = n_jobs
         self.holiday_count = 0
         self.df_cols = None
+        self.verbose = verbose
 
     def dates_to_holidays(self, dates, style="flag", holiday_impacts=False):
         """
@@ -2858,7 +2860,8 @@ class HolidayTransformer(EmptyTransformer):
         """Run holiday detection. Input wide-style pandas time series."""
         self.anomaly_model.fit(df)
         if np.min(self.anomaly_model.anomalies.values) != -1:
-            print("HolidayTransformer: no anomalies detected.")
+            if self.verbose > 1:
+                print("HolidayTransformer: no anomalies detected.")
         (
             self.day_holidays,
             self.wkdom_holidays,

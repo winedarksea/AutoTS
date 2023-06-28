@@ -14,6 +14,13 @@
 
 # 0.5.8 🌷🌷🌷
 * added plot_validations
+* updated pytorch forecasting for 1.0.0 version
+* plot_grid to prediction object
+
+### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
+* Pytorch-Forecasting
+* Neural Prophet
+* GluonTS
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

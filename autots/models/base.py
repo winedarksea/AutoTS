@@ -4,6 +4,7 @@ Base model information
 
 @author: Colin
 """
+import random
 import warnings
 import datetime
 import numpy as np
@@ -361,8 +362,6 @@ class PredictionObject(object):
         start_date: str = None,
     ):
         if series is None:
-            import random
-
             series = random.choice(self.forecast.columns)
 
         model_name = self.model_name
@@ -464,6 +463,42 @@ class PredictionObject(object):
                 ymax=plot_df.max().max(),
             )
             return ax
+
+    def plot_grid(self, df_wide=None, start_date='2021-01-01', figsize=(24, 18), title="AutoTS Forecasts", cols=None):
+        """Plots multiple series in a grid, if present."""
+        import matplotlib.pyplot as plt
+
+        if cols is None:
+            cols = self.forecast_columns
+        num_cols = len(cols)
+        if num_cols > 4:
+            nrow = 2
+            ncol = 3
+        elif num_cols > 2:
+            nrow = 2
+            ncol = 2
+        else:
+            nrow = 1
+            ncol = 2
+        fig, axes = plt.subplots(nrow, ncol, figsize=figsize)
+        fig.suptitle(title)
+        count = 0
+        for r in range(nrow):
+            for c in range(ncol):
+                    if count + 1 > num_cols:
+                        pass
+                    else:
+                        col = cols[count]
+                        self.plot(
+                            df_wide=df_wide,
+                            series=col,
+                            remove_zeroes=False,
+                            interpolate="linear",
+                            start_date=start_date,
+                            ax=axes[r,c]
+                        )
+                        count += 1
+        return fig
 
     def evaluate(
         self,

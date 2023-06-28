@@ -2537,17 +2537,17 @@ def generate_score_per_series(
                 overall_score = mae_score
         else:
             overall_score = overall_score + (oda_score * oda_weighting)
-    # remove basic duplicates
-    local_results = results_object.model_results.copy()
-    local_results = local_results[local_results['Exceptions'].isna()]
-    local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
-    local_results.drop_duplicates(
-        subset=['ValidationRound', 'smape', 'mae', 'spl'], keep="first", inplace=True
-    )
     # select only models run through all validations
     # run_count = temp.groupby(level=0).count().mean(axis=1)
     # models_to_use = run_count[run_count >= total_validations].index.tolist()
     if models_to_use is None:
+        # remove basic duplicates
+        local_results = results_object.model_results.copy()
+        local_results = local_results[local_results['Exceptions'].isna()]
+        local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
+        local_results = local_results.drop_duplicates(
+            subset=['ValidationRound', 'smape', 'mae', 'spl'], keep="first",
+        )
         run_count = local_results[['Model', 'ID']].groupby("ID").count()
         models_to_use = run_count[
             run_count['Model'] >= total_validations
