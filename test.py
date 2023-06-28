@@ -23,7 +23,7 @@ print(f"AutoTS version: {__version__}")
 # raise ValueError("aaargh!")
 use_template = True
 save_template = True
-force_univariate = False  # long = False
+force_univariate = True  # long = False
 back_forecast = False
 graph = True
 template_import_method = "addon"  # "only" "addon"
@@ -126,9 +126,13 @@ constraint = {
 }
 forecast_index = pd.date_range(start=df.index[-1], periods=forecast_length + 1, freq=df.index.freq)[1:]
 # sets an extremely high value for the cap, one that should never actually be reached by the data normally
-upper_constraint = pd.DataFrame(9999999999, index=forecast_index, columns=df.columns)
+if isinstance(df, pd.Series):
+    cols = [df.name]
+else:
+    cols = df.columns
+upper_constraint = pd.DataFrame(9999999999, index=forecast_index, columns=cols)
 # in this case also assuming negatives won't happen so setting a lower constraint of 0
-lower_constraint = pd.DataFrame(0, index=forecast_index, columns=df.columns)
+lower_constraint = pd.DataFrame(0, index=forecast_index, columns=cols)
 # add in your dates you want as definitely 0
 upper_constraint.loc["2022-10-31"] = 0
 constraint = {
@@ -247,7 +251,7 @@ if graph:
     start_date = "2018-09-26"
     prediction.plot(
         model.df_wide_numeric,
-        series=model.df_wide_numeric.columns[2],
+        series=cols[0],
         remove_zeroes=False,
         start_date=start_date,
     )
@@ -255,10 +259,10 @@ if graph:
     prediction.plot_grid(model.df_wide_numeric, start_date=start_date)
     plt.show()
     worst = model.best_model_per_series_score().head(6).index.tolist()
-    prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Worst Performing Forecastings", cols=worst)
+    prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Worst Performing Forecasts", cols=worst)
     plt.show()
     best = model.best_model_per_series_score().tail(6).index.tolist()
-    prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Best Performing Forecastings", cols=best)
+    prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Best Performing Forecasts", cols=best)
     plt.show()
     model.plot_generation_loss()
     plt.show()

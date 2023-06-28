@@ -485,6 +485,10 @@ class PredictionObject(object):
         count = 0
         for r in range(nrow):
             for c in range(ncol):
+                    if nrow > 1:
+                        ax = axes[r,c]
+                    else:
+                        ax = axes[c]
                     if count + 1 > num_cols:
                         pass
                     else:
@@ -495,7 +499,7 @@ class PredictionObject(object):
                             remove_zeroes=False,
                             interpolate="linear",
                             start_date=start_date,
-                            ax=axes[r,c]
+                            ax=ax,
                         )
                         count += 1
         return fig
