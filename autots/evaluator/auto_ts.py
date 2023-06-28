@@ -277,6 +277,8 @@ class AutoTS(object):
         elif ensemble == 'auto':
             if model_list in ['superfast']:
                 ensemble = ['horizontal-max']
+            elif any([x for x in model_list if x in ['PytorchForecasting', 'GluonTS']]):
+                ensemble = None
             else:
                 ensemble = ['simple', "distance", "horizontal-max"]
         if isinstance(ensemble, str):

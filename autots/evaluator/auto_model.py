@@ -22,7 +22,8 @@ from autots.models.model_list import (
     recombination_approved,
     no_shared,
     superfast,
-    model_lists,
+    # model_lists,
+    model_list_to_dict,
 )
 from itertools import zip_longest
 from autots.models.basics import (
@@ -1702,22 +1703,6 @@ def TemplateWizard(
         if verbose > 0 and not template.empty:
             print(f"Generation {current_generation} had all new models fail")
     return template_result
-
-
-def model_list_to_dict(model_list):
-    """Convert various possibilities to dict."""
-    if model_list in list(model_lists.keys()):
-        model_list = model_lists[model_list]
-
-    if isinstance(model_list, dict):
-        model_prob = list(model_list.values())
-        model_list = [*model_list]
-    elif isinstance(model_list, list):
-        trs_len = len(model_list)
-        model_prob = [1 / trs_len] * trs_len
-    else:
-        raise ValueError("model_list type not recognized.")
-    return model_list, model_prob
 
 
 def random_model(
