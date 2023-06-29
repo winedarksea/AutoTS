@@ -23,7 +23,7 @@ print(f"AutoTS version: {__version__}")
 # raise ValueError("aaargh!")
 use_template = True
 save_template = True
-force_univariate = True  # long = False
+force_univariate = False  # long = False
 back_forecast = False
 graph = True
 template_import_method = "addon"  # "only" "addon"
@@ -248,7 +248,7 @@ if save_template:
     )
 
 if graph:
-    start_date = "2018-09-26"
+    start_date = "auto"
     prediction.plot(
         model.df_wide_numeric,
         series=cols[0],
@@ -259,16 +259,16 @@ if graph:
     prediction.plot_grid(model.df_wide_numeric, start_date=start_date)
     plt.show()
     worst = model.best_model_per_series_score().head(6).index.tolist()
-    prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Worst Performing Forecasts", cols=worst)
+    prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Forecasts of Highest (Worst) Historical MAPE Series", cols=worst)
     plt.show()
     best = model.best_model_per_series_score().tail(6).index.tolist()
-    prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Best Performing Forecasts", cols=best)
+    prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Forecasts of Lowest (Best) Historical MAPE Series", cols=best)
     plt.show()
     model.plot_generation_loss()
     plt.show()
     # plt.savefig("improvement_over_generations.png", dpi=300)
 
-    model.plot_per_series_smape(kind="pie")
+    model.plot_per_series_mape(kind="pie")
     plt.show()
 
     model.plot_per_series_error()
@@ -315,8 +315,6 @@ if graph:
 
 df_wide_numeric = model.df_wide_numeric
 
-df = df_wide_numeric.tail(100).fillna(0).astype(float)
-
 if not [x for x in interest_series if x in model.df_wide_numeric.columns.tolist()]:
     interest_series = model.df_wide_numeric.columns.tolist()[0:5]
 if model.best_model["Ensemble"].iloc[0] == 2:
@@ -332,7 +330,7 @@ if model.best_model["Ensemble"].iloc[0] == 2:
                     model.df_wide_numeric,
                     series=x,
                     remove_zeroes=False,
-                    start_date="2018-09-26",
+                    start_date=start_date,
                 )
     interest_models = pd.Series(interest_models).value_counts().head(10)
     print(interest_models)
@@ -350,7 +348,8 @@ else:
                 model.df_wide_numeric,
                 series=x,
                 remove_zeroes=False,
-                start_date="2021-09-26",
+                start_date=start_date,
+                figsize=(16,12),
             )
 
 print("test run complete")

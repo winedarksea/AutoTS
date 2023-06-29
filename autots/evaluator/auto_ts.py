@@ -2579,7 +2579,7 @@ or otherwise increase models available."""
     def plot_back_forecast(self, **kwargs):
         return self.plot_backforecast(**kwargs)
 
-    def plot_validations(self, models=None, series=None, title=None, start_date="auto", end_date=None, subset=None, **kwargs):
+    def plot_validations(self, models=None, series=None, title=None, start_date="auto", end_date=None, subset=None, compare_horizontal=False, colors=None, **kwargs):
         """Similar to plot_backforecast but using the model's validation segments specifically. Must reforecast.
         Saves results to self.validation_forecasts and caches. Set that to None to force rerun otherwise it uses stored.
         
@@ -2590,6 +2590,7 @@ or otherwise increase models available."""
             start_date (str): or datetime, place to begin graph, None for full
             end_date (str): or datetime, end of graph x axis
             subset (str): overrides series, shows either 'best' or 'worst'
+            compare_horizontal (bool): if True, plot horizontal ensemble versus best non-horizontal model, when available
         """
         if series is None:
             if subset == "best":
@@ -2606,10 +2607,16 @@ or otherwise increase models available."""
             else:
                 title = f"Validation Forecasts for {series}"
         if models is None:
-            if self.best_model_non_horizontal is not None:
+            if self.best_model_non_horizontal is not None and compare_horizontal:
                 validation_template = pd.concat([self.best_model, self.best_model_non_horizontal], axis=0)
             else:
                 validation_template = self.best_model
+                colors = {
+                    'actuals': '#AFDBF5',
+                    'chosen': '#4D4DFF',
+                    'chosen_lower': '#A7AFB2',
+                    'chosen_upper': '#A7AFB2',
+                }
         elif isinstance(models, str):
             val_results = self.results()
             validation_template = val_results[val_results['ID'].isin([models])][self.template_cols].drop_duplicates()
@@ -2658,7 +2665,7 @@ or otherwise increase models available."""
             new_df[mname + "_" + "lower"] = self.validation_forecasts[x].lower_forecast[series]
             df_list.append(new_df)
         plot_df = pd.concat(df_list, sort=True, axis=0)
-        plot_df = plot_df.groupby(level=0).first()
+        plot_df = plot_df.groupby(level=0).last()
         plot_df = self.df_wide_numeric[series].rename("actuals").to_frame().merge(plot_df, left_index=True, right_index=True, how="left")
         if start_date == "auto":
             start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(how='all', axis=0).index.min() - pd.Timedelta(days=7)
@@ -2666,7 +2673,10 @@ or otherwise increase models available."""
             plot_df = plot_df[plot_df.index >= start_date]
         if end_date is not None:
             plot_df = plot_df[plot_df.index <= end_date]
-        ax = plot_df.plot(title=title, **kwargs)
+        if colors is not None:
+            ax = plot_df.plot(title=title, color=colors, **kwargs)
+        else:
+            ax = plot_df.plot(title=title, **kwargs)
         ax.vlines(
             x=self.validation_forecast_cuts,
             ls='--',
@@ -2688,7 +2698,25 @@ or otherwise increase models available."""
         temp = temp.groupby("Model")['Exceptions'].sum()
         return temp[temp <= 0].index.to_list()
 
-    def plot_per_series_smape(
+    def best_model_per_series_mape(self):
+        best_model_per_series_mae = self.initial_results.per_series_mae[
+            self.initial_results.per_series_mae.index == self.best_model_id
+        ].mean(axis=0)
+        # obsess over avoiding division by zero
+        scaler = self.df_wide_numeric.mean(axis=0)
+        scaler[scaler == 0] == np.nan
+        scaler = scaler.fillna(self.df_wide_numeric.max(axis=0))
+        scaler[scaler == 0] == 1
+        temp = (
+            ((best_model_per_series_mae / scaler) * 100)
+            .round(2)
+            .sort_values(ascending=False)
+        )
+        temp.name = 'MAPE'
+        temp.index.name = 'Series'
+        return temp
+
+    def plot_per_series_mape(
         self,
         title: str = None,
         max_series: int = 10,
@@ -2712,23 +2740,10 @@ or otherwise increase models available."""
         if self.best_model.empty:
             raise ValueError("No best_model. AutoTS .fit() needs to be run.")
         if title is None:
-            title = f"Top {max_series} Series Contributing SMAPE Error"
-        best_model_per_series_mae = self.initial_results.per_series_mae[
-            self.initial_results.per_series_mae.index == self.best_model_id
-        ].mean(axis=0)
-        # obsess over avoiding division by zero
-        scaler = self.df_wide_numeric.mean(axis=0)
-        scaler[scaler == 0] == np.nan
-        scaler = scaler.fillna(self.df_wide_numeric.max(axis=0))
-        scaler[scaler == 0] == 1
-        temp = (
-            ((best_model_per_series_mae / scaler) * 100)
-            .round(2)
-            .sort_values(ascending=False)
-            .head(max_series)
-        )
-        temp = temp.reset_index()
-        temp.columns = ["Series", "SMAPE"]
+            title = f"Top {max_series} Series Contributing MAPE Error"
+
+        temp = self.best_model_per_series_mape().reset_index().head(max_series)
+
         if self.best_model_ensemble == 2:
             series = self.horizontal_to_df()
             temp = temp.merge(series, on='Series')
@@ -2738,7 +2753,7 @@ or otherwise increase models available."""
 
         if kind == "pie":
             return temp.set_index("Series").plot(
-                y="SMAPE",
+                y="MAPE",
                 kind="pie",
                 title=title,
                 figsize=figsize,
@@ -2748,7 +2763,7 @@ or otherwise increase models available."""
         else:
             return temp.plot(
                 x="Series",
-                y="SMAPE",
+                y="MAPE",
                 kind=kind,
                 title=title,
                 color=color,

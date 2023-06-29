@@ -411,12 +411,13 @@ class PredictionObject(object):
         series: str = None,
         remove_zeroes: bool = False,
         interpolate: str = None,
-        start_date: str = None,
+        start_date: str = "auto",
         alpha=0.25,
         facecolor="black",
         loc="upper left",
         title=None,
         vline=None,
+        colors=None,
         **kwargs,
     ):
         """Generate an example plot of one series. Does not handle non-numeric forecasts.
@@ -429,8 +430,17 @@ class PredictionObject(object):
             interpolate (str): if not None, a method to pass to pandas interpolate
             start_date (str): Y-m-d string or Timestamp to remove all data before
             vline (datetime): datetime of dashed vertical line to plot
+            colors (dict): colors mapping dictionary col: color
             **kwargs passed to pd.DataFrame.plot()
         """
+        if start_date == "auto":
+            if df_wide is not None:
+                slx = -self.forecast_length * 3
+                if slx > df_wide.shape[0]:
+                    slx = 0
+                start_date = df_wide.index[slx]
+            else:
+                start_date = self.forecast.index[0]
         plot_df = self.plot_df(
             df_wide=df_wide,
             series=series,
@@ -438,6 +448,13 @@ class PredictionObject(object):
             interpolate=interpolate,
             start_date=start_date,
         )
+        if colors is None:
+            colors = {
+                'low_forecast': '#A5ADAF',
+                'up_forecast': '#A5ADAF',
+                'forecast': '#003399',  # '#4D4DFF',
+                'actuals': '#AFDBF5',
+            }
         if title is None:
             title_prelim = str(self.model_name)[0:80]
             if title_prelim == "Ensemble":
@@ -451,9 +468,9 @@ class PredictionObject(object):
                     title_prelim = ensemble_type
             title = f"{series} with model {title_prelim}"
         if vline is None:
-            return plot_df.plot(title=title, **kwargs)
+            return plot_df.plot(title=title, color=colors, **kwargs)
         else:
-            ax = plot_df.plot(title=title, **kwargs)
+            ax = plot_df.plot(title=title, color=colors, **kwargs)
             ax.vlines(
                 x=vline,
                 ls='--',
