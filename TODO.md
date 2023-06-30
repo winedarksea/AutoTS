@@ -16,7 +16,8 @@
 * added plot_validations
 * updated pytorch forecasting for 1.0.0 version
 * plot_grid to prediction object
-* minor bug fixes
+* breaking change: plot_per_series_smape switched to the more accurately described plot_per_series_mape
+* various bug fixes such as 'TotalRuntime' missing
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

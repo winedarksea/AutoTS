@@ -1920,6 +1920,8 @@ def NewGeneticTemplate(
     transformer_max_depth: int = 8,
     models_mode: str = "default",
     score_per_series=None,
+    recursive_count=0,
+    # UPDATE RECURSIVE section if adding or removing params
 ):
     """
     Return new template given old template with model accuracies.
@@ -2112,8 +2114,30 @@ def NewGeneticTemplate(
     new_template = UniqueTemplates(
         sorted_results, new_template, selection_cols=template_cols
     )
+    # use recursion to avoid empty returns
+    if new_template.empty:
+        recursive_count += 1
+        if recursive_count > 20:
+            print("NewGeneticTemplate max recursion reached")
+            return new_template
+        else:
+            return NewGeneticTemplate(
+                model_results=model_results,
+                submitted_parameters=submitted_parameters,
+                sort_column=sort_column,
+                sort_ascending=sort_ascending,
+                max_results=max_results,
+                max_per_model_class=max_per_model_class,
+                top_n=top_n,
+                template_cols=template_cols,
+                transformer_list=transformer_list,
+                transformer_max_depth=transformer_max_depth,
+                models_mode=models_mode,
+                score_per_series=score_per_series,
+                recursive_count=recursive_count,
+            )
     # enjoy the privilege
-    if new_template.shape[0] < max_results:
+    elif new_template.shape[0] < max_results:
         return new_template
     else:
         if max_results < 1:

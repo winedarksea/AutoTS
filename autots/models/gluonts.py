@@ -93,7 +93,7 @@ class GluonTS(ModelObject):
         """
         if not _has_gluonts:
             raise ImportError(
-                "GluonTS installation is incompatible with AutoTS. The numpy version is sometimes the issue."
+                "GluonTS installation is incompatible with AutoTS. The numpy version is sometimes the issue, try 1.23.1 {as of 06-2023}"
             )
 
         df = self.basic_profile(df)
