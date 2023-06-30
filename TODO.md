@@ -16,6 +16,7 @@
 * added plot_validations
 * updated pytorch forecasting for 1.0.0 version
 * plot_grid to prediction object
+* minor bug fixes
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

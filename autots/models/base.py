@@ -431,6 +431,7 @@ class PredictionObject(object):
             start_date (str): Y-m-d string or Timestamp to remove all data before
             vline (datetime): datetime of dashed vertical line to plot
             colors (dict): colors mapping dictionary col: color
+            alpha (float): intensity of bound interval shading
             **kwargs passed to pd.DataFrame.plot()
         """
         if start_date == "auto":
@@ -467,10 +468,10 @@ class PredictionObject(object):
                 else:
                     title_prelim = ensemble_type
             title = f"{series} with model {title_prelim}"
-        if vline is None:
-            return plot_df.plot(title=title, color=colors, **kwargs)
-        else:
-            ax = plot_df.plot(title=title, color=colors, **kwargs)
+
+        ax = plot_df[['actuals', 'forecast']].plot(title=title, color=colors, **kwargs)
+        ax.fill_between(plot_df.index, plot_df['up_forecast'], plot_df['low_forecast'], alpha=alpha, color="#A5ADAF")
+        if vline is not None:
             ax.vlines(
                 x=vline,
                 ls='--',
@@ -479,9 +480,9 @@ class PredictionObject(object):
                 ymin=plot_df.min().min(),
                 ymax=plot_df.max().max(),
             )
-            return ax
+        return ax
 
-    def plot_grid(self, df_wide=None, start_date='2021-01-01', figsize=(24, 18), title="AutoTS Forecasts", cols=None):
+    def plot_grid(self, df_wide=None, start_date='2021-01-01', interpolate=None, remove_zeroes=False, figsize=(24, 18), title="AutoTS Forecasts", cols=None, colors=None):
         """Plots multiple series in a grid, if present."""
         import matplotlib.pyplot as plt
 
@@ -513,9 +514,10 @@ class PredictionObject(object):
                         self.plot(
                             df_wide=df_wide,
                             series=col,
-                            remove_zeroes=False,
-                            interpolate="linear",
+                            remove_zeroes=remove_zeroes,
+                            interpolate=interpolate,
                             start_date=start_date,
+                            colors=colors,
                             ax=ax,
                         )
                         count += 1

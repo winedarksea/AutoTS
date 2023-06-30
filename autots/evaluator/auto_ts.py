@@ -1744,9 +1744,15 @@ or otherwise increase models available."""
         else:
             self.model_count = template_result.model_count
         # capture results from lower-level template run
-        template_result.model_results['TotalRuntime'].fillna(
-            pd.Timedelta(seconds=60), inplace=True
-        )
+        if "TotalRuntime" in template_result.model_results.columns:
+            template_result.model_results['TotalRuntime'].fillna(
+                pd.Timedelta(seconds=60), inplace=True
+            )
+        else:
+            # trying to catch a rare and sneaky bug (perhaps some variety of beetle?)
+            print(f"TotalRuntime missing in {current_generation}!")
+            self.template_result_error = template_result.model_results.copy()
+            self.template_error = template.copy()
         # gather results of template run
         self.initial_results = self.initial_results.concat(template_result)
         self.initial_results.model_results['Score'] = generate_score(
@@ -2579,9 +2585,10 @@ or otherwise increase models available."""
     def plot_back_forecast(self, **kwargs):
         return self.plot_backforecast(**kwargs)
 
-    def plot_validations(self, models=None, series=None, title=None, start_date="auto", end_date=None, subset=None, compare_horizontal=False, colors=None, **kwargs):
+    def plot_validations(self, models=None, series=None, title=None, start_date="auto", end_date=None, subset=None, compare_horizontal=False, colors=None, include_bounds=True, alpha=0.35, **kwargs):
         """Similar to plot_backforecast but using the model's validation segments specifically. Must reforecast.
-        Saves results to self.validation_forecasts and caches. Set that to None to force rerun otherwise it uses stored.
+        Saves results to self.validation_forecasts and caches. Set that to None to force rerun otherwise it uses stored (when models is the same).
+        'chosen' refers to best_model_id, the model chosen to run for predict
         
         Args:
             models (list): list, str, df or None, models to compare (IDs unless df of model params)
@@ -2591,11 +2598,16 @@ or otherwise increase models available."""
             end_date (str): or datetime, end of graph x axis
             subset (str): overrides series, shows either 'best' or 'worst'
             compare_horizontal (bool): if True, plot horizontal ensemble versus best non-horizontal model, when available
+            include_bounds (bool): if True (default) include the upper/lower forecast bounds
         """
         if series is None:
-            if subset == "best":
+            if str(subset).lower() == "best":
+                series = self.best_model_per_series_mape().tail(1).index.tolist()[0]
+            elif str(subset).lower() == "best score":
                 series = self.best_model_per_series_score().tail(1).index.tolist()[0]
-            elif subset == "worst":
+            elif str(subset).lower() == "worst":
+                series = self.best_model_per_series_mape().head(1).index.tolist()[0]
+            elif str(subset).lower() == "worst score":
                 series = self.best_model_per_series_score().head(1).index.tolist()[0]
             elif subset is None:
                 series = random.choice(self.df_wide_numeric.columns)
@@ -2603,7 +2615,10 @@ or otherwise increase models available."""
                 raise ValueError("plot_validations arg subset must be None, 'best' or 'worst'")
         if title is None:
             if subset is not None:
-                title = f"Validation Forecasts for {subset} score series {series}"
+                if "score" in str(subset).lower():
+                    title = f"Validation Forecasts for {subset} Tested Series {series}" 
+                else:
+                    title = f"Validation Forecasts for {subset} Tested MAPE Series {series}"
             else:
                 title = f"Validation Forecasts for {series}"
         if models is None:
@@ -2630,6 +2645,7 @@ or otherwise increase models available."""
                 duplicated = True
         if not duplicated:
             self.validation_forecast_cuts = []
+            # self.validation_forecasts = {}
             for val in range(len(self.validation_train_indexes)):
                 test_idx = self.validation_train_indexes[val]
                 train_reg = self.future_regressor_train.reindex(test_idx)
@@ -2654,27 +2670,36 @@ or otherwise increase models available."""
                         idz = "chosen_model"
                     self.validation_forecasts[str(val) + "_" + str(idz)] = df_forecast
         else:
-            print("using stored results for plot_validations")
+            if self.verbose > 0:
+                print("using stored results for plot_validations")
         self.validation_forecasts_template = validation_template
+        needed_mods = self.validation_forecasts_template['ID'].tolist()
         df_list = []
         for x in self.validation_forecasts.keys():
             mname = x.split("_")[1]
-            new_df = pd.DataFrame(index=self.df_wide_numeric.index)
-            new_df[mname] = self.validation_forecasts[x].forecast[series]
-            new_df[mname + "_" + "upper"] = self.validation_forecasts[x].upper_forecast[series]
-            new_df[mname + "_" + "lower"] = self.validation_forecasts[x].lower_forecast[series]
-            df_list.append(new_df)
+            if mname == "chosen" or mname in needed_mods:
+                new_df = pd.DataFrame(index=self.df_wide_numeric.index)
+                new_df[mname] = self.validation_forecasts[x].forecast[series]
+                new_df[mname + "_" + "upper"] = self.validation_forecasts[x].upper_forecast[series]
+                new_df[mname + "_" + "lower"] = self.validation_forecasts[x].lower_forecast[series]
+                df_list.append(new_df)
         plot_df = pd.concat(df_list, sort=True, axis=0)
         plot_df = plot_df.groupby(level=0).last()
         plot_df = self.df_wide_numeric[series].rename("actuals").to_frame().merge(plot_df, left_index=True, right_index=True, how="left")
+        if not include_bounds:
+            colb = [x for x in plot_df.columns if "_lower" not in x and "_upper" not in x]
+            plot_df = plot_df[colb]
         if start_date == "auto":
             start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(how='all', axis=0).index.min() - pd.Timedelta(days=7)
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         if end_date is not None:
             plot_df = plot_df[plot_df.index <= end_date]
+        # actual plotting section
         if colors is not None:
-            ax = plot_df.plot(title=title, color=colors, **kwargs)
+            # this will need to change is users are allowed to input colors
+            ax = plot_df[['actuals', 'chosen']].plot(title=title, color=colors, **kwargs)
+            ax.fill_between(plot_df.index, plot_df['chosen_upper'], plot_df['chosen_lower'], alpha=alpha, color="#A5ADAF")
         else:
             ax = plot_df.plot(title=title, **kwargs)
         ax.vlines(

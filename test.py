@@ -41,27 +41,28 @@ long = False
 # df = load_artificial(long=long, date_start="2018-01-01")
 df = load_daily(long=long)
 interest_series = [
-    'arima220_outliers',
-    'lumpy',
-    'out-of-stock',
-    "sine_seasonality_monthweek",
-    "intermittent_weekly",
-    "arima017",
-    "old_to_new",
-]
-interest_series = [
     'wiki_all',
     'wiki_William_Shakespeare',
     'wiki_Periodic_table',
     'wiki_Thanksgiving',
 ]
+if not long and interest_series[0] not in df.columns:
+    interest_series = [
+        'arima220_outliers',
+        'lumpy',
+        'out-of-stock',
+        "sine_seasonality_monthweek",
+        "intermittent_weekly",
+        "arima017",
+        "old_to_new",
+    ]
 prediction_interval = 0.9
 n_jobs = "auto"
 verbose = 1
 validation_method = "similarity"  # "similarity"
 frequency = "infer"
 drop_most_recent = 0
-generations = 15
+generations = 20
 generation_timeout = 300
 num_validations = 2  # "auto"
 initial_template = "Random"  # "General+Random" 
@@ -255,8 +256,10 @@ if graph:
         remove_zeroes=False,
         start_date=start_date,
     )
+    plt.savefig("single_forecast2.png", dpi=300, bbox_inches="tight")
     plt.show()
     prediction.plot_grid(model.df_wide_numeric, start_date=start_date)
+    plt.savefig("forecast_grid2.png", dpi=300, bbox_inches="tight")
     plt.show()
     worst = model.best_model_per_series_score().head(6).index.tolist()
     prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Forecasts of Highest (Worst) Historical MAPE Series", cols=worst)
@@ -266,7 +269,7 @@ if graph:
     plt.show()
     model.plot_generation_loss()
     plt.show()
-    # plt.savefig("improvement_over_generations.png", dpi=300)
+    # plt.savefig("improvement_over_generations.png", dpi=300, bbox_inches="tight")
 
     model.plot_per_series_mape(kind="pie")
     plt.show()
@@ -301,15 +304,29 @@ if graph:
     if back_forecast:
         model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
 
+    ax = model.plot_validations(subset='Worst', compare_horizontal=True, include_bounds=False)
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    plt.show()
+
     ax = model.plot_validations()
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    plt.savefig("validation_plot.png", dpi=300, bbox_inches="tight")
     plt.show()
 
-    ax = model.plot_validations(subset='best')
+    ax = model.plot_validations(subset='Best')
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    plt.savefig("validation_plot2.png", dpi=300, bbox_inches="tight")
+    plt.show()
+
+    ax = model.plot_validations(subset='Worst')
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
 
-    ax = model.plot_validations(subset='worst')
+    ax = model.plot_validations(subset='Best Score')
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    plt.show()
+
+    ax = model.plot_validations(subset='Worst Score')
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
     plt.show()
 
