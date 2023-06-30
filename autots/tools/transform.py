@@ -3791,7 +3791,14 @@ class GeneralTransformer(object):
         """
         # so much faster not to try to fill NaN if there aren't any NaN
         if isinstance(df, pd.DataFrame):
-            self.nan_flag = np.isnan(np.min(df.to_numpy()))
+            # attempting to find a bug, zero size array to min
+            try:
+                self.nan_flag = np.isnan(np.min(df.to_numpy()))
+            except Exception as e:
+                self.nan_flag = True
+                print(repr(e))
+                print(df)
+                print(df.shape)
         else:
             self.nan_flag = np.isnan(np.min(np.array(df)))
         if self.nan_flag:
