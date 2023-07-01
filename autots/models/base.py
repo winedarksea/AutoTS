@@ -482,7 +482,7 @@ class PredictionObject(object):
             )
         return ax
 
-    def plot_grid(self, df_wide=None, start_date='2021-01-01', interpolate=None, remove_zeroes=False, figsize=(24, 18), title="AutoTS Forecasts", cols=None, colors=None):
+    def plot_grid(self, df_wide=None, start_date='auto', interpolate=None, remove_zeroes=False, figsize=(24, 18), title="AutoTS Forecasts", cols=None, colors=None):
         """Plots multiple series in a grid, if present."""
         import matplotlib.pyplot as plt
 

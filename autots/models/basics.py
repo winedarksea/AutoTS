@@ -2261,8 +2261,9 @@ class KalmanStateSpace(ModelObject):
                     'observation_model': [[1, 0]],
                     'observation_noise': 0.1,
                 },
+                "dynamic_linear",
             ],
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1],
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1],
         )[0]
         if params in [364] and method not in ['deep']:
             params = 7
@@ -2275,6 +2276,18 @@ class KalmanStateSpace(ModelObject):
                 'observation_model': obsmod.tolist(),
                 'observation_noise': obsnois,
             }
+        elif params == "dynamic_linear":
+            choices = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5]
+            params = {
+                'model_name': 'dynamic linear',
+                'state_transition': [[1, 1, 0, 0],
+                 [0, 1, 0, 0],
+                 [0, 0, random.choice(choices), 1], [0, 0, random.choice(choices), 0]],
+                'process_noise': [[random.choice(choices), 0, 0, 0], [0, random.choice(choices), 0, 0], [0, 0, random.choice(choices), 0], [0, 0, 0, 0]],
+                'observation_model': [[1, 0, 1, 0]],
+                'observation_noise': 0.25,
+                'em_iter': 10
+             }
         elif isinstance(params, int):
             state_transition = np.zeros((params + 1, params + 1))
             state_transition[0, 0] = 1
