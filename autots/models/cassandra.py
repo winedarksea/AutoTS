@@ -1501,7 +1501,7 @@ class Cassandra(ModelObject):
         if future_impacts is not None and forecast_length is not None:
             future_impacts = future_impacts.reindex(
                 columns=df_forecast.forecast.columns,
-                index=self.forecast_index,
+                index=forecast_index,
                 fill_value=0,
             )
         # undo preprocessing and scaling
@@ -1619,11 +1619,11 @@ class Cassandra(ModelObject):
             else:
                 future_impts = pd.DataFrame()
             if self.past_impacts is not None or future_impacts is not None:
-                impts = 1 + pd.concat([past_impacts, future_impts], axis=0).reindex(
+                impts = 1 + (pd.concat([past_impacts, future_impts[~future_impts.index.isin(past_impacts.index)]], axis=0).reindex(
                     index=df_forecast.forecast.index,
                     columns=df_forecast.forecast.columns,
-                    fill_value=1,
-                )  # minus or plus
+                    fill_value=0,
+                ))  # minus or plus
                 self.impacts = impts
                 if include_organic:
                     df_forecast.organic_forecast = df_forecast.forecast.copy()
