@@ -352,7 +352,7 @@ Both `simple` and `distance` style models are constructed on the first evaluatio
 Both of these can also be recursive in depth, containing ensembles of ensembles. This recursive ensembling can happen when ensembles are imported from a starting template - they work just fine, but may get rather slow, having lots of models. 
 
 `horizontal` ensembles are the type of ensembles for which this package was originally created. 
-With this, each series gets its own model. This avoids the 'one size does not fit all' problem when many time series are in a datset. 
+With this, each series gets its own model. This avoids the 'one size does not fit all' problem when many time series are in a dataset. 
 In the interest of efficiency, univariate models are only run on the series they are needed for. 
 Models not in the `no_shared` list may make horizontal ensembling very slow at scale - as they have to be run for every series, even if they are only used for one. 
 `horizontal-max` chooses the best series for every model. `horizontal` and `horizontal-min` attempt to reduce the number of slow models chosen while still maintaining as much accuracy as possble. 
@@ -817,7 +817,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 * DatepartRegression is where X is simply the date features, and Y are the time series values for that date. 
 * WindowRegression takes an `n` preceeding data points as X to predict the future value or values of the series. 
 * RollingRegression takes all time series and summarized rolling values of those series in one massive dataframe as X. Works well for a small number of series but scales poorly. 
-* MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series `i` are used to predict next step for series `i`, with a model trained on all data from all series.
+* MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series `i` are used to predict next step for series `i`, with a model trained on all data from all series. This model is now often called by the community a "global forecasting ML model".
 * UnivariateRegression is the same as MultivariateRegression but trains an independent model on each series, thus not capable of learning from the patterns of other series. This performs well in horizontal ensembles as it can be parsed down to one series with the same performance on that series. 
 
 Currently `MultivariateRegression` has the (slower) option to utilize a stock GradientBoostingRegressor with quantile loss for probabilistic estimates, while others utilize point to probabilistic estimates.

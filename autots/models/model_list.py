@@ -20,7 +20,7 @@ all_models = [
     'VAR',
     'DatepartRegression',
     "UnivariateRegression",
-    "Greykite",
+    # "Greykite",
     'UnivariateMotif',
     'MultivariateMotif',
     'NVAR',
@@ -42,6 +42,7 @@ all_models = [
     'SeasonalityMotif',
     'MLEnsemble',
 ]
+all_pragmatic = list((set(all_models) - set(['MLEnsemble', 'VARMAX', 'Greykite'])))
 # downweight slower models
 default = {
     'ConstantNaive': 1,
@@ -71,32 +72,6 @@ default = {
     'MetricMotif': 1,
     # 'SeasonalityMotif': 1,
 }
-# so this opiniated and not fully updated always
-best = [
-    'LastValueNaive',
-    'AverageValueNaive',
-    'GLS',
-    'GLM',
-    'ETS',
-    'FBProphet',
-    'GluonTS',
-    'SeasonalNaive',
-    'UnobservedComponents',
-    'VECM',
-    # 'UnivariateRegression',
-    'MultivariateRegression',
-    'WindowRegression',
-    'VAR',
-    'DatepartRegression',
-    'UnivariateMotif',
-    'MultivariateMotif',
-    'NVAR',
-    'SectionalMotif',
-    'Theta',
-    'ARDL',
-    'ARCH',
-    'SeasonalityMotif',
-]
 # fastest models at any scale
 superfast = [
     'ConstantNaive',
@@ -148,6 +123,14 @@ parallel = {
 # models that should be fast given many CPU cores
 fast_parallel = {**parallel, **fast}
 fast_parallel_no_arima = {i: fast_parallel[i] for i in fast_parallel if i != 'ARIMA'}
+# so this opiniated and not fully updated always
+best = list(
+    set(
+        list(fast_parallel_no_arima.keys())
+        + ['MultivariateRegression', 'GluonTS', 'TMF', 'PytorchForecasting']
+    )
+)
+
 # models that are explicitly not production ready
 experimental = [
     'MotifSimulation',
@@ -349,8 +332,25 @@ model_lists = {
     "motifs": motifs,
     "all_result_path": all_result_path,
     "regressions": regressions,
+    "all_pragmatic": all_pragmatic,
 }
 
 
 def auto_model_list(n_jobs, n_series, frequency):
     pass
+
+
+def model_list_to_dict(model_list):
+    """Convert various possibilities to dict."""
+    if model_list in list(model_lists.keys()):
+        model_list = model_lists[model_list]
+
+    if isinstance(model_list, dict):
+        model_prob = list(model_list.values())
+        model_list = [*model_list]
+    elif isinstance(model_list, list):
+        trs_len = len(model_list)
+        model_prob = [1 / trs_len] * trs_len
+    else:
+        raise ValueError("model_list type not recognized.")
+    return model_list, model_prob

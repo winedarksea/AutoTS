@@ -12,12 +12,17 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.5.7 🛂🛂🛂
-* slight changes to holiday_flag to allow list in some cases
-* DatepartRegressionTransformer now accepts holiday country input as regressor
-* added RegressionFilter
-* changed bounded behavior of AlignLastValue
-* small bug fixes
+# 0.5.8 🌷🌷🌷
+* added plot_validations
+* updated pytorch forecasting for 1.0.0 version
+* plot_grid to prediction object
+* breaking change: plot_per_series_smape switched to the more accurately described plot_per_series_mape
+* various bug fixes such as 'TotalRuntime' missing
+
+### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
+* Pytorch-Forecasting
+* Neural Prophet
+* GluonTS
 
 ### New Model Checklist:
 	* Add to ModelMonster in auto_model.py

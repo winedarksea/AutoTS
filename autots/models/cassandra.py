@@ -35,6 +35,7 @@ from autots.templates.general import general_template
 from autots.tools.holiday import holiday_flag
 from autots.tools.window_functions import window_lin_reg_mean  # sliding_window_view
 from autots.evaluator.auto_model import ModelMonster, model_forecast
+from autots.models.model_list import model_list_to_dict
 
 # scipy is technically optional but most likely is present
 try:
@@ -1500,7 +1501,7 @@ class Cassandra(ModelObject):
         if future_impacts is not None and forecast_length is not None:
             future_impacts = future_impacts.reindex(
                 columns=df_forecast.forecast.columns,
-                index=self.forecast_index,
+                index=forecast_index,
                 fill_value=0,
             )
         # undo preprocessing and scaling
@@ -1618,10 +1619,18 @@ class Cassandra(ModelObject):
             else:
                 future_impts = pd.DataFrame()
             if self.past_impacts is not None or future_impacts is not None:
-                impts = 1 + pd.concat([past_impacts, future_impts], axis=0).reindex(
-                    index=df_forecast.forecast.index,
-                    columns=df_forecast.forecast.columns,
-                    fill_value=1,
+                impts = 1 + (
+                    pd.concat(
+                        [
+                            past_impacts,
+                            future_impts[~future_impts.index.isin(past_impacts.index)],
+                        ],
+                        axis=0,
+                    ).reindex(
+                        index=df_forecast.forecast.index,
+                        columns=df_forecast.forecast.columns,
+                        fill_value=0,
+                    )
                 )  # minus or plus
                 self.impacts = impts
                 if include_organic:
@@ -1740,9 +1749,12 @@ class Cassandra(ModelObject):
             anomaly_detector_params = None
 
         # random or pretested defaults
-        trend_base = random.choices(
-            ['pb1', 'pb2', 'pb3', 'random'], [0.1, 0.1, 0.0, 0.8]
-        )[0]
+        if method in ['deep', 'all']:
+            trend_base = 'deep'
+        else:
+            trend_base = random.choices(
+                ['pb1', 'pb2', 'pb3', 'random'], [0.1, 0.1, 0.0, 0.8]
+            )[0]
         if trend_base == "random":
             model_str = random.choices(
                 [
@@ -1840,6 +1852,18 @@ class Cassandra(ModelObject):
                     "1": {},
                 },
             }
+        elif trend_base == "deep":
+            model_list = "all_pragmatic"
+            model_list, model_prob = model_list_to_dict(model_list)
+            model_str = random.choices(model_list, model_prob, k=1)[0]
+            trend_model = {'Model': model_str}
+            trend_model['ModelParameters'] = ModelMonster(model_str).get_new_params(
+                method=method
+            )
+            trend_transformation = RandomTransform(
+                transformer_list="all",
+                transformer_max_depth=3,  # probably want some more usable defaults first as many random are senseless
+            )
 
         trend_anomaly_intervention = random.choices([None, 'detect_only'], [0.5, 0.5])[
             0

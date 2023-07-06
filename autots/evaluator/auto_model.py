@@ -22,7 +22,8 @@ from autots.models.model_list import (
     recombination_approved,
     no_shared,
     superfast,
-    model_lists,
+    # model_lists,
+    model_list_to_dict,
 )
 from itertools import zip_longest
 from autots.models.basics import (
@@ -60,9 +61,15 @@ def create_model_id(
     model_str: str, parameter_dict: dict = {}, transformation_dict: dict = {}
 ):
     """Create a hash ID which should be unique to the model parameters."""
-    str_repr = (
-        str(model_str) + json.dumps(parameter_dict) + json.dumps(transformation_dict)
-    )
+    if isinstance(parameter_dict, dict):
+        str_params = json.dumps(parameter_dict)
+    else:
+        str_params = str(parameter_dict)
+    if isinstance(transformation_dict, dict):
+        str_trans = json.dumps(transformation_dict)
+    else:
+        str_trans = str(transformation_dict)
+    str_repr = str(model_str) + str_params + str_trans
     str_repr = ''.join(str_repr.split())
     hashed = md5(str_repr.encode('utf-8')).hexdigest()
     return hashed
@@ -1696,22 +1703,6 @@ def TemplateWizard(
     return template_result
 
 
-def model_list_to_dict(model_list):
-    """Convert various possibilities to dict."""
-    if model_list in list(model_lists.keys()):
-        model_list = model_lists[model_list]
-
-    if isinstance(model_list, dict):
-        model_prob = list(model_list.values())
-        model_list = [*model_list]
-    elif isinstance(model_list, list):
-        trs_len = len(model_list)
-        model_prob = [1 / trs_len] * trs_len
-    else:
-        raise ValueError("model_list type not recognized.")
-    return model_list, model_prob
-
-
 def random_model(
     model_list,
     model_prob,
@@ -1927,6 +1918,8 @@ def NewGeneticTemplate(
     transformer_max_depth: int = 8,
     models_mode: str = "default",
     score_per_series=None,
+    recursive_count=0,
+    # UPDATE RECURSIVE section if adding or removing params
 ):
     """
     Return new template given old template with model accuracies.
@@ -2119,8 +2112,30 @@ def NewGeneticTemplate(
     new_template = UniqueTemplates(
         sorted_results, new_template, selection_cols=template_cols
     )
+    # use recursion to avoid empty returns
+    if new_template.empty:
+        recursive_count += 1
+        if recursive_count > 20:
+            print("NewGeneticTemplate max recursion reached")
+            return new_template
+        else:
+            return NewGeneticTemplate(
+                model_results=model_results,
+                submitted_parameters=submitted_parameters,
+                sort_column=sort_column,
+                sort_ascending=sort_ascending,
+                max_results=max_results,
+                max_per_model_class=max_per_model_class,
+                top_n=top_n,
+                template_cols=template_cols,
+                transformer_list=transformer_list,
+                transformer_max_depth=transformer_max_depth,
+                models_mode=models_mode,
+                score_per_series=score_per_series,
+                recursive_count=recursive_count,
+            )
     # enjoy the privilege
-    if new_template.shape[0] < max_results:
+    elif new_template.shape[0] < max_results:
         return new_template
     else:
         if max_results < 1:
@@ -2544,17 +2559,20 @@ def generate_score_per_series(
                 overall_score = mae_score
         else:
             overall_score = overall_score + (oda_score * oda_weighting)
-    # remove basic duplicates
-    local_results = results_object.model_results.copy()
-    local_results = local_results[local_results['Exceptions'].isna()]
-    local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
-    local_results.drop_duplicates(
-        subset=['ValidationRound', 'smape', 'mae', 'spl'], keep="first", inplace=True
-    )
     # select only models run through all validations
     # run_count = temp.groupby(level=0).count().mean(axis=1)
     # models_to_use = run_count[run_count >= total_validations].index.tolist()
     if models_to_use is None:
+        # remove basic duplicates
+        local_results = results_object.model_results.copy()
+        local_results = local_results[local_results['Exceptions'].isna()]
+        local_results = local_results.sort_values(
+            by="TotalRuntimeSeconds", ascending=True
+        )
+        local_results = local_results.drop_duplicates(
+            subset=['ValidationRound', 'smape', 'mae', 'spl'],
+            keep="first",
+        )
         run_count = local_results[['Model', 'ID']].groupby("ID").count()
         models_to_use = run_count[
             run_count['Model'] >= total_validations

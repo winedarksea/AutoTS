@@ -2131,13 +2131,7 @@ class KalmanStateSpace(ModelObject):
             # the same model can sometimes be defined in various matrix forms
             [
                 # floats are phi
-                {
-                    'model_name': 'local linear trend',
-                    'state_transition': [[1, 1], [0, 1]],
-                    'process_noise': [[0.1, 0.0], [0.0, 0.01]],
-                    'observation_model': [[1, 0]],
-                    'observation_noise': random.choice([0.25, 0.5, 1.0, 0.05]),
-                },
+                'ets_aan',
                 {
                     'model_name': 'local linear stochastic seasonal dummy',
                     'state_transition': [
@@ -2205,6 +2199,7 @@ class KalmanStateSpace(ModelObject):
                     'observation_model': [[1, 1, 1]],
                     'observation_noise': 1.0,
                 },
+                # I believe this is a seasonal ETS model but I would like confirmation on that
                 {
                     'model_name': "local linear hidden state with seasonal 7",
                     'state_transition': [
@@ -2261,8 +2256,9 @@ class KalmanStateSpace(ModelObject):
                     'observation_model': [[1, 0]],
                     'observation_noise': 0.1,
                 },
+                "dynamic_linear",
             ],
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1],
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1],
         )[0]
         if params in [364] and method not in ['deep']:
             params = 7
@@ -2275,14 +2271,81 @@ class KalmanStateSpace(ModelObject):
                 'observation_model': obsmod.tolist(),
                 'observation_noise': obsnois,
             }
+        elif params == "dynamic_linear":
+            choices = [
+                0.0,
+                0.1,
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                0.7,
+                0.8,
+                0.9,
+                1.0,
+                1.1,
+                1.2,
+                1.3,
+                1.4,
+                1.5,
+            ]
+            params = {
+                'model_name': 'dynamic linear',
+                'state_transition': [
+                    [1, 1, 0, 0],
+                    [0, 1, 0, 0],
+                    [0, 0, random.choice(choices), 1],
+                    [0, 0, random.choice(choices), 0],
+                ],
+                'process_noise': [
+                    [random.choice(choices), 0, 0, 0],
+                    [0, random.choice(choices), 0, 0],
+                    [0, 0, random.choice(choices), 0],
+                    [0, 0, 0, 0],
+                ],
+                'observation_model': [[1, 0, 1, 0]],
+                'observation_noise': 0.25,
+                'em_iter': 10,
+            }
+        elif params == "ets_aan":
+            choices = [
+                0.0,
+                0.01,
+                0.1,
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                0.7,
+                0.8,
+                0.9,
+                1.0,
+                1.1,
+                1.2,
+                1.3,
+                1.4,
+                1.5,
+            ]
+            params = {
+                'model_name': 'local_linear_trend_ets_aan',
+                'state_transition': [[1, 1], [0, 1]],
+                'process_noise': [
+                    [random.choice(choices), 0.0],
+                    [0.0, random.choice(choices)],
+                ],
+                'observation_model': [[1, 0]],
+                'observation_noise': random.choice([0.25, 0.5, 1.0, 0.05]),
+            }
         elif isinstance(params, int):
             state_transition = np.zeros((params + 1, params + 1))
             state_transition[0, 0] = 1
             state_transition[1, 1:-1] = [-1.0] * (params - 1)
             state_transition[2:, 1:-1] = np.eye(params - 1)
             observation_model = [[1, 1] + [0] * (params - 1)]
-            level_noise = 0.2 / random.choice([1, 5, 10])
-            season_noise = 1e-3
+            level_noise = 0.2 / random.choice([0.2, 0.5, 1, 5, 10, 200])
+            season_noise = random.choice([1e-4, 1e-3, 1e-2, 1e-1])
             process_noise_cov = (
                 np.diag([level_noise, season_noise] + [0] * (params - 1)) ** 2
             )

@@ -16,12 +16,13 @@ from autots.datasets import (  # noqa
     load_sine,
     load_artificial,
 )
-from autots import AutoTS, create_regressor, model_forecast  # noqa
+from autots import AutoTS, create_regressor, model_forecast, __version__  # noqa
 import matplotlib.pyplot as plt
 
+print(f"AutoTS version: {__version__}")
 # raise ValueError("aaargh!")
-use_template = False
-save_template = False
+use_template = True
+save_template = True
 force_univariate = False  # long = False
 back_forecast = False
 graph = True
@@ -31,7 +32,7 @@ models_to_validate = 0.25  # 0.99 to validate every tried (use with template imp
 # this is the template file imported:
 template_filename = "template_" + str(platform.node()) + ".csv"
 template_filename = "template_categories_1.csv"
-name = template_filename.replace('.csv', '')
+name = template_filename.replace('.csv', '').replace("autots_forecast_template_", "")
 random_seed = 2022
 forecast_length = 28
 long = False
@@ -40,24 +41,31 @@ long = False
 # df = load_artificial(long=long, date_start="2018-01-01")
 df = load_daily(long=long)
 interest_series = [
-    'arima220_outliers',
-    'lumpy',
-    'out-of-stock',
-    "sine_seasonality_monthweek",
-    "intermittent_weekly",
-    "arima017",
-    "old_to_new",
+    'wiki_all',
+    'wiki_William_Shakespeare',
+    'wiki_Periodic_table',
+    'wiki_Thanksgiving',
 ]
+if not long and interest_series[0] not in df.columns:
+    interest_series = [
+        'arima220_outliers',
+        'lumpy',
+        'out-of-stock',
+        "sine_seasonality_monthweek",
+        "intermittent_weekly",
+        "arima017",
+        "old_to_new",
+    ]
 prediction_interval = 0.9
 n_jobs = "auto"
 verbose = 1
-validation_method = "backwards"  # "similarity"
+validation_method = "similarity"  # "similarity"
 frequency = "infer"
 drop_most_recent = 0
-generations = 10
-generation_timeout = 30
-num_validations = 1  # "auto"
-initial_template = "Random"  # "General+Random"
+generations = 20
+generation_timeout = 300
+num_validations = 2  # "auto"
+initial_template = "Random"  # "General+Random" 
 if use_template:
     initial_training = not os.path.exists(template_filename)
     if initial_training:
@@ -69,13 +77,13 @@ if force_univariate:
     df = df.iloc[:, 0]
 
 transformer_list = "fast"  # "fast", "all", "superfast"
-# transformer_list = ["Round", "Slice", "EWMAFilter", 'Cointegration', "MeanDifference", "BTCD"]
+# transformer_list = ["SeasonalDifference", "Slice", "EWMAFilter", 'MinMaxScaler', "AlignLastValue", "RegressionFilter", "ClipOutliers", "QuantileTransformer", "DatepartRegression"]
 transformer_max_depth = 1
-models_mode = "gradient_boosting"  # "default", "regressor", "neuralnets", "gradient_boosting"
+models_mode = "default"  # "default", "regressor", "neuralnets", "gradient_boosting"
 model_list = "superfast"
 # model_list = "fast_parallel"  # fast_parallel, all, fast
 # model_list = ["LastValueNaive", "GluonTS", "SeasonalityMotif", "MetricMotif", 'PytorchForecasting']
-# model_list = ['MultivariateRegression', 'WindowRegression']
+# model_list = ['LastValueNaive', 'PytorchForecasting']
 preclean = None
 {
     "fillna": None,  # mean or median one of few consistent things
@@ -84,13 +92,14 @@ preclean = None
         "0": {"span": 14},
     },
 }
-ensemble = 'all'
-[
+ensemble = [
     "simple",
-    'mlensemble',
+    # 'mlensemble',
     'horizontal-max',
+    "mosaic-window",
+    'mosaic-crosshair',
 ]  # "dist", "subsample", "mosaic-window", "horizontal-max"
-ensemble = None
+# ensemble = None
 metric_weighting = {
     'smape_weighting': 3,
     'mae_weighting': 2,
@@ -106,7 +115,9 @@ metric_weighting = {
     'maxe_weighting': 0,
     'oda_weighting': 0,
     'mqae_weighting': 0,
+    'smoothness_weighting': -1,
 }
+# metric_weighting = {'ewmae_weighting': 1}
 constraint = {
     "constraint_method": "quantile",
     "constraint_regularization": 0.9,
@@ -116,9 +127,13 @@ constraint = {
 }
 forecast_index = pd.date_range(start=df.index[-1], periods=forecast_length + 1, freq=df.index.freq)[1:]
 # sets an extremely high value for the cap, one that should never actually be reached by the data normally
-upper_constraint = pd.DataFrame(9999999999, index=forecast_index, columns=df.columns)
+if isinstance(df, pd.Series):
+    cols = [df.name]
+else:
+    cols = df.columns
+upper_constraint = pd.DataFrame(9999999999, index=forecast_index, columns=cols)
 # in this case also assuming negatives won't happen so setting a lower constraint of 0
-lower_constraint = pd.DataFrame(0, index=forecast_index, columns=df.columns)
+lower_constraint = pd.DataFrame(0, index=forecast_index, columns=cols)
 # add in your dates you want as definitely 0
 upper_constraint.loc["2022-10-31"] = 0
 constraint = {
@@ -152,7 +167,7 @@ model = AutoTS(
     introduce_na=None,
     preclean=preclean,
     # prefill_na=0,
-    # subset=5,
+    # subset=2,
     verbose=verbose,
     models_mode=models_mode,
     random_seed=random_seed,
@@ -204,12 +219,12 @@ initial_results = model.results()
 # validation results
 validation_results = model.results("validation")
 
-initial_results["TransformationRuntime"] = initial_results[
-    "TransformationRuntime"
-].dt.total_seconds()
+"""
+initial_results["TransformationRuntime"] = initial_results["TransformationRuntime"].dt.total_seconds()
 initial_results["FitRuntime"] = initial_results["FitRuntime"].dt.total_seconds()
 initial_results["PredictRuntime"] = initial_results["PredictRuntime"].dt.total_seconds()
 initial_results["TotalRuntime"] = initial_results["TotalRuntime"].dt.total_seconds()
+"""
 
 sleep(5)
 print(model)
@@ -234,18 +249,29 @@ if save_template:
     )
 
 if graph:
+    start_date = "auto"
     prediction.plot(
         model.df_wide_numeric,
-        series=model.df_wide_numeric.columns[2],
+        series=cols[0],
         remove_zeroes=False,
-        start_date="2018-09-26",
+        start_date=start_date,
     )
+    # plt.savefig("single_forecast2.png", dpi=300, bbox_inches="tight")
+    plt.show()
+    prediction.plot_grid(model.df_wide_numeric, start_date=start_date)
+    # plt.savefig("forecast_grid2.png", dpi=300, bbox_inches="tight")
+    plt.show()
+    worst = model.best_model_per_series_score().head(6).index.tolist()
+    prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Forecasts of Highest (Worst) Historical MAPE Series", cols=worst)
+    plt.show()
+    best = model.best_model_per_series_score().tail(6).index.tolist()
+    prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Forecasts of Lowest (Best) Historical MAPE Series", cols=best)
     plt.show()
     model.plot_generation_loss()
     plt.show()
-    # plt.savefig("improvement_over_generations.png", dpi=300)
+    # plt.savefig("improvement_over_generations.png", dpi=300, bbox_inches="tight")
 
-    model.plot_per_series_smape(kind="pie")
+    model.plot_per_series_mape(kind="pie")
     plt.show()
 
     model.plot_per_series_error()
@@ -255,8 +281,12 @@ if graph:
         model.plot_horizontal_model_count()
         plt.show()
 
-        model.plot_horizontal_per_generation()
-        plt.show()
+        if back_forecast:
+            try:
+                model.plot_horizontal_per_generation()
+                plt.show()
+            except Exception as e:
+                print(f"plot horizontal per generation failed with: {repr(e)}")
 
         plt.show()
         model.plot_horizontal_transformers(method="fillna")
@@ -264,7 +294,7 @@ if graph:
         model.plot_horizontal_transformers()
         plt.show()
         model.plot_horizontal()
-        plt.savefig(f"horizontal_{name}.png", dpi=300)
+        # plt.savefig(f"horizontal_{name}.png", dpi=300)
         # plt.show()
         if "mosaic" in model.best_model["ModelParameters"].iloc[0].lower():
             mosaic_df = model.mosaic_to_df()
@@ -274,13 +304,35 @@ if graph:
     if back_forecast:
         model.plot_backforecast(n_splits="auto", start_date="2019-01-01")
 
+    ax = model.plot_validations(subset='Worst', compare_horizontal=True, include_bounds=False)
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    plt.show()
+
+    ax = model.plot_validations()
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    # plt.savefig("validation_plot.png", dpi=300, bbox_inches="tight")
+    plt.show()
+
+    ax = model.plot_validations(subset='Best')
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    # plt.savefig("validation_plot2.png", dpi=300, bbox_inches="tight")
+    plt.show()
+
+    ax = model.plot_validations(subset='Worst')
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    plt.show()
+
+    ax = model.plot_validations(subset='Best Score')
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    plt.show()
+
+    ax = model.plot_validations(subset='Worst Score')
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    plt.show()
+
 df_wide_numeric = model.df_wide_numeric
 
-df = df_wide_numeric.tail(100).fillna(0).astype(float)
-
-print("test run complete")
-
-if interest_series not in model.df_wide_numeric.columns.tolist():
+if not [x for x in interest_series if x in model.df_wide_numeric.columns.tolist()]:
     interest_series = model.df_wide_numeric.columns.tolist()[0:5]
 if model.best_model["Ensemble"].iloc[0] == 2:
     interest_models = []
@@ -295,7 +347,7 @@ if model.best_model["Ensemble"].iloc[0] == 2:
                     model.df_wide_numeric,
                     series=x,
                     remove_zeroes=False,
-                    start_date="2018-09-26",
+                    start_date=start_date,
                 )
     interest_models = pd.Series(interest_models).value_counts().head(10)
     print(interest_models)
@@ -313,8 +365,11 @@ else:
                 model.df_wide_numeric,
                 series=x,
                 remove_zeroes=False,
-                start_date="2018-09-26",
+                start_date=start_date,
+                figsize=(16,12),
             )
+
+print("test run complete")
 
 """
 forecasts = model_forecast(

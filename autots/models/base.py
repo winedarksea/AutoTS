@@ -4,12 +4,27 @@ Base model information
 
 @author: Colin
 """
+import random
 import warnings
 import datetime
 import numpy as np
 import pandas as pd
 from autots.tools.shaping import infer_frequency, clean_weights
 from autots.evaluator.metrics import full_metric_evaluation
+
+
+def create_forecast_index(frequency, forecast_length, train_last_date, last_date=None):
+    if frequency == 'infer':
+        raise ValueError(
+            "create_forecast_index run without specific frequency, run basic_profile first or pass proper frequency to model init"
+        )
+    return pd.date_range(
+        freq=frequency,
+        start=train_last_date if last_date is None else last_date,
+        periods=forecast_length + 1,
+    )[
+        1:
+    ]  # note the disposal of the first (already extant) date
 
 
 class ModelObject(object):
@@ -73,18 +88,10 @@ class ModelObject(object):
         Warnings:
             Requires ModelObject.basic_profile() being called as part of .fit()
         """
-        if self.frequency == 'infer':
-            raise ValueError(
-                "create_forecast_index run without specific frequency, run basic_profile first or pass proper frequency to model init"
-            )
-        self.forecast_index = pd.date_range(
-            freq=self.frequency,
-            start=self.train_last_date if last_date is None else last_date,
-            periods=forecast_length + 1,
-        )[
-            1:
-        ]  # note the disposal of the first (already extant) date
-        return self.forecast_index
+
+        return create_forecast_index(
+            self.frequency, forecast_length, self.train_last_date, last_date
+        )
 
     def get_params(self):
         """Return dict of current parameters."""
@@ -358,8 +365,6 @@ class PredictionObject(object):
         start_date: str = None,
     ):
         if series is None:
-            import random
-
             series = random.choice(self.forecast.columns)
 
         model_name = self.model_name
@@ -409,12 +414,13 @@ class PredictionObject(object):
         series: str = None,
         remove_zeroes: bool = False,
         interpolate: str = None,
-        start_date: str = None,
+        start_date: str = "auto",
         alpha=0.25,
         facecolor="black",
         loc="upper left",
         title=None,
         vline=None,
+        colors=None,
         **kwargs,
     ):
         """Generate an example plot of one series. Does not handle non-numeric forecasts.
@@ -427,8 +433,18 @@ class PredictionObject(object):
             interpolate (str): if not None, a method to pass to pandas interpolate
             start_date (str): Y-m-d string or Timestamp to remove all data before
             vline (datetime): datetime of dashed vertical line to plot
+            colors (dict): colors mapping dictionary col: color
+            alpha (float): intensity of bound interval shading
             **kwargs passed to pd.DataFrame.plot()
         """
+        if start_date == "auto":
+            if df_wide is not None:
+                slx = -self.forecast_length * 3
+                if slx > df_wide.shape[0]:
+                    slx = 0
+                start_date = df_wide.index[slx]
+            else:
+                start_date = self.forecast.index[0]
         plot_df = self.plot_df(
             df_wide=df_wide,
             series=series,
@@ -436,6 +452,13 @@ class PredictionObject(object):
             interpolate=interpolate,
             start_date=start_date,
         )
+        if colors is None:
+            colors = {
+                'low_forecast': '#A5ADAF',
+                'up_forecast': '#A5ADAF',
+                'forecast': '#003399',  # '#4D4DFF',
+                'actuals': '#AFDBF5',
+            }
         if title is None:
             title_prelim = str(self.model_name)[0:80]
             if title_prelim == "Ensemble":
@@ -444,13 +467,24 @@ class PredictionObject(object):
                     title_prelim = self.model_parameters['series'].get(
                         series, "Horizontal"
                     )
+                    title_prelim = (
+                        self.model_parameters.get("models", {})
+                        .get(title_prelim)
+                        .get('Model')
+                    )
                 else:
                     title_prelim = ensemble_type
             title = f"{series} with model {title_prelim}"
-        if vline is None:
-            return plot_df.plot(title=title, **kwargs)
-        else:
-            ax = plot_df.plot(title=title, **kwargs)
+
+        ax = plot_df[['actuals', 'forecast']].plot(title=title, color=colors, **kwargs)
+        ax.fill_between(
+            plot_df.index,
+            plot_df['up_forecast'],
+            plot_df['low_forecast'],
+            alpha=alpha,
+            color="#A5ADAF",
+        )
+        if vline is not None:
             ax.vlines(
                 x=vline,
                 ls='--',
@@ -459,7 +493,58 @@ class PredictionObject(object):
                 ymin=plot_df.min().min(),
                 ymax=plot_df.max().max(),
             )
-            return ax
+        return ax
+
+    def plot_grid(
+        self,
+        df_wide=None,
+        start_date='auto',
+        interpolate=None,
+        remove_zeroes=False,
+        figsize=(24, 18),
+        title="AutoTS Forecasts",
+        cols=None,
+        colors=None,
+    ):
+        """Plots multiple series in a grid, if present."""
+        import matplotlib.pyplot as plt
+
+        if cols is None:
+            cols = self.forecast_columns
+        num_cols = len(cols)
+        if num_cols > 4:
+            nrow = 2
+            ncol = 3
+        elif num_cols > 2:
+            nrow = 2
+            ncol = 2
+        else:
+            nrow = 1
+            ncol = 2
+        fig, axes = plt.subplots(nrow, ncol, figsize=figsize)
+        fig.suptitle(title)
+        count = 0
+        for r in range(nrow):
+            for c in range(ncol):
+                if nrow > 1:
+                    ax = axes[r, c]
+                else:
+                    ax = axes[c]
+                if count + 1 > num_cols:
+                    pass
+                else:
+                    col = cols[count]
+                    self.plot(
+                        df_wide=df_wide,
+                        series=col,
+                        remove_zeroes=remove_zeroes,
+                        interpolate=interpolate,
+                        start_date=start_date,
+                        colors=colors,
+                        ax=ax,
+                    )
+                    count += 1
+        return fig
 
     def evaluate(
         self,

@@ -6,7 +6,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 
-    <title>Tutorial &#8212; AutoTS 0.5.7 documentation</title>
+    <title>Tutorial &#8212; AutoTS 0.5.8 documentation</title>
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
     <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
@@ -360,7 +360,7 @@ Additionally, <code class="docutils literal notranslate"><span class="pre">MLE</
 Both <code class="docutils literal notranslate"><span class="pre">simple</span></code> and <code class="docutils literal notranslate"><span class="pre">distance</span></code> style models are constructed on the first evaluation set of data, and run through validation along with all other models selected for validation.
 Both of these can also be recursive in depth, containing ensembles of ensembles. This recursive ensembling can happen when ensembles are imported from a starting template - they work just fine, but may get rather slow, having lots of models.</p>
 <p><code class="docutils literal notranslate"><span class="pre">horizontal</span></code> ensembles are the type of ensembles for which this package was originally created.
-With this, each series gets its own model. This avoids the ‘one size does not fit all’ problem when many time series are in a datset.
+With this, each series gets its own model. This avoids the ‘one size does not fit all’ problem when many time series are in a dataset.
 In the interest of efficiency, univariate models are only run on the series they are needed for.
 Models not in the <code class="docutils literal notranslate"><span class="pre">no_shared</span></code> list may make horizontal ensembling very slow at scale - as they have to be run for every series, even if they are only used for one.
 <code class="docutils literal notranslate"><span class="pre">horizontal-max</span></code> chooses the best series for every model. <code class="docutils literal notranslate"><span class="pre">horizontal</span></code> and <code class="docutils literal notranslate"><span class="pre">horizontal-min</span></code> attempt to reduce the number of slow models chosen while still maintaining as much accuracy as possble.
@@ -829,7 +829,7 @@ All draw from the same potential pool of models, mostly sklearn and tensorflow m
 <li><p>DatepartRegression is where X is simply the date features, and Y are the time series values for that date.</p></li>
 <li><p>WindowRegression takes an <code class="docutils literal notranslate"><span class="pre">n</span></code> preceeding data points as X to predict the future value or values of the series.</p></li>
 <li><p>RollingRegression takes all time series and summarized rolling values of those series in one massive dataframe as X. Works well for a small number of series but scales poorly.</p></li>
-<li><p>MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series <code class="docutils literal notranslate"><span class="pre">i</span></code> are used to predict next step for series <code class="docutils literal notranslate"><span class="pre">i</span></code>, with a model trained on all data from all series.</p></li>
+<li><p>MultivariateRegression uses the same rolling features as above, but considers them one at a time, features for series <code class="docutils literal notranslate"><span class="pre">i</span></code> are used to predict next step for series <code class="docutils literal notranslate"><span class="pre">i</span></code>, with a model trained on all data from all series. This model is now often called by the community a “global forecasting ML model”.</p></li>
 <li><p>UnivariateRegression is the same as MultivariateRegression but trains an independent model on each series, thus not capable of learning from the patterns of other series. This performs well in horizontal ensembles as it can be parsed down to one series with the same performance on that series.</p></li>
 </ul>
 <p>Currently <code class="docutils literal notranslate"><span class="pre">MultivariateRegression</span></code> has the (slower) option to utilize a stock GradientBoostingRegressor with quantile loss for probabilistic estimates, while others utilize point to probabilistic estimates.</p>

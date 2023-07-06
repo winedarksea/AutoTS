@@ -555,6 +555,22 @@ datepart_model_dict: dict = {
     'ExtraTrees': 0.07,
     'RadiusNeighbors': 0.05,
 }
+gradient_boosting = {
+    'xgboost': 0.09,
+    'HistGradientBoost': 0.03,
+    'LightGBM': 0.09,
+    'LightGBMRegressorChain': 0.03,
+}
+# all tree based models
+tree_dict = {
+    'DecisionTree': 1,
+    'RandomForest': 1,
+    'ExtraTrees': 1,
+    'LightGBM': 1,
+    'HistGradientBoost': 1,
+    'xgboost': 1,
+    'XGBRegressor': 1,
+}
 # pre-optimized model templates
 xgparam3 = {
     "model": 'xgboost',
@@ -659,12 +675,10 @@ def generate_regressor_params(
         }
         method = "deep"
     elif method == "gradient_boosting":
-        model_dict = {
-            'xgboost': 0.09,
-            'HistGradientBoost': 0.03,
-            'LightGBM': 0.09,
-            'LightGBMRegressorChain': 0.03,
-        }
+        model_dict = gradient_boosting
+        method = "default"
+    elif method == "trees":
+        model_dict = tree_dict
         method = "default"
     """Generate new parameters for input to regressor."""
     model_list = list(model_dict.keys())
@@ -694,7 +708,8 @@ def generate_regressor_params(
                         ['linear', 'square', 'exponential'], [0.8, 0.01, 0.1]
                     )[0],
                     "estimator": random.choices(
-                        [None, 'LinReg', 'SVR'], [0.8, 0.1, 0.1]
+                        [None, 'LinReg', 'SVR'],
+                        [0.8, 0.1, 0.0],  # SVR slow and crash prone
                     )[0],
                     "learning_rate": random.choices([1, 0.5], [0.9, 0.1])[0],
                 },
@@ -1953,7 +1968,7 @@ class DatepartRegression(ModelObject):
 
         y = df.to_numpy()
 
-        X = date_part(
+        self.X = date_part(
             df.index,
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
@@ -1961,8 +1976,8 @@ class DatepartRegression(ModelObject):
         if self.regression_type in ['User', 'user']:
             # regr = future_regressor.copy()
             # regr.index = X.index
-            X = pd.concat([X, future_regressor], axis=1)
-        X.columns = [str(xc) for xc in X.columns]
+            self.X = pd.concat([self.X, future_regressor], axis=1)
+        self.X.columns = [str(xc) for xc in self.X.columns]
 
         multioutput = True
         if y.ndim < 2:
@@ -1979,7 +1994,7 @@ class DatepartRegression(ModelObject):
             multioutput=multioutput,
         )
         self.df_train = df
-        self.model = self.model.fit(X.astype(float), y.astype(float))
+        self.model = self.model.fit(self.X.astype(float), y.astype(float))
         self.shape = df.shape
         return self
 
@@ -2002,17 +2017,19 @@ class DatepartRegression(ModelObject):
         """
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
-        X = date_part(
+        self.X_pred = date_part(
             index, method=self.datepart_method, polynomial_degree=self.polynomial_degree
         )
         if self.regression_type in ['User', 'user']:
-            X = pd.concat([X, future_regressor], axis=1)
-            if X.shape[0] > index.shape[0]:
+            self.X_pred = pd.concat([self.X_pred, future_regressor], axis=1)
+            if self.X_pred.shape[0] > index.shape[0]:
                 raise ValueError("future_regressor and X index failed to align")
-        X.columns = [str(xc) for xc in X.columns]
+        self.X_pred.columns = [str(xc) for xc in self.X_pred.columns]
 
         forecast = pd.DataFrame(
-            self.model.predict(X.astype(float)), index=index, columns=self.column_names
+            self.model.predict(self.X_pred.astype(float)),
+            index=index,
+            columns=self.column_names,
         )
 
         if just_point_forecast:
@@ -2772,7 +2789,7 @@ class MultivariateRegression(ModelObject):
             cur_regr = None
             if self.regression_type is not None:
                 cur_regr = base_regr.reindex(current_x.index)
-            x_dat = pd.concat(
+            self.X_pred = pd.concat(
                 [
                     rolling_x_regressor_regressor(
                         current_x[x_col].to_frame(),
@@ -2800,17 +2817,17 @@ class MultivariateRegression(ModelObject):
                     for x_col in current_x.columns
                 ]
             ).to_numpy()
-            rfPred = self.model.predict(x_dat)
+            rfPred = self.model.predict(self.X_pred)
             pred_clean = pd.DataFrame(
                 rfPred, index=current_x.columns, columns=[index[fcst_step]]
             ).transpose()
             forecast = pd.concat([forecast, pred_clean])
             if self.probabilistic:
-                rfPred_upper = self.model_upper.predict(x_dat)
+                rfPred_upper = self.model_upper.predict(self.X_pred)
                 pred_upper = pd.DataFrame(
                     rfPred_upper, index=current_x.columns, columns=[index[fcst_step]]
                 ).transpose()
-                rfPred_lower = self.model_lower.predict(x_dat)
+                rfPred_lower = self.model_lower.predict(self.X_pred)
                 pred_lower = pd.DataFrame(
                     rfPred_lower, index=current_x.columns, columns=[index[fcst_step]]
                 ).transpose()
