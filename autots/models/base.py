@@ -26,6 +26,7 @@ def create_forecast_index(frequency, forecast_length, train_last_date, last_date
         1:
     ]  # note the disposal of the first (already extant) date
 
+
 class ModelObject(object):
     """Generic class for holding forecasting models.
 
@@ -87,8 +88,10 @@ class ModelObject(object):
         Warnings:
             Requires ModelObject.basic_profile() being called as part of .fit()
         """
-        
-        return create_forecast_index(self.frequency, forecast_length, self.train_last_date, last_date)
+
+        return create_forecast_index(
+            self.frequency, forecast_length, self.train_last_date, last_date
+        )
 
     def get_params(self):
         """Return dict of current parameters."""
@@ -464,13 +467,23 @@ class PredictionObject(object):
                     title_prelim = self.model_parameters['series'].get(
                         series, "Horizontal"
                     )
-                    title_prelim = self.model_parameters.get("models", {}).get(title_prelim).get('Model')
+                    title_prelim = (
+                        self.model_parameters.get("models", {})
+                        .get(title_prelim)
+                        .get('Model')
+                    )
                 else:
                     title_prelim = ensemble_type
             title = f"{series} with model {title_prelim}"
 
         ax = plot_df[['actuals', 'forecast']].plot(title=title, color=colors, **kwargs)
-        ax.fill_between(plot_df.index, plot_df['up_forecast'], plot_df['low_forecast'], alpha=alpha, color="#A5ADAF")
+        ax.fill_between(
+            plot_df.index,
+            plot_df['up_forecast'],
+            plot_df['low_forecast'],
+            alpha=alpha,
+            color="#A5ADAF",
+        )
         if vline is not None:
             ax.vlines(
                 x=vline,
@@ -482,7 +495,17 @@ class PredictionObject(object):
             )
         return ax
 
-    def plot_grid(self, df_wide=None, start_date='auto', interpolate=None, remove_zeroes=False, figsize=(24, 18), title="AutoTS Forecasts", cols=None, colors=None):
+    def plot_grid(
+        self,
+        df_wide=None,
+        start_date='auto',
+        interpolate=None,
+        remove_zeroes=False,
+        figsize=(24, 18),
+        title="AutoTS Forecasts",
+        cols=None,
+        colors=None,
+    ):
         """Plots multiple series in a grid, if present."""
         import matplotlib.pyplot as plt
 
@@ -503,24 +526,24 @@ class PredictionObject(object):
         count = 0
         for r in range(nrow):
             for c in range(ncol):
-                    if nrow > 1:
-                        ax = axes[r,c]
-                    else:
-                        ax = axes[c]
-                    if count + 1 > num_cols:
-                        pass
-                    else:
-                        col = cols[count]
-                        self.plot(
-                            df_wide=df_wide,
-                            series=col,
-                            remove_zeroes=remove_zeroes,
-                            interpolate=interpolate,
-                            start_date=start_date,
-                            colors=colors,
-                            ax=ax,
-                        )
-                        count += 1
+                if nrow > 1:
+                    ax = axes[r, c]
+                else:
+                    ax = axes[c]
+                if count + 1 > num_cols:
+                    pass
+                else:
+                    col = cols[count]
+                    self.plot(
+                        df_wide=df_wide,
+                        series=col,
+                        remove_zeroes=remove_zeroes,
+                        interpolate=interpolate,
+                        start_date=start_date,
+                        colors=colors,
+                        ax=ax,
+                    )
+                    count += 1
         return fig
 
     def evaluate(

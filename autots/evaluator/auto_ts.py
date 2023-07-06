@@ -1634,7 +1634,7 @@ or otherwise increase models available."""
                     print("Horizontal ensemble failed. Using best non-horizontal.")
                     time.sleep(3)
                 self.best_model = self.best_model_non_horizontal
-                
+
         else:
             # choose best model, when no horizontal ensembling is done
             eligible_models = self.validation_results.model_results[
@@ -1861,29 +1861,37 @@ or otherwise increase models available."""
         )
 
     def _predict(
-            self,
-            forecast_length: int = "self",
-            prediction_interval: float = 'self',
-            future_regressor=None,
-            fail_on_forecast_nan: bool = True,
-            verbose: int = 'self',
-            model_name=None,
-            model_params=None,
-            model_transformation_params=None,
-            df_wide_numeric=None,
-            future_regressor_train=None,
-        ):
+        self,
+        forecast_length: int = "self",
+        prediction_interval: float = 'self',
+        future_regressor=None,
+        fail_on_forecast_nan: bool = True,
+        verbose: int = 'self',
+        model_name=None,
+        model_params=None,
+        model_transformation_params=None,
+        df_wide_numeric=None,
+        future_regressor_train=None,
+    ):
         df_forecast = model_forecast(
             model_name=self.best_model_name if model_name is None else model_name,
-            model_param_dict=self.best_model_params.copy() if model_params is None else model_params,
-            model_transform_dict=self.best_model_transformation_params if model_transformation_params is None else model_transformation_params,
-            df_train=self.df_wide_numeric if df_wide_numeric is None else df_wide_numeric,
+            model_param_dict=self.best_model_params.copy()
+            if model_params is None
+            else model_params,
+            model_transform_dict=self.best_model_transformation_params
+            if model_transformation_params is None
+            else model_transformation_params,
+            df_train=self.df_wide_numeric
+            if df_wide_numeric is None
+            else df_wide_numeric,
             forecast_length=forecast_length,
             frequency=self.frequency,
             prediction_interval=prediction_interval,
             no_negatives=self.no_negatives,
             constraint=self.constraint,
-            future_regressor_train=self.future_regressor_train if future_regressor_train is None else future_regressor_train,
+            future_regressor_train=self.future_regressor_train
+            if future_regressor_train is None
+            else future_regressor_train,
             future_regressor_forecast=future_regressor,
             holiday_country=self.holiday_country,
             startTimeStamps=self.startTimeStamps,
@@ -1899,26 +1907,18 @@ or otherwise increase models available."""
         # convert categorical back to numeric
         trans = self.categorical_transformer
         df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
-        df_forecast.lower_forecast = trans.inverse_transform(
-            df_forecast.lower_forecast
-        )
-        df_forecast.upper_forecast = trans.inverse_transform(
-            df_forecast.upper_forecast
-        )
+        df_forecast.lower_forecast = trans.inverse_transform(df_forecast.lower_forecast)
+        df_forecast.upper_forecast = trans.inverse_transform(df_forecast.upper_forecast)
         # undo preclean transformations if necessary
         if self.preclean is not None:
             df_forecast.forecast = self.preclean_transformer.inverse_transform(
                 df_forecast.forecast
             )
-            df_forecast.lower_forecast = (
-                self.preclean_transformer.inverse_transform(
-                    df_forecast.lower_forecast
-                )
+            df_forecast.lower_forecast = self.preclean_transformer.inverse_transform(
+                df_forecast.lower_forecast
             )
-            df_forecast.upper_forecast = (
-                self.preclean_transformer.inverse_transform(
-                    df_forecast.upper_forecast
-                )
+            df_forecast.upper_forecast = self.preclean_transformer.inverse_transform(
+                df_forecast.upper_forecast
             )
         sys.stdout.flush()
         return df_forecast
@@ -2585,11 +2585,24 @@ or otherwise increase models available."""
     def plot_back_forecast(self, **kwargs):
         return self.plot_backforecast(**kwargs)
 
-    def plot_validations(self, models=None, series=None, title=None, start_date="auto", end_date=None, subset=None, compare_horizontal=False, colors=None, include_bounds=True, alpha=0.35, **kwargs):
+    def plot_validations(
+        self,
+        models=None,
+        series=None,
+        title=None,
+        start_date="auto",
+        end_date=None,
+        subset=None,
+        compare_horizontal=False,
+        colors=None,
+        include_bounds=True,
+        alpha=0.35,
+        **kwargs,
+    ):
         """Similar to plot_backforecast but using the model's validation segments specifically. Must reforecast.
         Saves results to self.validation_forecasts and caches. Set that to None to force rerun otherwise it uses stored (when models is the same).
         'chosen' refers to best_model_id, the model chosen to run for predict
-        
+
         Args:
             models (list): list, str, df or None, models to compare (IDs unless df of model params)
             series (str): time series to graph
@@ -2612,18 +2625,24 @@ or otherwise increase models available."""
             elif subset is None:
                 series = random.choice(self.df_wide_numeric.columns)
             else:
-                raise ValueError("plot_validations arg subset must be None, 'best' or 'worst'")
+                raise ValueError(
+                    "plot_validations arg subset must be None, 'best' or 'worst'"
+                )
         if title is None:
             if subset is not None:
                 if "score" in str(subset).lower():
-                    title = f"Validation Forecasts for {subset} Tested Series {series}" 
+                    title = f"Validation Forecasts for {subset} Tested Series {series}"
                 else:
-                    title = f"Validation Forecasts for {subset} Tested MAPE Series {series}"
+                    title = (
+                        f"Validation Forecasts for {subset} Tested MAPE Series {series}"
+                    )
             else:
                 title = f"Validation Forecasts for {series}"
         if models is None:
             if self.best_model_non_horizontal is not None and compare_horizontal:
-                validation_template = pd.concat([self.best_model, self.best_model_non_horizontal], axis=0)
+                validation_template = pd.concat(
+                    [self.best_model, self.best_model_non_horizontal], axis=0
+                )
             else:
                 validation_template = self.best_model
                 colors = {
@@ -2634,9 +2653,13 @@ or otherwise increase models available."""
                 }
         elif isinstance(models, str):
             val_results = self.results()
-            validation_template = val_results[val_results['ID'].isin([models])][self.template_cols].drop_duplicates()
+            validation_template = val_results[val_results['ID'].isin([models])][
+                self.template_cols
+            ].drop_duplicates()
         elif isinstance(models, list):
-            validation_template = val_results[val_results['ID'].isin(models)][self.template_cols].drop_duplicates()
+            validation_template = val_results[val_results['ID'].isin(models)][
+                self.template_cols
+            ].drop_duplicates()
         elif isinstance(models, pd.DataFrame):
             validation_template = models
         duplicated = False
@@ -2654,18 +2677,22 @@ or otherwise increase models available."""
                 fut_reg = self.future_regressor_train.reindex(sec_idx)
                 for index, row in validation_template.iterrows():
                     df_forecast = self._predict(
-                            forecast_length=self.forecast_length,
-                            prediction_interval=self.prediction_interval,
-                            future_regressor=fut_reg,
-                            fail_on_forecast_nan=False,
-                            verbose=self.verbose,
-                            model_name=row["Model"],
-                            model_params=row["ModelParameters"],
-                            model_transformation_params=row["TransformationParameters"],
-                            df_wide_numeric=self.df_wide_numeric.reindex(test_idx),
-                            future_regressor_train=train_reg,
-                        )
-                    idz = create_model_id(row["Model"], row["ModelParameters"], row["TransformationParameters"])
+                        forecast_length=self.forecast_length,
+                        prediction_interval=self.prediction_interval,
+                        future_regressor=fut_reg,
+                        fail_on_forecast_nan=False,
+                        verbose=self.verbose,
+                        model_name=row["Model"],
+                        model_params=row["ModelParameters"],
+                        model_transformation_params=row["TransformationParameters"],
+                        df_wide_numeric=self.df_wide_numeric.reindex(test_idx),
+                        future_regressor_train=train_reg,
+                    )
+                    idz = create_model_id(
+                        row["Model"],
+                        row["ModelParameters"],
+                        row["TransformationParameters"],
+                    )
                     if idz == self.best_model_id:
                         idz = "chosen_model"
                     self.validation_forecasts[str(val) + "_" + str(idz)] = df_forecast
@@ -2680,17 +2707,30 @@ or otherwise increase models available."""
             if mname == "chosen" or mname in needed_mods:
                 new_df = pd.DataFrame(index=self.df_wide_numeric.index)
                 new_df[mname] = self.validation_forecasts[x].forecast[series]
-                new_df[mname + "_" + "upper"] = self.validation_forecasts[x].upper_forecast[series]
-                new_df[mname + "_" + "lower"] = self.validation_forecasts[x].lower_forecast[series]
+                new_df[mname + "_" + "upper"] = self.validation_forecasts[
+                    x
+                ].upper_forecast[series]
+                new_df[mname + "_" + "lower"] = self.validation_forecasts[
+                    x
+                ].lower_forecast[series]
                 df_list.append(new_df)
         plot_df = pd.concat(df_list, sort=True, axis=0)
         plot_df = plot_df.groupby(level=0).last()
-        plot_df = self.df_wide_numeric[series].rename("actuals").to_frame().merge(plot_df, left_index=True, right_index=True, how="left")
+        plot_df = (
+            self.df_wide_numeric[series]
+            .rename("actuals")
+            .to_frame()
+            .merge(plot_df, left_index=True, right_index=True, how="left")
+        )
         if not include_bounds:
-            colb = [x for x in plot_df.columns if "_lower" not in x and "_upper" not in x]
+            colb = [
+                x for x in plot_df.columns if "_lower" not in x and "_upper" not in x
+            ]
             plot_df = plot_df[colb]
         if start_date == "auto":
-            start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(how='all', axis=0).index.min() - pd.Timedelta(days=7)
+            start_date = plot_df[plot_df.columns.difference(['actuals'])].dropna(
+                how='all', axis=0
+            ).index.min() - pd.Timedelta(days=7)
         if start_date is not None:
             plot_df = plot_df[plot_df.index >= start_date]
         if end_date is not None:
@@ -2698,8 +2738,16 @@ or otherwise increase models available."""
         # actual plotting section
         if colors is not None:
             # this will need to change is users are allowed to input colors
-            ax = plot_df[['actuals', 'chosen']].plot(title=title, color=colors, **kwargs)
-            ax.fill_between(plot_df.index, plot_df['chosen_upper'], plot_df['chosen_lower'], alpha=alpha, color="#A5ADAF")
+            ax = plot_df[['actuals', 'chosen']].plot(
+                title=title, color=colors, **kwargs
+            )
+            ax.fill_between(
+                plot_df.index,
+                plot_df['chosen_upper'],
+                plot_df['chosen_lower'],
+                alpha=alpha,
+                color="#A5ADAF",
+            )
         else:
             ax = plot_df.plot(title=title, **kwargs)
         ax.vlines(

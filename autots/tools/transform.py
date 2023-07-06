@@ -3342,23 +3342,69 @@ class KalmanSmoothing(EmptyTransformer):
                 'observation_noise': obsnois,
             }
         elif params == "dynamic_linear":
-            choices = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5]
+            choices = [
+                0.0,
+                0.1,
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                0.7,
+                0.8,
+                0.9,
+                1.0,
+                1.1,
+                1.2,
+                1.3,
+                1.4,
+                1.5,
+            ]
             params = {
                 'model_name': 'dynamic linear',
-                'state_transition': [[1, 1, 0, 0],
-                 [0, 1, 0, 0],
-                 [0, 0, random.choice(choices), 1], [0, 0, random.choice(choices), 0]],
-                'process_noise': [[random.choice(choices), 0, 0, 0], [0, random.choice(choices), 0, 0], [0, 0, random.choice(choices), 0], [0, 0, 0, 0]],
+                'state_transition': [
+                    [1, 1, 0, 0],
+                    [0, 1, 0, 0],
+                    [0, 0, random.choice(choices), 1],
+                    [0, 0, random.choice(choices), 0],
+                ],
+                'process_noise': [
+                    [random.choice(choices), 0, 0, 0],
+                    [0, random.choice(choices), 0, 0],
+                    [0, 0, random.choice(choices), 0],
+                    [0, 0, 0, 0],
+                ],
                 'observation_model': [[1, 0, 1, 0]],
                 'observation_noise': 0.25,
-                'em_iter': 10
-             }
+                'em_iter': 10,
+            }
         elif params == "ets_aan":
-            choices = [0.0, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5]
+            choices = [
+                0.0,
+                0.01,
+                0.1,
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                0.7,
+                0.8,
+                0.9,
+                1.0,
+                1.1,
+                1.2,
+                1.3,
+                1.4,
+                1.5,
+            ]
             params = {
                 'model_name': 'local_linear_trend_ets_aan',
                 'state_transition': [[1, 1], [0, 1]],
-                'process_noise': [[random.choice(choices), 0.0], [0.0, random.choice(choices)]],
+                'process_noise': [
+                    [random.choice(choices), 0.0],
+                    [0.0, random.choice(choices)],
+                ],
                 'observation_model': [[1, 0]],
                 'observation_noise': random.choice([0.25, 0.5, 1.0, 0.05]),
             }

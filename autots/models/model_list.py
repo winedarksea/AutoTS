@@ -124,7 +124,12 @@ parallel = {
 fast_parallel = {**parallel, **fast}
 fast_parallel_no_arima = {i: fast_parallel[i] for i in fast_parallel if i != 'ARIMA'}
 # so this opiniated and not fully updated always
-best = list(set(list(fast_parallel_no_arima.keys()) + ['MultivariateRegression', 'GluonTS', 'TMF', 'PytorchForecasting']))
+best = list(
+    set(
+        list(fast_parallel_no_arima.keys())
+        + ['MultivariateRegression', 'GluonTS', 'TMF', 'PytorchForecasting']
+    )
+)
 
 # models that are explicitly not production ready
 experimental = [
@@ -333,6 +338,7 @@ model_lists = {
 
 def auto_model_list(n_jobs, n_series, frequency):
     pass
+
 
 def model_list_to_dict(model_list):
     """Convert various possibilities to dict."""

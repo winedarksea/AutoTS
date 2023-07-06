@@ -256,10 +256,10 @@ if graph:
         remove_zeroes=False,
         start_date=start_date,
     )
-    plt.savefig("single_forecast2.png", dpi=300, bbox_inches="tight")
+    # plt.savefig("single_forecast2.png", dpi=300, bbox_inches="tight")
     plt.show()
     prediction.plot_grid(model.df_wide_numeric, start_date=start_date)
-    plt.savefig("forecast_grid2.png", dpi=300, bbox_inches="tight")
+    # plt.savefig("forecast_grid2.png", dpi=300, bbox_inches="tight")
     plt.show()
     worst = model.best_model_per_series_score().head(6).index.tolist()
     prediction.plot_grid(model.df_wide_numeric, start_date=start_date, title="Forecasts of Highest (Worst) Historical MAPE Series", cols=worst)
@@ -294,7 +294,7 @@ if graph:
         model.plot_horizontal_transformers()
         plt.show()
         model.plot_horizontal()
-        plt.savefig(f"horizontal_{name}.png", dpi=300)
+        # plt.savefig(f"horizontal_{name}.png", dpi=300)
         # plt.show()
         if "mosaic" in model.best_model["ModelParameters"].iloc[0].lower():
             mosaic_df = model.mosaic_to_df()
@@ -310,12 +310,12 @@ if graph:
 
     ax = model.plot_validations()
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
-    plt.savefig("validation_plot.png", dpi=300, bbox_inches="tight")
+    # plt.savefig("validation_plot.png", dpi=300, bbox_inches="tight")
     plt.show()
 
     ax = model.plot_validations(subset='Best')
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
-    plt.savefig("validation_plot2.png", dpi=300, bbox_inches="tight")
+    # plt.savefig("validation_plot2.png", dpi=300, bbox_inches="tight")
     plt.show()
 
     ax = model.plot_validations(subset='Worst')

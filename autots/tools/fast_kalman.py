@@ -253,8 +253,9 @@ class KalmanFilter(object):
             assert observation_model.shape[-2:] == (n_obs, n_states)
             assert observation_noise.shape[-2:] == (n_obs, n_obs)
         except Exception as e:
-            raise ValueError(f"dimension mismatch: n_states: {n_states}, n_obs: {n_obs}") from e
-            
+            raise ValueError(
+                f"dimension mismatch: n_states: {n_states}, n_obs: {n_obs}"
+            ) from e
 
         self.state_transition = state_transition
         self.process_noise = process_noise

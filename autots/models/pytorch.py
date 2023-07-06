@@ -15,6 +15,7 @@ from autots.tools.seasonal import date_part, seasonal_int
 try:
     # bewarned, pytorch-forecasting has useless error messages
     import torch
+
     try:
         import lightning.pytorch as pl  # 2.0 way
     except Exception:
@@ -148,9 +149,13 @@ class PytorchForecasting(ModelObject):
                     self.range_idx_name = temp_name
 
         # convert wide data back to long for this
-        df_int[self.range_idx_name] = pd.RangeIndex(start=0, stop=df_int.shape[0], step=1)
+        df_int[self.range_idx_name] = pd.RangeIndex(
+            start=0, stop=df_int.shape[0], step=1
+        )
         self._id_vars = [self.range_idx_name]
-        data = df_int.melt(id_vars=self._id_vars, var_name='series_id', value_name='value')
+        data = df_int.melt(
+            id_vars=self._id_vars, var_name='series_id', value_name='value'
+        )
         if self.datepart_method is not None:
             dt_merge = df_int[self.range_idx_name].drop_duplicates()
             date_parts = date_part(
@@ -186,7 +191,9 @@ class PytorchForecasting(ModelObject):
             group_ids=["series_id"],
             # static_categoricals=["series_id"],  # recommeded for DeepAR
             max_encoder_length=self.max_encoder_length,
-            min_encoder_length=self.max_encoder_length if self.max_encoder_length < 90 else 7,
+            min_encoder_length=self.max_encoder_length
+            if self.max_encoder_length < 90
+            else 7,
             max_prediction_length=self.forecast_length,
             target_normalizer=encoder,
             # static_categoricals=[ ... ],
@@ -423,15 +430,13 @@ class PytorchForecasting(ModelObject):
             )
             colz = pred_idx['series_id']
         pred_num = self.predictions.numpy(force=True).T
-        predictions_df = pd.DataFrame(
-            pred_num, columns=colz, index=test_index
-        )[self.column_names]
+        predictions_df = pd.DataFrame(pred_num, columns=colz, index=test_index)[
+            self.column_names
+        ]
 
         if just_point_forecast:
             return predictions_df
-        self.result_windows = self.tft.predict(
-            self.x_predict, mode="quantiles"
-        )
+        self.result_windows = self.tft.predict(self.x_predict, mode="quantiles")
         self.result_windows = self.result_windows.transpose(0, 2)
         if self.result_windows.shape[2] > 1:
             c_int = (1.0 - self.prediction_interval) / 2
@@ -478,8 +483,14 @@ class PytorchForecasting(ModelObject):
         """Return dict of new parameters for parameter tuning."""
         parameter_dict = {
             "model": random.choices(
-                ["TemporalFusionTransformer", "DecoderMLP", 'DeepAR', "NHiTS", "NBeats"],
-                [0.3, 0.2, 0.3, 0.2, 0.2]
+                [
+                    "TemporalFusionTransformer",
+                    "DecoderMLP",
+                    'DeepAR',
+                    "NHiTS",
+                    "NBeats",
+                ],
+                [0.3, 0.2, 0.3, 0.2, 0.2],
             )[0],
             "max_encoder_length": random.choice([7, 12, 24, 28, 60, 96, 364]),
             "datepart_method": random.choices(

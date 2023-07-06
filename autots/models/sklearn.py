@@ -708,7 +708,8 @@ def generate_regressor_params(
                         ['linear', 'square', 'exponential'], [0.8, 0.01, 0.1]
                     )[0],
                     "estimator": random.choices(
-                        [None, 'LinReg', 'SVR'], [0.8, 0.1, 0.1]
+                        [None, 'LinReg', 'SVR'],
+                        [0.8, 0.1, 0.0],  # SVR slow and crash prone
                     )[0],
                     "learning_rate": random.choices([1, 0.5], [0.9, 0.1])[0],
                 },
@@ -2026,7 +2027,9 @@ class DatepartRegression(ModelObject):
         self.X_pred.columns = [str(xc) for xc in self.X_pred.columns]
 
         forecast = pd.DataFrame(
-            self.model.predict(self.X_pred.astype(float)), index=index, columns=self.column_names
+            self.model.predict(self.X_pred.astype(float)),
+            index=index,
+            columns=self.column_names,
         )
 
         if just_point_forecast:

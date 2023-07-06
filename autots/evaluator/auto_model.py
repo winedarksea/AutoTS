@@ -69,9 +69,7 @@ def create_model_id(
         str_trans = json.dumps(transformation_dict)
     else:
         str_trans = str(transformation_dict)
-    str_repr = (
-        str(model_str) + str_params + str_trans
-    )
+    str_repr = str(model_str) + str_params + str_trans
     str_repr = ''.join(str_repr.split())
     hashed = md5(str_repr.encode('utf-8')).hexdigest()
     return hashed
@@ -2568,9 +2566,12 @@ def generate_score_per_series(
         # remove basic duplicates
         local_results = results_object.model_results.copy()
         local_results = local_results[local_results['Exceptions'].isna()]
-        local_results = local_results.sort_values(by="TotalRuntimeSeconds", ascending=True)
+        local_results = local_results.sort_values(
+            by="TotalRuntimeSeconds", ascending=True
+        )
         local_results = local_results.drop_duplicates(
-            subset=['ValidationRound', 'smape', 'mae', 'spl'], keep="first",
+            subset=['ValidationRound', 'smape', 'mae', 'spl'],
+            keep="first",
         )
         run_count = local_results[['Model', 'ID']].groupby("ID").count()
         models_to_use = run_count[
