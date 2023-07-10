@@ -781,7 +781,7 @@ class AutoTS(object):
             except Exception:
                 return "Initiated AutoTS object"
 
-    def fit_data(self, df, date_col=None, value_col=None, id_col=None, weights={}):
+    def fit_data(self, df, date_col=None, value_col=None, id_col=None, future_regressor=None, weights={}):
         """Part of the setup that involves fitting the initial data but not running any models."""
         self.date_col = date_col
         self.value_col = value_col
@@ -891,7 +891,28 @@ class AutoTS(object):
 
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
+        
+        if future_regressor is not None:
+            if not isinstance(future_regressor, pd.DataFrame):
+                future_regressor = pd.DataFrame(future_regressor)
+            if future_regressor.empty:
+                raise ValueError(
+                    "future_regressor empty, pass None if intending not to use"
+                )
+            if not isinstance(future_regressor.index, pd.DatetimeIndex):
+                # should be same length as history as this is not yet the predict step
+                future_regressor.index = df_wide_numeric.index
+            # test shape
+            if future_regressor.shape[0] != self.df_wide_numeric.shape[0]:
+                print(
+                    "future_regressor row count does not match length of training data"
+                )
+                time.sleep(2)
 
+            # handle any non-numeric data, crudely
+            self.regr_num_trans = NumericTransformer(verbose=self.verbose)
+            self.future_regressor_train = self.regr_num_trans.fit_transform(future_regressor)
+            
     def fit(
         self,
         df,
@@ -964,7 +985,10 @@ class AutoTS(object):
         random.seed(random_seed)
         np.random.seed(random_seed)
         
-        self.fit_data(df=df, date_col=date_col, value_col=value_col, id_col=id_col, weights=weights)
+        self.fit_data(
+            df=df, date_col=date_col, value_col=value_col, id_col=id_col,
+            future_regressor=future_regressor, weights=weights
+        )
 
         ensemble = self.ensemble
 
@@ -1036,30 +1060,11 @@ class AutoTS(object):
         self.validation_train_indexes.append(df_train.index)
         self.validation_test_indexes.append(df_test.index)
         if future_regressor is not None:
-            if not isinstance(future_regressor, pd.DataFrame):
-                future_regressor = pd.DataFrame(future_regressor)
-            if future_regressor.empty:
-                raise ValueError(
-                    "future_regressor empty, pass None if intending not to use"
-                )
-            if not isinstance(future_regressor.index, pd.DatetimeIndex):
-                # should be same length as history as this is not yet the predict step
-                future_regressor.index = df_subset.index
-            # handle any non-numeric data, crudely
-            self.regr_num_trans = NumericTransformer(verbose=self.verbose)
-            future_regressor = self.regr_num_trans.fit_transform(future_regressor)
-            self.future_regressor_train = future_regressor
-            future_regressor_train = future_regressor.reindex(index=df_train.index)
-            future_regressor_test = future_regressor.reindex(index=df_test.index)
+            future_regressor_train = self.future_regressor_train.reindex(index=df_train.index)
+            future_regressor_test = self.future_regressor_train.reindex(index=df_test.index)
         else:
             future_regressor_train = None
             future_regressor_test = None
-        if future_regressor is not None:
-            if future_regressor.shape[0] != self.df_wide_numeric.shape[0]:
-                print(
-                    "future_regressor row count does not match length of training data"
-                )
-                time.sleep(2)
 
         self.start_time = pd.Timestamp.now()
 
@@ -1267,7 +1272,7 @@ class AutoTS(object):
                 df_wide_numeric=self.df_wide_numeric,
                 num_validations=self.num_validations,
                 validation_template=self.validation_template,
-                future_regressor=future_regressor,
+                future_regressor=self.future_regressor_train,
             )
             # ensembles built on validation results
             if self.ensemble:
@@ -1315,7 +1320,7 @@ class AutoTS(object):
                         df_wide_numeric=self.df_wide_numeric,
                         num_validations=self.num_validations,
                         validation_template=ensemble_templates,
-                        future_regressor=future_regressor,
+                        future_regressor=self.future_regressor_train,
                         first_validation=False,
                     )
                 except Exception as e:
@@ -2063,6 +2068,7 @@ or otherwise increase models available."""
                 export_template = self.best_model
             else:
                 export_template = self.validation_results.model_results
+                # all validated models + horizontal ensembles
                 export_template = export_template[
                     (export_template['Runs'] >= (self.num_validations + 1))
                     | (export_template['Ensemble'] >= 2)
