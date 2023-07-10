@@ -302,7 +302,7 @@ prediction.plot(
 )
 plt.show()
 
-model.plot_per_series_smape(kind="pie")
+model.plot_per_series_mape(kind="pie")
 plt.show()
 
 model.plot_per_series_error()

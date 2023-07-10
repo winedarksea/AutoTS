@@ -1137,7 +1137,7 @@ def model_forecast(
                     horizontal_subset = parse_horizontal(all_series, model_id=test_mod)
 
                 if verbose >= 2:
-                    p = f"Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} {row['Model']} started"
+                    p = f"Ensemble {model_param_dict['model_name']} component {index} of {total_ens} {row['Model']} started"
                     print(p)
                 df_forecast = model_forecast(
                     model_name=row['Model'],

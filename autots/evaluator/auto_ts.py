@@ -912,6 +912,29 @@ class AutoTS(object):
             # handle any non-numeric data, crudely
             self.regr_num_trans = NumericTransformer(verbose=self.verbose)
             self.future_regressor_train = self.regr_num_trans.fit_transform(future_regressor)
+
+        # check how many validations are possible given the length of the data.
+        self.num_validations = validate_num_validations(
+            self.validation_method,
+            self.num_validations,
+            self.df_wide_numeric,
+            self.forecast_length,
+            self.min_allowed_train_percent,
+            self.verbose,
+        )
+
+        # generate validation indices (so it can fail now, not after all the generations)
+        self.validation_indexes = generate_validation_indices(
+            self.validation_method,
+            self.forecast_length,
+            self.num_validations,
+            self.df_wide_numeric,
+            validation_params=self.similarity_validation_params
+            if self.validation_method == "similarity"
+            else self.seasonal_validation_params,
+            preclean=None,
+            verbose=0,
+        )
             
     def fit(
         self,
@@ -945,7 +968,6 @@ class AutoTS(object):
         self.grouping_ids = grouping_ids
 
         # convert class variables to local variables (makes testing easier)
-        forecast_length = self.forecast_length
         if self.validation_method == "custom":
             self.validation_indexes = validation_indexes
             assert (
@@ -992,29 +1014,6 @@ class AutoTS(object):
 
         ensemble = self.ensemble
 
-        # check how many validations are possible given the length of the data.
-        self.num_validations = validate_num_validations(
-            self.validation_method,
-            self.num_validations,
-            self.df_wide_numeric,
-            forecast_length,
-            self.min_allowed_train_percent,
-            self.verbose,
-        )
-
-        # generate validation indices (so it can fail now, not after all the generations)
-        self.validation_indexes = generate_validation_indices(
-            self.validation_method,
-            forecast_length,
-            self.num_validations,
-            self.df_wide_numeric,
-            validation_params=self.similarity_validation_params
-            if self.validation_method == "similarity"
-            else self.seasonal_validation_params,
-            preclean=None,
-            verbose=0,
-        )
-
         # record if subset or not
         if self.subset is not None:
             self.subset = abs(int(self.subset))
@@ -1053,7 +1052,7 @@ class AutoTS(object):
         # split train and test portions, and split regressor if present
         df_train, df_test = simple_train_test_split(
             df_subset,
-            forecast_length=forecast_length,
+            forecast_length=self.forecast_length,
             min_allowed_train_percent=self.min_allowed_train_percent,
             verbose=self.verbose,
         )
@@ -1175,7 +1174,7 @@ class AutoTS(object):
                 )
                 ensemble_templates = EnsembleTemplateGenerator(
                     self.initial_results,
-                    forecast_length=forecast_length,
+                    forecast_length=self.forecast_length,
                     ensemble=ensemble,
                     score_per_series=self.score_per_series,
                 )
@@ -1299,7 +1298,7 @@ class AutoTS(object):
                     )
                     ensemble_templates = EnsembleTemplateGenerator(
                         ens_copy,
-                        forecast_length=forecast_length,
+                        forecast_length=self.forecast_length,
                         ensemble=ensemble,
                         score_per_series=self.score_per_series,
                     )
@@ -1352,7 +1351,7 @@ or otherwise increase models available."""
                 ens_templates = HorizontalTemplateGenerator(
                     self.score_per_series,
                     model_results=self.initial_results.model_results,
-                    forecast_length=forecast_length,
+                    forecast_length=self.forecast_length,
                     ensemble=ensemble,
                     subset_flag=self.subset_flag,
                 )
@@ -2887,6 +2886,28 @@ or otherwise increase models available."""
                 figsize=figsize,
                 **kwargs,
             )
+
+    def plot_per_series_smape(
+        self,
+        title: str = None,
+        max_series: int = 10,
+        max_name_chars: int = 25,
+        color: str = "#ff9912",
+        figsize=(12, 4),
+        kind: str = "bar",
+        **kwargs,
+    ):
+        """To be backwards compatible, not necessarily maintained, plot_per_series_mape is to be preferred."""
+        print("please switch to plot_per_series_mape")
+        return self.plot_per_series_mape(
+            title=title,
+            max_series=max_series,
+            max_name_chars=max_name_chars,
+            color=color,
+            figsize=figsize,
+            kind=kind,
+            **kwargs,
+        )
 
     def best_model_per_series_score(self):
         return (

@@ -188,7 +188,7 @@ class AutoTSTest(unittest.TestCase):
             drop_most_recent=1,
             verbose=verbose,
         )
-        model2.fit_data(df)
+        model2.fit_data(df, future_regressor=future_regressor_train2d)
         model2.import_best_model(tf.name)
         tf.close()
         os.unlink(tf.name)
