@@ -12,12 +12,8 @@
 * The most recent data will generally be the most important
 * Forecasts are desired for the future immediately following the most recent data.
 
-# 0.5.8 🌷🌷🌷
-* added plot_validations
-* updated pytorch forecasting for 1.0.0 version
-* plot_grid to prediction object
-* breaking change: plot_per_series_smape switched to the more accurately described plot_per_series_mape
-* various bug fixes such as 'TotalRuntime' missing
+# 0.5.9 ♨️♨️♨️
+* import_best_model and fit_data
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

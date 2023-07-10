@@ -4,6 +4,8 @@ import unittest
 import json
 import time
 import timeit
+import tempfile
+import os
 import numpy as np
 import pandas as pd
 from autots.datasets import (
@@ -157,13 +159,46 @@ class AutoTSTest(unittest.TestCase):
         # self.assertTrue((back_forecast.index == model.df_wide_numeric.index).all(), msg="Back forecasting failed to have equivalent index to train.")
         self.assertFalse(np.any(back_forecast.isnull()))
 
-        # a
-        # b
-        # c
-        # d
-        # e
-        # f
-        # g
+        # TEST EXPORTING A TEMPLATE THEN USING THE BEST MODEL AS A PREDICTION
+        tf = tempfile.NamedTemporaryFile(suffix='.csv', prefix=os.path.basename("autots_test"), delete=False)
+        time.sleep(1)
+        name = tf.name
+        model.export_template(name, models="best", n=1)
+        
+        model2 = AutoTS(
+            forecast_length=forecast_length,
+            frequency='infer',
+            prediction_interval=0.9,
+            ensemble='all',
+            constraint=None,
+            max_generations=generations,
+            num_validations=num_validations,
+            validation_method=validation_method,
+            model_list=model_list,
+            transformer_list=transformer_list,
+            transformer_max_depth=transformer_max_depth,
+            initial_template='General+Random',
+            metric_weighting=metric_weighting,
+            models_to_validate=models_to_validate,
+            max_per_model_class=None,
+            model_interrupt=False,
+            no_negatives=True,
+            subset=100,
+            n_jobs=n_jobs,
+            drop_most_recent=1,
+            verbose=verbose,
+        )
+        model2.fit_data(df)
+        model2.import_best_model(tf.name)
+        tf.close()
+        os.unlink(tf.name)
+
+        prediction = model2.predict(future_regressor=future_regressor_forecast2d, verbose=0)
+        forecasts_df2 = prediction.forecast
+        self.assertEqual(forecasts_df2.shape[0], forecast_length)
+        self.assertEqual(forecasts_df2.shape[1], df.shape[1])
+        self.assertFalse(forecasts_df2.isna().any().any())
+
     def test_all_default_models(self):
         print("Starting test_all_default_models")
         forecast_length = 8

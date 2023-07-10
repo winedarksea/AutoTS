@@ -1136,6 +1136,9 @@ def model_forecast(
                     test_mod = row['ID']
                     horizontal_subset = parse_horizontal(all_series, model_id=test_mod)
 
+                if verbose >= 2:
+                    p = f"Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} {row['Model']} started"
+                    print(p)
                 df_forecast = model_forecast(
                     model_name=row['Model'],
                     model_param_dict=row['ModelParameters'],
@@ -1175,9 +1178,6 @@ def model_forecast(
                 upper_forecasts[model_id] = df_forecast.upper_forecast
                 lower_forecasts[model_id] = df_forecast.lower_forecast
                 # print(f"{model_param_dict['model_name']} with shape {df_forecast.forecast.shape}")
-                if verbose >= 2:
-                    p = f"Ensemble {model_param_dict['model_name']} component {index + 1} of {total_ens} {row['Model']} succeeded"
-                    print(p)
             except Exception as e:
                 # currently this leaves no key/value for models that fail
                 if verbose >= 1:  # 1

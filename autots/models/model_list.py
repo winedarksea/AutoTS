@@ -122,12 +122,12 @@ parallel = {
 }
 # models that should be fast given many CPU cores
 fast_parallel = {**parallel, **fast}
-fast_parallel_no_arima = {i: fast_parallel[i] for i in fast_parallel if i != 'ARIMA'}
+fast_parallel_no_arima = {i: fast_parallel[i] for i in fast_parallel if i not in ['ARIMA', 'NVAR']}
 # so this opiniated and not fully updated always
 best = list(
     set(
         list(fast_parallel_no_arima.keys())
-        + ['MultivariateRegression', 'GluonTS', 'TMF', 'PytorchForecasting']
+        + ['MultivariateRegression', 'GluonTS', 'PytorchForecasting']
     )
 )
 

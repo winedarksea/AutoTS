@@ -417,7 +417,6 @@ class AutoTS(object):
                     index, 'TransformationParameters'
                 ] = json.dumps(full_params)
 
-        self.best_model = pd.DataFrame()
         self.regressor_used = False
         # do not add 'ID' to the below unless you want to refactor things.
         self.template_cols = [
@@ -431,10 +430,14 @@ class AutoTS(object):
             if "ID" in self.template_cols
             else ['ID'] + self.template_cols
         )
+        self.grouping_ids = None
         self.initial_results = TemplateEvalObject()
+        self.best_model = pd.DataFrame()
+        self.best_model_id = ""
         self.best_model_name = ""
         self.best_model_params = {}
         self.best_model_transformation_params = ""
+        self.best_model_ensemble = -1
         self.traceback = True if verbose > 1 else False
         self.future_regressor_train = None
         self.validation_train_indexes = []
@@ -778,90 +781,11 @@ class AutoTS(object):
             except Exception:
                 return "Initiated AutoTS object"
 
-    def fit(
-        self,
-        df,
-        date_col: str = None,
-        value_col: str = None,
-        id_col: str = None,
-        future_regressor=None,
-        weights: dict = {},
-        result_file: str = None,
-        grouping_ids=None,
-        validation_indexes: list = None,
-    ):
-        """Train algorithm given data supplied.
-
-        Args:
-            df (pandas.DataFrame): Datetime Indexed dataframe of series, or dataframe of three columns as below.
-            date_col (str): name of datetime column
-            value_col (str): name of column containing the data of series.
-            id_col (str): name of column identifying different series.
-            future_regressor (numpy.Array): single external regressor matching train.index
-            weights (dict): {'colname1': 2, 'colname2': 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
-                pass the alias 'mean' as a str ie `weights='mean'` to automatically use the mean value of a series as its weight
-                available aliases: mean, median, min, max
-            result_file (str): results saved on each new generation. Does not include validation rounds.
-                ".csv" save model results table.
-                ".pickle" saves full object, including ensemble information.
-            grouping_ids (dict): currently a one-level dict containing series_id:group_id mapping.
-                used in 0.2.x but not 0.3.x+ versions. retained for potential future use
-        """
-        self.weights = weights
+    def fit_data(self, df, date_col=None, value_col=None, id_col=None, weights={}):
+        """Part of the setup that involves fitting the initial data but not running any models."""
         self.date_col = date_col
         self.value_col = value_col
         self.id_col = id_col
-        self.grouping_ids = grouping_ids
-
-        # import mkl
-        # so this actually works it seems, on all sub process models
-        # mkl.set_num_threads_local(8)
-
-        # convert class variables to local variables (makes testing easier)
-        forecast_length = self.forecast_length
-        if self.validation_method == "custom":
-            self.validation_indexes = validation_indexes
-            assert (
-                validation_indexes is not None
-            ), "validation_indexes needs to be filled with 'custom' validation"
-            # if auto num_validation, use as many as provided in custom
-            if self.num_validations in ["auto", 'max']:
-                self.num_validations == len(validation_indexes) - 1
-            else:
-                assert len(validation_indexes) >= (
-                    self.num_validations + 1
-                ), "validation_indexes needs to be >= num_validations + 1 with 'custom' validation"
-        else:
-            self.validation_indexes = []
-        # flag if weights are given
-        if bool(weights):
-            weighted = True
-        else:
-            weighted = False
-        self.weighted = weighted
-        prediction_interval = self.prediction_interval
-        random_seed = self.random_seed
-        metric_weighting = self.metric_weighting
-        verbose = self.verbose
-        template_cols = self.template_cols
-
-        # shut off warnings if running silently
-        if verbose <= 0:
-            import warnings
-
-            warnings.filterwarnings("ignore")
-
-        # clean up result_file input, if given.
-        if result_file is not None:
-            formats = ['.csv', '.pickle']
-            if not any(x in result_file for x in formats):
-                print("result_file must be a valid str with .csv or .pickle")
-                result_file = None
-
-        # set random seeds for environment
-        random_seed = abs(int(random_seed))
-        random.seed(random_seed)
-        np.random.seed(random_seed)
 
         # convert data to wide format
         if date_col is None and value_col is None:
@@ -922,10 +846,16 @@ class AutoTS(object):
                 ens_piece3 = ""
             # self.ensemble = ens_piece1 + "," + ens_piece2 + "," + ens_piece3
             self.ensemble = [ens_piece1, ens_piece2, ens_piece3]
-        ensemble = self.ensemble
+  
         # because horizontal cannot handle non-string columns/series_ids
         if any(x in self.ensemble for x in self.h_ens_list):
             df_wide_numeric.columns = [str(xc) for xc in df_wide_numeric.columns]
+
+        # flag if weights are given
+        if bool(weights):
+            self.weighted = True
+        else:
+            self.weighted = False
 
         # use "mean" to assign weight as mean
         if self.weighted:
@@ -962,11 +892,87 @@ class AutoTS(object):
         self.df_wide_numeric = df_wide_numeric
         self.startTimeStamps = df_wide_numeric.notna().idxmax()
 
+    def fit(
+        self,
+        df,
+        date_col: str = None,
+        value_col: str = None,
+        id_col: str = None,
+        future_regressor=None,
+        weights: dict = {},
+        result_file: str = None,
+        grouping_ids=None,
+        validation_indexes: list = None,
+    ):
+        """Train algorithm given data supplied.
+
+        Args:
+            df (pandas.DataFrame): Datetime Indexed dataframe of series, or dataframe of three columns as below.
+            date_col (str): name of datetime column
+            value_col (str): name of column containing the data of series.
+            id_col (str): name of column identifying different series.
+            future_regressor (numpy.Array): single external regressor matching train.index
+            weights (dict): {'colname1': 2, 'colname2': 5} - increase importance of a series in metric evaluation. Any left blank assumed to have weight of 1.
+                pass the alias 'mean' as a str ie `weights='mean'` to automatically use the mean value of a series as its weight
+                available aliases: mean, median, min, max
+            result_file (str): results saved on each new generation. Does not include validation rounds.
+                ".csv" save model results table.
+                ".pickle" saves full object, including ensemble information.
+            grouping_ids (dict): currently a one-level dict containing series_id:group_id mapping.
+                used in 0.2.x but not 0.3.x+ versions. retained for potential future use
+        """
+        self.grouping_ids = grouping_ids
+
+        # convert class variables to local variables (makes testing easier)
+        forecast_length = self.forecast_length
+        if self.validation_method == "custom":
+            self.validation_indexes = validation_indexes
+            assert (
+                validation_indexes is not None
+            ), "validation_indexes needs to be filled with 'custom' validation"
+            # if auto num_validation, use as many as provided in custom
+            if self.num_validations in ["auto", 'max']:
+                self.num_validations == len(validation_indexes) - 1
+            else:
+                assert len(validation_indexes) >= (
+                    self.num_validations + 1
+                ), "validation_indexes needs to be >= num_validations + 1 with 'custom' validation"
+        else:
+            self.validation_indexes = []
+
+        prediction_interval = self.prediction_interval
+        random_seed = self.random_seed
+        metric_weighting = self.metric_weighting
+        verbose = self.verbose
+        template_cols = self.template_cols
+
+        # shut off warnings if running silently
+        if verbose <= 0:
+            import warnings
+
+            warnings.filterwarnings("ignore")
+
+        # clean up result_file input, if given.
+        if result_file is not None:
+            formats = ['.csv', '.pickle']
+            if not any(x in result_file for x in formats):
+                print("result_file must be a valid str with .csv or .pickle")
+                result_file = None
+
+        # set random seeds for environment
+        random_seed = abs(int(random_seed))
+        random.seed(random_seed)
+        np.random.seed(random_seed)
+        
+        self.fit_data(df=df, date_col=date_col, value_col=value_col, id_col=id_col, weights=weights)
+
+        ensemble = self.ensemble
+
         # check how many validations are possible given the length of the data.
         self.num_validations = validate_num_validations(
             self.validation_method,
             self.num_validations,
-            df_wide_numeric,
+            self.df_wide_numeric,
             forecast_length,
             self.min_allowed_train_percent,
             self.verbose,
@@ -977,7 +983,7 @@ class AutoTS(object):
             self.validation_method,
             forecast_length,
             self.num_validations,
-            df_wide_numeric,
+            self.df_wide_numeric,
             validation_params=self.similarity_validation_params
             if self.validation_method == "similarity"
             else self.seasonal_validation_params,
@@ -999,15 +1005,15 @@ class AutoTS(object):
         # take a subset of the data if working with a large number of series
         if self.subset_flag:
             df_subset = subset_series(
-                df_wide_numeric,
-                list((self.weights.get(i)) for i in df_wide_numeric.columns),
+                self.df_wide_numeric,
+                list((self.weights.get(i)) for i in self.df_wide_numeric.columns),
                 n=self.subset,
                 random_state=random_seed,
             )
             if self.verbose > 1:
                 print(f'First subset is of: {df_subset.columns}')
         else:
-            df_subset = df_wide_numeric.copy()
+            df_subset = self.df_wide_numeric.copy()
         # go to first index
         first_idx = self.validation_indexes[0]
         if max(first_idx) > max(df_subset.index):
@@ -1049,7 +1055,7 @@ class AutoTS(object):
             future_regressor_train = None
             future_regressor_test = None
         if future_regressor is not None:
-            if future_regressor.shape[0] != df_wide_numeric.shape[0]:
+            if future_regressor.shape[0] != self.df_wide_numeric.shape[0]:
                 print(
                     "future_regressor row count does not match length of training data"
                 )
@@ -1258,7 +1264,7 @@ class AutoTS(object):
         # run validations
         if self.num_validations > 0:
             self._run_validations(
-                df_wide_numeric=df_wide_numeric,
+                df_wide_numeric=self.df_wide_numeric,
                 num_validations=self.num_validations,
                 validation_template=self.validation_template,
                 future_regressor=future_regressor,
@@ -1306,7 +1312,7 @@ class AutoTS(object):
                         result_file=result_file,
                     )
                     self._run_validations(
-                        df_wide_numeric=df_wide_numeric,
+                        df_wide_numeric=self.df_wide_numeric,
                         num_validations=self.num_validations,
                         validation_template=ensemble_templates,
                         future_regressor=future_regressor,
@@ -1652,6 +1658,15 @@ or otherwise increase models available."""
             except IndexError:
                 raise ValueError(error_msg_template)
         # give a more convenient dict option
+        self.parse_best_model()
+
+        # clean up any remaining print statements
+        sys.stdout.flush()
+        return self
+    
+    def parse_best_model(self):
+        if self.best_model.empty:
+            raise ValueError("no best model present. Run .fit() of the AutoTS class first.")
         self.best_model_name = self.best_model['Model'].iloc[0]
         self.best_model_id = self.best_model['ID'].iloc[0]
         self.best_model_params = json.loads(self.best_model['ModelParameters'].iloc[0])
@@ -1659,16 +1674,13 @@ or otherwise increase models available."""
             self.best_model['TransformationParameters'].iloc[0]
         )
         self.best_model_ensemble = self.best_model['Ensemble'].iloc[0]
+        # flag if is any type of ensemble
         self.ensemble_check = int(self.best_model_ensemble > 0)
-
         # set flags to check if regressors or ensemble used in final model.
         self.used_regressor_check = self._regr_param_check(
             self.best_model_params.copy()
         )
         self.regressor_used = self.used_regressor_check
-        # clean up any remaining print statements
-        sys.stdout.flush()
-        return self
 
     def _regr_param_check(self, param_dict):
         """Help to search for if a regressor was used in model."""
@@ -2093,19 +2105,44 @@ or otherwise increase models available."""
                     export_template = export_template[self.template_cols_id]
         else:
             raise ValueError("`models` must be 'all' or 'best'")
+        return self.save_template(filename, export_template)
+            
+    def save_template(self, filename, export_template, **kwargs):
+        """Helper function for the save part of export_template."""
         try:
             if filename is None:
                 return export_template
             elif '.csv' in filename:
-                return export_template.to_csv(filename, index=False)
+                return export_template.to_csv(filename, index=False, **kwargs)  # lineterminator='\r\n'
             elif '.json' in filename:
-                return export_template.to_json(filename, orient='columns')
+                return export_template.to_json(filename, orient='columns', **kwargs)
             else:
                 raise ValueError("file must be .csv or .json")
-        except PermissionError:
+        except PermissionError as e:
             raise PermissionError(
                 "Permission Error: directory or existing file is locked for editing."
+            ) from e
+
+    def load_template(self, filename):
+        """Helper funciton for just loading the file part of import_template."""
+        if isinstance(filename, pd.DataFrame):
+            import_template = filename.copy()
+        elif '.csv' in filename:
+            import_template = pd.read_csv(filename)
+        elif '.json' in filename:
+            import_template = pd.read_json(filename, orient='columns')
+        else:
+            raise ValueError("file must be .csv or .json")
+
+        try:
+            import_template = import_template[self.template_cols_id]
+        except Exception:
+            print(
+                "Column names {} were not recognized as matching template columns: {}".format(
+                    str(import_template.columns), str(self.template_cols_id)
+                )
             )
+        return import_template
 
     def import_template(
         self,
@@ -2128,23 +2165,7 @@ or otherwise increase models available."""
         else:
             addon_flag = False
 
-        if isinstance(filename, pd.DataFrame):
-            import_template = filename.copy()
-        elif '.csv' in filename:
-            import_template = pd.read_csv(filename)
-        elif '.json' in filename:
-            import_template = pd.read_json(filename, orient='columns')
-        else:
-            raise ValueError("file must be .csv or .json")
-
-        try:
-            import_template = import_template[self.template_cols]
-        except Exception:
-            print(
-                "Column names {} were not recognized as matching template columns: {}".format(
-                    str(import_template.columns), str(self.template_cols)
-                )
-            )
+        import_template = self.load_template(filename)
 
         import_template = unpack_ensemble_models(
             import_template, self.template_cols, keep_ensemble=True, recursive=True
@@ -2185,6 +2206,23 @@ or otherwise increase models available."""
             return ValueError("method must be 'addon' or 'only'")
 
         return self
+
+    def export_best_model(self, filename, **kwargs):
+        """Basically the same as export_template but only ever the one best model."""
+        return self.save_template(filename, self.best_model.copy(), **kwargs)
+
+    def import_best_model(self, import_target):
+        """Load a best model, overriding any existing setting.
+        
+        Args:
+            import_target: pd.DataFrame or file path
+        """
+        if isinstance(import_target, pd.DataFrame):
+            self.best_model = import_target.copy().iloc[0:1]
+        else:
+            self.best_model = self.load_template(import_target).iloc[0:1]
+        
+        self.parse_best_model()
 
     def import_results(self, filename):
         """Add results from another run on the same data.
