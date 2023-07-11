@@ -2712,10 +2712,15 @@ or otherwise increase models available."""
         if not duplicated:
             self.validation_forecast_cuts = []
             # self.validation_forecasts = {}
-            for val in range(len(self.validation_train_indexes)):
-                test_idx = self.validation_train_indexes[val]
-                train_reg = self.future_regressor_train.reindex(test_idx)
-                sec_idx = self.validation_test_indexes[val]
+            for val in range(len(self.validation_indexes)):
+                val_df_train, val_df_test = simple_train_test_split(
+                    self.df_wide_numeric,
+                    forecast_length=self.forecast_length,
+                    min_allowed_train_percent=self.min_allowed_train_percent,
+                    verbose=self.verbose,
+                )
+                train_reg = self.future_regressor_train.reindex(val_df_train.index)
+                sec_idx = val_df_test.index
                 self.validation_forecast_cuts.append(sec_idx[0])
                 fut_reg = self.future_regressor_train.reindex(sec_idx)
                 for index, row in validation_template.iterrows():
@@ -2728,7 +2733,7 @@ or otherwise increase models available."""
                         model_name=row["Model"],
                         model_params=row["ModelParameters"],
                         model_transformation_params=row["TransformationParameters"],
-                        df_wide_numeric=self.df_wide_numeric.reindex(test_idx),
+                        df_wide_numeric=val_df_train,
                         future_regressor_train=train_reg,
                     )
                     idz = create_model_id(
