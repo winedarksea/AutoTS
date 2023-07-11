@@ -440,7 +440,7 @@ class PredictionObject(object):
         if start_date == "auto":
             if df_wide is not None:
                 slx = -self.forecast_length * 3
-                if slx > df_wide.shape[0]:
+                if abs(slx) > df_wide.shape[0]:
                     slx = 0
                 start_date = df_wide.index[slx]
             else:
