@@ -2437,7 +2437,7 @@ or otherwise increase models available."""
             series.set_index(series.columns[0], inplace=True)
             series = series.mode(axis=1)[0].to_frame().reset_index(drop=False)
         series.columns = ['Series', 'ID']
-        results = pd.Series({x: model.best_model_params['models'][x]['Model'] for x in model.best_model_params['models'].keys()})
+        results = pd.Series({x: self.best_model_params['models'][x]['Model'] for x in self.best_model_params['models'].keys()})
         results.name = "Model"
         series = series.merge(results, left_on="ID", right_index=True)
         # series = series.merge(self.results()[['ID', "Model"]].drop_duplicates(), on="ID")  # old
