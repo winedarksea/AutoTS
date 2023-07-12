@@ -14,6 +14,7 @@
 
 # 0.5.9 ♨️♨️♨️
 * import_best_model and fit_data
+* added canberra distance to SeasonalityMotif and MetricMotif
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

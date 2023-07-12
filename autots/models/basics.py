@@ -8,7 +8,7 @@ import datetime
 import numpy as np
 import pandas as pd
 from autots.models.base import ModelObject, PredictionObject
-from autots.tools.seasonal import seasonal_int, seasonal_window_match
+from autots.tools.seasonal import seasonal_int, seasonal_window_match, seasonal_independent_match
 from autots.tools.probabilistic import Point_to_Probability, historic_quantile
 from autots.tools.window_functions import window_id_maker, sliding_window_view
 from autots.tools.percentile import nan_quantile
@@ -2482,14 +2482,22 @@ class MetricMotif(ModelObject):
         # finding sliding windows to compare
         temp = sliding_window_view(array[:-n_tail, :], window_size, axis=0)
         # compare windows by metrics
+        last_window = array[-window_size:, :]
         if distance_metric == "mae":
             if nan_flag:
-                scores = np.nanmean(np.abs(temp - array[-window_size:, :].T), axis=2)
+                scores = np.nanmean(np.abs(temp - last_window.T), axis=2)
             else:
-                scores = np.mean(np.abs(temp - array[-window_size:, :].T), axis=2)
+                scores = np.mean(np.abs(temp - last_window.T), axis=2)
+        elif distance_metric == "canberra":
+            divisor = (np.abs(temp) + np.abs(last_window.T))
+            divisor[divisor == 0] = 1
+            if nan_flag:
+                scores = np.nanmean(np.abs(temp - last_window.T) / divisor, axis=2)
+            else:
+                scores = np.mean(np.abs(temp - last_window.T) / divisor, axis=2)
         elif distance_metric == "mqae":
             q = 0.85
-            ae = np.abs(temp - array[-window_size:, :].T)
+            ae = np.abs(temp - last_window.T)
             if ae.shape[2] <= 1:
                 vals = ae
             else:
@@ -2501,7 +2509,7 @@ class MetricMotif(ModelObject):
             else:
                 scores = np.mean(vals, axis=2)
         elif distance_metric == "mse":
-            scores = np.nanmean((temp - array[-window_size:, :].T) ** 2, axis=2)
+            scores = np.nanmean((temp - last_window.T) ** 2, axis=2)
         else:
             raise ValueError(f"distance_metric: {distance_metric} not recognized")
 
@@ -2602,6 +2610,7 @@ class MetricMotif(ModelObject):
             'mae',
             'mqae',
             'mse',
+            "canberra",
         ]
         if method == "event_risk":
             k_choice = random.choices(
@@ -2669,6 +2678,7 @@ class SeasonalityMotif(ModelObject):
         distance_metric: str = "mae",
         k: int = 10,
         datepart_method: str = "common_fourier",
+        independent: bool = False,
         **kwargs,
     ):
         ModelObject.__init__(
@@ -2687,6 +2697,7 @@ class SeasonalityMotif(ModelObject):
         self.distance_metric = str(distance_metric).lower()
         self.k = k
         self.datepart_method = datepart_method
+        self.independent = independent
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -2722,14 +2733,26 @@ class SeasonalityMotif(ModelObject):
         datepart_method = self.datepart_method
         k = self.k
 
-        test, scores = seasonal_window_match(
-            DTindex=self.df.index,
-            k=k,
-            window_size=window_size,
-            forecast_length=forecast_length,
-            datepart_method=datepart_method,
-            distance_metric=distance_metric,
-        )
+        if self.independent:
+            # each timestep is considered individually and not as a series
+            test, scores = seasonal_independent_match(
+                DTindex=self.df.index,
+                DTindex_future=test_index,
+                k=k,
+                forecast_length=forecast_length,
+                datepart_method=datepart_method,
+                distance_metric=distance_metric,
+            )
+        else:
+            # original method and perhaps smoother
+            test, scores = seasonal_window_match(
+                DTindex=self.df.index,
+                k=k,
+                window_size=window_size,
+                forecast_length=forecast_length,
+                datepart_method=datepart_method,
+                distance_metric=distance_metric,
+            )
         # (num_windows, forecast_length, num_series)
         results = np.moveaxis(np.take(self.df.to_numpy(), test, axis=0), 1, 0)
 
@@ -2786,6 +2809,7 @@ class SeasonalityMotif(ModelObject):
             'mae',
             'mqae',
             'mse',
+            'canberra',
         ]
         if method == "event_risk":
             k_choice = random.choices(
@@ -2817,6 +2841,7 @@ class SeasonalityMotif(ModelObject):
                 ],
                 [0.4, 0.3, 0.3, 0.3, 0.4, 0.35, 0.45, 0.2],
             )[0],
+            "independent": bool(random.getrandbits(1))
         }
 
     def get_params(self):

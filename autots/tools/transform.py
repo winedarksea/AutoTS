@@ -1143,20 +1143,23 @@ class DatepartRegressionTransformer(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
+        df_local = df.copy()
         try:
-            df = df.astype(float)
+            df_local = df_local.astype(float)
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
+        # remove rows that are entirely nan, unfortunately won't help with partial NaN
+        df_local = df_local[~np.isnan(df_local).all(axis=1)]
 
         if self.transform_dict is not None:
             model = GeneralTransformer(**self.transform_dict)
-            y = model.fit_transform(df)
+            y = model.fit_transform(df_local)
         else:
-            y = df.to_numpy()
+            y = df_local.to_numpy()
         if y.shape[1] == 1:
             y = np.asarray(y).ravel()
         X = date_part(
-            df.index,
+            df_local.index,
             method=self.datepart_method,
             polynomial_degree=self.polynomial_degree,
         )
@@ -1187,7 +1190,7 @@ class DatepartRegressionTransformer(EmptyTransformer):
             n_jobs=self.n_jobs,
         )
         self.model = self.model.fit(X, y)
-        self.shape = df.shape
+        self.shape = df_local.shape
         return self
 
     def fit_transform(self, df, regressor=None):
@@ -3610,7 +3613,7 @@ class RegressionFilter(EmptyTransformer):
             holiday_params = None
 
         return {
-            "sigma": random.choices([0.5, 1, 1.5, 2, 3], [0.1, 0.4, 0.1, 0.3, 0.1])[0],
+            "sigma": random.choices([0.5, 1, 1.5, 2, 2.5, 3], [0.1, 0.4, 0.1, 0.3, 0.05, 0.1])[0],
             "rolling_window": 90,
             "run_order": random.choices(["season_first", "trend_first"], [0.7, 0.3])[0],
             "regression_params": regression_params,
