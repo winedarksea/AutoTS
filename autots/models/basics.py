@@ -2739,7 +2739,6 @@ class SeasonalityMotif(ModelObject):
                 DTindex=self.df.index,
                 DTindex_future=test_index,
                 k=k,
-                forecast_length=forecast_length,
                 datepart_method=datepart_method,
                 distance_metric=distance_metric,
             )

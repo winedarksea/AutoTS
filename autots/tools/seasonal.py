@@ -530,7 +530,7 @@ def seasonal_window_match(
 
 
 def seasonal_independent_match(
-        DTindex, DTindex_future, k, forecast_length, datepart_method, distance_metric
+        DTindex, DTindex_future, k, datepart_method, distance_metric
 ):
     array = date_part(DTindex, method=datepart_method).to_numpy()
     future_array = date_part(DTindex_future, method=datepart_method).to_numpy()

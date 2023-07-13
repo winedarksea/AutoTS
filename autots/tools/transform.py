@@ -1148,8 +1148,16 @@ class DatepartRegressionTransformer(EmptyTransformer):
             df_local = df_local.astype(float)
         except Exception:
             raise ValueError("Data Cannot Be Converted to Numeric Float")
-        # remove rows that are entirely nan, unfortunately won't help with partial NaN
-        df_local = df_local[~np.isnan(df_local).all(axis=1)]
+        # handle NaN
+        nan_mask = np.isnan(df_local)
+        nan_mask_all = nan_mask.all(axis=1)
+        nan_mask_any = nan_mask.any(axis=1)
+        sum_nan_all = np.sum(nan_mask_all)
+        self.full_nan_rows = sum_nan_all > 0
+        self.partial_nan_rows = np.sum(nan_mask_any) > sum_nan_all
+        if self.full_nan_rows and not self.partial_nan_rows:
+            # this is the simplest if just all NaN rows, drop
+            df_local = df_local[~nan_mask_all]
 
         if self.transform_dict is not None:
             model = GeneralTransformer(**self.transform_dict)
@@ -1168,19 +1176,31 @@ class DatepartRegressionTransformer(EmptyTransformer):
                 [
                     X,
                     holiday_flag(
-                        df.index, country=self.holiday_country, encode_holiday_type=True
+                        df_local.index, country=self.holiday_country, encode_holiday_type=True
                     ),
                 ],
                 axis=1,
             )
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
-        self.X = X  # diagnostic
         multioutput = True
-        if y.ndim < 2:
+        if self.partial_nan_rows:
+            # process into a single output approach
+            X = np.repeat(X.to_numpy(), y.shape[1], axis=0)
+            # add a (hopefully not too massive) series ID encoder. This will not scale well to large multivariate
+            # X = np.concatenate([X, np.repeat(np.eye(y.shape[1]), df_local.shape[0], axis=0)], axis=1)
+            X = np.concatenate([X, np.tile(np.eye(y.shape[1]), df_local.shape[0]).T], axis=1)
+            y = y.flatten()
+            y_mask = np.isnan(y)
+            y = y[~y_mask]
+            X = X[~y_mask]
             multioutput = False
-        elif y.shape[1] < 2:
-            multioutput = False
+        else:
+            if y.ndim < 2:
+                multioutput = False
+            elif y.shape[1] < 2:
+                multioutput = False
+        self.X = X  # diagnostic
         self.model = retrieve_regressor(
             regression_model=self.regression_model,
             verbose=0,
@@ -1192,6 +1212,37 @@ class DatepartRegressionTransformer(EmptyTransformer):
         self.model = self.model.fit(X, y)
         self.shape = df_local.shape
         return self
+    
+    def impute(self, df, regressor=None):
+        """Fill Missing. Needs to have same general pattern of missingness (full rows of NaN only or scattered NaN) as was present during .fit()"""
+        X = date_part(
+            df.index,
+            method=self.datepart_method,
+            polynomial_degree=self.polynomial_degree,
+        )
+        if self.holiday_country is not None and self.holiday_countries_used:
+            X = pd.concat(
+                [
+                    X,
+                    holiday_flag(
+                        df.index, country=self.holiday_country, encode_holiday_type=True
+                    ),
+                ],
+                axis=1,
+            )
+        if regressor is not None:
+            X = pd.concat([X, regressor], axis=1)
+        if self.partial_nan_rows:
+            # process into a single output approach
+            X = np.repeat(X.to_numpy(), self.shape[1], axis=0)
+            X = np.concatenate([X, np.tile(np.eye(self.shape[1]), df.shape[0]).T], axis=1)
+
+        pred = self.model.predict(X)
+        if self.partial_nan_rows:
+            pred = pred.reshape(-1, df.shape[1])
+        y = pd.DataFrame(pred, columns=df.columns, index=df.index)
+        # np.where(np.isnan(df), y, df)
+        return df.where(~df.isnull(), y)
 
     def fit_transform(self, df, regressor=None):
         """Fit and Return Detrended DataFrame.
@@ -1230,8 +1281,15 @@ class DatepartRegressionTransformer(EmptyTransformer):
             )
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
+        if self.partial_nan_rows:
+            # process into a single output approach
+            X = np.repeat(X.to_numpy(), self.shape[1], axis=0)
+            X = np.concatenate([X, np.tile(np.eye(self.shape[1]), df.shape[0]).T], axis=1)
         # X.columns = [str(xc) for xc in X.columns]
-        y = pd.DataFrame(self.model.predict(X), columns=df.columns, index=df.index)
+        pred = self.model.predict(X)
+        if self.partial_nan_rows:
+            pred = pred.reshape(-1, df.shape[1])
+        y = pd.DataFrame(pred, columns=df.columns, index=df.index)
         df = df - y
         return df
 
@@ -1263,7 +1321,14 @@ class DatepartRegressionTransformer(EmptyTransformer):
             )
         if regressor is not None:
             X = pd.concat([X, regressor], axis=1)
-        y = pd.DataFrame(self.model.predict(X), columns=df.columns, index=df.index)
+        if self.partial_nan_rows:
+            # process into a single output approach
+            X = np.repeat(X.to_numpy(), self.shape[1], axis=0)
+            X = np.concatenate([X, np.tile(np.eye(self.shape[1]), df.shape[0]).T], axis=1)
+        pred = self.model.predict(X)
+        if self.partial_nan_rows:
+            pred = pred.reshape(-1, df.shape[1])
+        y = pd.DataFrame(pred, columns=df.columns, index=df.index)
         df = df + y
         return df
 
@@ -4277,6 +4342,8 @@ na_probs = {
     "interpolate": 0.4,
     "KNNImputer": 0.05,
     "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
+    "SeasonalityMotifImputer": 0.1,
+    "DatepartRegressionImputer": 0.05,  # also slow
 }
 
 
@@ -4344,6 +4411,7 @@ def RandomTransform(
         throw_away = na_prob_dict.pop("IterativeImputer", None)
         throw_away = df_interpolate.pop("spline", None)  # noqa
         throw_away = na_prob_dict.pop("IterativeImputerExtraTrees", None)  # noqa
+        throw_away = na_prob_dict.pop("DatepartRegressionImputer", None)  # noqa
     if superfast_params:
         params_method = "fast"
         throw_away = na_prob_dict.pop("KNNImputer", None)  # noqa

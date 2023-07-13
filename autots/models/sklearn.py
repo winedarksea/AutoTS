@@ -200,12 +200,11 @@ def rolling_x_regressor_regressor(
 
 def retrieve_regressor(
     regression_model: dict = {
-        "model": 'Adaboost',
+        "model": 'RandomForest',
         "model_params": {
-            'n_estimators': 50,
-            'estimator': 'DecisionTree',
-            'loss': 'linear',
-            'learning_rate': 1.0,
+            'n_estimators': 300,
+            'min_samples_leaf': 1,
+            'bootstrap': False,
         },
     },
     verbose: int = 0,
