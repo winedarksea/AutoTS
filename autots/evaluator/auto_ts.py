@@ -615,9 +615,20 @@ class AutoTS(object):
                         }
                     },
                 },
+                {
+                    'fillna': None,
+                    'transformations': {
+                        '0': 'ClipOutliers',
+                        '1': 'RegressionFilter',
+                    },
+                    'transformation_params': {
+                        '0': {'method': 'remove', 'std_threshold': 2.6, 'fillna': "SeasonalityMotifImputerLinMix"},
+                        '1': {"sigma": 2, "rolling_window": 90, "run_order": "season_first", "regression_params": {"regression_model": {"model": "ElasticNet", "model_params": {}}, "datepart_method": "expanded", "polynomial_degree": None, "transform_dict": None, "holiday_countries_used": False}, "holiday_params": None}
+                    }
+                },
                 'random',
             ],
-            [0.9, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1],
+            [0.99, 0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1],
         )[0]
         if preclean_choice == "random":
             preclean_choice = RandomTransform(

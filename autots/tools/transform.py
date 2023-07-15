@@ -4343,6 +4343,7 @@ na_probs = {
     "KNNImputer": 0.05,
     "IterativeImputerExtraTrees": 0.0001,  # and this one is even slower
     "SeasonalityMotifImputer": 0.1,
+    "SeasonalityMotifImputerLinMix": 0.02,
     "DatepartRegressionImputer": 0.05,  # also slow
 }
 
