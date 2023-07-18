@@ -3808,6 +3808,9 @@ class LevelShiftMagic(EmptyTransformer):
         self.fit(df)
         return self.transform(df)
 
+LevelShiftTransformer = LevelShiftMagic
+
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -3878,6 +3881,7 @@ have_params = {
     "DatepartRegression": DatepartRegressionTransformer,
     "DatepartRegressionTransformer": DatepartRegressionTransformer,
     "LevelShiftMagic": LevelShiftMagic,
+    "LevelShiftTransformer": LevelShiftTransformer,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -4388,7 +4392,7 @@ transformer_dict = {
     'LocalLinearTrend': 0.01,
     'KalmanSmoothing': 0.04,
     'RegressionFilter': 0.07,
-    "LevelShiftMagic": 0.03,
+    "LevelShiftTransformer": 0.03,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
