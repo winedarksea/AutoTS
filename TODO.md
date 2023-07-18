@@ -17,6 +17,7 @@
 * added canberra distance to SeasonalityMotif and MetricMotif
 * DatepartRegressionTransformer now handles NaN in input data
 * new DatepartRegression and SeasonalityMotif based imputers
+* LevelShiftMagic transformer added
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting

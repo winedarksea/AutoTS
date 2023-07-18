@@ -3686,6 +3686,128 @@ class RegressionFilter(EmptyTransformer):
         }
 
 
+class LevelShiftMagic(EmptyTransformer):
+    """Detects and corrects for level shifts.
+
+    Args:
+        method (str): "clip" or "remove"
+        std_threshold (float): number of std devs from mean to call an outlier
+        fillna (str): fillna method to use per tools.impute.FillNA
+    """
+
+    def __init__(
+        self,
+        window_size: int = 90,
+        alpha: float = 2.5,
+        grouping_forward_limit: int = 3,
+        max_level_shifts: int = 20,
+        alignment: str = "average",
+        **kwargs,
+    ):
+        super().__init__(name="LevelShiftMagic")
+        self.window_size = window_size
+        self.alpha = alpha
+        self.grouping_forward_limit = grouping_forward_limit
+        self.max_level_shifts = max_level_shifts
+        self.alignment = alignment
+
+    @staticmethod
+    def get_new_params(method: str = "random"):
+        return {
+            "window_size": random.choices(
+                [7, 30, 90, 364], [0.1, 0.4, 0.4, 0.1], k=1
+            )[0],
+            "alpha": random.choices(
+                [1.0, 2.0, 2.5, 3.0, 3.5, 4.0], [0.05, 0.2, 0.3, 0.2, 0.15, 0.1], k=1
+            )[0],
+            "grouping_forward_limit": random.choice([2, 3, 4]),
+            "max_level_shifts": random.choice([5, 10, 30]),
+            "alignment": random.choices(
+                ["average", "last_value", "rolling_diff", "rolling_diff_3nn"],
+                [0.5, 0.2, 0.15, 0.15],
+            )[0]
+        }
+
+    def fit(self, df):
+        """Learn behavior of data to change.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        rolling = df.rolling(self.window_size, center=False, min_periods=1).mean()
+        # pandas 1.1.0 introduction, or thereabouts
+        try:
+            indexer = pd.api.indexers.FixedForwardWindowIndexer(window_size=self.window_size)
+            rolling_forward = df.rolling(window=indexer, min_periods=1).mean()
+        except Exception:
+            rolling_forward = df.loc[::-1].rolling(self.window_size, center=False, min_periods=1).mean()[::-1]
+        # compare rolling forward and backwards diffs
+        diff = (rolling - rolling_forward)
+        threshold = (diff.std() * self.alpha)
+        diff_abs = diff.abs()
+        diff_mask_0 =  (diff_abs > threshold)  #  | (diff < -threshold)
+        # merge nearby groups
+        diff_smoothed = diff_abs.where(diff_mask_0, np.nan).fillna(method='ffill', limit=self.grouping_forward_limit)
+        diff_mask =  (diff_smoothed > threshold) | (diff_smoothed < -threshold)
+        # the max of each changepoint group is the chosen changepoint of the level shift
+        # doesn't handle identical maxes although that is unlikely with these floating point averages
+        maxes = diff_abs.where(diff_mask, np.nan).max()
+        # group ids are needed so that we can progressively remove
+        range_arr = pd.DataFrame(np.mgrid[0:df.shape[0]:1, 0:df.shape[1]][0], index=df.index, columns=df.columns)
+        group_ids = range_arr[~diff_mask].fillna(method='ffill')  # [diff_mask]
+        max_mask = diff_abs == maxes
+        used_groups = group_ids[max_mask].mean()
+        curr_diff = diff_abs.where(((group_ids != used_groups) & diff_mask), np.nan)
+        curr_diff_sum = np.nansum(curr_diff.to_numpy())
+        count = 0
+        # logic only handles one level shift at a time, so loop if multiple level shifts
+        while curr_diff_sum != 0 and count < self.max_level_shifts:
+            curr_maxes = curr_diff.max()
+            max_mask = max_mask | (curr_diff == curr_maxes)
+            used_groups = group_ids[curr_diff == curr_maxes].mean()
+            curr_diff = curr_diff.where(((group_ids != used_groups) & diff_mask), np.nan)
+            curr_diff_sum = np.sum(~curr_diff.isnull().to_numpy())
+            count += 1
+        # alignment is tricky, especially when level shifts are a mix of gradual and instantaneous
+        if self.alignment == "last_value":
+            self.lvlshft = (df[max_mask] - df[max_mask.shift(1)].shift(-1)).fillna(0).loc[::-1].cumsum()[::-1]
+        elif self.alignment == "average":
+            # average the two other approaches
+            lvlshft1 = (df[max_mask] - df[max_mask.shift(1)].shift(-1)).fillna(0).loc[::-1].cumsum()[::-1]
+            lvlshft2 = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
+            self.lvlshft = (lvlshft1 + lvlshft2) / 2
+        elif self.alignment == "rolling_diff_3nn":
+            self.lvlshft = ((diff[max_mask.shift(1)].shift(-1).fillna(0) + diff[max_mask] + diff[max_mask.shift(-1)].shift(1).fillna(0)) / 3).fillna(0).loc[::-1].cumsum()[::-1]
+        else:
+            self.lvlshft = diff[max_mask].fillna(0).loc[::-1].cumsum()[::-1]
+
+        return self
+
+    def transform(self, df):
+        """Return changed data.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df - self.lvlshft.reindex(index=df.index, columns=df.columns).fillna(method='bfill').fillna(0)
+
+    def inverse_transform(self, df, trans_method: str = "forecast"):
+        """Return data to original *or* forecast form.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        return df + self.lvlshft.reindex(index=df.index, columns=df.columns).fillna(method='bfill').fillna(0)
+
+    def fit_transform(self, df):
+        """Fits and Returns *Magical* DataFrame.
+
+        Args:
+            df (pandas.DataFrame): input dataframe
+        """
+        self.fit(df)
+        return self.transform(df)
+
 # lookup dict for all non-parameterized transformers
 trans_dict = {
     "None": EmptyTransformer(),
@@ -3755,6 +3877,7 @@ have_params = {
     "RegressionFilter": RegressionFilter,
     "DatepartRegression": DatepartRegressionTransformer,
     "DatepartRegressionTransformer": DatepartRegressionTransformer,
+    "LevelShiftMagic": LevelShiftMagic,
 }
 # where results will vary if not all series are included together
 shared_trans = [
@@ -4264,7 +4387,8 @@ transformer_dict = {
     'HolidayTransformer': 0.01,
     'LocalLinearTrend': 0.01,
     'KalmanSmoothing': 0.04,
-    'RegressionFilter': 0.03,
+    'RegressionFilter': 0.07,
+    "LevelShiftMagic": 0.03,
 }
 # remove any slow transformers
 fast_transformer_dict = transformer_dict.copy()
