@@ -80,6 +80,7 @@ class AutoTS(object):
             takes a new subset of columns on each validation, unless mosaic ensembling, in which case columns are the same in each validation
         aggfunc (str): if data is to be rolled up to a higher frequency (daily -> monthly) or duplicate timestamps are included. Default 'first' removes duplicates, for rollup try 'mean' or np.sum.
             Beware numeric aggregations like 'mean' will not work with non-numeric inputs.
+            Numeric aggregations like 'sum' will also change nan values to 0
         na_tolerance (float): 0 to 1. Series are dropped if they have more than this percent NaN. 0.95 here would allow series containing up to 95% NaN values.
         metric_weighting (dict): weights to assign to metrics, effecting how the ranking score is generated.
         drop_most_recent (int): option to drop n most recent data points. Useful, say, for monthly sales data where the current (unfinished) month is included.
@@ -178,7 +179,7 @@ class AutoTS(object):
             'oda_weighting': 0.001,
         },
         drop_most_recent: int = 0,
-        drop_data_older_than_periods: int = 100000,
+        drop_data_older_than_periods: int = None,
         model_list: str = 'default',
         transformer_list: dict = "auto",
         transformer_max_depth: int = 6,
@@ -1625,6 +1626,15 @@ or otherwise increase models available."""
                 self.validation_results.model_results['Runs']
                 >= (self.num_validations + 1)
             ]
+            if eligible_models.empty:
+                # this may occur if there is enough data for full validations
+                # but a lot of that data is bad leading to complete validation round failures
+                print("your validation results are questionable, perhaps bad data and too many validations")
+                max_vals = self.validation_results.model_results['Runs'].max()
+                eligible_models = self.validation_results.model_results[
+                    self.validation_results.model_results['Runs']
+                    >= max_vals
+                ]
             try:
                 self.best_model_non_horizontal = (
                     eligible_models.sort_values(
@@ -1662,6 +1672,15 @@ or otherwise increase models available."""
                 self.validation_results.model_results['Runs']
                 >= (self.num_validations + 1)
             ]
+            if eligible_models.empty:
+                # this may occur if there is enough data for full validations
+                # but a lot of that data is bad leading to complete validation round failures
+                print("your validation results are questionable, perhaps bad data and too many validations")
+                max_vals = self.validation_results.model_results['Runs'].max()
+                eligible_models = self.validation_results.model_results[
+                    self.validation_results.model_results['Runs']
+                    >= max_vals
+                ]
             try:
                 self.best_model = (
                     eligible_models.sort_values(

@@ -18,6 +18,8 @@
 * DatepartRegressionTransformer now handles NaN in input data
 * new DatepartRegression and SeasonalityMotif based imputers
 * LevelShiftMagic transformer added
+* adjusted automatic resampling to be performed only when necessary (to avoid filling NA with 0 bug and aggfunc='sum')
+* fixed a bug where if a full validation round fails, best model selection fails
 
 ### Unstable Upstream Pacakges (those that are frequently broken by maintainers)
 * Pytorch-Forecasting
