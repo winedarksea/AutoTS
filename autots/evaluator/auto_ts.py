@@ -621,15 +621,45 @@ class AutoTS(object):
                     'transformations': {
                         '0': 'ClipOutliers',
                         '1': 'RegressionFilter',
+                        '2': 'ClipOutliers',
                     },
                     'transformation_params': {
-                        '0': {'method': 'remove', 'std_threshold': 2.6, 'fillna': "SeasonalityMotifImputerLinMix"},
-                        '1': {"sigma": 2, "rolling_window": 90, "run_order": "season_first", "regression_params": {"regression_model": {"model": "ElasticNet", "model_params": {}}, "datepart_method": "expanded", "polynomial_degree": None, "transform_dict": None, "holiday_countries_used": False}, "holiday_params": None}
+                        '0': {'method': 'remove', 'std_threshold': 2.5, 'fillna': None},  # "SeasonalityMotifImputerLinMix"
+                        '1': {"sigma": 2, "rolling_window": 90, "run_order": "season_first", "regression_params": {"regression_model": {"model": "ElasticNet", "model_params": {}}, "datepart_method": ['common_fourier'], "polynomial_degree": None, "transform_dict": None, "holiday_countries_used": False}, "holiday_params": None},
+                        '2': {'method': 'remove', 'std_threshold': 3.0, 'fillna': "SeasonalityMotifImputerLinMix"},
                     }
+                },
+                {
+                    'fillna': None,
+                    'transformations': {
+                        '0': 'ClipOutliers',
+                        '1': "LevelShiftMagic",
+                        '2': 'RegressionFilter',
+                        '3': 'ClipOutliers',
+                    },
+                    'transformation_params': {
+                        '0': {'method': 'remove', 'std_threshold': 2.5, 'fillna': None},  # "SeasonalityMotifImputerLinMix"
+                        '1': {'window_size': 90, 'alpha': 2.5, 'grouping_forward_limit': 3, 'max_level_shifts': 5, 'alignment': 'average'},
+                        '2': {"sigma": 2, "rolling_window": 90, "run_order": "season_first", "regression_params": {"regression_model": {"model": "ElasticNet", "model_params": {}}, "datepart_method": ['common_fourier'], "polynomial_degree": None, "transform_dict": None, "holiday_countries_used": False}, "holiday_params": None},
+                        '3': {'method': 'remove', 'std_threshold': 3.0, 'fillna': "SeasonalityMotifImputerLinMix"},
+                    }
+                },
+                {
+                    "fillna": None,
+                    "transformations": {"0": "LocalLinearTrend"},
+                    "transformation_params": {
+                        "0": {
+                            'rolling_window': 30,
+                             'n_tails': 0.1,
+                             'n_future': 0.2,
+                             'method': 'mean',
+                             'macro_micro': True
+                         },
+                    },
                 },
                 'random',
             ],
-            [0.99, 0.1, 0.05, 0.1, 0.1, 0.1, 0.2, 0.1],
+            [0.9, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1, 0.05, 0.15, 0.1],
         )[0]
         if preclean_choice == "random":
             preclean_choice = RandomTransform(
@@ -1957,6 +1987,7 @@ or otherwise increase models available."""
         df_forecast.upper_forecast = trans.inverse_transform(df_forecast.upper_forecast)
         # undo preclean transformations if necessary
         if self.preclean is not None:
+            # self.raw_forecast = copy.copy(df_forecast)
             df_forecast.forecast = self.preclean_transformer.inverse_transform(
                 df_forecast.forecast
             )
@@ -2688,20 +2719,25 @@ or otherwise increase models available."""
             include_bounds (bool): if True (default) include the upper/lower forecast bounds
         """
         if series is None:
-            if str(subset).lower() == "best":
-                series = self.best_model_per_series_mape().tail(1).index.tolist()[0]
-            elif str(subset).lower() == "best score":
-                series = self.best_model_per_series_score().tail(1).index.tolist()[0]
-            elif str(subset).lower() == "worst":
-                series = self.best_model_per_series_mape().head(1).index.tolist()[0]
-            elif str(subset).lower() == "worst score":
-                series = self.best_model_per_series_score().head(1).index.tolist()[0]
-            elif subset is None:
+            if subset is None:
                 series = random.choice(self.df_wide_numeric.columns)
             else:
-                raise ValueError(
-                    "plot_validations arg subset must be None, 'best' or 'worst'"
-                )
+                scores = self.best_model_per_series_mape().index.tolist()
+                scores = [x for x in scores if "_lltmicro" not in x]
+                mapes = self.best_model_per_series_score().index.tolist()
+                mapes = [x for x in mapes if "_lltmicro" not in x]
+                if str(subset).lower() == "best":
+                    series = mapes[-1]
+                elif str(subset).lower() == "best score":
+                    series = scores[-1]
+                elif str(subset).lower() == "worst":
+                    series = mapes[0]
+                elif str(subset).lower() == "worst score":
+                    series = scores[0]
+                else:
+                    raise ValueError(
+                        "plot_validations arg subset must be None, 'best' or 'worst'"
+                    )
         if title is None:
             if subset is not None:
                 if "score" in str(subset).lower():

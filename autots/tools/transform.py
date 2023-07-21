@@ -3064,6 +3064,7 @@ class LocalLinearTrend(EmptyTransformer):
     Args:
         rolling_window (int): width of window to take trend on
         n_future (int): amount of data for the trend to be used extending beyond the edges of history.
+        macro_micro (bool): when True, splits the data into separate parts (trend and residual) and later combines together in inverse
     """
 
     def __init__(
@@ -3072,6 +3073,8 @@ class LocalLinearTrend(EmptyTransformer):
         # n_tails: float = 0.1,
         n_future: float = 0.2,
         method: str = "mean",
+        macro_micro: bool = False,
+        suffix: str = "_lltmicro",
         **kwargs,
     ):
         super().__init__(name="LocalLinearTrend")
@@ -3079,6 +3082,8 @@ class LocalLinearTrend(EmptyTransformer):
         # self.n_tails = n_tails
         self.n_future = n_future
         self.method = method
+        self.macro_micro = macro_micro
+        self.suffix = suffix
 
     def _fit(self, df):
         """Learn behavior of data to change.
@@ -3195,7 +3200,16 @@ class LocalLinearTrend(EmptyTransformer):
                 [self.dates.max() + 0.01],
             ]
         )
-        return df - (self.slope * self.dates_2d + self.intercept)
+        if self.macro_micro:
+            macro = pd.DataFrame(
+                self.slope * self.dates_2d + self.intercept,
+                index=df.index, columns=df.columns
+            )
+            self.columns = df.columns
+            micro = (df - macro).rename(columns=lambda x: str(x) + self.suffix)
+            return pd.concat([macro, micro], axis=1)
+        else:
+            return df - (self.slope * self.dates_2d + self.intercept)
 
     def fit(self, df):
         """Learn behavior of data to change.
@@ -3215,7 +3229,17 @@ class LocalLinearTrend(EmptyTransformer):
         dates = df.index.to_julian_date()
         dates_2d = np.repeat(dates.to_numpy()[..., None], df.shape[1], axis=1)
         idx = self.full_dates.searchsorted(dates)
-        return df - (self.full_slope[idx] * dates_2d + self.full_intercept[idx])
+        # return df - (self.full_slope[idx] * dates_2d + self.full_intercept[idx])
+
+        if self.macro_micro:
+            macro = pd.DataFrame(
+                self.full_slope[idx] * dates_2d + self.full_intercept[idx],
+                index=df.index, columns=df.columns
+            )
+            micro = (df - macro).rename(columns=lambda x: str(x) + self.suffix)
+            return pd.concat([macro, micro], axis=1)
+        else:
+            return df - (self.full_slope[idx] * dates_2d + self.full_intercept[idx])
 
     def inverse_transform(self, df, trans_method: str = "forecast"):
         """Return data to original *or* forecast form.
@@ -3223,10 +3247,17 @@ class LocalLinearTrend(EmptyTransformer):
         Args:
             df (pandas.DataFrame): input dataframe
         """
-        dates = df.index.to_julian_date()
-        dates_2d = np.repeat(dates.to_numpy()[..., None], df.shape[1], axis=1)
-        idx = self.full_dates.searchsorted(dates)
-        return df + (self.full_slope[idx] * dates_2d + self.full_intercept[idx])
+        if self.macro_micro:
+            macro = df[self.columns]
+            micro = df[df.columns.difference(self.columns)]
+            micro = micro.rename(columns=lambda x: str(x)[:-len(self.suffix)])[self.columns]
+            return macro + micro
+        else:
+            dates = df.index.to_julian_date()
+            n_cols = df.shape[1]
+            dates_2d = np.repeat(dates.to_numpy()[..., None], n_cols, axis=1)
+            idx = self.full_dates.searchsorted(dates)
+            return df + (self.full_slope[idx] * dates_2d + self.full_intercept[idx])
 
     def fit_transform(self, df):
         """Fits and Returns *Magical* DataFrame.
@@ -3250,6 +3281,7 @@ class LocalLinearTrend(EmptyTransformer):
                 [0.2, 90, 360, 0.1, 0.05], [0.5, 0.1, 0.1, 0.1, 0.2]
             )[0],
             "method": random.choice(["mean", "median"]),
+            "macro_micro": random.choice([True, False]),
         }
 
 
