@@ -6,6 +6,7 @@ from autots.tools.seasonal import date_part
 from autots.tools.holiday import holiday_flag
 from autots.tools.cointegration import coint_johansen
 from autots.evaluator.anomaly_detector import HolidayDetector
+from autots.tools.transform import GeneralTransformer
 
 
 def create_regressor(
@@ -44,7 +45,8 @@ def create_regressor(
             "method_params": {"distribution": "gamma", "alpha": 0.05},
         },
     },
-    holiday_regr_style="flag",
+    holiday_regr_style: str = "flag",
+    preprocessing_params: dict = None,
 ):
     """Create a regressor from information available in the existing dataset.
     Components: are lagged data, datepart information, and holiday.
@@ -77,6 +79,7 @@ def create_regressor(
         encode_holiday_type (bool): if True, returns column per holiday, ONLY for holidays package country holidays (not Detector)
         holiday_detector_params (dict): passed to HolidayDetector, or None
         holiday_regr_style (str): passed to detector's dates_to_holidays 'flag', 'series_flag', 'impact'
+        preprocessing_params (dict): GeneralTransformer params to be applied before regressor creation
 
     Returns:
         regressor_train, regressor_forecast
@@ -103,6 +106,11 @@ def create_regressor(
     # handle categorical
     df = df.apply(pd.to_numeric, errors='ignore')
     df = df.select_dtypes(include=np.number)
+    # macro_micro
+    if preprocessing_params is not None:
+        trans = GeneralTransformer(**preprocessing_params)
+        df = trans.fit_transform(df)
+
     # lagged data
     regr_train, regr_fcst = create_lagged_regressor(
         df,

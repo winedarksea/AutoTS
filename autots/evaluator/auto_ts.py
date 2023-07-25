@@ -2692,6 +2692,7 @@ or otherwise increase models available."""
 
     def plot_validations(
         self,
+        df_wide=None,
         models=None,
         series=None,
         title=None,
@@ -2718,9 +2719,11 @@ or otherwise increase models available."""
             compare_horizontal (bool): if True, plot horizontal ensemble versus best non-horizontal model, when available
             include_bounds (bool): if True (default) include the upper/lower forecast bounds
         """
+        if df_wide is None:
+            df_wide = self.df_wide_numeric
         if series is None:
             if subset is None:
-                series = random.choice(self.df_wide_numeric.columns)
+                series = random.choice(df_wide.columns)
             else:
                 scores = self.best_model_per_series_mape().index.tolist()
                 scores = [x for x in scores if "_lltmicro" not in x]
@@ -2820,7 +2823,7 @@ or otherwise increase models available."""
         for x in self.validation_forecasts.keys():
             mname = x.split("_")[1]
             if mname == "chosen" or mname in needed_mods:
-                new_df = pd.DataFrame(index=self.df_wide_numeric.index)
+                new_df = pd.DataFrame(index=df_wide.index)
                 new_df[mname] = self.validation_forecasts[x].forecast[series]
                 new_df[mname + "_" + "upper"] = self.validation_forecasts[
                     x
@@ -2832,7 +2835,7 @@ or otherwise increase models available."""
         plot_df = pd.concat(df_list, sort=True, axis=0)
         plot_df = plot_df.groupby(level=0).last()
         plot_df = (
-            self.df_wide_numeric[series]
+            df_wide[series]
             .rename("actuals")
             .to_frame()
             .merge(plot_df, left_index=True, right_index=True, how="left")

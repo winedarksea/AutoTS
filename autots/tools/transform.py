@@ -14,7 +14,7 @@ from autots.tools.anomaly_utils import (
     holiday_new_params,
     dates_to_holidays,
 )
-from autots.tools.window_functions import window_lin_reg, window_lin_reg_mean
+from autots.tools.window_functions import window_lin_reg_mean
 from autots.tools.fast_kalman import KalmanFilter, random_state_space
 from autots.tools.shaping import infer_frequency
 from autots.tools.holiday import holiday_flag
