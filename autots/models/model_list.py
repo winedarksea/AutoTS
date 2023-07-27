@@ -290,7 +290,7 @@ regressions = [
     'UnivariateRegression',
     'MultivariateRegression',
 ]
-no_shared_fast = list(set(no_shared).intersection(set(fast_parallel)))
+no_shared_fast = list(set(no_shared).intersection(set(fast_parallel_no_arima)))
 # this should be implementable with some models in gluonts
 all_result_path = [
     "UnivariateMotif",

@@ -157,7 +157,7 @@ class AutoTS(object):
         max_generations: int = 10,
         no_negatives: bool = False,
         constraint: float = None,
-        ensemble: str = 'auto',
+        ensemble: str = None,  # 'auto',
         initial_template: str = 'General+Random',
         random_seed: int = 2022,
         holiday_country: str = 'US',
@@ -490,7 +490,9 @@ class AutoTS(object):
                 ],
                 [0.3, 0.1, 0.2, 0.2],
             )[0]
+            max_generations = random.choices([5, 15, 25, 50], [0.2, 0.5, 0.1, 0.4])[0]
         else:
+            max_generations = random.choices([15, 25, 50, 200], [0.2, 0.5, 0.2, 0.1])[0]
             ensemble_choice = random.choices(
                 [
                     None,
@@ -510,7 +512,7 @@ class AutoTS(object):
                 ],
                 [0.3, 0.1, 0.2, 0.2],
             )[0]
-        if method in ["full", "fast"]:
+        if method in ["full", "fast", "superfast"]:
             metric_weighting = {
                 'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
                     0
@@ -547,6 +549,10 @@ class AutoTS(object):
                     [0, 0.05, 0.3, 1, 5], [0.1, 0.6, 0.2, 0.1, 0.1]
                 )[0],
             }
+            validation_method = random.choices(
+                ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
+                [0.4, 0.1, 0.3, 0.3, 0.2],
+            )[0]
         else:
             metric_weighting = {
                 'smape_weighting': random.choices([0, 1, 5, 10], [0.3, 0.2, 0.3, 0.1])[
@@ -574,6 +580,10 @@ class AutoTS(object):
                     [0, 0.05, 0.3, 1], [0.1, 0.6, 0.2, 0.1]
                 )[0],
             }
+            validation_method = random.choices(
+                ['backwards', 'even', 'similarity', 'seasonal 364'],
+                [0.4, 0.1, 0.3, 0.3],
+            )[0]
         preclean_choice = random.choices(
             [
                 None,
@@ -671,7 +681,7 @@ class AutoTS(object):
                     'fast',
                     'superfast',
                     'default',
-                    'fast_parallel',
+                    'fast_parallel_no_arima',
                     'all',
                     'motifs',
                     'no_shared_fast',
@@ -686,8 +696,8 @@ class AutoTS(object):
                 ],
                 [
                     0.2,
-                    0.2,
-                    0.2,
+                    0.4,
+                    0.1,
                     0.2,
                     0.01,
                     0.1,
@@ -709,14 +719,18 @@ class AutoTS(object):
                     'superfast',
                     'motifs',
                     'no_shared_fast',
+                    'fast_parallel_no_arima',
                 ],
                 [
                     0.2,
+                    0.3,
                     0.2,
                     0.2,
-                    0.2,
+                    0.05,
                 ],
             )[0]
+        elif method == "superfast":
+            model_list = 'superfast'
         else:
             model_list = random.choices(
                 [
@@ -727,20 +741,11 @@ class AutoTS(object):
                     'motifs',
                     'no_shared_fast',
                 ],
-                [0.2, 0.2, 0.2, 0.2, 0.05, 0.1],
+                [0.2, 0.3, 0.2, 0.2, 0.05, 0.1],
             )[0]
-        if method in ['full', 'fast']:
-            validation_method = random.choices(
-                ['backwards', 'even', 'similarity', 'seasonal 364', 'seasonal'],
-                [0.4, 0.1, 0.3, 0.3, 0.2],
-            )[0]
-        else:
-            validation_method = random.choices(
-                ['backwards', 'even', 'similarity', 'seasonal 364'],
-                [0.4, 0.1, 0.3, 0.3],
-            )[0]
+
         return {
-            'max_generations': random.choices([5, 15, 25, 50], [0.2, 0.5, 0.1, 0.4])[0],
+            'max_generations': max_generations,
             'model_list': model_list,
             'transformer_list': random.choices(
                 ['all', 'fast', 'superfast'],
