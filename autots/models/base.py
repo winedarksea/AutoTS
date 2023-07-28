@@ -101,6 +101,12 @@ class ModelObject(object):
         """Return dict of new parameters for parameter tuning."""
         return {}
 
+    def fit_data(self, df, future_regressor=None):
+        self.basic_profile(df)
+        if future_regressor is not None:
+            self.regressor_train = future_regressor
+        return self
+
     @staticmethod
     def time():
         return datetime.datetime.now()

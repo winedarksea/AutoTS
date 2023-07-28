@@ -309,6 +309,8 @@ diff_window_motif_list = [
     "Motif",
     "ARCH",
 ]
+# models that fit and then have updated predicts without updated model fits (just data update)
+update_fit = ['MultivariateRegression', "DatepartRegression", "GluonTS"]
 model_lists = {
     "all": all_models,
     "default": default,
@@ -333,6 +335,7 @@ model_lists = {
     "all_result_path": all_result_path,
     "regressions": regressions,
     "all_pragmatic": all_pragmatic,
+    "update_fit": update_fit,
 }
 
 

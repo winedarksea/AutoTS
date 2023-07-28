@@ -1950,6 +1950,7 @@ class DatepartRegression(ModelObject):
         self.regression_model = regression_model
         self.datepart_method = datepart_method
         self.polynomial_degree = polynomial_degree
+        self.forecast_length = forecast_length
 
     def fit(self, df, future_regressor=None):
         """Train algorithm given data supplied.
@@ -1997,11 +1998,16 @@ class DatepartRegression(ModelObject):
         self.shape = df.shape
         return self
 
+    def fit_data(self, df, future_regressor=None):
+        self.basic_profile(df)
+        return self
+
     def predict(
         self,
-        forecast_length: int,
+        forecast_length: int = None,
         future_regressor=None,
         just_point_forecast: bool = False,
+        df=None,
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
@@ -2014,6 +2020,10 @@ class DatepartRegression(ModelObject):
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
+        if forecast_length is None:
+            self.forecast_length = forecast_length
+        if df is not None:
+            self.fit_data(df)
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
         self.X_pred = date_part(
@@ -2746,16 +2756,25 @@ class MultivariateRegression(ModelObject):
                 self.model_upper.fit(self.X, self.Y)
                 self.model_lower.fit(self.X, self.Y)
             # we only need the N most recent points for predict
-            self.sktraindata = df.tail(self.min_threshold)
+            # self.sktraindata = df.tail(self.min_threshold)
+            self.fit_data(df)
 
             self.fit_runtime = datetime.datetime.now() - self.startTime
             return self
+
+    def fit_data(self, df, future_regressor=None):
+        df = self.basic_profile(df)
+        self.sktraindata = df.tail(self.min_threshold)
+        if future_regressor is not None:
+            self.regressor_train = future_regressor
+        return self
 
     def predict(
         self,
         forecast_length: int = None,
         just_point_forecast: bool = False,
         future_regressor=None,
+        df=None,
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
 
@@ -2769,6 +2788,10 @@ class MultivariateRegression(ModelObject):
             Either a PredictionObject of forecasts and metadata, or
             if just_point_forecast == True, a dataframe of point forecasts
         """
+        if df is not None:
+            self.fit_data(df)  # no new regressor support
+        if forecast_length is None:
+            forecast_length = self.forecast_length
         predictStartTime = datetime.datetime.now()
         index = self.create_forecast_index(forecast_length=forecast_length)
         forecast = pd.DataFrame()

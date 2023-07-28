@@ -667,3 +667,110 @@ class ModelTest(unittest.TestCase):
                 }, file
             )
         """
+
+    def test_sklearn(self):
+        from autots import load_daily
+        from autots import create_regressor
+        from autots.models.sklearn import MultivariateRegression, DatepartRegression
+
+        df = load_daily(long=False)
+        forecast_length = 8
+        df_train = df.iloc[:-forecast_length]
+        df_test = df.iloc[-forecast_length:]
+        future_regressor_train, future_regressor_forecast = create_regressor(
+            df_train,
+            forecast_length=forecast_length,
+            frequency="infer",
+            drop_most_recent=0,
+            scale=True,
+            summarize="auto",
+            backfill="bfill",
+            fill_na="spline",
+            holiday_countries={"US": None},  # requires holidays package
+            encode_holiday_type=True,
+        )
+
+        random_seed = 300
+        frequency = 'D'
+        prediction_interval = 0.9
+        verbose = -1
+        n_jobs = 2
+
+        params = MultivariateRegression().get_new_params()
+        params = {
+            'regression_model': {'model': 'LightGBM',
+            'model_params': {
+                'objective': 'regression',
+                'learning_rate': 0.1,
+                'num_leaves': 31,
+                'max_depth': 10,
+                'boosting_type': 'goss',
+                 'n_estimators': 250,
+                'linear_tree': False
+            }},
+            'mean_rolling_periods': 90,
+            'macd_periods': 12,
+            'std_rolling_periods': 7,
+            'max_rolling_periods': None,
+            'min_rolling_periods': None,
+            'quantile90_rolling_periods': 7,
+            'quantile10_rolling_periods': 10,
+            'ewm_alpha': 0.8,
+            'ewm_var_alpha': None,
+            'additional_lag_periods': None,
+            'abs_energy': False,
+            'rolling_autocorr_periods': None,
+            'datepart_method': 'expanded',
+            'polynomial_degree': None,
+            'regression_type': None,
+            'window': 3,
+            'holiday': True,
+            'probabilistic': False,
+            'cointegration': None,
+            'cointegration_lag': 1
+        }
+        model = MultivariateRegression(
+            forecast_length=forecast_length,
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **params
+        )
+        model.fit(df_train)
+        first_forecast = model.predict(future_regressor=future_regressor_forecast)
+        self.assertListEqual(first_forecast.index.tolist(), df_test.index.tolist())
+        model.fit_data(df)
+        updated_forecast = model.predict()
+        self.assertEqual(updated_forecast.forecast.shape[0], forecast_length)
+        self.assertTrue(updated_forecast.forecast.index[0] > df.index[-1])
+
+        params = {
+            'regression_model': {
+                'model': 'ExtraTrees',
+                'model_params': {
+                    'n_estimators': 500,
+                    'min_samples_leaf': 1,
+                    'max_depth': 20
+            }},
+            'datepart_method': 'simple_binarized',
+            'polynomial_degree': None,
+            'regression_type': None,
+        }
+        model = DatepartRegression(
+            forecast_length=forecast_length,
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **params
+        )
+        model.fit(df_train)
+        first_forecast = model.predict(future_regressor=future_regressor_forecast)
+        self.assertListEqual(first_forecast.index.tolist(), df_test.index.tolist())
+        model.fit_data(df)
+        updated_forecast = model.predict()
+        self.assertEqual(updated_forecast.forecast.shape[0], forecast_length)
+        self.assertTrue(updated_forecast.forecast.index[0] > df.index[-1])
