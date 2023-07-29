@@ -310,7 +310,7 @@ diff_window_motif_list = [
     "ARCH",
 ]
 # models that fit and then have updated predicts without updated model fits (just data update)
-update_fit = ['MultivariateRegression', "DatepartRegression", "GluonTS"]
+update_fit = ['MultivariateRegression', "DatepartRegression", "GluonTS", 'WindowRegression', 'Cassandra']
 model_lists = {
     "all": all_models,
     "default": default,

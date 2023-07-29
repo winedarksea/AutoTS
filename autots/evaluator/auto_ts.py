@@ -2794,10 +2794,14 @@ or otherwise increase models available."""
                     min_allowed_train_percent=self.min_allowed_train_percent,
                     verbose=self.verbose,
                 )
-                train_reg = self.future_regressor_train.reindex(val_df_train.index)
                 sec_idx = val_df_test.index
                 self.validation_forecast_cuts.append(sec_idx[0])
-                fut_reg = self.future_regressor_train.reindex(sec_idx)
+                try:
+                    train_reg = self.future_regressor_train.reindex(val_df_train.index)
+                    fut_reg = self.future_regressor_train.reindex(sec_idx)
+                except Exception:
+                    train_reg = None
+                    fut_reg = None
                 for index, row in validation_template.iterrows():
                     df_forecast = self._predict(
                         forecast_length=self.forecast_length,

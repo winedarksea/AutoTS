@@ -671,7 +671,7 @@ class ModelTest(unittest.TestCase):
     def test_sklearn(self):
         from autots import load_daily
         from autots import create_regressor
-        from autots.models.sklearn import MultivariateRegression, DatepartRegression
+        from autots.models.sklearn import MultivariateRegression, DatepartRegression, WindowRegression
 
         df = load_daily(long=False)
         forecast_length = 8
@@ -745,6 +745,28 @@ class ModelTest(unittest.TestCase):
         updated_forecast = model.predict()
         self.assertEqual(updated_forecast.forecast.shape[0], forecast_length)
         self.assertTrue(updated_forecast.forecast.index[0] > df.index[-1])
+
+        params = WindowRegression().get_new_params()
+        params = {}
+        model = WindowRegression(
+            forecast_length=forecast_length,
+            frequency=frequency,
+            prediction_interval=prediction_interval,
+            random_seed=random_seed,
+            verbose=verbose,
+            n_jobs=n_jobs,
+            **params
+        )
+        model.fit(df_train.fillna(method='ffill'))
+        first_forecast = model.predict(future_regressor=future_regressor_forecast)
+        # first_forecast.plot_grid(df)
+        self.assertListEqual(first_forecast.index.tolist(), df_test.index.tolist())
+        model.fit_data(df)
+        updated_forecast = model.predict()
+        # updated_forecast.plot_grid(df)
+        self.assertEqual(updated_forecast.forecast.shape[0], forecast_length)
+        self.assertTrue(updated_forecast.forecast.index[0] > df.index[-1])
+
 
         params = {
             'regression_model': {
