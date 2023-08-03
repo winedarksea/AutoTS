@@ -32,6 +32,7 @@ from autots.evaluator.auto_model import (
     remove_leading_zeros,
     horizontal_template_to_model_list,
     create_model_id,
+    ModelPrediction,
 )
 from autots.models.ensemble import (
     EnsembleTemplateGenerator,
@@ -39,7 +40,7 @@ from autots.models.ensemble import (
     generate_mosaic_template,
     generate_crosshair_score,
 )
-from autots.models.model_list import model_lists, no_shared
+from autots.models.model_list import model_lists, no_shared, update_fit
 from autots.tools import cpu_count
 from autots.evaluator.validation import (
     validate_num_validations,
@@ -463,6 +464,7 @@ class AutoTS(object):
             'datepart_method': 'common_fourier_rw',
         }
         self.model_count = 0
+        self.model = None  # intended for fit_data update models only
 
         if verbose > 2:
             msg = '"Hello. Would you like to destroy some evil today?" - Sanderson'
@@ -1012,6 +1014,7 @@ class AutoTS(object):
             grouping_ids (dict): currently a one-level dict containing series_id:group_id mapping.
                 used in 0.2.x but not 0.3.x+ versions. retained for potential future use
         """
+        self.model = None
         self.grouping_ids = grouping_ids
 
         # convert class variables to local variables (makes testing easier)
@@ -1953,38 +1956,65 @@ or otherwise increase models available."""
         model_transformation_params=None,
         df_wide_numeric=None,
         future_regressor_train=None,
+        refit=False,
     ):
-        df_forecast = model_forecast(
-            model_name=self.best_model_name if model_name is None else model_name,
-            model_param_dict=self.best_model_params.copy()
-            if model_params is None
-            else model_params,
-            model_transform_dict=self.best_model_transformation_params
-            if model_transformation_params is None
-            else model_transformation_params,
-            df_train=self.df_wide_numeric
-            if df_wide_numeric is None
-            else df_wide_numeric,
-            forecast_length=forecast_length,
-            frequency=self.frequency,
-            prediction_interval=prediction_interval,
-            no_negatives=self.no_negatives,
-            constraint=self.constraint,
-            future_regressor_train=self.future_regressor_train
-            if future_regressor_train is None
-            else future_regressor_train,
-            future_regressor_forecast=future_regressor,
-            holiday_country=self.holiday_country,
-            startTimeStamps=self.startTimeStamps,
-            grouping_ids=self.grouping_ids,
-            fail_on_forecast_nan=fail_on_forecast_nan,
-            random_seed=self.random_seed,
-            verbose=verbose,
-            n_jobs=self.n_jobs,
-            template_cols=self.template_cols,
-            current_model_file=self.current_model_file,
-            return_model=True,
-        )
+        use_model = self.best_model_name if model_name is None else model_name
+        use_params = self.best_model_params.copy() if model_params is None else model_params
+        use_trans = self.best_model_transformation_params if model_transformation_params is None else model_transformation_params
+        use_data = self.df_wide_numeric if df_wide_numeric is None else df_wide_numeric
+        use_regr_train = self.future_regressor_train if future_regressor_train is None else future_regressor_train
+        if use_model in update_fit:
+            if self.model is None or refit:
+                self.model = ModelPrediction(
+                    transformation_dict=use_trans,
+                    model_str=use_model,
+                    parameter_dict=use_params,
+                    forecast_length=forecast_length,
+                    frequency=self.frequency,
+                    prediction_interval=prediction_interval,
+                    no_negatives=self.no_negatives,
+                    constraint=self.constraint,
+                    future_regressor_train=use_regr_train,
+                    future_regressor_forecast=future_regressor,
+                    holiday_country=self.holiday_country,
+                    startTimeStamps=self.startTimeStamps,
+                    grouping_ids=self.grouping_ids,
+                    fail_on_forecast_nan=fail_on_forecast_nan,
+                    random_seed=self.random_seed,
+                    verbose=verbose,
+                    n_jobs=self.n_jobs,
+                    template_cols=self.template_cols,
+                    current_model_file=self.current_model_file,
+                    return_model=True,
+                )
+                self.model = self.model.fit(use_data, use_regr_train)
+            else:
+                self.model = self.model.fit_data(use_data, future_regressor=use_regr_train)
+            df_forecast = self.model.predict(forecast_length, future_regressor=future_regressor)
+        else:
+            df_forecast = model_forecast(
+                model_name=use_model,
+                model_param_dict=use_params,
+                model_transform_dict=use_trans,
+                df_train=use_data,
+                forecast_length=forecast_length,
+                frequency=self.frequency,
+                prediction_interval=prediction_interval,
+                no_negatives=self.no_negatives,
+                constraint=self.constraint,
+                future_regressor_train=use_regr_train,
+                future_regressor_forecast=future_regressor,
+                holiday_country=self.holiday_country,
+                startTimeStamps=self.startTimeStamps,
+                grouping_ids=self.grouping_ids,
+                fail_on_forecast_nan=fail_on_forecast_nan,
+                random_seed=self.random_seed,
+                verbose=verbose,
+                n_jobs=self.n_jobs,
+                template_cols=self.template_cols,
+                current_model_file=self.current_model_file,
+                return_model=True,
+            )
         # convert categorical back to numeric
         trans = self.categorical_transformer
         df_forecast.forecast = trans.inverse_transform(df_forecast.forecast)
@@ -2016,6 +2046,18 @@ or otherwise increase models available."""
         verbose: int = 'self',
     ):
         """Generate forecast data immediately following dates of index supplied to .fit().
+
+        If using a model from update_fit list, with no ensembling, underlying model will not be retrained when used as such, with a single prediction interval:
+        ```python
+        model = AutoTS()
+        model.fit(df)
+        model.predict()
+        # for new data without retraining
+        model.fit_data(df)
+        model.predict()
+        # to force retrain of model
+        model.model = None
+        ```
 
         Args:
             forecast_length (int): Number of periods of data to forecast ahead
@@ -2063,6 +2105,7 @@ or otherwise increase models available."""
                     future_regressor=future_regressor,
                     fail_on_forecast_nan=fail_on_forecast_nan,
                     verbose=verbose,
+                    refit=True,  # need to audit all models to make sure they don't require update train with new prediction_interval
                 )
                 forecast_objects[str(interval)] = df_forecast
             return forecast_objects
